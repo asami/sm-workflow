@@ -124,14 +124,17 @@ AI exploration
 
 Workflow-owned mutation と current artifact に差分がある場合は、base/current/desired の
 typed three-way model を作る。非重複変更、同一 normalized value、canonical model から
-再生成できる projection など、結果が一意で invariant を保存できる競合は Workflow
-provider が自動マージする。
+再生成できる projection は **修正の衝突ではない**。Workflow はその compatibility を
+検証して機械的に composition できるが、これを conflict resolution と呼ばない。
 
-同じ scope の ownership、goal、closure、dependency、handoff などに複数の意味的解釈が
-残る場合だけ、frozen conflict set を bounded semantic AI Action に渡す。AI は patch や
-command を直接適用せず、conflict ID ごとの typed resolution plan を返す。Workflow が
-authority/invariant を検証し、current revision に compare-and-set で適用する。
+同じ stable semantic entity、field、hunk、ownership、goal、closure、dependency、handoff
+へ両側が異なる意味を持つ修正をした時点で `ModificationCollision` とする。Workflow は
+出力が一見一意に見えてもこれを自動採択しない。authority が変わらず、解が一つに定まる
+semantic assessment を必要とする collision は frozen conflict set を bounded semantic AI
+Action に渡す。AI は patch や command を直接適用せず、conflict ID ごとの typed resolution
+plan を返す。Workflow が authority/invariant を検証し、current revision に
+compare-and-set で適用する。
 
 identity/authority の変更、破壊的上書き、複数の同等に妥当な解は AI の authority を
-越えるため human Decision で停止する。この境界により、機械的 merge の AI cost をゼロに
-しつつ、意味判断と権限判断を混同しない。
+越えるため human Decision で停止する。この境界により、non-colliding composition の AI
+cost をゼロにしつつ、実際の修正衝突で意味判断または権限判断を省略しない。

@@ -10,6 +10,11 @@ Status: Design decision
 `sm-split-phase` とする。両者は`SkillBundleManifest`で明示的にbindする。
 legacy `cncf-split-phase` は変更せず、独立した互換workflowとして長期併用する。
 
+`SplitPhaseWorkflow` は、`sm-goal-phase` の `SPLIT_REQUIRED` recommendation から自動開始
+しない。人間が `sm-split-phase` を明示選択した場合だけ独立 run として開始し、prior run
+からは typed source/evidence/proposal reference だけを入力として受ける。split terminal 後も
+child goal を開始せず、人間が選択した child ごとに別の `sm-goal-phase` run を開始する。
+
 Normative design input:
 
 - [SM Split Phase Workflow Definition](../../../notes/sm-split-phase-workflow-definition.md)
@@ -43,6 +48,9 @@ AI は file edit や Git command を行わない。AI の typed resolution は W
 `RESOLUTION_VALIDATION` を通す。AI resultからproposalまたはwrite setを直接更新しない。
 skillはWorkflowが選択したexact AI requestを一件実行してresultを返すだけで、resultから
 follow-up処理をdispatchしない。
+
+Workflow/skill/terminal result は別 profile を dispatch せず、host/client は候補表示だけを
+行う。開始権限は常に明示的な profile/child 選択から得る。
 
 ## Consequence
 

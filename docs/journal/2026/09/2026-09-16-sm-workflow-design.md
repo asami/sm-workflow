@@ -40,10 +40,11 @@ Phase 1には`sm-goal-phase`の完全実装、installer、MCP/server、CNCF adap
 
 ### 2026-09-18 Phase 1 scope revision
 
-上記の `sm-goal-phase` deferred 判断を更新し、Phase 1 に `GoalPhaseWorkflow` と
-`SplitPhaseWorkflow`、および対応する thin public skills `sm-goal-phase` と
-`sm-split-phase` を含める。Workflow名とskill名はmanifestで明示的にbindする。
-legacy `cncf-goal-phase` / `cncf-split-phase` は変更せず、別名・別状態の互換workflow
+上記の `sm-goal-phase` deferred 判断を更新し、Phase 1 に `GoalPhaseWorkflow`、
+`SplitPhaseWorkflow`、`RepositorySyncWorkflow`、および対応する thin public skills
+`sm-goal-phase`、`sm-split-phase`、`sm-repository-sync` を含める。Workflow名とskill名は
+manifestで明示的にbindする。legacy `cncf-goal-phase` / `cncf-split-phase` /
+`cncf-repository-sync` は変更せず、別名・別状態の互換workflow
 として長期併用する。generic `sm-workflow-run` / `sm-workflow-resume` skill は Phase 1 の
 配布skill名にせず、profile skills が versioned `sm-workflow` protocol を直接利用する。
 

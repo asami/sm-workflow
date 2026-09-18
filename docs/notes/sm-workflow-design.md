@@ -5,6 +5,7 @@
 - 更新: 2026-09-16（公開 skill の CNCF 非依存化）
 - 更新: 2026-09-16（Textus 管理の SQLite local persistence 案）
 - 更新: 2026-09-16（コスト低減目標と `advance` 中心設計）
+- 更新: 2026-09-18（repository sync profile と managed Git provider 境界）
 - 対象: Textus CAR `sm-workflow` と `sm-*` Codex skills
 - 実装フェーズ: [Phase 1: Advance-Centered Local Workflow Core](../phase/phase-1.md)
 
@@ -75,6 +76,7 @@
 8. **公開 skill に内部基盤を漏らさない。** CNCF 固有の command、schema、agent、receipt、directory を public skill contract に含めない。
 9. **`advance` を唯一の通常進行入口にする。** deterministic な内部遷移を固定点まで評価し、次の semantic boundary だけを返す。
 10. **履歴と continuation を分離する。** 完全な監査履歴は保存するが、Codex への通常応答には次の作業に必要な最小情報だけを載せる。
+11. **profile invocation は人間が選ぶ。** recommendation と開始権限を分離し、skill、Workflow、terminal result が別 Workflow を自動開始しない。
 
 ### 3.1 汎用 core と workflow profile
 
@@ -83,18 +85,37 @@
 - generic core: WorkflowDefinition、WorkflowRun、Stage、WorkItem、WorkOrder、Decision、Evidence、Result/Receipt
 - workflow profile: 開発手順や組織ごとの語彙、順序、受理条件を generic core に写像する定義
 
-`GoalPhaseWorkflow` と `SplitPhaseWorkflow` は generic core を使う最初の Workflow
-definitions であり、CNCF 型の再公開ではない。対応するpublic skillsはそれぞれ
-`sm-goal-phase` と `sm-split-phase` とする。前者は一つの Phase delivery、後者は Phase
-planning split を所有する。将来は同じ core 上に、文書制作、調査、release、運用手順
-など別用途の Workflow/skill binding を追加できる。
+`GoalPhaseWorkflow`、`SplitPhaseWorkflow`、`RepositorySyncWorkflow` は generic core を
+使う最初の Workflow definitions であり、CNCF 型の再公開ではない。対応するpublic
+skillsはそれぞれ `sm-goal-phase`、`sm-split-phase`、`sm-repository-sync` とする。前二者は
+Phase delivery と Phase planning split、後者は non-rewriting Git repository integration を
+所有する。将来は同じ core 上に、文書制作、調査、release、運用手順など別用途の
+Workflow/skill binding を追加できる。
 
 skill名とWorkflow名は同一にせず、`SkillBundleManifest`の明示bindingを正本とする。
 
 ```text
 sm-goal-phase  -> GoalPhaseWorkflow
 sm-split-phase -> SplitPhaseWorkflow
+sm-repository-sync -> RepositorySyncWorkflow
 ```
+
+### 3.2 Profile invocation selection
+
+`sm-goal-phase` と `sm-split-phase` は相互に呼び出す一つの dispatcher ではなく、別々の
+human-selected entry point である。skill を直接選ぶ場合はその選択が exact Workflow
+binding の invocation authority になる。generic host/UI は `SkillBundleManifest` の binding
+を使って候補と説明を表示できるが、`StartWorkflowRun` は常に一つの exact
+`workflowDefinitionId` を受け取り、runtime が目的や前 run の result から profile を推測
+してはならない。
+
+`GoalPhaseWorkflow` が split 必要性を判定した場合は `SPLIT_REQUIRED` terminal result と
+advisory `SplitPhaseWorkflow` recommendation を返す。この result は別 run を開始せず、
+人間が `sm-split-phase` を選択した場合にだけ独立した split run を作る。split 適用後も
+child goal は開始せず、host が child 候補を表示し、人間が選択した child ごとに独立した
+`sm-goal-phase` run を開始する。run identity、revision、Decision、Continuation、durable
+state は Workflow 間で暗黙移送せず、必要な source/evidence/proposal reference だけを typed
+start input として渡す。
 
 ## 4. 全体構成
 
@@ -236,6 +257,40 @@ CML Action は型付き Operation を参照する。raw shell、任意 script、
 - `CompleteWorkflowRun`
 - `FailWorkflowRun`
 - `CancelWorkflowRun`
+
+`StartWorkflowRun` は exact `workflowDefinitionId` と profile 固有 typed start input を必須に
+し、recommendation、terminal result、skill名の文字列推測から別 Workflow を選択または
+chain しない。別 Workflow の開始は常に新しい人間選択と新しい run identity を必要とする。
+
+```text
+WorkflowInvocationSelection
+  selectionId
+  workflowDefinitionId
+  participantIdentity
+  selectionKind: EXPLICIT_HUMAN
+  recommendationReference?
+
+WorkflowRecommendation
+  recommendationId
+  sourceRunId
+  sourceRevision
+  recommendedWorkflowDefinitionId
+  typedStartInputReference
+  reasonCode
+  advisoryOnly: true
+
+StartWorkflowRunRequest
+  workflowDefinitionId
+  typedStartInput
+  invocationSelection: WorkflowInvocationSelection
+  idempotencyKey
+```
+
+host/client adapter は UI または直接選択された public skill から
+`WorkflowInvocationSelection` を構築する。`WorkflowRecommendation`、semantic AI result、
+skill、Workflow runtime は selection record を自己生成できない。recommendation を利用する
+場合も `recommendationReference` として相関させるだけで、`workflowDefinitionId` と
+participant selection を置き換えない。
 
 ### 6.4 Automatic transition と semantic boundary
 
@@ -405,6 +460,8 @@ advanceSummary:
 
 `DECISION`のuser presentation、`WAIT`のwake registration、`TERMINAL`の表示は
 host/client adapterのmechanical envelope handlingであり、semantic AI skillの判断ではない。
+`SPLIT_REQUIRED` terminal では host/client adapter が `sm-split-phase` を候補表示できるが、
+開始は人間の明示選択後に別の `StartWorkflowRun` として行う。
 
 `start`、`work complete`、`work fail`、`decision resolve` は、通常は server-side で
 `advance` を続けて同じ `Continuation` envelope を返す。明示的 `advance` は再開、競合
@@ -524,7 +581,7 @@ SQLite profile は単一マシン上の CLI、loopback server、少数の並行 
 
 | 項目 | `cncf-*` | `sm-*` |
 | --- | --- | --- |
-| skill 名 | `cncf-goal-phase`, `cncf-split-phase` 等 | `sm-goal-phase`, `sm-split-phase` 等 |
+| skill 名 | `cncf-goal-phase`, `cncf-split-phase`, `cncf-repository-sync` 等 | `sm-goal-phase`, `sm-split-phase`, `sm-repository-sync` 等 |
 | executable | 既存 launcher/skill contract | `sm-workflow` |
 | workflow state | 既存 `.codex-workflow` 等 | Textus datastore |
 | schema namespace | 既存契約 | `sm.workflow.*`（案） |
@@ -538,8 +595,8 @@ SQLite profile は単一マシン上の CLI、loopback server、少数の並行 
 - `cncf-*` と `sm-*` への dual write
 - 一方の terminal state を他方の terminal state と暗黙に同一視すること
 - 同一 worktree・重複 path に対する両系列の同時 mutation
-- legacy `cncf-goal-phase` / `cncf-split-phase` skill の rename、overwrite、forwarding
-- `sm-goal-phase` / `sm-split-phase` から対応する `cncf-*` skill を内部呼び出しすること
+- legacy `cncf-goal-phase` / `cncf-split-phase` / `cncf-repository-sync` skill の rename、overwrite、forwarding
+- `sm-goal-phase` / `sm-split-phase` / `sm-repository-sync` から対応する `cncf-*` skill を内部呼び出しすること
 
 将来 migration が必要になった場合は、独立した明示コマンドとして設計し、まず read-only preview を要求する。
 
@@ -568,6 +625,7 @@ component and generated workflow definitions
 SkillBundleManifest
 skills/sm-goal-phase/
 skills/sm-split-phase/
+skills/sm-repository-sync/
 skills/sm-goal-task/          # 後続
 skills/sm-review/             # 後続
 skills/sm-validated-commit/   # 後続
@@ -639,18 +697,18 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 6. **`sm-workflow` vertical slice**
    - `start/advance -> edit -> complete/advance -> validate -> complete/advance -> review -> complete`
    - 中間の機械的遷移はCodexへ返さない
-7. **`sm-goal-phase` / `sm-split-phase` profile skills**
+7. **`sm-goal-phase` / `sm-split-phase` / `sm-repository-sync` profile skills**
    - versioned `sm-workflow` protocol を呼ぶ薄い client
    - Goal / Phase / Step を generic Stage / WorkItem に写像
    - resume と user decision を含む
    - CNCF command、type、state、skill を参照しない
-   - legacy `cncf-goal-phase` / `cncf-split-phase` は変更せず併用する
-9. **併用 acceptance**
+   - legacy `cncf-goal-phase` / `cncf-split-phase` / `cncf-repository-sync` は変更せず併用する
+8. **併用 acceptance**
    - 両系列の同時 install
    - 別 worktree での並行運用
    - 同一 path mutation の拒否
    - development/published skill bundle の同値性
-10. **適用範囲の拡張**
+9. **適用範囲の拡張**
    - `sm-goal-task`
    - `sm-review`
    - `sm-validated-commit`

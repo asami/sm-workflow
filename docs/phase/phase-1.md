@@ -153,17 +153,45 @@ versioned policy で収集・calibrate し、contiguous candidates を列挙し�
 最適化する。履歴から推定できない新規作業と未確定 semantic boundary だけを
 `AssessNovelSplitWork` に渡す。
 
-split 適用時の conflict は base/current/desired の typed three-way model で扱う。一意で
-invariant-preserving な merge は Workflow-owned deterministic operation が実行し、
-ownership、goal、closure、dependency、handoff 等の semantic conflict だけを
-`ResolveSplitMergeConflicts` として AI provider に委譲する。identity/authority の変更や
-複数の妥当解は human `DECISION` で停止する。AI は planning files や Git command を
-直接操作せず、typed resolution も Workflow validation と compare-and-set write を通す。
+`sm-goal-phase` と `sm-split-phase` は別々の human-selected entry point とする。skill の
+直接選択、または host/client が提示した候補からの明示選択が exact Workflow invocation
+authority になる。`GoalPhaseWorkflow` が split 必要性を判定した場合は
+`SPLIT_REQUIRED` terminal result と advisory recommendation を返すだけで、
+`SplitPhaseWorkflow` を自動開始しない。人間が `sm-split-phase` を選択した場合に新しい
+runを作る。split適用後もchild goalを自動開始せず、人間が選択したchildごとに独立した
+`sm-goal-phase` runを開始する。Workflow間でrun identity、revision、Decision、
+Continuation、durable stateを暗黙移送しない。
 
-両 profile とも semantic AI Action の前に deterministic input preparation、後に
+split 適用時の conflict は base/current/desired の typed three-way model で扱う。非重複、
+同一値、canonical projection は修正の衝突ではなく、Workflow-owned deterministic operation
+が composition する。同じ semantic target への異なる修正は `ModificationCollision` とし、
+`ResolveSplitMergeConflicts` として AI provider に委譲する。identity/authority の変更や
+複数の妥当解は human `DECISION` で停止する。AI は planning files や Git command を直接
+操作せず、typed resolution も Workflow validation と compare-and-set write を通す。
+
+Goal / Split profile は semantic AI Action の前に deterministic input preparation、後に
 deterministic result admission/validation を置く。AI result は `nextState`、command、
 validation acceptance、ledger mutation、cycle count、commit readiness を所有せず、
 admission stateを経ずにcommitまたはterminalへ遷移しない。
+
+第三の reference workflow は
+[`RepositorySyncWorkflow`](../notes/sm-repository-sync-workflow-definition.md) とし、public
+skill `sm-repository-sync` から明示的にbindする。legacy `cncf-repository-sync` skill の
+full-state checkpoint、tracking fetch、equal/ahead/diverged分類、non-rewriting merge、
+proportional validation、merge review、non-force push、equal-tip verification を pure
+Workflow / StateMachine に写す。通常の同期と conflict-free merge は semantic AI Action を
+発行せず、Workflow-owned Git provider が実行する。same semantic target への異なる修正は
+`ModificationCollision` とし、AI resolution または human Decision を必須にする。AI は
+uncommitted merge review、policy-bounded merge repair も担当し、Git command、
+branch/remote選択、checkpoint/merge/commit/push、retry、terminal判定を所有しない。
+
+`RepositorySyncWorkflow` は public profile として GitHub、CNCF、Scala、SBT、agent、
+local path、receipt locatorを要求しない。remote allowlist、declared source-history
+maintenance、validation selection は host-side repository policy に閉じる。full-state
+checkpoint の後は必ず clean tree gate を通り、force/rebase/squash/amend/reset/clean/stash、
+tag/PR/release/publication/deployment、remote configuration/credential mutation を fail-closed
+で禁止する。push中のremote advanceは一度だけ決定的に再fetch/reclassifyし、二度目は
+semantic AIでなく `WAIT_FOR_REMOTE_STABILITY` とする。
 
 各 transition は Cozy Phase 62 の generated ABI と CNCF Phase 77 の admission を
 通じて `automatic` または `semantic-boundary` として判定可能にする。Phase 1 は
@@ -183,6 +211,38 @@ Phase 1 で公開する operation:
 - `GetWorkflowRunStatus`
 - `GetWorkflowRunHistory`
 - `CancelWorkflowRun`
+
+`StartWorkflowRun` は exact `workflowDefinitionId` と typed start input を要求する。
+runtime、skill、terminal result は前 run の内容から別 Workflow を選択または chain せず、
+recommendation は invocation authority として扱わない。
+
+```text
+WorkflowInvocationSelection
+  selectionId
+  workflowDefinitionId
+  participantIdentity
+  selectionKind: EXPLICIT_HUMAN
+  recommendationReference?
+
+WorkflowRecommendation
+  recommendationId
+  sourceRunId
+  sourceRevision
+  recommendedWorkflowDefinitionId
+  typedStartInputReference
+  reasonCode
+  advisoryOnly: true
+
+StartWorkflowRunRequest
+  workflowDefinitionId
+  typedStartInput
+  invocationSelection: WorkflowInvocationSelection
+  idempotencyKey
+```
+
+host/client adapter は direct skill selection または UI selection から selection record を
+作る。recommendation は候補表示と相関にだけ使い、別 Workflow の selection record や
+start authority を生成しない。
 
 `AdvanceWorkflowRun` の概念入力:
 
@@ -292,21 +352,25 @@ Requested
 
 ### S9. Thin public skill
 
-- `skills/sm-goal-phase/SKILL.md` と `skills/sm-split-phase/SKILL.md` を提供する。
+- `skills/sm-goal-phase/SKILL.md`、`skills/sm-split-phase/SKILL.md`、
+  `skills/sm-repository-sync/SKILL.md` を提供する。
 - `SkillBundleManifest` に `sm-goal-phase -> GoalPhaseWorkflow` と
-  `sm-split-phase -> SplitPhaseWorkflow` のversioned bindingを明記し、skill名から
+  `sm-split-phase -> SplitPhaseWorkflow`、
+  `sm-repository-sync -> RepositorySyncWorkflow` のversioned bindingを明記し、skill名から
   Workflow名を推測しない。
 - Workflowが選択・leaseしたexact `AIWorkRequest`をskillへ渡し、skillはその一件のAI処理を
   実行してtyped `AIWorkResult`を同じWork Orderへ返すだけにする。
 - skill 内に state machine、phase progression、retry policy、SQLite path、CNCF commandを複製しない。
 - skillはoperation候補、result disposition、next state、次に呼ぶskill/agent/commandを判断しない。
+- skill、Workflow、terminal result は別 Workflow を自動開始しない。host/client は候補を
+  表示できるが、人間の明示選択後に新しい run identity で開始する。
 - `DECISION`、`WAIT`、`TERMINAL`の配送/表示はhost/client adapterがContinuation kindに
   従ってmechanically行い、semantic AI skillのdispatcher logicにしない。
 - `AIWorkResult`にnext operation/state、command request、routing directiveを含めない。
 - bundle は framework-neutral `SkillBundleManifest` を持ち、CAR に同梱した bytes と standalone bundle の bytes/digest を一致させる。
-- legacy `cncf-goal-phase` / `cncf-split-phase` skill を rename、overwrite、forward、または
+- legacy `cncf-goal-phase` / `cncf-split-phase` / `cncf-repository-sync` skill を rename、overwrite、forward、または
   state migration しない。両系列は別名、別run/stateで長期併用する。
-- `sm-goal-phase` / `sm-split-phase` は `cncf-*` skill を呼ばず、versioned
+- `sm-goal-phase` / `sm-split-phase` / `sm-repository-sync` は `cncf-*` skill を呼ばず、versioned
   `sm-workflow` protocol だけを使用する。
 
 ### S10. Cost observability
@@ -318,7 +382,7 @@ run ごとに少なくとも次を記録・表示できるようにする。
 - `client_round_trip_count`
 - `continuation_payload_bytes`
 - `resume_context_payload_bytes`
-- `automatic_merge_conflict_count`
+- `non_colliding_composition_count`
 - `semantic_merge_work_order_count`
 - `deterministic_work_estimate_count`
 - `novel_work_estimate_count`
@@ -340,14 +404,14 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 ## Deliverables
 
 - Textus CAR source and generated ABI
-- Workflow/StateMachine CML model, including `GoalPhaseWorkflow` and `SplitPhaseWorkflow`
+- Workflow/StateMachine CML model, including `GoalPhaseWorkflow`, `SplitPhaseWorkflow`, and `RepositorySyncWorkflow`
 - versioned public operation and JSON schema
 - provider-neutral workflow storage port
 - Textus-managed SQLite local provider binding
 - bounded `advance` evaluator
 - CLI adapter
 - reference development workflow profile
-- thin `sm-goal-phase` and `sm-split-phase` skills
+- thin `sm-goal-phase`, `sm-split-phase`, and `sm-repository-sync` skills
 - neutral skill bundle manifest and CAR inclusion
 - unit, persistence, concurrency, restart, CLI, bundle, and cost-structure acceptance evidence
 - public usage and recovery documentation
@@ -400,10 +464,11 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - Continuation payload size is measured and excludes full history and previous receipt bodies.
 - Resume requires only run identity and bounded continuation context, not conversation replay.
 - A current complete split proposal reaches validated apply with zero semantic AI Work Orders.
-- A normal split without reusable proposal requires one partition-design Work Order; deterministic
-  inventory, numbering, projection, merge, and validation do not add AI calls.
-- An apply conflict adds an AI Work Order only when deterministic conflict classification proves
-  that semantic resolution is required.
+- A split without a reusable proposal requires zero semantic Work Orders when all work estimates and
+  boundaries are already known; otherwise it requires one bounded novel-work/boundary Work Order.
+  Deterministic inventory, numbering, projection, merge, and validation do not add AI calls.
+- A `ModificationCollision` adds an AI Work Order unless authority or multiple-valid-resolution
+  classification requires a human Decision; non-colliding composition adds neither.
 - Known split work is estimated from the same frozen evidence and policy with reproducible results;
   candidate enumeration and partition selection add no AI Work Order.
 - AI estimation is limited to work marked `UNRESOLVED_NOVEL`, and semantic classification is limited
@@ -415,6 +480,8 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - The thin skill continues to use the host's ordinary permission boundary.
 - `advance` stops at user decision and new-authority boundaries.
 - Cost reduction does not remove required validation, review, permission, or receipt.
+- Workflow recommendation does not authorize or automatically start another Workflow; profile and
+  child selection remain explicit human choices with separate run identities.
 
 ## Validation Plan
 
@@ -424,7 +491,7 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - CLI JSON contract tests for every continuation outcome and typed conflict
 - end-to-end reference workflow restart test
 - split preview/apply/idempotency tests, including zero-AI proposal adoption, zero-AI known-work
-  estimation/optimization, bounded novel-work enrichment, automatic non-overlapping merge,
+  estimation/optimization, bounded novel-work enrichment, non-colliding composition,
   semantic-conflict delegation, and authority-conflict stop
 - static dependency-boundary checks over public skill and schemas
 - standalone/CAR skill bundle digest equivalence check

@@ -10,6 +10,11 @@ Status: Design decision
 `sm-goal-phase` とする。両者は`SkillBundleManifest`で明示的にbindする。legacy
 `cncf-goal-phase` は変更せず、独立した互換workflowとして長期併用する。
 
+`sm-goal-phase` と `sm-split-phase` の選択は run 開始前の human invocation decision とする。
+`GoalPhaseWorkflow` が split 必要性を判定した場合、この run は `SPLIT_REQUIRED` terminal
+result と advisory `SplitPhaseWorkflow` recommendation を返すが、別 Workflow を開始しない。
+人間が `sm-split-phase` を明示選択した場合だけ、別 run identity で開始する。
+
 legacy skill の手続き全文を `sm-goal-phase` skill に写すのではなく、Phase Entry、PLAN、
 Step/Slice delivery、review、repair、commit、Phase closure を CML/CNCF の純粋な
 Workflow / StateMachine として定義する。
@@ -36,6 +41,8 @@ Normative design input:
   からcommit/terminalへ直接遷移させない。
 - skillはWorkflowが選択したexact AI requestを一件実行してresultを返すだけとし、resultを
   見て次のskill/agent/operation/command/stateを選ばない。
+- `SPLIT_REQUIRED` recommendation は invocation authority ではなく、run identity、revision、
+  Decision、Continuation、durable state を別 Workflow へ暗黙移送しない。
 
 ## Consequence
 

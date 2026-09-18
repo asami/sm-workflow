@@ -28,6 +28,17 @@ Result / Evidence を resume する participant である。
 宣言する。skill名をWorkflow definition IDとして推測したり、文字列変換で導出しない。
 CLI selectorは `sm-workflow run start --workflow GoalPhaseWorkflow ...` とする。
 
+`GoalPhaseWorkflow` と `SplitPhaseWorkflow` のどちらを開始するかは、run 作成前に
+人間が明示的に選択する。public skill を直接利用する場合は `sm-goal-phase` の選択自体が
+その invocation authority になる。host/client は Phase evidence から別 Workflow を推奨
+表示できるが、skill、Workflow、terminal result のいずれも別 Workflow を自動開始しない。
+
+Phase Entry が split を要求した場合、この run は `SPLIT_REQUIRED` terminal result を返して
+終了する。terminal result は source Phase、entry evidence/proposal reference、および
+`SplitPhaseWorkflow` の advisory recommendation を含められるが、次の run の開始権限や
+state migration を含めない。人間が `sm-split-phase` を選択したときだけ、独立した
+`SplitPhaseWorkflow` run を新規作成する。
+
 legacy `cncf-goal-phase` skill は rename、overwrite、forward、または implicit migration
 しない。両 skill は別の entry point と別の durable state を持ち、長期併用する。
 `sm-goal-phase` は legacy skill を内部呼び出しせず、versioned `sm-workflow` protocol
@@ -51,6 +62,7 @@ legacy `cncf-goal-phase` skill は rename、overwrite、forward、または impl
 - 一 turn 一 state、commentary、`State End` の Markdown 表示。
 - CML/public Action contract 内の SBT/Git/CLI raw command sequence。
 - participant の spawn、resume、tool permission、UI transport。
+- 別 Workflow の選択、開始、run/state の移送。
 - SQLite/JDBC/path details。
 
 raw command の具体的な argv と process lifecycle は Workflow runtime が所有する
@@ -103,7 +115,7 @@ GoalPhaseRun
   runId
   revision
   phaseIdentity
-  phaseExecutionPolicy: AUTOMATIC_SPLITTING | WHOLE_PHASE
+  invocationSelectionReference
   authorityReference
   entryEvidenceSnapshotReference
   entrySemanticInputDigest?
@@ -170,12 +182,30 @@ CNCF Workflow ABI の必須語彙にはしない。
 Terminal outcomes:
 
 - `PHASE_CLOSED`
-- `SPLIT_HANDOFF`
+- `SPLIT_REQUIRED`
 - `BOUNDARY_INVALID`
 - `RESTART_REQUIRED`
 - `BLOCKED`
 - `FAILED`
 - `CANCELLED`
+
+`SPLIT_REQUIRED` の typed terminal payload は次とする。
+
+```text
+GoalPhaseTerminalResult
+  outcome: SPLIT_REQUIRED
+  runId
+  revision
+  phaseIdentity
+  entryEvidenceSnapshotReference
+  proposalReference?
+  recommendation: WorkflowRecommendation
+```
+
+`WorkflowRecommendation` は `SplitPhaseWorkflow` と typed start-input reference を示す
+advisory evidence であり、invocation authority ではない。host/client はこの payload を
+候補表示に使えるが、別 run の `WorkflowInvocationSelection` を作成できるのは、人間が
+その候補を明示選択した後だけである。
 
 ## Primary transition definition
 
@@ -191,7 +221,7 @@ ENTRY_PREPARING -- invalid authority --> BOUNDARY_INVALID
 
 ENTRY_SEMANTIC_ASSESSMENT -- typed result submitted --> ENTRY_ADMITTING
 
-ENTRY_ADMITTING -- split-required --> SPLIT_HANDOFF
+ENTRY_ADMITTING -- split-required --> SPLIT_REQUIRED
 ENTRY_ADMITTING -- boundary-invalid --> BOUNDARY_INVALID
 ENTRY_ADMITTING -- proceed --> PARENT_CAPABILITY_ASSESSMENT
 ENTRY_ADMITTING -- authority decision required --> AWAITING_DECISION
@@ -563,6 +593,8 @@ commit readiness を返さない。またresult内容から別skill、agent、op
 15. deterministic operation は意味判断を補完せず、閉じた規則で分類不能なら semantic/human boundary で停止する。
 16. validation、lint、manifest construction、diff ownership、review vocabulary admission、repair convergence、commit は AI Action に含めない。
 17. Phase Entryのauthority収集、既知duration計算、split/proceed分類はdeterministicとし、AIは未知durationと未確定closure/boundaryだけを補完する。
+18. `SPLIT_REQUIRED` はこの run の terminal result であり、`SplitPhaseWorkflow` を開始したり
+    current run/stateを移送したりしない。
 
 ## Advance behavior
 
@@ -610,6 +642,8 @@ Skill を起動しない deterministic test provider で少なくとも次を証
     human Decisionを返す。
 12. known-entry evidenceだけのPhaseはentry AI invocation 0回で分類され、未知部分がある
     Phaseも `AssessPhaseEntrySemantics` resultをdeterministic admissionしてから分類される。
+13. split-required entry は `SPLIT_REQUIRED` で終了し、advisory recommendation を返しても
+    `sm-split-phase`、`SplitPhaseWorkflow`、child goal のいずれも自動開始しない。
 
 ## Source mapping
 

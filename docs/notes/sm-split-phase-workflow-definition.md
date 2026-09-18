@@ -36,6 +36,17 @@ static validation は Workflow が実行する。
 宣言する。skill名をWorkflow definition IDとして推測したり、文字列変換で導出しない。
 CLI selectorは `sm-workflow run start --workflow SplitPhaseWorkflow ...` とする。
 
+`SplitPhaseWorkflow` の開始は人間が明示的に選択する。`sm-goal-phase` の
+`SPLIT_REQUIRED` terminal result や host/client の recommendation は開始候補を提示できるが、
+それ自体は invocation authority ではない。`sm-split-phase` の選択または exact
+`StartWorkflowRun(workflowDefinitionId = SplitPhaseWorkflow, ...)` によって、別の run として
+開始する。前 run の typed source/evidence/proposal reference は入力として参照できるが、
+run identity、revision、Decision、Continuation、durable state を暗黙に移送しない。
+
+split 完了後も Workflow は child goal を開始しない。host/client は適用済み child を
+`GoalPhaseWorkflow` の候補として表示できるが、どの child をいつ開始するかは人間が選び、
+各選択は独立した `sm-goal-phase` invocation になる。
+
 legacy `cncf-split-phase` skill は rename、overwrite、forward、または implicit migration
 しない。両 skill は別の entry point と別の durable state を持ち、長期併用する。
 `sm-split-phase` は legacy skill を内部呼び出しせず、versioned `sm-workflow` protocol
@@ -65,6 +76,7 @@ legacy `cncf-split-phase` skill は rename、overwrite、forward、または imp
 - arbitrary shell、free-form argv、AI が選ぶ Git/SBT command sequence。
 - user authority を必要とする Phase identity の再利用、nested numbering、scope change。
 - planning split の commit、push、publish、deploy。
+- `GoalPhaseWorkflow`、child goal、または別 Workflow run の選択と開始。
 
 Skill は Workflow owner ではない。external semantic Action の provider として
 `Suspended(Continuation)` を受け、typed Result/Evidence を返す thin participant である。
@@ -104,7 +116,7 @@ SplitPhaseWorkflow
   +-- ApplicationLifecycle
   |     Projection
   |     ConflictClassification
-  |     AutomaticMerge
+  |     NonCollidingComposition
   |     SemanticMerge
   |     Write
   +-- ValidationLifecycle
@@ -131,6 +143,8 @@ SplitPhaseRun
   runId
   revision
   sourcePhaseIdentity
+  invocationSelectionReference
+  originGoalPhaseTerminalResultReference?
   invocationMode: APPLY | PREVIEW
   validationTiming: FINAL_ONLY | EACH_PHASE
   sourceAuthorityReference
@@ -156,6 +170,24 @@ SplitPhaseRun
 
 SQLite、JDBC、artifact path はこの profile の public Action contract に含めない。
 
+Start input は cross-Workflow state ではなく、独立 run を構築する immutable reference
+だけを受け取る。
+
+```text
+SplitPhaseStartInput
+  sourcePhaseIdentity
+  invocationMode: APPLY | PREVIEW
+  sourceAuthorityReference
+  sourceSnapshotReference?
+  originGoalPhaseTerminalResultReference?
+  proposalReference?
+  invocationSelection: WorkflowInvocationSelection
+```
+
+`originGoalPhaseTerminalResultReference` と `proposalReference` は任意である。指定された場合も
+source identity、digest、authority を entry assessment で再検証し、prior run の revision、
+Decision、Continuation、lease、pending state を復元または継承しない。
+
 ## Top-level states
 
 | State | Meaning | On-entry Action class |
@@ -171,9 +203,9 @@ SQLite、JDBC、artifact path はこの profile の public Action contract に�
 | `PROPOSAL_FROZEN` | proposal digest と source revision を固定する | automatic |
 | `PREVIEW_PROJECTION` | edit せず preview result を生成する | deterministic |
 | `DOCUMENT_PROJECTION` | authoritative documents の desired projection を生成する | deterministic operation |
-| `CONFLICT_CLASSIFICATION` | base/current/desired の差を型付き conflict に分類する | deterministic operation |
-| `AUTOMATIC_MERGE` | admission 済みの機械的 conflict を解消する | deterministic operation |
-| `SEMANTIC_MERGE` | 残る意味的 conflict の解決案を作る | semantic AI |
+| `CONFLICT_CLASSIFICATION` | base/current/desired の差を non-collision / modification collision / authority collision に分類する | deterministic operation |
+| `NON_COLLIDING_COMPOSITION` | 非重複・同一値・canonical projection を conflict でないこととして compose する | deterministic operation |
+| `SEMANTIC_MERGE` | modification collision の解決案を作る | semantic AI |
 | `RESOLUTION_VALIDATION` | AI resolution を authority/invariant に照らして検証する | deterministic |
 | `APPLYING_DOCUMENTS` | current revision に CAS で write set を適用する | deterministic operation |
 | `STATIC_VALIDATION` | applied split を documentation-only に検証する | deterministic operation |
@@ -243,14 +275,13 @@ digest の enrichment を一度発行し、同じ rejection lineage の反復は
 DOCUMENT_PROJECTION -- exact split already present --> STATIC_VALIDATION
 DOCUMENT_PROJECTION -- projection ready --> CONFLICT_CLASSIFICATION
 
-CONFLICT_CLASSIFICATION -- no conflict --> APPLYING_DOCUMENTS
-CONFLICT_CLASSIFICATION -- automatic conflicts only --> AUTOMATIC_MERGE
-CONFLICT_CLASSIFICATION -- semantic conflicts remain --> SEMANTIC_MERGE
+CONFLICT_CLASSIFICATION -- no current/desired overlap --> APPLYING_DOCUMENTS
+CONFLICT_CLASSIFICATION -- non-colliding composition required --> NON_COLLIDING_COMPOSITION
+CONFLICT_CLASSIFICATION -- modification collision --> SEMANTIC_MERGE
 CONFLICT_CLASSIFICATION -- identity/authority conflict --> AWAITING_DECISION
 
-AUTOMATIC_MERGE -- all resolved --> APPLYING_DOCUMENTS
-AUTOMATIC_MERGE -- semantic conflicts remain --> SEMANTIC_MERGE
-AUTOMATIC_MERGE -- authority conflict exposed --> AWAITING_DECISION
+NON_COLLIDING_COMPOSITION -- verified --> APPLYING_DOCUMENTS
+NON_COLLIDING_COMPOSITION -- collision exposed --> SEMANTIC_MERGE | AWAITING_DECISION
 
 SEMANTIC_MERGE -- typed resolution submitted --> RESOLUTION_VALIDATION
 
@@ -479,7 +510,7 @@ Workflow/generated binding が選択した一つの `AssessNovelSplitWork` ま�
 - `ScanPhaseIdentityCollisions`
 - `BuildThreeWayMergeModel`
 - `ClassifySplitConflicts`
-- `ApplyAutomaticSplitMerge`
+- `ApplyNonCollidingSplitComposition`
 - `ValidateSemanticConflictResolution`
 - `ApplyPlanningWriteSet`
 - `ValidateAppliedSplit`
@@ -493,10 +524,11 @@ operation provider 内で実行する。Skill/AI に Python、Git、SBT その�
 ## Conflict and merge policy
 
 競合は source snapshot、current planning set、desired projection の three-way semantic
-model で判定する。Workflow は、結果が一意で invariant を保存できる conflict だけを
-自動解消する。
+model で判定する。非重複、同一 normalized value、canonical proposal から再生成できる
+projection は修正の衝突ではない。Workflow は compatibility を検証して compose できるが、
+これを conflict resolution と扱わない。
 
-### Workflow-side automatic merge
+### Workflow-side non-colliding composition
 
 - base に対する current/desired の変更範囲が非重複である。
 - 両側が同じ normalized value または同じ completed-history bytes を保持する。
@@ -507,12 +539,15 @@ model で判定する。Workflow は、結果が一意で invariant を保存で
 - stale generated projection を canonical proposal から置換でき、human-authored semantic
   authority を上書きしない。
 
-automatic merge は operation version、input digests、resolved conflict IDs、output digest、
-changed paths を receipt に残す。同じ receipt の replay は同じ result を返す。
+These conditions prove that the two edits do not collide. The composition receipt records operation
+version、input digests、compatibility reason、output digest、changed paths を残す。同じ receipt
+の replay は同じ result を返す。
 
 ### AI-side semantic merge
 
-次は `ResolveSplitMergeConflicts` へ委譲する。
+同じ stable semantic entity、Step/Slice ownership、goal、closure、dependency、handoff に
+current と desired が異なる修正をした時点で `ModificationCollision` とする。Workflow は
+outputが一見一意でも自動採択せず、次を `ResolveSplitMergeConflicts` へ委譲する。
 
 - 同じ unfinished Step/Slice の ownership が current と desired で異なる。
 - goal、closure criterion、dependency、handoff の意味が両側で変わっている。
@@ -525,7 +560,7 @@ AI resolution も Workflow の validator と CAS write を必ず通る。AI が�
 
 ### Human decision boundary
 
-次は automatic merge も AI authority も越えられない。
+次は non-colliding composition も AI authority も越えられない。
 
 - proposed child identity が別の authoritative Phase と衝突する。
 - decimal-suffixed source の nested numbering rule が定義されていない。
@@ -558,6 +593,8 @@ AI resolution も Workflow の validator と CAS write を必ず通る。AI が�
 20. AI は `UNRESOLVED_NOVEL` item 以外の duration estimate を変更できない。
 21. partition candidate の列挙、admissibility、objective evaluation、tie-break は Workflow が行う。
 22. semantic enrichment/merge result は別の deterministic admission/validation state を通るまで proposal/write set/stateを変更しない。
+23. prior `SPLIT_REQUIRED` result は typed input reference としてのみ利用し、prior run の
+    identity/revision/stateを移送せず、split後のchild goalも自動開始しない。
 
 ## Static validation
 
@@ -624,18 +661,24 @@ preview は frozen proposal の human projection を terminal result として�
 4. same evidence snapshot/policy が同じ estimates、candidate set、selected partition を返す。
 5. preview は proposal を返し planning files を変更しない。
 6. exact re-run は `SPLIT_ALREADY_APPLIED` になり重複 note/child を作らない。
-7. non-overlapping concurrent edit は Workflow three-way merge で AI なしに保存される。
-8. semantic ownership conflict だけが `ResolveSplitMergeConflicts` を発行する。
+7. non-overlapping concurrent edit は non-colliding composition として Workflow three-way
+   model で AI なしに保存される。
+8. every `ModificationCollision` が `ResolveSplitMergeConflicts` または human Decision を
+   発行する。
 9. AI resolution は invariant validator/CAS を通らない限り適用されない。
 10. identity collision と nested numbering は human Decision で停止する。
 11. child numbering、packing、history、validation ownership の invariant violation は fail closed。
 12. split run は child goal、SBT/runtime validation、commit、push を開始しない。
 13. skill-backed provider と deterministic test provider が同じ typed results に対して同じ
     state/history/terminal outcome を生成する。
-14. semantic AI count、automatic transition count、deterministic operation count、auto-merged
-    conflict count、AI-delegated conflict count を receipt から測定できる。
+14. semantic AI count、automatic transition count、deterministic operation count、non-colliding
+    composition count、AI-delegated `ModificationCollision` count、human Decision count を
+    receipt から測定できる。
 15. novel-work/boundary enrichment と semantic merge のAI resultが、それぞれ独立した
     deterministic admission/validationを通らずにproposalまたはwrite setを変更できない。
+16. `SPLIT_REQUIRED` recommendation だけでは run を開始できず、明示的に選択された
+    `sm-split-phase` invocation が独立 run を作る。split terminal 後も `sm-goal-phase` を
+    自動開始しない。
 
 ## Source mapping
 
