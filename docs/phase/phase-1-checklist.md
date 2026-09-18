@@ -31,6 +31,10 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 - [ ] P1-C06: Version the public CLI/JSON schema and document compatibility behavior.
 - [ ] P1-C07: Define typed deterministic-operation contracts for build, test, executable specification, git inspection/staging/commit, including input/output, failure semantics, authorization, idempotency, and receipt.
 - [ ] P1-C08: Verify no raw shell or arbitrary script is exposed as a Workflow Action contract.
+- [ ] P1-C09: Define typed planning-document snapshot, projection, three-way conflict classification, automatic merge, compare-and-set write, and validation contracts without exposing file-edit or Git command mechanics to AI Actions.
+- [ ] P1-C10: Restrict semantic Work Order kinds to planning, editing/repair, review, and exception analysis; represent validation/commit as deterministic operations and user authority as a Decision.
+- [ ] P1-C11: Require every semantic Action to consume a deterministic immutable input snapshot and pass a distinct deterministic result-admission state before it can affect workflow state or acceptance ledgers.
+- [ ] P1-C12: Define one fully materialized `AIWorkRequest` and matching `AIWorkResult` contract with no candidate-operation list, next-state field, command request, or routing directive.
 
 ## Advance Evaluator
 
@@ -45,6 +49,11 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 - [ ] P1-A09: Keep status/history read-only and side-effect free.
 - [ ] P1-A10: Execute deterministic operations without Codex/model invocation and persist their typed receipts/evidence.
 - [ ] P1-A11: Classify deterministic-operation failures through declared retry / WAIT / WORK_ORDER / DECISION / failure rules rather than automatically delegating them to Codex.
+- [ ] P1-A12: Execute admitted procedural external processes, including Git/SBT, only from Workflow-owned deterministic-operation providers, covering command resolution, bounded environment/capabilities, serialization or lifecycle control, completion, retry/failure classification, and receipt persistence; never issue them as Skill/AI Work Orders.
+- [ ] P1-A13: Keep the AI tool sandbox unchanged while enforcing Workflow-managed operation allowlists, current-state/revision guards, typed argv projection, working-directory, mutation-root, network/credential, timeout, and audit boundaries without expanding authority through a Continuation or Work Order.
+- [ ] P1-A14: Reject provider-registry misses, executable/free-form argv injection, generic shell, arbitrary script, and operations not admitted in the current Workflow state.
+- [ ] P1-A15: Automatically merge only conflicts whose result is unique and invariant-preserving; issue a semantic Work Order only for the remaining typed semantic conflicts and a human Decision for authority conflicts or multiple valid resolutions.
+- [ ] P1-A16: Reject semantic results that attempt to select next state, commands, validation acceptance, ledger mutation, repair-cycle count, retry policy, or commit readiness.
 
 ## SQLite Persistence
 
@@ -62,7 +71,7 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 
 - [ ] P1-R01: Implement the Phase 1 CLI command surface.
 - [ ] P1-R02: Emit versioned machine-readable JSON and a separate human projection.
-- [ ] P1-R03: Implement the reference PLAN -> CHANGE -> deterministic validation -> REVIEW -> deterministic closing workflow profile.
+- [ ] P1-R03: Implement `GoalPhaseWorkflow` as the first reference Workflow from the normative pure StateMachine definition derived from legacy `cncf-goal-phase`, covering Phase Entry, PLAN, Step/Slice delivery, review, bounded repair, Step commits, full Phase review, and release closure.
 - [ ] P1-R04: Prove start returns the first semantic Work Order after internal automatic transitions.
 - [ ] P1-R05: Prove each semantic Work Order completion returns the next semantic boundary in the same response after intervening deterministic progression.
 - [ ] P1-R06: Prove explicit advance resumes the current boundary without conversation history.
@@ -71,15 +80,34 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 - [ ] P1-R09: Prove REVIEW ACCEPT enters Closing and reaches Completed without a COMMIT Work Order when the normal deterministic path succeeds.
 - [ ] P1-R10: Prove successful Closing records commit SHA and operation receipts.
 - [ ] P1-R11: Prove push, PR creation, merge, and deployment are not executed by Phase 1 Closing.
+- [ ] P1-R12: Prove the `GoalPhaseWorkflow` CML/generated ABI contains no skill name/path, model, reasoning effort, agent role, prompt, raw command, or turn-scheduling contract.
+- [ ] P1-R13: Bind only semantic AI Required Operations through `Suspended(Continuation)` and typed resume Result/Evidence; keep deterministic build/test/git and workflow-control operations on internal providers.
+- [ ] P1-R14: Prove deterministic-test and skill-backed providers produce equivalent state/history/terminal outcomes for the same typed Action results.
+- [ ] P1-R15: Prove build/test, generation/inspection, and local Git inspect/stage/commit complete through Workflow-owned providers while the Skill receives no external command or raw command sequence.
+- [ ] P1-R16: Implement `SplitPhaseWorkflow` from the normative pure StateMachine definition derived from legacy `cncf-split-phase`, covering evidence collection, deterministic estimation/optimization, bounded semantic enrichment, preview/apply, numbering, planning-document projection, conflict resolution, idempotency, and static validation.
+- [ ] P1-R17: Prove a current complete `SPLIT_REQUIRED` proposal applies with zero semantic AI Work Orders; a source containing only known work and explicit boundaries also builds and applies its proposal with zero semantic AI Work Orders.
+- [ ] P1-R18: Prove non-overlapping and generated-projection conflicts merge on Workflow providers, while only unresolved semantic conflicts produce `ResolveSplitMergeConflicts` and identity/authority conflicts produce a human Decision.
+- [ ] P1-R19: Prove split AI results never directly edit planning files or run Git; Workflow validation and compare-and-set write own every applied mutation.
+- [ ] P1-R20: Prove split preview mutates no planning file, idempotent apply creates no duplicate child/note, and no split run starts a child goal, runs SBT/runtime validation, commits, or pushes.
+- [ ] P1-R21: Freeze a versioned duration-estimation policy covering comparable evidence selection, sample threshold, median calculation, normalization, rounding, overhead, and outlier admission, and prove the same evidence snapshot/policy produces identical estimates.
+- [ ] P1-R22: Prove only `UNRESOLVED_NOVEL` work and unresolved semantic edges enter `AssessNovelSplitWork`; known-work estimates cannot be overwritten by AI.
+- [ ] P1-R23: Enumerate contiguous partition candidates and select the unique result with the versioned admissibility filter, lexicographic objective, and stable tie-break without AI participation.
+- [ ] P1-R24: Split goal-phase Phase Entry, provisional adoption, planning, implementation, step/phase review, repair, and re-review into deterministic prepare, semantic Action, and deterministic admission/validation states.
+- [ ] P1-R25: Prove split-phase novel-work/boundary enrichment and semantic conflict resolution each pass distinct deterministic admission/validation states before proposal or write-set mutation.
 
 ## Public Skill and Bundle
 
-- [ ] P1-K01: Author the thin `sm-workflow-run` skill.
+- [ ] P1-K01: Author the thin `sm-goal-phase` and `sm-split-phase` skills.
 - [ ] P1-K02: Keep state progression, deterministic build/test/git command sequences, retry policy, SQLite details, and CNCF-specific routing out of the skill.
 - [ ] P1-K03: Define a framework-neutral `SkillBundleManifest` with file digests and protocol compatibility.
 - [ ] P1-K04: Produce a standalone bundle that can be validated without CNCF or CAR resolution.
 - [ ] P1-K05: Include the same bundle bytes in the CAR and verify digest equivalence.
 - [ ] P1-K06: Document install prerequisites without implementing installer adapters in Phase 1.
+- [ ] P1-K07: Prove legacy `cncf-goal-phase` and `cncf-split-phase` remain installed and unchanged, with no rename, overwrite, forwarding, shared state, or implicit migration from either `sm-*` skill.
+- [ ] P1-K08: Prove `sm-goal-phase` and `sm-split-phase` call only the versioned `sm-workflow` protocol and contain no runtime dependency on a `cncf-*` skill.
+- [ ] P1-K09: Prove each skill executes exactly the leased AI request and returns its typed result without choosing another skill, agent, operation, command, Decision, or next state.
+- [ ] P1-K10: Keep Decision presentation, WAIT registration, terminal display, and next-Continuation delivery in the host/client adapter rather than semantic skill logic.
+- [ ] P1-K11: Bind `sm-goal-phase -> GoalPhaseWorkflow` and `sm-split-phase -> SplitPhaseWorkflow` explicitly in `SkillBundleManifest`, including compatible definition versions, without name-derived lookup.
 
 ## Cost and Safety Acceptance
 
@@ -93,6 +121,12 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 - [ ] P1-Q08: Prove REVIEW ACCEPT to Completed requires zero additional Codex/model turns on the normal deterministic closing path.
 - [ ] P1-Q09: Prove `CommitChanges` refuses stale revision or missing required review/validation evidence.
 - [ ] P1-Q10: Prove failed commit never produces Completed and preserves diagnostic/evidence needed for recovery.
+- [ ] P1-Q11: Measure AI tool-command calls avoided by Workflow-owned external-command providers without relaxing the AI sandbox.
+- [ ] P1-Q12: Prove Workflow-managed command execution does not widen executable, filesystem, network, credential, or process authority and remains bound to current state/revision/guard.
+- [ ] P1-Q13: Measure split proposal reuse, deterministic/novel work estimates, enumerated candidates, automatically merged conflicts, semantic-conflict Work Orders, and human Decisions separately.
+- [ ] P1-Q14: Prove deterministic inventory, numbering, rendering, merge, and static validation do not increase semantic Work Order count.
+- [ ] P1-Q15: Prove history collection, known-work calibration, contiguous candidate enumeration, objective evaluation, and tie-break do not increase semantic Work Order count.
+- [ ] P1-Q16: Prove deterministic prepare/admission states execute without model invocation and that one semantic result cannot trigger an unvalidated direct commit or terminal transition.
 
 ## Validation and Closure
 
@@ -106,3 +140,7 @@ This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic
 - [ ] P1-V08: Pass CAR structure/lint and documentation checks.
 - [ ] P1-V09: Record all validation receipts against the final intended tree.
 - [ ] P1-V10: Update Phase 1 status and evidence only after every required item is complete.
+- [ ] P1-V11: Pass end-to-end `SplitPhaseWorkflow` through the `sm-split-phase` skill for preview, apply, restart, idempotency, deterministic-estimation, concurrent-edit merge, semantic-conflict, and authority-conflict scenarios.
+- [ ] P1-V12: Pass side-by-side installation and separate-state acceptance for `sm-goal-phase`, `sm-split-phase`, `cncf-goal-phase`, and `cncf-split-phase` without skill-name collision or implicit state transfer.
+- [ ] P1-V13: Pass schema-negative tests for semantic results containing forbidden command, transition, validation, ledger, cycle, retry, or commit-readiness fields.
+- [ ] P1-V14: Pass a dispatcher-negative test proving different AI result contents cannot cause the skill to select or invoke different follow-up processing; only Workflow admission and `advance` choose the next continuation.

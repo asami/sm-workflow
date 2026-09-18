@@ -44,7 +44,9 @@
 - `sm-*` skill は薄いクライアントとし、ワークフロー本体を skill の自然言語指示へ埋め込まない。
 - workflow の状態遷移、再開、排他、冪等性、証跡は `sm-workflow` の公開 service contract の背後にある runtime が担う。
 - local/standalone profile の既定永続化候補は、Textus runtime が管理する SQLite とする。
-- Codex 固有の編集、検証、レビュー、commit、権限確認は skill 側が担う。
+- Codex skill は planning、semantic edit/repair、review、例外分析を担う。定型化された
+  validation、inspection、generation、commit、権限/状態検証は Workflow-owned typed
+  operation または human Decision が担う。
 - skill は CAR に同梱して配布できるようにする。
 - skill bundle の形式は CAR や CNCF から独立した中立な公開契約とし、CAR 同梱と standalone 配布の両方を可能にする。
 - Textus/CNCF 側には、その中立な bundle を生成・検証・導入する adapter を実装する。
@@ -66,8 +68,8 @@
 1. **CML は構造を定義する。** Workflow、StateMachine、Operation、状態遷移、受理条件をモデル化する。
 2. **公開 contract と runtime 実装を分離する。** `sm-workflow` は中立な service/runtime port を公開し、永続化や回復の具体実装を差し替え可能にする。
 3. **core と profile を分離する。** `sm-workflow` core は Run / Stage / Work Item / Work Order を扱い、Goal / Phase / Step などの運用語彙は profile が対応付ける。
-4. **skill は Codex との境界を担う。** component から仕事を取得し、Codex の道具で実行し、型付き結果を返す。
-5. **遷移判断と外部作用を分離する。** component は raw shell を直接実行せず、型付き Work Order を発行する。
+4. **skill は semantic AI との境界だけを担う。** component から bounded semantic work を取得し、型付き semantic result を返す。
+5. **意味判断と決定的処理を分離する。** semantic AI Action の前後に deterministic prepare/admission を置き、定型化された外部作用は typed operation provider が実行する。raw shell や任意 command を Work Order にしない。
 6. **一つの事実に一つの正本を置く。** workflow state の正本は Textus datastore とし、skill の会話履歴や Markdown を正本にしない。
 7. **併用は共有状態ではなく明確な隔離で成立させる。** `cncf-*` と `sm-*` の暗黙変換、dual write、自動 migration は行わない。
 8. **公開 skill に内部基盤を漏らさない。** CNCF 固有の command、schema、agent、receipt、directory を public skill contract に含めない。
@@ -81,7 +83,18 @@
 - generic core: WorkflowDefinition、WorkflowRun、Stage、WorkItem、WorkOrder、Decision、Evidence、Result/Receipt
 - workflow profile: 開発手順や組織ごとの語彙、順序、受理条件を generic core に写像する定義
 
-`sm-goal-phase` は generic core を使う最初の profile skill であり、CNCF 型の再公開ではない。将来は同じ core 上に、文書制作、調査、release、運用手順など別用途の profile skill を追加できる。
+`GoalPhaseWorkflow` と `SplitPhaseWorkflow` は generic core を使う最初の Workflow
+definitions であり、CNCF 型の再公開ではない。対応するpublic skillsはそれぞれ
+`sm-goal-phase` と `sm-split-phase` とする。前者は一つの Phase delivery、後者は Phase
+planning split を所有する。将来は同じ core 上に、文書制作、調査、release、運用手順
+など別用途の Workflow/skill binding を追加できる。
+
+skill名とWorkflow名は同一にせず、`SkillBundleManifest`の明示bindingを正本とする。
+
+```text
+sm-goal-phase  -> GoalPhaseWorkflow
+sm-split-phase -> SplitPhaseWorkflow
+```
 
 ## 4. 全体構成
 
@@ -102,18 +115,24 @@ Workflow runtime implementation
     v
 Work Order
     |
-    | Codex performs edit / validate / review / commit
+    | Codex performs plan / semantic edit or repair / review / exception analysis
     v
-Result + Receipt
+Semantic Result
     |
-    `---- validated transition back into sm-workflow
+    v
+deterministic admission / validation / closing
+    |
+    `---- typed receipts and transition back into sm-workflow
 ```
 
 CLI と MCP/server は異なる workflow 実装を持たない。同じ application service を呼ぶ二つの adapter とする。初期 vertical slice は CLI を主経路とし、対話性や remote access が必要になった時点で MCP/server を追加できる構造にする。
 
 公開 `sm-*` skill が認識するのは `sm-workflow` CLI/MCP の versioned protocol までとする。その背後が standalone runtime、Textus runtime、CNCF adapter のどれであるかは観測も要求もしない。
 
-通常経路では、skill が StateMachine の各 state/transition を解釈しない。`advance` が内部遷移を進め、外部作用または判断が必要になった時だけ、型付き continuation を返す。
+通常経路では、skill が StateMachine の各 state/transition、候補operation、result disposition
+を解釈しない。`advance` が次の一件のAI処理をexact `AIWorkRequest`として指定する。skillは
+その依頼を実行し、typed `AIWorkResult`を同じWork Orderへ返すだけである。次の処理選択は
+result受理後のWorkflowだけが行う。
 
 ## 5. 責務境界
 
@@ -124,7 +143,7 @@ CLI と MCP/server は異なる workflow 実装を持たない。同じ applicat
 | Workflow runtime port | instance、transition、lease、冪等性、回復、履歴 | profile 固有ポリシー |
 | optional CNCF adapter | CNCF runtime への port 実装、既存環境との協調 | public skill contract |
 | `sm-workflow` CAR | plan、Work Order、receipt 検証、運用ポリシー | Codex tool の直接操作 |
-| `sm-*` skill | Codex への指示、tool/agent 選択、権限境界 | durable workflow state |
+| `sm-*` skill | exact `AIWorkRequest` の一回実行と typed result 返却 | operation/state/next-action選択、result disposition、durable state |
 | installer adapter | 中立 skill bundle の検証、導入、更新、削除 | bundle schema の所有、workflow の進行判断 |
 
 ### 5.1 公開 skill の許可依存
@@ -271,7 +290,7 @@ Work Order は component から Codex skill へ渡す、実行可能だが権限
 
 - `workOrderId`
 - `runId`
-- `kind`: `PLAN | EDIT | VALIDATE | REVIEW | COMMIT | USER_DECISION`
+- `kind`: `PLAN | EDIT | REPAIR | REVIEW | EXCEPTION_ANALYSIS`
 - `scope`: 対象 repository、worktree、path、論理境界
 - `inputRevision`
 - `expectedResultSchema`
@@ -282,6 +301,45 @@ Work Order は component から Codex skill へ渡す、実行可能だが権限
 - `acceptanceCriteria`
 
 Work Order は「何を達成すべきか」と「返却形式」を表し、任意コマンド列を運ばない。
+`VALIDATE`、`COMMIT`、`USER_DECISION` は Work Order kind にしない。前二者は
+Workflow-owned deterministic operation、後者は `Decision` boundary とする。
+
+すべての Work Order は Workflow が構築した immutable input snapshot を受け取る。
+semantic Result は別の deterministic admission state で schema、authority、owned delta、
+evidence freshnessを検証されるまで Workflow state や acceptance ledger を変更しない。
+
+AI executor向けWork Orderは、候補一覧ではなく一つのfully materialized requestを持つ。
+
+```text
+AIWorkRequest
+  workOrderId
+  runId
+  expectedRevision
+  operationIdentity
+  operationVersion
+  objective
+  typedInput
+  expectedResultSchema
+  evidenceContract
+  allowedMutationScope?
+  lease
+```
+
+skillは`operationIdentity`を見て別skill、command、agent、workflow処理を選択しない。
+Workflow/generated bindingが既に選んだrequestをそのまま実行する。返却も次だけとする。
+
+```text
+AIWorkResult
+  workOrderId
+  runId
+  expectedRevision
+  operationIdentity
+  result
+  evidenceReferences
+  idempotencyKey
+```
+
+`AIWorkResult`にnext operation/state、command request、routing directiveを含めない。
 
 ### 7.4 Result / Receipt
 
@@ -335,17 +393,23 @@ advanceSummary:
 
 複数の automatic transition が同時に有効で優先順位が決まらない場合は model invariant error とする。循環や異常に長い列は `maxAutomaticTransitions` で停止し、Codexに解決作業として渡さず診断可能な内部エラーにする。
 
-### 8.2 skill の通常ループ
+### 8.2 skill の単一依頼実行
 
-1. run の開始または再開時に `advance` を呼ぶ。
-2. `WORK_ORDER` のときだけ Codex が意味的作業を実行する。
-3. 型付き Result/Receipt を `work complete` または `work fail` で提出する。
-4. component は受理後に同じ `advance` evaluator を実行し、次の `Continuation` をその応答で返す。
-5. `DECISION` は必要な判断だけをユーザーへ提示する。
-6. `WAIT` では wake condition を記録して終了し、busy polling しない。
-7. `TERMINAL` で run を終了する。
+1. Workflow/host がlease済みのexact `AIWorkRequest`をskillへ渡す。
+2. skillは指定された一件のsemantic AI処理だけを実行する。
+3. skillはtyped `AIWorkResult`またはtyped failureを同じWork Orderへ提出して終了する。
+4. componentはresultをdeterministic admissionし、同じ`advance` evaluatorで次の
+   `Continuation`を選ぶ。
+5. host/client adapterは返された`Continuation`をそのkindどおりに配送する。skillは
+   result内容を見て次のskill、operation、command、Decisionを呼び分けない。
 
-`start`、`work complete`、`work fail`、`decision resolve` は、通常は server-side で `advance` を続けて同じ `Continuation` envelope を返す。明示的 `advance` は再開、競合回復、診断後の継続に使う。この合成により、意味的作業の間に追加の Codex turnやCLI往復を挟まない。
+`DECISION`のuser presentation、`WAIT`のwake registration、`TERMINAL`の表示は
+host/client adapterのmechanical envelope handlingであり、semantic AI skillの判断ではない。
+
+`start`、`work complete`、`work fail`、`decision resolve` は、通常は server-side で
+`advance` を続けて同じ `Continuation` envelope を返す。明示的 `advance` は再開、競合
+回復、診断後の継続に使う。この合成は次の処理選択をWorkflow内で完了させるためのもので、
+skillにdispatcher loopを持たせるものではない。
 
 外部作用の最中に datastore transaction を保持しない。lease 期限切れ後の再取得を許容し、同じ `idempotencyKey` の重複提出は同じ `Continuation` を返す。
 
@@ -412,7 +476,10 @@ database の具体 path は Textus の platform-aware local-data resolver が決
 5. 新しい Work Order、Decision、Evidence requirement の発行と任意のlease
 6. idempotency resultと返却Continuationの記録
 
-Codex による編集、検証、レビュー、ユーザー待ちは transaction 外で行う。SQLite write lock を外部作業の間保持しない。Work Order の acquire/complete は条件付き遷移と revision guard で競合を検出する。
+semantic AIによる編集/レビュー、Workflow providerによる外部validation/commit、human
+Decision待ちはtransaction外で行う。SQLite write lockを外部作業の間保持しない。
+Work Order、operation attempt、Decisionの開始/完了は条件付き遷移とrevision guardで
+競合を検出する。
 
 SQLite provider の初期運用要件:
 
@@ -457,7 +524,7 @@ SQLite profile は単一マシン上の CLI、loopback server、少数の並行 
 
 | 項目 | `cncf-*` | `sm-*` |
 | --- | --- | --- |
-| skill 名 | `cncf-goal-*` 等 | `sm-goal-*` 等 |
+| skill 名 | `cncf-goal-phase`, `cncf-split-phase` 等 | `sm-goal-phase`, `sm-split-phase` 等 |
 | executable | 既存 launcher/skill contract | `sm-workflow` |
 | workflow state | 既存 `.codex-workflow` 等 | Textus datastore |
 | schema namespace | 既存契約 | `sm.workflow.*`（案） |
@@ -471,6 +538,8 @@ SQLite profile は単一マシン上の CLI、loopback server、少数の並行 
 - `cncf-*` と `sm-*` への dual write
 - 一方の terminal state を他方の terminal state と暗黙に同一視すること
 - 同一 worktree・重複 path に対する両系列の同時 mutation
+- legacy `cncf-goal-phase` / `cncf-split-phase` skill の rename、overwrite、forwarding
+- `sm-goal-phase` / `sm-split-phase` から対応する `cncf-*` skill を内部呼び出しすること
 
 将来 migration が必要になった場合は、独立した明示コマンドとして設計し、まず read-only preview を要求する。
 
@@ -497,15 +566,16 @@ SQLite profile は単一マシン上の CLI、loopback server、少数の並行 
 ```text
 component and generated workflow definitions
 SkillBundleManifest
-skills/sm-workflow-run/
-skills/sm-workflow-resume/
 skills/sm-goal-phase/
+skills/sm-split-phase/
 skills/sm-goal-task/          # 後続
 skills/sm-review/             # 後続
 skills/sm-validated-commit/   # 後続
 ```
 
 skill bundle は component version、required `sm-workflow` protocol version、各 file の digest、install scope、entry skill、任意の MCP descriptor を manifest に持つ。CNCF の artifact coordinate、command、schema を必須 field にしない。
+各entry skillは対応する`workflowDefinitionName`とcompatible definition version rangeを
+明示し、skill名からdefinition名を推測しない。
 
 ### 12.2 中立な公開契約
 
@@ -569,13 +639,12 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 6. **`sm-workflow` vertical slice**
    - `start/advance -> edit -> complete/advance -> validate -> complete/advance -> review -> complete`
    - 中間の機械的遷移はCodexへ返さない
-7. **generic workflow skills**
-   - `sm-workflow-run` と `sm-workflow-resume`
-   - CLI を呼ぶ薄い client
-   - resume と user decision を含む
-8. **`sm-goal-phase` profile skill**
+7. **`sm-goal-phase` / `sm-split-phase` profile skills**
+   - versioned `sm-workflow` protocol を呼ぶ薄い client
    - Goal / Phase / Step を generic Stage / WorkItem に写像
-   - CNCF command、type、state を参照しない
+   - resume と user decision を含む
+   - CNCF command、type、state、skill を参照しない
+   - legacy `cncf-goal-phase` / `cncf-split-phase` は変更せず併用する
 9. **併用 acceptance**
    - 両系列の同時 install
    - 別 worktree での並行運用

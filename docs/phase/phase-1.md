@@ -14,7 +14,7 @@ LLM/Codex 利用コストの低減は副次効果ではなく、本 Phase の明
 
 ## Completion Statement
 
-Phase 1 は、利用者が一つの reference workflow を `sm-workflow` CLI または同梱された薄い skill から開始し、process を終了・再起動しても継続でき、各 semantic Work Order の完了応答から次の semantic boundary が直接返り、途中の automatic transition に Codex/model invocation を必要としない状態で完了する。
+Phase 1 は、利用者が reference workflow を `sm-workflow` CLI または同梱された薄い skill から開始し、process を終了・再起動しても継続でき、各 semantic Work Order の完了応答から次の semantic boundary が直接返り、途中の automatic transition に Codex/model invocation を必要としない状態で完了する。
 
 ## Upstream Phase Dependencies
 
@@ -132,6 +132,39 @@ Goal / Phase / Step などの語彙は core model に入れず、workflow profil
 - `DecisionLifecycle`
 - `EvidenceLifecycle`
 
+最初の reference workflow は
+[`GoalPhaseWorkflow`](../notes/sm-goal-phase-workflow-definition.md) とし、public skill
+`sm-goal-phase` から明示的にbindする。legacy
+`cncf-goal-phase` skill の
+Phase Entry、PLAN、Step/Slice delivery、review、bounded repair、commit、Phase closure
+を純粋な Workflow / StateMachine として実装する。skill/model/agent/turn scheduling は
+state semantics に含めず、AI 担当 typed Action だけを Required Operation の external
+provider として Continuation Protocol へ bind する。
+
+第二の reference workflow は
+[`SplitPhaseWorkflow`](../notes/sm-split-phase-workflow-definition.md) とし、public skill
+`sm-split-phase` から明示的にbindする。legacy
+`cncf-split-phase` skill を source compatibility とし、一つの
+source Phase の inventory、proposal adoption/design、preview/apply、planning-document
+projection、conflict merge、static validation を純粋な Workflow / StateMachine として
+実装する。current で complete な `SPLIT_REQUIRED` proposal があれば semantic AI を
+呼ばずに適用する。proposal がない場合も、過去 Phase の予定/実績時間と作業分類を
+versioned policy で収集・calibrate し、contiguous candidates を列挙して決定的に
+最適化する。履歴から推定できない新規作業と未確定 semantic boundary だけを
+`AssessNovelSplitWork` に渡す。
+
+split 適用時の conflict は base/current/desired の typed three-way model で扱う。一意で
+invariant-preserving な merge は Workflow-owned deterministic operation が実行し、
+ownership、goal、closure、dependency、handoff 等の semantic conflict だけを
+`ResolveSplitMergeConflicts` として AI provider に委譲する。identity/authority の変更や
+複数の妥当解は human `DECISION` で停止する。AI は planning files や Git command を
+直接操作せず、typed resolution も Workflow validation と compare-and-set write を通す。
+
+両 profile とも semantic AI Action の前に deterministic input preparation、後に
+deterministic result admission/validation を置く。AI result は `nextState`、command、
+validation acceptance、ledger mutation、cycle count、commit readiness を所有せず、
+admission stateを経ずにcommitまたはterminalへ遷移しない。
+
 各 transition は Cozy Phase 62 の generated ABI と CNCF Phase 77 の admission を
 通じて `automatic` または `semantic-boundary` として判定可能にする。Phase 1 は
 その宣言を `Continuation` と WorkOrder lifecycle に bind するだけで、分類を
@@ -190,6 +223,15 @@ advanceSummary:
 7. `WORK_ORDER` かつ executor が与えられている場合、発行と lease を同じ transaction で行う。
 8. idempotency result と返却 `Continuation` を記録する。
 
+Git/SBT を含む procedural external command は、typed deterministic operation として
+admission できる限り Workflow runtime が component-local provider を通じて実行する。
+Skill/AI は argv の選択、process 起動、retry、終了判定、commit 処理を行わず、外部
+command を要求する `WORK_ORDER` も発行しない。provider は AI tool sandbox から独立
+した管理実行境界を持つが、AI sandbox 自体は緩和しない。operation registry、current
+state/revision/guard、operation-specific capability、mutation root、network/credential
+policy、timeout、receipt を必須とし、権限を暗黙に拡張しない。AI/Skill からの
+executable、free-form argv、generic shell、arbitrary script の注入は拒否する。
+
 同時に複数の automatic transition が成立して優先順位が一意でない場合は model invariant error とする。循環または上限超過は internal diagnostic failure とし、Codex が解決すべき Work Order に変換しない。
 
 ### S6. Textus-managed SQLite persistence
@@ -237,12 +279,11 @@ Requested
   -> [automatic] InitializePlan
   -> [automatic] SelectFirstWorkItem
   -> [semantic] PLAN work order
-  -> [automatic] AcceptPlanResult
+  -> [deterministic] AdmitPlanResult
   -> [automatic] SelectChangeWorkItem
   -> [semantic] CHANGE work order
-  -> [automatic] AcceptChangeResult
-  -> [automatic] SelectValidationWorkItem
-  -> [semantic] VALIDATE work order
+  -> [deterministic] InspectChangeResult
+  -> [deterministic] RunValidation
   -> [automatic] EvaluateAcceptance
   -> [terminal] Completed
 ```
@@ -251,13 +292,22 @@ Requested
 
 ### S9. Thin public skill
 
-- `skills/sm-workflow-run/SKILL.md` を提供する。
-- skill は CLI availability/protocol compatibility を確認し、`Continuation` に従うだけにする。
+- `skills/sm-goal-phase/SKILL.md` と `skills/sm-split-phase/SKILL.md` を提供する。
+- `SkillBundleManifest` に `sm-goal-phase -> GoalPhaseWorkflow` と
+  `sm-split-phase -> SplitPhaseWorkflow` のversioned bindingを明記し、skill名から
+  Workflow名を推測しない。
+- Workflowが選択・leaseしたexact `AIWorkRequest`をskillへ渡し、skillはその一件のAI処理を
+  実行してtyped `AIWorkResult`を同じWork Orderへ返すだけにする。
 - skill 内に state machine、phase progression、retry policy、SQLite path、CNCF commandを複製しない。
-- `WORK_ORDER` のときだけ意味的作業を行う。
-- `DECISION` のときだけユーザーへ必要な判断を求める。
-- `WAIT` のときは wake condition を報告して終了し、busy polling しない。
+- skillはoperation候補、result disposition、next state、次に呼ぶskill/agent/commandを判断しない。
+- `DECISION`、`WAIT`、`TERMINAL`の配送/表示はhost/client adapterがContinuation kindに
+  従ってmechanically行い、semantic AI skillのdispatcher logicにしない。
+- `AIWorkResult`にnext operation/state、command request、routing directiveを含めない。
 - bundle は framework-neutral `SkillBundleManifest` を持ち、CAR に同梱した bytes と standalone bundle の bytes/digest を一致させる。
+- legacy `cncf-goal-phase` / `cncf-split-phase` skill を rename、overwrite、forward、または
+  state migration しない。両系列は別名、別run/stateで長期併用する。
+- `sm-goal-phase` / `sm-split-phase` は `cncf-*` skill を呼ばず、versioned
+  `sm-workflow` protocol だけを使用する。
 
 ### S10. Cost observability
 
@@ -268,13 +318,17 @@ run ごとに少なくとも次を記録・表示できるようにする。
 - `client_round_trip_count`
 - `continuation_payload_bytes`
 - `resume_context_payload_bytes`
+- `automatic_merge_conflict_count`
+- `semantic_merge_work_order_count`
+- `deterministic_work_estimate_count`
+- `novel_work_estimate_count`
+- `partition_candidate_count`
 
 host が model usage を返せる場合は invocation/token/cost を追加 metric として受理するが、特定 host の usage API を public contract の必須依存にはしない。
 
 ## Non-Goals
 
 - `cncf-*` の置換、変更、state migration、dual write
-- `sm-goal-phase` の完全実装
 - CNCF runtime/Job/agent/receipt protocol との adapter
 - `cncf skill ...` または `textus skill ...` installer の実装
 - MCP/server adapter
@@ -286,14 +340,14 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 ## Deliverables
 
 - Textus CAR source and generated ABI
-- Workflow/StateMachine CML model
+- Workflow/StateMachine CML model, including `GoalPhaseWorkflow` and `SplitPhaseWorkflow`
 - versioned public operation and JSON schema
 - provider-neutral workflow storage port
 - Textus-managed SQLite local provider binding
 - bounded `advance` evaluator
 - CLI adapter
 - reference development workflow profile
-- thin `sm-workflow-run` skill
+- thin `sm-goal-phase` and `sm-split-phase` skills
 - neutral skill bundle manifest and CAR inclusion
 - unit, persistence, concurrency, restart, CLI, bundle, and cost-structure acceptance evidence
 - public usage and recovery documentation
@@ -345,6 +399,15 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - One semantic completion requires no extra Codex turn solely to determine the next state.
 - Continuation payload size is measured and excludes full history and previous receipt bodies.
 - Resume requires only run identity and bounded continuation context, not conversation replay.
+- A current complete split proposal reaches validated apply with zero semantic AI Work Orders.
+- A normal split without reusable proposal requires one partition-design Work Order; deterministic
+  inventory, numbering, projection, merge, and validation do not add AI calls.
+- An apply conflict adds an AI Work Order only when deterministic conflict classification proves
+  that semantic resolution is required.
+- Known split work is estimated from the same frozen evidence and policy with reproducible results;
+  candidate enumeration and partition selection add no AI Work Order.
+- AI estimation is limited to work marked `UNRESOLVED_NOVEL`, and semantic classification is limited
+  to unresolved boundaries.
 
 ### A7. Safety and authority
 
@@ -360,6 +423,9 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - SQLite persistence, rollback, restart, and concurrent lease tests
 - CLI JSON contract tests for every continuation outcome and typed conflict
 - end-to-end reference workflow restart test
+- split preview/apply/idempotency tests, including zero-AI proposal adoption, zero-AI known-work
+  estimation/optimization, bounded novel-work enrichment, automatic non-overlapping merge,
+  semantic-conflict delegation, and authority-conflict stop
 - static dependency-boundary checks over public skill and schemas
 - standalone/CAR skill bundle digest equivalence check
 - cost-structure test correlating automatic transitions, semantic Work Orders, and client round trips
@@ -377,8 +443,7 @@ A partially working CLI, an in-memory-only engine, a skill that interprets state
 
 After Phase 1 closure, define separate phases for:
 
-1. `sm-goal-phase` profile and long-running development workflow semantics
-2. public skill catalog/install/update/uninstall distribution
-3. optional MCP/server adapter
-4. optional CNCF runtime and coexistence coordination adapter
-5. additional document, research, review, release, and operations profiles
+1. public skill catalog/install/update/uninstall distribution
+2. optional MCP/server adapter
+3. optional CNCF runtime and coexistence coordination adapter
+4. additional document, research, review, release, and operations profiles

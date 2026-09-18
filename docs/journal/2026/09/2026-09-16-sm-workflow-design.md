@@ -38,6 +38,15 @@ Phase 1 `Advance-Centered Local Workflow Core` と、そのclosure authorityと�
 
 Phase 1には`sm-goal-phase`の完全実装、installer、MCP/server、CNCF adapterを含めない。まずgenericなreference workflowで「automatic transitionはTextusが吸収し、Codexにはsemantic Work Orderだけを返す」ことを、SQLite再起動・競合・冪等性・コスト構造を含めて閉じる。
 
+### 2026-09-18 Phase 1 scope revision
+
+上記の `sm-goal-phase` deferred 判断を更新し、Phase 1 に `GoalPhaseWorkflow` と
+`SplitPhaseWorkflow`、および対応する thin public skills `sm-goal-phase` と
+`sm-split-phase` を含める。Workflow名とskill名はmanifestで明示的にbindする。
+legacy `cncf-goal-phase` / `cncf-split-phase` は変更せず、別名・別状態の互換workflow
+として長期併用する。generic `sm-workflow-run` / `sm-workflow-resume` skill は Phase 1 の
+配布skill名にせず、profile skills が versioned `sm-workflow` protocol を直接利用する。
+
 ## 追記: コスト低減と `advance`
 
 `sm-workflow` の中心価値を、durable stateだけでなく「LLMを必要な意味判断に限定すること」と定める。
@@ -134,6 +143,22 @@ start -> plan -> edit -> validate -> review -> complete
 - `COMMIT`
 - `USER_DECISION`
 
+### 2026-09-18 semantic/deterministic separation revision
+
+上記の「各外部作用をWork Orderにする」設計を更新する。Work Orderは `PLAN | EDIT |
+REPAIR | REVIEW | EXCEPTION_ANALYSIS` のsemantic AI workだけに限定する。`VALIDATE` と
+`COMMIT` はWorkflow-owned typed deterministic operation、`USER_DECISION` は独立した
+Decision boundaryとする。
+
+すべてのsemantic Actionはdeterministic prepareでimmutable inputを受け取り、resultは
+別のdeterministic admission/validationを通るまでstate、ledger、acceptance、commit
+readinessを変更しない。AI resultはnext state、command、validation acceptance、cycle
+count、retry policy、commit readinessを含めない。
+
+skillはWorkflowが選びleaseした一件のfully materialized AI requestを実行し、matching
+resultを返して終了する。result内容から次のskill、agent、operation、command、Decisionを
+呼び分けるdispatcherにはしない。follow-upはadmission後の`advance`だけが選ぶ。
+
 ## 長期併用の境界
 
 `cncf-*` と `sm-*` は、skill 名、command 名、schema namespace、workflow state を分離する。併用の安全性は「両方を同一状態へ書かせること」ではなく「独立状態と狭い共有排他」によって確保する。
@@ -171,10 +196,9 @@ standalone artifact、開発ソース、published CAR が、同一の中立 `Ski
 6. 中立 `SkillBundleManifest`、standalone bundle、CAR 同梱
 7. Textus/CNCF producer/installer adapter
 8. `advance`中心の`sm-workflow` vertical slice
-9. generic な `sm-workflow-run` / `sm-workflow-resume` skills
-10. CNCF 型に依存しない `sm-goal-phase` profile skill
-11. `cncf-*` / `sm-*` 併用 acceptance
-12. 文書制作、調査、release など別 profile への展開
+9. CNCF 型に依存しない `sm-goal-phase` / `sm-split-phase` profile skills
+10. legacy `cncf-goal-phase` / `cncf-split-phase` を変更しない併用 acceptance
+11. 文書制作、調査、release など別 profile への展開
 
 ## 保留事項
 
