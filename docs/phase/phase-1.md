@@ -18,7 +18,7 @@ Phase 1 は、利用者が reference workflow を `sm-workflow` CLI または同
 
 ## Upstream Phase Dependencies
 
-Phase 1 は、基盤 Workflow contract に加えて Retry / Timeout contract を提供する upstream Phase 群が release closure を完了し、
+Phase 1 は、次の二つの upstream Phase がそれぞれの release closure を完了し、
 相互に対応する versioned handoff を提供した後にだけ開始できる。`planned`、
 途中の producer fixture、hand-written definition、または consumer 側の暫定
 adapter は Entry Criteria を満たさない。
@@ -66,34 +66,18 @@ distribution、Codex cost policy を提供しない。Phase 1 は同 Phase の r
 contract を component-local Textus runtime に bind するが、公開 `sm-*` skill と
 public protocol に CNCF 固有 contract を露出しない。
 
-### Cozy Phase 66 / CNCF Phase 81 — Retry and Timeout
-
-Phase 1 の実運用可能な completion line には Retry / Timeout を含める。sm-workflow 自身はこれらを実装せず、Cozy Phase 66 が生成する Retry / Timeout ABI と CNCF Phase 81 が提供する runtime semantics を利用する。
-
-必要 contract:
-
-- Action / Participant invocation の maximum attempts。
-- fixed retry delay。
-- durable attempt count。
-- execution timeout。
-- retry exhaustion / timeout の typed outcome と diagnostics。
-- restart 後も retry state が破綻しないこと。
-- timeout 後の late completion が二重 transition を起こさないこと。
-
-Deadline、general Timer / Wait、Cancellation、rich FailurePolicy、general idempotency framework、dedicated Iteration semantics は Phase 1 の依存対象にしない。
-
 ### Fixed Handoff Rule
 
-Phase 1 の開始時に、Cozy Phase 62 / Phase 66 release、CNCF Phase 77 / Phase 81 release、互換性のある
+Phase 1 の開始時に、Cozy Phase 62 release、CNCF Phase 77 release、互換性のある
 Workflow ABI version、real-source fixture identity、および両 repository の exact
-commit/revision を記録する。必要な upstream Phase のいずれかが未完了、互換性未確認、
+commit/revision を記録する。Phase 62 と Phase 77 のどちらかが未完了、互換性未確認、
 または handoff evidence を欠く場合、`sm-workflow` 内に一時的な Workflow DSL、
 生成物コピー、CNCF ABI emulator を作って迂回しない。upstream gap と exact resume
 point を記録して Phase 1 を開始前のまま保持する。
 
 ## Entry Criteria
 
-- Cozy Phase 62 / 66 と CNCF Phase 77 / 81 の fixed handoff が上記の規則を満たす。
+- Cozy Phase 62 と CNCF Phase 77 の fixed handoff が上記の規則を満たす。
 - Workflow が StateMachine / Composite StateMachine の意味論を再利用している。
 - generated ABI が automatic transition と typed semantic boundary を識別できる。
 - CML Action が raw command ではなく型付き Operation を参照できる。
@@ -111,7 +95,6 @@ point を記録して Phase 1 を開始前のまま保持する。
 8. workflow の正本は Textus-managed datastore に置き、skill、会話履歴、workspace 内 Markdown を正本にしない。
 9. public skill、public CLI schema、public JSON schema は CNCF 固有 contract に依存しない。
 10. SQLite、JDBC、SQL、database path は skill/CML/domain contract に公開しない。
-11. Retry / Timeout は Cozy/CNCF の contract を利用し、sm-workflow 独自 engine / policy semantics を作らない。
 
 ## Scope
 
@@ -311,16 +294,6 @@ executable、free-form argv、generic shell、arbitrary script の注入は拒�
 
 同時に複数の automatic transition が成立して優先順位が一意でない場合は model invariant error とする。循環または上限超過は internal diagnostic failure とし、Codex が解決すべき Work Order に変換しない。
 
-### S5.1. Retry and timeout adoption
-
-- Cozy Phase 66 / CNCF Phase 81 の Retry / Timeout contract を Action / Participant invocation に bind する。
-- transient failure は configured maximum attempts と fixed delay の範囲で再実行する。
-- hanging invocation は configured execution timeout で確定させる。
-- retry exhaustion / timeout を WorkflowRun status/history/diagnostics に接続する。
-- attempt state は durable とし、process restart 後も重複 attempt や counter reset を起こさない。
-- timeout 後の late completion は二重 transition を起こさない。
-- sm-workflow 独自の Retry / Timeout engine を実装しない。
-
 ### S6. Textus-managed SQLite persistence
 
 local/standalone profile の既定 backend を SQLite とする。
@@ -466,9 +439,6 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - Stale revision and lease conflict return typed conflicts without state mutation.
 - Ambiguous automatic transitions fail as a model invariant error.
 - A cycle or `maxAutomaticTransitions` overflow fails with a diagnostic reference and no Codex Work Order.
-- transient invocation failure can recover within configured retry attempts; retry exhaustion is typed and observable.
-- a hanging invocation reaches configured timeout instead of leaving the WorkflowRun indefinitely blocked.
-- retry attempt state survives restart, and late completion after timeout cannot cause duplicate progression.
 - A semantic boundary is never crossed without its accepted Result/Receipt or Decision.
 
 ### A4. SQLite durability and concurrency
@@ -517,7 +487,6 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 
 - CML generation and generated ABI compatibility checks
 - unit tests for transition selection, fixed-point drain, continuation closure, idempotency, cycle/limit handling
-- Retry / Timeout tests covering transient recovery, exhaustion, hanging invocation, restart durability, and late completion
 - SQLite persistence, rollback, restart, and concurrent lease tests
 - CLI JSON contract tests for every continuation outcome and typed conflict
 - end-to-end reference workflow restart test
@@ -532,6 +501,10 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 All future top-level SBT validation must use the repository's machine-wide serialized SBT execution policy. Phase definition itself executes no validation.
 
 ## Closure Rule
+
+Phase 1 の completion line は executable specification の成立である。3つの reference Workflow が generated ABI / CNCF runtime 上で仕様どおり実行され、決定的 fixture を用いた executable specification が再現可能に通ることを要求する。Phase 1 完了時点で、手作業で整備する public skill の実運用品質、Retry / Timeout、運用上の convenience feature まで完成していることは要求しない。
+
+Phase 1 後に skill を手作業で整備しながら実環境との疎通を行い、その過程で実運用に必要な作り込みを行う。Retry / Timeout を含む Cozy / CNCF runtime extension はこの疎通で必要性と優先順位を確認して導入する。暫定的な再実行や停止判断を skill / human operation で補うことは許容するが、それを canonical Workflow semantics として固定しない。
 
 Phase 1 is complete only when every required item in [phase-1-checklist.md](phase-1-checklist.md) is checked, all A1–A7 acceptance groups have reproducible evidence, and the evidence is bound to the final intended tree.
 
