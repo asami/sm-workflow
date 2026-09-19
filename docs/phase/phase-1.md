@@ -83,6 +83,14 @@ point を記録して Phase 1 を開始前のまま保持する。
 - CML Action が raw command ではなく型付き Operation を参照できる。
 - Textus runtime が component-local datastore を構成できる。
 
+## CNCF Generic Protocol Dependency
+
+Phase 1 は CNCF Phase 77 が提供する Generic Workflow JSON Protocol を public/runtime envelope として使用し、Start/Handle/Continuation/WorkOrder/Decision/Wait/Terminal/Result/Evidence/Presentation/ExecutionRequirement を再定義しない。
+
+sm-workflow は GoalPhase / SplitPhase / RepositorySync の application-specific typed payload schema、software-development presentation specialization、および abstract reasoning level から concrete worker profile への versioned mapping policy を所有する。
+
+詳細は [CNCF Workflow Protocol Application Specialization](../notes/cncf-workflow-protocol-application-specialization.md) に従う。
+
 ## Design Invariants
 
 1. `advance` は通常進行の唯一の evaluator である。
@@ -93,7 +101,7 @@ point を記録して Phase 1 を開始前のまま保持する。
 6. `start`、`work complete`、`work fail`、`decision resolve` は受理後に同じ evaluator を呼び、次の `Continuation` を同じ応答で返す。
 7. `status` と `history` は read-only であり、状態遷移を起こさない。
 8. workflow の正本は Textus-managed datastore に置き、skill、会話履歴、workspace 内 Markdown を正本にしない。
-9. public skill、public CLI schema、public JSON schema は CNCF 固有 contract に依存しない。
+9. public skill / CLI は CNCF Generic Workflow JSON Protocol の stable application-neutral contract に依存し、CNCF 内部実装型には依存しない。
 10. SQLite、JDBC、SQL、database path は skill/CML/domain contract に公開しない。
 
 ## Scope
@@ -405,7 +413,7 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 
 - Textus CAR source and generated ABI
 - Workflow/StateMachine CML model, including `GoalPhaseWorkflow`, `SplitPhaseWorkflow`, and `RepositorySyncWorkflow`
-- versioned public operation and JSON schema
+- CNCF Generic Workflow JSON Protocol に準拠した application-specific versioned payload schemas
 - provider-neutral workflow storage port
 - Textus-managed SQLite local provider binding
 - bounded `advance` evaluator
@@ -488,7 +496,9 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - CML generation and generated ABI compatibility checks
 - unit tests for transition selection, fixed-point drain, continuation closure, idempotency, cycle/limit handling
 - SQLite persistence, rollback, restart, and concurrent lease tests
-- CLI JSON contract tests for every continuation outcome and typed conflict
+- CNCF generic Start/Continuation/Result/Terminal round-trip と application payload schema の JSON contract tests
+- Presentation から Codex console の処理推移・人間向け状況説明を projection でき、presentation text を制御に使用しないことの tests
+- abstract reasoning level の versioned skill/host mapping と execution evidence tests
 - end-to-end reference workflow restart test
 - split preview/apply/idempotency tests, including zero-AI proposal adoption, zero-AI known-work
   estimation/optimization, bounded novel-work enrichment, non-colliding composition,
