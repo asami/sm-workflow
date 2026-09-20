@@ -7,6 +7,7 @@
 - 更新: 2026-09-16（コスト低減目標と `advance` 中心設計）
 - 更新: 2026-09-18（repository sync profile と managed Git provider 境界）
 - 更新: 2026-09-21（Skill-managed Phase / Checklist と Workflow Core の境界）
+- 更新: 2026-09-21（CNCF generic Workflow DTO と sm-workflow payload DTO の分離）
 - 対象: Textus CAR `sm-workflow` と `sm-*` Codex skills
 - 実装フェーズ: [Phase 1: Advance-Centered Local Workflow Core](../phase/phase-1.md)
 
@@ -843,3 +844,77 @@ Phase / Checklist の更新命令や「この checklist を checked にせよ」
 ### 18.6 Scope guard
 
 新しい情報を sm-workflow に追加する際は「Phase / Checklist が存在しない別用途の Workflow でも必要か」を判定基準にする。必要でなければ原則として profile または skill 側に置く。この guard により software-development-specific planning model が generic workflow runtime に侵入することを防ぐ。
+
+
+## 19. CNCF Workflow DTO と sm-workflow Application Payload
+
+### 19.1 DTO ownership
+
+sm-workflow は Workflow transport/execution envelope を独自定義しない。CNCF Phase 77 が提供する application-neutral typed Workflow protocol を canonical envelope として利用する。
+
+CNCF が所有する generic DTO / control information:
+
+- `WorkflowStartRequest[I]` / `WorkflowStartResult[W, O]`
+- `WorkflowHandle`
+- closed `Continuation = WORK_ORDER | DECISION | WAIT | TERMINAL`
+- `WorkOrder[W]` / `ContinuationResult[R]` / `WorkResult[R]`
+- Workflow / Continuation / Action / Required SPI identity
+- expected revision / idempotency / stale detection
+- `ContextSnapshot`
+- Completion / Evidence requirements and generic Evidence envelope
+- `ExecutionRequirement` / `ExecutionEvidence`
+- generic `Presentation` / `Progress`
+
+sm-workflow は上記 envelope の型パラメータに software-development specialization の payload を載せる。
+
+```text
+WorkflowStartRequest[SmWorkflowStart]
+Continuation.WORK_ORDER[SmWorkRequest]
+WorkResult[SmWorkResult]
+TERMINAL[SmWorkflowOutcome]
+```
+
+### 19.2 sm-workflow payload DTO
+
+`SmWorkflowStart` は objective / target、selected profile input、`SmExecutionContext`、software-development-specific constraints、optional opaque `sourceCorrelation` を持つ。
+
+`SmWorkRequest` は bounded semantic objective、software-development target/artifact scope、domain-specific constraints、allowed mutation scope、expected domain result shape を持つ。
+
+`SmWorkResult` は domain outcome、changed/inspected artifact references、findings/domain result data、および generic CNCF Evidence で不足する場合だけ domain-specific evidence extension を持つ。
+
+`SmWorkflowOutcome` は application terminal outcome と domain result を持ち、CNCF envelope の generic Workflow lifecycle/revision fields を複製しない。
+
+名称は設計上の候補であり、Phase 1 で Scala/schema 名を精緻化してよいが ownership は維持する。
+
+### 19.3 Context relationship
+
+`SmExecutionContext` は sm-workflow が所有する application semantics である。CNCF `ContextSnapshot` は identity、revision/freshness、安全な resume を保証する generic execution-time snapshot/envelope である。
+
+```text
+Skill-only Context
+      |
+      | projection
+      v
+SmExecutionContext
+      |
+      | carried/snapshotted by
+      v
+CNCF ContextSnapshot
+```
+
+CNCF は `SmExecutionContext` の software-development semantics を解釈せず、sm-workflow は CNCF が所有する snapshot/revision/stale-resume mechanics を再実装しない。
+
+### 19.4 Existing protocol reconciliation
+
+既存設計の `AIWorkRequest`、`AIWorkResult`、`Continuation`、handle/revision/evidence structures は第二の canonical Workflow protocol としない。
+
+- generic identity、continuation、revision、context snapshot、evidence、execution requirement -> CNCF Phase 77 DTO
+- software-development-specific request/result -> sm-workflow payload DTO
+- concrete Skill/Codex worker selection -> host dispatch / CNCF ExecutionEvidence
+- `JudgmentAction` request/result semantics -> CNCF StateMachine/Workflow Action contract。sm-workflow は必要な application-specific judgment content だけを供給する。
+
+Phase 1 executable specification は、第二の sm-workflow `WorkflowHandle`、`Continuation`、revision protocol、generic Evidence envelope が導入されないことを検証する。
+
+### 19.5 Phase / Checklist boundary
+
+Phase / Checklist / Closure Criteria / WorkflowMapping は Skill-owned であり、sm-workflow payload DTO にしない。`sourceCorrelation` が必要な場合も opaque traceability reference とし、CNCF progression の制御入力にしない。Skill が CNCF/sm-workflow Result / Evidence を planning model へ mapping/reconciliation する。
