@@ -137,3 +137,38 @@ types even though both return through the same Operation boundary.
 This direction should be reconciled with existing sm-workflow documents that
 currently expose Suspended Continuation / resume terminology before those terms
 are frozen into the public CNCF Workflow ABI.
+
+## Specification follow-up
+
+The corresponding normative design input is
+[`workflow-handle-and-advance-operation-boundary.md`](../../../notes/workflow-handle-and-advance-operation-boundary.md).
+Writing that specification clarified the following consequences of this design
+direction:
+
+- `sm-goal-phase`, `sm-split-phase`, and `sm-repository-sync` remain separate
+  human-selected entry points. Direct skill selection, or explicit selection in
+  a host/client, supplies invocation authority for the matching profile-specific
+  start Operation.
+- A recommendation such as `SPLIT_REQUIRED` may carry a typed start-input
+  reference, but it is advisory and cannot start another WorkflowInstance or
+  manufacture a human-selection record.
+- A generic public `StartWorkflowRun` is replaced by profile-specific start
+  Operations. A generic start application service may still be shared behind
+  those Operations as an implementation detail.
+- `WorkflowInteraction` is the public next-boundary projection of a framework
+  `WorkflowHandle` plus its current CNCF `Continuation`. Continuation identity,
+  expected revision, ContextSnapshot, and typed completion/evidence remain
+  available through the projection and its fail-closed wire forms; Continuation
+  is not a second public root identity or an independent suspend/resume
+  lifecycle.
+- Work-result and human-decision admission may be decomposed into internal
+  application commands, while the skill-facing progression protocol remains
+  `advanceWorkflow(handle, response?)`.
+- Revision guards, idempotency, leases, typed response admission, and read-only
+  status/history remain required; they move to the handle/interaction protocol
+  rather than depending on a public Continuation lifecycle.
+
+These clarifications require one coordinated reconciliation of the main design,
+Phase 1 plan/checklist, and the three profile definitions. Partial edits must not
+leave generic and profile-specific start contracts, or public Continuation and
+WorkflowInteraction lifecycles, active at the same time.

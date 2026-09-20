@@ -17,6 +17,19 @@ Skill は Workflow の owner ではない。AI が担当する typed Action の 
 IoC binding され、CNCF runtime が返す `Suspended(Continuation)` を受け取り、typed
 Result / Evidence を resume する participant である。
 
+## Phase 1 common-contract alignment
+
+Phase 1 closure binds this profile to the CNCF Phase 77 common contract. Its
+profile-specific start Operation delegates to `WorkflowStartRequest` and
+projects the resulting `WorkflowHandle` plus first `Continuation` (or typed
+terminal) as `WorkflowInteraction`. A current `Continuation` remains the
+canonical typed semantic boundary and Skill/Codex wire correlation; it is not
+a second root identity or lifecycle. A typed completion is a
+`ContinuationResult` admitted through `advanceWorkflow(handle, response?)`.
+The older `Suspended(Continuation)` and profile-specific continuation wording
+below describes runtime state or application payload specialization only; it
+cannot replace the common Continuation protocol.
+
 ## Profile and skill identity
 
 - CML Workflow name / definition selector: `GoalPhaseWorkflow`

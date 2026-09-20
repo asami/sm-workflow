@@ -1,20 +1,29 @@
-# Phase 1: Advance-Centered Local Workflow Core
+# Phase 1: Application Workflows on the CNCF Common Contract
 
 Status: planned
 
 ## Goal
 
-Textus-managed SQLite 上に durable な WorkflowRun を保持し、`advance` が機械的遷移を吸収して、公開 `sm-*` skill には次の意味的作業だけを返す local/standalone vertical slice を完成させる。
+Phase 1 は、CNCF Phase 77 の common Start/Handle/Continuation/Result contract を
+specialize する software-development application layer を executable
+specifications で完成させる。GoalPhase、SplitPhase、RepositorySync の typed payload
+と CML Workflow definition、deterministic/test Provider、JSON fixture をこの Phase
+の成果とする。
 
-Phase 1 の中心命題は次である。
-
-> `advance` が機械的遷移を吸収し、Codex には次の意味的作業だけを返す。
-
-LLM/Codex 利用コストの低減は副次効果ではなく、本 Phase の明示的な受入目標とする。validation、review、permission、receipt を省略せず、それらの間にある状態確認、分岐、完了判定、次作業生成を Textus 側へ移す。
+Phase 1 は production-ready local runtime を作る Phase ではない。SQLite operational
+profile、public `sm-*` skill、CLI/bundle distribution、lease/restart/concurrency
+hardening、provider dispatch policy、運用 recovery は、実際の connectivity/use evidence
+に基づく post-Phase-1 operational hardening へ残す。
 
 ## Completion Statement
 
-Phase 1 は、利用者が reference workflow を `sm-workflow` CLI または同梱された薄い skill から開始し、process を終了・再起動しても継続でき、各 semantic Work Order の完了応答から次の semantic boundary が直接返り、途中の automatic transition に Codex/model invocation を必要としない状態で完了する。
+Phase 1 は、三つの application Workflow が CNCF の common contract に binding され、
+deterministic progression が AI turn を必要とせず、semantic boundary だけが typed
+WorkOrder/Decision/Wait として現れることを executable specifications で再現可能に
+示した時点で完了する。production CLI、public skill、standalone bundle、SQLite restart
+profile は completion 条件ではない。
+
+Checklist: [Phase 1 Executable-Specification Checklist](phase-1-executable-specification-checklist.md)
 
 ## Upstream Phase Dependencies
 
@@ -23,10 +32,10 @@ Phase 1 は、次の二つの upstream Phase がそれぞれの release closure 
 途中の producer fixture、hand-written definition、または consumer 側の暫定
 adapter は Entry Criteria を満たさない。
 
-### Cozy Phase 62 — CML WORKFLOW Language and Producer ABI
+### Cozy Phase 62.3 — CML WORKFLOW Producer Handoff ABI
 
-`asami/cozy` Phase 62 は CML の first-class `WORKFLOW` declaration を確定する
-producer boundary である。Phase 1 が受け取るのは、StateMachine / Composite
+`asami/cozy` Phase 62.3 producer handoff は CML の first-class `WORKFLOW`
+declaration を確定する producer boundary である。Phase 1 が受け取るのは、StateMachine / Composite
 StateMachine semantics を再利用しながら、次を明示した release 済み generated ABI
 である。
 
@@ -55,6 +64,12 @@ Phase 1 は Phase 77 の次の完了済み contract に依存する。
   discovery。
 - entity-local StateMachine persistence と別の WorkflowInstance identity,
   revision, history, correlation contract。
+- `WorkflowStartRequest` / `WorkflowStartResult`, `WorkflowHandle`, closed
+  `Continuation`, and the externally claimable `ContinuationRequest` /
+  `ContinuationResult` / `WorkResult` wire forms.
+- Workflow and Continuation identity, expected revision, `ContextSnapshot`,
+  typed input/result, Completion/Evidence/ExecutionEvidence, and
+  schema-versioned fail-closed JSON codecs.
 - automatic progression を評価し、semantic boundary または terminal outcome を
   一つ返す evaluator。semantic boundary を越えたり、external Action を実行したり
   しないこと。
@@ -63,12 +78,13 @@ Phase 1 は Phase 77 の次の完了済み contract に依存する。
 
 Phase 77 は default datastore、SQLite、WorkOrder lease、public CLI/server、skill
 distribution、Codex cost policy を提供しない。Phase 1 は同 Phase の reusable
-contract を component-local Textus runtime に bind するが、公開 `sm-*` skill と
-public protocol に CNCF 固有 contract を露出しない。
+contract を application payload/definition/test fixture に bind する。profile-specific
+start operations と `WorkflowInteraction` は framework `WorkflowHandle` と current
+`Continuation` の projection であり、別の generic protocol を再定義しない。
 
 ### Fixed Handoff Rule
 
-Phase 1 の開始時に、Cozy Phase 62 release、CNCF Phase 77 release、互換性のある
+Phase 1 の開始時に、Cozy Phase 62.3 producer handoff/release、CNCF Phase 77 release、互換性のある
 Workflow ABI version、real-source fixture identity、および両 repository の exact
 commit/revision を記録する。Phase 62 と Phase 77 のどちらかが未完了、互換性未確認、
 または handoff evidence を欠く場合、`sm-workflow` 内に一時的な Workflow DSL、
@@ -83,6 +99,54 @@ point を記録して Phase 1 を開始前のまま保持する。
 - CML Action が raw command ではなく型付き Operation を参照できる。
 - Textus runtime が component-local datastore を構成できる。
 
+## Scope reconciliation
+
+This Phase's closure authority is the
+[Phase 1 Executable-Specification Checklist](phase-1-executable-specification-checklist.md).
+The prior [Phase 1 checklist](phase-1-checklist.md) remains an immutable
+pre-reconciliation planning inventory; it is not this Phase's closure ledger.
+
+### In scope
+
+- application-specific typed start/work/result/terminal payloads for
+  GoalPhase, SplitPhase, and RepositorySync;
+- three CML Workflow/StateMachine definitions binding to CNCF common Start,
+  Handle, Continuation, ContinuationRequest/Result, WorkResult, Evidence,
+  ExecutionEvidence, Presentation, identity/revision, and ContextSnapshot;
+- deterministic/test Providers and fixtures needed to execute specifications;
+- application Presentation content and a versioned profile-mapping policy that
+  consumes CNCF `ReasoningLevel`; only a Skill/Host-dispatched external
+  `WORK_ORDER` records selected worker-profile and mapping-policy
+  `ExecutionEvidence`, while a deterministic/local Provider records no
+  invented worker profile and neither evidence form changes Workflow semantics;
+  and
+- executable specifications proving Start -> semantic boundary -> typed result
+  -> next boundary -> terminal, with no AI turn for deterministic progression.
+
+### Deferred operational hardening
+
+The following are deliberately outside Phase 1 closure: production public
+skills and catalog, standalone/CAR bundle distribution, broad CLI/UI, SQLite
+operational profile/tuning, broad lease/restart/concurrency hardening,
+production recovery, cost dashboards, operational Git/SBT policy, concrete AI
+provider dispatch, and MCP/server adapters. A fixture adapter is allowed only
+when it is necessary to prove the application executable specification.
+
+### Adopted executable-specification scope review
+
+The 2026-09-20 [executable-specification scope review handoff](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/09/2026-09-20-phase-1-executable-spec-scope-review-handoff.md)
+is adopted as planning input with the following binding interpretation:
+
+- CNCF Phase 77 owns the generic Value Objects and fail-closed JSON wire
+  contract; `sm-workflow` owns only application payloads, definitions, and
+  specialization policy.
+- The upstream critical path includes the Cozy Phase 62.3 producer handoff as
+  well as CNCF Phases 64, 64.2, and 77. This records a dependency; it does not
+  claim that an upstream implementation is already complete.
+- `WorkflowInteraction` and profile-specific entry operations are projections
+  of a framework `WorkflowHandle` plus current `Continuation`; they do not
+  introduce another lifecycle or protocol.
+
 ## Design Invariants
 
 1. `advance` は通常進行の唯一の evaluator である。
@@ -96,7 +160,10 @@ point を記録して Phase 1 を開始前のまま保持する。
 9. public skill、public CLI schema、public JSON schema は CNCF 固有 contract に依存しない。
 10. SQLite、JDBC、SQL、database path は skill/CML/domain contract に公開しない。
 
-## Scope
+## Historical pre-reconciliation design detail
+
+The following prior detail is retained as design input for the deferred
+operational hardening work. It does not enlarge the Phase 1 closure authority.
 
 ### S1. Textus CAR baseline
 
@@ -105,9 +172,12 @@ point を記録して Phase 1 を開始前のまま保持する。
 - public namespace と component identity を固定する。
 - local runtime profile と test profile を用意する。
 
-### S2. Generic workflow model
+### S2. Historical generic workflow model — not carried forward
 
-次の generic model を定義する。
+The following predecessor proposal is retained only as post-Phase-1 planning
+input. It does not define a Phase 1 generic model, add Value Objects to the
+Phase 1 closure boundary, or permit an application-owned replacement for the
+CNCF Start/Handle/Continuation protocol.
 
 - `WorkflowDefinition`
 - `WorkflowRun`
@@ -199,9 +269,11 @@ semantic AIでなく `WAIT_FOR_REMOTE_STABILITY` とする。
 再定義または推測しない。automatic transition は永続済み入力だけから
 deterministic に決まり、外部 I/O、LLM、人間判断、追加権限を要求しない。
 
-### S4. Public operation contract
+### S4. Historical public operation contract — not carried forward
 
-Phase 1 で公開する operation:
+The following predecessor operation surface is not a Phase 1 delivery
+requirement. Current profile-specific entry operations are projections over
+the CNCF common contract; later operational planning may refine this surface.
 
 - `StartWorkflowRun`
 - `AdvanceWorkflowRun`
@@ -390,7 +462,7 @@ run ごとに少なくとも次を記録・表示できるようにする。
 
 host が model usage を返せる場合は invocation/token/cost を追加 metric として受理するが、特定 host の usage API を public contract の必須依存にはしない。
 
-## Non-Goals
+## Historical pre-reconciliation non-goals
 
 - `cncf-*` の置換、変更、state migration、dual write
 - CNCF runtime/Job/agent/receipt protocol との adapter
@@ -401,7 +473,7 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - arbitrary shell command を CML Action または Work Order payload として実行する機能
 - model による automatic/semantic 分類の推測
 
-## Deliverables
+## Historical pre-reconciliation deliverables
 
 - Textus CAR source and generated ABI
 - Workflow/StateMachine CML model, including `GoalPhaseWorkflow`, `SplitPhaseWorkflow`, and `RepositorySyncWorkflow`
@@ -416,7 +488,7 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - unit, persistence, concurrency, restart, CLI, bundle, and cost-structure acceptance evidence
 - public usage and recovery documentation
 
-## Acceptance
+## Historical pre-reconciliation acceptance
 
 ### A1. Mechanical transition absorption
 
@@ -483,7 +555,7 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 - Workflow recommendation does not authorize or automatically start another Workflow; profile and
   child selection remain explicit human choices with separate run identities.
 
-## Validation Plan
+## Historical pre-reconciliation validation plan
 
 - CML generation and generated ABI compatibility checks
 - unit tests for transition selection, fixed-point drain, continuation closure, idempotency, cycle/limit handling
@@ -500,13 +572,13 @@ host が model usage を返せる場合は invocation/token/cost を追加 metri
 
 All future top-level SBT validation must use the repository's machine-wide serialized SBT execution policy. Phase definition itself executes no validation.
 
-## Closure Rule
+## Historical pre-reconciliation closure rule
 
 Phase 1 is complete only when every required item in [phase-1-checklist.md](phase-1-checklist.md) is checked, all A1–A7 acceptance groups have reproducible evidence, and the evidence is bound to the final intended tree.
 
 A partially working CLI, an in-memory-only engine, a skill that interprets state transitions itself, or a workflow that invokes Codex for automatic transitions does not satisfy Phase 1.
 
-## Deferred Follow-Up
+## Historical pre-reconciliation deferred follow-up
 
 After Phase 1 closure, define separate phases for:
 

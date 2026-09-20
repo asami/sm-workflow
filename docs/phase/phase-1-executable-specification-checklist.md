@@ -1,0 +1,78 @@
+# Phase 1 Checklist: Common Contract Application Executable Specifications
+
+Status: planned
+phase: [Phase 1](phase-1.md)
+
+This is the sole closure authority for Phase 1 after the 2026-09-20 common
+contract scope reconciliation. It preserves the older
+[operational inventory](phase-1-checklist.md) as post-Phase-1 planning, without
+claiming that any of its open items are complete.
+
+## Entry and common-contract binding
+
+- [ ] P1-E01: Record the completed Cozy Phase 62.3 producer handoff and CNCF
+  Phase 77 release/revisions plus their compatible generated Workflow ABI
+  versions.
+- [ ] P1-E02: Bind application definitions only to CNCF
+  `WorkflowStartRequest`/`WorkflowStartResult`, `WorkflowHandle`, closed
+  `Continuation`, `ContinuationRequest`/`ContinuationResult`/`WorkResult`,
+  typed Result/Evidence/ExecutionEvidence, and fail-closed JSON codecs;
+  preserve Workflow/Continuation identity, expected revision, and
+  `ContextSnapshot`; create no application-owned generic protocol.
+- [ ] P1-E03: Define `WorkflowInteraction` as the public projection of a
+  framework `WorkflowHandle` and current `Continuation`, preserving identity,
+  expected revision, typed response admission, suspension, and terminal
+  semantics.
+
+## Application workflows and fixtures
+
+- [ ] P1-A01: Define typed application start/work/result/terminal payloads for
+  GoalPhaseWorkflow, SplitPhaseWorkflow, and RepositorySyncWorkflow.
+- [ ] P1-A02: Define the three CML Workflow/StateMachine definitions and bind
+  their application payloads to the common CNCF contract without recreating
+  generic Start, Handle, or Continuation semantics.
+- [ ] P1-A03: Provide deterministic/test Providers and fixtures sufficient to
+  exercise each definition through CNCF Phase 77.
+- [ ] P1-A04: Supply application Presentation content to the common
+  title/current-situation/optional-summary-next-action-reason-progress model.
+- [ ] P1-A05: Supply a versioned application mapping policy that consumes the
+  abstract ReasoningLevel. A Skill/Host-dispatched external WorkOrder records
+  compatible ExecutionEvidence; deterministic/local Providers invent no worker
+  profile, and concrete worker selection is never a Workflow guard or
+  transition.
+
+## Executable specifications
+
+- [ ] P1-S01: Prove each application Workflow starts, absorbs deterministic
+  progression, returns its first semantic boundary, accepts a typed result,
+  and reaches the correct typed terminal result.
+- [ ] P1-S02: Prove deterministic/test Provider execution requires no AI turn,
+  while semantic WorkOrder/Decision boundaries remain explicit.
+- [ ] P1-S03: Prove schema-versioned JSON fixtures round-trip
+  Start/ContinuationRequest/ContinuationResult/WorkResult/Terminal common
+  envelopes with each application's typed payloads and fail closed for
+  incompatible schema, identity, revision/ContextSnapshot, result, or required
+  evidence.
+- [ ] P1-S04: Prove profile-specific start operations and WorkflowInteraction
+  remain projections of the common framework contract rather than a second
+  generic lifecycle.
+- [ ] P1-S05: Record exact fixture, generated ABI, CNCF, and sm-workflow
+  revisions in the consumer handoff.
+
+## Exclusions
+
+- [ ] P1-X01: Prove Phase 1 completion does not require production public
+  skills/catalogs, standalone/CAR distribution, broad CLI/UI, production SQLite
+  profile, operational lease/restart/concurrency/recovery hardening, concrete
+  AI provider dispatch, cost dashboards, or MCP/server adapters.
+- [ ] P1-X02: Permit a tiny fixture adapter only when necessary for an
+  executable specification; it must not become a production operational
+  surface.
+
+## Closure
+
+- [ ] P1-C01: Run the relevant executable specifications on the final intended
+  application definition/fixture tree and record their evidence.
+- [ ] P1-C02: Update Phase 1 status only after every item in this checklist is
+  complete; do not treat the historical operational inventory as a closure
+  prerequisite.

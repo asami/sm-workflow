@@ -25,6 +25,19 @@ contiguous な分割候補を列挙して決定的に最適化する。AI が担
 packing、validation ownership、document rendering、collision scan、three-way merge、
 static validation は Workflow が実行する。
 
+## Phase 1 common-contract alignment
+
+Phase 1 closure binds this profile to the CNCF Phase 77 common contract. Its
+profile-specific start Operation delegates to `WorkflowStartRequest` and
+projects the resulting `WorkflowHandle` plus first `Continuation` (or typed
+terminal) as `WorkflowInteraction`. A current `Continuation` remains the
+canonical typed semantic boundary and Skill/Codex wire correlation; it is not
+a second root identity or lifecycle. A typed completion is a
+`ContinuationResult` admitted through `advanceWorkflow(handle, response?)`.
+The older `Suspended(Continuation)` and profile-specific continuation wording
+below describes runtime state or application payload specialization only; it
+cannot replace the common Continuation protocol.
+
 ## Profile and skill identity
 
 - CML Workflow name / definition selector: `SplitPhaseWorkflow`
@@ -39,8 +52,8 @@ CLI selectorは `sm-workflow run start --workflow SplitPhaseWorkflow ...` とす
 `SplitPhaseWorkflow` の開始は人間が明示的に選択する。`sm-goal-phase` の
 `SPLIT_REQUIRED` terminal result や host/client の recommendation は開始候補を提示できるが、
 それ自体は invocation authority ではない。`sm-split-phase` の選択または exact
-`StartWorkflowRun(workflowDefinitionId = SplitPhaseWorkflow, ...)` によって、別の run として
-開始する。前 run の typed source/evidence/proposal reference は入力として参照できるが、
+profile-specific `startSplitPhase(...)` によって、別の run として開始する。前 run の
+typed source/evidence/proposal reference は入力として参照できるが、
 run identity、revision、Decision、Continuation、durable state を暗黙に移送しない。
 
 split 完了後も Workflow は child goal を開始しない。host/client は適用済み child を

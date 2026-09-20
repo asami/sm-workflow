@@ -1,8 +1,13 @@
-# Phase 1 Checklist: Advance-Centered Local Workflow Core
+# Phase 1 Checklist: Historical Advance-Centered Local Workflow Core Inventory
 
-Status: planned
+Status: superseded as Phase 1 closure authority
 
-This checklist is the closure authority for [Phase 1](phase-1.md). Deterministic operation / closing requirements are specified by [Phase 1 deterministic closing addendum](phase-1-deterministic-closing-addendum.md).
+This is the pre-2026-09-20 operational planning inventory. It is retained for
+post-Phase-1 operational hardening and is no longer the closure authority for
+[Phase 1](phase-1.md). The current closure ledger is
+[Phase 1 Executable-Specification Checklist](phase-1-executable-specification-checklist.md).
+No item in this historical inventory is implicitly accepted, deleted, or
+implemented by that scope reduction.
 
 ## Entry Gates
 

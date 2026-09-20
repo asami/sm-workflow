@@ -27,6 +27,19 @@ target への異なる修正が衝突した場合、AI が resolution plan を�
 Git command、checkpoint、merge、validation、commit、push、再fetch はすべて Workflow
 provider が管理する。
 
+## Phase 1 common-contract alignment
+
+Phase 1 closure binds this profile to the CNCF Phase 77 common contract. Its
+profile-specific start Operation delegates to `WorkflowStartRequest` and
+projects the resulting `WorkflowHandle` plus first `Continuation` (or typed
+terminal) as `WorkflowInteraction`. A current `Continuation` remains the
+canonical typed semantic boundary and Skill/Codex wire correlation; it is not
+a second root identity or lifecycle. A typed completion is a
+`ContinuationResult` admitted through `advanceWorkflow(handle, response?)`.
+The older `Suspended(Continuation)` and profile-specific continuation wording
+below describes runtime state or application payload specialization only; it
+cannot replace the common Continuation protocol.
+
 ## Profile and skill identity
 
 - CML Workflow name / definition selector: `RepositorySyncWorkflow`
