@@ -227,3 +227,14 @@ not Current Boundary Blockers for this documentation repair.
 
 Do not commit from this handoff. A later commit workflow must bind the final
 reviewed tree and the selected documentation paths explicitly.
+
+
+## Follow-up: Step close request and proactive review evidence
+
+A later boundary clarification refines DEV-SMWF-SKILL-002. The Skill is responsible for bringing program artifacts and its planning/management files to the latest state before requesting Step close. It may perform review proactively and submit the resulting typed, scoped review evidence with the close request.
+
+`RequestStepClose` establishes closure intent. sm-workflow evaluates supplied evidence against closure policy, including scope, reviewed artifact revision, freshness, disposition, unresolved findings, validation and commit prerequisites. A scoped review may therefore be accepted as evidence while the Workflow still returns a full-review Continuation. Fresh full-review evidence should be reused rather than duplicated.
+
+After the initial close request, requested Review/Repair/ReReview results resume closure evaluation automatically; the Skill does not repeat the close request. When requirements are satisfied, Workflow-owned deterministic validation/commit closes the program and management-file state together.
+
+This supersedes the earlier interpretation of DEV-SMWF-SKILL-002 as planning mutation occurring after Step commit. The required ordering is planning/program state update -> close request with evidence -> missing semantic work as Continuations -> deterministic commit -> Step closed.
