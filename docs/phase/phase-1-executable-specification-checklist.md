@@ -40,6 +40,13 @@ claiming that any of its open items are complete.
   compatible ExecutionEvidence; deterministic/local Providers invent no worker
   profile, and concrete worker selection is never a Workflow guard or
   transition.
+- [ ] P1-A06: Specialize CNCF `JudgmentAction` for each genuinely contextual
+  software-development judgment using typed goal, context, alternatives,
+  criteria, and expected result; keep deterministic work as
+  `OperationAction`.
+- [ ] P1-A07: Define application `JudgmentResult` payloads containing an
+  admitted decision, rationale, and evidence without encoding the next state
+  or next Action in the worker result.
 
 ## Executable specifications
 
@@ -58,6 +65,15 @@ claiming that any of its open items are complete.
   generic lifecycle.
 - [ ] P1-S05: Record exact fixture, generated ABI, CNCF, and sm-workflow
   revisions in the consumer handoff.
+- [ ] P1-S06: Exercise Codex as the initial external worker for at least one
+  `JudgmentAction` through the CNCF Skill/Continuation JSON boundary and prove
+  its typed decision/rationale/evidence round trip.
+- [ ] P1-S07: Prove the same judgment contract with a deterministic Provider
+  and show that worker replacement does not alter Workflow definition identity
+  or transition semantics.
+- [ ] P1-S08: Prove only StateMachine guards/transitions map an admitted
+  `JudgmentResult` to ACCEPT/REVISE/ESCALATE-equivalent progression; reject an
+  unknown decision and any worker attempt to select or mutate the next state.
 
 ## Exclusions
 
