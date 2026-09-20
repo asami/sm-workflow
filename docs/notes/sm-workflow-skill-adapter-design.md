@@ -119,7 +119,55 @@ SmExecutionContext is application semantics. ContextSnapshot is CNCF's generic e
 
 Before adding context to an execution payload ask: Does this information materially affect correct execution of this Workflow? If not, keep it Skill-side.
 
-## 6. Revision and reconciliation
+## 6. Workflow Step Closure and Checklist Closure are different
+
+Workflow Step closure and planning Checklist closure are deliberately separate decisions.
+
+sm-workflow owns execution-side Step closure. For GoalPhaseWorkflow this includes review admission, determination of whether re-review is required, validation/evidence checks, Step closure readiness, deterministic staging/commit, commit SHA/receipt recording, and transition to the next Step or Phase review.
+
+The Skill does not decide whether sm-workflow should enter STEP_REREVIEWING or STEP_COMMITTING, and it must not run the commit sequence as semantic Skill work.
+
+A successful Workflow Step commit is execution evidence. It does **not** directly mutate or imply the planning-side Checklist state.
+
+~~~text
+sm-workflow
+  review / repair / re-review
+       |
+       v
+  Step closure-ready
+       |
+       v
+  deterministic commit
+       |
+       | Result / Evidence / commit receipt
+       v
+Skill WorkflowMapping
+       |
+       | semantic reconciliation
+       v
+Phase / Checklist update
+~~~
+
+The Skill decides what that execution evidence means for the Phase/Checklist by applying WorkflowMapping and current planning context. A ChecklistItem may remain open after a Step commit, multiple ChecklistItems may be satisfied by one committed Step, or additional planning work may be created.
+
+Therefore the following implication is forbidden:
+
+~~~text
+Workflow Step committed => ChecklistItem checked
+~~~
+
+The only valid path is:
+
+~~~text
+Workflow Step committed
+  -> typed Result/Evidence
+  -> Skill reconciliation
+  -> planning-side update if justified
+~~~
+
+Likewise, a ChecklistItem already marked complete does not authorize sm-workflow to skip its own review, validation, evidence, or commit guards unless the Workflow itself admits existing evidence through its defined states.
+
+## 7. Revision and reconciliation
 
 The Skill must assume Phase/Checklist can change while a Workflow is running. Record the planning/source revision used to create a mapping.
 
@@ -127,13 +175,13 @@ Before applying execution results: read current planning revision; compare with 
 
 Git commit SHA may be used as source revision when appropriate, but the Skill contract does not require Git when another stable revision identity exists.
 
-## 7. Recovery
+## 8. Recovery
 
 A new Skill turn/session must recover without conversation history using current Phase/Checklist, required project context, stored/reconstructable WorkflowMapping/correlation, and CNCF Workflow handle/status/history/result/evidence.
 
 If mapping metadata is missing, reconstruct conservatively from stable planning references and execution identity/history. Do not manufacture completion.
 
-## 8. Failure boundaries
+## 9. Failure boundaries
 
 - planning ambiguity: Skill-side interpretation/input issue
 - stale planning mapping: Skill-side reconciliation issue
@@ -142,11 +190,11 @@ If mapping metadata is missing, reconstruct conservatively from stable planning 
 - missing evidence: planning remains incomplete unless Workflow contract rejects it
 - infrastructure/provider failure: do not convert directly into Checklist semantics
 
-## 9. Prohibited responsibilities
+## 10. Prohibited responsibilities
 
 An sm-* Skill must not own durable Workflow progression; choose the next StateMachine Action; reproduce retry/lease/idempotency; define a generic Continuation/WorkflowHandle; treat conversation history as durable state; copy all project context into SmExecutionContext; make Phase/Checklist generic CNCF fields; assume 1:1 ChecklistItem/Action mapping; check items solely because a Workflow terminated; auto-chain another Workflow; make concrete AI model/provider transition semantics; or expose internal deterministic Actions as semantic Skill work.
 
-## 10. Skill generation checklist
+## 11. Skill generation checklist
 
 A generated Skill is acceptable only when it:
 
@@ -163,7 +211,7 @@ A generated Skill is acceptable only when it:
 - keeps Skill-only context outside sm-workflow/CNCF;
 - does not auto-chain Workflow invocations.
 
-## 11. Reference flow
+## 12. Reference flow
 
 ~~~text
 Phase / Checklist / Skill-only Context
@@ -196,7 +244,7 @@ Skill Observe + Reconcile
 Phase / Checklist
 ~~~
 
-## 12. Related design
+## 13. Related design
 
 - [sm-workflow design](sm-workflow-design.md)
 - [CNCF Workflow protocol application specialization](cncf-workflow-protocol-application-specialization.md)
