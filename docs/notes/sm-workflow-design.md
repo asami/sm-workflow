@@ -6,6 +6,7 @@
 - 更新: 2026-09-16（Textus 管理の SQLite local persistence 案）
 - 更新: 2026-09-16（コスト低減目標と `advance` 中心設計）
 - 更新: 2026-09-18（repository sync profile と managed Git provider 境界）
+- 更新: 2026-09-21（Skill-managed Phase / Checklist と Workflow Core の境界）
 - 対象: Textus CAR `sm-workflow` と `sm-*` Codex skills
 - 実装フェーズ: [Phase 1: Advance-Centered Local Workflow Core](../phase/phase-1.md)
 
@@ -773,3 +774,72 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 - `/Users/asami/src/dev2026/textus-art-scene/src/test/scala/org/simplemodeling/textus/artscene/ArtSceneStandaloneRestartSpec.scala`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/spec/component-local-datastore-layout.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/src/test/scala/org/goldenport/cncf/datastore/SqliteConditionalTransitionSpec.scala`
+
+
+## 18. Skill-managed Phase / Checklist と Workflow Core の境界
+
+### 18.1 所有権
+
+sm-workflow は execution semantics だけを所有する。Workflow / State / Action（JudgmentAction を含む）/ Transition / typed Input・Output / Participant・Binding / Result・Evidence / Execution History が核である。
+
+Phase、Checklist、Closure Criteria、開発計画上の意味、rationale、project-specific convention、過去の判断などの planning semantics と project context は skill が所有する。これらを sm-workflow の domain model に昇格させない。
+
+原則:
+
+> sm-workflow owns execution semantics. Skill owns planning semantics and context. Skill maps workflow execution onto its Phase/Checklist model.
+
+### 18.2 Workflow Projection / Mapping
+
+skill は sm-workflow の核情報を、自らが管理する Phase / Checklist へ投影する責務を持つ。対応は 1:1 を仮定しない。一つの Checklist Item が複数 Action / JudgmentAction / Evidence に対応してよく、一つの Workflow execution result が複数 Checklist Item の判断材料になってもよい。
+
+この対応は sm-workflow 側の属性ではなく skill 側の `WorkflowProjection` / `WorkflowMapping` として管理する。概念上は次を持つ。
+
+- source: Phase / ChecklistItem / ClosureCriterion
+- target: WorkflowRef / StateRef / ActionRef / ResultRef / EvidenceRef
+- interpretation: completion rule / evidence rule / reconciliation rule
+- source revision: checklist/phase の解釈時点を識別する revision
+
+sm-workflow は `phaseId` や `checklistItemId` を必須 domain attribute にしない。
+
+### 18.3 Context Projection
+
+skill が保持する context 全体を sm-workflow に渡してはならない。skill は Workflow 実行に必要な最小部分だけを `ExecutionContext` として投影する。
+
+`ExecutionContext` は skill context の複製や永続的共有モデルではなく、特定 run / work order を成立させるための bounded input snapshot である。planning history、Phase の意味、checklist の編集理由、project 固有の暗黙知など、実行に不要な情報は skill 側に留める。
+
+### 18.4 同期モデル
+
+Phase / Checklist と Workflow state の dual-write や field-level synchronization は行わない。同期は意味論的 reconciliation とする。
+
+1. skill が Phase / Checklist と skill-only context を解釈する。
+2. skill が必要な Workflow/profile を選択し、bounded ExecutionContext を materialize する。
+3. sm-workflow が execution model を進行し、Result / Evidence / History を正本として保持する。
+4. skill が Result / Evidence を取得し、自身の WorkflowMapping を用いて Phase / Checklist 上の意味へ再解釈する。
+5. skill が Checklist 完了、分割、追加、Closure 判定などを更新する。
+6. Phase / Checklist が実行中に変更された場合、source revision の差異を検出し、skill が mapping を reconcile する。sm-workflow は Phase 文書の差分を解釈しない。
+
+したがって `checklist.checked = workflow.completed` のような直接同期は設計しない。
+
+### 18.5 境界を越える情報
+
+Skill -> sm-workflow:
+
+- exact Workflow/Profile selection
+- bounded objective / typed input
+- ExecutionContext
+- acceptance/evidence contract のうち execution に必要な部分
+- source correlation reference（任意。opaque reference として扱う）
+
+sm-workflow -> Skill:
+
+- Workflow / Action status
+- typed Result
+- Evidence / Receipt reference
+- Execution History reference
+- revision / continuation
+
+Phase / Checklist の更新命令や「この checklist を checked にせよ」という planning-side disposition は sm-workflow から返さない。最終的な Phase / Checklist の意味判断は常に skill が行う。
+
+### 18.6 Scope guard
+
+新しい情報を sm-workflow に追加する際は「Phase / Checklist が存在しない別用途の Workflow でも必要か」を判定基準にする。必要でなければ原則として profile または skill 側に置く。この guard により software-development-specific planning model が generic workflow runtime に侵入することを防ぐ。
