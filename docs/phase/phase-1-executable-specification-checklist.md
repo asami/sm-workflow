@@ -21,8 +21,8 @@ claiming that any of its open items are complete.
   `ContextSnapshot`; create no application-owned generic protocol.
 - [ ] P1-E03: Define `WorkflowInteraction` as the public projection of a
   framework `WorkflowHandle` and current `Continuation`, preserving identity,
-  expected revision, typed response admission, suspension, and terminal
-  semantics.
+  expected revision, typed response admission, exact registered completion
+  Operation identity, suspension, and terminal semantics.
 
 ## Application workflows and fixtures
 
@@ -60,9 +60,10 @@ claiming that any of its open items are complete.
   envelopes with each application's typed payloads and fail closed for
   incompatible schema, identity, revision/ContextSnapshot, result, or required
   evidence.
-- [ ] P1-S04: Prove profile-specific start operations and WorkflowInteraction
-  remain projections of the common framework contract rather than a second
-  generic lifecycle.
+- [ ] P1-S04: Prove profile-specific start/completion operations and
+  WorkflowInteraction remain projections of the common framework contract
+  rather than a second generic lifecycle; expose no Skill-facing generic
+  `StartWorkflowRun` or `advanceWorkflow` protocol.
 - [ ] P1-S05: Record exact fixture, generated ABI, CNCF, and sm-workflow
   revisions in the consumer handoff.
 - [ ] P1-S06: Exercise Codex as the initial external worker for at least one
@@ -74,6 +75,14 @@ claiming that any of its open items are complete.
 - [ ] P1-S08: Prove only StateMachine guards/transitions map an admitted
   `JudgmentResult` to ACCEPT/REVISE/ESCALATE-equivalent progression; reject an
   unknown decision and any worker attempt to select or mutate the next state.
+- [ ] P1-S09: Prove each profile-specific start Operation requires matching
+  explicit human invocation authority; reject recommendation-only start,
+  mismatched profile selection, and attempts by a Skill, Workflow, or terminal
+  result to manufacture the selection record.
+- [ ] P1-S10: Prove launcher JSON is a fixture adapter for the registered typed
+  application Operations, not the Skill contract itself, and that a
+  Continuation-selected completion Operation returns the same common envelope
+  independently of transport grammar.
 
 ## Exclusions
 

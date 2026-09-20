@@ -43,7 +43,9 @@
 
 - `cncf-*` と `sm-*` は長期間併用する。
 - `sm-*` は新規の名前空間、状態、コマンド、配布物を使用する。
-- `sm-*` skill は汎用的に公開し、利用者側に `cncf-*` skill、CNCF launcher、CNCF 固有 schema/runtime API を要求しない。
+- `sm-*` skill は汎用的に公開し、利用者側に `cncf-*` skill や特定 transport の argv grammar
+  を要求しない。Skill-facing contract は CNCF common DTO を使用する registered
+  sm-workflow application Operation であり、MCP と CNCF launcher/CLI は交換可能な adapter とする。
 - `sm-*` skill は薄いクライアントとし、ワークフロー本体を skill の自然言語指示へ埋め込まない。
 - workflow の状態遷移、再開、排他、冪等性、証跡は `sm-workflow` の公開 service contract の背後にある runtime が担う。
 - local/standalone profile の既定永続化候補は、Textus runtime が管理する SQLite とする。
@@ -58,7 +60,8 @@
 ### 2.2 現時点の実装事実
 
 - Cozy の既存 CML では `COMPOSITE-STATEMACHINE` が正規のルートであり、`WORKFLOW` は独立キーワードとして確定していない。
-- CNCF の Workflow runtime 統合は Phase 64 で計画されており、`sm-workflow` runtime port の実装候補になる。
+- Phase 1 は CNCF Phase 77 の common Workflow runtime contract を canonical execution
+  dependency とし、application側で第二のWorkflow runtime portを定義しない。
 - 現在の `WorkflowEngine.inMemory` は長期実行、プロセス再起動、複数クライアントからの再開を満たさない。
 - `cncf-launcher` と `textus-launcher` の skill install はそれぞれ計画段階である。ただし、これらは公開 bundle の利用に必須の依存ではなく、導入 adapter の候補である。
 - Textus CAR には、runtime が SQLite file を component-local datastore として束縛し、再起動後に同じ状態を復元する既存実例がある。
@@ -75,8 +78,8 @@
 5. **意味判断と決定的処理を分離する。** semantic AI Action の前後に deterministic prepare/admission を置き、定型化された外部作用は typed operation provider が実行する。raw shell や任意 command を Work Order にしない。
 6. **一つの事実に一つの正本を置く。** workflow state の正本は Textus datastore とし、skill の会話履歴や Markdown を正本にしない。
 7. **併用は共有状態ではなく明確な隔離で成立させる。** `cncf-*` と `sm-*` の暗黙変換、dual write、自動 migration は行わない。
-8. **公開 skill に内部基盤を漏らさない。** CNCF 固有の command、schema、agent、receipt、directory を public skill contract に含めない。
-9. **`advance` を唯一の通常進行入口にする。** deterministic な内部遷移を固定点まで評価し、次の semantic boundary だけを返す。
+8. **公開 skill に内部基盤を漏らさない。** transport 固有 command grammar、agent、receipt、directory を public skill contract に含めない。CNCF common Workflow DTO は canonical envelope として利用する。
+9. **runtime `advance` evaluator を唯一の通常進行機構にする。** registered start/completion Operation の内部で deterministic な遷移を固定点まで評価し、次の semantic boundary だけを返す。Skill-facing の第二の generic `advance` API は作らない。
 10. **履歴と continuation を分離する。** 完全な監査履歴は保存するが、Codex への通常応答には次の作業に必要な最小情報だけを載せる。
 11. **profile invocation は人間が選ぶ。** recommendation と開始権限を分離し、skill、Workflow、terminal result が別 Workflow を自動開始しない。
 
@@ -97,9 +100,9 @@ Workflow/skill binding を追加できる。
 skill名とWorkflow名は同一にせず、`SkillBundleManifest`の明示bindingを正本とする。
 
 ```text
-sm-goal-phase  -> GoalPhaseWorkflow
-sm-split-phase -> SplitPhaseWorkflow
-sm-repository-sync -> RepositorySyncWorkflow
+sm-goal-phase       -> GoalPhaseWorkflow / StartGoalPhase
+sm-split-phase      -> SplitPhaseWorkflow / StartSplitPhase
+sm-repository-sync  -> RepositorySyncWorkflow / StartRepositorySync
 ```
 
 ### 3.2 Profile invocation selection
@@ -107,9 +110,9 @@ sm-repository-sync -> RepositorySyncWorkflow
 `sm-goal-phase` と `sm-split-phase` は相互に呼び出す一つの dispatcher ではなく、別々の
 human-selected entry point である。skill を直接選ぶ場合はその選択が exact Workflow
 binding の invocation authority になる。generic host/UI は `SkillBundleManifest` の binding
-を使って候補と説明を表示できるが、`StartWorkflowRun` は常に一つの exact
-`workflowDefinitionId` を受け取り、runtime が目的や前 run の result から profile を推測
-してはならない。
+を使って候補と説明を表示できるが、選択結果は一つの exact profile-specific start
+Operation (`StartGoalPhase`、`StartSplitPhase`、`StartRepositorySync`) に解決する。runtime が
+目的や前 run の result から profile または start Operation を推測してはならない。
 
 `GoalPhaseWorkflow` が split 必要性を判定した場合は `SPLIT_REQUIRED` terminal result と
 advisory `SplitPhaseWorkflow` recommendation を返す。この result は別 run を開始せず、
@@ -124,15 +127,18 @@ start input として渡す。
 ```text
 sm-* Codex skill
     |
-    | advance / complete through typed CLI or MCP
+    | selected registered Operation through typed client
     v
-sm-workflow public service contract
+transport adapter (MCP or launcher/CLI)
     |
-    | generated Workflow / StateMachine / Operation API + runtime port
     v
-Workflow runtime implementation
-    |-- standalone/Textus runtime + SQLite (default local provider)
-    `-- optional CNCF runtime adapter
+sm-workflow application Operation contract
+    |
+    | generated Workflow / StateMachine / Operation API
+    v
+CNCF common Workflow runtime
+    |-- one-shot component bootstrap
+    `-- long-lived Textus/CNCF server application
     |
     | persistent state, history, lease, idempotency
     v
@@ -148,23 +154,27 @@ deterministic admission / validation / closing
     `---- typed receipts and transition back into sm-workflow
 ```
 
-CLI と MCP/server は異なる workflow 実装を持たない。同じ application service を呼ぶ二つの adapter とする。初期 vertical slice は CLI を主経路とし、対話性や remote access が必要になった時点で MCP/server を追加できる構造にする。
+launcher/CLI と MCP/server は異なる workflow 実装を持たない。同じ registered application
+Operation を呼ぶ transport adapter とする。Phase 1 は one-shot launcher fixtureを使い、Phase 2
+は通常のinteractive経路としてMCPを追加する。
 
-公開 `sm-*` skill が認識するのは `sm-workflow` CLI/MCP の versioned protocol までとする。その背後が standalone runtime、Textus runtime、CNCF adapter のどれであるかは観測も要求もしない。
+公開 `sm-*` skill が認識するのは versioned typed application Operation contract までとする。
+transport adapter が MCP、launcher/CLI、またはtest adapterのどれであるかをWorkflow semanticsに
+含めず、その背後のruntime実装も要求しない。
 
-通常経路では、skill が StateMachine の各 state/transition、候補operation、result disposition
-を解釈しない。`advance` が次の一件のAI処理をexact `AIWorkRequest`として指定する。skillは
-その依頼を実行し、typed `AIWorkResult`を同じWork Orderへ返すだけである。次の処理選択は
-result受理後のWorkflowだけが行う。
+通常経路では、skill が StateMachine の各 state/transition、候補Operation、result disposition
+を解釈しない。current Continuationが次の一件のAI処理とexact completion Operationを指定する。
+skillは依頼を実行し、typed resultをそのOperationへ返すだけである。次の処理選択はresult受理後の
+Workflowだけが行う。
 
 ## 5. 責務境界
 
 | 層 | 所有するもの | 所有しないもの |
 | --- | --- | --- |
 | Cozy/CML | Workflow 表現、StateMachine、Operation、生成 ABI | runtime の永続化や Codex の実行方法 |
-| `sm-workflow` public protocol | versioned command/API、JSON schema、capability negotiation | 特定 runtime/launcher の名称 |
-| Workflow runtime port | instance、transition、lease、冪等性、回復、履歴 | profile 固有ポリシー |
-| optional CNCF adapter | CNCF runtime への port 実装、既存環境との協調 | public skill contract |
+| `sm-workflow` application Operation contract | registered typed Operation、application payload、presentation specialization | transport固有command grammar、generic Workflow envelopeの再定義 |
+| CNCF common Workflow runtime | instance、transition、Continuation、冪等性、回復、履歴 | profile 固有planning semantics |
+| MCP / launcher transport adapter | registered application Operationの搬送、schema-validated I/O | Workflow semantics、Operation選択、durable state |
 | `sm-workflow` CAR | plan、Work Order、receipt 検証、運用ポリシー | Codex tool の直接操作 |
 | `sm-*` skill | exact `AIWorkRequest` の一回実行と typed result 返却 | operation/state/next-action選択、result disposition、durable state |
 | installer adapter | 中立 skill bundle の検証、導入、更新、削除 | bundle schema の所有、workflow の進行判断 |
@@ -174,14 +184,14 @@ result受理後のWorkflowだけが行う。
 公開 bundle に含まれる skill が直接依存してよいものは次に限定する。
 
 - Codex skill の標準ファイル規約
-- versioned `sm-workflow` CLI または MCP protocol
+- versioned registered sm-workflow application Operation contract
 - bundle に同梱された JSON Schema、template、説明資料
 - manifest に明記された一般的な host capability
 
 次は依存禁止とする。
 
 - `cncf-*` skill の存在や呼び出し
-- `cncf` launcher command
+- transport 固有 launcher command/argv grammar
 - `cncf.*` schema namespace
 - CNCF 固有 agent role、receipt locator、temporary directory、lock path
 - `/Users/asami/...` のような開発環境固有 path
@@ -244,29 +254,31 @@ Missing -> Submitted -> Accepted
 
 CML Action は型付き Operation を参照する。raw shell、任意 script、skill 本文を Action の実体にはしない。
 
-初期 Operation 候補:
+初期 registered application Operation:
 
-- `StartWorkflowRun`
-- `AdvanceWorkflowRun`
-- `PlanWorkflowRun`
-- `OfferWorkOrder`
-- `AcquireWorkOrder`
-- `StartWorkOrder`
-- `SubmitWorkResult`
-- `AcceptEvidence`
-- `RejectEvidence`
-- `ResolveDecision`
-- `CompleteWorkflowRun`
-- `FailWorkflowRun`
-- `CancelWorkflowRun`
+- `StartGoalPhase`
+- `StartSplitPhase`
+- `StartRepositorySync`
+- `SubmitGoalPhaseWorkResult`
+- `SubmitSplitPhaseWorkResult`
+- `SubmitRepositorySyncWorkResult`
+- application-specific `ResolveDecision`
+- read-only status/history/result Operations
+- authority-checked cancellation Operation
 
-`StartWorkflowRun` は exact `workflowDefinitionId` と profile 固有 typed start input を必須に
-し、recommendation、terminal result、skill名の文字列推測から別 Workflow を選択または
-chain しない。別 Workflow の開始は常に新しい人間選択と新しい run identity を必要とする。
+profile-specific start Operation は exact Workflow binding と typed start input を所有し、
+recommendation、terminal result、skill名の文字列推測から別 Workflow を選択または chain しない。
+別 Workflow の開始は常に新しい人間選択と新しい WorkflowInstance identity を必要とする。
+
+non-terminal Continuation は current handle/revision/ContextSnapshot、typed completion contract、
+exact registered completion Operation identity を持つ。SkillはそのOperationへtyped resultを返し、
+CNCF runtimeが内部advance evaluatorで次のboundaryまで進める。generic `StartWorkflowRun`、
+`AdvanceWorkflowRun`、`SubmitWorkResult`をSkill-facingの第二protocolとして公開しない。
 
 ```text
 WorkflowInvocationSelection
   selectionId
+  registeredStartOperationIdentity
   workflowDefinitionId
   participantIdentity
   selectionKind: EXPLICIT_HUMAN
@@ -281,9 +293,9 @@ WorkflowRecommendation
   reasonCode
   advisoryOnly: true
 
-StartWorkflowRunRequest
-  workflowDefinitionId
-  typedStartInput
+ProfileStartRequest
+  registeredStartOperationIdentity
+  typedProfileStartInput
   invocationSelection: WorkflowInvocationSelection
   idempotencyKey
 ```
@@ -291,7 +303,7 @@ StartWorkflowRunRequest
 host/client adapter は UI または直接選択された public skill から
 `WorkflowInvocationSelection` を構築する。`WorkflowRecommendation`、semantic AI result、
 skill、Workflow runtime は selection record を自己生成できない。recommendation を利用する
-場合も `recommendationReference` として相関させるだけで、`workflowDefinitionId` と
+場合も `recommendationReference` として相関させるだけで、registered start Operation と
 participant selection を置き換えない。
 
 ### 6.4 Automatic transition と semantic boundary
@@ -454,7 +466,8 @@ advanceSummary:
 
 1. Workflow/host がlease済みのexact `AIWorkRequest`をskillへ渡す。
 2. skillは指定された一件のsemantic AI処理だけを実行する。
-3. skillはtyped `AIWorkResult`またはtyped failureを同じWork Orderへ提出して終了する。
+3. skillはtyped `AIWorkResult`またはtyped failureを、current Continuationが指定する
+   registered completion Operationへ提出して終了する。
 4. componentはresultをdeterministic admissionし、同じ`advance` evaluatorで次の
    `Continuation`を選ぶ。
 5. host/client adapterは返された`Continuation`をそのkindどおりに配送する。skillは
@@ -463,31 +476,30 @@ advanceSummary:
 `DECISION`のuser presentation、`WAIT`のwake registration、`TERMINAL`の表示は
 host/client adapterのmechanical envelope handlingであり、semantic AI skillの判断ではない。
 `SPLIT_REQUIRED` terminal では host/client adapter が `sm-split-phase` を候補表示できるが、
-開始は人間の明示選択後に別の `StartWorkflowRun` として行う。
+開始は人間の明示選択後に別の `StartSplitPhase` Operationとして行う。
 
-`start`、`work complete`、`work fail`、`decision resolve` は、通常は server-side で
-`advance` を続けて同じ `Continuation` envelope を返す。明示的 `advance` は再開、競合
-回復、診断後の継続に使う。この合成は次の処理選択をWorkflow内で完了させるためのもので、
-skillにdispatcher loopを持たせるものではない。
+profile-specific start、work-result submission、decision resolution は、受理後にruntime内部の
+`advance` evaluatorを続けて同じ `Continuation` envelopeを返す。この合成は次の処理選択を
+Workflow内で完了させるためのもので、skillにdispatcher loopまたはgeneric advance clientを
+持たせるものではない。
 
 外部作用の最中に datastore transaction を保持しない。lease 期限切れ後の再取得を許容し、同じ `idempotencyKey` の重複提出は同じ `Continuation` を返す。
 
-## 9. コマンド面
+## 9. Operation transport
 
-初期 CLI 案:
+Skill-facing contract は registered typed application Operation であり、transport 固有CLI grammarを
+正本にしない。
 
-```text
-sm-workflow run start --workflow <workflow-id> --target <target> --workspace <path>
-sm-workflow run advance <run-id> --executor <executor-id>
-sm-workflow work start <run-id> <work-order-id>
-sm-workflow work complete <run-id> <work-order-id> --receipt <file>
-sm-workflow work fail <run-id> <work-order-id> --receipt <file>
-sm-workflow decision resolve <run-id> <decision-id> --input <file>
-sm-workflow run status <run-id>
-sm-workflow run history <run-id>
-```
+- Phase 1のone-shot fixtureはCNCF launcherがregistered Operationをmachine-readable JSONで公開する。
+- Phase 2の通常interactive経路はMCP adapterが同じOperationを公開する。
+- startは人間選択から解決したprofile-specific Operationを使う。
+- completionはcurrent Continuationが指定するregistered Operationを使う。
+- status/history/resultはread-only Operationであり、自動遷移を起こさない。
+- mutation Operationは`expectedRevision`、`ContextSnapshot`、`idempotencyKey`をcommon contractに
+  従って検証する。
 
-すべての mutation command は `expectedRevision` と `idempotencyKey` を内部または明示引数で持つ。人間向け表示と machine-readable JSON output を分け、skill は JSON の `Continuation` を使用する。`status` と `history` はread-onlyであり、自動遷移を起こさない。
+console textはPresentation projectionであり、Skillはmachine-readable Continuation/Resultだけを
+制御に使う。
 
 ### 9.1 コスト観測
 
@@ -634,8 +646,9 @@ skills/sm-validated-commit/   # 後続
 ```
 
 skill bundle は component version、required `sm-workflow` protocol version、各 file の digest、install scope、entry skill、任意の MCP descriptor を manifest に持つ。CNCF の artifact coordinate、command、schema を必須 field にしない。
-各entry skillは対応する`workflowDefinitionName`とcompatible definition version rangeを
-明示し、skill名からdefinition名を推測しない。
+各entry skillは対応する`workflowDefinitionName`、compatible definition version range、
+`registeredStartOperationIdentity`、compatible application Operation contract versionを明示し、
+skill名からdefinition名またはOperation名を推測しない。
 
 ### 12.2 中立な公開契約
 
@@ -645,7 +658,8 @@ skill bundle は component version、required `sm-workflow` protocol version、�
 - CAR は standalone bundle と同じ bytes/manifest を同梱できる。
 - `textus skill ...` は published CAR 用の任意 installer adapter とする。
 - `cncf skill ...` は development source 用の任意 installer adapter とする。
-- どちらの launcher も public skill の実行時依存にはしない。
+- public skill bundleは特定launcherのcommand/argv grammarへ依存しない。実行時はMCP、
+  launcher/CLI、test adapterのいずれかが同じregistered application Operation contractを提供する。
 - source-tree、standalone artifact、packaged CAR の digest/manifest 同値性を acceptance 対象にする。
 - install は server 起動、任意 script 実行、AI/MCP 呼び出しを行わない。
 - 既存 skill の上書きは暗黙に行わない。
@@ -660,7 +674,9 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 - CAR package へ同じ bundle を収録する sbt-cozy integration
 - `WorkspaceMutationLease` と既存 workflow/lock を接続する coordination adapter
 
-これにより CNCF 環境では十分に統合しつつ、公開 skill は CNCF が存在しない環境でも導入・実行できる。
+これにより CNCF 環境では十分に統合しつつ、bundleの導入はCNCF runtimeから独立できる。
+実行環境はCNCF common Workflow contractと互換なoperation transport/runtimeを提供しなければ
+ならないが、公開skillはその具体transportをWorkflow semanticsに含めない。
 
 ## 13. セキュリティと権限
 
@@ -683,27 +699,27 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
    - WorkflowInstance persistence SPI と deterministic progression evaluator
    - existing `ExecProgram[UnitOfWorkOp, A]` への typed Operation / Action
      integration
-3. **公開 protocol/runtime port phase**
-   - CNCF 固有型を含まない CLI/JSON schema
-   - `AdvanceWorkflowRun` と `Continuation`
-   - durable WorkflowInstance の port
-   - recovery、revision、idempotency、lease、history、observability の contract
-4. **runtime adapter phase**
-   - Textus-managed SQLite を既定とする standalone 実装
-   - storage port と provider-neutral domain boundary
-   - CNCF Workflow runtime と Operation/Job への optional adapter
+3. **application Operation specialization phase**
+   - CNCF common Start/Handle/Continuation/Result envelope
+   - profile-specific start/completion Operation と sm-workflow payload
+   - transport-neutral typed operation client boundary
+   - launcher JSON fixture と schema-versioned fail-closed codec
+4. **operational runtime phase**
+   - CNCF common Workflow runtimeをTextus-managed durable providerへbinding
+   - one-shot component bootstrapとlong-lived server application
+   - MCP / launcher transport adapterの同値性
 5. **中立 skill bundle phase**
    - framework-neutral `SkillBundleManifest`
    - standalone artifact と CAR 同梱
    - Textus/CNCF installer adapter の conformance
 6. **`sm-workflow` vertical slice**
-   - `start/advance -> edit -> complete/advance -> validate -> complete/advance -> review -> complete`
+   - `profile start -> edit -> typed completion -> validate -> typed completion -> review -> terminal`
    - 中間の機械的遷移はCodexへ返さない
 7. **`sm-goal-phase` / `sm-split-phase` / `sm-repository-sync` profile skills**
-   - versioned `sm-workflow` protocol を呼ぶ薄い client
+   - versioned registered application Operationを呼ぶ薄いclient
    - Goal / Phase / Step を generic Stage / WorkItem に写像
-   - resume と user decision を含む
-   - CNCF command、type、state、skill を参照しない
+   - Continuation-selected completion と user decision を含む
+   - transport固有command grammar、state mutation、`cncf-*` skillを参照しない
    - legacy `cncf-goal-phase` / `cncf-split-phase` / `cncf-repository-sync` は変更せず併用する
 8. **併用 acceptance**
    - 両系列の同時 install
@@ -721,12 +737,12 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 - 同じ Textus-managed SQLite database を再度開き、run、pending Work Order、Decision、history を復元できる。
 - 同じ completion を再送しても重複遷移しない。
 - revision conflict と lease conflict が機械可読に返る。
-- skill が会話履歴なしで `run advance` から再開できる。
+- skill が会話履歴なしでcurrent Handle/Continuationを取得し、指定completion Operationから再開できる。
 - edit、validate、review の receipt が受理条件に使われる。
 - user decision 待ちを terminal failure と混同しない。
 - `cncf-*` の状態やファイルを変更しない。
-- CNCF が導入されていない環境でも public bundle を検証・install できる。
-- public skill は `cncf` command、`cncf-*` skill、CNCF 固有 schema を参照しない。
+- CNCF runtime が導入されていない環境でも public bundle を検証・install できる。
+- public skill は transport固有`cncf` command grammar、`cncf-*` skill、agent/receipt内部型を参照しない。
 - 両系列を install した状態で名前衝突しない。
 - 同一 worktree/path の同時 mutation を検出して拒否する。
 - source-tree、standalone artifact、published CAR の skill bundle が同じ内容として検証される。
@@ -734,11 +750,11 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
 - transition と次の Work Order 発行が同一 transaction で確定する。
 - SQLite の同時 acquire test で一つの Work Order に複数 owner が成立しない。
 - SQLite file を network filesystem や複数ホスト共有へ暗黙昇格しない。
-- 複数のautomatic transitionを含むworkflowが、一回の`advance`で最初のsemantic Work Orderまで進む。
-- `work complete`の応答が、中間stateを公開せず次のsemantic `Continuation`を返す。
+- 複数のautomatic transitionを含むworkflowが、一回のstart/completion Operation内部のadvance評価で最初のsemantic Work Orderまで進む。
+- typed completion Operationの応答が、中間stateを公開せず次のsemantic `Continuation`を返す。
 - automatic transitionごとのCodex/model invocationがゼロである。
 - `WAIT`がCodexによるbusy pollingを要求しない。
-- `advance`の再送が同じrevision/idempotency keyに対して同じContinuationを返す。
+- completion Operationの再送が同じrevision/idempotency keyに対して同じContinuationを返す。
 - continuationに完全履歴を展開せず、次の作業に必要なbounded contextだけを返す。
 - automatic transitionの循環または上限超過を内部エラーとして検出する。
 
@@ -868,7 +884,11 @@ CNCF が所有する generic DTO / control information:
 sm-workflow は上記 envelope の型パラメータに software-development specialization の payload を載せる。
 
 ```text
-WorkflowStartRequest[SmWorkflowStart]
+StartGoalPhase(GoalPhaseStartInput, WorkflowInvocationSelection)
+StartSplitPhase(SplitPhaseStartInput, WorkflowInvocationSelection)
+StartRepositorySync(RepositorySyncStartInput, WorkflowInvocationSelection)
+profile Start Operation validates selection
+  -> WorkflowStartRequest[profile start input]
 Continuation.WORK_ORDER[SmWorkRequest]
 WorkResult[SmWorkResult]
 TERMINAL[SmWorkflowOutcome]
@@ -876,7 +896,10 @@ TERMINAL[SmWorkflowOutcome]
 
 ### 19.2 sm-workflow payload DTO
 
-`SmWorkflowStart` は objective / target、selected profile input、`SmExecutionContext`、software-development-specific constraints、optional opaque `sourceCorrelation` を持つ。
+各profile start inputはobjective / target、profile固有入力、`SmExecutionContext`、
+software-development-specific constraints、optional opaque `sourceCorrelation`を持つ。
+profile-specific start Operationがexact Workflow bindingを所有するため、Skillがgeneric
+`SmWorkflowStart`に自由形式のdefinition selectorを渡す構造にはしない。
 
 `SmWorkRequest` は bounded semantic objective、software-development target/artifact scope、domain-specific constraints、allowed mutation scope、expected domain result shape を持つ。
 

@@ -25,7 +25,8 @@ projects the resulting `WorkflowHandle` plus first `Continuation` (or typed
 terminal) as `WorkflowInteraction`. A current `Continuation` remains the
 canonical typed semantic boundary and Skill/Codex wire correlation; it is not
 a second root identity or lifecycle. A typed completion is a
-`ContinuationResult` admitted through `advanceWorkflow(handle, response?)`.
+`ContinuationResult` admitted through the registered completion Operation
+identified by the current Continuation, such as `SubmitGoalPhaseWorkResult`.
 The older `Suspended(Continuation)` and profile-specific continuation wording
 below describes runtime state or application payload specialization only; it
 cannot replace the common Continuation protocol.
@@ -37,9 +38,12 @@ cannot replace the common Continuation protocol.
 - skill path in bundle: `skills/sm-goal-phase/SKILL.md`
 - source compatibility reference: legacy `cncf-goal-phase`
 
-`SkillBundleManifest` は `sm-goal-phase -> GoalPhaseWorkflow` のbindingをversioned fieldで
-宣言する。skill名をWorkflow definition IDとして推測したり、文字列変換で導出しない。
-CLI selectorは `sm-workflow run start --workflow GoalPhaseWorkflow ...` とする。
+`SkillBundleManifest` は `sm-goal-phase -> GoalPhaseWorkflow / StartGoalPhase` のbindingを
+versioned fieldで宣言する。skill名をWorkflow definition IDまたはstart Operation identityとして
+推測したり、文字列変換で導出しない。
+one-shot launcher selector は registered `StartGoalPhase` Operation identity とする。MCP は
+同じ typed Operation の adapter であり、skill は transport 固有 argv から Workflow 名を
+組み立てない。
 
 `GoalPhaseWorkflow` と `SplitPhaseWorkflow` のどちらを開始するかは、run 作成前に
 人間が明示的に選択する。public skill を直接利用する場合は `sm-goal-phase` の選択自体が

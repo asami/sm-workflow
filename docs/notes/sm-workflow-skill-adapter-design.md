@@ -58,6 +58,28 @@ Mapping cardinality is not 1:1. One ChecklistItem may require multiple Actions/E
 
 Read the current Phase, Checklist, closure rules, and only the project context needed to interpret them. Resolve current planning revision. Determine the required outcome, relevant closure conditions, whether existing evidence already satisfies work, and whether a Workflow must be started, observed, or resumed.
 
+This interpretation may conclude that a Workflow would be useful, but it does
+not grant invocation authority. A Skill must not turn a recommendation,
+terminal result, planning inference, or existing mapping into authority to
+start another Workflow.
+
+### Select / authorize start
+
+Starting a Workflow requires an exact human-selected profile entry point. A
+direct selection of `sm-goal-phase`, `sm-split-phase`, or
+`sm-repository-sync`, or an explicit host/client selection of that entry
+point, supplies invocation authority for the corresponding profile-specific
+start Operation. The host/client records that selection as
+`WorkflowInvocationSelection`; the Skill carries it but must not manufacture
+or rewrite it.
+
+The Skill resolves the selected entry point through the versioned
+`SkillBundleManifest` binding. It does not derive a Workflow definition or
+Operation identifier by string conversion. `SPLIT_REQUIRED`, child-goal
+recommendations, and other cross-Workflow recommendations are advisory only;
+they may provide a typed source reference but cannot create the selection
+record or start a new WorkflowInstance.
+
 ### Map / Project
 
 Create or refresh WorkflowMapping. Do not assume ChecklistItem = Action.
@@ -66,20 +88,45 @@ Produce the application-owned bounded execution payload, principally SmExecution
 
 ### Invoke
 
-Use CNCF Phase 77 generic typed Workflow DTOs carrying sm-workflow application payloads:
+Invoke the selected registered sm-workflow application Operation through a
+transport-neutral typed operation client. MCP and the CNCF launcher/CLI are
+adapters for the same registered Operations; a generated Skill must not embed
+either transport's command grammar as Workflow semantics.
+
+Start Operations are profile-specific and carry CNCF Phase 77 generic typed
+Workflow DTOs with sm-workflow application payloads:
 
 ~~~text
-WorkflowStartRequest[SmWorkflowStart]
+StartGoalPhase(GoalPhaseStartInput, WorkflowInvocationSelection)
+StartSplitPhase(SplitPhaseStartInput, WorkflowInvocationSelection)
+StartRepositorySync(RepositorySyncStartInput, WorkflowInvocationSelection)
+
+profile Start Operation validates WorkflowInvocationSelection
+  -> WorkflowStartRequest[profile start input]
+  -> WorkflowStartResult[WorkflowHandle, Continuation]
+
 WORK_ORDER -> WorkOrder[SmWorkRequest]
 WorkResult[SmWorkResult]
 TERMINAL[SmWorkflowOutcome]
 ~~~
 
+`WorkflowStartResult` returns the framework `WorkflowHandle` and first
+`Continuation` (or terminal result). A non-terminal Continuation identifies
+the exact registered completion Operation and typed response contract selected
+by the Workflow. The Skill invokes that Operation, for example a profile work
+result submission or application decision resolution, with the current handle,
+Continuation identity/revision/ContextSnapshot, and typed result. It does not
+select a completion Operation from result content.
+
+The CNCF runtime admits the completion and internally drains automatic
+progression to the next Continuation. There is no second Skill-facing generic
+`advanceWorkflow` protocol alongside the registered application Operations.
+
 Do not invent a second WorkflowHandle, Continuation, revision protocol, ContextSnapshot, generic Evidence envelope, retry, lease, or idempotency mechanism.
 
 ### Execute semantic work
 
-When a semantic WORK_ORDER/Continuation is exposed, execute exactly the materialized request within scope and return the typed result/evidence. The Skill does not choose the next Workflow Action.
+When a semantic WORK_ORDER/Continuation is exposed, execute exactly the materialized request within scope and return the typed result/evidence through the completion Operation named by that Continuation. The Skill does not choose the next Workflow Action or completion Operation.
 
 For JudgmentAction, return only the admitted typed judgment result (decision/rationale/evidence). Do not encode the next transition.
 
@@ -184,6 +231,7 @@ If mapping metadata is missing, reconstruct conservatively from stable planning 
 ## 9. Failure boundaries
 
 - planning ambiguity: Skill-side interpretation/input issue
+- missing or mismatched human invocation authority: Skill/Host admission issue
 - stale planning mapping: Skill-side reconciliation issue
 - stale/invalid Workflow revision or Continuation: CNCF typed protocol/runtime issue
 - domain execution failure: sm-workflow payload/result semantics
@@ -199,12 +247,16 @@ An sm-* Skill must not own durable Workflow progression; choose the next StateMa
 A generated Skill is acceptable only when it:
 
 - identifies planning inputs and source of truth;
+- requires an exact human-selected profile entry point and carries the host/client-recorded `WorkflowInvocationSelection`;
+- treats recommendations as advisory and never converts them into start authority;
+- resolves the profile-specific start Operation through the manifest binding;
 - defines/reuses a WorkflowMapping strategy;
 - records source revision;
 - projects bounded SmExecutionContext;
-- uses CNCF generic Workflow DTOs;
+- uses CNCF generic Workflow DTOs through registered sm-workflow application Operations;
+- uses a transport-neutral typed operation client and keeps MCP/launcher grammar out of Skill semantics;
 - executes only exposed semantic WorkOrders;
-- returns typed Result/Evidence without next-action directives;
+- submits typed Result/Evidence through the completion Operation selected by the current Continuation, without next-action directives;
 - recovers without conversation history;
 - explicitly reconciles execution facts to Phase/Checklist;
 - handles planning revision drift;
@@ -214,6 +266,10 @@ A generated Skill is acceptable only when it:
 ## 12. Reference flow
 
 ~~~text
+Human-selected sm-* entry point
+        |
+        | manifest binding + invocation authority
+        v
 Phase / Checklist / Skill-only Context
         |
         | Read + Interpret
@@ -225,13 +281,18 @@ Skill-owned WorkflowMapping
 SmExecutionContext / Sm* payload
         |
         v
+registered sm-workflow Operation
+        |
+        | transport adapter: MCP or launcher/CLI
+        v
 CNCF Workflow DTO + sm-workflow
         |
         | WORK_ORDER when semantic work is required
         v
 Skill executes bounded semantic work
         |
-        | typed WorkResult / Evidence
+        | typed WorkResult / Evidence through
+        | Continuation-selected completion Operation
         v
 CNCF Workflow progression
         |

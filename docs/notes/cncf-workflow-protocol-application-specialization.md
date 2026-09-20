@@ -21,27 +21,37 @@ Phase / Step / Slice、repository、review、validation、commit 等は applicat
 
 ## GoalPhase start
 
-skill は Phase 情報を収集し、schema-validated `GoalPhaseStartInput` を CNCF generic StartRequest の `input.payload` として渡す。skill prose や conversation history を canonical input にしない。
+人間が `sm-goal-phase` entry point を明示選択した後、skill は Phase 情報を収集し、
+manifest binding で解決した registered `StartGoalPhase` Operation に
+schema-validated `GoalPhaseStartInput` と host/client が作成した
+`WorkflowInvocationSelection` を渡す。Operation はauthorityを検証し、profile inputをCNCF
+generic StartRequest の `input.payload` へ写像する。skill prose、conversation history、
+recommendation を canonical input または invocation authority にしない。
 
 StartResult は CNCF generic WorkflowHandle + Continuation をそのまま使用する。
 
-## Launcher-provided command interface
+## Transport-neutral application Operation interface
 
-CNCF launcher は component に登録された CML Operation を machine-readable CLI として
-自動公開する。component assembly、generated Operation registration、Provider binding が正しく
-構成されれば、`sm-workflow` は追加の CLI 実装なしに launcher 経由で動作する。Skill が使う
-command interface はこの launcher-provided surface であり、
-`sm-workflow` は独自の executable、CLI protocol、または argv grammar を提供しない。
+Skill-facing contract は component に登録された typed CML Operation である。MCP と CNCF
+launcher/CLI は同じ Operation を搬送する transport adapter であり、どちらも独自の Workflow
+semantics、Operation 選択、または第二の Start/Continuation protocol を持たない。通常の
+interactive deployment は MCP を使用でき、one-shot deployment は launcher/CLI を使用できる。
+public skill bundle は特定の transport の argv grammar を contract に含めない。
 
-launcher は registered CML Operation の exact identifier と schema-validated JSON request を
-受理し、CNCF generic response JSON を返す。Skill は選択済み Operation の request/result を
-launcher 経由で搬送するだけであり、Operation 選択、next state、任意 command argv、または
-直接 state mutation を行わない。launcher JSON I/O は executable specification の fixture で
-検証する。
+各 adapter は registered CML Operation の exact identifier と schema-validated request を
+受理し、CNCF generic response を返す。profile start Operation は人間選択と manifest binding
+から決まり、後続のcompletion Operationはcurrent Continuationが指定する。Skillはこの二つを
+独自に推測せず、next state、任意 command argv、または直接 state mutationを指定しない。
+Phase 1ではlauncher JSON I/Oをfixtureで検証し、Phase 2ではMCPとlauncherの同値性を検証する。
 
 ## Continuation
 
-sm-workflow は generic Continuation.kind を制御に使用し、presentation text を parse しない。WORK_ORDER の application payload を typed software-development task として worker に渡し、typed Result/Evidence を返す。
+sm-workflow は generic Continuation.kind を制御に使用し、presentation text を parse しない。
+WORK_ORDER の application payload を typed software-development task として worker に渡し、
+typed Result/Evidence を current Continuation が指定する registered completion Operation へ返す。
+completion Operation は generic CNCF Result/Decision submission を呼び、runtime 内部の
+progression evaluator が次の Continuation まで進める。Skill-facing generic
+`advanceWorkflow` Operation は別途設けない。
 
 ## Console
 
@@ -59,10 +69,12 @@ Phase 1 は少なくとも各 reference workflow について以下を JSON fixt
 
 ```text
 application StartInput
+  -> human-selected registered profile Start Operation
   -> CNCF StartRequest
   -> StartResult + Continuation
   -> application WorkResult / Decision
-  -> generic Result submission
+  -> Continuation-selected registered completion Operation
+  -> generic Result / Decision submission
   -> next Continuation
   -> ...
   -> Terminal + application Result

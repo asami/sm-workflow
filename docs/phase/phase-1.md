@@ -121,16 +121,16 @@ Operation は Skill/Host と CML Workflow を接続する唯一の型付き外�
 Phase 1 の executable specification はこの interface を通じて動作確認する。CML definition
 には少なくとも次の application Operation と、その input/result schema を定義する。
 
-- `StartGoalPhase(GoalPhaseStartInput)`
-- `StartSplitPhase(SplitPhaseStartInput)`
-- `StartRepositorySync(RepositorySyncStartInput)`
+- `StartGoalPhase(GoalPhaseStartInput, WorkflowInvocationSelection)`
+- `StartSplitPhase(SplitPhaseStartInput, WorkflowInvocationSelection)`
+- `StartRepositorySync(RepositorySyncStartInput, WorkflowInvocationSelection)`
 - `SubmitGoalPhaseWorkResult(GoalPhaseWorkResult)`
 - `SubmitSplitPhaseWorkResult(SplitPhaseWorkResult)`
 - `SubmitRepositorySyncWorkResult(RepositorySyncWorkResult)`
 - application-specific `ResolveDecision(...)` operations
 
-起動 Operation は application input を CNCF generic `WorkflowStartRequest` の payload へ
-写像する。結果提出と Decision Operation は current `WorkflowHandle` と
+起動 Operation は `WorkflowInvocationSelection` を検証してから application input を CNCF
+generic `WorkflowStartRequest` の payload へ写像する。結果提出と Decision Operation は current `WorkflowHandle` と
 `Continuation` に対する CNCF generic Result/Decision submission を呼ぶ。これらは別の
 generic lifecycle、`advance` protocol、または raw command surface を導入しない。
 
@@ -143,18 +143,19 @@ deterministic/test Provider は同じ Operation contract を実装し、fixture 
 semantic boundary・terminal のすべてを検証する。production Git/SBT provider、任意 command
 execution、または broad CLI はこの Phase の Operation 実装に含めない。
 
-### Launcher-provided command interface
+### Launcher fixture adapter
 
 CNCF launcher は component に登録された CML Operation を machine-readable CLI として
 自動公開する。component assembly、generated Operation registration、Provider binding が正しく
-構成されれば、`sm-workflow` は追加の CLI 実装なしに launcher 経由で動作する。Skill が使用する
-command interface はこの launcher-provided surface であり、
-`sm-workflow` は独自の executable、CLI protocol、または argv grammar を所有しない。
+構成されれば、`sm-workflow` は追加の CLI 実装なしに launcher 経由で動作する。Phase 1 は
+このsurfaceをone-shot executable-specification adapterとして使用するが、production Skillを
+launcher固有のargv grammarへbindingしない。Skill-facing contractはregistered typed
+application Operationであり、Phase 2のMCPも同じcontractを搬送する。
 
 launcher は registered CML Operation の exact identifier と schema-validated JSON request を
-受理して CNCF generic response JSON を返す。Skill は launcher 経由で選択済み Operation の
-request を送り、response の typed `Continuation` / Result を返すだけである。Operation を
-推測・選択せず、raw command、任意 shell argv、直接 state mutation、独自の
+受理して CNCF generic response JSON を返す。fixture client は launcher 経由で選択済み
+Operation のrequestを送り、response の typed `Continuation` / Result を返すだけである。
+Operationを推測・選択せず、raw command、任意 shell argv、直接 state mutation、独自の
 Start/Advance/Continuation protocol を提供しない。launcher JSON I/O は executable
 specification の fixture で検証する。
 
@@ -204,6 +205,12 @@ concrete worker profile への versioned mapping policy を所有する。
    worker は次の state / Action を選択しない。
 10. Codex は Phase 1 の初期外部 worker であり、CNCF の Action model や
     sm-workflow の Workflow definition に固定された provider identity ではない。
+11. profile-specific start Operation は explicit human selection と manifest binding から決まり、
+    recommendation は invocation authority にならない。
+12. non-terminal response は current Continuation が指定する registered completion Operationへ
+    提出し、Skill-facing generic `advanceWorkflow` Operationを別途設けない。
+13. launcherはPhase 1のfixture transportであり、registered application Operation contract
+    自体をlauncher固有argv grammarへbindingしない。
 
 ## Decision and Historical Records
 

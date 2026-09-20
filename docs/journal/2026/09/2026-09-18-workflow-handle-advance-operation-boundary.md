@@ -1,7 +1,7 @@
 # Workflow Handle and Advance Operation Boundary
 
 Date: 2026-09-18
-Status: Design direction
+Status: Historical design direction; public Operation shape refined on 2026-09-21
 
 ## Context
 
@@ -172,3 +172,14 @@ These clarifications require one coordinated reconciliation of the main design,
 Phase 1 plan/checklist, and the three profile definitions. Partial edits must not
 leave generic and profile-specific start contracts, or public Continuation and
 WorkflowInteraction lifecycles, active at the same time.
+
+## 2026-09-21 refinement
+
+The subsequent
+[`sm-workflow-skill-adapter-review-fix-handoff.md`](2026-09-21-sm-workflow-skill-adapter-review-fix-handoff.md)
+keeps the Handle/Continuation ownership decided here but refines the public
+Operation shape after CNCF Phase 77 common-contract adoption. A Skill now calls
+profile-specific start Operations and the exact completion Operation identified
+by the current Continuation. `advance` remains the CNCF runtime's internal
+bounded progression evaluator; it is not a separate Skill-facing generic
+`advanceWorkflow` protocol.

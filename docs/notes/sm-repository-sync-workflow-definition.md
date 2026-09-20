@@ -35,7 +35,8 @@ projects the resulting `WorkflowHandle` plus first `Continuation` (or typed
 terminal) as `WorkflowInteraction`. A current `Continuation` remains the
 canonical typed semantic boundary and Skill/Codex wire correlation; it is not
 a second root identity or lifecycle. A typed completion is a
-`ContinuationResult` admitted through `advanceWorkflow(handle, response?)`.
+`ContinuationResult` admitted through the registered completion Operation
+identified by the current Continuation, such as `SubmitRepositorySyncWorkResult`.
 The older `Suspended(Continuation)` and profile-specific continuation wording
 below describes runtime state or application payload specialization only; it
 cannot replace the common Continuation protocol.
@@ -47,10 +48,12 @@ cannot replace the common Continuation protocol.
 - skill path in bundle: `skills/sm-repository-sync/SKILL.md`
 - source compatibility reference: legacy `cncf-repository-sync`
 
-`SkillBundleManifest` は `sm-repository-sync -> RepositorySyncWorkflow` を versioned
-binding として宣言する。skill 名から Workflow definition ID を推測または文字列変換で
-導出しない。CLI selector は
-`sm-workflow run start --workflow RepositorySyncWorkflow ...` とする。
+`SkillBundleManifest` は
+`sm-repository-sync -> RepositorySyncWorkflow / StartRepositorySync` を versioned binding
+として宣言する。skill 名から Workflow definition IDまたはstart Operation identityを推測・
+文字列変換で導出しない。one-shot launcher selector は registered `StartRepositorySync` Operation
+identity とする。MCP は同じ typed Operation の adapter であり、skill は transport 固有 argv
+から Workflow 名を組み立てない。
 
 公開 profile は GitHub、CNCF、Scala、SBT、Codex agent、local path、temporary receipt の
 名称へ依存しない。remote endpoint は configured tracking remote の opaque identity として
