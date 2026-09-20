@@ -2,6 +2,9 @@
 
 Status: superseded as Phase 1 closure authority
 
+> **Historical inventory only.** This file is not normative, is not an active
+> checklist, and must not be used to start, validate, or close Phase 1.
+
 This is the pre-2026-09-20 operational planning inventory. It is retained for
 post-Phase-1 operational hardening and is no longer the closure authority for
 [Phase 1](phase-1.md). The current closure ledger is

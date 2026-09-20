@@ -1,6 +1,11 @@
 # Phase 1 Addendum: Deterministic Operations and Closing
 
-Status: planned / normative addendum to [Phase 1](phase-1.md)
+Status: historical / deferred; not normative for [Phase 1](phase-1.md)
+
+> **Deferred operational-hardening design.** This document does not extend the
+> Phase 1 scope, checklist, validation requirements, or closure conditions.
+> Typed Git/SBT operations, local closing, and production operation providers
+> require later connectivity evidence and a separately planned Phase.
 
 ## Goal extension
 

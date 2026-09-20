@@ -37,8 +37,10 @@ is the Phase 1 closure authority.
 
 ## Executable-specification scope review adoption
 
-The GitHub review handoff dated 2026-09-20 is adopted as Phase 1 planning
-input. The Phase and closure checklist now make the following points explicit:
+The executable-specification scope review dated 2026-09-20 is adopted by this
+decision record as Phase 1 planning input. This record is the durable reference;
+no separate handoff document is required. The Phase and closure checklist now
+make the following points explicit:
 
 - Phase 1 depends on Cozy Phase 62.3 producer handoff as well as CNCF Phases
   64, 64.2, and 77; this is a dependency record, not an assertion that those
