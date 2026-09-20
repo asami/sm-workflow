@@ -214,7 +214,69 @@ Workflow Step committed
 
 Likewise, a ChecklistItem already marked complete does not authorize sm-workflow to skip its own review, validation, evidence, or commit guards unless the Workflow itself admits existing evidence through its defined states.
 
-## 7. Revision and reconciliation
+## 7. Step Close Request and proactive review evidence
+
+The Skill is responsible for bringing program artifacts and planning/management files to the latest state it believes satisfies the Step. It may perform semantic review proactively for its own reasons before requesting closure.
+
+The Skill then requests Step close. The close request is a closure intent plus evidence submission, not an assertion that closure conditions are satisfied.
+
+Conceptually:
+
+~~~text
+RequestStepClose
+  stepIdentity
+  expectedRevision
+  artifactSnapshotReference
+  reviewEvidence[]
+~~~
+
+Review evidence must be typed and scoped rather than a boolean reviewed flag.
+
+~~~text
+ReviewEvidence
+  reviewIdentity
+  scope
+  reviewedArtifactRevision
+  disposition
+  findingReferences
+  evidenceReferences
+  executionEvidence?
+~~~
+
+Initial scope vocabulary should distinguish at least scoped/focused review from full Step review; Phase-wide review remains a separate closure scope. Exact schema names may be refined by the profile contract.
+
+sm-workflow owns closure policy. It evaluates submitted evidence for required scope, artifact/revision coverage, freshness, disposition, unresolved findings, and other closure prerequisites.
+
+Therefore a Skill may submit a successful scoped review while the Workflow responds that a full Step review is still required:
+
+~~~text
+Skill
+  proactive SCOPED review
+  -> RequestStepClose(reviewEvidence = SCOPED ACCEPT)
+sm-workflow
+  -> closure evaluation
+  -> Continuation: ReviewStep(STEP_FULL)
+Skill
+  -> full review result
+sm-workflow
+  -> re-evaluate closure
+  -> deterministic commit
+  -> Step Closed
+~~~
+
+If adequate full-review evidence is already supplied and remains fresh for the current artifact snapshot, sm-workflow must reuse it rather than request an unnecessary duplicate semantic review.
+
+Review evidence freshness is revision-sensitive. A repair after a full review may invalidate that evidence. Closure policy may require only a focused re-review when the repair frontier is bounded, or a full review when the current tree is not sufficiently covered.
+
+Once RequestStepClose establishes closure intent, the Skill does not repeatedly request close after every requested review/repair. Submission of each Continuation result resumes closure evaluation. When all requirements are satisfied, sm-workflow proceeds through deterministic validation/commit and closes the Step.
+
+The separation is:
+
+> Skill may review proactively. Workflow decides whether available review evidence satisfies closure requirements.
+
+The Skill must keep planning/management files synchronized with semantic repairs before returning the relevant result. The final Step commit is Workflow-owned and should close the admitted program plus management-file state together.
+
+## 8. Revision and reconciliation
 
 The Skill must assume Phase/Checklist can change while a Workflow is running. Record the planning/source revision used to create a mapping.
 
@@ -222,13 +284,13 @@ Before applying execution results: read current planning revision; compare with 
 
 Git commit SHA may be used as source revision when appropriate, but the Skill contract does not require Git when another stable revision identity exists.
 
-## 8. Recovery
+## 9. Recovery
 
 A new Skill turn/session must recover without conversation history using current Phase/Checklist, required project context, stored/reconstructable WorkflowMapping/correlation, and CNCF Workflow handle/status/history/result/evidence.
 
 If mapping metadata is missing, reconstruct conservatively from stable planning references and execution identity/history. Do not manufacture completion.
 
-## 9. Failure boundaries
+## 10. Failure boundaries
 
 - planning ambiguity: Skill-side interpretation/input issue
 - missing or mismatched human invocation authority: Skill/Host admission issue
@@ -238,11 +300,11 @@ If mapping metadata is missing, reconstruct conservatively from stable planning 
 - missing evidence: planning remains incomplete unless Workflow contract rejects it
 - infrastructure/provider failure: do not convert directly into Checklist semantics
 
-## 10. Prohibited responsibilities
+## 11. Prohibited responsibilities
 
 An sm-* Skill must not own durable Workflow progression; choose the next StateMachine Action; reproduce retry/lease/idempotency; define a generic Continuation/WorkflowHandle; treat conversation history as durable state; copy all project context into SmExecutionContext; make Phase/Checklist generic CNCF fields; assume 1:1 ChecklistItem/Action mapping; check items solely because a Workflow terminated; auto-chain another Workflow; make concrete AI model/provider transition semantics; or expose internal deterministic Actions as semantic Skill work.
 
-## 11. Skill generation checklist
+## 12. Skill generation checklist
 
 A generated Skill is acceptable only when it:
 
@@ -263,7 +325,7 @@ A generated Skill is acceptable only when it:
 - keeps Skill-only context outside sm-workflow/CNCF;
 - does not auto-chain Workflow invocations.
 
-## 12. Reference flow
+## 13. Reference flow
 
 ~~~text
 Human-selected sm-* entry point
@@ -305,7 +367,7 @@ Skill Observe + Reconcile
 Phase / Checklist
 ~~~
 
-## 13. Related design
+## 14. Related design
 
 - [sm-workflow design](sm-workflow-design.md)
 - [CNCF Workflow protocol application specialization](cncf-workflow-protocol-application-specialization.md)
