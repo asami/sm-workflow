@@ -14,6 +14,7 @@ specialize する software-development application layer を executable specific
 - CML typed Operation definitions と Action binding
 - deterministic/test Providers と fixtures
 - ReasoningLevel mapping policy
+- CNCF `JudgmentAction` specialization with Codex as the initial external worker
 - Presentation specialization
 - schema-versioned JSON codecs / fixtures
 - Executable Specifications
@@ -59,6 +60,7 @@ bounded deterministic progression を所有する。Phase 1 は少なくとも�
 - typed Result / Evidence / `ExecutionEvidence`
 - schema-versioned fail-closed JSON codecs
 - minimum `Presentation` / `Progress`
+- provider-neutral `JudgmentAction` / `JudgmentResult`
 
 `sm-workflow` はこれらの generic contract を再定義しない。
 
@@ -83,6 +85,9 @@ bounded deterministic progression を所有する。Phase 1 は少なくとも�
 - application Presentation content
 - CNCF `ReasoningLevel` を入力とする versioned mapping policy
 - application payload を含む JSON round-trip / fail-closed fixtures
+- judgment goal/context/alternatives/criteria と
+  decision/rationale/evidence を持つ application payload
+- Codex を初期外部 worker とする JudgmentAction fixture
 - typed Operation を経由する Start → semantic boundary → typed result → next boundary
   → terminal の Executable Specifications
 
@@ -90,6 +95,25 @@ Skill/Host が外部 WorkOrder を dispatch した場合だけ、compatible work
 mapping-policy version を `ExecutionEvidence` に記録する。deterministic/local Provider は
 架空の worker profile を記録せず、evidence を Workflow guard や transition input に
 使用しない。
+
+## JudgmentAction Specialization
+
+Phase 1 の文脈依存判断は CNCF Phase 77 の `JudgmentAction` を使用する。sm-workflow は
+別の AI Action 型を定義せず、software-development domain の goal、context、
+alternatives、criteria、および expected result だけを specialize する。
+
+初期外部 worker は Codex とし、既存の Skill/Host と durable Continuation を通じて
+呼び出す。Codex は admitted alternatives の一つ、rationale、evidence を
+`JudgmentResult` として返す。次の state / Action の選択、retry、escalation、terminal
+判定は行わず、CNCF StateMachine の guard / transition が判断結果を解釈する。
+
+少なくとも implementation review、novel work / semantic-boundary assessment、
+repository synchronization conflict assessment の判断境界を候補とし、各 Workflow が
+必要とするものだけを明示的に `JudgmentAction` として定義する。決定的に導出できる処理を
+JudgmentAction に昇格させない。
+
+将来 Codex を jev、人間、local LLM、または別 Provider に置き換えても、Workflow
+definition、application payload、判断結果からの transition semantics は変更しない。
 
 ## Application Operation Boundary
 
@@ -176,9 +200,15 @@ concrete worker profile への versioned mapping policy を所有する。
 6. concrete worker selectionはWorkflow guardやtransitionを制御しない。
 7. JSONはValue Objectのencodingであり、独立した正本モデルではない。
 8. Skill/Host は selected typed Operation の入出力を搬送するが、Workflow state を直接変更しない。
+9. `JudgmentAction` は判断要求、`JudgmentResult` は判断結果を表し、Codex を含む
+   worker は次の state / Action を選択しない。
+10. Codex は Phase 1 の初期外部 worker であり、CNCF の Action model や
+    sm-workflow の Workflow definition に固定された provider identity ではない。
 
 ## Decision and Historical Records
 
+- [Phase 1 adoption of CNCF JudgmentAction](../journal/2026/09/2026-09-20-judgment-action-phase-1-adoption.md)
+  — JudgmentActionの責務、Codex初期実行、provider差し替え境界
 - [Phase 1 common-contract scope reconciliation](../journal/2026/09/2026-09-20-phase-1-common-contract-scope-reconciliation.md)
   — current scopeを確定したdecision record
 - [Phase 1 executable-specification scope review handoff](../journal/2026/09/2026-09-20-phase-1-executable-spec-scope-review-handoff.md)
