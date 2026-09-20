@@ -373,6 +373,33 @@ FORCE_RELEASE_COMMITTING -- success --> PHASE_CLOSED
 FORCE_RELEASE_COMMITTING -- failure --> FAILED
 ```
 
+
+## Step closure request protocol
+
+Step closure is initiated by an explicit application Operation `RequestStepClose`; it is not entered merely because implementation or a proactive Skill review returned success.
+
+Before requesting close, the Skill brings program artifacts and Skill-owned planning/management files to the latest state it believes satisfies the Step. It may attach zero or more typed `ReviewEvidence` records from proactive reviews.
+
+`RequestStepClose` establishes durable closure intent and submits the current artifact snapshot plus available evidence. Workflow admission then determines whether closure requirements are satisfied.
+
+```text
+RequestStepClose
+  -> STEP_CLOSURE_EVALUATING
+       -> evidence sufficient -> deterministic final validation -> STEP_COMMITTING
+       -> scoped review insufficient -> STEP_REVIEW_PREPARING(full)
+       -> stale review after bounded repair -> STEP_REREVIEW_PREPARING(focused/full)
+       -> blockers -> STEP_REPAIRING
+       -> authority ambiguity -> AWAITING_DECISION
+```
+
+A review record is evidence, not progression authority. Closure evaluation checks review scope, reviewed artifact revision/snapshot, freshness, disposition, unresolved finding lineage, validation evidence and commit prerequisites.
+
+A proactive scoped review can therefore be accepted as useful evidence while still producing a `ReviewStep(STEP_FULL)` Continuation. Conversely, a fresh full-Step review that satisfies the current closure policy is reused and must not be repeated merely because closure was requested later.
+
+After the initial close request, completion of Review/Repair/ReReview Continuations automatically resumes closure evaluation through the registered completion Operation and CNCF bounded progression. The Skill does not issue another close request after each result.
+
+The final commit is Workflow-owned deterministic work and closes the admitted program and planning/management-file state together. A successful Step commit remains execution evidence; the Skill-side meaning of planning items is owned by the Skill, but those management files must already reflect the latest reconciliation before final commit.
+
 ## Action contracts
 
 ### Semantic/deterministic separation rule
