@@ -8,6 +8,20 @@ contract scope reconciliation. It preserves the older
 [operational inventory](phase-1-checklist.md) as post-Phase-1 planning, without
 claiming that any of its open items are complete.
 
+
+## Candidate-Admission Model acceptance
+
+- [ ] CAM-01: A Skill can bring program and planning/management artifacts to a candidate state and invoke the profile Step-close Operation without selecting the next Workflow state.
+- [ ] CAM-02: `RequestStepClose` records closure intent plus candidate snapshot/evidence and evaluates admission before commit.
+- [ ] CAM-03: A fresh full-Step review supplied proactively is reused and does not cause a duplicate semantic review WorkOrder.
+- [ ] CAM-04: A successful scoped review is preserved as evidence but produces a full-review Continuation when the closure contract requires full-Step scope.
+- [ ] CAM-05: A repair that invalidates prior review coverage produces the policy-required focused or full re-review according to evidence freshness/scope.
+- [ ] CAM-06: Review/Repair/ReReview completion resumes the existing closure admission automatically; the Skill does not submit a second close request.
+- [ ] CAM-07: Missing semantic evidence becomes a typed Continuation, missing deterministic evidence is produced/verified by internal providers, and authority gaps become Decision boundaries.
+- [ ] CAM-08: Semantic Result/Evidence cannot directly select transition, commit, or Step Closed.
+- [ ] CAM-09: Final deterministic commit includes the admitted program and planning/management-file state and records commit/evidence receipts before Step Closed.
+- [ ] CAM-10: Candidate/Admission semantics do not introduce Phase/Checklist vocabulary into CNCF generic Workflow DTO/runtime contracts.
+
 ## Entry and common-contract binding
 
 - [ ] P1-E01: Record the completed Cozy Phase 62.3 producer handoff and CNCF
