@@ -45,11 +45,11 @@ handoff を使用する。
 
 Cozy 側へ `advance`、Workflow persistence、SQLite、lease、public skill を再導入しない。
 
-### CNCF Phase 77
+### CNCF Phase 77 and Phase 90
 
-CNCF Phase 77 は generated Workflow ABI を admission し、common Workflow contract と
-bounded deterministic progression を所有する。Phase 1 は少なくとも次を consumer として
-利用する。
+CNCF Phase 77 は generated Workflow ABI を admission し、common Workflow contract、Continuation runtime と bounded deterministic progression を所有する。CNCF Phase 90 はその上に optional Candidate-Admission runtime layer を提供する。Phase 1 の CAM/Step-closure path は Phase 90 を前提とし、generic Candidate/Admission runtime を sm-workflow 内に再実装しない。
+
+Phase 77 から少なくとも次を consumer として利用する。
 
 - `WorkflowStartRequest` / `WorkflowStartResult`
 - `WorkflowHandle`
@@ -64,9 +64,11 @@ bounded deterministic progression を所有する。Phase 1 は少なくとも�
 
 `sm-workflow` はこれらの generic contract を再定義しない。
 
+Phase 90 から Candidate/Submission、AdmissionRequirement/Evaluation/Gap/Result、typed Evidence binding と freshness/coverage extension hook を利用する。`RequestStepClose` は application-specific Candidate/Submission specialization、Step closure policy は application-specific AdmissionRequirement/Evaluation specialization とする。Review scope、Phase/Checklist、Git commit semantics は sm-workflow 側に残す。Admission Gap は Continuation そのものではなく、必要な semantic Action を選択し、その Action が外部結果を必要とするときだけ Phase 77 Continuation runtime が suspension を提供する。
+
 ## Entry Criteria
 
-- Cozy Phase 62.3 と CNCF Phase 77 の compatible release handoff を確認できる。
+- Cozy Phase 62.3、CNCF Phase 77、および CAM/Step-closure path について CNCF Phase 90 の compatible release handoff を確認できる。
 - exact ABI version、fixture identity、repository revision を記録できる。
 - generated ABI が automatic progression と semantic boundary を識別できる。
 - CML Action が raw command ではなく typed Operation を参照できる。
