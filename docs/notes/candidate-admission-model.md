@@ -76,3 +76,21 @@ CNCF:
 GoalPhaseWorkflow is the first proving case. SplitPhaseWorkflow and RepositorySyncWorkflow should apply the same model where a semantic actor constructs a candidate proposal/resolution and the Workflow admits/applies/commits it.
 
 The model is intentionally broader than software development and is expected to generalize to organizational work approval, peer review/publication, editing and knowledge admission.
+
+
+## CNCF Phase 90 dependency
+
+sm-workflow does not own the generic Candidate/Admission runtime. CNCF Phase 90 provides that optional layer above Phase 77 Continuation mechanics. `RequestStepClose` and Step closure specialize Phase 90 contracts with software-development payloads and policy.
+
+The layers are:
+
+```text
+sm-workflow application
+  Step candidate / review scope / closure policy / Git commitment
+        -> CNCF Phase 90 Admission
+             Candidate / Requirement / Evaluation / Gap / Result
+                  -> CNCF Phase 77 Continuation runtime
+                       ActionExecution / suspend / resume / Provider
+```
+
+Admission Gap is not encoded as a Continuation. Phase 90 selects the missing semantic Action; that Action may suspend through Phase 77 when external Skill/Human/AI work is required. This allows strict non-CAM StateMachines to continue using Phase 77 directly.
