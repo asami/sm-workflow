@@ -9,7 +9,7 @@ Planned after: Phase 4
 
 Phase 5 is functionally dependent only on Phase 1. Phase 2 (server/MCP), Phase 3 (Resolved Failure Model), and Phase 4 (Service Bus events) are orthogonal extensions and are not prerequisites for semantic reasoning resolution. Phase 5 is scheduled after Phase 4 only to preserve the current implementation sequence.
 
-A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic ReasoningClass -> ~/.cncf.d/ mapping -> concrete provider profile.
+A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic ReasoningClass -> CNCF standard Component configuration mapping -> concrete provider profile.
 
 ## Goal
 
@@ -44,7 +44,7 @@ Multiple reasoning classes MAY map to the same concrete execution profile.
         v
     Reasoning Profile Resolver
         |
-        | ~/.cncf.d/...
+        | CNCF Component configuration
         v
     Concrete Execution Profile
         +-- provider
@@ -55,7 +55,7 @@ Multiple reasoning classes MAY map to the same concrete execution profile.
         v
     Codex / other provider
 
-The resolver belongs to the CNCF execution/runtime boundary. sm-workflow selects semantic intent; runtime configuration determines how the current environment realizes it. Exact filename/schema and deterministic precedence are fixed during implementation.
+The resolver belongs to the CNCF execution/runtime boundary. sm-workflow selects semantic intent; runtime configuration determines how the current environment realizes it. The canonical split-file location is `~/.textus/components/sm-workflow/config.yaml` when the Component ID is `sm-workflow`; this location is selected by CNCF's standard Component configuration binding. sm-workflow consumes the resolved typed configuration and does not directly discover or open that path.
 
 ## Initial Codex mapping target
 
@@ -72,7 +72,7 @@ These concrete bands MUST NOT determine the number of semantic classes. Planning
 2. Define meaningful semantic intensities per work kind.
 3. Define how Actions request a ReasoningClass.
 4. Define the CNCF-facing resolver contract and concrete execution-profile representation.
-5. Define and implement user-level mapping under ~/.cncf.d/ with deterministic lookup.
+5. Define and implement user-level mapping through CNCF standard Component configuration binding with deterministic lookup.
 6. Remove provider-specific reasoning levels from sm-workflow semantics where superseded.
 7. Provide default mappings for the supported Codex environment.
 8. Record both requested semantic class and resolved concrete profile in diagnostics/evidence.
