@@ -14,3 +14,19 @@ The model resolves the tension between Skill autonomy and deterministic Workflow
 Phase 1 is updated to make GoalPhaseWorkflow an executable proving case for CAM. The implementation must demonstrate proactive scoped/full review evidence reuse, Admission Gap materialization, no duplicate close request after Continuation completion, and final commit only after admitted program plus management-file state.
 
 Cross-project direction: sm-workflow proves the pattern, CNCF generalizes runtime semantics, Cozy generalizes declarative/ABI support.
+
+
+## Human Admission surfaces
+
+Candidate-Admission is also the common gate for externally visible or consequential actions such as publication, release, deployment, knowledge admission, and workflow continuation where human authority is required.
+
+Human confirmation should be separable from full review. Many candidates may already have deterministic validation, executable-spec evidence, focused/full review, and sufficient context, leaving only the final authority decision. These candidates can be classified as suitable for a lightweight confirmation surface.
+
+Pixel Watch / Wear OS is the initial reference scenario:
+- Confirm: exercise Admission authority and continue the workflow.
+- Later/Defer: keep the candidate pending.
+- Review: escalate to Smartphone/Fold/Desktop for evidence, diff, editing, or rejection.
+
+The Watch is not expected to perform full review. It is a low-friction Admission authority surface. A suspicious candidate should leave the Watch path and move to a richer review surface.
+
+The same Admission Action semantics must be callable from Watch, Smartphone, Fold, Web, Desktop, email links, or future channels without changing workflow semantics.
