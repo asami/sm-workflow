@@ -77,7 +77,7 @@ One-shot mode MUST NOT implement a separate Workflow engine, separate persistenc
 Initial candidates to evaluate rather than blindly persist include:
 
 - Workflow definition/profile catalog;
-- ReasoningLevel mapping policy;
+- semantic reasoning mapping policy (a resident reference-data candidate only; the semantic model and runtime mapping are implemented in Phase 5);
 - project/repository descriptors;
 - operation/presentation metadata;
 - validation/review policy tables.
