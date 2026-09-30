@@ -10,7 +10,7 @@ sm-workflow separates semantic reasoning requirements from provider-specific mod
 
 Workflow reasoning is classified by work purpose: Planning, Analysis, Design, Coding, Review, and Judgment. Each purpose is subdivided only where sm-workflow itself can meaningfully choose a different reasoning demand. The semantic combination is treated as one ReasoningClass, such as CodingDeep or ReviewCritical, rather than as a provider-style model/level pair.
 
-At runtime CNCF resolves ReasoningClass through configuration under ~/.cncf.d/ to a concrete execution profile. Multiple semantic classes may intentionally resolve to the same concrete profile.
+At runtime CNCF resolves ReasoningClass through configuration through CNCF standard Component configuration binding to a concrete execution profile. Multiple semantic classes may intentionally resolve to the same concrete profile.
 
 ## Motivation
 
