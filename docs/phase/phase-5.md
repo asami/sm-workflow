@@ -2,7 +2,14 @@
 
 Status: planned
 Planned: 2026-09-30
-Depends on: Phase 4
+Depends on: Phase 1
+Planned after: Phase 4
+
+## Dependency boundary
+
+Phase 5 is functionally dependent only on Phase 1. Phase 2 (server/MCP), Phase 3 (Resolved Failure Model), and Phase 4 (Service Bus events) are orthogonal extensions and are not prerequisites for semantic reasoning resolution. Phase 5 is scheduled after Phase 4 only to preserve the current implementation sequence.
+
+A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic ReasoningClass -> ~/.cncf.d/ mapping -> concrete provider profile.
 
 ## Goal
 
