@@ -941,3 +941,25 @@ Phase 1 executable specification は、第二の sm-workflow `WorkflowHandle`、
 ### 19.5 Phase / Checklist boundary
 
 Phase / Checklist / Closure Criteria / WorkflowMapping は Skill-owned であり、sm-workflow payload DTO にしない。`sourceCorrelation` が必要な場合も opaque traceability reference とし、CNCF progression の制御入力にしない。Skill が CNCF/sm-workflow Result / Evidence を planning model へ mapping/reconciliation する。
+
+
+## 20. Production Agent boundary
+
+sm-workflow follows the CNCF Production Agent principle: **the LLM/skill is not the execution runtime and is not a state carrier**.
+
+Long-lived workflow state, structured data needed across steps, revision, Continuation, retry/failure and accepted transition history remain authoritative in the typed/persisted runtime. A skill receives only the bounded semantic work and context needed for the current boundary. It must not reconstruct authoritative state by carrying forward or editing a previous JSON/message payload.
+
+A semantic AI result is a candidate result. Deterministic validation / Admission decides whether it can affect authoritative workflow state. Missing fields, schema drift, stale context or semantically invalid results therefore fail at the boundary rather than silently becoming the next state.
+
+```text
+runtime state
+   -> bounded typed Work Order
+   -> skill / LLM semantic work
+   -> typed candidate result
+   -> validation / Admission
+   -> runtime transition
+```
+
+This makes sm-workflow suitable as a production-agent reference pattern: Workflow/StateMachine owns execution semantics; deterministic Actions, JudgmentActions, Human Decisions and external Operations are participants under that runtime. Skill complexity should remain semantic rather than accumulate state-machine, persistence, retry and orchestration logic.
+
+The same boundary supports progressive determinization. A workflow may begin with broader AI semantic work; observed stable behavior can later be moved into typed Operations, validation, rules or explicit StateMachine transitions without changing the principle that runtime state is authoritative.
