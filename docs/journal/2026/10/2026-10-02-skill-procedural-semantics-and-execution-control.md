@@ -1,83 +1,64 @@
-# Skill Procedural Semantics and Execution Control
+# Skill Specification, Skill Logic, and Execution Control
 
 Date: 2026-10-02
-Status: design principle
+Status: corrected design principle
 
-## Decision
+## Correction
 
-Skill is a human-readable procedural description of work. A Skill executes the work it is given as a conceptually single-threaded sequential procedure.
+The earlier formulation "Skill is a human-readable procedure" was too broad. Human-readable top-level work procedure belongs to the **Skill Specification**, not to executable Skill Logic.
 
-A Skill MUST NOT own or model concurrency control. It does not acquire/release locks, coordinate competing workers, manage leases, resolve deadlocks, or decide retry/recovery caused by concurrent execution.
+The corrected separation is:
 
-Concurrency, exclusion, execution ownership, durable coordination, continuation, admission, retry/recovery, and scheduling belong outside the Skill, in sm-workflow/CNCF Workflow and runtime mechanisms.
+- **Skill Specification**: human-readable purpose, responsibilities, semantic work, expected inputs/results, and top-level work description.
+- **Skill Logic**: thin semantic worker / adapter. It connects to Workflow, performs only the AI-native or ambiguous semantic work requested by the current WorkOrder/Continuation, and returns typed Result/Evidence.
+- **Workflow / StateMachine**: executable procedure and control semantics: sequencing, branching, iteration, closure, continuation, admission, retry/recovery policy, and execution coordination.
+- **Runtime**: execution ownership, exclusion/locking/lease, persistence, scheduling, job/recovery infrastructure.
 
-This strengthens the existing boundary:
+## Skill Logic execution model
 
-> Skill owns planning semantics and human-readable procedure. sm-workflow owns software-development execution semantics. CNCF Workflow/runtime owns generic execution control.
+Skill Logic MUST NOT reproduce the top-level procedure from the specification as its own control flow.
 
-## Why procedural
-
-The top-level procedure should remain readable as an ordinary work instruction:
-
-1. read the target;
-2. understand the requested outcome;
-3. perform the semantic work;
-4. verify the result;
-5. submit result/evidence.
-
-This form is intentionally close to how a human explains work and is also suitable for AI execution. The Skill should not become a second state machine or concurrency runtime.
-
-"Single-threaded" is semantic, not an implementation restriction. A provider may internally parallelize implementation details, but the Skill contract observes one sequential unit of work and must not coordinate concurrent Skill executions.
-
-## Skill responsibilities
-
-Skill has three complementary roles:
-
-1. **AI-native work** — semantic reading, generation, review, classification, judgment support, and other work where AI capability is intrinsic.
-2. **Ambiguous/non-routine work** — work not yet stable enough to encode as deterministic Operation/Workflow/StateMachine behavior.
-3. **Human-readable top-level procedure** — preserve an understandable description of how the work proceeds even when lower-level steps are implemented by deterministic Operations, Workflows, human approval, or sub-Skills.
-
-As recurring work becomes deterministic, its mechanics should move downward into Operation/Workflow/StateMachine rather than making the Skill more complicated. The Skill may remain as the readable top-level procedure.
-
-## Execution boundary
+Its normal shape is deliberately thin:
 
 ```text
-Human / AI-readable Skill
-  sequential procedure
-        |
-        +-- semantic AI work
-        +-- Operation
-        +-- Workflow / StateMachine
-        +-- Human Approval
-        +-- Sub-Skill
-        |
-        v
-sm-workflow / CNCF Workflow
-  execution ownership
-  concurrency / exclusion
-  continuation
-  admission
-  retry / recovery
-        |
-        v
-CNCF Runtime
-  locking / lease
-  persistence
-  job / recovery infrastructure
+Workflow
+  -> Continuation / WorkOrder
+  -> Skill Logic
+       interpret bounded request
+       perform semantic AI work
+       produce Result / Evidence
+  -> completion Operation
+  -> Workflow decides next action
 ```
 
-The Skill does not need to know whether another Skill or agent is touching the same repository, Aggregate, resource, or file. The execution layer must arrange safe execution before exposing work to the Skill.
+A Skill Logic invocation handles the work assigned to it locally and sequentially. It does not coordinate concurrent Skill executions. "Sequential" here is a local execution assumption for one WorkOrder, not ownership of the overall procedure.
 
-## Consequence for Skill authors
+## Responsibilities
 
-Do not add lock/retry/wait-for-other-worker logic to Skill instructions. If correct execution requires such logic, that is evidence that the responsibility belongs in Workflow/runtime support.
+Skill Logic is appropriate for:
 
-This principle also supports the broader evolution path:
+1. AI-native semantic work such as reading, generation, review, classification, and judgment support;
+2. ambiguous/non-routine semantic work that cannot yet be represented deterministically;
+3. adapting the bounded Workflow request/context to that semantic work and returning typed Result/Evidence.
 
-```text
-ambiguous work
-  -> AI/Skill provisional operation
-  -> identify deterministic parts
-  -> move deterministic parts to Operation/Workflow/StateMachine
-  -> retain Skill as human-readable procedure where useful
-```
+Human-readable top-level procedure is documentation/specification. When it becomes executable control flow, Workflow/StateMachine owns it.
+
+## Prohibited responsibilities
+
+Skill Logic must not own:
+
+- Workflow sequencing or next-action choice;
+- loops such as review -> repair -> re-review;
+- closure/admission decisions;
+- concurrency, locks, leases, execution ownership, or deadlock handling;
+- retry/recovery coordination;
+- durable progression;
+- local substitutes for Workflow state.
+
+If Skill Logic needs any of these to be correct, treat it as a Workflow/runtime modeling gap.
+
+## Evolution
+
+Ambiguous semantic work may initially be performed by Skill Logic. As behavior becomes deterministic, move it to Operation/Workflow/StateMachine. This makes Skill Logic thinner; it does not preserve the old control flow merely for readability.
+
+The human-readable explanation remains in Skill Specification and related process/design documentation.
