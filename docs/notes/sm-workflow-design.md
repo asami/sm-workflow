@@ -963,3 +963,15 @@ runtime state
 This makes sm-workflow suitable as a production-agent reference pattern: Workflow/StateMachine owns execution semantics; deterministic Actions, JudgmentActions, Human Decisions and external Operations are participants under that runtime. Skill complexity should remain semantic rather than accumulate state-machine, persistence, retry and orchestration logic.
 
 The same boundary supports progressive determinization. A workflow may begin with broader AI semantic work; observed stable behavior can later be moved into typed Operations, validation, rules or explicit StateMachine transitions without changing the principle that runtime state is authoritative.
+
+
+### 20.1 Two roles for AI
+
+Within sm-workflow, AI work should have one of two reasons:
+
+1. **Semantic / Intellectual Work**: planning, semantic edit/repair, review, exception analysis, design/coding and other work where interpretation or generation is the capability being requested. This may remain AI-backed permanently.
+2. **Exploratory / Bootstrap Work**: broader AI execution used because the process has not yet been modeled or implemented. This is transitional and should be observed for extraction into deterministic Actions, validation, rules and explicit Workflow/StateMachine transitions.
+
+Mechanical progression, durable state carrying, retry loops, routing, authorization, validation and already-known external effects are not reasons to invoke AI. They belong to the runtime or typed Operations.
+
+The two roles can reinforce each other: semantic coding/design AI can inspect evidence from exploratory execution and generate candidate Workflow/StateMachine/Operation/Executable Specification assets, which are then reviewed and admitted as ordinary software assets.
