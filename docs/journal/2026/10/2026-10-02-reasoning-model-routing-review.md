@@ -189,3 +189,28 @@ Result -> sm-workflow
 ```
 
 sm-workflow should not encode "launch a child task" as workflow semantics. It should state the logical execution requirement. The execution harness decides whether satisfying it means self-execution or delegation.
+
+
+## 2026-10-03 refinement: Skill classification versus execution disposition
+
+The parent/worker routing discussion exposed a missing responsibility boundary. Existing sm-goal-phase practice already allowed the current task to make extremely small one- or two-line fixes directly. Generalizing that rule as merely a provider shortcut would put semantic work assessment in the wrong layer.
+
+The revised decision is three-layered.
+
+1. The sm-* Skill evaluates the planned implementation and reports semantic WorkClassification. It can recognize TRIVIAL work because it understands the Phase, task intent, affected artifact and whether unresolved design judgment remains. Line count is evidence, not the definition.
+2. sm-workflow applies application execution policy and returns logical execution requirements. Placement (INLINE or DELEGATED), independence (OPTIONAL or REQUIRED), and reasoning requirement are separate axes.
+3. The execution harness maps those requirements to the current executor or a concrete worker/model/profile.
+
+This corrects the earlier temptation to have the Skill say 'execute in parent' or to have sm-workflow return 'same model/mode/level as parent'. Neither is the right abstraction. The Skill should not select a provider, and sm-workflow should not know ChatGPT/Codex task-tree topology.
+
+TRIVIAL implementation becomes an INLINE fast path. The semantic reasoning requirement can still be recorded for evidence, but a concrete profile mismatch alone does not justify creating a worker for a tiny, obvious, locally verifiable change. This extends the existing sm-goal-phase one/two-line self-edit rule without making physical line count normative.
+
+For non-trivial work, normal routing applies. If the current executor matches the appropriate profile and context footprint is bounded, implementation can remain INLINE. If a cheaper/different profile is appropriate or context footprint is large, it can be DELEGATED without requiring independence. Review remains different: it is normally DELEGATED with independence REQUIRED even when the reviewer model/effort equals the implementation parent.
+
+The key distinction is therefore:
+
+- Skill: classify the work.
+- sm-workflow: determine logical execution disposition and requirements.
+- Harness: select and launch the concrete provider when delegation is required.
+
+The normative specification is recorded in docs/notes/cncf-workflow-protocol-application-specialization.md.
