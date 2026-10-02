@@ -81,3 +81,48 @@ application StartInput
 ```
 
 Codex console projection も fixture response から生成できることを確認する。
+
+
+## Work classification and execution placement policy
+
+sm-* Skills classify software-development work during planning. sm-workflow owns the policy that converts that semantic classification into application requirements carried through the CNCF generic ExecutionRequirement envelope. The execution harness owns concrete provider selection.
+
+Responsibility boundary: Skill -> WorkClassification (what kind of work); sm-workflow -> placement / independence / reasoning requirement (how it must execute); Execution Harness -> concrete provider (who executes it).
+
+### Skill-owned WorkClassification
+
+For implementation planning, a Skill may report application-semantic indicators such as complexity (TRIVIAL | SIMPLE | STANDARD | COMPLEX), responsibility (PROGRAMMING | ENGINEERING), contextFootprint (SMALL | MEDIUM | LARGE), and the work type / semantic reasoning class already defined by the reasoning model.
+
+These are classifications of work, not provider selections. TRIVIAL does not mean parent task, and PROGRAMMING does not mean Luna. A one- or two-line change is common evidence for TRIVIAL, but line count is not normative: a one-line authorization or domain-semantic change can be non-trivial.
+
+The initial TRIVIAL criterion is a very small local change requiring no unresolved design judgment whose result is locally and easily verifiable. The Skill owns this semantic assessment because it has the Phase/task/project context needed to interpret the change.
+
+### sm-workflow-owned execution disposition
+
+sm-workflow resolves WorkClassification plus Workflow policy into orthogonal execution requirements. Placement and independence must not be collapsed into one flag.
+
+- placement: INLINE | DELEGATED
+- independence: OPTIONAL | REQUIRED
+- semantic ReasoningClass / abstract reasoning level as already defined
+
+INLINE means the current execution participant may perform the semantic work without creating another worker solely for routing. It does not name a ChatGPT/Codex parent task. DELEGATED means execution should use another provider/context. REQUIRED independence additionally means the delegated execution must not reuse the producer's execution context as the reviewer/decision context.
+
+Initial policy:
+
+| Classification / work | Placement | Independence | Reasoning |
+| --- | --- | --- | --- |
+| TRIVIAL implementation | INLINE | OPTIONAL | recorded semantic requirement; provider-profile mismatch does not by itself force delegation |
+| bounded implementation whose current executor satisfies the resolved profile | INLINE | OPTIONAL | normal Coding requirement |
+| implementation requiring a different profile | DELEGATED | OPTIONAL | normal Coding requirement |
+| context-heavy implementation where parent context should be protected | DELEGATED | OPTIONAL | normal Coding requirement |
+| independent review | DELEGATED | REQUIRED | Review requirement |
+
+TRIVIAL implementation is therefore a fast path over normal concrete model/mode/level routing. It does not bypass validation, review, Admission, evidence, authorization, or any Workflow acceptance requirement.
+
+### Provider selection
+
+The execution harness resolves the requirements against current execution capability and configured provider mapping. Concrete model/provider identity remains runtime policy/evidence and must not become Workflow transition semantics.
+
+For example, with a Sol/high parent: TRIVIAL implementation is INLINE on the current parent even if normal Coding mapping would prefer another profile; PROGRAMMING mapped to Luna/high is delegated to Luna/high when not on the trivial fast path; bounded Sol/high implementation may be INLINE when the current parent satisfies it; independent Sol/high review is delegated to a separate Sol/high worker despite matching model/effort.
+
+This keeps three questions separate: the Skill classifies the work, sm-workflow decides logical execution requirements, and the harness chooses the concrete execution provider.
