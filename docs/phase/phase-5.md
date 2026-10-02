@@ -3,17 +3,19 @@
 Status: planned
 Planned: 2026-09-30
 Depends on: Phase 1
-Planned after: Phase 4
+Planned after: Phase 2 for the current practical rollout
 
 ## Dependency boundary
 
 Phase 5 is functionally dependent only on Phase 1. Phase 2 (server/MCP), Phase 3 (Resolved Failure Model), and Phase 4 (Service Bus events) are orthogonal extensions and are not prerequisites for semantic reasoning resolution. Phase 5 is scheduled after Phase 4 only to preserve the current implementation sequence.
 
-A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic ReasoningClass -> CNCF standard Component configuration mapping -> concrete provider profile.
+A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic WorkClassification / ReasoningClass -> execution disposition -> CNCF standard Component configuration mapping -> concrete provider profile. The current practical rollout follows Phase 2 so the same policy is also available through the server/MCP path.
 
 ## Goal
 
-Decouple sm-workflow's semantic description of AI work from provider/model-specific reasoning controls. Workflow definitions express the kind and semantic intensity of reasoning required; provider model names and controls such as medium/high/xhigh are resolved only at invocation time.
+Make sm-workflow practically usable for daily development while decoupling semantic work description from provider/model-specific controls. Workflow/Skill planning classifies the work; sm-workflow resolves the logical execution requirement; the execution harness resolves the concrete provider/model/effort at invocation time.
+
+Phase 5 is the minimum practical vertical slice. Generic Skill/Workflow execution-protocol generalization beyond this proven slice is deferred to Phase 6.
 
 ## Semantic work kinds
 
@@ -61,8 +63,11 @@ The resolver belongs to the CNCF execution/runtime boundary. sm-workflow selects
 
 Current operating targets intentionally collapse the richer semantic vocabulary:
 
-- Coding: GPT-6 Sol medium / high / xhigh.
-- Review: GPT-6 Sol high / xhigh.
+- Coding PROGRAMMING: GPT-6.1 Luna / high as the primary delegated candidate.
+- Coding ENGINEERING: GPT-6.1 Sol / high as the primary candidate; a matching bounded parent may execute inline.
+- Review Standard: GPT-6.1 Sol / high in an independent execution context.
+- Review Critical/broad: GPT-6.1 Sol / xhigh in an independent execution context.
+- TRIVIAL implementation: INLINE fast path regardless of the normal concrete profile mapping, provided Workflow acceptance requirements remain unchanged.
 
 These concrete bands MUST NOT determine the number of semantic classes. Planning, Analysis, Design, and Judgment mappings are operational configuration, not Workflow semantics.
 
@@ -76,15 +81,26 @@ These concrete bands MUST NOT determine the number of semantic classes. Planning
 6. Remove provider-specific reasoning levels from sm-workflow semantics where superseded.
 7. Provide default mappings for the supported Codex environment.
 8. Record both requested semantic class and resolved concrete profile in diagnostics/evidence.
-9. Add Executable Specifications for mapping, many-to-one collapse, missing configuration, and mapping changes.
+9. Add WorkClassification input from sm-* planning, initially covering TRIVIAL/SIMPLE/STANDARD/COMPLEX, PROGRAMMING/ENGINEERING, and bounded context-footprint hints without making physical line count normative.
+10. Resolve the minimum practical execution disposition: INLINE or DELEGATED, independence OPTIONAL or REQUIRED, plus semantic ReasoningClass/level.
+11. Implement TRIVIAL implementation as an INLINE fast path; it MUST NOT bypass validation, review, Admission, evidence, or authorization.
+12. Allow bounded implementation to execute INLINE when the current executor satisfies the resolved profile; delegate when a different profile is required or context footprint should be isolated.
+13. Require review to use an independent execution context even when its concrete model/effort equals the implementation parent.
+14. Consume the minimum CNCF generic ExecutionRequirement/ExecutionEvidence extension supplied by CNCF Phase 80 for placement, independence, and execution identity/evidence; do not define a parallel sm-workflow protocol.
+15. Add Executable Specifications for mapping, many-to-one collapse, missing configuration, mapping changes, trivial inline execution, matching-profile inline implementation, Luna delegation, and independent review.
 
 ## Executable Specification requirements
 
 Demonstrate that a Workflow requests semantic reasoning without provider details; distinct semantic classes may resolve to the same profile; mapping changes affect subsequent invocation without Workflow changes; coding resolves across current medium/high/xhigh bands; review resolves across high/xhigh bands; missing mappings fail explicitly; and provider-specific values do not leak back into persisted Workflow semantics.
+
+## Practical completion condition
+
+Phase 5 is practically complete when a Sol/high parent can directly call sm-workflow control operations and the same workflow can demonstrate: TRIVIAL self/inline implementation; Luna/high delegated PROGRAMMING; bounded matching-profile Sol/high inline implementation; and separate Sol/high or xhigh review with required independence, with requested requirements and actual execution evidence preserved.
 
 ## Non-goals
 
 - Encoding Codex effort names as abstract Workflow levels.
 - Requiring identical intensity sets for all work kinds.
 - Automatic cross-provider cost optimization.
+- Full generic provider capability negotiation, fallback/escalation, context-budget accounting, or Human/remote-worker generalization; these belong to Phase 6 / CNCF Phase 80 follow-up work.
 - Changing closure criteria of preceding Phases.
