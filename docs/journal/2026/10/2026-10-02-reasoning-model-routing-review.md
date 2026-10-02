@@ -139,3 +139,53 @@ Required action is primarily policy/document alignment and Phase 5 implementatio
 5. use Sol/xhigh selectively for critical/broad review and judgment;
 6. treat Luna/xhigh as an evidence-driven optimization candidate rather than a mandatory escalation rung;
 7. record requested semantic class and resolved execution profile in evidence so the policy can be measured and changed independently.
+
+
+## Parent execution versus delegated worker
+
+The parent task should invoke sm-workflow operations directly. A separate AI child task should not be created merely to call a workflow command or to relay structured workflow data. Doing so adds cost and another nondeterministic data-transfer boundary without adding semantic capability.
+
+When sm-workflow returns semantic work, however, the current parent and a delegated child are both possible Execution Providers. Provider selection should be driven by the Work Order's Execution Requirement rather than by a fixed rule that implementation or review always belongs to a child task.
+
+For a parent operating as GPT-6.1 Sol/high, the initial policy is:
+
+| Work | Requirement / situation | Provider candidate |
+| --- | --- | --- |
+| Implementation | PROGRAMMING; Luna/high is sufficient | delegated Luna/high worker |
+| Implementation | Sol/high is appropriate and parent satisfies requirement | parent may execute directly |
+| Implementation | stronger/different profile required | delegated matching worker |
+| Review | independent review required | separate worker even if model/effort equals parent |
+| Review | Luna/high sufficient and independence required | separate Luna/high worker |
+| Review | Sol/high or xhigh required | separate Sol worker at requested effort |
+
+There are therefore two independent reasons to delegate:
+
+1. **Capability/cost routing** — a cheaper or otherwise more appropriate execution profile can satisfy the semantic requirement. Example: Sol/high parent delegates routine PROGRAMMING to Luna/high.
+2. **Isolation/independence routing** — the work requires an execution context independent of the producer. Review is the primary case. Sol/high implementation followed by Sol/high review should still use a separate review worker when independence is required.
+
+Implementation does not require independence by default. If the parent's execution profile is already the appropriate provider, direct execution avoids unnecessary task startup, handoff and context reconstruction. Review should default to independent execution because carrying implementation context into review can preserve the same assumptions and blind spots.
+
+This should be represented as a general Execution Requirement / Provider Selection concern, not as hard-coded parent/child semantics. Logical requirements may include semantic ReasoningClass, implementation responsibility class, required independence and context-isolation constraints. Runtime/harness policy resolves those requirements against available providers and current parent capability.
+
+Conceptually:
+
+```text
+Work Order
+   |
+   v
+Execution Requirement
+   |-- semantic reasoning demand
+   |-- PROGRAMMING / ENGINEERING responsibility
+   |-- independence requirement
+   |-- context isolation requirement
+   v
+Provider Selection
+   |-- current parent
+   |-- Luna worker
+   |-- Sol worker
+   |-- other provider / human
+   v
+Result -> sm-workflow
+```
+
+sm-workflow should not encode "launch a child task" as workflow semantics. It should state the logical execution requirement. The execution harness decides whether satisfying it means self-execution or delegation.
