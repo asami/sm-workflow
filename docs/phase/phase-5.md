@@ -88,10 +88,16 @@ These concrete bands MUST NOT determine the number of semantic classes. Planning
 13. Require review to use an independent execution context even when its concrete model/effort equals the implementation parent.
 14. Consume the minimum CNCF generic ExecutionRequirement/ExecutionEvidence extension supplied by CNCF Phase 80 for placement, independence, and execution identity/evidence; do not define a parallel sm-workflow protocol.
 15. Add Executable Specifications for mapping, many-to-one collapse, missing configuration, mapping changes, trivial inline execution, matching-profile inline implementation, Luna delegation, and independent review.
+16. Treat independent sbt/build/test operations as parallelizable by default. sm-workflow MUST NOT introduce a process-wide or sbt-wide mutex merely because an operation invokes sbt.
+17. Delegate Ivy/Coursier/sbt shared-cache coordination and locking to sbt and its underlying tooling. sm-workflow MUST NOT duplicate those implementation-level locks.
+18. Keep harness-specific execution restrictions outside Workflow semantics. In particular, a Skill adapter MAY serialize sbt invocations when the Skill execution environment itself fails on concurrent sbt execution; that serialization is an adapter workaround and MUST NOT become an ExecutionRequirement or a general sm-workflow policy.
+19. Treat genuine semantic conflicts separately from tool identity: operations that write the same protected work area or otherwise have an explicit application/workflow conflict MAY require coordination, but "uses sbt" alone is not such a conflict.
 
 ## Executable Specification requirements
 
 Demonstrate that a Workflow requests semantic reasoning without provider details; distinct semantic classes may resolve to the same profile; mapping changes affect subsequent invocation without Workflow changes; coding resolves across current medium/high/xhigh bands; review resolves across high/xhigh bands; missing mappings fail explicitly; and provider-specific values do not leak back into persisted Workflow semantics.
+
+Also demonstrate two independent sbt operations can be admitted for concurrent execution and are not serialized solely because both invoke sbt. A harness/Skill-specific serialization constraint, when present, remains local to that adapter and does not alter the persisted Workflow or resolved generic ExecutionRequirement. The specification MUST NOT add Ivy/Coursier cache locking to sm-workflow; those locks remain the responsibility of sbt/tooling.
 
 ## Practical completion condition
 
@@ -104,3 +110,5 @@ Phase 5 is practically complete when a Sol/high parent can directly call sm-work
 - Automatic cross-provider cost optimization.
 - Full generic provider capability negotiation, fallback/escalation, context-budget accounting, or Human/remote-worker generalization; these belong to Phase 6 / CNCF Phase 80 follow-up work.
 - Changing closure criteria of preceding Phases.
+- Providing global sbt, Ivy, or Coursier locking as a safety mechanism.
+- Promoting a Skill-runtime concurrency workaround into Workflow semantics or generic runtime policy.
