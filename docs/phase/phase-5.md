@@ -101,13 +101,17 @@ Also demonstrate two independent sbt operations can be admitted for concurrent e
 
 ## Practical completion condition
 
+Phase 5 MUST NOT close until the CNCF Phase 101 minimum Component resource slice required by sm-workflow has been implemented and verified through the CNCF project, and sm-workflow has consumed that upstream API without hard-coded project resource paths.
+
 Phase 5 is practically complete when a Sol/high parent can directly call sm-workflow control operations and the same workflow can demonstrate: TRIVIAL self/inline implementation; Luna/high delegated PROGRAMMING; bounded matching-profile Sol/high inline implementation; and separate Sol/high or xhigh review with required independence, with requested requirements and actual execution evidence preserved.
 
 ## Project resource integration
 
 Phase 5 establishes the consumer-side rule that sm-workflow MUST use CNCF logical Component resource APIs rather than construct project-local physical paths. Existing CNCF configuration resolution remains authoritative for configuration; sm-workflow consumes the merged Component configuration and does not reproduce current-directory/project/home/system lookup.
 
-CNCF Phase 101 is the upstream driver for non-configuration resources. Phase 5 MAY begin consuming its minimum API when available, but Phase 5 completion MUST NOT be expanded into implementing a private sm-workflow filesystem abstraction.
+CNCF Phase 101 is the upstream implementation phase for non-configuration resources and is explicitly driven from sm-workflow Phase 5. During Phase 5 execution, the workflow MUST start/advance CNCF Phase 101 far enough to deliver the minimum logical Component resource API required by sm-workflow, then consume and verify that API before Phase 5 closes. Phase 5 MUST NOT substitute a private sm-workflow filesystem abstraction when the upstream slice is missing.
+
+This is a cross-project driven-development dependency rather than a requirement that all of CNCF Phase 101 be completed before Phase 5 starts. Phase 5 may begin first, discover/materialize the required CNCF slice, drive Phase 101, resume sm-workflow integration, and close only after the required upstream acceptance evidence is available. Phase 7 later drives the workspace/worktree scenario to broaden and harden the same CNCF API.
 
 ## Non-goals
 
