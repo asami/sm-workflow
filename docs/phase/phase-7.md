@@ -39,6 +39,12 @@ sync Project X / CNCF / Cozy
 
 Independent dependency tests SHOULD execute concurrently. Phase 5 execution policy applies: sm-workflow MUST NOT serialize sbt merely because multiple tests use sbt.
 
+## CNCF Component resource integration
+
+Phase 7 is the primary sm-workflow driver scenario for CNCF Phase 101. Dedicated/project-specific checkouts or worktrees MUST be acquired through the CNCF logical Component workspace/resource API. RepositorySync logic MUST NOT construct `$PROJECT/.textus/sm-workflow/...` paths itself.
+
+The default local mapping may place sm-workflow project resources under the project-local Textus component area, while the logical contract keeps that physical layout outside Workflow semantics. Project-local runtime state/DataStore and worktrees share the same Component resource ownership model, but configuration continues to use CNCF's existing hierarchical configuration resolver.
+
 ## Repository set
 
 The synchronization set consists of:
