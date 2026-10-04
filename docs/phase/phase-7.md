@@ -1,4 +1,4 @@
-# Phase 7: Dependency-Aware Repository Synchronization and Validation
+# Phase 7: Dependency-Aware Multi-Repository Synchronization and Validation
 
 Status: planned
 Planned: 2026-10-04
@@ -10,7 +10,28 @@ Extend the Phase 1 `RepositorySyncWorkflow` from synchronization of one project 
 
 For a root project X, synchronization MUST include X itself and the related repositories explicitly participating in X through project-specific branches. When remote changes are incorporated into one of those related repositories, sm-workflow validates the changed dependency first and validates X only after all changed dependencies have passed their full tests.
 
-This is an extension of the existing `RepositorySyncWorkflow`, not a second synchronization workflow.
+This is an extension of the existing `RepositorySyncWorkflow`, not a second synchronization workflow. It is also the project-workspace convergence counterpart to `sm-goal-phase`: GoalPhase closes work locally in one admitted repository/worktree; RepositorySync brings the root repository and its dedicated related worktrees into synchronized, validated GitHub convergence.
+
+## GoalPhase / RepositorySync responsibility split
+
+`sm-goal-phase` owns repository/worktree-local development closing:
+
+```text
+edit -> test/review -> admission -> CommitChanges -> local commit -> Step/Phase close
+```
+
+`sm-repository-sync` owns Project Workspace synchronization/convergence:
+
+```text
+root + dedicated related worktrees
+  -> fetch/classify
+  -> fast-forward or non-rewriting merge as required
+  -> dependency-aware validation/full tests
+  -> permitted non-force push
+  -> convergence verification
+```
+
+RepositorySync MUST consume already-created local commits from GoalPhase without reimplementing GoalPhase closing. Conversely, GoalPhase MUST NOT grow multi-repository fetch/push/convergence semantics merely because its current worktree belongs to a larger Project Workspace.
 
 ## Example
 
@@ -144,6 +165,12 @@ sm-workflow Phase 7 driver acceptance
   -> CNCF Phase 101 full acceptance / close
   -> sm-workflow Phase 7 close
 ```
+
+## Dogfooding / reference scenario
+
+The development of sm-workflow itself is a normative driver scenario: sm-workflow uses a dedicated CNCF worktree to develop CNCF Phase 101 while the root sm-workflow project proceeds through its own phases. GoalPhase may locally close work in either admitted worktree; RepositorySync must later treat the root and dedicated CNCF (and, where present, Cozy) worktrees as one explicit Project Workspace for synchronization, dependency-aware validation, permitted push, and convergence evidence.
+
+This scenario must be supported through the same public project/workspace model intended for later `sm-repository-sync` use, not by a one-off development script or hard-coded repository names.
 
 ## Practical completion condition
 
