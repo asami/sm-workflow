@@ -64,7 +64,7 @@ Independent dependency tests SHOULD execute concurrently. Phase 5 execution poli
 
 Phase 7 is the primary sm-workflow driver scenario for CNCF Phase 101. Dedicated/project-specific checkouts or worktrees MUST be acquired through the CNCF logical Component workspace/resource API. RepositorySync logic MUST NOT construct `$PROJECT/.textus/sm-workflow/...` paths itself.
 
-The default local mapping may place sm-workflow project resources under the project-local Textus component area, while the logical contract keeps that physical layout outside Workflow semantics. Project-local runtime state/DataStore and worktrees share the same Component resource ownership model, but configuration continues to use CNCF's existing hierarchical configuration resolver.
+The standard local mapping places sm-workflow definitions at the Component-area root, version-controlled assets under `resources/`, and runtime state/worktrees under ignored `work.d/`. The project generator supplies the generic `.textus/*/work.d/` ignore rule; RepositorySync MUST NOT edit `.gitignore`. The local provider may map project resources under the project-local Textus component area, while the logical contract keeps that physical layout outside Workflow semantics. Project-local runtime state/DataStore and worktrees share the same Component resource ownership model, but configuration continues to use CNCF's existing hierarchical configuration resolver.
 
 ## Repository set
 
