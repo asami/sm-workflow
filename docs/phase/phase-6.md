@@ -1,66 +1,149 @@
-# Phase 6: Generic Skill Execution Requirement and Provider Selection
+# Phase 6: Dependency-Aware Repository Synchronization and Validation
 
 Status: planned
-Planned: 2026-10-03
-Depends on: Phase 5, CNCF Phase 80 minimum execution-requirement extension
+Planned: 2026-10-04
+Depends on: Phase 1, Phase 5
 
 ## Goal
 
-Generalize the execution-routing model proven by Phase 5 into a reusable Skill/Workflow execution contract without making sm-workflow own provider-specific or harness-specific semantics.
+Extend the Phase 1 `RepositorySyncWorkflow` from synchronization of one project repository into dependency-aware synchronization and validation for a development project and the related repositories whose project-specific branches it uses.
 
-Phase 5 proves the minimum practical development slice. Phase 6 extracts the reusable model for broader sm-* work and for CNCF generalization.
+For a root project X, synchronization MUST include X itself and the related repositories explicitly participating in X through project-specific branches. When remote changes are incorporated into one of those related repositories, sm-workflow validates the changed dependency first and validates X only after all changed dependencies have passed their full tests.
 
-## Boundary
+This is an extension of the existing `RepositorySyncWorkflow`, not a second synchronization workflow.
 
-The intended three-layer boundary is:
+## Example
+
+Project X uses project-specific branches of CNCF and Cozy.
+
+If synchronization incorporates a remote change into CNCF only:
 
 ```text
-Skill / application planning
-  -> application-specific WorkAssessment / WorkClassification
-
-Workflow application policy
-  -> generic logical ExecutionRequirement
-
-Execution Harness
-  -> concrete Provider Selection
-  -> ExecutionEvidence
+sync Project X / CNCF / Cozy
+  -> CNCF: remote change incorporated
+  -> Cozy: unchanged
+  -> full test CNCF
+  -> full test Project X
 ```
 
-Input assessment remains application-specific where its meaning is domain-specific. Generic execution requirements and evidence belong to CNCF.
+If both CNCF and Cozy incorporate remote changes:
 
-## Scope
+```text
+sync Project X / CNCF / Cozy
+  -> CNCF: remote change incorporated
+  -> Cozy: remote change incorporated
+  -> full test CNCF --+
+                       +-> when both succeed -> full test Project X
+  -> full test Cozy --+
+```
 
-1. Reconcile Phase 5 WorkClassification with the generic CNCF ExecutionRequirement contract.
-2. Stabilize placement semantics such as INLINE / DELEGATED without referring to ChatGPT/Codex parent/child task topology.
-3. Stabilize independence semantics and execution-context identity sufficient to prove producer/reviewer separation.
-4. Define Requirement -> ExecutionEvidence conformance and Admission behavior.
-5. Generalize context-isolation / context-footprint routing beyond the Phase 5 heuristic; evaluate explicit context-budget evidence only if operationally justified.
-6. Define provider capability matching and configuration-driven Provider Selection without making provider identity Workflow transition semantics.
-7. Define bounded fallback/escalation behavior for unavailable or insufficient providers.
-8. Generalize the contract to Human, remote worker, OpenClaw-like worker, local model, and other execution participants where the same semantics apply.
-9. Preserve direct control-plane invocation: Workflow commands themselves do not require a child AI task.
-10. Record enough execution evidence to evaluate routing quality, independence, admission rate, retries, latency, usage and cost.
+Independent dependency tests SHOULD execute concurrently. Phase 5 execution policy applies: sm-workflow MUST NOT serialize sbt merely because multiple tests use sbt.
 
-## Genericization rule
+## Repository set
 
-Do not move software-development classifications such as TRIVIAL or PROGRAMMING / ENGINEERING into CNCF merely because Phase 5 uses them. Generalize only the resolved execution concepts that are meaningful across applications.
+The synchronization set consists of:
 
-## Executable Specification direction
+1. the root development project; and
+2. related repositories explicitly used through project-specific/dedicated branches for that root project.
+
+RepositorySync MUST NOT recursively synchronize every transitive library dependency merely because it exists in the build dependency graph.
+
+The source of the project-specific repository/branch relationship MUST be deterministic project configuration or equivalent explicit project metadata. Discovery by repository-name guessing is not allowed.
+
+## Synchronization result
+
+RepositorySync records a typed result for every repository sufficient to distinguish at least:
+
+- UNCHANGED — no remote change was incorporated;
+- UPDATED — remote change was incorporated into the local project branch;
+- CONFLICT — synchronization cannot be completed without resolution;
+- FAILED — synchronization itself failed.
+
+The implementation MAY refine UPDATED into fast-forward/merge/rebase-related facts when useful, but validation policy is based on the semantic fact that external changes were incorporated, not on a particular Git command.
+
+A fetch with no incorporated working-branch change is not UPDATED.
+
+## Validation policy
+
+1. Every related repository with result UPDATED MUST receive its full test.
+2. Related repositories without incorporated remote changes MUST NOT receive a full test merely as a precaution.
+3. Full tests for independent UPDATED related repositories MAY run concurrently.
+4. The root project full test MUST wait until every required related-repository full test succeeds.
+5. If one or more related-repository full tests fail, the root full test MUST NOT be reported as validation of the synchronized dependency set. The Workflow remains unresolved with explicit failure evidence.
+6. If the root project itself is UPDATED, it requires a full test.
+7. If any related repository is UPDATED, the root project requires a full test even when the root repository itself was unchanged, because the effective dependency baseline of the root project changed.
+8. Therefore, when neither the root nor any related repository incorporates remote changes, synchronization completes without a precautionary full test.
+
+## Dependency ordering
+
+Validation follows the explicit project dependency relation, not repository enumeration order.
+
+For the Phase 6 minimum scope, project X is the root and its dedicated-branch repositories are dependency nodes. If dependencies between those related repositories are explicitly known, their tests MUST respect that ordering. Otherwise independent nodes may be tested concurrently.
+
+The root project is the final validation node.
+
+## Operations
+
+Retain the Phase 1 application boundary:
+
+- `StartRepositorySync(RepositorySyncStartInput, WorkflowInvocationSelection)`
+- `SubmitRepositorySyncWorkResult(RepositorySyncWorkResult)`
+
+Extend their typed payloads/results as necessary rather than introducing a parallel ProjectSync protocol.
+
+The Workflow should materialize bounded work orders for Git synchronization and full-test execution and receive typed evidence through the existing continuation/completion boundary.
+
+## Evidence
+
+For each repository preserve enough evidence to establish:
+
+- repository identity;
+- local/project-specific branch identity;
+- synchronization result;
+- whether a remote change was incorporated;
+- before/after revision identity as normal Git revision evidence;
+- whether full test was required;
+- full-test execution identity and result when required.
+
+Revision identifiers are observational Git evidence. Phase 6 MUST NOT introduce custom content hashing or integrity machinery.
+
+## Conflict and failure behavior
+
+A Git conflict is a normal explicit Workflow outcome requiring resolution. Phase 6 MUST NOT add speculative rollback, repository backup, duplicate working trees, integrity verification, or contamination-prevention machinery merely because synchronization may fail.
+
+After conflict resolution, validation requirements are derived again from the actual incorporated changes.
+
+## Executable Specification requirements
 
 Demonstrate at least:
 
-- application-specific assessments mapping to the same generic execution requirement;
-- INLINE execution by the current participant;
-- DELEGATED execution by another provider;
-- REQUIRED independence rejecting completion that reuses a prohibited producer execution identity;
-- provider replacement without Workflow definition change;
-- provider unavailability/fallback without changing semantic WorkOrder identity;
-- equivalent generic behavior for an AI worker and at least one non-identical participant class;
-- ExecutionEvidence sufficient for requirement conformance and later audit.
+1. root and related repositories unchanged -> no full test;
+2. root only UPDATED -> root full test;
+3. CNCF-like dependency only UPDATED -> dependency full test, then root full test;
+4. two independent dependencies UPDATED -> their full tests may overlap, then root full test after both succeed;
+5. dependency full test failure -> root validation does not proceed as if the synchronized set were valid;
+6. root unchanged but dependency UPDATED -> root still receives full test;
+7. fetch without incorporation -> no UPDATE-triggered full test;
+8. synchronization conflict -> explicit unresolved result, not automatic defensive recovery;
+9. two sbt-based dependency full tests are not globally serialized by sm-workflow solely because they use sbt.
+
+## Practical completion condition
+
+Phase 6 is complete when a real root project using at least two project-specific related repository branches can execute one RepositorySyncWorkflow that:
+
+- synchronizes the complete explicit repository set;
+- identifies exactly which repositories incorporated remote changes;
+- runs full tests only where required by the validation policy;
+- runs independent dependency tests concurrently where possible;
+- waits for successful dependency validation before root validation; and
+- returns typed synchronization and validation evidence for the complete operation.
 
 ## Non-goals
 
-- Moving sm-goal-phase planning semantics into CNCF.
-- Treating concrete model/provider names as Workflow guards.
-- Building a universal autonomous-agent framework.
-- Making context-budget optimization a prerequisite for Phase 5 practical use.
+- Synchronizing every transitive build dependency.
+- Global sbt/Ivy/Coursier locking.
+- Full-testing unchanged dependency repositories as a precaution.
+- Automatic semantic conflict resolution.
+- Defensive repository backup/rollback/integrity machinery.
+- Replacing Git's own merge/conflict semantics.
+- General provider-selection semantics; the previously planned generic execution-requirement work continues in Phase 7.
