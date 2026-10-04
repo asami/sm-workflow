@@ -40,6 +40,8 @@ Input assessment remains application-specific where its meaning is domain-specif
 8. Generalize the contract to Human, remote worker, OpenClaw-like worker, local model, and other execution participants where the same semantics apply.
 9. Preserve direct control-plane invocation: Workflow commands themselves do not require a child AI task.
 10. Record enough execution evidence to evaluate routing quality, independence, admission rate, retries, latency, usage and cost.
+11. Consume CNCF Phase 101 logical Component resource APIs for runtime state/work resources where execution participants require project-local storage; provider/harness code MUST NOT depend on a hard-coded `.textus/sm-workflow` layout.
+12. Keep configuration on CNCF's existing hierarchical Component configuration mechanism; Phase 6 MUST NOT create a second configuration lookup/merge model.
 
 ## Genericization rule
 
