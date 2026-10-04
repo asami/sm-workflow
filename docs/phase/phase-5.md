@@ -105,6 +105,12 @@ Phase 5 MUST NOT close until the CNCF Phase 101 minimum Component resource slice
 
 Phase 5 is practically complete when a Sol/high parent can directly call sm-workflow control operations and the same workflow can demonstrate: TRIVIAL self/inline implementation; Luna/high delegated PROGRAMMING; bounded matching-profile Sol/high inline implementation; and separate Sol/high or xhigh review with required independence, with requested requirements and actual execution evidence preserved.
 
+## GoalPhase repository-local closing boundary
+
+Phase 5 preserves the existing `sm-goal-phase` / `GoalPhaseWorkflow` closing responsibility: implementation, review/admission, deterministic validation, staging/CommitChanges, commit evidence, and Step/Phase close occur against the currently admitted repository/worktree. GoalPhase closing does not attempt to synchronize or converge the complete multi-repository Project Workspace with GitHub.
+
+A dedicated CNCF/Cozy worktree is therefore a valid GoalPhase working repository: GoalPhase can change, validate, review, and locally commit that worktree exactly as it can the root repository. Cross-repository fetch/merge/push/convergence remains the responsibility of `sm-repository-sync` / `RepositorySyncWorkflow` in Phase 7.
+
 ## Project resource integration
 
 Phase 5 establishes the consumer-side rule that sm-workflow MUST use CNCF logical Component resource APIs rather than construct project-local physical paths. Existing CNCF configuration resolution remains authoritative for configuration; sm-workflow consumes the merged Component configuration and does not reproduce current-directory/project/home/system lookup.
