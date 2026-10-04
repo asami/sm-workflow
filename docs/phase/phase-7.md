@@ -133,6 +133,18 @@ Demonstrate at least:
 8. synchronization conflict -> explicit unresolved result, not automatic defensive recovery;
 9. two sbt-based dependency full tests are not globally serialized by sm-workflow solely because they use sbt.
 
+## CNCF Phase 101 closure gate
+
+Phase 7 is the final driver acceptance for CNCF Phase 101. After the RepositorySync/worktree acceptance scenario succeeds, Phase 7 MUST cause/record CNCF Phase 101 full acceptance and closure before Phase 7 itself closes. A Phase 5 minimum-slice acceptance of Phase 101 is not sufficient for this gate.
+
+The closure order is:
+
+```text
+sm-workflow Phase 7 driver acceptance
+  -> CNCF Phase 101 full acceptance / close
+  -> sm-workflow Phase 7 close
+```
+
 ## Practical completion condition
 
 Phase 7 is complete when a real root project using at least two project-specific related repository branches can execute one RepositorySyncWorkflow that:
