@@ -103,6 +103,12 @@ Also demonstrate two independent sbt operations can be admitted for concurrent e
 
 Phase 5 is practically complete when a Sol/high parent can directly call sm-workflow control operations and the same workflow can demonstrate: TRIVIAL self/inline implementation; Luna/high delegated PROGRAMMING; bounded matching-profile Sol/high inline implementation; and separate Sol/high or xhigh review with required independence, with requested requirements and actual execution evidence preserved.
 
+## Project resource integration
+
+Phase 5 establishes the consumer-side rule that sm-workflow MUST use CNCF logical Component resource APIs rather than construct project-local physical paths. Existing CNCF configuration resolution remains authoritative for configuration; sm-workflow consumes the merged Component configuration and does not reproduce current-directory/project/home/system lookup.
+
+CNCF Phase 101 is the upstream driver for non-configuration resources. Phase 5 MAY begin consuming its minimum API when available, but Phase 5 completion MUST NOT be expanded into implementing a private sm-workflow filesystem abstraction.
+
 ## Non-goals
 
 - Encoding Codex effort names as abstract Workflow levels.
