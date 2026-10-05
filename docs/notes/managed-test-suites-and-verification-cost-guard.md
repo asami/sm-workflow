@@ -57,7 +57,8 @@ TestSuiteDefinition
 
 Initial purposes SHOULD reflect Workflow needs rather than build-tool vocabulary:
 
-- DEVELOPMENT / FOCUSED: bounded feedback during candidate construction/repair when required.
+- SMOKE: cheapest registered post-implementation validity check.
+- FOCUSED: bounded functional/regression validation for the changed area.
 - ADMISSION: deterministic validation required to admit/close a candidate.
 - FULL: broad regression validation required by explicit Workflow policy such as RepositorySync.
 
@@ -106,6 +107,63 @@ TestSuiteExecutionReceipt
 ~~~
 
 Do not duplicate complete test output in every Workflow record. Preserve bounded diagnostics/result references using existing evidence/observability mechanisms. PASSED evidence is fresh only for the candidate/revision and suite revision it validates; existing Candidate-Admission freshness rules remain authoritative.
+
+
+## Candidate validation pipeline and FIX work
+
+After an implementation result returns, sm-workflow SHOULD apply progressively more expensive validation before requesting semantic review:
+
+~~~text
+IMPLEMENTATION
+  -> SMOKE
+       fail -> TEST_FIX -> SMOKE
+  -> FOCUSED
+       fail -> TEST_FIX -> SMOKE -> FOCUSED
+  -> REVIEW
+       findings -> REVIEW_FIX -> SMOKE -> FOCUSED -> REVIEW
+  -> ACCEPT
+  -> ADMISSION validation
+  -> Closing
+~~~
+
+### SMOKE purpose
+
+SMOKE is the cheapest registered TestSuite intended to reject an obviously invalid Candidate before focused validation or AI review. For Scala/sbt projects, the suite SHOULD exploit the fact that running even a small test normally requires test compilation: all test sources are compiled before the selected test executes. Thus a Scala SMOKE suite may combine full test-source compilation with only a very small representative runtime test set. This gives materially broader structural/type coverage than the number of executed tests alone suggests.
+
+This is a project/provider property, not a generic assumption: other ecosystems may define SMOKE differently. AI designs and registers the project-appropriate SMOKE suite; sm-workflow only executes the admitted definition.
+
+The initial TestSuite purposes are therefore refined to include SMOKE, FOCUSED, ADMISSION and FULL. DEVELOPMENT may remain an exploratory/harness concern unless a concrete Workflow requirement later justifies a separate managed purpose.
+
+### FIX as semantic candidate revision
+
+TEST_FIX and REVIEW_FIX are specializations of a common FIX concept. FIX means semantic work that revises an existing Candidate using newly obtained evidence. It is not a deterministic patch operation and has no validation authority.
+
+~~~text
+FIX
+  trigger: TEST_FAILURE | REVIEW_FINDING
+  originalRequirement
+  currentCandidate
+  triggerEvidence
+  relevantPriorEvidence
+~~~
+
+TEST_FIX is triggered by deterministic TestSuite failure evidence. Its request contains the original requirement, current Candidate, failed suite identity/revision, execution evidence and bounded failure diagnostics. The AI decides whether the cause is implementation code, test code, TestSuite design, or a requirement/design gap. TEST_FIX MUST NOT mean merely making an assertion pass.
+
+REVIEW_FIX is triggered by semantic ReviewEvidence/findings. Its request contains the original requirement, current Candidate, ReviewEvidence and required findings. It may address design, responsibility boundaries, overimplementation, missing requirements, naming/structure, or other semantic review findings.
+
+Both are implementation-like semantic work for execution routing even though their triggers differ. REVIEW_FIX does not require a review-class worker merely because its input came from review. Concrete reasoning/provider selection remains governed by Phase 5/6 execution policy.
+
+### Revalidation rule
+
+A FIX result is only a new Candidate. The AI MUST NOT declare validation success or select the next Workflow state.
+
+After TEST_FIX or REVIEW_FIX changes the Candidate, previously applicable validation evidence becomes stale according to normal Candidate-Admission freshness rules. sm-workflow restarts the required deterministic validation chain from SMOKE. A REVIEW_FIX therefore normally flows through SMOKE and FOCUSED before re-review. A TEST_FIX from FOCUSED also returns through SMOKE before FOCUSED is rerun.
+
+The Workflow MUST NOT rerun only the previously failing individual test and treat that as closure evidence unless the admitted validation policy explicitly defines that as sufficient. This preserves the separation between semantic Candidate revision and deterministic acceptance evidence.
+
+### Failure semantics
+
+A TestSuite FAILED result requests TEST_FIX rather than an untyped generic repair. ERROR and TIMEOUT remain operational outcomes and MUST NOT automatically be converted into TEST_FIX unless policy/evidence establishes that Candidate semantic work is required. Duration warnings likewise do not trigger TEST_FIX; they enter the Human -> AI TestSuite improvement loop described above.
 
 ## Admission duration guard
 
@@ -182,7 +240,7 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 
 ## Initial implementation slice
 
-1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects.
+1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including SMOKE/FOCUSED/ADMISSION/FULL.
 2. Project resource loading and schema validation.
 3. typed RunTestSuite deterministic operation/provider binding.
 4. TestSuiteExecutionReceipt with measured duration.
@@ -191,7 +249,8 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 7. warning persistence/query/presentation hook.
 8. typed registration/revision path for AI-proposed definitions.
 9. bounded Human -> AI review request using warning + receipts.
-10. executable specifications.
+10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
+11. executable specifications.
 
 ## Executable specifications
 
@@ -205,6 +264,11 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 8. AI proposal with arbitrary command injection -> registration rejected.
 9. human-selected warning can form bounded AI improvement request; warning alone does not trigger AI work.
 10. code change after PASSED evidence follows existing Candidate-Admission freshness policy.
+11. SMOKE failure -> TEST_FIX; successful fix restarts at SMOKE before FOCUSED.
+12. FOCUSED failure -> TEST_FIX -> SMOKE -> FOCUSED; failing test alone is not sufficient closure evidence.
+13. REVIEW findings -> REVIEW_FIX -> SMOKE -> FOCUSED -> re-review.
+14. TEST_FIX may identify a test/suite/design problem instead of blindly modifying production code.
+15. provider ERROR/TIMEOUT and duration warning do not automatically become TEST_FIX.
 
 ## Non-goals
 
