@@ -1,0 +1,92 @@
+# Managed Test Suites and Verification Cost Feedback Loop
+
+Date: 2026-10-06
+Status: design decision
+Related: Candidate-Admission Model, deterministic operations/closing, Human-in-the-Loop Continuation/Admission
+
+## Context
+
+Job-management development exposed excessive development time from repeated validation. Two causes matter: AI/Skill may choose too broad a regression scope for a small change, and selected tests may themselves contain expensive setup/repeated computation. A Skill rule that blindly executes a fixed focused set after every repair amplifies both.
+
+An initial idea was to leave test selection with Codex while sm-workflow only records duration/retry reasons. That leaves official validation selection nondeterministic: every agent turn can rediscover a different safe set and repeatedly broaden it.
+
+The revised decision is to make purpose-specific Test Suites first-class sm-workflow development assets.
+
+## Decision
+
+AI designs and maintains TestSuite definitions. sm-workflow registers admitted definitions, selects them by Workflow purpose, executes them deterministically, records evidence, and evaluates simple cost policy.
+
+~~~text
+AI: semantic TestSuite design/improvement
+sm-workflow: purpose selection + execution + measurement + policy evaluation
+Human: decide which warnings deserve improvement work
+~~~
+
+Official Workflow validation is therefore not an ad-hoc Codex test-selection decision. Codex may still use narrow exploratory tests during implementation; those are distinct from managed focused/admission/full suites that produce Workflow validation evidence.
+
+## First guard: admission validation over one minute
+
+The first practical rule is deliberately small: an ordinary ADMISSION TestSuite taking more than 60 seconds records a duration warning.
+
+The warning is not a test failure and does not reject Admission by itself. It surfaces development-process friction to a human, who can ask AI to inspect the suite/tests, improve them, and register a revised definition.
+
+Some tests legitimately require more than one minute. Their definition may declare LONG_RUNNING with rationale and expected duration/explicit threshold. This remains observable and is not a blanket ignore-performance flag.
+
+~~~text
+managed suite
+ -> deterministic execution
+ -> measured evidence
+ -> warning
+ -> human identifies improvement point
+ -> AI reviews suite/tests
+ -> revised suite is admitted
+ -> later measured evidence
+~~~
+
+Human-in-the-Loop remains at the improvement decision. sm-workflow does not autonomously optimize or rewrite tests.
+
+## Why this belongs in sm-workflow
+
+Existing design already places build/test and other established procedural commands in typed deterministic operations rather than Skill/AI orchestration. Managed Test Suites extend that boundary from who launches the process to which admitted validation asset represents each Workflow purpose.
+
+This strengthens Candidate-Admission semantics: admission asks for declared validation evidence rather than asking AI to improvise a validation procedure each time.
+
+## Why suite maintenance still belongs to AI
+
+Correct focused/admission/full composition depends on code structure, regression risk, test architecture and evolving project knowledge. Automatic dependency/test selection in sm-workflow would encode semantic reasoning as brittle deterministic machinery.
+
+AI performs that semantic analysis when a suite is created/reviewed. The result becomes an admitted reusable project asset; ordinary executions remain deterministic until evidence and human judgment request another revision.
+
+~~~text
+AI analysis -> admitted TestSuite -> deterministic repeated execution -> evidence -> occasional AI revision
+~~~
+
+## Implementation consequences
+
+A definition needs stable identity, purpose, revision and typed operation binding. Duration policy needs expected duration/threshold, NORMAL versus LONG_RUNNING, and rationale for long-running behavior.
+
+Execution produces a receipt bound to suite revision and candidate revision. Warning records observed duration and evaluated threshold. Full test logs need not be copied into Workflow state; bounded diagnostics/reference are enough.
+
+Definitions belong with version-controlled project sm-workflow resources through CNCF logical Component resource APIs. Receipts/warnings belong to runtime state/evidence. Do not hard-code physical .textus paths or create a second configuration resolver.
+
+The default ADMISSION warning threshold is 60 seconds and should be configurable through the existing CNCF Component configuration mechanism.
+
+## Relationship to current phases
+
+This is operational hardening and MUST NOT expand Phase 1 completion. Phase 1 explicitly defers production operational providers and cost dashboards. Implement this in the first suitable operational/provider phase after required runtime/resource boundaries are available, then integrate it with GoalPhase admission/closing.
+
+Phase 4 Service Bus is a natural publication path for warnings/evidence. Control Center/cbd-support can later consume the facts for KPI/trend review.
+
+Phase 7 dependency-aware RepositorySync should use managed FULL suites rather than invent another full-test command-selection mechanism. Its existing policy still decides when FULL is required; the registered suite decides what that project's FULL validation means.
+
+## Guard against overengineering
+
+Initial implementation MUST NOT add automatic test dependency analysis, adaptive thresholds, historical statistical anomaly detection in the execution path, autonomous AI remediation, hash/integrity ledgers, duplicate full log storage, or global sbt/build-tool locking.
+
+Measure the simple case first. Immediate success is: a one-minute-plus admission test becomes a visible actionable warning and can drive one explicit Human -> AI improvement cycle.
+
+## Expected effect
+
+The symptom development is taking too long becomes attributable evidence. sm-workflow can identify which admission suite/revision consumed time. Once AI improves the suite, that decision is registered and reused; later Codex runs do not rediscover the same official selection strategy or silently broaden it out of caution.
+
+Detailed normative/implementation design: docs/notes/managed-test-suites-and-verification-cost-guard.md
