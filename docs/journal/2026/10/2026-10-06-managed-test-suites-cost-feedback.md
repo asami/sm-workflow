@@ -104,3 +104,16 @@ After either FIX changes the Candidate, sm-workflow restarts deterministic valid
 Operational provider ERROR/TIMEOUT is not automatically TEST_FIX, because the Candidate may be correct. A slow successful test is also not TEST_FIX; duration warnings remain part of the separate Human -> AI TestSuite improvement loop.
 
 This refinement further separates three concerns: AI constructs/revises semantic Candidates; sm-workflow produces deterministic validation evidence; AI Review evaluates semantic quality only after cheap and focused mechanical validation have passed.
+
+
+## Follow-up decision: five validation purposes and bounded FULL
+
+The managed purpose taxonomy is now SMOKE / FOCUSED / ADMISSION / FULL / HEAVY. These are validation objectives, not five duplicated test-code trees. AI composes each logical suite from existing tests/selectors, and strict physical subset nesting is not required.
+
+The practical budgets are intentionally different. SMOKE should normally finish in seconds to tens of seconds; FOCUSED should remain bounded around the changed area; ADMISSION targets one minute or less; FULL targets ten minutes or less. These are engineering targets and cost guards, not correctness results.
+
+FULL is explicitly defined as time-bounded comprehensive regression, not literally every expensive test. This avoids the common failure mode where the word full causes ordinary project validation to grow without bound. Tests that cannot reasonably fit the roughly ten-minute operational envelope should be optimized, represented more cheaply where valid, or moved to HEAVY. A project-specific FULL exception is allowed when explicit, justified, and registered with an expected duration.
+
+HEAVY is the completeness-oriented outer class. It may run for hours and may contain exhaustive combinations, broad E2E/integration matrices, long-running concurrency/performance checks, large-data tests, or multi-toolchain matrices. It is not part of the ordinary implementation loop and is invoked only by explicit Workflow/release/milestone policy or human request.
+
+This creates a useful pressure gradient: routine assurance stays fast, while expensive completeness is preserved rather than deleted. ADMISSION should not become FULL, and FULL should not become HEAVY merely because more tests exist.
