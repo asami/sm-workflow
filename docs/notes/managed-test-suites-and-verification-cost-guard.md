@@ -57,16 +57,64 @@ TestSuiteDefinition
 
 Initial purposes SHOULD reflect Workflow needs rather than build-tool vocabulary:
 
-- SMOKE: cheapest registered post-implementation validity check.
-- FOCUSED: bounded functional/regression validation for the changed area.
-- ADMISSION: deterministic validation required to admit/close a candidate.
-- FULL: broad regression validation required by explicit Workflow policy such as RepositorySync.
+- SMOKE: cheapest registered post-implementation validity check; normally seconds to tens of seconds.
+- FOCUSED: bounded functional/regression validation for the changed area; normally tens of seconds where practical.
+- ADMISSION: routine Candidate acceptance validation; target at or below 60 seconds by default.
+- FULL: time-bounded comprehensive project regression; target at or below 10 minutes by default.
+- HEAVY: completeness-oriented exhaustive/high-cost validation; hours are acceptable when justified.
 
 A suite is a logical validation asset, not synonymous with one shell command.
 
 ### Operation binding
 
 TestSuiteDefinition MUST reference an admitted typed test operation/provider configuration. It MUST NOT carry arbitrary executable or free-form argv supplied by AI. Existing deterministic-operation rules remain in force. Provider implementation may use sbt, Gradle, Flutter, npm, etc. below this semantic model.
+
+
+## Purpose-specific suite construction and time budgets
+
+Purpose defines the validation objective and time budget; it does not require a separate duplicate body of test code. AI SHOULD compose managed suites from existing tests/selectors and may reuse the same test in multiple purposes. The sets are independent and MUST NOT require a strict physical subset relation such as SMOKE subset FOCUSED subset ADMISSION subset FULL subset HEAVY.
+
+### SMOKE
+
+SMOKE optimizes for the cheapest useful rejection of an invalid Candidate. It contains compilation/type checks naturally provided by the ecosystem plus a very small representative runtime set. For Scala/sbt, test-source compilation gives broad structural/type coverage even when only a few tests are selected for execution.
+
+### FOCUSED
+
+FOCUSED validates a bounded changed area. A project MAY register multiple named focused suites such as goal-phase, repository-sync, admission, or execution-routing. Workflow/change classification selects among already admitted logical suite IDs; ordinary execution MUST NOT ask Codex to improvise individual test classes each time.
+
+### ADMISSION
+
+ADMISSION is the routine Candidate-acceptance suite. It SHOULD maximize useful regression confidence while remaining continuously affordable in the development loop. The default engineering target is 60 seconds or less. Important contracts, representative happy/failure paths, major invariants and historically fragile boundaries are candidates for inclusion.
+
+ADMISSION is not merely a mechanically truncated FULL suite. AI designs it for routine acceptance value under the time budget. Persistent breach of the one-minute target is an improvement signal: optimize tests, revise selection, or move expensive coverage outward while preserving appropriate assurance.
+
+### FULL
+
+FULL means the strongest comprehensive regression that remains practical for ordinary project operation. The default engineering target is 10 minutes or less. Repository synchronization, release preparation and other larger boundaries may require it.
+
+FULL does not mean literally every possible test regardless of cost. A test that causes the suite to persistently exceed the practical budget SHOULD be reviewed for optimization, representative substitution, or placement in HEAVY. A project MAY admit a justified FULL exception above 10 minutes, but the exception MUST be explicit and carry rationale/expected duration rather than silently redefining FULL.
+
+### HEAVY
+
+HEAVY is the outer validation class for completeness-oriented tests that should not distort normal development latency. Hours are acceptable. Examples include exhaustive combinations, broad integration/E2E matrices, long-running concurrency tests, large-data tests, performance/regression campaigns, multiple runtime/toolchain matrices, and other validation excluded from FULL primarily because of cost.
+
+HEAVY prioritizes required completeness over the ordinary time budget. It is not part of the normal implementation -> SMOKE -> FOCUSED -> REVIEW loop. It runs only when explicit Workflow policy, a release/milestone policy, or human request requires it.
+
+HEAVY still records duration and expected-duration evidence. It is exempt from the ordinary ADMISSION 60-second and FULL 10-minute targets, but a declared three-hour suite taking ten hours may still produce a cost anomaly warning under a future/general duration policy.
+
+### Time-budget interpretation
+
+The initial standard is therefore:
+
+~~~text
+SMOKE     seconds to tens of seconds
+FOCUSED   tens of seconds where practical
+ADMISSION target <= 1 minute
+FULL      target <= 10 minutes
+HEAVY     no ordinary upper budget; hours are acceptable
+~~~
+
+These are engineering targets, not correctness semantics. ADMISSION/FULL budget breach does not by itself turn a passing test into failure. Explicit exceptions are allowed when justified, but recurring excess should remain visible and reviewable rather than becoming accidental normality.
 
 ## Registration and revision
 
@@ -132,7 +180,7 @@ SMOKE is the cheapest registered TestSuite intended to reject an obviously inval
 
 This is a project/provider property, not a generic assumption: other ecosystems may define SMOKE differently. AI designs and registers the project-appropriate SMOKE suite; sm-workflow only executes the admitted definition.
 
-The initial TestSuite purposes are therefore refined to include SMOKE, FOCUSED, ADMISSION and FULL. DEVELOPMENT may remain an exploratory/harness concern unless a concrete Workflow requirement later justifies a separate managed purpose.
+The managed TestSuite purposes are SMOKE, FOCUSED, ADMISSION, FULL and HEAVY. DEVELOPMENT may remain an exploratory/harness concern unless a concrete Workflow requirement later justifies a separate managed purpose.
 
 ### FIX as semantic candidate revision
 
@@ -240,7 +288,7 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 
 ## Initial implementation slice
 
-1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including SMOKE/FOCUSED/ADMISSION/FULL.
+1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including SMOKE/FOCUSED/ADMISSION/FULL/HEAVY and standard time-budget policy.
 2. Project resource loading and schema validation.
 3. typed RunTestSuite deterministic operation/provider binding.
 4. TestSuiteExecutionReceipt with measured duration.
@@ -269,6 +317,11 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 13. REVIEW findings -> REVIEW_FIX -> SMOKE -> FOCUSED -> re-review.
 14. TEST_FIX may identify a test/suite/design problem instead of blindly modifying production code.
 15. provider ERROR/TIMEOUT and duration warning do not automatically become TEST_FIX.
+16. FULL completes within 10 minutes -> normal evidence with no FULL-budget warning.
+17. FULL persistently exceeds 10 minutes -> cost warning/review signal without converting PASS to failure.
+18. explicitly justified FULL exception above 10 minutes uses its registered expectation.
+19. multi-hour exhaustive validation is registered as HEAVY and does not inherit ADMISSION/FULL time targets.
+20. HEAVY is not automatically inserted into the normal implementation validation loop.
 
 ## Non-goals
 
