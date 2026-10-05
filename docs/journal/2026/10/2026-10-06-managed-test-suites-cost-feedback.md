@@ -90,3 +90,17 @@ Measure the simple case first. Immediate success is: a one-minute-plus admission
 The symptom development is taking too long becomes attributable evidence. sm-workflow can identify which admission suite/revision consumed time. Once AI improves the suite, that decision is registered and reused; later Codex runs do not rediscover the same official selection strategy or silently broaden it out of caution.
 
 Detailed normative/implementation design: docs/notes/managed-test-suites-and-verification-cost-guard.md
+
+## Follow-up decision: staged validation and evidence-triggered FIX
+
+The post-implementation path was refined further. The desired normal sequence is SMOKE -> FOCUSED -> semantic AI REVIEW. In Scala/sbt, SMOKE has unusually good leverage: executing a small selected test still requires compilation of the test source set, so a very small runtime sample can provide broad compile/type consistency evidence before more expensive focused execution.
+
+When SMOKE or FOCUSED fails, the semantic action is named TEST_FIX rather than returning to a fresh IMPLEMENTATION or using an ambiguous generic repair. TEST_FIX means: revise the current Candidate using deterministic test-failure evidence. It does not mean blindly satisfy the failed assertion; AI may conclude that production code, test code, TestSuite definition, or an upstream requirement/design gap is the actual issue.
+
+Review findings use REVIEW_FIX. TEST_FIX and REVIEW_FIX are two evidence-triggered forms of a common FIX concept. Both are implementation-like semantic work and neither has acceptance authority. Their distinction is the trigger/evidence contract: TEST_FAILURE versus REVIEW_FINDING.
+
+After either FIX changes the Candidate, sm-workflow restarts deterministic validation at SMOKE. A FOCUSED failure therefore follows TEST_FIX -> SMOKE -> FOCUSED. Review findings follow REVIEW_FIX -> SMOKE -> FOCUSED -> re-review. The agent's claim that a fix is complete never substitutes for these checks.
+
+Operational provider ERROR/TIMEOUT is not automatically TEST_FIX, because the Candidate may be correct. A slow successful test is also not TEST_FIX; duration warnings remain part of the separate Human -> AI TestSuite improvement loop.
+
+This refinement further separates three concerns: AI constructs/revises semantic Candidates; sm-workflow produces deterministic validation evidence; AI Review evaluates semantic quality only after cheap and focused mechanical validation have passed.
