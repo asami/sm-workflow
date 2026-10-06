@@ -174,3 +174,14 @@ sm-workflow intentionally goes further than a fixed cap: deterministic Convergen
 Orca's stage-as-Git-commit/resume-point model is not imported because sm-workflow already has Workflow state, Continuation, Candidate/Admission and Evidence freshness. Likewise Orca's concrete reviewer-selection machinery is not made a new sm-workflow authority layer. The useful operational behaviors are generalized into the existing architecture instead of creating a parallel orchestration model.
 
 The comparison therefore reinforces the direction: use AI for semantic implementation/review/fix, reconcile its structured results deterministically, keep unresolved work explicitly identified, rerun required machine validation after edits, reuse fresh evidence, and make loop termination a Workflow concern rather than an agent prompt convention.
+
+
+## Follow-up decision: CNCF Validation/Test Metadata ABI replaces suite registry
+
+The Test Suite representation was simplified further. The normal source of truth is no longer a sm-workflow-managed suite definition/resource file. Executable specifications/test operations carry CNCF Validation/Test Metadata ABI annotations/properties, and sm-workflow constructs SMOKE/FOCUSED/ADMISSION/FULL/HEAVY selections by querying CNCF-resolved metadata.
+
+Operation/scenario is the primary granularity, with class/specification metadata acting as defaults/shared feature context. One operation may participate in multiple purposes, allowing the same test program to serve SMOKE, ADMISSION and FULL without duplication.
+
+FOCUSED becomes feature-driven rather than registry-driven. Slice planning selects feature identities; sm-workflow runs FOCUSED-tagged operations whose features match the admitted Slice selection. If the classification itself is insufficient, the Slice revises Test Architecture metadata explicitly rather than creating an ad-hoc runtime test list.
+
+CNCF owns the portable semantic ABI and annotation/property merge/discovery semantics. sm-workflow owns runtime policy such as the one-minute ADMISSION and ten-minute FULL targets, execution receipts, freshness and warnings. cbd-support consumes the same ABI statically. This removes duplicated management data and makes metadata changes themselves visible Test Architecture changes.
