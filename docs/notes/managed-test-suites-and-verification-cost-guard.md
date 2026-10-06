@@ -521,6 +521,83 @@ cycle   source files   external resources   semantic class
 
 Neither example is judged by one metric alone. The guard evaluates the vector/trend, while the semantic class remains AI-provided evidence and the cycle bound guarantees termination.
 
+
+## Finding ledger and Fix reconciliation
+
+A Fix loop MUST track the identity and lifecycle of concrete findings rather than only count rounds or rely on free-form AI summaries. This design is informed by Orca's review/fix implementation, but is expressed in sm-workflow Candidate/Admission terms.
+
+### FixIssue ledger
+
+Test/review findings that participate in a Fix cycle SHOULD be normalized to stable typed issue identities where the producing source can support them:
+
+~~~text
+FixIssue
+  id: FixIssueId
+  source: TEST | REVIEW | CHECK | other admitted source
+  sourceIdentity
+  title/summary
+  evidenceReference
+  status: OPEN | RESOLVED | DECLINED | REOPENED
+~~~
+
+The ledger is carried across Fix cycles. A later observation of the same logical issue refreshes/reopens the existing identity rather than blindly creating another unrelated entry. Resolved issues leave the open set but remain in history. The implementation MUST avoid contradictory simultaneous open/resolved records for the same issue identity.
+
+Test failure identity should use stable test/check identity when available. Review finding identity requires a typed/stable finding identity from the review result; sm-workflow MUST NOT invent semantic identity by fuzzy text matching.
+
+### FixResult reconciliation
+
+TEST_FIX/REVIEW_FIX receives an explicit set of open FixIssue identities. The AI result SHOULD account for those identities with a typed disposition, conceptually:
+
+~~~text
+FixIssueDisposition
+  issueId
+  disposition: FIXED | DECLINED | BLOCKED
+  rationale?
+
+FixResult
+  candidateRevision
+  issueDispositions
+  changeAssessment
+  convergenceAssessment
+~~~
+
+sm-workflow deterministically reconciles the result against the request before accepting the new Candidate as a Fix result. Unknown issue IDs, duplicate contradictory dispositions, or malformed/unaccounted result entries are rejected or surfaced as degraded evidence according to explicit policy. AI cannot manufacture authority by claiming to have fixed an issue it was not handed.
+
+A FIXED claim removes the issue from the carried open set provisionally; subsequent Test/Review may re-report the same issue, in which case it becomes REOPENED. A DECLINED issue remains open with the latest rationale. BLOCKED stops the automatic loop and enters typed error/decision handling.
+
+The fixer's FIXED claim is not validation evidence. The normal SMOKE/FOCUSED/REVIEW chain determines whether the issue actually stays resolved.
+
+### Ledger metrics in ConvergenceVector
+
+The convergence evidence SHOULD additionally expose deterministic ledger counts:
+
+~~~text
+openIssues
+resolvedIssues
+newIssues
+reopenedIssues
+~~~
+
+These augment rather than replace file/resource/test metrics. For example, decreasing file surface with increasing reopened issues is not automatically healthy convergence.
+
+### Zero-fix stop
+
+If a Fix request contains one or more open issues but the reconciled result fixes none and does not produce an admitted plan/validation-design revision, sm-workflow SHOULD classify the cycle as STALLED and stop or escalate according to Convergence Guard policy rather than repeatedly issue the same Fix request.
+
+An explicit AI BLOCKED disposition stops immediately. A DECLINED-only result is not progress merely because the Candidate changed cosmetically.
+
+### Narrowing re-evaluation scope
+
+After a Fix, re-evaluation MAY narrow semantic reviewers/checks to sources relevant to still-open/recently-fixed findings when the admitted review policy supports it. This is an optimization, not an authority shortcut.
+
+The required deterministic chain remains SMOKE plus the Slice FocusedValidationProfile after Candidate modification. Final acceptance still requires the configured review/admission scope. Narrowing MUST NOT silently reduce a required final review or ADMISSION TestSuite.
+
+### Fresh evidence reuse on resume
+
+Workflow restart/resume MUST NOT repeat expensive TestSuite/Review work merely because the process restarted when existing evidence is still fresh for the same Candidate revision, TestSuite/review definition revision, and required scope. Existing Candidate-Admission freshness rules decide reuse. A changed Candidate or changed required definition/scope stales the corresponding evidence.
+
+This is the sm-workflow equivalent of stage-resume reuse without introducing a second stage/commit model.
+
 ## Failure and retry
 
 FAILED/ERROR/TIMEOUT are separate from duration warnings. FAILED means tests ran and validation was negative; ERROR means provider/infrastructure could not produce a valid result; TIMEOUT means explicit timeout policy was reached; duration warning means execution completed but cost exceeded expectation.
@@ -545,7 +622,9 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
 11. Slice FocusedValidationProfile with standard reference/composition/Slice-specific definition and planning-time admission.
 12. Fix Convergence Guard with deterministic ConvergenceVector, AI semantic change classification/self-assessment, trend policy, and bounded cycle limits.
-13. acceptance scenarios.
+13. FixIssue ledger and deterministic FixResult reconciliation, including zero-fix stop and reopened/new issue metrics.
+14. bounded re-evaluation narrowing and fresh-evidence reuse on resume.
+15. acceptance scenarios.
 
 ## Acceptance scenarios
 
@@ -581,6 +660,12 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 30. three physical files with independent file-local changes may report STANDARD_LOGIC; file count alone does not force COMPLEX_LOGIC.
 31. one coordinated semantic change spanning multiple files reports COMPLEX_LOGIC.
 32. AI semantic class/self-assessment is recorded separately from deterministic ConvergenceVector and cannot override deterministic policy except explicit BLOCKED.
+33. FixResult claiming an unknown/unrequested issue ID is rejected/degraded by deterministic reconciliation.
+34. FIXED issue disappears from open set but reappears as REOPENED when subsequent validation reports the same stable identity.
+35. open issues plus zero FIXED dispositions produces STALLED/escalation rather than an identical automatic Fix loop.
+36. DECLINED issues remain open with latest rationale; BLOCKED enters error/decision handling.
+37. re-evaluation may narrow intermediate semantic reviewer scope but cannot bypass SMOKE/Slice FOCUSED or required final review/ADMISSION scope.
+38. restart reuses fresh matching Test/Review evidence and does not rerun it solely because the process restarted.
 
 ## Non-goals
 
