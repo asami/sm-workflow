@@ -166,3 +166,67 @@ deterministic rule/operation where sufficient
 ~~~
 
 The local-first policy MUST remain replaceable/versioned configuration. No named local model, cloud model, or machine capability becomes part of Workflow transition semantics.
+
+
+## Provider Routing basic design
+
+Provider Routing follows three primary principles: **local-first execution**, **graceful decline/escalation**, and **evidence-driven policy improvement**. These principles apply to semantic Implementation and Review and, where suitable, bounded Judgment.
+
+### Local-first
+
+When an admitted local provider satisfies the resolved ExecutionRequirement, it SHOULD be considered before a more expensive/stronger provider. This applies to Implementation and Review, including STANDARD work where measured capability supports it. Local-first is an execution policy, not a claim that local models can complete all such work.
+
+Review remains subject to its independence requirement. A local implementation provider and an independent local review execution MUST use execution contexts satisfying the resolved independence constraint. Local-first never weakens independent review semantics.
+
+A deployment MAY use staged review: an inexpensive independent local review as the first review stage, followed by stronger review when policy, uncertainty, work class, sampling/calibration, or findings require it. A local PASS is not automatically equivalent to final Admission unless the admitted routing/review policy says it is sufficient.
+
+### Decline Protocol and graceful escalation
+
+Semantic providers MUST have a normal typed way to decline work they do not judge themselves capable of completing/reviewing reliably. Providers MUST NOT be forced to manufacture a result merely because a WorkOrder was assigned.
+
+Conceptually, semantic execution has at least these outcomes:
+
+~~~text
+COMPLETED
+DECLINED
+BLOCKED
+~~~
+
+- COMPLETED: semantic work produced the requested typed result; normal validation/review/admission continues.
+- DECLINED: the provider judges the work outside its reliable capability/context. This is a routing outcome, not a semantic failure. sm-workflow/provider routing SHOULD retry the same semantic work with the next admitted stronger/capable provider according to policy.
+- BLOCKED: merely choosing a stronger provider is not expected to resolve the problem because an upstream requirement, design, missing input, authority, or human decision is required. This enters typed decision/error handling rather than blind escalation.
+
+Implementation and Review both use this principle. Review may additionally express uncertainty/finding information in its application result, but provider incapability is represented as DECLINED rather than a fabricated PASS/FINDINGS judgment.
+
+Escalation MUST be bounded and policy-driven. It is a provider-routing chain, not an unbounded retry loop. The same ExecutionRequirement, work identity, Candidate/evidence context, decline reason, and provider attempt history SHOULD remain attributable across escalation.
+
+### Evidence-driven routing improvement
+
+Every provider attempt SHOULD record sufficient ExecutionEvidence to evaluate routing quality. Useful dimensions include:
+
+- semantic work type and WorkClassification;
+- abstract ReasoningLevel / ExecutionRequirement;
+- relevant failure/finding characteristics;
+- selected provider/profile and independence disposition;
+- COMPLETED / DECLINED / BLOCKED outcome and reason;
+- deterministic compile/test/validation result;
+- review result and later stronger-review disagreement when sampled/staged;
+- retry/Fix/escalation path;
+- elapsed time and available cost/resource evidence.
+
+Routing policy SHOULD improve from observed evidence rather than static intuition alone. Initial policy can be simple and deterministic. Aggregated evidence produces routing KPIs such as local completion/success rate, decline rate, escalation rate, validation failure after local completion, and local-review false-negative/disagreement rate against stronger review.
+
+Policy evolution is Human-in-the-Loop:
+
+~~~text
+ExecutionEvidence
+  -> aggregate routing KPI / corpus
+  -> analysis or experiment
+  -> routing-policy revision proposal
+  -> human/admission process
+  -> versioned routing policy
+~~~
+
+Runtime evidence MUST NOT silently self-modify routing policy. corpus/experiment may replay reproducible work contexts against alternative providers/models before a policy revision is admitted.
+
+The long-term objective is not to maximize local execution percentage. It is to minimize total execution cost/latency while preserving convergence and required quality, using stronger providers where evidence shows they add value.
