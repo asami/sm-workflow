@@ -145,3 +145,32 @@ AI also returns PROGRESSING/STALLED/REGRESSING/BLOCKED as a convergence self-ass
 Cycle limits remain necessary even when the measured trend looks favorable. A soft limit permits continued CONVERGING/SLOW_CONVERGENCE work; a hard limit always terminates automatic cycling. Conversely, clear DIVERGING behavior or AI BLOCKED can terminate before the hard limit. Numeric limits are policy/configuration values, not embedded assumptions about how many Fixes are universally correct.
 
 The resulting principle is: permit bounded exploration and slow convergence, detect widening change surfaces early, preserve AI semantic/self-assessment as separate evidence, and guarantee that automatic Fix cycling always terminates or hands control to an explicit decision/error path.
+
+
+## Comparative study: VirtusLab Orca review/fix loop
+
+A source-level review of VirtusLab/orca was performed as a comparison for the emerging sm-workflow Test/Fix/Review design. Orca shares the core principle that procedural orchestration should be deterministic code rather than instructions an AI is expected to remember. Its current review loop provided several concrete operational lessons.
+
+### Findings worth adopting
+
+Orca keeps an explicit open-finding record across review/fix rounds. Findings have identities; fixer outcomes are reconciled against the findings actually supplied; fixed findings are pruned from the carried open set, declined findings remain open, and a later reviewer can report a supposedly fixed finding again. This is stronger than merely counting failures and is adopted as a typed FixIssue ledger in sm-workflow.
+
+Orca also reconciles the fixer's structured fixed/declined response against the request instead of trusting a free-form statement that everything was fixed. sm-workflow adopts the same principle at the Candidate admission boundary: TEST_FIX/REVIEW_FIX results must account for supplied FixIssue identities and cannot manufacture unrelated issue authority.
+
+A particularly useful termination rule is that Orca stops when findings exist but the fixer reports no fixes. sm-workflow generalizes this as a deterministic zero-fix STALLED signal within the Convergence Guard. This complements, rather than replaces, change-surface trends, AI BLOCKED, and cycle limits.
+
+Orca supports narrowing later review rounds to reviewers that previously reported issues. sm-workflow adopts the optimization principle only in bounded form: intermediate semantic re-evaluation may narrow to unresolved/recently-fixed evidence, but Candidate changes still pass project SMOKE and Slice FOCUSED, and required final review/ADMISSION scope cannot be reduced implicitly.
+
+Orca's resumable stages also reinforce the rule that completed expensive work should not be repeated after a process restart. sm-workflow already has a more general mechanism through Candidate revision, Evidence freshness and Admission. The adopted rule is therefore to reuse fresh matching Test/Review evidence rather than introduce Orca's stage/commit model.
+
+### Orca loop bounds and cost lesson
+
+Orca's current implementation uses a default maximum of three fix turns. Its own research records that a larger historical iteration ceiling allowed long review loops and growing review payload/token cost. This is practical evidence for sm-workflow's decision to keep explicit cycle bounds even when convergence metrics look favorable.
+
+sm-workflow intentionally goes further than a fixed cap: deterministic ConvergenceVector trends, FixIssue ledger movement, AI semantic change depth, AI self-assessment, soft/hard limits and explicit error/decision handoff are evaluated together. Slow genuine convergence may continue past a soft threshold, while clear divergence, zero-fix stall or AI BLOCKED can stop earlier.
+
+### What is not copied
+
+Orca's stage-as-Git-commit/resume-point model is not imported because sm-workflow already has Workflow state, Continuation, Candidate/Admission and Evidence freshness. Likewise Orca's concrete reviewer-selection machinery is not made a new sm-workflow authority layer. The useful operational behaviors are generalized into the existing architecture instead of creating a parallel orchestration model.
+
+The comparison therefore reinforces the direction: use AI for semantic implementation/review/fix, reconcile its structured results deterministically, keep unresolved work explicitly identified, rerun required machine validation after edits, reuse fresh evidence, and make loop termination a Workflow concern rather than an agent prompt convention.
