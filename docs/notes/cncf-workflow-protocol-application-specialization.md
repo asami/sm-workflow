@@ -230,3 +230,32 @@ ExecutionEvidence
 Runtime evidence MUST NOT silently self-modify routing policy. corpus/experiment may replay reproducible work contexts against alternative providers/models before a policy revision is admitted.
 
 The long-term objective is not to maximize local execution percentage. It is to minimize total execution cost/latency while preserving convergence and required quality, using stronger providers where evidence shows they add value.
+
+
+## Machine placement and repository-based development migration
+
+Provider Routing and physical Machine Placement are related but distinct optimization layers. Provider/model routing can be relatively fine-grained. Moving development execution between physical machines has substantially higher transfer/resume cost and SHOULD therefore operate at a coarser granularity.
+
+A repository checkpoint plus sm-workflow state can act as a development-migration boundary. sm-repository-sync may synchronize an admitted repository state through the configured remote (for example GitHub), after which another machine with a compatible development environment can resume a sufficiently large Goal/Phase/Slice. This is analogous in spirit to process migration, but the migrated unit is durable development state rather than an in-memory process image.
+
+Conceptually:
+
+~~~text
+fine-grained semantic routing
+  WorkOrder -> local/cloud model/provider on current machine
+
+coarse-grained execution placement
+  Goal / Phase / sufficiently-large Slice
+    -> repository checkpoint/sync
+    -> another machine
+    -> restore compatible environment/context
+    -> resume workflow execution
+~~~
+
+Machine Placement SHOULD consider capabilities beyond LLM reasoning: CPU/build throughput, memory, available local models, toolchain/repository compatibility, current load, expected validation cost, and environment/cache state where available. These are execution capabilities/policy inputs, not Workflow transition semantics.
+
+Migration MUST NOT be assumed beneficial. Relevant cost includes repository synchronization, checkout/worktree preparation, dependency/cache warm-up, environment/context reconstruction, and lost locality. Initial operation SHOULD use simple coarse policy and record evidence rather than implement a sophisticated distributed scheduler.
+
+The useful decision boundary is whether expected benefit from parallelism, available compute, lower semantic-provider cost, or reduced queue/wall-clock time justifies migration cost. Fine-grained Fix/Review operations normally remain on the current machine unless evidence later supports otherwise; multi-hour or otherwise substantial development units are stronger migration candidates.
+
+ExecutionEvidence SHOULD make physical placement and migration attributable where practical: machine/provider identity, migration/sync occurrence and duration, build/test duration, semantic-provider duration, escalation/decline path, and end-to-end completion time. This evidence can support later placement-policy improvement without autonomous runtime self-modification.
