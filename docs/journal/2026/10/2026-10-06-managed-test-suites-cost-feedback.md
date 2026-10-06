@@ -130,3 +130,18 @@ This moves focused-test selection to acceptance design. By the time implementati
 TEST_FIX does not get authority to broaden the focused scope. It revises the Candidate and reruns SMOKE plus the same admitted Slice profile. If test evidence reveals that the profile itself is inadequate, the correct response is an explicit validation-design/Slice-plan revision. This keeps test-selection knowledge reviewable and reusable instead of hiding it inside an agent repair turn.
 
 Repeated Slice-specific profiles should be reviewed for promotion into reusable standard feature suites. Thus recurring AI-discovered validation knowledge gradually becomes deterministic project test architecture.
+
+
+## Follow-up decision: Fix Convergence Guard and semantic change depth
+
+Fix/Test/Review loops need bounded convergence control rather than a simple retry counter. The chosen design combines deterministic change-surface metrics, AI semantic change classification, AI self-assessment, and explicit soft/hard cycle limits.
+
+sm-workflow measures a ConvergenceVector for every Candidate revision: source files touched, test files touched, managed resources touched, external resources touched, lines added/deleted, and failed-test count. These values are retained as a vector and trend; they are not collapsed into an unexplained convergence score. Temporary expansion is allowed, because a valid investigation may broaden before contracting. Slow but real convergence may therefore continue for multiple cycles. Sustained expansion, oscillation or non-improvement can enter error/decision handling before the hard cycle limit.
+
+AI additionally classifies each Fix revision as HYGIENE, TRIVIAL_COMPILE_FIX, SIMPLE_LOGIC, STANDARD_LOGIC or COMPLEX_LOGIC. The classification measures semantic depth, not physical file count. Multiple files containing independent file-local ordinary changes remain STANDARD_LOGIC. COMPLEX_LOGIC means one integrated logical change requires coordinated behavior across files/boundaries.
+
+AI also returns PROGRESSING/STALLED/REGRESSING/BLOCKED as a convergence self-assessment. This is initially retained as advisory evidence for future calibration. BLOCKED is the exception: it is an explicit signal that the same automatic Fix loop should not continue, so sm-workflow enters typed error/decision handling immediately.
+
+Cycle limits remain necessary even when the measured trend looks favorable. A soft limit permits continued CONVERGING/SLOW_CONVERGENCE work; a hard limit always terminates automatic cycling. Conversely, clear DIVERGING behavior or AI BLOCKED can terminate before the hard limit. Numeric limits are policy/configuration values, not embedded assumptions about how many Fixes are universally correct.
+
+The resulting principle is: permit bounded exploration and slow convergence, detect widening change surfaces early, preserve AI semantic/self-assessment as separate evidence, and guarantee that automatic Fix cycling always terminates or hands control to an explicit decision/error path.
