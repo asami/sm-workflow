@@ -128,3 +128,46 @@ A working topic is:
 sm-workflow can serve as the experimental platform rather than merely an implementation artifact. A useful paper should measure migration/routing behavior rather than stop at an architecture proposal.
 
 Before large-scale optimization, preserve reproducible routing and migration evidence so later corpus/experiment work can answer which work classes belong on small local machines, larger local machines, or cloud providers, and at what granularity physical migration becomes worthwhile.
+
+
+## Project heaviness / machine suitability profile
+
+A practical near-term use of the routing evidence is to decide a project's normal home machine rather than migrate every small WorkOrder. The useful question is: is this project normally light enough for an Air-class machine, or does its observed development behavior justify a mini-class machine?
+
+Project heaviness should initially remain a vector, not a synthetic scalar score. At least three dimensions are useful:
+
+- semantic heaviness: local DECLINED rate by work/reasoning class, stronger-provider escalation, local validated completion, local-vs-strong Review disagreement;
+- build heaviness: compile/test-compile and SMOKE/FOCUSED/ADMISSION/FULL/HEAVY duration/resource observations;
+- operational heaviness: concurrent services/subsystems, databases/containers/external dependencies and other execution-environment load where typed evidence exists.
+
+The most interesting semantic indicator is local-provider decline rate. It measures effective difficulty for a particular Project x Provider/Machine combination rather than relying on source size or a generic hardware benchmark. Decline reasons should be typed enough to distinguish reasoning/capability limits from context/resource/tool-environment limits.
+
+A complementary metric is validated local completion: the proportion of admitted development units that complete local implementation and required deterministic validation/review without stronger-provider escalation. Decline rate alone is insufficient because a provider may complete work that later fails validation or is contradicted by stronger review.
+
+Conceptually preserve a profile such as:
+
+~~~text
+ProjectExecutionProfile
+  projectIdentity
+  observationWindow
+  machine/provider class
+
+  semantic
+    declineRate by work/reasoning class
+    declineReason distribution
+    validatedLocalCompletionRate
+    escalationRate
+    reviewDisagreementRate
+
+  build
+    compile/test duration distributions
+    suite duration distributions
+    available resource observations
+
+  operational
+    typed environment/load observations where available
+~~~
+
+Human-facing UI may project this vector to recommendations such as AIR_SUFFICIENT or MINI_RECOMMENDED, but the underlying observations should remain inspectable and explainable. A recommendation is time/provider dependent: a newer local model can lower decline/escalation rates and make the same project suitable for a smaller machine.
+
+The likely practical placement policy is therefore: choose a project home machine from its observed ProjectExecutionProfile, then use RepositorySync migration only for exceptional large development units whose expected benefit exceeds migration cost.
