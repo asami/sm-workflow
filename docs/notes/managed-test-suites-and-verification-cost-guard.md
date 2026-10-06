@@ -360,6 +360,167 @@ observation -> autonomous self-modification
 
 Codex remains free to use narrowly scoped exploratory developer tests when useful, subject to harness policy. Those checks are not automatically official Workflow validation evidence. Official focused/admission/full validation is the registered TestSuite executed by sm-workflow. This prevents repeated just-in-case expansion of official validation scope.
 
+
+## Fix Convergence Guard
+
+TEST_FIX and REVIEW_FIX form bounded semantic revision loops. sm-workflow MUST observe convergence and MUST NOT allow an unbounded Fix -> Test/Review -> Fix cycle.
+
+The guard combines four independent inputs:
+
+1. deterministic change-surface and validation metrics;
+2. AI-reported semantic change classification;
+3. AI convergence self-assessment, initially advisory except for an explicit hard-stop signal;
+4. bounded cycle-count policy.
+
+### Deterministic ConvergenceVector
+
+sm-workflow derives measurable values from Candidate revisions and validation evidence rather than asking AI to count them:
+
+~~~text
+ConvergenceVector
+  sourceFilesTouched
+  testFilesTouched
+  managedResourcesTouched
+  externalResourcesTouched
+  linesAdded
+  linesDeleted
+  failedTests
+~~~
+
+External resources mean resources outside ordinary source/test files whose participation expands the effective change boundary, such as explicit dependency/repository resources, external service/API bindings, datastore/schema resources, generated/deployed artifacts, or equivalent typed resources known to the Workflow/provider. The implementation SHOULD use typed resource identities already available from CNCF rather than filesystem guessing.
+
+Each Fix cycle records its vector and delta from the preceding Candidate. The vector is preserved as a vector; the initial implementation MUST NOT collapse it into an opaque scalar convergence score.
+
+A single expansion does not imply divergence. sm-workflow evaluates a bounded recent trend so a sequence that expands modestly while locating a problem and then contracts may continue. Sustained expansion, persistent non-improvement, or oscillation is suspicious. The initial policy should use simple deterministic rules over a small recent window rather than statistical/ML anomaly detection.
+
+### AI semantic change classification
+
+Every TEST_FIX/REVIEW_FIX result SHOULD report the semantic depth of the actual revision using this closed ordinal vocabulary:
+
+~~~text
+HYGIENE
+TRIVIAL_COMPILE_FIX
+SIMPLE_LOGIC
+STANDARD_LOGIC
+COMPLEX_LOGIC
+~~~
+
+Semantics:
+
+- HYGIENE: no logic change; formatting, harmless cleanup, naming/hygiene and equivalent changes.
+- TRIVIAL_COMPILE_FIX: mechanically small compile correction without intended logic change, such as a missing import, spelling/identifier typo, or similarly local compile defect.
+- SIMPLE_LOGIC: localized logic change that normally fits within one function/method or equivalent logical unit.
+- STANDARD_LOGIC: ordinary logic change whose individual logic units remain within one file/module-local implementation boundary.
+- COMPLEX_LOGIC: one integrated semantic/logic change whose correctness depends on coordinated logic across multiple files/components/boundaries.
+
+Physical file count does NOT determine semantic class. If several files are changed but each contains an independent file-local STANDARD_LOGIC correction, the aggregate classification remains STANDARD_LOGIC rather than COMPLEX_LOGIC. COMPLEX_LOGIC requires cross-file semantic coupling for the same logical change.
+
+The classes form an ordinal depth for trend evaluation only:
+
+~~~text
+HYGIENE < TRIVIAL_COMPILE_FIX < SIMPLE_LOGIC < STANDARD_LOGIC < COMPLEX_LOGIC
+~~~
+
+The ordinal MUST NOT be interpreted as a linear cost ratio.
+
+The AI result should conceptually include:
+
+~~~text
+FixChangeAssessment
+  changeClass
+  affectedLogicalUnits
+  crossFileLogic: Boolean
+  rationale
+~~~
+
+sm-workflow records this separately from deterministic file/resource counts. A semantic class that grows over successive Fix cycles is useful divergence evidence even when physical file count is flat.
+
+### AI convergence self-assessment
+
+Every Fix result SHOULD also provide a forward-looking/self-assessment for future use:
+
+~~~text
+AIConvergenceAssessment
+  status: PROGRESSING | STALLED | REGRESSING | BLOCKED
+  confidence: HIGH | MEDIUM | LOW
+  rationale
+~~~
+
+Initially PROGRESSING/STALLED/REGRESSING are advisory evidence and MUST NOT override deterministic guard policy. They are retained so later operation can evaluate calibration and usefulness of AI self-assessment.
+
+BLOCKED is a hard-stop signal: the AI explicitly judges that continuing the same Fix loop is not appropriate or safe without an upstream decision/change. sm-workflow MUST stop automatic Fix cycling and enter the typed error/decision handling path. A future contract may refine explicit hard-stop reasons such as requirement gap, design gap or validation-design gap.
+
+### Trend policy
+
+The deterministic guard classifies recent behavior conceptually as:
+
+~~~text
+CONVERGING
+SLOW_CONVERGENCE
+STALLED
+DIVERGING
+~~~
+
+CONVERGING means the observed change/validation surface is generally contracting. SLOW_CONVERGENCE allows several cycles when contraction is real but gradual. A small temporary increase MUST NOT immediately fail the loop.
+
+STALLED means meaningful improvement is not observable over the configured recent window. DIVERGING means sustained expansion/oscillation or comparable deterministic evidence shows the loop moving away from closure. Exact initial thresholds/window sizes belong to versioned sm-workflow policy/configuration, not to AI prompts.
+
+Examples of useful deterministic signals include consecutive growth of source/resource surface, failed-test count that does not improve, repeated reappearance of the same failure identities, and repeated oscillation between recent failure sets. Avoid sophisticated semantic inference in the guard.
+
+### Cycle limits
+
+Trend evaluation is combined with bounded cycle limits. The policy SHOULD provide a soft limit and a hard limit.
+
+- Below soft limit: continue when no divergence/hard-stop is present.
+- At/above soft limit: CONVERGING or SLOW_CONVERGENCE may continue; STALLED should warn/escalate according to policy.
+- DIVERGING: stop without waiting for the hard limit.
+- AI BLOCKED: stop immediately.
+- Hard limit: stop automatic cycling regardless of apparently favorable trend.
+
+The initial numeric limits MUST be configuration/policy values rather than hard-coded domain constants. Their purpose is to prevent infinite cycling, not to claim that a particular number of Fixes is inherently wrong.
+
+### Error/Decision handoff
+
+Guard termination enters existing typed failure/decision handling rather than inventing a new repair strategy:
+
+~~~text
+Fix cycle
+  -> Convergence Guard
+       CONTINUE
+       or
+       ERROR / DECISION HANDOFF
+         reason:
+           CONVERGENCE_DIVERGING
+           CONVERGENCE_STALLED
+           FIX_CYCLE_LIMIT
+           AI_BLOCKED
+~~~
+
+The handoff SHOULD present the cycle history, ConvergenceVectors/deltas, semantic change classes, validation outcomes and AI assessments. sm-workflow reports facts and policy outcome; it does not choose a new semantic strategy.
+
+### Convergence examples
+
+A healthy sequence may look like:
+
+~~~text
+cycle   source files   external resources   semantic class
+1       8              2                    COMPLEX_LOGIC
+2       5              1                    STANDARD_LOGIC
+3       2              0                    SIMPLE_LOGIC
+4       1              0                    TRIVIAL_COMPILE_FIX
+~~~
+
+A suspicious/diverging sequence may look like:
+
+~~~text
+cycle   source files   external resources   semantic class
+1       4              0                    SIMPLE_LOGIC
+2       9              2                    STANDARD_LOGIC
+3       16             5                    COMPLEX_LOGIC
+~~~
+
+Neither example is judged by one metric alone. The guard evaluates the vector/trend, while the semantic class remains AI-provided evidence and the cycle bound guarantees termination.
+
 ## Failure and retry
 
 FAILED/ERROR/TIMEOUT are separate from duration warnings. FAILED means tests ran and validation was negative; ERROR means provider/infrastructure could not produce a valid result; TIMEOUT means explicit timeout policy was reached; duration warning means execution completed but cost exceeded expectation.
@@ -383,7 +544,8 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 9. bounded Human -> AI review request using warning + receipts.
 10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
 11. Slice FocusedValidationProfile with standard reference/composition/Slice-specific definition and planning-time admission.
-12. executable specifications.
+12. Fix Convergence Guard with deterministic ConvergenceVector, AI semantic change classification/self-assessment, trend policy, and bounded cycle limits.
+13. executable specifications.
 
 ## Executable specifications
 
@@ -412,6 +574,13 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 23. Slice not covered by standard suites admits a Slice-specific focused definition during planning.
 24. TEST_FIX reruns the same admitted Slice FocusedValidationProfile and cannot silently broaden it.
 25. evidence that the focused profile itself is insufficient creates an explicit validation-design/plan revision rather than ad-hoc test expansion.
+26. gradually contracting vectors across several Fix cycles are allowed beyond the soft limit when policy classifies SLOW_CONVERGENCE.
+27. sustained expansion of source/external-resource surface reaches DIVERGING and stops before hard limit.
+28. AI BLOCKED stops automatic cycling immediately and enters typed error/decision handling.
+29. favorable convergence still stops at the configured hard cycle limit.
+30. three physical files with independent file-local changes may report STANDARD_LOGIC; file count alone does not force COMPLEX_LOGIC.
+31. one coordinated semantic change spanning multiple files reports COMPLEX_LOGIC.
+32. AI semantic class/self-assessment is recorded separately from deterministic ConvergenceVector and cannot override deterministic policy except explicit BLOCKED.
 
 ## Non-goals
 
