@@ -126,3 +126,43 @@ The execution harness resolves the requirements against current execution capabi
 For example, with a Sol/high parent: TRIVIAL implementation is INLINE on the current parent even if normal Coding mapping would prefer another profile; PROGRAMMING mapped to Luna/high is delegated to Luna/high when not on the trivial fast path; bounded Sol/high implementation may be INLINE when the current parent satisfies it; independent Sol/high review is delegated to a separate Sol/high worker despite matching model/effort.
 
 This keeps three questions separate: the Skill classifies the work, sm-workflow decides logical execution requirements, and the harness chooses the concrete execution provider.
+
+
+## Local-first judgment and semantic execution policy
+
+Judgment and ordinary semantic implementation are eligible for local execution when their resolved ExecutionRequirement can be satisfied by an admitted local provider. Local execution is a Provider Selection policy, not Workflow semantics and not a weakening of validation, review, Admission, independence, or evidence requirements.
+
+### Local-first Judgment
+
+Bounded AI Judgment SHOULD be designed as a narrow typed decision whenever practical. A representative case is classification of deterministic compiler/test evidence before TEST_FIX execution:
+
+~~~text
+deterministic failure evidence
+  -> deterministic pattern/rule classification where sufficient
+  -> local AI Judgment for unresolved semantic classification
+  -> abstract reasoning requirement
+  -> TEST_FIX WorkOrder
+  -> provider selection
+~~~
+
+The Judgment result should be structured and bounded, conceptually including failure category, required abstract ReasoningLevel, confidence, and rationale. Judgment does not perform the Fix and does not select a named model/provider. Low confidence, an unsupported category, or a requirement beyond local capability may resolve to a stronger provider through normal provider-selection policy.
+
+Compile diagnostics are an important initial driver because they are deterministic evidence and many cases can be cheaply classified before AI is used. Error count alone MUST NOT determine reasoning depth: many diagnostics may share one root cause, while one diagnostic may expose a deep type/API/design problem.
+
+### Local-first implementation target
+
+The provider policy SHOULD treat local execution as a first-class candidate not only for ROUTINE work but also for STANDARD implementation and bounded TEST_FIX when measured capability supports it. DEEP/CRITICAL work, independent review, low-confidence Judgment, or failed local attempts may resolve/escalate to stronger providers according to policy.
+
+This is a target policy rather than an assumption that every STANDARD task is locally solvable. Routing SHOULD become evidence-driven using execution outcomes such as compile/test/review success, retries, elapsed time, cost, and escalation. sm-workflow/corpus/experiment integration may later compare local models and cloud providers against the same reproducible work context.
+
+A desired operating shape is:
+
+~~~text
+deterministic rule/operation where sufficient
+  -> local Judgment where semantic classification is needed
+  -> local ROUTINE/STANDARD implementation or bounded FIX where capable
+  -> deterministic validation
+  -> independent review / stronger reasoning / escalation where required
+~~~
+
+The local-first policy MUST remain replaceable/versioned configuration. No named local model, cloud model, or machine capability becomes part of Workflow transition semantics.
