@@ -39,36 +39,67 @@ sm-workflow MUST keep admitted TestSuite definitions as project development asse
 
 A human decides whether a warning deserves engineering work and may request AI review. A warning MUST NOT silently rewrite a suite, suppress itself, or authorize AI repair.
 
-## TestSuite model
+## CNCF Validation/Test Metadata ABI consumer model
 
-Minimum semantics:
+The earlier managed-definition-file model is superseded. sm-workflow does not own a separate TestSuite registry as the normal source of truth. Executable specification/test operations carry CNCF Validation/Test Metadata ABI annotations/properties, and sm-workflow resolves suites as deterministic queries over the CNCF-normalized operation metadata.
 
 ~~~text
-TestSuiteDefinition
-  id: TestSuiteId
-  purpose: TestSuitePurpose
-  revision: TestSuiteRevision
-  operation: TestOperationRef
-  expectedDuration: Duration?
-  warningThreshold: Duration?
-  durationClass: NORMAL | LONG_RUNNING
-  rationale: String?
+Executable Specification/Test Operation
+  + CNCF Validation Metadata
+      purposes: Set[SMOKE|FOCUSED|ADMISSION|FULL|HEAVY]
+      features
+      expectedDuration?
+      durationClass
+      executionRequirements
+        |
+        v
+CNCF resolved metadata discovery
+        |
+        v
+sm-workflow selection + deterministic execution + runtime evidence
 ~~~
 
-Initial purposes SHOULD reflect Workflow needs rather than build-tool vocabulary:
+The same operation may participate in several purposes. Purpose membership is explicit and does not imply strict subset nesting.
 
-- SMOKE: cheapest registered post-implementation validity check; normally seconds to tens of seconds.
-- FOCUSED: bounded functional/regression validation for the changed area; normally tens of seconds where practical.
-- ADMISSION: routine Candidate acceptance validation; target at or below 60 seconds by default.
-- FULL: time-bounded comprehensive project regression; target at or below 10 minutes by default.
-- HEAVY: completeness-oriented exhaustive/high-cost validation; hours are acceptable when justified.
+Class/specification-level metadata provides defaults/shared context; operation/scenario metadata is the primary selection/execution granularity. sm-workflow consumes CNCF's resolved merge semantics and MUST NOT independently reinterpret annotation inheritance.
 
-A suite is a logical validation asset, not synonymous with one shell command.
+No separate YAML/registry is required to add an ordinary test to SMOKE/ADMISSION/FULL/HEAVY: changing the source annotation/property changes the declared Test Architecture and is itself a reviewable Candidate change.
+
+### Selection
+
+Project-level queries:
+
+- SMOKE = resolved operations containing SMOKE purpose.
+- ADMISSION = resolved operations containing ADMISSION purpose.
+- FULL = resolved operations containing FULL purpose.
+- HEAVY = resolved operations containing HEAVY purpose and invoked only by explicit policy/request.
+
+FOCUSED is Slice-scoped:
+
+- Slice planning selects one or more feature identities;
+- runtime selects resolved operations containing FOCUSED and matching the admitted Slice feature selection;
+- if a Slice needs a genuinely unique feature boundary, that boundary is represented as admitted Slice/Test Architecture metadata rather than a free-form post-implementation list of test names.
+
+This replaces the earlier standard-focused-suite registry concept. Stable feature tags themselves provide the reusable focused grouping.
+
+### Runtime policy remains sm-workflow-owned
+
+CNCF defines metadata semantics, not development policy. sm-workflow owns the engineering targets and guards:
+
+- ADMISSION target <= 1 minute;
+- FULL target <= 10 minutes;
+- HEAVY may take hours;
+- actual execution duration, result, warning and Candidate freshness are runtime Evidence.
+
+Expected-duration declarations from the ABI may refine operation-level anomaly detection. Runtime observations never write themselves back into source annotations automatically.
+
+### Metadata changes
+
+Purpose/feature changes are Test Architecture changes. TEST_FIX/REVIEW_FIX MUST NOT silently remove ADMISSION/FOCUSED coverage merely to make validation pass or run faster. Such metadata changes remain normal Candidate changes subject to diff/review/admission and are visible to cbd-support static analysis.
 
 ### Operation binding
 
-TestSuiteDefinition MUST reference an admitted typed test operation/provider configuration. It MUST NOT carry arbitrary executable or free-form argv supplied by AI. Existing deterministic-operation rules remain in force. Provider implementation may use sbt, Gradle, Flutter, npm, etc. below this semantic model.
-
+The discovered executable specification/test operation MUST ultimately bind to an admitted typed deterministic execution mechanism. Metadata MUST NOT introduce arbitrary executable/free-form argv. Existing deterministic-operation/provider rules remain authoritative.
 
 ## Purpose-specific suite construction and time budgets
 
@@ -138,34 +169,7 @@ This distinction is normative. sm-workflow MUST NOT model one ever-growing proje
 
 ### Standard focused feature suites
 
-A project SHOULD maintain reusable standard focused suites for stable functional areas, for example conceptually:
-
-~~~text
-focused.goal-phase
-focused.repository-sync
-focused.candidate-admission
-focused.execution-routing
-focused.test-suite-management
-~~~
-
-These are admitted reusable project assets designed by AI and maintained as the feature/test architecture evolves.
-
-During Slice planning, AI MUST select the focused validation profile as part of the Slice acceptance design. If one standard feature suite covers the Slice, the Slice records only that logical suite reference. Runtime then executes the admitted reference deterministically; it does not ask AI to rediscover test classes after implementation.
-
-### Composition and Slice-specific focused suites
-
-If one standard feature suite is insufficient, prefer composition of admitted standard suites. A Slice may conceptually declare:
-
-~~~text
-focusedValidation:
-  suites:
-    - focused.goal-phase
-    - focused.candidate-admission
-~~~
-
-If composition still cannot express the required validation precisely, AI MAY propose a Slice-specific focused definition. The Slice-specific definition is admitted with the Slice plan and is then immutable for that Slice revision unless the plan itself is revised/admitted.
-
-Where useful, a Slice-specific profile MAY compose standard suites plus a small explicit additional selector rather than duplicating their contents. The implementation representation should preserve logical references and avoid copying large test lists into every Slice.
+Feature tags provide the standard reusable focused grouping. Slice planning selects admitted feature identities; a special Slice may introduce/revise an explicit feature classification as part of its admitted plan rather than create an external suite registry.
 
 ### Planning-time rule
 
@@ -174,11 +178,9 @@ Focused validation is an acceptance-design decision, not a post-implementation i
 ~~~text
 Slice planning
   -> determine changed semantic/functional area
-  -> standard focused suite sufficient?
-       yes -> reference admitted standard suite
-       no  -> compose admitted standard suites
-               -> still insufficient?
-                    yes -> propose/admit Slice-specific focused definition
+  -> existing feature classification sufficient?
+       yes -> select admitted feature identity/identities
+       no  -> propose/admit Slice/Test Architecture feature classification
   -> admit Slice plan including FocusedValidationProfile
   -> implementation
 ~~~
@@ -194,7 +196,7 @@ IMPLEMENTATION
   -> Closing
 ~~~
 
-A TEST_FIX changes the Candidate, not the Slice validation design. It returns through project SMOKE and the same admitted Slice FocusedValidationProfile. If failure evidence demonstrates that the focused profile itself is wrong or insufficient, that is a validation-design gap and requires an explicit Slice plan/TestSuite revision rather than silent test expansion by the fixing AI.
+A TEST_FIX changes the Candidate, not the Slice validation design. It returns through project SMOKE and the same admitted Slice feature selection. If failure evidence demonstrates that the focused profile itself is wrong or insufficient, that is a validation-design gap and requires an explicit Slice plan/TestSuite revision rather than silent test expansion by the fixing AI.
 
 ### Promotion of repeated Slice-specific knowledge
 
@@ -342,7 +344,7 @@ Warnings are durable diagnostic facts. They SHOULD be publishable through Phase 
 
 ## Human -> AI improvement loop
 
-When a human selects a warning for improvement, create a bounded semantic work request containing the current TestSuite definition/revision, relevant receipts, warning facts, bounded test/build context, and the human instruction.
+When a human selects a warning for improvement, create a bounded semantic work request containing the current resolved Validation Metadata identity/revision, relevant receipts, warning facts, bounded test/build context, and the human instruction.
 
 AI may return no change with rationale, a TestSuite revision, a test implementation change, or both. Normal candidate/review/admission applies to code changes. A proposed TestSuite revision separately passes TestSuite registration admission. Subsequent executions provide new evidence; sm-workflow MUST NOT claim improvement until observation supports it.
 
@@ -610,17 +612,17 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 
 ## Initial implementation slice
 
-1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including fixed project SMOKE/ADMISSION/FULL, optional project HEAVY, and reusable FOCUSED feature suites.
-2. Project resource loading and schema validation.
+1. Consume CNCF Validation/Test Metadata ABI and resolved operation discovery for SMOKE/FOCUSED/ADMISSION/FULL/HEAVY.
+2. Bind discovered operations to typed deterministic execution.
 3. typed RunTestSuite deterministic operation/provider binding.
 4. TestSuiteExecutionReceipt with measured duration.
 5. ADMISSION default 60-second TestSuiteDurationWarning.
 6. LONG_RUNNING + rationale + expected/threshold semantics.
 7. warning persistence/query/presentation hook.
-8. typed registration/revision path for AI-proposed definitions.
+8. metadata annotation/property change path through normal Candidate/review/admission.
 9. bounded Human -> AI review request using warning + receipts.
 10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
-11. Slice FocusedValidationProfile with standard reference/composition/Slice-specific definition and planning-time admission.
+11. Slice focused feature selection with planning-time admission and CNCF metadata query.
 12. Fix Convergence Guard with deterministic ConvergenceVector, AI semantic change classification/self-assessment, trend policy, and bounded cycle limits.
 13. FixIssue ledger and deterministic FixResult reconciliation, including zero-fix stop and reopened/new issue metrics.
 14. bounded re-evaluation narrowing and fresh-evidence reuse on resume.
@@ -634,8 +636,8 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 4. justified LONG_RUNNING admission suite expected 180s, actual 120s -> no default 60s warning.
 5. LONG_RUNNING exceeds registered threshold -> duration warning.
 6. same suite executes twice -> two receipts; no hidden deduplication or invented retry.
-7. revision N replaced by N+1 -> old receipts remain bound to N; new execution binds to N+1.
-8. AI proposal with arbitrary command injection -> registration rejected.
+7. metadata/test revision N replaced by N+1 -> old receipts remain attributable to N and new execution uses N+1.
+8. validation metadata cannot inject arbitrary commands; execution remains typed/provider-bound.
 9. human-selected warning can form bounded AI improvement request; warning alone does not trigger AI work.
 10. code change after PASSED evidence follows existing Candidate-Admission freshness policy.
 11. SMOKE failure -> TEST_FIX; successful fix restarts at SMOKE before FOCUSED.
@@ -648,11 +650,11 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 18. explicitly justified FULL exception above 10 minutes uses its registered expectation.
 19. multi-hour exhaustive validation is registered as HEAVY and does not inherit ADMISSION/FULL time targets.
 20. HEAVY is not automatically inserted into the normal implementation validation loop.
-21. Slice using one standard focused feature suite records/reference-executes it without post-implementation AI selection.
-22. Slice requiring two standard focused areas composes both logical suite references.
-23. Slice not covered by standard suites admits a Slice-specific focused definition during planning.
-24. TEST_FIX reruns the same admitted Slice FocusedValidationProfile and cannot silently broaden it.
-25. evidence that the focused profile itself is insufficient creates an explicit validation-design/plan revision rather than ad-hoc test expansion.
+21. Slice selects one feature tag and executes matching FOCUSED operations without post-implementation AI test selection.
+22. Slice selects two feature identities and executes the union of matching admitted FOCUSED operations.
+23. Slice not covered by existing feature classification admits a Test Architecture/feature metadata revision during planning.
+24. TEST_FIX reruns the same admitted Slice feature selection and cannot silently broaden/reduce metadata coverage.
+25. evidence that focused feature classification is insufficient creates an explicit validation-metadata/plan revision rather than ad-hoc test expansion.
 26. gradually contracting vectors across several Fix cycles are allowed beyond the soft limit when policy classifies SLOW_CONVERGENCE.
 27. sustained expansion of source/external-resource surface reaches DIVERGING and stops before hard limit.
 28. AI BLOCKED stops automatic cycling immediately and enters typed error/decision handling.
