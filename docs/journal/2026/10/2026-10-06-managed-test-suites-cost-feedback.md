@@ -117,3 +117,16 @@ FULL is explicitly defined as time-bounded comprehensive regression, not literal
 HEAVY is the completeness-oriented outer class. It may run for hours and may contain exhaustive combinations, broad E2E/integration matrices, long-running concurrency/performance checks, large-data tests, or multi-toolchain matrices. It is not part of the ordinary implementation loop and is invoked only by explicit Workflow/release/milestone policy or human request.
 
 This creates a useful pressure gradient: routine assurance stays fast, while expensive completeness is preserved rather than deleted. ADMISSION should not become FULL, and FULL should not become HEAVY merely because more tests exist.
+
+
+## Follow-up decision: FOCUSED is Slice-scoped, project suites are fixed
+
+A further distinction is now explicit. SMOKE, ADMISSION and FULL are fixed project-level managed suites. HEAVY is also project-level when defined, but optional and explicitly invoked. FOCUSED is not one global project suite: its concrete validation profile is selected as part of each Slice plan.
+
+The project maintains reusable standard focused suites for functional areas. Slice planning should first reference one standard feature suite, then compose multiple admitted standard suites when necessary, and only then define a Slice-specific focused profile for a case that cannot be expressed cleanly by the standard catalog.
+
+This moves focused-test selection to acceptance design. By the time implementation starts, sm-workflow already knows the exact logical FocusedValidationProfile. When implementation returns, the deterministic path is project SMOKE -> Slice FOCUSED -> AI REVIEW -> project ADMISSION. Codex does not choose individual official tests at that point.
+
+TEST_FIX does not get authority to broaden the focused scope. It revises the Candidate and reruns SMOKE plus the same admitted Slice profile. If test evidence reveals that the profile itself is inadequate, the correct response is an explicit validation-design/Slice-plan revision. This keeps test-selection knowledge reviewable and reusable instead of hiding it inside an agent repair turn.
+
+Repeated Slice-specific profiles should be reviewed for promotion into reusable standard feature suites. Thus recurring AI-discovered validation knowledge gradually becomes deterministic project test architecture.
