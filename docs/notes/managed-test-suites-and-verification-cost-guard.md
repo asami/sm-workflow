@@ -116,6 +116,90 @@ HEAVY     no ordinary upper budget; hours are acceptable
 
 These are engineering targets, not correctness semantics. ADMISSION/FULL budget breach does not by itself turn a passing test into failure. Explicit exceptions are allowed when justified, but recurring excess should remain visible and reviewable rather than becoming accidental normality.
 
+
+## Fixed project suites and Slice-focused validation
+
+The purposes do not all have the same ownership/lifetime.
+
+SMOKE, ADMISSION and FULL are fixed project-level managed suites. HEAVY is also project-level when the project defines it, but it is optional and explicitly invoked. FOCUSED is different: its concrete validation set is resolved for each development Slice.
+
+~~~text
+Project Test Suites
+  SMOKE       fixed
+  ADMISSION   fixed
+  FULL        fixed
+  HEAVY       fixed/optional
+
+Slice Validation
+  FOCUSED     resolved per Slice
+~~~
+
+This distinction is normative. sm-workflow MUST NOT model one ever-growing project-global FOCUSED suite and run it for every Slice.
+
+### Standard focused feature suites
+
+A project SHOULD maintain reusable standard focused suites for stable functional areas, for example conceptually:
+
+~~~text
+focused.goal-phase
+focused.repository-sync
+focused.candidate-admission
+focused.execution-routing
+focused.test-suite-management
+~~~
+
+These are admitted reusable project assets designed by AI and maintained as the feature/test architecture evolves.
+
+During Slice planning, AI MUST select the focused validation profile as part of the Slice acceptance design. If one standard feature suite covers the Slice, the Slice records only that logical suite reference. Runtime then executes the admitted reference deterministically; it does not ask AI to rediscover test classes after implementation.
+
+### Composition and Slice-specific focused suites
+
+If one standard feature suite is insufficient, prefer composition of admitted standard suites. A Slice may conceptually declare:
+
+~~~text
+focusedValidation:
+  suites:
+    - focused.goal-phase
+    - focused.candidate-admission
+~~~
+
+If composition still cannot express the required validation precisely, AI MAY propose a Slice-specific focused definition. The Slice-specific definition is admitted with the Slice plan and is then immutable for that Slice revision unless the plan itself is revised/admitted.
+
+Where useful, a Slice-specific profile MAY compose standard suites plus a small explicit additional selector rather than duplicating their contents. The implementation representation should preserve logical references and avoid copying large test lists into every Slice.
+
+### Planning-time rule
+
+Focused validation is an acceptance-design decision, not a post-implementation improvisation:
+
+~~~text
+Slice planning
+  -> determine changed semantic/functional area
+  -> standard focused suite sufficient?
+       yes -> reference admitted standard suite
+       no  -> compose admitted standard suites
+               -> still insufficient?
+                    yes -> propose/admit Slice-specific focused definition
+  -> admit Slice plan including FocusedValidationProfile
+  -> implementation
+~~~
+
+After implementation the normal path is therefore deterministic:
+
+~~~text
+IMPLEMENTATION
+  -> fixed project SMOKE
+  -> Slice FocusedValidationProfile
+  -> semantic REVIEW
+  -> fixed project ADMISSION
+  -> Closing
+~~~
+
+A TEST_FIX changes the Candidate, not the Slice validation design. It returns through project SMOKE and the same admitted Slice FocusedValidationProfile. If failure evidence demonstrates that the focused profile itself is wrong or insufficient, that is a validation-design gap and requires an explicit Slice plan/TestSuite revision rather than silent test expansion by the fixing AI.
+
+### Promotion of repeated Slice-specific knowledge
+
+Repeatedly similar Slice-specific focused definitions are a signal that a reusable feature suite is missing. Human/AI review may promote the recurring pattern into a standard focused feature suite. This follows the general sm-workflow progression from semantic discovery to admitted reusable deterministic knowledge.
+
 ## Registration and revision
 
 AI-produced TestSuite content is a candidate, not runtime authority. Registration MUST validate schema/id/purpose, validate admitted operation/provider binding, reject arbitrary command injection, create a distinguishable definition revision, and preserve provenance so execution evidence identifies the exact definition revision.
@@ -288,7 +372,7 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 
 ## Initial implementation slice
 
-1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including SMOKE/FOCUSED/ADMISSION/FULL/HEAVY and standard time-budget policy.
+1. TestSuiteDefinition/TestSuitePurpose/TestSuiteRevision Value Objects including fixed project SMOKE/ADMISSION/FULL, optional project HEAVY, and reusable FOCUSED feature suites.
 2. Project resource loading and schema validation.
 3. typed RunTestSuite deterministic operation/provider binding.
 4. TestSuiteExecutionReceipt with measured duration.
@@ -298,7 +382,8 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 8. typed registration/revision path for AI-proposed definitions.
 9. bounded Human -> AI review request using warning + receipts.
 10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
-11. executable specifications.
+11. Slice FocusedValidationProfile with standard reference/composition/Slice-specific definition and planning-time admission.
+12. executable specifications.
 
 ## Executable specifications
 
@@ -322,6 +407,11 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 18. explicitly justified FULL exception above 10 minutes uses its registered expectation.
 19. multi-hour exhaustive validation is registered as HEAVY and does not inherit ADMISSION/FULL time targets.
 20. HEAVY is not automatically inserted into the normal implementation validation loop.
+21. Slice using one standard focused feature suite records/reference-executes it without post-implementation AI selection.
+22. Slice requiring two standard focused areas composes both logical suite references.
+23. Slice not covered by standard suites admits a Slice-specific focused definition during planning.
+24. TEST_FIX reruns the same admitted Slice FocusedValidationProfile and cannot silently broaden it.
+25. evidence that the focused profile itself is insufficient creates an explicit validation-design/plan revision rather than ad-hoc test expansion.
 
 ## Non-goals
 
