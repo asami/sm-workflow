@@ -545,9 +545,9 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
 11. Slice FocusedValidationProfile with standard reference/composition/Slice-specific definition and planning-time admission.
 12. Fix Convergence Guard with deterministic ConvergenceVector, AI semantic change classification/self-assessment, trend policy, and bounded cycle limits.
-13. executable specifications.
+13. acceptance scenarios.
 
-## Executable specifications
+## Acceptance scenarios
 
 1. ADMISSION suite 20s -> PASSED, no duration warning.
 2. ADMISSION NORMAL suite 61s -> PASSED plus duration warning; duration alone does not reject Admission.
