@@ -70,3 +70,18 @@ Demonstrate at least:
 - Treating concrete model/provider names as Workflow guards.
 - Building a universal autonomous-agent framework.
 - Making context-budget optimization a prerequisite for Phase 5 practical use.
+
+
+## Post-Phase-6 provider candidate: OpenCode
+
+OpenCode is a concrete provider candidate for a successor Phase after Phase 6 closes. It is intentionally NOT a Phase 6 completion requirement.
+
+Phase 6 should establish a provider-neutral contract strong enough that a later OpenCode adapter can be added without changing Workflow definitions or semantic WorkClassification. The later adapter can be evaluated as a driver of the generic ExecutionRequirement -> Provider Selection -> ExecutionEvidence boundary.
+
+The main expected value is a common execution gateway to cloud and local/self-hosted models, including Ollama/LM Studio-class environments, without making sm-workflow itself implement each model/provider protocol. Codex remains an independent provider; OpenCode is not intended to replace or become the semantic identity of coding work.
+
+A successor implementation should study VirtusLab Orca's OpenCode backend as a reference for server/session lifecycle, model selection, streaming/result handling, tool execution, local/self-hosted provider use, and execution/cost evidence. Orca is reference evidence only; sm-workflow/CNCF contracts remain authoritative.
+
+The Workflow boundary must remain logical. OpenCode/provider/model/reasoning-variant identifiers belong to environment/provider resolution and ExecutionEvidence, not Workflow guards or application state transitions.
+
+Phase 6 therefore closes once generic provider replacement is proven; it must not remain open waiting for OpenCode/Ollama integration.
