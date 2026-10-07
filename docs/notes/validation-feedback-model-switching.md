@@ -11,12 +11,15 @@ A provider may voluntarily DECLINE work, but self-awareness is not required for 
 ~~~text
 WorkOrder
   -> reason/implement
-  -> deterministic validation
-  -> feedback
-  -> repair
-  -> validation
-  -> converge | re-route | blocked
+  -> lightweight convergence observation
+       -> repair while converging
+       -> early re-route if stuck/diverging
+       -> candidate
+            -> CAR lint when required
+                 -> clean | bounded repair | re-route
 ~~~
+
+CAR lint is intentionally outside the ordinary inner repair loop because it is comparatively expensive. Compile, targeted tests, typed diagnostics, and repair history answer the cheap question "is this attempt converging?" first. CAR lint answers the more expensive question "does this plausible candidate conform to the Textus architecture/programming model?"
 
 Re-routing preserves semantic work identity. Provider/model identity is execution policy, not Workflow semantics.
 
@@ -36,7 +39,7 @@ This is analogous to human application programmers: they need not reconstruct th
 
 ## Convergence and switching
 
-The first implementation should use explicit, explainable signals: recurring material findings, lack of reduction, oscillation, or introduction of equally serious architectural violations.
+The first implementation should use explicit, explainable signals. Lightweight signals include recurring compile/test diagnostics, lack of reduction, and repair oscillation. CAR lint is evaluated later at a candidate/gate point; deep, repeated, or worsening architectural findings can then trigger escalation.
 
 A retry budget is policy. When exhausted or non-convergence is detected, Provider Routing selects another admitted provider. This can be another local model or a stronger hosted model.
 
