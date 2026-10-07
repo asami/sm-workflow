@@ -9,7 +9,7 @@ Related: CAR lint, deterministic validation, Provider Routing, textus-experiment
 
 Extend Provider Routing from provider-declared DECLINED escalation into validation-observed model switching.
 
-sm-workflow MUST be able to execute a bounded correction loop in which deterministic feedback from compile, tests, and CAR lint is returned to the current reasoning provider, and then re-route the same semantic work to another admitted provider/model when the observed correction process is not converging.
+sm-workflow MUST execute a bounded, cost-aware correction loop. Lightweight compile/targeted-test/diagnostic/repair-history evidence is used first to observe convergence. CAR lint is a heavier architectural/Textus-conformance gate and MUST NOT run on every inner-loop repair merely to check progress. Re-route when lightweight evidence already shows non-convergence, or when a later CAR lint result shows that the candidate is architecturally unsuitable.
 
 The purpose is to expand the practical range of inexpensive/local models without requiring them to have perfect pretrained knowledge of Textus, OFP, or project architecture.
 
@@ -24,34 +24,32 @@ BLOCKED remains distinct: it represents missing authority/input/design/context w
 
 ## Feedback loop
 
+Phase 9 uses two validation tiers.
+
 ~~~text
 Semantic WorkOrder
   -> Provider A
-  -> candidate implementation
-  -> compile / test / CAR lint
-       PASS -> continue normal Review / Admission
-       actionable findings
-         -> feedback to Provider A
-         -> repair attempt
-         -> deterministic validation
-              converging -> bounded retry with Provider A
-              non-converging -> Provider Routing
-                                  -> Provider B
-                                  -> same semantic work + relevant evidence/history
-                                  -> validate again
+  -> implementation / repair
+  -> lightweight convergence loop
+       compile / targeted test / typed diagnostics / repair history
+       +-> stuck/diverging -> early Provider Routing
+       +-> converging -> bounded repair with Provider A
+       +-> candidate formed
+             -> CAR lint when required by policy/gate
+                  clean -> normal Review / Admission
+                  repairable -> bounded feedback to Provider A
+                  deep/repeated -> Provider Routing -> Provider B
 ~~~
 
-The loop MUST be bounded. It MUST NOT become an unbounded "retry until green" mechanism.
+The loop MUST be bounded. Expensive verification follows the existing verification-cost-guard principle and MUST NOT be run merely as a precautionary progress probe.
 
-## Convergence observations
+## Lightweight convergence observations
 
 Phase 9 should support deterministic observations sufficient to identify at least:
 
-- the same material CAR lint finding recurring after repair;
 - compile/test failure class recurring without meaningful progress;
 - material finding count/severity not improving across bounded attempts;
 - repair oscillation where previously resolved findings repeatedly return;
-- a repair introducing new architectural violations of comparable or greater severity;
 - explicit provider DECLINED;
 - successful deterministic convergence.
 
@@ -77,6 +75,12 @@ Provider selection remains governed by the provider-neutral ExecutionRequirement
 
 A routing policy MAY prefer another local provider before a stronger hosted provider when measured capability and cost justify it.
 
+## CAR lint gate and correction feedback
+
+CAR lint is heavier than ordinary compile/targeted-test feedback. It SHOULD normally run after a plausible candidate has formed, at an architectural gate, or when policy specifically requests it. If lightweight evidence is already clearly abnormal, sm-workflow MAY escalate before paying the CAR lint cost.
+
+CAR lint results then drive a second decision: clean -> continue; local/repairable -> bounded same-provider repair; deep/severe/repeated or poorly converging findings -> re-route.
+
 ## CAR lint as correction feedback
 
 CAR lint is treated as a machine-readable architectural/Textus-conformance feedback source, alongside compiler and test evidence.
@@ -93,8 +97,10 @@ CAR lint findings SHOULD carry enough typed information for a reasoning provider
 
 Initial routing policy MUST be explicit and versioned. Representative policy:
 
-- first actionable validation failure -> return feedback to the same provider;
-- repeated equivalent material finding or bounded non-improvement -> re-route;
+- first lightweight actionable failure -> normally return feedback to the same provider;
+- lightweight stuck/diverging/oscillating behavior -> re-route early without requiring CAR lint;
+- after candidate formation, run CAR lint only where required by gate/policy;
+- repairable CAR lint findings -> bounded same-provider repair; repeated/deep findings -> re-route;
 - architecture/deep-model findings MAY route directly to a stronger provider;
 - DECLINED -> normal next-provider selection;
 - BLOCKED -> typed decision/human/upstream handoff rather than blind model escalation.
@@ -121,16 +127,18 @@ This evidence is suitable for textus-corpus/textus-experiment replay and later r
 
 Demonstrate at least:
 
-1. local provider produces a CAR lint finding, repairs it, and converges without model switching;
-2. the same material lint finding recurs and triggers observed re-routing;
-3. compile/test evidence improves across retries and therefore remains on the same provider within the configured bound;
-4. repair oscillation triggers re-routing;
-5. provider DECLINED triggers voluntary escalation through the same routing framework;
-6. BLOCKED does not cause blind stronger-model retry;
-7. Provider A -> Provider B preserves semantic WorkOrder identity and validation history;
-8. a second local provider can be selected before a stronger hosted provider when policy admits it;
-9. bounded attempts terminate with an explicit unresolved outcome when no admitted provider converges;
-10. no named model/provider is embedded in Workflow transition semantics.
+1. local provider converges through compile/targeted-test feedback without running CAR lint on every repair;
+2. lightweight evidence clearly diverges and triggers early re-routing before CAR lint;
+3. compile/test evidence improves across retries and remains on the same provider within the configured bound;
+4. a candidate reaches CAR lint, receives a repairable finding, repairs it, and converges;
+5. a deep or repeated CAR lint finding triggers re-routing;
+6. repair oscillation triggers re-routing;
+7. provider DECLINED triggers voluntary escalation through the same routing framework;
+8. BLOCKED does not cause blind stronger-model retry;
+9. Provider A -> Provider B preserves semantic WorkOrder identity and validation history;
+10. a second local provider can be selected before a stronger hosted provider when policy admits it;
+11. bounded attempts terminate with an explicit unresolved outcome when no admitted provider converges;
+12. no named model/provider is embedded in Workflow transition semantics.
 
 ## Completion
 
