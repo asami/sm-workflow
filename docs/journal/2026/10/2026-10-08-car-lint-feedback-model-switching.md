@@ -52,3 +52,23 @@ This ordering keeps provider integration separate from convergence policy.
 Attempt history should be retained for replay through textus-corpus/textus-experiment. Important comparisons include raw local, local + feedback, local + repeated repair, local-to-local switching, and local-to-strong escalation.
 
 The resulting evidence can later improve versioned routing policy, but runtime routing must not autonomously rewrite policy from recent outcomes.
+
+
+## Verification-cost refinement
+
+CAR lint is comparatively heavy, so it is not part of every inner repair iteration.
+
+~~~text
+implementation / repair
+  -> lightweight convergence observation
+       compile / targeted tests / diagnostics / repair history
+       -> stuck or diverging: early escalation
+       -> converging: continue bounded repair
+       -> candidate formed
+            -> CAR lint when required
+                 -> clean: continue
+                 -> repairable: bounded same-model feedback
+                 -> deep/repeated: escalation
+~~~
+
+Observed escalation can therefore happen before CAR lint when the execution trajectory is already abnormal, or after CAR lint when architectural/Textus-conformance evidence shows that a different reasoning model is appropriate. This follows the verification-cost-guard principle: expensive validation is not a precautionary progress probe.
