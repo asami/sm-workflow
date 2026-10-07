@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "sm-workflow.split-phase-source-snapshot.v1",
+  "sourceSnapshotIdentity": "snapshot-prose",
+  "sourcePhaseIdentity": "78",
+  "sourceAuthorityReference": "source-authority-1",
+  "revision": "phase-78-r1",
+  "orderedUnfinishedItems": ["work-a"],
+  "occupiedPhaseIdentities": ["78"],
+  "phaseDocumentSha256": "982c2261b918573efa5b514a952d47c11335971b9d303607d86c10a503d278e9"
+}

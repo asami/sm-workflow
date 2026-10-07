@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "sm-workflow.split-phase-cost-evidence.v1",
+  "sourceSnapshotIdentity": "snapshot-prose",
+  "sourceSnapshotDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sourcePhaseIdentity": "78",
+  "sourceAuthorityReference": "source-authority-1",
+  "policy": {
+    "version": "cost-fixture-v1",
+    "expensiveProfile": "expensive",
+    "lowerCostProfile": "lower-cost",
+    "expensiveUnitsPerMinute": 2,
+    "lowerCostUnitsPerMinute": 1,
+    "materialSavingThresholdUnits": 300
+  },
+  "itemDemands": [
+    {"identity": "work-a", "demand": "SettledExecution"}
+  ]
+}

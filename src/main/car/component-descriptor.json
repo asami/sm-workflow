@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 3,
+  "component": {
+    "namespace": "org.simplemodeling.textus",
+    "id": "SmWorkflow",
+    "version": "0.1.0-SNAPSHOT"
+  }
+}

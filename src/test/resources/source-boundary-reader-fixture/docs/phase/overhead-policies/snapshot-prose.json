@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "sm-workflow.split-phase-overhead-policy.v1",
+  "sourceSnapshotIdentity": "snapshot-prose",
+  "sourceSnapshotDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sourcePhaseIdentity": "78",
+  "sourceAuthorityReference": "source-authority-1",
+  "policy": {
+    "version": "overhead-fixture-v1",
+    "perChildSetupUnits": 1,
+    "perHandoffUnits": 0,
+    "perValidationRunUnits": 10,
+    "perReviewUnits": 1,
+    "perCommitUnits": 1
+  }
+}

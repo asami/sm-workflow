@@ -1,0 +1,18 @@
+expose:
+  sm-workflow.goal-phase-workflow.start-goal-phase: protected
+  sm-workflow.goal-phase-workflow.get-workflow-status: public
+form:
+  sm-workflow.goal-phase-workflow.start-goal-phase:
+    enabled: true
+    successRedirect: /web/${component}/admin/entities/workflow-run/${result.id}
+    stayOnError: true
+    controls:
+      description:
+        type: textarea
+  sm-workflow.goal-phase-workflow.get-workflow-status:
+    enabled: true
+    successRedirect: /web/${component}/admin/entities/workflow-run
+    stayOnError: true
+admin:
+  entity.workflow-run:
+    totalCount: optional

@@ -1,0 +1,4402 @@
+{
+  "format": "cozy.car.abi-manifest.v2",
+  "component": {
+    "namespace": "org.simplemodeling.textus",
+    "id": "SmWorkflow",
+    "version": "0.1.0-SNAPSHOT"
+  },
+  "abi": {
+    "version": 1,
+    "exports": {
+      "components": [
+        {
+          "namespace": "org.simplemodeling.textus",
+          "id": "SmWorkflow"
+        }
+      ],
+      "services": [
+        {
+          "name": "GoalPhaseService"
+        },
+        {
+          "name": "HumanDecisionService"
+        },
+        {
+          "name": "StepRepairService"
+        },
+        {
+          "name": "StepReviewService"
+        },
+        {
+          "name": "SplitPhaseService"
+        },
+        {
+          "name": "RepositoryHumanService"
+        },
+        {
+          "name": "RepositorySyncService"
+        },
+        {
+          "name": "RepositoryConflictService"
+        },
+        {
+          "name": "GoalPhaseImplementationService"
+        },
+        {
+          "name": "GoalPhaseOrderedHumanService"
+        },
+        {
+          "name": "GoalPhaseRepairWorkService"
+        },
+        {
+          "name": "GoalPhaseStepReviewService"
+        },
+        {
+          "name": "GoalPhaseReviewService"
+        },
+        {
+          "name": "MergeReviewService"
+        },
+        {
+          "name": "SplitSemanticService"
+        },
+        {
+          "name": "SplitSemanticAdmissionService"
+        },
+        {
+          "name": "SplitHumanService"
+        }
+      ],
+      "operations": [
+        {
+          "service": "GoalPhaseService",
+          "name": "advanceGoalPhase",
+          "kind": "COMMAND",
+          "input": "GoalPhaseAdvanceCommand",
+          "output": "GoalPhaseAdvanceResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitGoalPhaseWorkResult",
+          "kind": "COMMAND",
+          "input": "GoalPhaseWorkResult",
+          "output": "GoalPhaseWorkSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitGoalPhaseOrderedDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseOrderedDecisionAnswer",
+          "output": "GoalPhaseOrderedDecisionSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "startGoalPhase",
+          "kind": "COMMAND",
+          "input": "GoalPhaseStartCommand",
+          "output": "GoalPhaseStartResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "requestStepClose",
+          "kind": "COMMAND",
+          "input": "StepCloseRequest",
+          "output": "StepCloseResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitStepReview",
+          "kind": "COMMAND",
+          "input": "ReviewStepResult",
+          "output": "StepReviewSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitStepRepair",
+          "kind": "COMMAND",
+          "input": "RepairStepResult",
+          "output": "StepRepairSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "registerGoalPhaseSubmission",
+          "kind": "COMMAND",
+          "input": "GoalPhaseSubmissionRegistrationCommand",
+          "output": "GoalPhaseSubmissionRegistrationResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "registerGoalPhaseArtifacts",
+          "kind": "COMMAND",
+          "input": "GoalPhaseArtifactRegistrationCommand",
+          "output": "GoalPhaseArtifactRegistrationResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "recoverGoalPhaseReview",
+          "kind": "COMMAND",
+          "input": "GoalPhaseReviewRecoveryCommand",
+          "output": "StepReviewSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "prepareGoalPhaseReviewDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseReviewDecisionPreparationCommand",
+          "output": "StepReviewSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "prepareGoalPhaseHumanDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseHumanDecisionPreparationCommand",
+          "output": "GoalPhaseHumanDecisionQuestionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "recordGoalPhaseHumanAnswer",
+          "kind": "COMMAND",
+          "input": "GoalPhaseHumanAnswerCommand",
+          "output": "GoalPhaseHumanAnswerResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitGoalPhaseHumanDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseHumanDecisionAnswer",
+          "output": "GoalPhaseHumanAnswerResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "getGoalPhaseHumanDecisionResult",
+          "kind": "QUERY",
+          "input": "GoalPhaseHumanCompletionQuery",
+          "output": "GoalPhaseHumanCompletionObservation"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "advanceGoalPhaseHumanDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseNativeHumanAdvanceCommand",
+          "output": "GoalPhaseHumanDecisionQuestionResult"
+        },
+        {
+          "service": "HumanDecisionService",
+          "name": "presentGoalPhaseHumanDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseClosureAuthorityInput",
+          "output": "GoalPhaseHumanDecisionAnswer"
+        },
+        {
+          "service": "StepRepairService",
+          "name": "repairStep",
+          "kind": "COMMAND",
+          "input": "StepCloseRequest",
+          "output": "RepairStepResult"
+        },
+        {
+          "service": "StepReviewService",
+          "name": "reviewStep",
+          "kind": "COMMAND",
+          "input": "StepCloseRequest",
+          "output": "ReviewStepResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "startSplitPhase",
+          "kind": "COMMAND",
+          "input": "SplitPhaseStartCommand",
+          "output": "SplitPhaseStartResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "assessSplitProposal",
+          "kind": "COMMAND",
+          "input": "SplitPhaseProposalAssessmentCommand",
+          "output": "SplitPhaseProposalAssessmentResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "previewSplitPhase",
+          "kind": "COMMAND",
+          "input": "SplitPhasePreviewCommand",
+          "output": "SplitPhasePreviewResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "applySplitPhase",
+          "kind": "COMMAND",
+          "input": "SplitPhaseApplyCommand",
+          "output": "SplitPhaseApplyResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "submitSplitSemanticResult",
+          "kind": "COMMAND",
+          "input": "SplitPhaseSemanticResult",
+          "output": "SplitPhaseSemanticSubmissionResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "submitPartitionSemanticResult",
+          "kind": "COMMAND",
+          "input": "SplitPhasePartitionSemanticResult",
+          "output": "SplitPhaseSemanticSubmissionResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "advanceSplitPhase",
+          "kind": "COMMAND",
+          "input": "SplitPhaseAdvanceCommand",
+          "output": "SplitPhaseAdvanceResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "submitHandoffScopeResult",
+          "kind": "COMMAND",
+          "input": "SplitPhaseScopeSemanticResult",
+          "output": "SplitPhaseScopeSubmissionResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "submitReasoningResult",
+          "kind": "COMMAND",
+          "input": "SplitPhaseReasoningSemanticResult",
+          "output": "SplitPhaseReasoningSubmissionResult"
+        },
+        {
+          "service": "SplitPhaseService",
+          "name": "submitSplitHumanDirection",
+          "kind": "COMMAND",
+          "input": "SplitPhaseHumanDirectionAnswer",
+          "output": "SplitPhaseHumanDirectionSubmissionResult"
+        },
+        {
+          "service": "RepositoryHumanService",
+          "name": "presentRepositoryConflictDecision",
+          "kind": "COMMAND",
+          "input": "RepositorySyncHumanConflictRequest",
+          "output": "RepositorySyncHumanConflictAnswer"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "startRepositorySync",
+          "kind": "COMMAND",
+          "input": "RepositorySyncStartCommand",
+          "output": "RepositorySyncStartResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "advanceRepositorySync",
+          "kind": "COMMAND",
+          "input": "RepositorySyncAdvanceCommand",
+          "output": "RepositorySyncAdvanceResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitRepositoryConflicts",
+          "kind": "COMMAND",
+          "input": "RepositorySyncConflictRequest",
+          "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitRepositorySyncWorkResult",
+          "kind": "COMMAND",
+          "input": "RepositorySyncConflictResult",
+          "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitNativeMergeReview",
+          "kind": "COMMAND",
+          "input": "RepositorySyncNativeMergeReviewRequest",
+          "output": "RepositorySyncNativeMergeReviewSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitNativeMergeReview",
+          "kind": "COMMAND",
+          "input": "RepositorySyncNativeMergeReviewResult",
+          "output": "RepositorySyncNativeMergeReviewSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitRepositoryConflictDecision",
+          "kind": "COMMAND",
+          "input": "RepositorySyncHumanConflictAnswer",
+          "output": "RepositorySyncHumanConflictSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "assessRepositoryBoundary",
+          "kind": "COMMAND",
+          "input": "RepositorySyncBoundaryAssessmentCommand",
+          "output": "RepositorySyncBoundaryAssessmentResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitTrackingFetch",
+          "kind": "COMMAND",
+          "input": "RepositorySyncFetchAdmissionCommand",
+          "output": "RepositorySyncFetchAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitLocalPreservation",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPreservationAdmissionCommand",
+          "output": "RepositorySyncPreservationAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitTipRelation",
+          "kind": "COMMAND",
+          "input": "RepositorySyncRelationAdmissionCommand",
+          "output": "RepositorySyncRelationAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitFastForward",
+          "kind": "COMMAND",
+          "input": "RepositorySyncFastForwardAdmissionCommand",
+          "output": "RepositorySyncFastForwardAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitPush",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPushAdmissionCommand",
+          "output": "RepositorySyncPushAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitMerge",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergeAdmissionCommand",
+          "output": "RepositorySyncMergeAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitMergeValidation",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergeValidationAdmissionCommand",
+          "output": "RepositorySyncMergeValidationAdmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "requestMergeReview",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergeReviewRequest",
+          "output": "RepositorySyncMergeReviewSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitMergeReview",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergeReviewResult",
+          "output": "RepositorySyncMergeReviewSubmissionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitConvergence",
+          "kind": "COMMAND",
+          "input": "RepositorySyncConvergenceCommand",
+          "output": "RepositorySyncConvergenceResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "admitMergedConvergence",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergedConvergenceCommand",
+          "output": "RepositorySyncConvergenceResult"
+        },
+        {
+          "service": "RepositoryConflictService",
+          "name": "resolveRepositoryMergeConflicts",
+          "kind": "COMMAND",
+          "input": "RepositorySyncConflictRequest",
+          "output": "RepositorySyncConflictResult"
+        },
+        {
+          "service": "GoalPhaseImplementationService",
+          "name": "implementGoalPhaseStep",
+          "kind": "COMMAND",
+          "input": "GoalPhaseWorkRequest",
+          "output": "GoalPhaseWorkResult"
+        },
+        {
+          "service": "GoalPhaseOrderedHumanService",
+          "name": "presentOrderedGoalDecision",
+          "kind": "COMMAND",
+          "input": "GoalPhaseOrderedDecisionRequest",
+          "output": "GoalPhaseOrderedDecisionAnswer"
+        },
+        {
+          "service": "GoalPhaseRepairWorkService",
+          "name": "repairGoalPhaseStep",
+          "kind": "COMMAND",
+          "input": "GoalPhaseWorkRequest",
+          "output": "GoalPhaseWorkResult"
+        },
+        {
+          "service": "GoalPhaseStepReviewService",
+          "name": "reviewGoalPhaseStep",
+          "kind": "COMMAND",
+          "input": "GoalPhaseWorkRequest",
+          "output": "GoalPhaseWorkResult"
+        },
+        {
+          "service": "GoalPhaseReviewService",
+          "name": "reviewGoalPhase",
+          "kind": "COMMAND",
+          "input": "GoalPhaseWorkRequest",
+          "output": "GoalPhaseWorkResult"
+        },
+        {
+          "service": "MergeReviewService",
+          "name": "reviewNativePendingMerge",
+          "kind": "COMMAND",
+          "input": "RepositorySyncNativeMergeReviewRequest",
+          "output": "RepositorySyncNativeMergeReviewResult"
+        },
+        {
+          "service": "MergeReviewService",
+          "name": "reviewMerge",
+          "kind": "COMMAND",
+          "input": "RepositorySyncMergeReviewRequest",
+          "output": "RepositorySyncMergeReviewResult"
+        },
+        {
+          "service": "SplitSemanticService",
+          "name": "assessNovelSplitWork",
+          "kind": "COMMAND",
+          "input": "SplitPhaseSemanticRequest",
+          "output": "SplitPhaseSemanticResult"
+        },
+        {
+          "service": "SplitSemanticService",
+          "name": "assessPartitionSemanticInputs",
+          "kind": "COMMAND",
+          "input": "SplitPhasePartitionSemanticRequest",
+          "output": "SplitPhasePartitionSemanticResult"
+        },
+        {
+          "service": "SplitSemanticService",
+          "name": "assessHandoffScopes",
+          "kind": "COMMAND",
+          "input": "SplitPhaseScopeSemanticRequest",
+          "output": "SplitPhaseScopeSemanticResult"
+        },
+        {
+          "service": "SplitSemanticService",
+          "name": "assessReasoningDemand",
+          "kind": "COMMAND",
+          "input": "SplitPhaseReasoningSemanticRequest",
+          "output": "SplitPhaseReasoningSemanticResult"
+        },
+        {
+          "service": "SplitSemanticAdmissionService",
+          "name": "admitSemanticInputs",
+          "kind": "COMMAND",
+          "input": "SplitPhaseSemanticRequest",
+          "output": "SplitPhaseSemanticSubmissionResult"
+        },
+        {
+          "service": "SplitSemanticAdmissionService",
+          "name": "admitPartitionSemanticInputs",
+          "kind": "COMMAND",
+          "input": "SplitPhasePartitionSemanticRequest",
+          "output": "SplitPhaseSemanticSubmissionResult"
+        },
+        {
+          "service": "SplitSemanticAdmissionService",
+          "name": "admitHandoffScopes",
+          "kind": "COMMAND",
+          "input": "SplitPhaseScopeSemanticRequest",
+          "output": "SplitPhaseScopeSubmissionResult"
+        },
+        {
+          "service": "SplitSemanticAdmissionService",
+          "name": "admitReasoningDemand",
+          "kind": "COMMAND",
+          "input": "SplitPhaseReasoningSemanticRequest",
+          "output": "SplitPhaseReasoningSubmissionResult"
+        },
+        {
+          "service": "SplitHumanService",
+          "name": "presentSplitHumanDirection",
+          "kind": "COMMAND",
+          "input": "SplitPhaseHumanDirectionRequest",
+          "output": "SplitPhaseHumanDirectionAnswer"
+        },
+        {
+          "service": "SplitHumanService",
+          "name": "presentReasoningHumanDirection",
+          "kind": "COMMAND",
+          "input": "SplitPhaseReasoningHumanDirectionRequest",
+          "output": "SplitPhaseHumanDirectionAnswer"
+        }
+      ],
+      "types": [
+        {
+          "name": "GoalPhaseStartInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "phaseIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStartCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "GoalPhaseStartInput",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStartResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseAdvanceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseAdvanceResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseOrderedStep",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "dependencies",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedPlan",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "phase",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repository",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "steps",
+              "type": "GoalPhaseOrderedStep",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "phaseChecks",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "repairLimit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeSnapshot",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "head",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "tree",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeCommit",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "parent",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "tree",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseClosedStep",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "step",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "commit",
+              "type": "GoalPhaseNativeCommit",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "review",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseRepairDirective",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseWorkRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "generation",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectedPlan",
+              "type": "GoalPhaseOrderedPlan",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalBase",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completed",
+              "type": "GoalPhaseClosedStep",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "candidate",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "checksReceipt",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repairDirective",
+              "type": "GoalPhaseRepairDirective",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "review",
+              "type": "GoalPhaseNativeReviewContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "decisionContext",
+              "type": "GoalPhaseOrderedDecisionContext",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionContext",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "requestingResult",
+              "type": "GoalPhaseWorkResult",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionResultReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "work",
+              "type": "GoalPhaseWorkRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestingResult",
+              "type": "GoalPhaseOrderedDecisionResultReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "result",
+              "type": "GoalPhaseWorkResult",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseNativeCheckReceipt",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "termination",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "exitCode",
+              "type": "int",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "stdout",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stderr",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeReviewContext",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "policyIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "policyRevision",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "changedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "diff",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "GoalPhaseNativeCheckReceipt",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseWorkResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseWorkSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseStartInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourcePhaseIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "invocationMode",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceAuthorityReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceSnapshotReference",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "originGoalPhaseTerminalResultReference",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "proposalReference",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseStartCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "SplitPhaseStartInput",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseStartResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseProposalAssessmentCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "startCommand",
+              "type": "SplitPhaseStartCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseProposalAssessmentResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhasePreviewCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "startCommand",
+              "type": "SplitPhaseStartCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePreviewResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseApplyCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "startCommand",
+              "type": "SplitPhaseStartCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseApplyResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncStartInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingRemote",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteEndpointIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "syncMode",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryPolicyVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncStartCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "RepositorySyncStartInput",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncStartResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncAdvanceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncAdvanceResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncConflictBlob",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "text",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeConflict",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "path",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "base",
+              "type": "RepositorySyncConflictBlob",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "local",
+              "type": "RepositorySyncConflictBlob",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remote",
+              "type": "RepositorySyncConflictBlob",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "mode",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "worktree",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncConflictRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "conflictRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localTip",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteTip",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "conflicts",
+              "type": "RepositorySyncNativeConflict",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncConflictResolution",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "conflictIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "text",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncConflictResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resolutions",
+              "type": "RepositorySyncConflictResolution",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncConflictSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncHumanConflictRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "conflict",
+              "type": "RepositorySyncConflictRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestingResultIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestingResultRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncHumanConflictAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resolutions",
+              "type": "RepositorySyncConflictResolution",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncHumanConflictSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncNativeValidationReceipt",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "termination",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "exitCode",
+              "type": "int",
+              "multiplicity": "0..1",
+              "required": false
+            },
+            {
+              "name": "stdout",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stderr",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeReviewRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validatedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localTip",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteTip",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "indexTree",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "changedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "localDiff",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteDiff",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationPolicyIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationPolicyRevision",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationMode",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationReason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectedChecks",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "checks",
+              "type": "RepositorySyncNativeValidationReceipt",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reviewPolicyIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewPolicyRevision",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeReviewFinding",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "affectedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeReviewResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "RepositorySyncNativeMergeReviewFinding",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeReviewSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncNativeConvergenceResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryRoot",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remote",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "tip",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "tree",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncBoundaryAssessmentCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "startCommand",
+              "type": "RepositorySyncStartCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncBoundaryAssessmentResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncFetchAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "boundaryCommand",
+              "type": "RepositorySyncBoundaryAssessmentCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncFetchAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncPreservationAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "fetchCommand",
+              "type": "RepositorySyncFetchAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPreservationAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncRelationAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "preservationCommand",
+              "type": "RepositorySyncPreservationAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncRelationAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncFastForwardAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "relationCommand",
+              "type": "RepositorySyncRelationAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncFastForwardAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncPushAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "relationCommand",
+              "type": "RepositorySyncRelationAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncMergeAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "relationCommand",
+              "type": "RepositorySyncRelationAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergeAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncMergeValidationAdmissionCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "mergeCommand",
+              "type": "RepositorySyncMergeAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergeValidationAdmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncConvergenceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "relationCommand",
+              "type": "RepositorySyncRelationAdmissionCommand",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "fastForwardIdempotencyKey",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "pushIdempotencyKey",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergedConvergenceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reviewResultIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewResultRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "pushIdempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "expectedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncConvergenceResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "localBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingRemote",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "trackingBranch",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "remoteEndpointIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "tipOid",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "treeOid",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "treeDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidenceDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StepCloseRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "submissionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "programDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "planningDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewEvidence",
+              "type": "StepReviewEvidence",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StepReviewEvidence",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "evidenceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewedRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validUntil",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scope",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "provenance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StepCloseResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "ReviewStepResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewEvidence",
+              "type": "StepReviewEvidence",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StepReviewSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepairStepResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidenceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StepRepairSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncMergeReviewRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "submissionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "candidateRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewPolicyVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "pendingHeadOid",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "pendingTreeOid",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "pendingTreeDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "orderedParents",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "changedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "selectedChecks",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergeReviewFinding",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "affectedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergeReviewResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "candidateRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validUntil",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidenceDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "RepositorySyncMergeReviewFinding",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncMergeReviewSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseRunLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseOrderedDecisionContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseHumanDecisionLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "StepCloseLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseReasoningSemanticContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseHumanDirectionLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseEntryLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseSemanticContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhasePartitionSemanticContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseScopeSemanticContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncMergeReviewContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncNativeConflictContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncNativeMergeReviewContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncHumanConflictContext",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncBoundaryLifecycle",
+          "kind": "statemachine",
+          "fields": []
+        },
+        {
+          "name": "GoalPhaseHumanDecisionPreparationCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reviewContinuationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseClosureAuthorityInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "candidate",
+              "type": "StepCloseRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "candidateRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanAnswerCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reviewContinuationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "questionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choiceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "interactionReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanDecisionChoice",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanDecisionAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choiceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanDecisionQuestion",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "questionSchema",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "intentIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "question",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "GoalPhaseHumanDecisionChoice",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanDecisionQuestionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "question",
+              "type": "GoalPhaseHumanDecisionQuestion",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanDecisionReceipt",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "question",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "answer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentLabel",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "submittingParticipant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "humanParticipant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "occurredAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validUntil",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanAnswerResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "receipt",
+              "type": "GoalPhaseHumanDecisionReceipt",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeHumanAdvanceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "reviewContinuationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanCompletionQuery",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "questionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanCompletionObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "questionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choiceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "humanEvidenceReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completingRevision",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "currentRevision",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuedDecision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReviewDecisionPreparationCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "continuationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReviewRecoveryCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "continuationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactStorageReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "store",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "container",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "key",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "version",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "etag",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "storageRef",
+              "type": "GoalPhaseArtifactStorageReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "byteSize",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "digest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactSelection",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "program",
+              "type": "GoalPhaseArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "planning",
+              "type": "GoalPhaseArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactRegistrationCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "subject",
+              "type": "StepCloseRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "GoalPhaseArtifactSelection",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactRegistrationReceipt",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "typeIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workflowIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workflowRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "submissionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceCandidateRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "GoalPhaseArtifactSelection",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseArtifactRegistrationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "receipt",
+              "type": "GoalPhaseArtifactRegistrationReceipt",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseSubmissionRegistrationCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "registrationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "submissionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "start",
+              "type": "GoalPhaseStartCommand",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseSubmissionRegistrationReceipt",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "typeIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "registrationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "submissionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workflowIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workflowRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseSubmissionRegistrationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "receipt",
+              "type": "GoalPhaseSubmissionRegistrationReceipt",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseNovelWorkItem",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workClassKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryClass",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "normalizedUnits",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "explicitBaselineMinutes",
+              "type": "int",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseSemanticEdge",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "afterItem",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "authorityReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseKnownEstimate",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "workItemIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "minutes",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "method",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseSemanticRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceSnapshotDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposalDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "contextDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceAuthorityReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "unresolvedWorkItems",
+              "type": "SplitPhaseNovelWorkItem",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "unresolvedEdges",
+              "type": "SplitPhaseSemanticEdge",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "knownEstimates",
+              "type": "SplitPhaseKnownEstimate",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseNovelEstimate",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "workItemIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "minimumMinutes",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "maximumMinutes",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "assumptions",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "noveltyBasis",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseBoundaryAssessment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "afterItem",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "authorityReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseSemanticResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceSnapshotDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposalDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "contextDigest",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "novelEstimates",
+              "type": "SplitPhaseNovelEstimate",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "boundaries",
+              "type": "SplitPhaseBoundaryAssessment",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "evidenceReferences",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseSemanticSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhasePartitionContextReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionSourceReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionAuthorityReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionEvidenceReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionWorkItemIdentity",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionClosureCriterion",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionSourceItem",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "closureCriteria",
+              "type": "SplitPhasePartitionClosureCriterion",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "prerequisiteItems",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "authority",
+              "type": "SplitPhasePartitionAuthorityReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionEdge",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "afterItem",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "authority",
+              "type": "SplitPhasePartitionAuthorityReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionNovelWork",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "closure",
+              "type": "SplitPhasePartitionSourceItem",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionUnknownBoundary",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "edge",
+              "type": "SplitPhasePartitionEdge",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "left",
+              "type": "SplitPhasePartitionSourceItem",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "right",
+              "type": "SplitPhasePartitionSourceItem",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionSemanticRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "SplitPhasePartitionSourceReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "items",
+              "type": "SplitPhasePartitionNovelWork",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "boundaries",
+              "type": "SplitPhasePartitionUnknownBoundary",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reply",
+              "type": "SplitPhasePartitionReply",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionResultReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionEstimateReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionHandoffReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionResolutionReferences",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "estimates",
+              "type": "SplitPhasePartitionEstimateReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "handoffs",
+              "type": "SplitPhasePartitionHandoffReference",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionReply",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "result",
+              "type": "SplitPhasePartitionResultReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resolutions",
+              "type": "SplitPhasePartitionResolutionReferences",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionNovelEstimate",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "minimumMinutes",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "maximumMinutes",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "assumptions",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "noveltyBasis",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionBoundaryJudgment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "afterItem",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhasePartitionSemanticResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "estimates",
+              "type": "SplitPhasePartitionNovelEstimate",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "boundaries",
+              "type": "SplitPhasePartitionBoundaryJudgment",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "evidence",
+              "type": "SplitPhasePartitionEvidenceReference",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningDemandReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningUnknownItem",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "closure",
+              "type": "SplitPhasePartitionSourceItem",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningSemanticRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "SplitPhasePartitionSourceReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "authority",
+              "type": "SplitPhasePartitionAuthorityReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "demand",
+              "type": "SplitPhaseReasoningDemandReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "items",
+              "type": "SplitPhaseReasoningUnknownItem",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "result",
+              "type": "SplitPhasePartitionResultReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningAssignment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "classification",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningSemanticResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "assignments",
+              "type": "SplitPhaseReasoningAssignment",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "evidence",
+              "type": "SplitPhasePartitionEvidenceReference",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseScopePhaseIdentity",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseScopeHandoffIdentity",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseScopeHandoff",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "SplitPhaseScopeHandoffIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producingChild",
+              "type": "SplitPhaseScopePhaseIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "receivingChild",
+              "type": "SplitPhaseScopePhaseIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "action",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "output",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "owner",
+              "type": "SplitPhaseScopePhaseIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "invalidationReason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "authority",
+              "type": "SplitPhasePartitionAuthorityReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseUnresolvedHandoffScope",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "original",
+              "type": "SplitPhaseScopeHandoff",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producingItems",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "receivingItems",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseScopeSemanticRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checkpoint",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "SplitPhasePartitionSourceReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "gaps",
+              "type": "SplitPhaseUnresolvedHandoffScope",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "items",
+              "type": "SplitPhasePartitionSourceItem",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "result",
+              "type": "SplitPhasePartitionResultReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseResolvedHandoffScope",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "handoff",
+              "type": "SplitPhaseScopeHandoffIdentity",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producingItems",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "receivingItems",
+              "type": "SplitPhasePartitionWorkItemIdentity",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseScopeSemanticResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checkpoint",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scopes",
+              "type": "SplitPhaseResolvedHandoffScope",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "evidence",
+              "type": "SplitPhasePartitionEvidenceReference",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseScopeSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseAdvanceCommand",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseAdvanceResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "SplitPhaseHumanScopeCheckpointReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseHumanFrontierPayload",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseHumanDirectionRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checkpoint",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scopeCheckpoint",
+              "type": "SplitPhaseHumanScopeCheckpointReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "frontier",
+              "type": "SplitPhaseHumanFrontierPayload",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseReasoningHumanDirectionRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "context",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reasoningWork",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reasoningResult",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "frontier",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseHumanDirectionChoice",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "value",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseHumanDirectionAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "choice",
+              "type": "SplitPhaseHumanDirectionChoice",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resolution",
+              "type": "SplitPhasePartitionContextReference",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "SplitPhaseHumanDirectionSubmissionResult",
+          "kind": "value",
+          "fields": []
+        }
+      ],
+      "entities": []
+    },
+    "dependencies": []
+  }
+}

@@ -370,6 +370,43 @@ deterministic estimate を上書きすることを拒否する。
 
 ### Semantic boundary input
 
+Source Phase の独立 closure と authority は proposal の自己申告から推定しない。
+host は `docs/phase/snapshots/<snapshotIdentity>.json` に
+`sm-workflow.split-phase-source-snapshot.v1` catalog record を登録する。
+catalog の exact UTF-8 bytes の SHA-256 が Start の source snapshot digest となる。
+record は `sourceSnapshotIdentity`、`sourcePhaseIdentity`、
+`sourceAuthorityReference`、`revision`、ordered `orderedUnfinishedItems[]`、
+`occupiedPhaseIdentities[]`、`phaseDocumentSha256` を持つ。Start と proposal
+assessment は同じ catalog path を再読込し、変更された bytes は digest mismatch で拒否する。
+catalog の文書 SHA と source Phase file の実 bytes も毎回照合する。proposal は catalog を
+供給・改変できず、別の snapshot identity を同じ run に継承できない。
+
+Phase 1 の file reader は `docs/phase/phase-<identity>.md` の一つの
+`split-phase-source-boundary.v1` fenced block だけを機械可読な source 契約として読む。
+host-owned snapshot reference は repository root、source snapshot identity/digest、
+Phase identity、authority reference、Phase file の SHA-256 を固定し、reader は実ファイル
+の bytes と照合する。block は `schemaVersion`、`sourcePhaseIdentity`、
+`sourceAuthorityReference`、ordered `items[]`（identity、closureCriteria[]、
+prerequisiteItems[]、authorityReference）、`authorizedHandoffReferences[]` を持つ。
+block がなければ証拠待ちの `WAIT`、宣言された block が不正・重複・stale なら拒否する。
+自然文の Scope/Closure contract から item-to-criterion 対応を補完しない。
+
+```split-phase-source-boundary.v1
+{
+  "schemaVersion": "sm-workflow.split-phase-source-boundary.v1",
+  "sourcePhaseIdentity": "77",
+  "sourceAuthorityReference": "source-authority-1",
+  "items": [
+    {"identity": "work-1", "closureCriteria": ["close-work-1"], "prerequisiteItems": [], "authorityReference": "source-authority-1"}
+  ],
+  "authorizedHandoffReferences": []
+}
+```
+
+この block 自体は proposal や skill が後付けする admission 証拠ではない。source snapshot
+の取得者が authoritative document として登録した場合にのみ、snapshot-bound port が供給する。
+実 planning repository の snapshot catalog 登録は Phase 1 の後続作業である。
+
 authority documents に exact handoff kind/input/action/output/owner/invalidation reason が既に
 ある boundary は deterministic に採用する。不明な edge だけを同じ
 `AssessNovelSplitWork` request に含める。AI は edge を `BOUNDARY | NOT_BOUNDARY |
@@ -390,6 +427,91 @@ admissibility filter:
 - `<5h` child has complete adjacent rebalance evaluation;
 - `<4h` child has predecessor/successor merge evaluation and a genuine semantic handoff;
 - validation/dependency/authority constraints are satisfied.
+
+Phase 1 の `SplitPhaseCandidateSetAssessment` は、単一の host-owned source
+snapshot catalog に束縛した全候補の gate evidence を検査し、admissibility と
+duration frontier までを返す。候補ごとの source boundary 自己申告は受け付けず、
+証拠がない候補や closure/authority 契約がない候補を winner にしない。
+正しく記述された short-child 不適格候補は候補単位で reject し、ほかの候補の評価を
+継続する。全候補が決着し duration leader が一つならその段階だけは決定できる。
+duration 同点なら `CostPolicyRequired` とし、cost-isolation、overhead を含む最終選定と
+proposal admission は別段階である。
+`SplitPhaseCostIsolation` は、明示された versioned profile 単価・material-saving 閾値と
+全 item の reasoning demand に基づき、duration 同点候補の低コスト隔離効果を採点する。
+`SplitPhaseCostEvidenceCatalog` は host-owned
+`docs/phase/cost-policies/<snapshotIdentity>.json` を読み、source snapshot digest、Phase
+identity、authority、ordered item coverage を照合する。欠落は `CostPolicyRequired`、
+不一致は拒否する。`decideCatalogWithCostC` は duration 同点時だけ `CostRanked` を返し、
+file bytes の digest を後続検証用に保持する。cost frontier はまだ proposal admission
+ではない。`SplitPhaseOverheadPriority` は duration・cost 両方で同点の候補だけを対象に、
+child setup、semantic handoff、validation run、review、commit の明示的な重みで
+administrative overhead を比較する。validation run は `FinalOnly` で1回、
+`EachPhase` で child 数とし、各 child の expected duration に含まれる Phase overhead
+は重複計上しない。`SplitPhaseOverheadPolicyCatalog` は host-owned
+`docs/phase/overhead-policies/<snapshotIdentity>.json` を source snapshot の実 bytes
+の digest、Phase identity、authority に束縛する。欠落は `OverheadPolicyRequired`、
+不一致は拒否する。`decideCatalogWithOverheadC` は必要な場合だけ `OverheadRanked` と
+policy document digest を返す。これも preview であり、実運用 policy 値の登録、
+authority を考慮した最終 tie-break、proposal admission、PREVIEW/APPLY が残る。
+`decideCatalogWithFinalC` は、duration/cost/overhead で一意になった候補を
+objective preview として返す。overhead まで同点なら `SplitPhaseFinalTieBreak` が
+host-owned source boundary で各候補の authority digest を再検証し、handoff の
+authority reference と授受 child の item 所有を署名に含める。異なる署名
+を boundary vector の辞書順で選ばず `AuthorityDecisionRequired` とし、同一 digest
+の場合に限って child 数、次いで source item 順の boundary vector で選ぶ。
+この選定結果も proposal admission や planning write の権限を与えない。
+`SplitPhaseProposalAdmission` は選定された candidate の draft identity/digest と
+参照 proposal を照合し、host-owned source snapshot を使う既存の proposal assessment
+を通して in-memory の admission outcome を返す。proposal 欠落と objective 未確定は
+pending、不一致と source drift は拒否する。ここでは文書を書き換えず、PREVIEW/APPLY
+は実行直前に source/policy evidence を再検証する。
+admission outcome は source snapshot と partition policy の digest、cost/overhead
+policy 文書の bytes digest も保持する。`revalidateCatalogC` は現在の host-owned 入力で
+再評価し、元の outcome と一致した場合だけ返す。policy 文書変更を含む差分は古い判定を
+失効させる。この再照合自体は planning write や PREVIEW/APPLY の実装ではない。
+`SplitPhasePreviewProjection` は、再照合済み admission と source boundary から
+child の所有 work item、closure、時間、validation owner、依存、handoff を型付きの
+読み取り専用 projection にする。proposal/validation evidence を固定して投影前後に
+admission を再照合する。公開 `previewSplitPhase` はこの projection を revision 2 の
+durable instance に結び、成功時に revision 3 の Completed append と Terminal JSON
+を返す。PREVIEW は planning document を書き換えず、APPLY と document projection /
+CAS write は別に実装する。
+生成 CML は `split-phase-preview-v1` として `Previewed` state と
+`previewSplitPhase` Provided Operation を宣言済みで、CNCF の entry binding も
+3段階を受け入れる。Operation の runtime 実行は host-owned catalog の再照合と
+Completed append に接続済みで、古い admission や APPLY mode は拒否する。
+source/policy 再照合と instance append の間は共有 transaction ではない。
+`SplitPhaseDocumentProjection` は再照合済み admission と exact source Phase file から
+source/child Phase の desired Markdown と expected/desired SHA-256 を決定的に作る。
+これは read-only の write-set plan であり、対応していない文書形式や既存 child path
+を拒否する。`SplitPhaseDocumentConflict` は read port で current SHA-256 を確認し、
+exact base、全 path の already-applied、部分適用を含む conflict を分類する。
+異なる bytes を自動 merge せず、実文書を変更しない。
+`SplitPhaseDocumentCas` は返却された結果について全件適用または補償復元を host port に要求し、
+適用後の全 desired digest を再確認する。fixture の in-memory port で一回だけの適用、
+同一再送、同時変更、全件を適用しない port の拒否を検証した。これは port 契約であり、
+この契約はプロセス停止・停電時の multi-file atomicity を含まない。
+`SplitPhaseDocumentFilePort` は Phase 文書だけを対象とする協調 lock、expected digest
+の再照合、同一ディレクトリ内 staging、失敗時の補償復元を提供する。コピーした fixture
+でのみ使用し、実 Phase 文書にはまだ接続していない。公開 APPLY Operation も
+コピーした fixture だけで検証する。crash recovery は今回の
+緩いトランザクション境界には含めず、別フェーズの課題として扱う。
+現行の `SplitPhaseDocumentStaticValidation` は、CAS の前に projected Phase 文書を
+厳密な boundary parser で再読し、Scope と source item coverage、closure、authority、
+proposal provenance を確認する。これは狭い fixture の subset であり、上記の
+`ValidateAppliedSplit` 全項目や実ファイル適用を証明するものではない。
+`SplitPhaseApplyDocuments` は host-only の下位境界で、APPLY mode の Start と
+proposal-assessed instance/current admission を再確認して文書だけに適用する。
+`SplitPhaseApplyPlanStore` と `SplitPhaseApplyExecution` は、host-owned の不変計画を
+文書適用前に保存し、そのdigestをintent履歴に結び付ける。完了appendが失敗しても、
+保存計画から適用済み文書を確認してCompleted履歴を再試行できる。
+生成 CML は `split-phase-apply-v1` として PREVIEW/APPLY の別々の終端分岐を
+宣言し、CNCF の actionless entry binding は両 Provided Operation を照合する。
+公開 `applySplitPhase` は host-owned repository root と catalog を使用し、
+成功時に revision 4 の Completed instance に結び付いた `SplitPhaseApplyResult`
+の Terminal JSON を返す。同一 command の再送は保存計画と文書を照合し、
+異なる APPLY idempotency key は履歴照合で拒否する。公開経路の実行検証は
+コピー fixture に限定し、プロセス停止中の部分的な複数ファイル適用は自動復旧しない。
 
 残った候補を versioned lexicographic objective で一意に選ぶ。
 

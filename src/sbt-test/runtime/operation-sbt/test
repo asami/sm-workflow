@@ -1,0 +1,2 @@
+# This single scripted invocation owns the Operation caller and its SBT children.
+> checkOperations

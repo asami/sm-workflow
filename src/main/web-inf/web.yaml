@@ -1,0 +1,6 @@
+apps:
+  - name: sm-workflow
+    path: /web/sm-workflow
+    kind: static-form
+    root: /web/sm-workflow
+    route: /web/{component}/sm-workflow
