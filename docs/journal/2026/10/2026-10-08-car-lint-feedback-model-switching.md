@@ -72,3 +72,74 @@ implementation / repair
 ~~~
 
 Observed escalation can therefore happen before CAR lint when the execution trajectory is already abnormal, or after CAR lint when architectural/Textus-conformance evidence shows that a different reasoning model is appropriate. This follows the verification-cost-guard principle: expensive validation is not a precautionary progress probe.
+
+
+## 2026-10-10 observation: abandonment/protocol failure as routing evidence
+
+A concrete local-model experiment exposed a third escalation path in addition to provider-declared DECLINED and Workflow-observed non-convergence.
+
+Environment:
+
+- ChatGPT/Codex desktop integration with Ollama;
+- local model: gpt-oss:20b;
+- task: inspect and explain the algebra-based DSL in CNCF UnitOfWork;
+- the model successfully began repository exploration, but after roughly one minute ended by emitting what appeared to be the next shell/tool invocation (a `sed` command encoded as tool-call JSON) instead of continuing the agent loop and producing a result.
+
+This should not automatically be classified as a reasoning failure. The model may have been capable of understanding the Scala/DSL material but failed to sustain the surrounding agent/tool protocol. sm-workflow therefore needs to distinguish at least:
+
+- `DECLINED`: the model/provider explicitly judges the task outside its capability;
+- `ABANDONED`: execution stops without a valid completion or explicit decline;
+- `PROTOCOL_FAILURE`: tool/IoC/continuation behavior becomes invalid or cannot continue;
+- `VALIDATION_FAILURE`: a nominally completed result fails deterministic validation;
+- bounded `NON_CONVERGENCE`: repeated repair is not converging.
+
+All of these are escalation evidence. A local-first route should be able to hand the same bounded task/context to a stronger provider rather than requiring a human to restart the work manually.
+
+## Corpus and routing feedback
+
+Escalation records are also corpus candidates. Retain enough execution evidence to compare:
+
+~~~text
+task characteristics
+  x project/context
+  x work kind
+  x provider/model/reasoning level
+  x outcome category
+  x cost/latency
+  x escalation target
+  x eventual successful result
+~~~
+
+In particular, preserve the stronger model's successful continuation/result after escalation. A failure sample without the successful resolution is much less useful for later provider evaluation.
+
+This evidence should feed future Model Selector / Provider Routing policy. The useful KPI is not only task success rate. It also includes:
+
+- appropriate decline rate;
+- inappropriate acceptance followed by abandonment/protocol failure;
+- validation failure and non-convergence rate;
+- escalation success rate;
+- latency/cost before escalation;
+- success by task/project/work-kind characteristics.
+
+A weaker model that quickly and correctly declines work outside its capability may be more useful than one that attempts everything and fails late. Therefore decline quality is a first-class model-selection signal.
+
+The operational loop becomes:
+
+~~~text
+select provider
+  -> execute
+       success ----------------------> accept + evidence
+       declined ---------------------+
+       abandoned --------------------+
+       protocol failure -------------+-> escalate -> stronger provider
+       validation failure -----------+                  |
+       bounded non-convergence ------+                  v
+                                               result + corpus evidence
+                                                        |
+                                                        v
+                                            future routing evaluation
+~~~
+
+Routing-policy updates remain versioned and controlled. Runtime observations provide evidence; they do not cause an online self-modifying routing policy.
+
+This makes escalation + corpus capture a core requirement for practical local-first operation rather than merely an experimental convenience.
