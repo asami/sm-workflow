@@ -47,9 +47,12 @@ private[smworkflow] object GoalPhaseClosureDecisionRecord {
       interaction.current match {
         case WorkflowContinuation.Decision(request, _) if interaction.handle == intent.handle &&
             request.runId.value == intent.handle.instanceIdentity.value &&
-            request.expectedRevision == intent.expectedRevision && request.context.snapshot == intent.snapshot &&
-            request.input == Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)) &&
-            request.resultType.isEmpty => Consequence.success(request)
+            request.expectedRevision == intent.expectedRevision && GoalPhaseClosureAuthority.sameContextScope(request.context.snapshot, intent.snapshot) &&
+            request.input.exists(value => value != null && value.typeIdentity == GoalPhaseClosureAuthority.inputCodec.typeIdentity &&
+              GoalPhaseClosureAuthority.sameInputScope(value.value, intent.input)) &&
+            request.resultType.isEmpty =>
+          GoalPhaseClosureDecisionTemplate(request.requiredOperation, request.operation, request.completionOperation)
+            .validateC.map(_ => request)
         case _ => Consequence.stateConflict("Recorded closure Decision differs from the current intent")
       }
     }

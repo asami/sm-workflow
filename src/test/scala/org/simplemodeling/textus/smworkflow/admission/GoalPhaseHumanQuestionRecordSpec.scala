@@ -94,10 +94,27 @@ final class GoalPhaseHumanQuestionRecordSpec extends AnyWordSpec with Matchers w
       storage.creates shouldBe 1
       storage.retained shouldBe first
     }
-    "refuse conflicting visible choices, malformed rows and initial observation failures without Create" in {
-      Given("an otherwise valid question with conflicting choices or invalid existing rows")
+    "consume the selected question and declared choices without a proposed-body equality proof" in {
+      Given("a saved question with its own valid visible labels and diagnostic context")
       val changed = question.copy(choices = choices.updated(0, choices.head.copy(label = "Another question")))
-      Vector(row(changed), Record.data(storageField -> "invalid"), Record.data("unknown" -> "payload"), null).foreach { value =>
+      val storage = new Storage
+      val saved = row(changed)
+      storage.retained = Some(saved)
+      When("retention receives a later proposal for the same allocated question and target")
+      val actual = take(retainC(question, storage))
+      Then("saved declarations are consumed without comparing or replacing their full body")
+      actual shouldBe changed
+      storage.creates shouldBe 0
+      storage.reads shouldBe 1
+      storage.retained shouldBe Some(saved)
+      actual.admitAnswerC(GoalPhaseHumanDecisionContract.Answer(choices.head.identity)).isSuccess shouldBe true
+      actual.admitAnswerC(GoalPhaseHumanDecisionContract.Answer("not-declared")).isSuccess shouldBe false
+    }
+    "refuse foreign allocated slots, malformed rows and initial observation failures without Create" in {
+      Given("a question belonging to another allocated slot or invalid existing rows")
+      val foreign = question.copy(request = question.request.copy(
+        continuationId = org.goldenport.cncf.workflow.ContinuationIdentity("another-question")))
+      Vector(row(foreign), Record.data(storageField -> "invalid"), Record.data("unknown" -> "payload"), null).foreach { value =>
         val storage = new Storage
         storage.retained = Some(value)
         When("retention observes the conflicting or malformed existing row")

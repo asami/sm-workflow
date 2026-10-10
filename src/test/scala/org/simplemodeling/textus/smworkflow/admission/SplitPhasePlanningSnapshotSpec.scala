@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def objectives(s: Base, threshold: Long = 300): O.Records = O.Records(
@@ -25,9 +25,9 @@ final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers wit
     Some(O.OverheadPolicy(O.OverheadPolicyReference("overhead", "1"), s.source.reference, s.source.authority, 1, 0, 0, 0, 0)))
   private def run(s: Base, records: O.Records = O.Records(None, None, None),
     boundary: Option[B.Validated] = None, allocate: Boolean = true): W.Outcome = {
-    val input = take(E.loadC(boundary.getOrElse(s.initial), s.records, s.records))
+    val input = take(E.loadC(boundary.getOrElse(s.initial), s.records))
     val data = W.Data(W.DataReference("original", "1"), s.source.reference, s.source.authority, None, records)
-    take(W.advanceC(take(W.selectC(input, data, data)))) match {
+    take(W.advanceC(take(W.selectC(input, data)))) match {
       case need: W.AllocationRequired if allocate => take(W.continueMechanicalAllocatedC(
         take(SplitPhaseCandidateAllocationFixture.policy.allocateMechanicalC(need, M.Reference("checkpoint", "1")))))
       case other => other
@@ -39,7 +39,7 @@ final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers wit
       "candidate", "review", "evidence", phases(0), "candidate-changed", s.source.authority)
     val records = s.initial.records.copy(handoffs = s.initial.records.handoffs.copy(handoffs = Vector(h),
       incomingByChild = phases.map(p => p -> (if (p == phases(1)) Vector(h.identity) else Vector.empty)).toMap))
-    take(B.loadC(s.initial.shape, records, records))
+    take(B.loadC(s.initial.shape, records))
   }
   private def snapshot(w: W.Outcome): R.Record = {
     val r = take(R.projectC(w)).record
@@ -48,6 +48,48 @@ final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers wit
   }
 
   "Passive planning projection" should {
+    "preserve the reached private outcome kind independently of passive storage inspection" in {
+      Given("real computed partition, allocation, projection, admission and objective outcomes")
+      val tied = base(Vector(260, 180, 260))
+      val known = objectives(tied, 500)
+      val unknown = tied.copy(records = tied.records.copy(estimates = tied.records.estimates.copy(
+        items = tied.records.estimates.items.updated(0, tied.records.estimates.items.head.copy(
+          duration = E.Duration.Unresolved("novel work"))))))
+      val demand = known.demands.get
+      val reasoning = known.copy(demands = Some(demand.copy(items = demand.items.updated(1,
+        demand.items(1).copy(demand = O.Demand.Unresolved("unknown kernel"))))))
+      val scope = base(Vector.fill(4)(180))
+      val grouped = proof(scope, enumerate(scope).candidates.find(_.cutAfterIndices == Vector(1)).get,
+        "grouped", handoffPairs = Vector(0 -> 1))
+      val cases = Vector(
+        run(unknown, allocate = false) -> R.Disposition.PartitionSemanticRequired,
+        run(base(Vector(360, 360)), allocate = false) -> R.Disposition.AllocationRequired,
+        run(base(Vector(360, 360), dispositions = Vector(SplitPhasePartitionEnumeration.EdgeDisposition.CrossOnly)),
+          allocate = false) -> R.Disposition.PartitionUnavailable,
+        run(base(Vector(481, 481)), allocate = false) -> R.Disposition.PartitionUnavailable,
+        run(scope, boundary = Some(grouped)) -> R.Disposition.ProjectionRequired,
+        run(base(Vector(120, 120))) -> R.Disposition.CandidatesUnavailable,
+        run(tied) -> R.Disposition.ObjectiveRecordRequired,
+        run(tied, reasoning) -> R.Disposition.ReasoningRequired,
+        run(tied, known, Some(withHandoff(tied))) -> R.Disposition.HumanDecisionRequired,
+        run(base(Vector(360, 360))) -> R.Disposition.Planned)
+      When("the constructed outcome is copied and its passive record is separately stored and interpreted")
+      val observed = cases.map { (outcome, expected) =>
+        val projected = take(R.projectC(outcome))
+        val decoded = take(SplitPhasePlanningSnapshotJsonV1.decodeC(
+          take(SplitPhasePlanningSnapshotJsonV1.encodeC(projected.record))))
+        (projected, decoded, take(R.dispositionC(decoded)), outcome, expected)
+      }
+      Then("each reached kind and whole frontier survive without storage creating a private projected capability")
+      observed.foreach { (projected, decoded, interpreted, outcome, expected) =>
+        projected.disposition shouldBe expected
+        interpreted shouldBe expected
+        decoded shouldBe projected.record
+        projected.record.selection.planning shouldBe outcome.selection.data
+      }
+      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.HostEvidenceRequired(null, null, null)")
+    }
+
     "retain the whole allocated frontier and all four actual objective stages" in {
       Given("constructed duration, cost, overhead and stable-tie outcomes")
       val tied = base(Vector(260, 180, 260))
@@ -117,7 +159,7 @@ final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers wit
       val mixed = s.initial.records.copy(ownership = s.initial.records.ownership.copy(children =
         s.initial.records.ownership.children.zipWithIndex.map((c, i) => c.copy(repository = B.RepositoryIdentity(if (i < 2) "repo-A" else "repo-B")))))
       When("requirements are copied without filtering the frontier")
-      val outcomes = Vector(grouped, take(B.loadC(s.initial.shape, mixed, mixed))).map(b => run(s, boundary = Some(b)).asInstanceOf[W.ProjectionRequired])
+      val outcomes = Vector(grouped, take(B.loadC(s.initial.shape, mixed))).map(b => run(s, boundary = Some(b)).asInstanceOf[W.ProjectionRequired])
       Then("aggregate needs and per-candidate documents remain in original order")
       outcomes.foreach { w =>
         val r = snapshot(w); val p = r.projection.get.asInstanceOf[R.ProjectionView.Requirements]
@@ -140,8 +182,8 @@ final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers wit
       val s = base(Vector.fill(4)(180)); val grouped = proof(s, enumerate(s).candidates.find(_.cutAfterIndices == Vector(1)).get, "grouped")
       val inventory = s.inventory.copy(occupiedPhases = s.inventory.occupiedPhases + P.PhaseIdentity("77.2"))
       val proposal = grouped.shape.records.copy(inventory = inventory)
-      val shape = take(P.loadC(proposal, proposal)).asInstanceOf[P.ShapeReady]
-      val boundary = take(B.loadC(shape, grouped.records, grouped.records))
+      val shape = take(P.loadC(proposal)).asInstanceOf[P.ShapeReady]
+      val boundary = take(B.loadC(shape, grouped.records))
       When("actual candidate projection meets a numbering collision")
       val w = run(s.copy(inventory = inventory), boundary = Some(boundary)).asInstanceOf[W.ProjectionRequired]
       val r = snapshot(w)

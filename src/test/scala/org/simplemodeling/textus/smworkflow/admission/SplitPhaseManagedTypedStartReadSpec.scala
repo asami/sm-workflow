@@ -30,7 +30,7 @@ import J.Purpose
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 final class SplitPhaseManagedTypedStartReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "typedstarts", name))
@@ -130,7 +130,7 @@ final class SplitPhaseManagedTypedStartReadSpec extends AnyWordSpec with Matcher
                 }
                 def installC(): Consequence[Unit] = {
                   val all = rows.map { case (p, id, raw) => (target(p), id, Record.data(J.storageField -> raw)) } ++ Vector(
-                    (collection("starts"), record.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeC(record)))),
+                    (collection("starts"), record.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeAllocationC(record)))),
                     (collection("starts"), "malformed", Record.data(TJ.storageField -> "not-json")),
                     (collection("starts"), "missing-payload", Record.data("unrelated" -> "data")),
                     (collection("selections"), selection.selectionId, Record.data(ProfileSelectionJsonV1.storageField ->
@@ -162,19 +162,31 @@ final class SplitPhaseManagedTypedStartReadSpec extends AnyWordSpec with Matcher
                   .foreach(r => port.prepareForCallC(r, capsule).isSuccess shouldBe false)
                 take(port.bindPartitionForCallC(S.ContextReference("absent", "1"), capsule)) shouldBe None
                 port.bindPartitionForCallC(S.ContextReference("missing-start", "1"), capsule).isSuccess shouldBe false
+                val changedproposal = proposal.copy(children = proposal.children.updated(0, proposal.children.head.copy(expectedMinutes = 361)))
+                val changedselection = selection.copy(recommendationReference = Some("changed"))
                 val changes = Vector(
                   (target(Purpose.Source), source.reference.identity, J.storageField,
-                    take(J.encodeSourceC(source.copy(authority = source.authority.copy(revision = "2")))), take(J.encodeSourceC(source))),
+                    take(J.encodeSourceC(source.copy(authority = source.authority.copy(revision = "2")))), take(J.encodeSourceC(source)), false),
                   (target(Purpose.Proposal), proposal.reference.identity, J.storageField,
-                    take(J.encodeProposalC(proposal.copy(children = proposal.children.updated(0, proposal.children.head.copy(expectedMinutes = 361))))),
-                    take(J.encodeProposalC(proposal))),
+                    take(J.encodeProposalC(changedproposal)), take(J.encodeProposalC(proposal)), true),
                   (collection("selections"), selection.selectionId, ProfileSelectionJsonV1.storageField,
-                    take(ProfileSelectionJsonV1.encodeStorageC(selection.copy(recommendationReference = Some("changed")))),
-                    take(ProfileSelectionJsonV1.encodeStorageC(selection))))
-                changes.foreach { case (c, id, field, changed, original) =>
+                    take(ProfileSelectionJsonV1.encodeStorageC(changedselection)),
+                    take(ProfileSelectionJsonV1.encodeStorageC(selection)), true))
+                changes.foreach { case (c, id, field, changed, original, compatible) =>
+                  Given("a changed current input, not a saved-copy consistency certificate")
                   take(installer.writeC(c, id, Record.data(field -> changed), true))
-                  port.prepareForCallC(record.reference, capsule).isSuccess shouldBe false
-                  port.bindPartitionForCallC(context.reference, capsule).isSuccess shouldBe false
+                  When("the normal call reads the allocation and actual host inputs")
+                  val prepared = port.prepareForCallC(record.reference, capsule)
+                  val bound = port.bindPartitionForCallC(context.reference, capsule)
+                  Then("compatible current data is consumed while an incompatible source/proposal authority is refused")
+                  prepared.isSuccess shouldBe compatible
+                  bound.isSuccess shouldBe compatible
+                  if (compatible) {
+                    val actual = take(prepared).get.record
+                    if (c == target(Purpose.Proposal)) actual.proposal shouldBe Some(changedproposal)
+                    else actual.selection shouldBe changedselection
+                    take(bound).get.start.record shouldBe actual
+                  }
                   take(installer.writeC(c, id, Record.data(field -> original), true))
                 }
                 take(port.bindPartitionForCallC(context.reference, capsule)).get.start.record shouldBe record

@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.CandidateAdmissionModel
 import org.goldenport.cncf.workflow.CandidateAdmissionModel.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
-import RepositorySyncMergeValidationAssessment.{Assessment, digest, hash, name, paths}
+import RepositorySyncMergeValidationAssessment.{Assessment, name, paths}
 
 /** Application-owned CAM evidence for a full pending-merge review. Admission
   * neither issues semantic work nor grants validation, transition or commit authority.
@@ -23,11 +23,9 @@ private[smworkflow] object RepositorySyncMergeReviewAdmission {
   final case class Review(
     reviewedRevision: String,
     reviewedAt: Instant,
-    validUntil: Instant,
     disposition: Disposition,
     findings: Vector[Finding],
-    rationale: String,
-    evidenceDigest: String
+    rationale: String
   )
   type Evidence = AdmissionEvidence[Review, Scope]
   type Submission = AdmissionSubmission[Assessment, Review, Scope]
@@ -40,13 +38,13 @@ private[smworkflow] object RepositorySyncMergeReviewAdmission {
     if (!name(identity) || supplied == null)
       Consequence.stateConflict("RepositorySync merge review submission is missing")
     else RepositorySyncMergeValidationAssessment.readmitC(validated).flatMap { admitted =>
-      val reference = _reference(admitted)
+      val reference = _reference(identity, admitted)
       AdmissionSubmission(identity, CandidateSnapshot(reference, TypedValue(candidateType, admitted)), supplied).validateC
     }
 
   def evidenceC(identity: String, target: CandidateRef, review: Review,
     scope: Scope, provenance: String): Consequence[Evidence] =
-    if (!name(identity) || target == null || !hash(target.revision) || !_validReview(review) ||
+    if (!name(identity) || target == null || !name(target.revision) || !_validReview(review) ||
         !_validScope(scope) || !name(provenance))
       Consequence.stateConflict("RepositorySync merge review evidence is incomplete")
     else AdmissionEvidence(identity, requirement, target, TypedValue(evidenceType, review),
@@ -59,25 +57,26 @@ private[smworkflow] object RepositorySyncMergeReviewAdmission {
       Consequence.stateConflict("RepositorySync merge review evaluation is incomplete")
     else for {
       validated <- RepositorySyncMergeValidationAssessment.readmitC(submission.candidate.payload.value)
-      _ <- if (submission.candidate.reference == _reference(validated) &&
+      _ <- if (submission.candidate.reference != null &&
+          submission.candidate.reference.identity == s"${validated.plan.context.merge.frozen.state.before.repositoryIdentity}:pending-merge" &&
+          name(submission.candidate.reference.revision) &&
           submission.candidate.payload.typeIdentity == candidateType) Consequence.unit
-        else Consequence.stateConflict("RepositorySync merge review candidate differs from validated merge")
+        else Consequence.stateConflict("RepositorySync merge review candidate has incompatible repository scope or type")
       combined = submission.evidence ++ laterEvidence
       _ <- if (combined.forall(_ != null) && combined.count(_.requirementIdentity == requirement) <= 1) Consequence.unit
         else Consequence.stateConflict("RepositorySync merge review has ambiguous evidence")
       evaluation <- CandidateAdmissionModel.evaluateC(submission, Vector(fullReview),
-        new ReviewPolicy(asOf, validated), laterEvidence)
+        new ReviewPolicy(validated), laterEvidence)
     } yield Assessed(evaluation, evaluation.acceptedEvidence.headOption.flatMap(identity =>
       combined.find(_.identity == identity).map(_.payload.value)))
 
   private def fullReview: AdmissionRequirement[Scope] = AdmissionRequirement(requirement,
     RequirementKind.Semantic, evidenceType, TypedValue(scopeType, Scope.FullMerge))
 
-  private final class ReviewPolicy(asOf: Instant, validated: Assessment) extends EvidencePolicy[Review, Scope] {
+  private final class ReviewPolicy(validated: Assessment) extends EvidencePolicy[Review, Scope] {
     def isFresh(evidence: Evidence, target: CandidateRef): Boolean =
       evidence != null && evidence.payload != null && _validReview(evidence.payload.value) &&
         name(evidence.provenance) && evidence.payload.value.reviewedRevision == target.revision &&
-        !evidence.payload.value.reviewedAt.isAfter(asOf) && !evidence.payload.value.validUntil.isBefore(asOf) &&
         evidence.payload.value.findings.forall(finding =>
           finding.affectedPaths.forall(validated.plan.context.merge.receipt.changedPaths.contains))
     def covers(evidence: Evidence, required: AdmissionRequirement[Scope]): Boolean =
@@ -85,13 +84,13 @@ private[smworkflow] object RepositorySyncMergeReviewAdmission {
         evidence.scope.value == Scope.FullMerge && required.scope.value == Scope.FullMerge
   }
 
-  private def _reference(validated: Assessment): CandidateRef = CandidateRef(
+  // The submission selects a candidate; its address is not a certificate of
+  // validation JSON. Reads preserve the selected address, including old SHA keys.
+  private def _reference(identity: String, validated: Assessment): CandidateRef = CandidateRef(
     s"${validated.plan.context.merge.frozen.state.before.repositoryIdentity}:pending-merge",
-    digest(Vector("repository-sync-merge-review-candidate-v1", validated.digest,
-      validated.plan.policy.reviewPolicyVersion)))
-  private def _validReview(review: Review): Boolean = review != null && hash(review.reviewedRevision) &&
-    review.reviewedAt != null && review.validUntil != null && !review.validUntil.isBefore(review.reviewedAt) &&
-    review.disposition != null && _text(review.rationale) && hash(review.evidenceDigest) &&
+    identity)
+  private def _validReview(review: Review): Boolean = review != null && name(review.reviewedRevision) &&
+    review.reviewedAt != null && review.disposition != null && _text(review.rationale) &&
     review.findings != null && review.findings.forall(finding => finding != null && name(finding.identity) &&
       paths(finding.affectedPaths) && finding.affectedPaths.nonEmpty && _text(finding.rationale)) &&
     review.findings.map(_.identity) == review.findings.map(_.identity).distinct.sorted &&

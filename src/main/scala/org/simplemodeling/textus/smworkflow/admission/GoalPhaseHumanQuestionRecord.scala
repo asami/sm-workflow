@@ -88,12 +88,12 @@ private[smworkflow] object GoalPhaseHumanQuestionRecord {
       raw <- encodeStorageC(expected)
       existing <- try storage.loadC() catch { case NonFatal(_) => Consequence.stateConflict("Initial human question observation failed") }
       result <- existing match {
-        case Some(record) => compareC(expected, record)
+        case Some(record) => readSelectedC(expected, record)
         case None => try storage.createC(Record.data(storageField -> raw)) match {
           case Consequence.Success(_) => storage.loadC() match {
-            case Consequence.Success(Some(record)) => compareC(expected, record) match {
+            case Consequence.Success(Some(record)) => readSelectedC(expected, record) match {
               case Consequence.Success(value) => Consequence.success(value)
-              case _ => uncertainC("Human question committed observation differs")
+              case _ => uncertainC("Human question committed observation has invalid scope or format")
             }
             case _ => uncertainC("Human question committed observation is unavailable")
           }
@@ -102,10 +102,16 @@ private[smworkflow] object GoalPhaseHumanQuestionRecord {
       }
     } yield result
 
-  private def compareC(expected: Question, record: Record): Consequence[Question] =
+  private def readSelectedC(expected: Question, record: Record): Consequence[Question] =
     if (record == null) Consequence.stateConflict("Human question record is absent")
     else record.getString(storageField).map(value => decodeStorageC(value).flatMap { actual =>
-      if (actual == expected) Consequence.success(actual) else Consequence.stateConflict("Human question belongs to another contract")
+      if (actual.intent.handle == expected.intent.handle &&
+          actual.intent.expectedRevision == expected.intent.expectedRevision &&
+          actual.intent.idempotencyKey == expected.intent.idempotencyKey &&
+          actual.request.continuationId == expected.request.continuationId &&
+          GoalPhaseClosureAuthority.sameContextScope(actual.intent.snapshot, expected.intent.snapshot) &&
+          GoalPhaseClosureAuthority.sameInputScope(actual.intent.input, expected.intent.input)) Consequence.success(actual)
+      else Consequence.stateConflict("Human question belongs to another target or allocated question slot")
     }).getOrElse(Consequence.stateConflict("Human question record has no closed payload"))
 
   private def uncertainC(message: String): Consequence[Question] =

@@ -229,7 +229,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             val child = RepositorySyncStartCommand(host.repository.input, host.repository.closureSelection, "participant", invocation)
             prepare(call => call.evidenceC(NativeHostEvidence.Purpose.PhaseClosure,
               ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-phase-authority", "1"),
-              "participant", ThreeWorkflowHostEvidencePorts.ownedBinding(call.core, closure.asJson))
+              "participant", take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, closure)))
               .flatMap(_ => _prepare_input_(call, child, root)))
             When("owning advance executes the installed RepositorySync Operations and their actual SBT check")
             val wire = invoke("advanceGoalPhase", advance)
@@ -281,7 +281,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
               selected.kind shouldBe (if (session == "step-review") "ReviewStep" else "ReviewPhase")
               executions().size shouldBe (if (session == "step-review") 1 else 2)
               val completion = result("accept")
-              prepare(call => ThreeWorkflowHostEvidencePorts.reviewBindingC(call.core, S.inputCodec.encode(selected), completion, S.resultCodec)
+              prepare(call => ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, selected, completion)
                 .flatMap(binding => call.evidenceC(NativeHostEvidence.Purpose.GoalReview,
                   ThreeWorkflowHostEvidencePorts.key(completion.resultReference.identity, completion.resultReference.revision),
                   completion.resultReference, "specification-reviewer", binding)))
@@ -293,7 +293,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
                   selected.stepIdentity.get, selected.generation, selected.originalBase, selected.candidate.get, completion.resultReference.identity)
                 prepare(call => call.evidenceC(NativeHostEvidence.Purpose.StepClosure,
                   ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-step-authority", "1"),
-                  "participant", ThreeWorkflowHostEvidencePorts.ownedBinding(call.core, closure.asJson)))
+                  "participant", take(ThreeWorkflowHostEvidencePorts.stepClosureBindingC(call.core, closure))))
                 When("owning advance commits the actual Step and runs the whole-Phase SBT test")
                 next()
                 Then("whole-Phase review contains a real second check and the retained original allowance")

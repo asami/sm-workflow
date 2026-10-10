@@ -186,15 +186,14 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     _ <- if (stage.payload.finalTip.contains(remote) && actual.trackingTip.contains(remote) &&
         actual.counts.contains(G.Counts(0, 0)) && actual.mergeBase.contains(remote)) Consequence.unit
       else N.uncertain("final fetch intent has no actual equal clean local/tracking/remote postimage; no replay")
-    finalLocal <- localC(store, stage)
-    _ <- if (finalLocal == actual) Consequence.unit else N.invalid("repository changed during convergence observation")
-  } yield finalLocal
+  } yield actual
 
   private def authorizeC(store: N.Store, authority: AuthorityPort, effect: Effect) =
-    authority.admitC(store.core, store.original.originalCommand, store.declaration.target, effect)
-  private def matchesC(accepted: N.Stage, stage: N.Stage): Consequence[Unit] =
-    if (stage.payload.before == accepted.payload.before && stage.payload.indexTree == accepted.payload.indexTree &&
-        stage.payload.mergeHead == accepted.payload.mergeHead && stage.payload.validation == accepted.payload.validation &&
-        stage.record.history.take(accepted.record.history.size) == accepted.record.history) Consequence.unit
+    authority.admitC(store.core, RepositorySyncStartServiceOperation.commandJson(store.command), store.declaration.target, effect)
+  private[admission] def matchesC(accepted: N.Stage, stage: N.Stage): Consequence[Unit] =
+    if (stage.payload.before.head == accepted.payload.before.head && stage.payload.before.tree == accepted.payload.before.tree &&
+        stage.payload.before.branch == accepted.payload.before.branch && stage.payload.before.trackingTip == accepted.payload.before.trackingTip &&
+        stage.payload.indexTree == accepted.payload.indexTree && stage.payload.mergeHead == accepted.payload.mergeHead &&
+        SplitPhaseDefinitionBinding.includesState(stage.record, accepted.record)) Consequence.unit
       else N.invalid("retained convergence crosses actual paired accepted candidate")
 }

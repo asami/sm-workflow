@@ -28,7 +28,7 @@ private[smworkflow] object SplitPhaseSelectedDocumentEffect {
   def prepareC(source: F.Observed, context: String, revision: String): Consequence[Prepared] =
     if (source == null) Consequence.stateConflict("Selected document effect requires its actual native source")
     else for {
-      _ <- if (source.original.original.start.command.input.invocationMode == "APPLY") Consequence.unit
+      _ <- if (source.invocationMode == "APPLY") Consequence.unit
         else Consequence.stateConflict("Selected PREVIEW supplies no document application authority")
       projection <- SplitPhaseSelectedDocuments.projectC(source.snapshot)
       repositories = projection.documents.map(_.contract.hcursor.downField("validation")

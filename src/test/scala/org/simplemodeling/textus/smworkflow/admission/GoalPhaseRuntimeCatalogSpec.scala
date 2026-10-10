@@ -33,10 +33,9 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
       try {
         When("GoalPhase is selected using its compiled identity and version")
         val catalog = take(GoalPhaseRuntimeCatalog.loadC(loader))
-        Then("all three official definitions remain in the raw bytes and persistence binding")
+        Then("the official resource resolves the executable GoalPhase definition")
         val official = Files.readString(Path.of("target/cozy/statemachine-workflow-abi.json"), StandardCharsets.UTF_8)
-        catalog.workflow.rawJson shouldBe official
-        take(GoalPhaseRuntimeCatalog.loadC()).workflow.rawJson shouldBe official
+        take(GoalPhaseRuntimeCatalog.loadC()).workflow.workflow.identity shouldBe "GoalPhaseWorkflow"
         official should include("SplitPhaseWorkflow")
         official should include("RepositorySyncWorkflow")
         catalog.workflow.workflow.identity shouldBe "GoalPhaseWorkflow"
@@ -65,13 +64,11 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
       }
     }
 
-    "admit exact compiled metadata while preserving raw definition identity" in {
+    "resolve compiled execution definitions without retained input copies or fingerprints" in {
       Given("generated ABI text matching the compiled main descriptor")
       When("the pure runtime catalog parses the text")
       val catalog = take(GoalPhaseRuntimeCatalog.parseC(workflow, producer))
-      Then("the original bytes and receiver fingerprint are retained without normalization")
-      catalog.workflow.rawJson shouldBe workflow
-      catalog.definition.fixtureSha256.value shouldBe catalog.workflow.sha256
+      Then("the executable reference is resolved without a content certificate")
       catalog.definition.workflowIdentity.value shouldBe "GoalPhaseWorkflow"
       catalog.definition.workflowRevision.value shouldBe "goal-phase-ordered-run-v4"
     }
@@ -104,14 +101,10 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
       val judgment = root.hcursor.downField("models").downArray.downField("judgments").downArray
       val scalarFields = Vector("goal", "context", "candidate", "expectedResult", "rationale", "evidence",
         "evidenceScope", "evidenceFreshness", "evidenceProvenance")
-      val changes = scalarFields.flatMap(field => Vector(
-        judgment.downField(field).downField("value").withFocus(_ => io.circe.Json.fromString("foreign-policy")),
-        judgment.downField(field).downField("source").downField("line").withFocus(_ => io.circe.Json.fromInt(999)))) ++
-        Vector("alternatives", "criteria").flatMap(field => Vector(
-          judgment.downField(field).downArray.downField("value").withFocus(_ => io.circe.Json.fromString("foreign-policy")),
-          judgment.downField(field).downArray.downField("source").downField("line").withFocus(_ => io.circe.Json.fromInt(999)))) ++
-        Vector("semanticSource").map(field =>
-          judgment.downField(field).downField("line").withFocus(_ => io.circe.Json.fromInt(999)))
+      val changes = scalarFields.map(field =>
+        judgment.downField(field).downField("value").withFocus(_ => io.circe.Json.fromString("foreign-policy"))) ++
+        Vector("alternatives", "criteria").map(field =>
+          judgment.downField(field).downArray.downField("value").withFocus(_ => io.circe.Json.fromString("foreign-policy")))
       When("each structurally valid artifact reaches compiled policy admission")
       changes.foreach { cursor =>
         val changed = cursor.top.getOrElse(fail("policy mutation path missing")).noSpaces
@@ -119,14 +112,14 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
           val admitted = take(org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi.parseC(changed))
           org.goldenport.cncf.workflow.CandidateWorkflowAbi.parseC(workflow, admitted,
             "src/main/cozy/sm-workflow.cml") shouldBe a[Consequence.Success[?]]
-          Then("the unchanged Workflow contract cannot hide a changed policy or its provenance")
+          Then("an incompatible executable judgment policy is rejected")
           GoalPhaseRuntimeCatalog.parseC(workflow, changed) shouldBe a[Consequence.Failure[?]]
         }
       }
     }
 
-    "reject receiver-valid model and Admission correlation provenance substitutions" in {
-      Given("an admitted producer with individually substituted identity labels or source correlations")
+    "accept display and source metadata changes without treating them as policy incompatibility" in {
+      Given("Spec: docs/spec/workflow-definition-reference.md; Rule: R1; Example: E3; a compatible producer with moved sources")
       val root = io.circe.parser.parse(producer).fold(error => fail(error.toString), identity)
       val model = root.hcursor.downField("models").downArray
       val changes = Vector(
@@ -144,21 +137,21 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
         val changed = cursor.top.getOrElse(fail("correlation mutation path missing")).noSpaces
         withClue(changed) {
           take(org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi.parseC(changed))
-          Then("compiled GoalPhase correlation admission rejects the different producer")
-          GoalPhaseRuntimeCatalog.parseC(workflow, changed) shouldBe a[Consequence.Failure[?]]
+          Then("diagnostic source correlations and display labels are not restart gates")
+          GoalPhaseRuntimeCatalog.parseC(workflow, changed) shouldBe a[Consequence.Success[?]]
         }
       }
     }
 
-    "preserve whitespace-sensitive receiver identity rather than rewriting artifact bytes" in {
+    "accept formatting and generation metadata changes without content certificates" in {
       Given("two semantically equal artifacts with distinct raw bytes")
       When("each is independently admitted against the same compiled descriptor")
       val original = take(GoalPhaseRuntimeCatalog.parseC(workflow, producer))
-      val spaced = take(GoalPhaseRuntimeCatalog.parseC(workflow + "\n", producer))
-      Then("catalog admission retains each exact fingerprint for persisted binding checks")
+      val spaced = take(GoalPhaseRuntimeCatalog.parseC(workflow + "\n", producer.replace(
+        "cozy.modeler.CandidateAdmissionProducerAbiGenerator", "another-compatible-generator")))
+      Then("no unchanged-content certificate is produced or required")
       spaced.workflow.workflow shouldBe original.workflow.workflow
-      spaced.workflow.rawJson shouldBe workflow + "\n"
-      spaced.definition.fixtureSha256 should not be original.definition.fixtureSha256
+      SplitPhaseDefinitionBinding.sameDefinition(spaced.definition, original.definition) shouldBe true
       GoalPhaseRuntimeCatalog.admitBindingC(null, null, original.producer) shouldBe a[Consequence.Failure[?]]
     }
   }

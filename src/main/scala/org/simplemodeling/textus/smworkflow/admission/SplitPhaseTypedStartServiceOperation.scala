@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2
-import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.workflow.WorkflowWaitJsonV1
@@ -21,7 +20,7 @@ private[smworkflow] object SplitPhaseTypedStartServiceOperation {
     host: SplitPhaseManagedTypedStartAssembly.Host, instances: CallScopedWorkflowInstances.Port): Consequence[spec.OperationDefinition] = {
     val generated = SplitPhaseWorkflowStateMachineProvidedApi2.workflow
     val start = generated.providedOperations.filter(o => o.service == "SplitPhaseService" && o.name == "startSplitPhase")
-    if (inputs == null || revision == null || host == null || host.asOf == null || host.verifier == null || instances == null ||
+    if (inputs == null || revision == null || host == null || host.evidence == null || instances == null ||
         generated.identity != "SplitPhaseWorkflow" || start.size != 1 || start.head.inputType != Some("SplitPhaseStartCommand") ||
         start.head.resultType != Some("SplitPhaseStartResult"))
       Consequence.configurationInvalid("SplitPhase typed Start differs from its existing generated ABI or host dependencies")
@@ -53,11 +52,8 @@ private[smworkflow] object SplitPhaseTypedStartServiceOperation {
     host: SplitPhaseManagedTypedStartAssembly.Host, instances: CallScopedWorkflowInstances.Port) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = for {
       prepared <- inputs.prepareInvocationForCallC(command, revision, core)
-      asOf <- try Option(host.asOf()).map(Consequence.success).getOrElse(
-        Consequence.serviceUnavailable("SplitPhase Start host time is absent"))
-        catch { case NonFatal(_) => Consequence.serviceUnavailable("SplitPhase Start host time is unavailable") }
-      human <- SplitPhaseTypedStartHumanVerification.admitForCallC(prepared, asOf, core, host.verifier)
-      result <- SplitPhaseTypedStartExecution.startForCallC(prepared, human, core, instances)
+      human <- SplitPhaseTypedStartHumanVerification.admitForCallC(prepared, core, host.evidence)
+      result <- SplitPhaseTypedStartExecution.startForCallC(human, core, instances)
       wire <- WorkflowWaitJsonV1.encodeC(result)
     } yield OperationResponse.Scalar(wire)
   }

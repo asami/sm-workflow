@@ -13,7 +13,8 @@ import org.simplemodeling.textus.smworkflow.value.{ReviewStepResult, StepReviewE
   * The worker supplies only ReviewStepResult. The Host owns the issued envelope,
   * mapping policy and observed execution identity; the Workflow owns progression.
   * @since   Sep. 29, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[admission] final class GoalPhaseWorkerFixtureHost(model: String) extends AutoCloseable {
   import GoalPhaseApplicationFixture.take
@@ -53,9 +54,7 @@ private[admission] final class GoalPhaseWorkerFixtureHost(model: String) extends
 
   def submitC(result: ContinuationResult[ReviewStepResult]): Consequence[String] =
     WorkflowResultJsonV1.encodeC(result, GoalPhaseReviewCompletionOperation.payloadCodec)
-      .flatMap(wire => WorkflowResultJsonV1.decodeC(wire, GoalPhaseReviewCompletionOperation.payloadCodec)
-        .flatMap(decoded => if (decoded == result) fixture.invoke("submitStepReview", wire)
-          else Consequence.stateConflict("Worker Result JSON was not lossless")))
+      .flatMap(wire => fixture.invoke("submitStepReview", wire))
 
   def close(): Unit = fixture.subsystem.shutdown()
 }
@@ -75,7 +74,7 @@ private[admission] object GoalPhaseWorkerFixtureHost {
       Consequence.stateConflict("Deterministic Provider has no calibration for this candidate")
     else Consequence.success(ReviewStepResult("accept", "Exact known increment candidate satisfies its complete Step contract",
       Vector(StepReviewEvidence("deterministic-review", fixture.originalCandidate,
-        "2026-09-27T23:59:00Z", "2026-09-28T01:00:00Z", "full-step",
+        "2026-09-27T23:59:00Z", "full-step",
         "Fixed known-candidate verification", "deterministic-provider"))))
 
   def trace(fixture: GoalPhaseApplicationFixture): Json = Json.arr(fixture.stored.history.map(entry => Json.obj(

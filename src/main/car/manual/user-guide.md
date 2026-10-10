@@ -34,7 +34,7 @@ In a source checkout, use the existing
 and [direct Operation specification](../../../../src/test/scala/org/simplemodeling/textus/smworkflow/admission/ThreeWorkflowDirectOperationSpec.scala).
 These are repository-only source links, not promised packaged manual routes or
 a production input issuer. Select the existing example
-`continue actual scope through enriched and any assigned reasoning to its complete outcome`
+`E12 session result consumption: continue actual scope through enriched and any assigned reasoning to its complete outcome`
 through the registered serial test runner. Do not run SBT directly or substitute
 its separate-process observation entry as a public client.
 
@@ -45,7 +45,8 @@ initializes shared storage and the normal three-service bindings, then:
 2. Registers the specification-owned partition context and calls
    `advanceSplitPhase`; Workflow issues the genuine handoff-scope WorkOrder.
 3. Returns only the assigned `Enriched` scope result through
-   `submitHandoffScopeResult`, preserving its complete issued references.
+   `submitHandoffScopeResult`; the reduced input omits the saved result destination
+   because Workflow resolves that assignment internally.
 4. Lets Workflow issue any genuinely unknown reasoning task, returns only that
    assigned result, and advances to the complete read-only Preview.
 5. Reopens a separate runtime/JVM to observe the retained work and final outcome,
@@ -99,8 +100,13 @@ WorkOrder, Decision, Wait or Terminal instead of asking the caller to choose an
 internal stage.
 
 A semantic participant returns only the requested typed result to the completion
-Operation identified in its issued work. Preserve the handle, run/continuation
-identity, expected revision, context snapshot and assigned result reference.
+Operation identified in its issued work. With normal reduced submission, Workflow
+resolves handle, run/continuation identity, revision and snapshot from the actual
+issued state. Supply session context and only a request selector when actual
+issued generations are ambiguous. The three Split semantic completions also
+resolve their assigned destination; return `result.value` without a destination
+echo. Other actual artifact/result/evidence references remain required business
+data. A historical full-envelope client retains its original wire contract.
 Never add a cursor, argv, winning candidate, storage plan or permission to an
 advance command. Do not invent a human answer or accepted review.
 
@@ -138,8 +144,10 @@ the Operation caller is direct rather than a CLI process.
 
 ## Reopen without repeating effects
 
-Open a fresh configured runtime and use the saved Workflow identity and original
-context. Do not reinstall instances or fabricate history. Pending assigned work,
+Open a fresh configured runtime and use the same session context, adding a target
+selector only for genuine ambiguity. Historical identity-based clients still use
+their saved Workflow identity and original context. Do not reinstall instances
+or fabricate history. Pending assigned work,
 completed results and Terminal must be observed through the public interface.
 An unchanged duplicate result may return its original saved acknowledgement;
 a changed or crossed result must not create another completion.

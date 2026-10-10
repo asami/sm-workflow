@@ -11,6 +11,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterDecoder, ComponentParameterKey}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.workflow.WorkflowExecutionProfileParameters
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
 
@@ -47,10 +48,43 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
   }
   def encode(value: Definition): Json = value.asJson
   def decodeDefinitionC(value: Json): Consequence[Definition] =
-    Option(value).toRight("Three-workflow host definition is absent").flatMap(_.as[Definition].left.map(_.message))
-      .flatMap(d => Either.cond(d.schemaVersion == schema && encode(d) == value, d,
-        "Three-workflow host schema or declared fields differ"))
+    Option(value).filter(_definition_shape).toRight("Three-workflow host declared fields differ")
+      .flatMap(_.as[Definition].left.map(_.message))
+      .flatMap(d => Either.cond(d.schemaVersion == schema, d, "Three-workflow host schema differs"))
       .fold(Consequence.configurationInvalid(_), Consequence.success)
+
+  // Shape belongs to this input boundary; typed decoding owns field values.
+  // A valid value need not be the serializer's exact presentation (e.g. Set
+  // members may repeat). This does not admit host policies or command grants.
+  private def _object_shape(value: Json, names: Set[String],
+    nested: Map[String, Json => Boolean] = Map.empty): Boolean =
+    value.asObject.exists(fields => fields.keys.toSet == names &&
+      nested.forall((name, shape) => fields(name).exists(shape)))
+  private def _check_array_shape(value: Json): Boolean =
+    value.asArray.exists(_.forall(item => _object_shape(item, Set("identity", "ordinal"))))
+  private def _validation_shape(value: Json): Boolean =
+    _object_shape(value, Set("identity", "revision", "checks"), Map("checks" -> _check_array_shape))
+  private def _program_array_shape(value: Json): Boolean =
+    value.asArray.exists(_.forall(item => _object_shape(item, Set("step", "ordinal"))))
+  private def _closure_shape(value: Json): Boolean =
+    _object_shape(value, Set("identity", "revision", "programs"), Map("programs" -> _program_array_shape))
+  private def _goal_shape(value: Json): Boolean =
+    _object_shape(value, Set("input", "candidatePaths", "stepValidation", "phaseValidation", "review", "closure"), Map(
+      "input" -> (v => _object_shape(v, Set("phaseIdentity", "repositoryIdentity"))),
+      "stepValidation" -> _validation_shape, "phaseValidation" -> _validation_shape,
+      "review" -> (v => _object_shape(v, Set("identity", "revision"))),
+      "closure" -> _closure_shape))
+  private def _repository_shape(value: Json): Boolean =
+    _object_shape(value, Set("input", "closureSelection", "validation", "conflicts", "review"), Map(
+      "input" -> (v => _object_shape(v, Set("repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch",
+        "remoteEndpointIdentity", "syncMode", "repositoryPolicyVersion"))),
+      "validation" -> (v => _object_shape(v, Set("identity", "revision", "mode", "reason", "checks"), Map("checks" -> _check_array_shape))),
+      "conflicts" -> (v => _object_shape(v, Set("semanticPaths", "maximumConflicts", "maximumBlobBytes"))),
+      "review" -> (v => _object_shape(v, Set("identity", "revision", "maximumPaths", "maximumDiffBytes")))))
+  private def _definition_shape(value: Json): Boolean =
+    _object_shape(value, Set("schemaVersion", "target", "goal", "repository"), Map(
+      "target" -> (v => _object_shape(v, Set("root", "localBranch", "remote", "remoteBranch", "endpoint"))),
+      "goal" -> _goal_shape, "repository" -> _repository_shape))
 
   val definition = ComponentParameterKey.required("sm-workflow.host.definition",
     ComponentParameterDecoder[Definition] {
@@ -59,7 +93,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         .fold(_ => Consequence.configurationInvalid("Three-workflow host JSON is invalid"), decodeDefinitionC)
       case _ => Consequence.configurationInvalid("Three-workflow host requires an explicit structured definition")
     })
-  val declarations: Vector[ComponentParameterKey[?]] = GoalPhaseRuntimeParameters.declarations :+ definition
+  val declarations: Vector[ComponentParameterKey[?]] =
+    GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -72,6 +107,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Consequence.configurationInvalid("Three-workflow host definition is not configured"))
       catalog <- GoalPhaseRuntimeCatalog.loadC()
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters, catalog)
+      executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
@@ -86,7 +122,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         settings.goal.input, target, settings.goal.candidatePaths, Some(settings.goal.stepValidation),
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
-        Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)))
+        Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
+        executionprofiles)
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations)

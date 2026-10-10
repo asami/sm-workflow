@@ -181,11 +181,31 @@ final class SplitPhaseManagedPartitionPreparationSpec extends AnyWordSpec with M
                 take(preparation.prepareForCallC(S.ContextReference("absent", "1"), capsule)) shouldBe None
                 contextRows.tail.foreach(r => preparation.prepareForCallC(r.reference, capsule).isSuccess shouldBe false)
                 rows.foreach { row =>
+                  Given(s"an independent current ${row.purpose} row and an unchanged historical context")
+                  When("the actual row is updated and managed preparation reads its selected references")
                   take(installer.changeC(row, row.drift))
+                  val current = take(currentInputs.loadCurrentForCallC(facts, capsule))
+                  val stored = take(contexts.loadForCallC(record.reference, capsule))
+                  val result = preparation.prepareForCallC(record.reference, capsule)
+                  Then("compatible current values are consumed and only concrete source contradictions fail")
                   withClue(row.purpose.toString) {
-                    take(currentInputs.loadCurrentForCallC(facts, capsule)) should not be facts
-                    take(contexts.loadForCallC(record.reference, capsule)) shouldBe Some(record)
-                    preparation.prepareForCallC(record.reference, capsule).isSuccess shouldBe false
+                    current should not be facts
+                    stored shouldBe Some(record)
+                    row.purpose match {
+                      case Purpose.Source | Purpose.Inventory | Purpose.Boundary | Purpose.Planning =>
+                        result.isSuccess shouldBe false
+                      case _ =>
+                        val accepted = take(result).get
+                        accepted.record.facts shouldBe current
+                        row.purpose match {
+                          case Purpose.Proposal => accepted.record.facts.proposal.proposal.children.head.expectedMinutes shouldBe 361
+                          case Purpose.Ownership => accepted.selection.partition.boundary.records.ownership.method shouldBe "other-method"
+                          case Purpose.Handoffs => accepted.request.boundaries shouldBe empty
+                          case Purpose.Estimates => accepted.selection.partition.records.estimates.items.head.duration shouldBe E.Duration.Known(261)
+                          case Purpose.PartitionPolicy => accepted.selection.partition.records.policy.phaseOverheadMinutes shouldBe 15
+                          case _ => fail("Unexpected compatible purpose")
+                        }
+                    }
                   }
                   take(installer.changeC(row, row.raw))
                 }

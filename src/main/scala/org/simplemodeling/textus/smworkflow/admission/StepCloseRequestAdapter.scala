@@ -37,12 +37,11 @@ object StepCloseRequestAdapter {
       Consequence.stateConflict("Step review has no valid target revision")
     else for {
       reviewedAt <- _instantC(declared.reviewedAt)
-      validUntil <- _instantC(declared.validUntil)
       scope <- _scopeC(declared.scope)
       evidence <- StepClosureAdmission.evidenceC(
         declared.evidenceIdentity,
         CandidateRef(stepIdentity, declared.reviewedRevision),
-        ReviewEvidence(declared.reviewedRevision, reviewedAt, validUntil, declared.summary),
+        ReviewEvidence(declared.reviewedRevision, reviewedAt, declared.summary),
         scope,
         declared.provenance
       )

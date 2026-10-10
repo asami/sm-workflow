@@ -13,7 +13,8 @@ import GoalPhaseCallScopedSnapshot.{Scope, Purpose}
 /** Initial candidate registration, not startup, refresh or a transition.
   * Uses the same opaque Create-only capability as other admitted Component
   * records. Stored submission claims are checked against retained Start and
-  * actual ingress provenance; reference claims are checked against Blob bytes.
+  * actual ingress provenance; selected references are resolved under the
+  * current call and actual payload reads are bounded, not hash-certified.
   * @since   Oct.  1, 2026
   * @version Oct.  8, 2026
   */
@@ -29,11 +30,8 @@ private[smworkflow] object GoalPhaseManagedArtifactInstallation {
         !core.component.exists(value => value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty))
       Consequence.stateConflict("Artifact installation requires its complete owning current call")
     else for {
-      key <- GoalPhaseArtifactReferenceRecord.keyC(scope)
-      _ <- GoalPhaseArtifactReferenceRecord.encodeStorageC(scope, selected, maximumBytes).map(_ => ())
-      _ <- if (scope.purpose == Purpose.Candidate && selected.program.digest == scope.request.programDigest &&
-          selected.planning.digest == scope.request.planningDigest) Consequence.unit
-        else Consequence.stateConflict("Initial artifact registration requires exact candidate content, not a repair successor")
+      _ <- if (scope.purpose == Purpose.Candidate) Consequence.unit
+        else Consequence.stateConflict("Initial artifact registration is not a repair successor operation")
       _ <- declaration.configuration.validateC
       _ <- if (associationCollection != artifactCollection &&
           !Vector(declaration.instances, declaration.continuations).exists(value =>
@@ -41,7 +39,6 @@ private[smworkflow] object GoalPhaseManagedArtifactInstallation {
         else Consequence.stateConflict("Artifact registration aliases Workflow or submission infrastructure")
       storeName = declaration.configuration.workflowStore.name
       _ <- GoalPhaseArtifactReadPolicy.admitC(core.component.get.subsystem.get.configuration, storeName, artifactCollection)
-      storage <- ComponentRecordStorage.bindForCallC(core, storeName, artifactCollection, DataStore.StringEntryId(key))
       storedRegistration <- ManagedHostRecordRead.loadC(core, storeName, associationCollection,
         scope.request.submissionIdentity, GoalPhaseHostRecordReadPolicy.Purpose.Association)
       raw <- storedRegistration.flatMap(_.getString(GoalPhaseSubmissionRegistration.storageField))
@@ -52,15 +49,13 @@ private[smworkflow] object GoalPhaseManagedArtifactInstallation {
       _ <- GoalPhaseParticipantAdmission.admitC(registration.request.start.participantIdentity, core.executionContext)
       retained <- GoalPhaseManagedStartAssembly.loadRetainedForCallC(registration.request.start, core, declaration, selection)
       _ <- GoalPhaseSubmissionRegistration.matchesRetainedC(registration, registration.request, retained)
-      existing <- storage.loadC()
-      _ <- existing.fold(Consequence.unit)(record =>
-        GoalPhaseArtifactCatalogRetention.compareC(scope, selected, maximumBytes, record).map(_ => ()))
-      _ <- new ReadBytes(core, storeName, selected, maximumBytes).readC()
+      key <- GoalPhaseArtifactReferenceRecord.keyC(scope)
+      storage <- ComponentRecordStorage.bindForCallC(core, storeName, artifactCollection, DataStore.StringEntryId(key))
       result <- GoalPhaseArtifactCatalogRetention.retainC(scope, selected, maximumBytes,
         new GoalPhaseArtifactCatalogRetention.Port {
           def loadC() = storage.loadC()
           def createC(record: org.goldenport.record.Record) = storage.createC(record)
-        })
+        }, actual => new ReadBytes(core, storeName, actual, maximumBytes).readC())
     } yield result
 
   private final class ReadBytes(val core: ActionCall.Core, storeName: String, selected: References,

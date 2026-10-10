@@ -2,19 +2,33 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionContext as C,
   SplitPhaseExplicitPartitionSemantic as S}
 
 /**
  * Exact raw-data read only. No retained lease, writer or decoded admission.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] final class SplitPhasePartitionContextDataStorePort(
   declaration: SplitPhasePartitionContextReadPolicy.Declaration
 ) {
   def loadC(reference: S.ContextReference): Consequence[Option[C.Record]] =
     Consequence.stateConflict("SplitPhase partition context requires its current Operation")
+
+  def findForCallC(instanceIdentity: InstanceIdentity, core: ActionCall.Core): Consequence[Vector[C.Record]] =
+    ManagedHostRecordRead.searchSplitPartitionContextsC(core, declaration.storeName, declaration.collection)
+      .flatMap { rows =>
+        rows.foldLeft(Consequence.success(Vector.empty[C.Record])) { (acc, row) =>
+          for {
+            prior <- acc
+            selected <- row.getString(SplitPhaseExplicitPartitionContextJsonV1.storageField)
+              .map(raw => SplitPhaseExplicitPartitionContextJsonV1.findForInstanceC(raw, instanceIdentity.value))
+              .getOrElse(Consequence.success(None))
+          } yield prior ++ selected.toVector
+        }
+      }
 
   def loadForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Record]] =
     if (declaration == null || reference == null || !name(reference.identity) || !name(reference.revision))

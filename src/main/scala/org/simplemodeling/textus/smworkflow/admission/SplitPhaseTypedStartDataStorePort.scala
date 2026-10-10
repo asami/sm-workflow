@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Current Operation reads only; owns no pool, lease, writer or Start authority.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admission] (
   declaration: SplitPhaseTypedStartReadPolicy.Declaration,
@@ -32,14 +32,39 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
     }
 
   def prepareForCallC(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Prepared]] =
-    observeForCallC(reference, core).flatMap {
+    _load_allocation_c(reference, core).flatMap {
       case None => Consequence.success(None)
-      case Some(frozen) => T.prepareC(frozen, frozen.source, frozen.proposal, frozen.selection,
-        catalog, workflow.configuration).map(Some(_))
+      case Some(allocation) => for {
+        source <- inputs.loadSourceForCallC(allocation.source, core)
+        proposal <- allocation.proposal match {
+          case None => Consequence.success(None)
+          case Some(value) => inputs.loadProposalForCallC(value, core).map(Some(_))
+        }
+        selection <- selections.loadForCallC(allocation.command.selectionIdentity, core).flatMap {
+          case Some(value) => Consequence.success(value)
+          case None => Consequence.stateConflict("SplitPhase typed Start current selection is absent")
+        }
+        actual = T.Record(allocation.reference, allocation.instanceIdentity,
+        catalog.definition.workflowIdentity, catalog.definition.workflowRevision, workflow.configuration,
+        allocation.command, selection, source, proposal)
+        prepared <- T.prepareC(actual, source, proposal, selection, catalog, workflow.configuration)
+      } yield Some(prepared)
     }
 
-  /** Independent original data only; no Start construction or human ingress. */
-  def observeForCallC(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Record]] =
+  /** Original routing consumes no current input bodies or fresh consent. */
+  def observeForCallC(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Routing]] =
+    _load_raw_c(reference, core).flatMap {
+      case None => Consequence.success(None)
+      case Some(raw) => SplitPhaseTypedStartJsonV1.decodeRoutingC(reference, raw).map(Some(_))
+    }
+
+  private def _load_allocation_c(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Allocation]] =
+    _load_raw_c(reference, core).flatMap {
+      case None => Consequence.success(None)
+      case Some(raw) => SplitPhaseTypedStartJsonV1.decodeAllocationC(reference, raw).map(Some(_))
+    }
+
+  private def _load_raw_c(reference: T.Reference, core: ActionCall.Core): Consequence[Option[String]] =
     if (reference == null || !name(reference.identity) || !name(reference.revision))
       Consequence.stateConflict("SplitPhase typed Start requires an exact reference/revision")
     else ManagedHostRecordRead.loadSplitTypedStartC(core, declaration.storeName, declaration.collection, reference.identity)
@@ -48,19 +73,7 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
         case Some(row) => for {
           raw <- row.getString(SplitPhaseTypedStartJsonV1.storageField).map(Consequence.success)
             .getOrElse(Consequence.stateConflict("SplitPhase typed Start payload is absent"))
-          frozen <- SplitPhaseTypedStartJsonV1.decodeC(reference, raw)
-          source <- inputs.loadSourceForCallC(frozen.source.reference, core)
-          proposal <- frozen.proposal match {
-            case None => Consequence.success(None)
-            case Some(value) => inputs.loadProposalForCallC(value.reference, core).map(Some(_))
-          }
-          selection <- selections.loadForCallC(frozen.command.selectionIdentity, core).flatMap {
-            case Some(value) => Consequence.success(value)
-            case None => Consequence.stateConflict("SplitPhase typed Start current selection is absent")
-          }
-          _ <- if (frozen.source == source && frozen.proposal == proposal && frozen.selection == selection) Consequence.unit
-            else Consequence.stateConflict("SplitPhase observed Start differs from complete independent records")
-        } yield Some(frozen)
+        } yield Some(raw)
       }
   def bindPartitionForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[T.PartitionBound]] =
     contexts.prepareForCallC(reference, core).flatMap {

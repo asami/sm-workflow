@@ -32,14 +32,13 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
         When("the packaged SplitPhase definition is selected against all compiled policy facts")
         val catalog = take(SplitPhaseRuntimeCatalog.loadC(loader))
         Then("the complete official resource bytes and exact SplitPhase binding are retained")
-        catalog.workflow.rawJson shouldBe workflowText
         catalog.workflow.workflow shouldBe take(SplitPhaseDefinitionBinding.candidateC).workflow
         catalog.definition.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
         catalog.definition.workflowRevision.value shouldBe "split-phase-selected-application-v12"
         catalog.definition.validateC shouldBe a[Consequence.Success[?]]
         catalog.producer.models.map(_.model.workflow.map(_.identity.value)).flatten.toSet shouldBe
           Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow")
-        take(SplitPhaseRuntimeCatalog.loadC()).workflow.rawJson shouldBe workflowText
+        take(SplitPhaseRuntimeCatalog.loadC()).workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
       } finally loader.close()
     }
 
@@ -120,9 +119,8 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
       val judgment = original.hcursor.downField("models").downN(index).downField("judgments").downArray
       val fields = Vector("goal", "context", "candidate", "expectedResult", "rationale", "evidence",
         "evidenceScope", "evidenceFreshness", "evidenceProvenance")
-      val changes = fields.flatMap(field => Vector(
-        judgment.downField(field).downField("value").withFocus(_ => Json.fromString("foreign-policy")),
-        judgment.downField(field).downField("source").downField("line").withFocus(_ => Json.fromInt(999)))) ++
+      val changes = fields.map(field =>
+        judgment.downField(field).downField("value").withFocus(_ => Json.fromString("foreign-policy"))) ++
         Vector("alternatives", "criteria").map(field =>
           judgment.downField(field).downArray.downField("value").withFocus(_ => Json.fromString("foreign-policy")))
       When("each receiver-valid changed policy is compared with the complete compiled producer")

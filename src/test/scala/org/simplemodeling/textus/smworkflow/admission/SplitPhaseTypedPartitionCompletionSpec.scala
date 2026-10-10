@@ -15,7 +15,7 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _binding = take(T.bindPartitionC(prepared, partition))
@@ -23,7 +23,7 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
   private def allocation = issue.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value.reply
   private def result(plan: I.Plan): ContinuationResult[S.Judgment] = {
     val work = plan.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
-    val payload = S.Judgment(work.input.get.value.context, S.Decision.Enriched, "semantic-only",
+    val payload = S.Judgment(S.Decision.Enriched, "semantic-only",
       work.input.get.value.items.map(i => S.NovelEstimate(i.identity, 120, 180, "bounded-work", "novel-closure")),
       work.input.get.value.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
         SplitPhasePartitionEnumeration.EdgeDisposition.Either, "independent-closure")),
@@ -36,17 +36,32 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
   private def pending(plan: I.Plan) = take(P.pendingC(context, facts, prepared, plan.projected, plan.interaction, configuration, catalog))
 
   "Typed partition completion" should {
-    "absorb host candidate allocation without another history entry and reconstruct it solely from stored planning data" in {
+    "project the selected disposition from actual committed native state without a planned-body certificate" in {
+      Given("an admitted issued answer and a real native append following its selected completion")
+      val issued = issue
+      val completed = take(P.admitC(pending(issued), result(issued)))
+      val actual = take(completed.next.appendC(completed.next.revision, completed.next.history.last.copy(
+        sequence = HistorySequence(4), revision = InstanceRevision(4), causation = CausationReference("native-observation"))))
+      When("the response projects actual committed state rather than proving equality to the selected Plan")
+      val wire = take(P.committedWireC(completed, actual))
+      val observed = take(WorkflowWaitJsonV1.decodeC(wire))
+      val wait = observed.current.asInstanceOf[WorkflowContinuation.Wait]
+      Then("the actual native revision and original requested disposition are consumed without replacing native history")
+      wait.expectedRevision shouldBe StateMachineRevision(actual.revision.value.toString)
+      wait.expectedRevision should not be StateMachineRevision(completed.next.revision.value.toString)
+      wait.presentation.title shouldBe "HostAllocationRequired"
+      observed.handle shouldBe issued.interaction.handle
+      actual.history.dropRight(1) shouldBe completed.next.history
+    }
+
+    "absorb host candidate allocation without another history entry or repeated enumeration" in {
       Given("a privately admitted completion whose next need is candidate allocation")
       val issued = issue
       val baseline = take(P.admitC(pending(issued), result(issued)))
       val need = baseline.mechanical.get.asInstanceOf[W.AllocationRequired]
       val allocated = take(SplitPhaseCandidateAllocationFixture.policy.allocateC(need, allocation.result))
-      When("Workflow continues the exact computed need and later reconstructs from its stored version")
+      When("Workflow continues the exact computed need using the host-assigned allocation")
       val continued = take(P.continueAllocatedC(baseline, allocated))
-      val retained = WorkflowCompletionRecordJsonV1.Record(continued.next.revision, continued.submitted, Some(continued.closing))
-      val observed = take(P.recoverC(context, facts, prepared, continued.next, issued.interaction, retained, configuration, catalog))
-      val recovered = take(P.recoverPlanningC(observed, Some(allocated.data)))
       Then("only mechanical planning changes, while canonical completion and adjacent native history remain identical")
       continued.next shouldBe baseline.next
       continued.closing shouldBe baseline.closing
@@ -54,50 +69,8 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       continued.mechanical.get should not be a[W.AllocationRequired]
       (continued.mechanical.get.trace.partition.asInstanceOf[AnyRef] eq need.enumerated) shouldBe true
       continued.mechanical.get.trace.mechanicalStages.count(_ == W.Stage.PartitionEnumeration) shouldBe 1
-      recovered.wire shouldBe continued.wire
-      recovered.next shouldBe continued.next
-      recovered.mechanical.get.selection.data shouldBe allocated.data
-      P.recoverPlanningC(observed, None).isSuccess shouldBe false
-      P.recoverPlanningC(observed, Some(allocated.data.copy(authority = allocated.data.authority.copy(revision = "foreign"))))
-        .isSuccess shouldBe false
       val other = take(P.admitC(pending(issued), result(issued)))
       P.continueAllocatedC(other, allocated).isSuccess shouldBe false
-    }
-
-    "reconstruct the exact retained completion prefix without replacing later native history" in {
-      Given("the original context, independent current facts and a durable issued WorkOrder")
-      val issued = issue
-      val completed = take(P.admitC(pending(issued), result(issued)))
-      val retained = WorkflowCompletionRecordJsonV1.Record(completed.next.revision, completed.submitted, Some(completed.closing))
-      val later = take(completed.next.appendC(completed.next.revision, completed.next.history.last.copy(
-        sequence = HistorySequence(4), revision = InstanceRevision(4), causation = CausationReference("later-native-call"))))
-      When("Workflow reconstructs from the canonical retained result and actual native prefix")
-      val recovered = take(P.recoverC(context, facts, prepared, later, issued.interaction, retained, configuration, catalog))
-      Then("the same completion and next mechanical need are reconstructed without treating revision four as completion")
-      SplitPhaseDefinitionBinding.sameRecord(recovered.next, completed.next) shouldBe true
-      recovered.closing shouldBe completed.closing
-      recovered.wire shouldBe completed.wire
-      take(P.verifyCompletedPrefixC(recovered, later)) shouldBe ()
-      later.history.size shouldBe 4
-    }
-
-    "refuse crossed retained revisions closing values raw results and current facts during recovery" in {
-      Given("a canonical retained completion and its actual native history")
-      val issued = issue
-      val completed = take(P.admitC(pending(issued), result(issued)))
-      val retained = WorkflowCompletionRecordJsonV1.Record(completed.next.revision, completed.submitted, Some(completed.closing))
-      When("one complete recovery observation differs or the original issue is still pending")
-      val variants = Vector(retained.copy(instanceRevision = InstanceRevision(4)), retained.copy(closingResult = None),
-        retained.copy(closingResult = Some(completed.closing.copy(contextReference = ContextReference("other", "1")))),
-        retained.copy(result = retained.result.copy(resultReference = ContextReference("other", "1"))))
-      Then("no privately admitted Plan can be recovered from the conflicting observations")
-      variants.foreach(value => P.recoverC(context, facts, prepared, completed.next, issued.interaction, value,
-        configuration, catalog).isSuccess shouldBe false)
-      val drift = facts.copy(proposal = facts.proposal.copy(source = source.copy(authority = source.authority.copy(revision = "2"))))
-      P.recoverC(context, drift, prepared, completed.next, issued.interaction, retained, configuration, catalog)
-        .isSuccess shouldBe false
-      P.recoverC(context, facts, prepared, issued.projected, issued.interaction, retained, configuration, catalog)
-        .isSuccess shouldBe false
     }
 
     "admit only issued semantic gaps and resume deterministic enumeration without selecting an AI processor" in {
@@ -122,20 +95,41 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       wait.presentation.title shouldBe "HostAllocationRequired"
     }
 
-    "refuse changed complete current facts and an unrelated or already completed history" in {
+    "consume saved presentation and diagnostic Context without reconstructing its issued WorkOrder" in {
+      Given("an actual issue and compatible saved presentation and non-model Context diagnostics")
+      val issued = issue
+      val order = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]]
+      val savedorder = order.copy(presentation = order.presentation.copy(summary = Some("saved explanation")),
+        request = order.request.copy(context = order.request.context.copy(
+          summary = "original saved semantic task",
+          references = Vector(ContextReference("diagnostic-context", "old")),
+          snapshot = order.request.context.snapshot.copy(workspaceRevision = Some("old-workspace"),
+            evidenceRevision = Some("old-evidence")))))
+      val saved = issued.interaction.copy(current = savedorder)
+      When("the actual result boundary consumes saved work and the answer to its assigned semantic gaps")
+      val selected = take(P.pendingC(context, facts, prepared, issued.projected, saved, configuration, catalog))
+      val completed = take(P.admitC(selected, result(issued)))
+      Then("the original saved WorkOrder and known facts survive without an issue-copy certificate or another issue")
+      selected.issued shouldBe saved
+      completed.semantic shouldBe a[S.Enriched]
+      completed.semantic.asInstanceOf[S.Enriched].admitted.resolvedItems.head shouldBe facts.partition.estimates.items.head
+      completed.next.history.dropRight(1) shouldBe issued.projected.history
+      completed.next.revision shouldBe issued.projected.revision.next
+      completed.next.suspension shouldBe None
+    }
+
+    "refuse incompatible consumed source and an unrelated or already completed history" in {
       Given("a canonical issue containing its complete host-assigned Reply")
       val issued = issue
       val drift = facts.copy(proposal = facts.proposal.copy(source = source.copy(authority = source.authority.copy(revision = "2"))))
-      When("current facts or canonical history and issue data are crossed")
-      Then("no private Pending is constructed")
-      P.pendingC(context, drift, prepared, issued.projected, issued.interaction, configuration, catalog).isSuccess shouldBe false
-      P.pendingC(context, facts, prepared, instance, issued.interaction, configuration, catalog).isSuccess shouldBe false
       val next = take(P.admitC(pending(issued), result(issued))).next
-      P.pendingC(context, facts, prepared, next, issued.interaction, configuration, catalog).isSuccess shouldBe false
-      val work = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]]
-      val crossed = issued.interaction.copy(current = work.copy(request = work.request.copy(
-        input = Some(TypedValue(work.request.input.get.typeIdentity, work.request.input.get.value.copy(items = Vector.empty))))))
-      P.pendingC(context, facts, prepared, issued.projected, crossed, configuration, catalog).isSuccess shouldBe false
+      When("current facts or canonical history and issue data are crossed")
+      val selected = Vector(
+        P.pendingC(context, drift, prepared, issued.projected, issued.interaction, configuration, catalog).isSuccess,
+        P.pendingC(context, facts, prepared, instance, issued.interaction, configuration, catalog).isSuccess,
+        P.pendingC(context, facts, prepared, next, issued.interaction, configuration, catalog).isSuccess)
+      Then("no private Pending is constructed")
+      selected shouldBe Vector(false, false, false)
     }
 
     "reject crossed frame allocation evidence and unknown coverage before selecting a closing action" in {
@@ -145,8 +139,7 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       val variants = Vector(submitted.copy(expectedRevision = StateMachineRevision("9")),
         submitted.copy(resultReference = ContextReference("worker-chosen-result", "1")),
         submitted.copy(evidence = ExecutionEvidence(Vector.empty)),
-        submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(estimates = Vector.empty))),
-        submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(context = S.ContextReference("other", "1")))))
+        submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(estimates = Vector.empty))))
       When("a worker-selected result or other crossed frame is submitted")
       Then("no closing Plan is selected and malformed issued replies also refuse")
       variants.foreach(value => P.admitC(pending(issued), value).isSuccess shouldBe false)

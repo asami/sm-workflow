@@ -16,13 +16,13 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionContext as C,
   SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPartitionSemanticJson as J,
   SplitPhaseTypedPartitionCompletion as P, SplitPhaseExplicitPlanningAdvance as W,
-  SplitPhasePartitionCompletionCheckpointPreparation as A, SplitPhasePlanningCheckpointPublication as U,
+  SplitPhasePartitionCompletionCheckpointPreparation as A,
   SplitPhasePartitionCompletionCheckpointDataStorePort as D}
 
 /** Generated public completion on canonical storage. No lease/provider is
   * retained, and no historical hash-backed completion is an alternate route.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
   final class ObservedCompletion private[SplitPhaseManagedTypedPartitionCompletion] (
@@ -30,9 +30,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
   final class Binding private[SplitPhaseManagedTypedPartitionCompletion] (
     val operation: spec.OperationDefinition, issue: SplitPhaseManagedTypedPartitionIssue.Port,
     declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, starts: SplitPhaseTypedStartDataStorePort,
-    contexts: SplitPhasePartitionContextDataStorePort, inputs: SplitPhasePlanningInputDataStorePort,
-    instances: CallScopedWorkflowInstances.Port, targets: U.Targets, purposes: D.ReadPurposes) {
+    catalog: SplitPhaseRuntimeCatalog.Catalog) {
     /** Observation only. Actual SQL issued-work reading enforces the current
       * native call before the canonical retained-completion query is allowed.
       */
@@ -47,11 +45,11 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
 
     /** No planning reconstruction, allocation, human verifier or write. */
     def recoverForCallC(identity: ContinuationIdentity, core: ActionCall.Core):
-        Consequence[Option[ObservedCompletion]] = observeForCallC(identity, declaration, catalog, targets, purposes, core)
+        Consequence[Option[ObservedCompletion]] = observeForCallC(identity, declaration, catalog, core)
   }
 
   def observeForCallC(identity: ContinuationIdentity, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, targets: U.Targets, purposes: D.ReadPurposes,
+    catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core): Consequence[Option[ObservedCompletion]] = for {
     _ <- actorC(core, None)
     params = ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin)
@@ -65,7 +63,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
     result <- retained match {
       case None => Consequence.success(None)
       case Some(actual) => for {
-        reads <- currentReadsC(core, declaration, catalog, targets, purposes)
+        reads <- currentReadsC(core, declaration, catalog)
         saved <- reads.loadForCallC(identity, core)
         _ <- actorC(core, Some(saved.start.command.participantIdentity))
         instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
@@ -74,8 +72,11 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
           case Some(x) => Consequence.success(x)
           case _ => Consequence.stateConflict("SplitPhase recovery native instance is absent")
         }
-        _ <- reads.observeForCallC(saved, work, actual.completion, current, core)
-      } yield Some(new ObservedCompletion(saved, current))
+        // Native completion is authoritative. The stored calculation supplies
+        // inert data, not a second completion/result certificate. No old input,
+        // header or generated-document reread is needed to acknowledge it.
+        observed = saved.copy(completion = actual.completion)
+      } yield Some(new ObservedCompletion(observed, current))
     }
   } yield result
 
@@ -87,8 +88,6 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
       starts <- SplitPhaseTypedStartReadPolicy.bindC(params.configuration, declaration, catalog)
       contexts <- SplitPhasePartitionContextReadPolicy.bindC(params.configuration, declaration)
       inputs <- SplitPhasePlanningInputReadPolicy.bindC(params.configuration, declaration)
-      targets <- U.bindTargetsC(params.configuration, declaration)
-      purposes <- D.capturePurposesC(params.configuration)
       issue <- SplitPhaseManagedTypedPartitionIssue.bindC(params, declaration, catalog)
       storage <- WorkflowComponentStorage.bindC(params, SmWorkflowComponent.componentId, declaration.configuration,
         Vector(catalog.definition), declaration.instances, declaration.continuations)
@@ -102,7 +101,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
       instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
         declaration.instances, declaration.continuations)
       declared <- operationC(None, provided, op, declaration, catalog, starts, contexts, inputs, issue,
-        instances, Some(completion), targets, purposes)
+        instances, Some(completion))
       // A retained result is observed, not submitted as another adjacent
       // completion. Fresh results retain the canonical managed closing path.
       wrapped = new spec.OperationDefinition {
@@ -121,7 +120,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
                     case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
                     case _ => Consequence.stateConflict("SplitPhase completion requires one typed result JSON frame")
                   }
-                  retained <- observeForCallC(submitted.continuationId, declaration, catalog, targets, purposes, core)
+                  retained <- observeForCallC(submitted.continuationId, declaration, catalog, core)
                   response <- retained match {
                     case Some(actual) if actual.record.completion.result == submitted =>
                       Consequence.success(OperationResponse.Scalar(actual.record.wire))
@@ -129,7 +128,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
                     case None => for {
                       native <- nativeC(core, declaration, catalog)
                       bound <- operationC(Some(core), provided, op, declaration, catalog, starts, contexts,
-                        inputs, issue, instances, Some(native), targets, purposes)
+                        inputs, issue, instances, Some(native))
                       action <- bound.createOperationRequest(core.action.request).flatMap {
                         case value: CommandAction => Consequence.success(value)
                         case _ => Consequence.stateConflict("SplitPhase completion is not a canonical command")
@@ -149,17 +148,16 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
             case _ => Consequence.stateConflict("SplitPhase completion declaration is not a command")
           }
       }
-    } yield new Binding(wrapped, issue, declaration, catalog, starts, contexts, inputs, instances, targets, purposes)
+    } yield new Binding(wrapped, issue, declaration, catalog)
 
   private def operationC(core: Option[ActionCall.Core], provided: GeneratedProvidedApiAbi.Definition,
     op: GeneratedProvidedApiAbi.Operation, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, starts: SplitPhaseTypedStartDataStorePort,
     contexts: SplitPhasePartitionContextDataStorePort, inputs: SplitPhasePlanningInputDataStorePort,
     issue: SplitPhaseManagedTypedPartitionIssue.Port, instances: CallScopedWorkflowInstances.Port,
-    completion: Option[WorkflowManagedCompletion[S.Judgment]], targets: U.Targets,
-    purposes: D.ReadPurposes): Consequence[spec.OperationDefinition] = {
+    completion: Option[WorkflowManagedCompletion[S.Judgment]]): Consequence[spec.OperationDefinition] = {
     // These closures live only in the canonical current-call Operation binding.
-    var selected = Option.empty[A.Captured]
+    var selected = Option.empty[P.Plan]
     val issued = new IssuedWorkOrderPersistence[S.Request] {
       def putIfAbsentC(value: WorkflowInteraction[S.Request, Nothing]) =
         Consequence.stateConflict("SplitPhase completion cannot publish an issue")
@@ -180,18 +178,13 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
         completed: Option[WorkflowInstancePersistence.InstanceRecord]): Consequence[OperationResponse] = {
         val plan = selected
         selected = None
-        plan match {
-          case Some(value) if submitted == value.record.completion.result && completed.exists(actual =>
-              SplitPhaseDefinitionBinding.sameRecord(actual, value.record.next)) && resume != null &&
-              value.record.completion.closingResult.contains(resume.result) && core.nonEmpty =>
-            observeForCallC(submitted.continuationId, declaration, catalog, targets, purposes, core.get) match {
-              case Consequence.Success(Some(actual)) if actual.record == value.record =>
-                Consequence.success(OperationResponse.Scalar(actual.record.wire))
-              case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
-                "SplitPhase completion committed readback differs or is unavailable; do not retry")
-            }
+        // CNCF calls this only after the owning managed completion succeeds.
+        // Consume its native result; no extra read can certify that commit.
+        (plan, completed) match {
+          case (Some(value), Some(actual)) =>
+            P.committedWireC(value, actual).map(OperationResponse.Scalar(_))
           case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
-            "SplitPhase completion response lacks the matching committed instance and typed closing result")
+            "SplitPhase completion response lacks its selected disposition or actual committed instance")
         }
       }
     }
@@ -229,12 +222,12 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
             case _ => Consequence.success(initial)
           }
           captured <- A.captureC(plan)
-          reads <- currentReadsC(call, declaration, catalog, targets, purposes)
+          reads <- currentReadsC(call, declaration, catalog)
           staged <- reads.stageForCallC(captured, call)
           program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(plan.closing)))
         } yield {
-          selected = Some(captured)
+          selected = Some(plan)
           WorkflowCompletionServiceOperation.SelectedClosing(program, Some(plan.next))
         }
       }
@@ -257,14 +250,8 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
   } yield native
 
   private def currentReadsC(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, targets: U.Targets, purposes: D.ReadPurposes): Consequence[D] =
-    D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog).flatMap { port =>
-      val actual = port.reads.targets
-      if (actual.storeName == targets.storeName && actual.localCollections == targets.localCollections &&
-          actual.instances == targets.instances && actual.continuations == targets.continuations &&
-          port.purposes.sameAs(purposes)) Consequence.success(port)
-      else Consequence.stateConflict("SplitPhase actual call purposes differ from bound metadata")
-    }
+    catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[D] =
+    D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
 
   private def mutationActorC(core: ActionCall.Core): Consequence[Unit] = actorC(core, None).flatMap { _ =>
     if (core.action != null && core.action.request != null && core.action.request.service.contains(C.completionOperation.service) &&

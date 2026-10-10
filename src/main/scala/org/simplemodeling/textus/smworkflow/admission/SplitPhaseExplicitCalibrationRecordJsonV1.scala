@@ -4,7 +4,7 @@ import io.circe.{Json, parser}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
-import SplitPhaseExplicitDurationCalibration.{Reference, Request, Input}
+import SplitPhaseExplicitDurationCalibration.{Reference, Request}
 
 /** Closed calibration input data only. Decode neither calculates an estimate
   * nor establishes a current record, admission, grant or semantic authority.
@@ -34,21 +34,13 @@ private[smworkflow] object SplitPhaseExplicitCalibrationRecordJsonV1 {
         .map(Consequence.success).getOrElse(Consequence.stateConflict("SplitPhase explicit calibration envelope differs"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit
         else Consequence.stateConflict("SplitPhase explicit calibration schema differs")
+      _ <- if (SplitPhaseCalibrationRawShape.record(root("payload").get)) Consequence.unit
+        else Consequence.stateConflict("SplitPhase explicit calibration nested structure differs")
       value <- root("payload").get.as[Record].fold(
         _ => Consequence.stateConflict("SplitPhase explicit calibration payload is invalid"), Consequence.success)
-      canonical <- jsonC(value)
-      _ <- if (canonical == json && value.reference == expected) Consequence.unit
-        else Consequence.stateConflict("SplitPhase explicit calibration nested fields or reference/revision differ")
+      _ <- if (value.reference == expected) Consequence.unit
+        else Consequence.stateConflict("SplitPhase explicit calibration selected reference/revision differs")
     } yield value
-
-  /** Natural storage-to-calculation boundary. Current data must be independently
-    * loaded by authorized readers. Construction owns the one complete-data and
-    * calculation-input check; do not serialize/recheck the record internally.
-    */
-  def loadForCalculationC(stored: Record, current: Request): Consequence[Input] =
-    if (stored == null)
-      Consequence.stateConflict("SplitPhase explicit calibration stored data is absent")
-    else SplitPhaseExplicitDurationCalibration.loadC(stored.request, current)
 
   private def jsonC(value: Record): Consequence[Json] =
     if (value == null || !reference(value.reference) || !serializable(value.request))

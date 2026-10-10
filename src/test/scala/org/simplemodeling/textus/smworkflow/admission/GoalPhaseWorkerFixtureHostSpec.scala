@@ -5,15 +5,17 @@ import java.nio.file.{Files, StandardOpenOption}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * Automated Host stand-ins; only the separately recorded live run proves Codex execution.
  * @since   Sep. 29, 2026
- * @version Oct.  8, 2026
+ *  version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
-final class GoalPhaseWorkerFixtureHostSpec extends AnyWordSpec with Matchers {
+final class GoalPhaseWorkerFixtureHostSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GoalPhaseApplicationFixture.take
   import GoalPhaseWorkerFixtureHost.*
 
@@ -78,21 +80,27 @@ final class GoalPhaseWorkerFixtureHostSpec extends AnyWordSpec with Matchers {
       } finally host.close()
     }
 
-    "reject a wrong model, incomplete payload and invented next-state field without progressing" in {
-      // Given the frozen worker selection and original live instance.
+    "preserve returned identity diagnostics without progressing and distinguish current payload conversion failures" in {
+      Given("an issued review and a planned profile; diagnostic text does not prove or invalidate execution")
       val host = new GoalPhaseWorkerFixtureHost("host-test-model")
       try {
         val before = host.fixture.stored
         val payload = GoalPhaseReviewCompletionOperation.payloadCodec.encode(take(deterministicC(host.fixture)))
-        // When execution identity or semantic payload violates the admission contract.
-        host.normalizeC("host-test-worker", "wrong-model", payload) shouldBe a[Consequence.Failure[?]]
-        host.normalizeC("", "host-test-model", payload) shouldBe a[Consequence.Failure[?]]
-        host.normalizeC("host-test-worker", "host-test-model", Json.obj()) shouldBe a[Consequence.Failure[?]]
-        host.normalizeC("host-test-worker", "host-test-model",
-          payload.mapObject(_.add("nextState", Json.fromString("StepClosed")))) shouldBe a[Consequence.Failure[?]]
-        // Then no completion, transition or commit is fabricated.
-        host.fixture.stored shouldBe before
-        host.fixture.commits shouldBe empty
+        When("translation receives differing model text, blank worker text and currently unconvertible payloads")
+        val model = host.normalizeC("host-test-worker", "wrong-model", payload)
+        val worker = host.normalizeC("", "host-test-model", payload)
+        val missing = host.normalizeC("host-test-worker", "host-test-model", Json.obj())
+        val unsupported = host.normalizeC("host-test-worker", "host-test-model",
+          payload.mapObject(_.add("nextState", Json.fromString("StepClosed"))))
+        val after = host.fixture.stored
+        val commits = host.fixture.commits
+        Then("diagnostics survive, payload failures stay typed and neither conversion progresses the Workflow")
+        take(model).evidence.modelIdentity shouldBe Some("wrong-model")
+        take(worker).evidence.workerIdentity shouldBe Some("")
+        missing shouldBe a[Consequence.Failure[?]]
+        unsupported shouldBe a[Consequence.Failure[?]]
+        after shouldBe before
+        commits shouldBe empty
       } finally host.close()
     }
 

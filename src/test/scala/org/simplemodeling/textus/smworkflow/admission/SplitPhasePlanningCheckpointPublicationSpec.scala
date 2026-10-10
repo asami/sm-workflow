@@ -19,7 +19,7 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "checkpoint", name))
@@ -58,7 +58,20 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
     prepared.rows.count(_.collection == targets.ownerships) shouldBe documents.size
   }
 
-  "Passive complete publication preflight" should {
+  "Passive complete publication data" should {
+    "prepare only the mechanical native locator without a speculative receipt copy" in {
+      Given("an actual privately captured mechanical result and declared publication targets")
+      val saved = capture()
+      val prepared = take(U.prepareC(saved, targets))
+      val row = prepared.rows.find(_.identity == take(U.mappingKeyC(saved.record.reference))).get
+      When("the actual compact publication row is decoded")
+      val locator = take(J.decodeLocatorC(saved.record.reference, row.payload.getString(J.storageField).get))
+      Then("the row supplies the native address without storing another full mapping or granting native execution")
+      locator shouldBe K.Locator(saved.record.reference, saved.record.origin)
+      row.payload.getString(J.storageField).get should startWith (J.locatorSchema + ":")
+      prepared.rows.count(_.identity == row.identity) shouldBe 1
+    }
+
     "prepare all Built documents including mixed scope and repository requirement frontiers" in {
       Given("real all-known and mixed frontiers rather than a fabricated winner")
       val s = base(Vector.fill(4)(180)); val e = enumerate(s)
@@ -67,7 +80,7 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       val mixed = s.initial.records.copy(ownership = s.initial.records.ownership.copy(children =
         s.initial.records.ownership.children.zipWithIndex.map((c, i) => c.copy(repository = B.RepositoryIdentity(if (i < 2) "repo-A" else "repo-B")))))
       When("every actual Built member is converted to three declared document rows")
-      val captures = Vector(capture(), forBoundary(s, grouped), forBoundary(s, take(B.loadC(s.initial.shape, mixed, mixed))),
+      val captures = Vector(capture(), forBoundary(s, grouped), forBoundary(s, take(B.loadC(s.initial.shape, mixed))),
         forBoundary(s, local))
       Then("requirements do not discard usable candidate documents or local handoffs")
       captures.foreach(verifyDocuments)
@@ -83,7 +96,7 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       val retained = bound(knownFacts.copy(planning = allocation.data))
       val unchanged = take(K.captureUnchangedC(retained, take(W.advanceC(retained.context.selection)), reference, anchor))
       val semantic = take(K.captureCompletionC(completion(), reference)).get
-      When("the full descriptors and anticipated native envelopes are prepared")
+      When("the actual publication descriptors for both origins are prepared")
       val mechanical = take(U.prepareC(unchanged, targets)); val ai = take(U.prepareC(semantic, targets))
       Then("retained planning is not recreated and AI has no fake mechanical receipt")
       mechanical.rows.exists(_.collection == targets.planning) shouldBe false
@@ -93,7 +106,6 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       mechanical.rows.count(_.collection == targets.publication) shouldBe 2
       ai.rows.count(_.collection == targets.publication) shouldBe 2
       ai.captured.mechanicalIntent shouldBe None
-      ai.anticipatedNativeBytes should not be mechanical.anticipatedNativeBytes
     }
 
     "bind distinct declared same-store purposes and reject missing or aliased metadata" in {
@@ -108,7 +120,7 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
         .isSuccess shouldBe false)
       U.bindTargetsC(host(values.updated(ep + "store-name", ConfigurationValue.StringValue("other"))), declaration).isSuccess shouldBe false
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPublication.Targets(null, null, null, null, null, null, null, null, null)")
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPublication.Prepared(null, null, Vector.empty, null)")
+      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPublication.Prepared(null, null, Vector.empty)")
     }
 
     "derive injective Unicode delimiter locators and bound the final prefixed physical key" in {
@@ -125,34 +137,46 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       U.indexKeyC(null, null).isSuccess shouldBe false
     }
 
-    "check exactly 64 versus 65 complete passive descriptors including closing effects and byte limits" in {
-      Given("duplicate-free descriptor vectors for capacity shape only, not private native completions")
+    "prepare passive Create descriptors without repeating the native count or duplicate-target gate" in {
+      Given("complete descriptor vectors and actual captured rows, without native execution or a storage grant")
       val t = targets; val saved = capture(); val frame = take(J.encodeIndexC(saved.index))
       def rows(count: Int) = Vector.tabulate(count)(i => U.Row(t.publication, s"capacity-$i", StorageRecord.data(J.indexStorageField -> frame)))
       val baseline = take(U.prepareC(saved, t))
-      When("count duplication reserved targets and UTF-8 row bounds are preflighted")
-      Then("overflow refuses the whole set without staging or truncation")
-      U.validateRowsC(rows(64), t).isSuccess shouldBe true
-      U.validateRowsC(rows(65), t).isSuccess shouldBe false
+      When("passive rows and closing effects are prepared without executing a native program")
+      val overflow = U.prepareC(saved, t, rows(65 - baseline.rows.size))
+      val duplicated = U.prepareC(saved, t, Vector(baseline.rows.head))
+      Then("65 rows and duplicate descriptors remain complete data, not proof that their effects can execute")
       U.prepareC(saved, t, rows(64 - baseline.rows.size)).isSuccess shouldBe true
-      U.prepareC(saved, t, rows(65 - baseline.rows.size)).isSuccess shouldBe false
-      U.validateRowsC(Vector(rows(1).head, rows(1).head), t).isSuccess shouldBe false
-      U.validateRowsC(Vector(rows(1).head.copy(collection = t.instances)), t).isSuccess shouldBe false
-      U.validateRowsC(Vector(rows(1).head.copy(payload = StorageRecord.data(J.indexStorageField -> ("語" * (J.maximumPayloadBytes / 2))))), t).isSuccess shouldBe false
-      U.prepareC(null, t).isSuccess shouldBe false
+      take(overflow).rows.size shouldBe 65
+      take(duplicated).rows.count(row => row.collection == baseline.rows.head.collection &&
+        row.identity == baseline.rows.head.identity) shouldBe 2
+      Given("closing data with extra fields, a different local purpose and bytes exceeding an unrelated frame limit")
+      val supplemental = Vector(rows(1).head.copy(collection = t.estimates,
+        payload = StorageRecord.data("text" -> ("語" * (J.maximumPayloadBytes / 2)), "diagnostic" -> 7)))
+      When("the producer forwards the complete closing data without an additional purpose or frame readmission")
+      val forwarded = take(U.prepareC(saved, t, supplemental))
+      Then("the original descriptors survive exactly without provider access or execution authority")
+      forwarded.rows.filter(row => supplemental.exists(_.identity == row.identity)) shouldBe supplemental
+
+      When("publication preparation is missing its actual source capture")
+      val missing = U.prepareC(null, t)
+      Then("no original publication can be derived from an absent source")
+      missing.isSuccess shouldBe false
     }
 
-    "refuse an oversized whole native receipt even when snapshot and individual histories fit" in {
+    "prepare consumed publication rows without constructing an oversized speculative native receipt" in {
       Given("actual prepared history with large causation, never persisted or acknowledged")
       val later = take(f.instance.appendC(f.instance.revision, f.instance.history.last.copy(
         sequence = HistorySequence(2), revision = InstanceRevision(2), causation = CausationReference("x" * 530000))))
       val saved = capture(bound(current = later))
-      When("the anticipated native receipt includes both histories plus complete mapping")
-      Then("whole-envelope capacity refuses before any store execution")
+      When("only the actual mapping index and generated-document rows are prepared")
+      val prepared = U.prepareC(saved, targets)
+      Then("passive row data succeeds without encoding a discarded whole-history copy or granting native execution")
       RJ.encodeC(saved.record.snapshot).isSuccess shouldBe true
       WorkflowInstanceRecordJsonV1.encodeC(saved.before).isSuccess shouldBe true
       WorkflowInstanceRecordJsonV1.encodeC(saved.next).isSuccess shouldBe true
-      U.prepareC(saved, targets).isSuccess shouldBe false
+      prepared.isSuccess shouldBe true
+      take(prepared).rows.count(_.collection == targets.publication) shouldBe 2
     }
   }
 }

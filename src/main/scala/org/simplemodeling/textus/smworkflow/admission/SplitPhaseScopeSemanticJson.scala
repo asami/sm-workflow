@@ -9,9 +9,9 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic as S}
 
 /**
- * Closed application payload; CNCF owns WorkOrder/result envelopes.
+ * Typed application payload; CNCF owns WorkOrder/result envelopes.
  * @since   Oct.  4, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] object SplitPhaseScopeSemanticJson {
   private given Encoder[S.Decision] = Encoder.encodeString.contramap(_.toString)
@@ -24,11 +24,10 @@ private[smworkflow] object SplitPhaseScopeSemanticJson {
       if (value == null || value.noSpaces.getBytes(StandardCharsets.UTF_8).length > 1024 * 1024)
         Left("Scope semantic payload is absent or oversized")
       else for {
-        root <- value.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload"))
-          .toRight("Scope semantic envelope fields differ")
-        _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Unknown scope semantic schema")
-        decoded <- root("payload").get.as[A].left.map(_.message)
-        _ <- Either.cond(encode(decoded) == value, (), "Scope semantic nested fields differ")
+        version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
+        _ <- Either.cond(version == schema, (), "Unknown scope semantic schema")
+        payload <- value.hcursor.get[Json]("payload").left.map(_.message)
+        decoded <- payload.as[A].left.map(_.message)
       } yield decoded
   }
   val requestCodec: WorkflowResultJsonV1.PayloadCodec[S.Request] =

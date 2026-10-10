@@ -27,7 +27,7 @@ final class SplitPhaseExplicitBoundaryValidationSpec extends AnyWordSpec with Ma
     case Consequence.Success(value) => value
     case other => fail(s"Explicit boundary fixture failed: $other")
   }
-  private val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(selected, selected)).asInstanceOf[ShapeReady]
+  private val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(selected)).asInstanceOf[ShapeReady]
   private val ca = ClosureCriterion("close-a")
   private val cb = ClosureCriterion("close-b")
   private val boundary = Boundary(BoundaryReference("boundary", "1"), source.reference, first, source.authority,
@@ -41,13 +41,13 @@ final class SplitPhaseExplicitBoundaryValidationSpec extends AnyWordSpec with Ma
   private val handoffs = HandoffPlan(HandoffPlanReference("handoffs", "1"), source.reference, proposal.reference,
     Vector(transfer), Map(first -> Vector.empty, last -> Vector(transfer.identity)), Vector(Edge(itemA, EdgeDisposition.Either, source.authority)))
   private val records = Records(boundary, ownership, handoffs)
-  private def run(r: Records) = loadC(shape, r, r)
+  private def run(r: Records) = loadC(shape, r)
 
   "Explicit closure ownership and handoffs" should {
     "construct one typed result for source-backed closure and final-only serial validation" in {
       Given("a shape-ready proposal with exact source closure and reciprocal validation declarations")
       When("the complete boundary records are constructed at loading")
-      val result = take(loadC(shape, records, records.copy()))
+      val result = take(loadC(shape, records.copy()))
       Then("the result retains typed source evidence rather than a hash or whole proposal admission")
       result.shape shouldBe shape
       result.records shouldBe records
@@ -128,16 +128,18 @@ final class SplitPhaseExplicitBoundaryValidationSpec extends AnyWordSpec with Ma
       results.foreach(_ shouldBe an[Consequence.Failure[?]])
     }
 
-    "reject complete data drift and crossed source or proposal revisions" in {
-      Given("same-reference changes and records bound to another selected proposal")
+    "consume current driver data and reject crossed source or proposal revisions" in {
+      Given("a current driver and records bound to another selected proposal")
       val drift = records.copy(ownership = ownership.copy(driver = "changed-driver"))
       val crossed = Vector(records.copy(boundary = boundary.copy(source = source.reference.copy(revision = "2"))),
         records.copy(ownership = ownership.copy(proposal = proposal.reference.copy(revision = "2"))),
         records.copy(handoffs = handoffs.copy(source = SourceReference("foreign", "1"))))
-      When("full data and explicit inter-record references are compared at loading")
-      val results = crossed.map(run) :+ loadC(shape, records, drift)
-      Then("a stored reference is not enough to construct validated state")
+      When("the current records reach their construction boundary")
+      val results = crossed.map(run)
+      val accepted = take(loadC(shape, drift))
+      Then("the current driver is consumed while contradictory source joins fail")
       results.foreach(_ shouldBe an[Consequence.Failure[?]])
+      accepted.records.ownership.driver shouldBe "changed-driver"
     }
 
     "refuse incomplete data and prevent bypass of the prior shape or private result constructor" in {
@@ -146,11 +148,11 @@ final class SplitPhaseExplicitBoundaryValidationSpec extends AnyWordSpec with Ma
         records.copy(ownership = ownership.copy(children = Vector(null))),
         records.copy(handoffs = handoffs.copy(handoffs = Vector(transfer.copy(invalidationReason = "")))))
       When("the malformed records are loaded")
-      val results = invalid.map(run) :+ loadC(null, records, records)
+      val results = invalid.map(run) :+ loadC(null, records)
       Then("no invalid executable boundary state can be constructed outside the admitting object")
       results.foreach(_ shouldBe an[Consequence.Failure[?]])
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitBoundaryValidation.Validated(null, null)")
-      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitBoundaryValidation.loadC(org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitProposalPrecheck.Records(null, null, null), null, null)")
+      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitBoundaryValidation.loadC(org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitProposalPrecheck.Records(null, null, null), null)")
     }
   }
 }

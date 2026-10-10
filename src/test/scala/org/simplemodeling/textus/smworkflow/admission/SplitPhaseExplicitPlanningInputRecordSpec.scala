@@ -6,7 +6,9 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPlanningInputJsonV1 as J,
-  SplitPhaseExplicitPartitionComputation as E, SplitPhaseExplicitPartitionContext as C}
+  SplitPhaseExplicitPartitionComputation as E, SplitPhaseExplicitPartitionContext as C,
+  SplitPhaseExplicitProposalPrecheck as P, SplitPhaseExplicitBoundaryValidation as B,
+  SplitPhaseExplicitObjectiveSelection as O, SplitPhaseExplicitCandidateProjection as Q}
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhasePartitionContextFixture.*
 
@@ -63,6 +65,25 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
   private def wire(value: Json) = J.schema + ":" + value.noSpaces
   private def payload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject) =
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
+
+  // Mutate actual declared data, not source text or a canonical encoder image.
+  // The incoming-by-child object is a dynamic typed map, not a closed record.
+  private def _malformed(value: Json, openmap: Boolean = false): Vector[Json] = value.asObject match {
+    case Some(fields) =>
+      val direct = if (openmap) Vector.empty else
+        Vector(value.mapObject(_.add("undeclared", Json.True))) ++
+          fields.keys.toVector.map(key => value.mapObject(_.remove(key)))
+      direct ++ fields.toVector.flatMap { case (key, child) =>
+        _malformed(child, key == "incomingByChild").map(changed => value.mapObject(_.add(key, changed)))
+      }
+    case None => value.asArray match {
+      case Some(items) => items.indices.toVector.flatMap(index =>
+        _malformed(items(index)).map(changed => Json.fromValues(items.updated(index, changed))))
+      case None if value.isNull => Vector.empty
+      case None if value.isString => Vector(Json.True, Json.Null)
+      case None => Vector(Json.fromString("wrong-type"), Json.Null)
+    }
+  }
 
   "Independent typed planning input records" should {
     "round-trip every purpose with its own exact reference without context data" in {
@@ -140,6 +161,61 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
       rawPolicy shouldBe policy
       val current = facts.copy(partition = facts.partition.copy(policy = rawPolicy))
       C.prepareC(record.copy(facts = current), current, instance, configuration, catalog).isSuccess shouldBe false
+    }
+
+    "read declared Set meaning without proving the encoder's array ordering or repetition" in {
+      Given("Spec: docs/spec/split-phase-planning-input-applicability.md; Rule: R1; Example: E1; independent inventory and boundary records with multiple Set members")
+      val inventory = facts.proposal.inventory.copy(occupiedPhases = Set(P.PhaseIdentity("7"), P.PhaseIdentity("9")))
+      val boundary = facts.boundary.boundary.copy(authorizedHandoffAuthorities = Set(facts.boundary.boundary.authority,
+        P.AuthorityReference("additional-authority", "1")))
+      val inventorywire = json(take(J.encodeInventoryC(inventory)))
+      val boundarywire = json(take(J.encodeBoundaryC(boundary)))
+      def _changed_(value: Json, field: String) = payload(value) { fields =>
+        val members = fields(field).get.asArray.get
+        fields.add(field, Json.fromValues(members.reverse :+ members.head))
+      }
+      When("both independent raw readers receive valid reordered and repeated Set members")
+      val readinventory = J.decodeInventoryC(inventory.reference, wire(_changed_(inventorywire, "occupiedPhases")))
+      val readboundary = J.decodeBoundaryC(boundary.reference, wire(_changed_(boundarywire, "authorizedHandoffAuthorities")))
+      Then("the selected references and typed Set data resolve without whole-body re-encoding or a rewrite")
+      take(readinventory) shouldBe inventory
+      take(readboundary) shouldBe boundary
+    }
+
+    "reject recursively malformed declared data including populated optional allocations and objective policies" in {
+      Given("Spec: docs/spec/split-phase-planning-input-applicability.md; Rule: R1; Example: E2; all nine purposes and populated optional planning subrecords")
+      val source = baseData.source
+      val objectives = O.Records(
+        Some(O.CostPolicy(O.CostPolicyReference("cost", "1"), source.reference, source.authority,
+          O.ProfileIdentity("deep"), O.ProfileIdentity("routine"), Long.MaxValue, 1L, 300L)),
+        Some(O.DemandRecord(O.DemandReference("demands", "1"), source.reference, source.authority,
+          Vector(O.ItemDemand(P.WorkItemIdentity("item-0"), O.Demand.ExpensiveReasoning),
+            O.ItemDemand(P.WorkItemIdentity("item-1"), O.Demand.Unresolved("unknown")),
+            O.ItemDemand(P.WorkItemIdentity("item-2"), O.Demand.SettledExecution)))),
+        Some(O.OverheadPolicy(O.OverheadPolicyReference("overhead", "1"), source.reference, source.authority, 1L, 2L, 3L, 4L, 5L)))
+      val allocations = Q.Records(Q.AllocationReference("allocations", "1"), source.reference, source.authority,
+        Vector(Q.Allocation(Vector(0), P.ProposalReference("allocated", "1"),
+          B.OwnershipReference("allocated-owner", "1"), B.HandoffPlanReference("allocated-handoff", "1"))))
+      val planning = facts.planning.copy(allocations = Some(allocations), objectives = objectives)
+      val populated = row(J.Purpose.Planning, planning, J.encodePlanningC,
+        raw => J.decodePlanningC(planning.reference, raw),
+        raw => J.decodePlanningC(planning.reference.copy(identity = "foreign"), raw),
+        raw => J.decodePlanningC(planning.reference.copy(revision = "2"), raw))
+      val independent = rows.init :+ populated
+      When("unknown or missing record fields and wrong primitive types arrive at every populated nested position")
+      val results = independent.map { r =>
+        val original = json(r.raw)
+        val malformed = _malformed(original.hcursor.downField("payload").focus.get)
+        r -> malformed.map(changed => r.valid(wire(original.mapObject(_.add("payload", changed)))))
+      }
+      Then("every structural deviation is refused, while complete optional data and Long values remain readable")
+      populated.recover(populated.raw) shouldBe true
+      results.foreach { case (r, valid) =>
+        withClue(r.purpose.toString) {
+          valid.nonEmpty shouldBe true
+          valid.forall(value => !value) shouldBe true
+        }
+      }
     }
   }
 }

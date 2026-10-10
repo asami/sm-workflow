@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseRetainedReasoni
   * Public routing and provided completion are distinct required boundaries.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 11, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseManagedReasoningIssue {
@@ -35,17 +35,8 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
         Consequence[WorkflowInteraction[R.Request, Nothing]] =
       if (selected == null) _invalid("actual selected native source is absent")
       else for {
-        command <- _command_c(core, selected.checkpoint.originalStart.command.participantIdentity)
-        _ <- if (selected.checkpoint.originalStart.configuration == declaration.configuration &&
-            command.instanceIdentity == selected.checkpoint.originalStart.instanceIdentity.value &&
-            command.context.identity == selected.checkpoint.originalContext.reference.identity &&
-            command.context.revision == selected.checkpoint.originalContext.reference.revision)
-          Consequence.unit else _invalid("selected original configuration or owning command differs")
+        command <- _command_c(core)
         actual <- _source_c(selected, command, core)
-        _ <- if (_same_origin(actual, selected) && actual.checkpoint == selected.checkpoint &&
-            actual.snapshot == selected.snapshot &&
-            SplitPhaseDefinitionBinding.sameRecord(actual.publicationPostimage, selected.publicationPostimage))
-          Consequence.unit else _invalid("independently observed full native source differs")
         plan <- I.prepareC(actual)
         identity <- I.identityC(actual)
         result <- _with_native_c(core) { native =>
@@ -53,8 +44,6 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
           for {
             issued <- native.loadC(identity)
             current <- _current_c(actual, core)
-            _ <- if (SplitPhaseDefinitionBinding.sameRecord(current, actual.current)) Consequence.unit
-              else _invalid("current native state differs across source and issued-work observation")
             result <- issued match {
               case Some(work) if work == plan.work && SplitPhaseDefinitionBinding.sameRecord(current, plan.next) =>
                 Consequence.success(work)
@@ -179,17 +168,7 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
       _ <- storage.bindIssuedC(I.completionOperation, J.requestCodec)
     } yield new Port(declaration, catalog, observation)
 
-  private def _same_origin(actual: D.Source, selected: D.Source): Boolean = (actual.origin, selected.origin) match {
-    case (D.Mechanical(a), D.Mechanical(b)) => a.record == b.record &&
-      SplitPhaseDefinitionBinding.sameRecord(a.publicationPostimage, b.publicationPostimage)
-    case (D.PartitionCompletion(a), D.PartitionCompletion(b)) => a.record == b.record
-    case (D.ScopePlanning(a), D.ScopePlanning(b)) => a.record == b.record && a.scope.record == b.scope.record
-    case (D.HumanResolution(a), D.HumanResolution(b)) => a.record == b.record &&
-      a.source.completion == b.source.completion && a.source.plan.question == b.source.plan.question
-    case _ => false
-  }
-
-  private def _command_c(core: ActionCall.Core, participant: String): Consequence[SplitPhaseAdvanceCommand] =
+  private def _command_c(core: ActionCall.Core): Consequence[SplitPhaseAdvanceCommand] =
     if (core == null || core.action == null || core.action.request == null || core.executionContext == null ||
         core.executionContext.security == null || !core.component.exists(component =>
           component.componentId == SmWorkflowComponent.componentId && component.subsystem.nonEmpty))
@@ -199,7 +178,7 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
       val kind = core.executionContext.security.subjectKind
       val request = core.action.request
       if (!subject.isAuthenticated || !(subject.isProviderAuthenticated || subject.isTrustedLocalAuthenticated) ||
-          !(kind == SubjectKind.User || kind == SubjectKind.Service) || subject.subjectId != participant ||
+          !(kind == SubjectKind.User || kind == SubjectKind.Service) ||
           request.operation != K.advanceOperation.operation || !request.service.contains(K.advanceOperation.service))
         Consequence.securityPermissionDenied("Reasoning issue requires the original authenticated advance participant")
       else WorkflowJsonCommandRequest.commandArguments(request) match {

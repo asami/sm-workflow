@@ -9,7 +9,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.CandidateAdmissionProducerAbi as Abi
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.simplemodeling.textus.smworkflow.value.RepositorySyncMergeReviewResult
+import org.simplemodeling.textus.smworkflow.value.{RepositorySyncMergeReviewRequest, RepositorySyncMergeReviewResult}
 import RepositorySyncMergeReviewAdmission as R
 
 /**
@@ -22,11 +22,14 @@ private[smworkflow] object RepositorySyncMergeReviewResultAdapter {
     val typeIdentity = "RepositorySyncMergeReviewResult"
     def encode(value: RepositorySyncMergeReviewResult): Json = value.asJson
     def decode(value: Json): Either[String, RepositorySyncMergeReviewResult] =
-      if (value != null && value.asObject.exists(_.keys.toSet == Set("candidateRevision", "reviewedAt",
-          "validUntil", "decision", "rationale", "evidenceDigest", "findings")) &&
+      if (value != null && value.asObject.exists { fields =>
+          val required = Set("candidateRevision", "reviewedAt", "decision", "rationale", "findings")
+          required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required ++ Set("validUntil", "evidenceDigest"))
+        } &&
           value.hcursor.downField("findings").focus.flatMap(_.asArray).exists(_.forall(finding =>
             finding.asObject.exists(_.keys.toSet == Set("identity", "affectedPaths", "rationale")))))
-        value.as[RepositorySyncMergeReviewResult].left.map(_.message)
+        value.mapObject(_.remove("validUntil").remove("evidenceDigest"))
+          .as[RepositorySyncMergeReviewResult].left.map(_.message)
       else Left("RepositorySync merge review Result has an incompatible shape")
   }
 
@@ -51,19 +54,19 @@ private[smworkflow] object RepositorySyncMergeReviewResultAdapter {
       _ <- WorkflowProtocolV1.admitResultC(issued, submitted)
       expected <- RepositorySyncMergeReviewBoundary.requestC(original)
       _ <- issued.current match {
-        case work: WorkflowContinuation.WorkOrder[?] if
+        case work: WorkflowContinuation.WorkOrder[RepositorySyncMergeReviewRequest] if
             issued.handle.workflowIdentity.value == candidate.workflow.identity &&
             issued.handle.workflowRevision.value == candidate.workflow.version &&
             work.request.requiredOperation == StateMachineRequiredOperationIdentity("review-merge-capability") &&
             work.request.operation == StateMachineOperationIdentity("MergeReviewService", "reviewMerge") &&
             work.request.completionOperation == StateMachineOperationIdentity("RepositorySyncService", "submitMergeReview") &&
             work.request.resultType.contains(StateMachineResultTypeReference("RepositorySyncMergeReviewResult")) &&
-            work.request.input.contains(TypedValue("RepositorySyncMergeReviewRequest", expected)) => Consequence.unit
+            work.request.input.exists(value => value != null && value.typeIdentity == "RepositorySyncMergeReviewRequest" &&
+              RepositorySyncMergeDecision.sameCandidateScope(value.value, expected)) => Consequence.unit
         case _ => Consequence.stateConflict("RepositorySync review Result differs from its declared WorkOrder")
       }
       value = submitted.result.value
       reviewedAt <- _instantC(value.reviewedAt)
-      validUntil <- _instantC(value.validUntil)
       disposition <- value.decision match {
         case "accept" => Consequence.success(R.Disposition.Accept)
         case "repair" => Consequence.success(R.Disposition.Repair)
@@ -73,18 +76,17 @@ private[smworkflow] object RepositorySyncMergeReviewResultAdapter {
       }
       _ <- if (value.findings != null && value.findings.forall(_ != null)) Consequence.unit
         else Consequence.stateConflict("RepositorySync review findings are missing")
-      review = R.Review(value.candidateRevision, reviewedAt, validUntil, disposition,
+      review = R.Review(value.candidateRevision, reviewedAt, disposition,
         value.findings.map(finding => R.Finding(finding.identity, finding.affectedPaths, finding.rationale)),
-        value.rationale, value.evidenceDigest)
-      evidence <- R.evidenceC("merge-review-" + RepositorySyncMergeValidationAssessment.digest(
-        Vector(submitted.resultReference.identity, submitted.resultReference.revision, value.evidenceDigest)),
+        value.rationale)
+      evidence <- R.evidenceC(submitted.resultReference.identity,
         original.candidate.reference, review, R.Scope.FullMerge, "issued-work-order")
       admission <- R.assessC(original.copy(evidence = Vector.empty), asOf, Vector(evidence))
       _ <- if (admission.evaluation.gaps.isEmpty) Consequence.unit
-        else Consequence.stateConflict("RepositorySync review is stale or differs from the full pending merge")
+        else Consequence.stateConflict("RepositorySync review is not applicable to the full pending merge")
       typed = Abi.TypedJudgmentResultV1(Abi.acceptedTypedJudgmentResultSchemaVersion,
         Abi.JudgmentResult(Abi.JudgmentActionIdentity("ReviewMerge"), Abi.AlternativeIdentity(value.decision),
-          Abi.Rationale(value.rationale), Abi.Evidence(value.evidenceDigest), Abi.EvidenceScope("full-merge"),
+          Abi.Rationale(value.rationale), Abi.Evidence(submitted.resultReference.identity), Abi.EvidenceScope("full-merge"),
           Abi.EvidenceFreshness("current"), Abi.EvidenceProvenance("issued-work-order")),
         Abi.TypeIdentity("RepositorySyncMergeReviewResult"), submitted.resultReference)
       judgment <- Abi.admitTypedJudgmentResultC(candidate.sidecar, typed)

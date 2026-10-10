@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
 /** Separate reasoning Decision; native readers, not decoded payloads, establish
   * the saved AI completion and its original whole planning frontier.
   * @since Oct. 7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseReasoningHumanDirection {
   final case class Input(context: SplitPhaseExplicitPartitionSemantic.ContextReference,
@@ -38,11 +38,10 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       throw new IllegalArgumentException("Invalid reasoning Human input"))
     def decode(value: Json): Either[String, Input] = for {
       json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Reasoning Human input is absent or oversized")
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload")).toRight("Reasoning Human fields differ")
+      root <- json.asObject.toRight("Reasoning Human input is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Reasoning Human schema differs")
-      input <- root("payload").get.as[Input].left.map(_.message)
-      canonical <- _json_c(input).toOption.toRight("Reasoning Human source data differs")
-      _ <- Either.cond(canonical == json, (), "Reasoning Human nested fields differ")
+      payload <- root("payload").toRight("Reasoning Human payload is absent")
+      input <- payload.as[Input].left.map(_.message)
     } yield input
   }
 
@@ -51,7 +50,7 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       case decision: WorkflowContinuation.Decision[?] if decision.request.input.exists(v =>
           v.typeIdentity == inputCodec.typeIdentity && v.value.isInstanceOf[Input]) =>
         val input = decision.request.input.get.value.asInstanceOf[Input]
-        _json_c(input).map(_ => SplitPhaseAdvanceCommand(question.handle.instanceIdentity.value,
+        Consequence.success(SplitPhaseAdvanceCommand(question.handle.instanceIdentity.value,
           SplitPhasePartitionContextReference(input.context.identity, input.context.revision)))
       case _ => _invalid("issued input differs")
     }
@@ -70,37 +69,36 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       .getOrElse(_invalid("native reasoning assignment is absent"))
     saved <- SplitPhaseManagedReasoningCompletion.observeForCallC(identity, declaration, catalog, core)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("canonical reasoning answer is absent")))
-    _ <- if (saved.plan.pending.issue.prepared.request.context ==
+    _ <- if (saved.request.context ==
         SplitPhaseExplicitPartitionSemantic.ContextReference(command.context.identity, command.context.revision))
       Consequence.unit else _invalid("query crosses original context")
     plan <- prepareC(saved)
   } yield plan
 
   def prepareC(source: SplitPhaseManagedReasoningCompletion.Observed): Consequence[Plan] = for {
-    _ <- if (source != null && source.plan.semantic.isInstanceOf[S.DecisionNeeded] && source.plan.downstream.isEmpty)
+    _ <- if (source != null && source.completion.result.result.value.decision == S.Decision.DecisionNeeded && source.downstream.isEmpty)
       Consequence.unit else _invalid("saved result is not a genuine DecisionNeeded")
-    base = source.plan.next
-    original = source.plan.pending.issue.source
+    base = source.next
+    original = source.source
     _ <- if (base.lifecycle == Lifecycle.Active && base.suspension.isEmpty && base.revision.value < Long.MaxValue &&
-        source.current.history.take(base.history.size) == base.history) Consequence.unit
-      else _invalid("saved completion native prefix differs")
-    work <- J.encodeWorkOrderC(source.plan.pending.work)
-    result <- WorkflowResultJsonV1.encodeC(source.plan.submitted, J.resultCodec)
+        SplitPhaseDefinitionBinding.includesState(source.current, base)) Consequence.unit
+      else _invalid("current instance does not include the selected reasoning completion state")
+    work <- J.encodeWorkOrderC(source.work)
+    result <- WorkflowResultJsonV1.encodeC(source.completion.result, J.resultCodec)
     frontier <- R.encodeC(original.snapshot)
-    input = Input(source.plan.pending.issue.prepared.request.context, work, result, frontier)
-    _ <- _json_c(input)
+    input = Input(source.request.context, work, result, frontier)
     required <- SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC
     identity = ContinuationIdentity("split-reasoning-human:" + base.identity.value + ":" + base.revision.next.value.toString)
     bundle = ContextBundle("Human classification of the retained unresolved reasoning work",
-      Vector(ContextReference(input.context.identity, input.context.revision), source.plan.submitted.resultReference),
+      Vector(ContextReference(input.context.identity, input.context.revision), source.completion.result.resultReference),
       Vector(ContextReference(original.checkpoint.reference.identity, original.checkpoint.reference.revision)),
-      source.plan.submitted.contextSnapshot)
+      source.completion.result.contextSnapshot)
     continuation = Continuation(StateMachineRunIdentity(base.identity.value), identity,
       StateMachineRevision(base.revision.next.value.toString), required, bundle)
     request = ContinuationRequest(continuation.runId, identity, continuation.expectedRevision, required.identity,
       required.operation, Some(TypedValue(inputCodec.typeIdentity, input)), required.resultType, bundle,
       required.metadata.completionContract, required.metadata.evidenceContract, completionOperation)
-    question = WorkflowInteraction[Input, Nothing](source.plan.submitted.handle, WorkflowContinuation.Decision(request,
+    question = WorkflowInteraction[Input, Nothing](source.completion.result.handle, WorkflowContinuation.Decision(request,
       MinimalPresentation("Reasoning Human direction", Json.obj("choices" -> Json.arr(A.choices.map(Json.fromString)*),
         "notice" -> Json.fromString("Return only Human direction; Workflow validates unknown-item coverage and calculates the successor.")).noSpaces)))
     entry = HistoryEntry(HistorySequence(base.history.size.toLong + 1L), base.revision.next, Lifecycle.Active,
@@ -117,6 +115,18 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       if (_bounded(raw)) Consequence.unit else _invalid("Decision exceeds its UTF-8 bound"))
   } yield new Plan(source, intent, admitted.next, question)
 
+  def selectIssuedC(plan: Plan, question: WorkflowInteraction[Input, Nothing]): Consequence[Plan] =
+    if (plan == null) _invalid("owning reasoning Human plan is absent")
+    else for {
+      selected <- NativeHumanQuestionSelection.selectC(plan.question, question)
+      expected = plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
+      actual = selected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
+      target <- NativeHostSplitAnswerScope.reasoningTargetC(expected, plan.question.handle)
+      scope <- NativeHostSplitAnswerScope.reasoningTargetC(actual, selected.handle)
+      _ <- if (scope == target) Consequence.unit
+        else _invalid("issued question selects another native reasoning assignment or result target")
+    } yield new Plan(plan.source, plan.intent, plan.next, selected)
+
   def advanceC(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[String] = for {
     plan <- sourceC(command, declaration, catalog, core)
@@ -125,18 +135,12 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
     identity = plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.continuationId
     retained <- decisions.loadC(identity)(using core.executionContext)
     question <- retained match {
-      case Some(value) if value == plan.question && SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.next) =>
-        Consequence.success(value)
+      case Some(value) if SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.next) =>
+        selectIssuedC(plan, value).map(_.question)
       case Some(_) => _invalid("actual question or current pending native state differs")
       case None if SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.intent.current) =>
         decisions.suspendC(plan.intent, plan.question)(using core.executionContext) match {
-          case Consequence.Success(committed) if SplitPhaseDefinitionBinding.sameRecord(committed.instance, plan.next) => for {
-            saved <- decisions.loadC(identity)(using core.executionContext)
-            current <- sourceC(command, declaration, catalog, core)
-            _ <- if (saved.contains(plan.question) && current.question == plan.question &&
-                SplitPhaseDefinitionBinding.sameRecord(current.source.current, plan.next)) Consequence.unit
-              else _uncertain("issued question readback differs; observe later without reissuing")
-          } yield saved.get
+          case Consequence.Success(_) => Consequence.success(plan.question)
           case _ => _uncertain("question commit is not established; observe later without reissuing")
         }
       case None => _invalid("advanced history lacks its saved question")
@@ -149,20 +153,13 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
     WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
       SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition), declaration.instances, declaration.continuations)
 
-  private def _json_c(input: Input): Consequence[Json] = for {
-    _ <- if (input != null && input.context != null && Vector(input.reasoningWork, input.reasoningResult, input.frontier)
-        .forall(v => v != null && _bounded(v))) Consequence.unit else _invalid("complete input is absent or oversized")
-    work <- WorkflowWorkOrderJsonV1.decodeC(input.reasoningWork, J.requestCodec)
-    result <- WorkflowResultJsonV1.decodeC(input.reasoningResult, J.resultCodec)
-    _ <- WorkflowProtocolV1.admitResultC(work, result).map(_ => ())
-    frontier <- R.decodeC(input.frontier)
-    request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
-    _ <- if (request.context == input.context && result.result.value.decision == S.Decision.DecisionNeeded &&
-        result.result.value.assignments.isEmpty && frontier.selection.proposal.source.reference == request.source)
-      Consequence.unit else _invalid("saved request, result or whole frontier crosses its reasoning source")
-    json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> input.asJson)
-    _ <- if (_bounded(json.noSpaces)) Consequence.unit else _invalid("complete input exceeds its UTF-8 bound")
-  } yield json
+  private def _json_c(input: Input): Consequence[Json] =
+    if (input == null || input.context == null || Vector(input.reasoningWork, input.reasoningResult, input.frontier)
+        .exists(v => v == null || !_bounded(v))) _invalid("complete input is absent or oversized")
+    else {
+      val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> input.asJson)
+      if (_bounded(json.noSpaces)) Consequence.success(json) else _invalid("complete input exceeds its UTF-8 bound")
+    }
   private def _bounded(raw: String): Boolean = UTF_8.newEncoder().canEncode(raw) && raw.getBytes(UTF_8).length <= 1024 * 1024
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase reasoning Human " + reason)
   private def _uncertain[A](reason: String): Consequence[A] = DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

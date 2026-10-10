@@ -28,7 +28,7 @@ final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Ma
         if (i == 0) Demand.ExpensiveReasoning else Demand.SettledExecution)))),
     Some(OverheadPolicy(OverheadPolicyReference("overhead-policy", "1"), source.source.reference, source.source.authority,
       1L, 0L, 10L, 1L, 1L)))
-  private def run(ranked: A.DurationRanked, raw: Records): Outcome = take(calculateC(take(loadC(ranked, raw, raw))))
+  private def run(ranked: A.DurationRanked, raw: Records): Outcome = take(calculateC(take(loadC(ranked, raw))))
   private val absentRecords = Records(None, None, None)
 
   "Explicit cost-aware objective selection" should {
@@ -144,8 +144,8 @@ final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Ma
       transfer.producingItems.map(_.value) shouldBe Vector("item-0", "item-1")
       transfer.receivingItems.map(_.value) shouldBe Vector("item-2")
     }
-    "refuse full same-reference data drift and crossed source or authority versions once at loading" in {
-      Given("selected records whose rates or complete source, authority and demand bindings changed")
+    "calculate current rates and refuse crossed source authority or demand coverage" in {
+      Given("current rates and contradictory source, authority or demand bindings")
       val source = base(Vector(260, 180, 260))
       val ranked = duration(source)
       val raw = records(source)
@@ -159,9 +159,12 @@ final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Ma
         raw.copy(demands = Some(demand.copy(items = demand.items.tail))),
         raw.copy(overhead = Some(overhead.copy(source = overhead.source.copy(identity = "foreign")))))
       When("those complete current records reach their construction boundary")
-      val results = crossed.map(r => loadC(ranked, r, r)) :+ loadC(ranked, raw, changed)
-      Then("matching reference text cannot replace the selected complete facts")
+      val results = crossed.map(r => loadC(ranked, r))
+      val calculated = run(ranked, changed).asInstanceOf[Selected]
+      Then("actual current rates affect savings while contradictory bindings fail")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      calculated.stage shouldBe Stage.Cost
+      calculated.costScores.head.materialSavingUnits shouldBe BigInt(880)
     }
     "refuse malformed raw rate profiles demands and overhead without adding internal calculation checks" in {
       Given("raw policy data that cannot construct an objective Input")
@@ -182,7 +185,7 @@ final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Ma
           perValidationRunUnits = 0, perReviewUnits = 0, perCommitUnits = 0))),
         raw.copy(cost = Some(null)), raw.copy(demands = null), null)
       When("malformed optional records are loaded")
-      val results = invalid.map(r => loadC(ranked, r, r)) :+ loadC(null, raw, raw)
+      val results = invalid.map(r => loadC(ranked, r)) :+ loadC(null, raw)
       Then("external data is refused before calculation without retry or automatic repair")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
@@ -206,7 +209,7 @@ final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Ma
       val source = base(Vector(260, 180, 260))
       val ranked = duration(source)
       val raw = records(source)
-      val admitted = take(loadC(ranked, raw, raw))
+      val admitted = take(loadC(ranked, raw))
       When("objective calculation consumes that immutable state")
       val result = take(calculateC(admitted)).asInstanceOf[Selected]
       Then("selection retains its exact input and free construction or raw data cannot bypass admission")

@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -21,11 +22,101 @@ import SplitPhaseExplicitPartitionFixture.take
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   "GoalPhase public Operations on the production three-workflow composition" should {
+    "session-associated targets" which {
+      "E7 advance only the explicitly selected associated Phase when a session has two real Starts" in {
+        Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R3; Example: E7; two selected plans on an owned repository and one actual invocation session")
+        val workroot = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
+        val root = Files.createTempDirectory(workroot, "goal-session-targets-")
+        val host = ThreeWorkflowNormalHostFixture.definition(root)
+        val commands = Vector("first", "second").map(label => GoalPhaseStartCommand(host.goal.input,
+          "session-goal-" + label, "participant", "session-goal-start-" + label))
+        val identities = commands.map(command => take(GoalPhaseNativeRun.identityC(command)))
+        var selectedwire = Option.empty[String]
+        for (episode <- Vector("publish", "reopen")) _with_runtime_(root, "Goal", Some(host)) {
+          (owner, component, actor, prepare) =>
+          val context = take(ExecutionContext.withRoutingSessionIdentity(actor, "two-goal-targets"))
+          def _call_(target: Option[String], foreign: Boolean = false) = {
+            val query = io.circe.Json.obj("schemaVersion" -> io.circe.Json.fromString(NativeWorkflowSessionInput.schema))
+            val arguments = target.map(value => List(Argument("arg1", query.mapObject(
+              _.add("instanceIdentity", io.circe.Json.fromString(value))).noSpaces))).getOrElse(Nil)
+            val invocation = if (foreign) take(ExecutionContext.withRoutingSessionIdentity(actor, "unassociated-goal-session"))
+              else context
+            owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+              operation = "advanceGoalPhase", arguments = arguments), invocation)
+          }
+          def _states_(): Vector[InstanceRecord] = {
+            var records = Vector.empty[InstanceRecord]
+            prepare(call => identities.foldLeft(Consequence.unit)((prior, identity) =>
+              prior.flatMap(_ => call.goalCurrentC(identity).map(value => { records = records :+ value; () }))))
+            records
+          }
+          def _expect_unchanged_(observed: Vector[InstanceRecord], original: Vector[InstanceRecord]): Unit = {
+            observed.size shouldBe original.size
+            observed.zip(original).foreach { (current, prior) =>
+              SplitPhaseDefinitionBinding.sameRecord(current, prior) shouldBe true
+              current.history shouldBe prior.history
+            }
+          }
+          if (episode == "publish") {
+            When("the existing fixture prepares only selected business inputs and the two public Starts publish their actual associations")
+            prepare(call => call.setupC(_setup_commands_(root, "Goal").size).flatMap(_ =>
+              commands.foldLeft(Consequence.unit) { (prior, command) => prior.flatMap { _ =>
+                val plan = O.Plan(command.selectionIdentity, "1", command.input.phaseIdentity, command.input.repositoryIdentity,
+                  Vector(O.Step("step-1", "Implement the selected Phase", host.goal.candidatePaths, Vector.empty, Vector("test"))),
+                  Vector("test"), repairLimit = 1)
+                GoalPhaseRuntimeCatalog.loadC().flatMap { catalog =>
+                  val selection = ProfileStartAdmission.Selection(command.selectionIdentity, GoalPhaseNativeRun.startOperation,
+                    catalog.definition.workflowIdentity, catalog.definition.workflowRevision, command.participantIdentity,
+                    ProfileStartAdmission.SelectionOrigin.ExplicitHuman, command.idempotencyKey, None,
+                    Some(GoalPhaseStartCommandAdapter.selectedInput(command.input)))
+                  call.createC("goal_selection", selection.selectionId, Record.data(ProfileSelectionJsonV1.storageField ->
+                    take(ProfileSelectionJsonV1.encodeStorageC(selection)))).flatMap(_ =>
+                    call.createC("goal_plans", command.selectionIdentity, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+                      take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(
+                        command.selectionIdentity, command.participantIdentity, command.input, plan))))))
+                }
+              } }))
+            val started = commands.map(command => take(WorkflowWaitJsonV1.decodeC(_scalar_(take(
+              owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+                operation = "startGoalPhase", arguments = List(Argument("arg1",
+                  GoalPhaseStartServiceOperation.encodeCommand(command)))), context))))).handle.instanceIdentity)
+            Then("both distinct native targets were created by their owning Start rather than inserted by a fixture")
+            started shouldBe identities
+            started.distinct.size shouldBe 2
+          }
+          val before = _states_()
+          When("advance omits a target selector while both legitimate associations exist, including after persisted reopen")
+          val ambiguous = _call_(None)
+          val afterambiguous = _states_()
+          Then("genuine ambiguity refuses before progressing either Phase")
+          ambiguous.isSuccess shouldBe false
+          ambiguous.toString should include("ambiguous instance")
+          _expect_unchanged_(afterambiguous, before)
+          When("another session names a target that exists but is not associated with that session")
+          val foreign = _call_(Some(identities.head.value), foreign = true)
+          val afterforeign = _states_()
+          Then("the selector is not authority to borrow another session's association")
+          foreign.isSuccess shouldBe false
+          foreign.toString should include("no associated instance")
+          _expect_unchanged_(afterforeign, before)
+          When("the owning session supplies only the selector needed to identify its first Phase")
+          val wire = _scalar_(take(_call_(Some(identities.head.value))))
+          val work = take(WorkflowWorkOrderJsonV1.decodeC(wire, S.inputCodec))
+          val afterselected = _states_()
+          Then("only the selected Phase issues or retains its actual next semantic work, without instance or revision echoes for the other Phase")
+          work.handle.instanceIdentity shouldBe identities.head
+          work.current shouldBe a[WorkflowContinuation.WorkOrder[?]]
+          _expect_unchanged_(afterselected.tail, before.tail)
+          selectedwire.foreach(_ shouldBe wire)
+          selectedwire = Some(wire)
+        }
+      }
+    }
     for (withDecisions <- Vector(false, true)) {
     (if (withDecisions) "close the whole ordered Phase after verified Human resumption of implementation, review, repair and Phase review"
       else "close the whole ordered two-Step Phase after assigned repair, checks, reviews and actual repository closure") in {
@@ -43,18 +134,30 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           GoalPhaseNativeClosure.StepProgram("step-1", 1), GoalPhaseNativeClosure.StepProgram("step-2", 2)))))
       val command = GoalPhaseStartCommand(host.goal.input, "selected-goal", "participant", "direct-goal-start")
       val identity = take(GoalPhaseNativeRun.identityC(command))
-      val advance = GoalPhaseNativeServiceAssembly.encodeAdvance(identity.value)
+      Given("advance contains unused diagnostics and caller hints but only its actual instance is consumed")
+      val advance = io.circe.parser.parse(GoalPhaseNativeServiceAssembly.encodeAdvance(identity.value)).toOption.get
+        .mapObject(_.add("stage", io.circe.Json.fromString("Completed"))
+          .add("argv", io.circe.Json.arr(io.circe.Json.fromString("must-not-execute")))
+          .add("diagnostics", io.circe.Json.obj("expectedRevision" -> io.circe.Json.fromInt(999)))).spaces2
       var assigned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
       var saved = Option.empty[InstanceRecord]
       var terminal = Option.empty[String]
       var firstbase = Option.empty[O.Snapshot]
       var completed = Vector.empty[O.ClosedStep]
+      var previousworkanswer = Option.empty[(String, String)]
+      var previoushumananswer = Option.empty[(String, String)]
+      var delayedworkchecks = 0
+      var delayedhumanchecks = 0
       val sessions = Vector("issue", "implement-1", "review-repair", "repair", "review-1", "implement-2",
         "review-2", "phase-review", "repository-close", "fresh terminal")
       for (session <- sessions) _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
+        val invocationcontext = if (withDecisions)
+          take(ExecutionContext.withRoutingSessionIdentity(actor, "goal-operation-session")) else actor
+        Given("the Human episode uses actual invocation session context across managed SQLite runtimes; the other episode retains legacy input")
         def _call_(operation: String, wire: String) = owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
-            arguments = List(Argument("arg1", wire))), actor)
+            arguments = if (withDecisions && operation == "advanceGoalPhase" && wire == advance) Nil
+              else List(Argument("arg1", wire))), invocationcontext)
         def _invoke_(operation: String, wire: String) = _scalar_(take(_call_(operation, wire)))
         def _current_(): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
@@ -75,8 +178,54 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             reference, Vector.empty, ExecutionEvidence(Vector(reference), Some(
               if (input.kind.startsWith("Review")) "specification-reviewer" else "participant")))
         }
-        def _complete_(result: ContinuationResult[S.Result]): Unit =
-          take(WorkflowWaitJsonV1.decodeC(_invoke_("submitGoalPhaseWorkResult", take(WorkflowResultJsonV1.encodeC(result, S.resultCodec)))))
+        def _delayed_reply_(operation: String, previous: (String, String), pending: InstanceRecord): Unit = {
+          Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R4; Examples: E9/E10; a real previously completed answer and a newer actual suspension in the same invocation session")
+          val (oldwire, acknowledgement) = previous
+          val oldjson = io.circe.parser.parse(oldwire).toOption.get
+          val oldidentity = oldjson.hcursor.get[String]("requestIdentity").toOption.get
+          pending.history.flatMap(_.suspension).map(_.continuationIdentity.value) should contain(oldidentity)
+          pending.suspension should not be empty
+          pending.suspension.get.continuationIdentity.value should not be oldidentity
+          When("the actual old answer is delayed until newer work is pending and omits its necessary request selector")
+          val ambiguous = _call_(operation, oldjson.mapObject(_.remove("requestIdentity")).noSpaces)
+          val afterambiguous = _current_()
+          Then("completed issued generations prevent the old answer from silently closing the only newer pending generation")
+          ambiguous.isSuccess shouldBe false
+          ambiguous.toString should include("ambiguous issued request")
+          SplitPhaseDefinitionBinding.sameRecord(afterambiguous, pending) shouldBe true
+          afterambiguous.history shouldBe pending.history
+          When("the same delayed answer explicitly names only its actual old request")
+          val observed = _call_(operation, oldwire)
+          val afterselected = _current_()
+          Then("existing retained completion may acknowledge or refuse that old target but cannot replace or close the newer pending request")
+          if (observed.isSuccess) _scalar_(take(observed)) shouldBe acknowledgement
+          SplitPhaseDefinitionBinding.sameRecord(afterselected, pending) shouldBe true
+          afterselected.history shouldBe pending.history
+        }
+        def _complete_(result: ContinuationResult[S.Result]): Unit = {
+          val wire = take(NativeWorkflowResultSubmissionFixture.encodeC(result, S.resultCodec))
+          val reduced = io.circe.parser.parse(wire).toOption.get.mapObject(_.remove("requestIdentity")).noSpaces
+          val pending = _current_()
+          val generations = pending.history.flatMap(_.suspension).count(boundary =>
+            boundary.completion.value != "goal-phase-ordered-human-completion-v1")
+          if (withDecisions) previousworkanswer.foreach { previous =>
+            _delayed_reply_("submitGoalPhaseWorkResult", previous, pending)
+            delayedworkchecks += 1
+          }
+          if (withDecisions && generations > 1) {
+            When("an answer omits its selector after earlier work generations were already completed")
+            val ambiguous = _call_("submitGoalPhaseWorkResult", reduced)
+            Then("actual issued history prevents blindly closing the sole newer pending request")
+            ambiguous.isSuccess shouldBe false
+            ambiguous.toString should include("ambiguous issued request")
+            SplitPhaseDefinitionBinding.sameRecord(_current_(), pending) shouldBe true
+          }
+          When("only a genuinely ambiguous generation carries its request selector")
+          val acknowledgement = _invoke_("submitGoalPhaseWorkResult",
+            if (withDecisions && generations == 1) reduced else wire)
+          take(WorkflowWaitJsonV1.decodeC(acknowledgement))
+          previousworkanswer = Some((wire, acknowledgement))
+        }
         def _retain_(next: WorkflowInteraction[S.Request, Nothing]): Unit = {
           assigned = Some(next)
           saved = Some(_current_())
@@ -86,7 +235,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val prior = _input_(previous)
           val requesting = _result_("decision-needed")
           if (prior.kind.startsWith("Review")) prepare(call =>
-            ThreeWorkflowHostEvidencePorts.reviewBindingC(call.core, S.inputCodec.encode(prior), requesting, S.resultCodec)
+            ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, prior, requesting)
               .flatMap(binding => call.evidenceC(NativeHostEvidence.Purpose.GoalReview,
                 ThreeWorkflowHostEvidencePorts.key(requesting.resultReference.identity, requesting.resultReference.revision),
                 requesting.resultReference, "specification-reviewer", binding)))
@@ -101,6 +250,10 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val pending = _current_()
           pending.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
           pending.suspension should not be empty
+          if (withDecisions) previoushumananswer.foreach { previous =>
+            _delayed_reply_("submitGoalPhaseOrderedDecision", previous, pending)
+            delayedhumanchecks += 1
+          }
           When("another JVM observes the exact issued ordered Human question without reissuing work")
           val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
           take(WorkflowDecisionJsonV1.decodeC(reopened.hcursor.get[String]("result").toOption.get,
@@ -111,7 +264,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             decision.context.snapshot, TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
               GoalPhaseOrderedHumanDecision.Answer("ResumeAssignedWork", "Continue only the same original assigned semantic work")),
             reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-human")))
-          val wire = take(WorkflowResultJsonV1.encodeC(answer, GoalPhaseOrderedHumanDecision.answerCodec))
+          val wire = take(NativeWorkflowResultSubmissionFixture.encodeC(answer, GoalPhaseOrderedHumanDecision.answerCodec))
           When("an answer has no separately prepared host Human evidence")
           _call_("submitGoalPhaseOrderedDecision", wire).isSuccess shouldBe false
           Then("the actual question, repository and original allowance remain unchanged")
@@ -128,6 +281,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           answered.history.size shouldBe pending.history.size + 1
           Then("the exact retained answer can be acknowledged without a second history entry")
           _invoke_("submitGoalPhaseOrderedDecision", wire) shouldBe acknowledgement
+          previoushumananswer = Some((wire, acknowledgement))
           val altered = answer.copy(result = answer.result.copy(value = answer.result.value.copy(choice = "Cancel")))
           _call_("submitGoalPhaseOrderedDecision", take(WorkflowResultJsonV1.encodeC(altered,
             GoalPhaseOrderedHumanDecision.answerCodec))).isSuccess shouldBe false
@@ -166,11 +320,21 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           } yield ())
           When("public Start saves the complete selected plan and captures the actual clean base")
           take(WorkflowWaitJsonV1.decodeC(_invoke_("startGoalPhase", GoalPhaseStartServiceOperation.encodeCommand(command))))
+          When("advance consumes its actual instance while ignoring caller stage argv and diagnostic revision")
           _retain_(_next_())
+          Then("only the original plan's first implementation is issued rather than the caller's Completed stage")
           _input_(assigned.get).selectedPlan shouldBe plan
           _input_(assigned.get).kind shouldBe "ImplementStep"
           _input_(assigned.get).stepIdentity shouldBe Some("step-1")
           firstbase = Some(_input_(assigned.get).originalBase)
+          When("the actual target instance is changed while the unused diagnostic fields are retained")
+          val foreign = io.circe.parser.parse(advance).toOption.get
+            .mapObject(_.add("instanceIdentity", io.circe.Json.fromString("foreign-instance"))).noSpaces
+          val rejected = _call_("advanceGoalPhase", foreign)
+          Then("the actual native Start lookup refuses the absent instance without changing original pending work")
+          rejected.isSuccess shouldBe false
+          rejected.toString should include("owning advance has no actual native ordered Start")
+          SplitPhaseDefinitionBinding.sameRecord(_current_(), saved.get) shouldBe true
           When("another JVM reopens the saved first implementation without installing selected rows or Workflow history")
           val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
           take(WorkflowWorkOrderJsonV1.decodeC(reopened.hcursor.get[String]("result").toOption.get, S.inputCodec)) shouldBe assigned.get
@@ -197,7 +361,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val child = RepositorySyncStartCommand(host.repository.input, host.repository.closureSelection, "participant", invocation)
           prepare(call => call.evidenceC(NativeHostEvidence.Purpose.PhaseClosure,
             ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-phase-authority", "1"),
-            "participant", ThreeWorkflowHostEvidencePorts.ownedBinding(call.core, closure.asJson))
+            "participant", take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, closure)))
             .flatMap(_ => _prepare_input_(call, child, root)))
           When("owning advance calls the installed RepositorySync Operations and closes only their observed convergence")
           val wire = _invoke_("advanceGoalPhase", advance)
@@ -261,11 +425,11 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             input.kind shouldBe (if (session == "phase-review") "ReviewPhase" else "ReviewStep")
             val repair = session == "review-repair"
             val result = _result_(if (repair) "repair" else "accept", if (repair) Vector("Repair the assigned first boundary") else Vector.empty)
-            val wire = take(WorkflowResultJsonV1.encodeC(result, S.resultCodec))
+            val wire = take(NativeWorkflowResultSubmissionFixture.encodeC(result, S.resultCodec))
             _call_("submitGoalPhaseWorkResult", wire).isSuccess shouldBe false
             Then("review strings without the exact separately prepared reviewer evidence leave pending history unchanged")
             SplitPhaseDefinitionBinding.sameRecord(_current_(), saved.get) shouldBe true
-            prepare(call => ThreeWorkflowHostEvidencePorts.reviewBindingC(call.core, S.inputCodec.encode(input), result, S.resultCodec)
+            prepare(call => ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input, result)
               .flatMap(binding => call.evidenceC(NativeHostEvidence.Purpose.GoalReview,
                 ThreeWorkflowHostEvidencePorts.key(result.resultReference.identity, result.resultReference.revision),
                 result.resultReference, "specification-reviewer", binding)))
@@ -286,7 +450,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               _current_().lifecycle shouldBe Lifecycle.Active
               prepare(call => call.evidenceC(NativeHostEvidence.Purpose.StepClosure,
                 ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-step-authority", "1"),
-                "participant", ThreeWorkflowHostEvidencePorts.ownedBinding(call.core, closure.asJson)))
+                "participant", take(ThreeWorkflowHostEvidencePorts.stepClosureBindingC(call.core, closure))))
               When("owning advance commits only the reviewed Step and selects the next ordered frontier")
               _retain_(_next_())
               completed = _input_(assigned.get).completed
@@ -309,6 +473,11 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             }
           }
         }
+      }
+      if (withDecisions) {
+        Then("multiple actual semantic and Human generations exercised delayed old answers rather than a vacuous single-generation fixture")
+        delayedworkchecks should be >= 3
+        delayedhumanchecks shouldBe 3
       }
     }
     }
@@ -383,6 +552,15 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             answered.history.size shouldBe saved.get.history.size + 1
             answered.suspension shouldBe empty
             invoke("submitGoalPhaseOrderedDecision", wire) shouldBe acknowledgement
+            When("the same retained answer is observed with different explanatory transport text")
+            val transported = answer.copy(result = answer.result.copy(value = answer.result.value.copy(rationale = "Another explanatory rendering")))
+            invoke("submitGoalPhaseOrderedDecision", take(WorkflowResultJsonV1.encodeC(transported,
+              GoalPhaseOrderedHumanDecision.answerCodec))) shouldBe acknowledgement
+            val otherChoice = answer.copy(result = answer.result.copy(value = answer.result.value.copy(
+              choice = if (choice == "Defer") "Cancel" else "Defer")))
+            owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+              operation = "submitGoalPhaseOrderedDecision", arguments = List(Argument("arg1", take(WorkflowResultJsonV1.encodeC(
+                otherChoice, GoalPhaseOrderedHumanDecision.answerCodec))))), actor).isSuccess shouldBe false
             retained = Some(invoke("advanceGoalPhase", advance))
             take(WorkflowWaitJsonV1.decodeC(retained.get))
             Then("the answer stays latched without another question, WorkOrder or Phase completion")

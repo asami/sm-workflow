@@ -39,11 +39,9 @@ private[smworkflow] object SplitPhaseExplicitDurationCalibration {
       acceptedObservations: Vector[Reference], exclusions: Vector[Exclusion]) extends Outcome
   }
 
-  def loadC(frozen: Request, current: Request): Consequence[Input] =
+  def loadC(current: Request): Consequence[Input] =
     if (!complete(current))
       Consequence.stateConflict("SplitPhase explicit calibration input or policy is incomplete")
-    else if (frozen != current)
-      Consequence.stateConflict("SplitPhase explicit calibration complete current input differs")
     else Consequence.success(new Input(current))
 
   /** Internal numerical work consumes only a constructed Input. There is no

@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
   * There is deliberately no factory taking a passive checkpoint or snapshot.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseRetainedReasoningSource {
   sealed trait Origin
@@ -52,11 +52,11 @@ private[smworkflow] object SplitPhaseRetainedReasoningSource {
 
   def scopePlanningC(observed: SplitPhaseManagedScopePlanningCheckpoint.Observed): Consequence[Source] =
     if (observed == null) _invalid("actual scope planning observation is absent")
-    else _source_c(ScopePlanning(observed), observed.record.priorScope.snapshot.first, observed.current)
+    else _source_c(ScopePlanning(observed), observed.scope.record.snapshot.first, observed.current)
 
   def humanResolutionC(observed: SplitPhaseManagedHumanResolutionCheckpoint.Observed): Consequence[Source] =
     if (observed == null) _invalid("actual Human publication observation is absent")
-    else _source_c(HumanResolution(observed), observed.record.priorScope.snapshot.first, observed.current)
+    else _source_c(HumanResolution(observed), observed.source.plan.source.record.snapshot.first, observed.current)
 
   private def _source_c(origin: Origin, checkpoint: K.Record, current: InstanceRecord): Consequence[Source] = {
     val source = new Source(origin, checkpoint, current)

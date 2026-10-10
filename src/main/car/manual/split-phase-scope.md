@@ -27,9 +27,19 @@ availability and host prerequisites.
 candidate, repository or storage selector.
 
 The application's command frame uses the exact prefix
-`sm-workflow.split-phase-advance-command.v1:` followed by a closed JSON object
-with `schemaVersion` and `payload`. The whole UTF-8 frame is bounded to 16 KiB;
-the payload must match the generated command shape exactly. This describes a
+`sm-workflow.split-phase-advance-command.v1:` followed by a JSON object
+with `schemaVersion` and `payload`. There is no separate command-codec byte
+limit for formatting or ignored diagnostic data. Transport/runtime resource
+policies remain separate; codec acceptance is not a resource grant.
+The decoder consumes the generated instance/context fields and ignores unused
+diagnostics at every object level; it does not compare the whole input with a
+regenerated JSON body. Extra stage, action, storage or command fields do not
+select those controls. Missing or wrongly typed consumed fields and incompatible
+schemas still fail conversion; actual current-call authority, context and native
+state are resolved by the owning Operation. Logical reference strings are not
+trimmed or pre-admitted as physical planning keys by this codec. The actual
+planning-index read/publication owns its escaped-key bound when that key is
+consumed; missing contexts fail at the owning context lookup. This describes a
 codec, not permission to call an unavailable binding. Use the configured
 client's encoder, not a fabricated context or an approximate envelope.
 
@@ -48,8 +58,9 @@ alone do not prove current checkpoint provenance or native execution authority.
 
 ## Semantic result
 
-`SplitPhaseScopeSemanticResult` echoes the exact context and checkpoint and
-contains `decision`, `rationale`, `scopes` and `evidence`.
+`SplitPhaseScopeSemanticResult` contains only `decision`, `rationale`, `scopes`
+and `evidence`. Workflow resolves the original context and checkpoint from its
+issued request; the answer does not echo or certify them.
 
 - `Enriched` supplies scopes for exactly the issued gap identities in their
   original order. Each producing and receiving range is a nonempty, distinct,
@@ -58,29 +69,111 @@ contains `decision`, `rationale`, `scopes` and `evidence`.
   required; it does not approve a human choice or allow execution.
 
 Evidence references must be nonempty and distinct and also belong to the actual
-execution evidence. The common completion envelope must use the host-assigned
-result reference and match the exact issued continuation, revision, snapshot
-and contracts. Extra nested fields, old payload aliases, foreign references,
-reordered/duplicate scopes and missing evidence are rejected.
+execution evidence. Normal reduced submission resolves the host-assigned result
+destination and issued controls from managed state; return `result.value`, not a
+destination comparison copy. Historical full-envelope input must use the assigned
+result reference and actual issued continuation, revision, snapshot and contracts.
+Unused legacy context/checkpoint copies and diagnostic fields are ignored, not
+compared or used to select execution. Actual incompatible schemas or consumed
+field types fail decoding; foreign business references, reordered/duplicate
+scopes and missing evidence fail at their consuming boundary.
 
-The application request and result payload codecs use separate closed schemas
+The application request and result payload codecs use separate typed schemas
 `sm-workflow.split-phase-scope-request.v1` and
-`sm-workflow.split-phase-scope-result.v1`. Their envelope contains only
-`schemaVersion` and `payload`; decode limits payloads to 1 MiB. CNCF owns the
-outer WorkOrder/result envelopes. Do not return just the application payload
-where the host expects the complete result envelope.
+`sm-workflow.split-phase-scope-result.v1`. Producers emit `schemaVersion` and
+`payload`; readers decode consumed typed fields without an exact-key or
+re-encoding comparison certificate. Old unused fields do not grant authority.
+Decode limits payloads to 1 MiB. CNCF owns the
+outer WorkOrder/result envelopes. The normal component also accepts
+`sm-workflow.result-submission.v1` with the typed semantic payload under
+`result.value`, consumed evidence and session or necessary request selection.
+This is distinct from returning a bare application payload where the host expects
+a submission frame or a historical complete result envelope.
 
 ## Effects and retained observation
 
-Before issue or completion, the managed route independently checks original
-Start/context facts, checkpoint mapping, effective facts, Built documents and
-the complete canonical history prefix. It distinguishes actual mechanical
-checkpoint provenance from an actual retained partition completion.
+The mechanical route resolves the selected checkpoint's actual native receipt.
+CNCF owns receipt and native-state admission; scope consumes that receipt's
+postimage and actual current instance, not independently reopened Start/context
+bodies or reconstructed prefix copies. The route checks the authenticated
+participant and requires declared generated documents to exist and be readable.
+An AI-origin checkpoint instead resolves its genuine retained partition
+completion; it cannot substitute a mechanical receipt or recompute on absence.
+These origins remain distinct from the scope task's actual issue/completion
+contracts and native state/CAS transitions.
+
+The full v1 payload can retain historical input copies and revision metadata.
+Reading those passive values does not certify their agreement with the computed
+snapshot or admit a transition. Mechanical observation uses the actual native
+receipt's postimage/current state, not the historical payload's revision echo.
+Publication consumes its privately constructed capture without rechecking full
+copies of the same data. Remaining AI/scope and nested-codec checks are separate
+implementation work; this distinction does not grant them a blanket exemption.
 
 The route borrows the owning Subsystem's initialized storage and uses canonical
 managed issue/completion. It creates no second pool, production SQLite access,
 application claim/lock or implicit retry. Returned scope subsets do not change
 candidate ownership, original closure obligations or transfer authority.
+
+ScopeProjection derives its native-result address from the genuine owning
+predecessor; it creates and reads no separate application locator. Observation
+consumes the actual native receipt, not an application copy or historical proof.
+Old full, malformed, crossed-reference or absent application copies are ignored
+without rewriting. Only new Built documents accompany the real native transition.
+Native payloads no longer emit comparison-only scopeWork, scopePredecessor or
+scopeIssued; old versions ignore them. Real receipt before/next/current state
+supplies the native state, without old-row rewriting or repeat publication.
+Actual crossed receipt owner/type/address/instance data fails at its consuming
+boundary. A missing receipt is actual absence; the real native state/CAS prevents
+stale replay after an append. Required document readability is independent of
+unused physical columns or document-copy equality. Other source/frontier/resource
+checks remain separate adopted removal work.
+
+ScopePlanning also selects the actual native calculation from its independently
+owning Scope, without an application locator, presence join or side Create.
+Its native intent uses an empty UoW program; no dummy receipt or checked marker is
+created. Old unused application copies and native priorScope bodies may be absent
+or unreadable without gating reopening or being rewritten. Original first
+checkpoint and Start mode come from the genuine owning Scope observation.
+Actual receipt states and saved downstream supply the successor; stale replay
+after receipt loss is prevented by the actual native state/CAS boundary.
+Actor/storage/CAS/Create remain at their effect owners. Other remaining nested/
+frontier/source/resource checks are separate adopted removal work, not collectively
+endorsed by this contract.
+
+The current no-application-copy correction is authored but UNVERIFIED pending
+fresh complete executable suites and a fresh independent connected review.
+That authoring cutoff is now followed by bounded executable validation and an
+independent connected source assessment. Its sole stale empty-row fixture finding
+was corrected without restoring a copy row; the complete changed managed suite
+then passed142/142. Runtime Help and full Phase acceptance remain open.
+
+Owning checkpoint readers use the current call's declared storage targets, not
+an equality proof against construction-time target copies. The admitted runtime
+Catalog is consumed without another whole-declaration or source-line comparison.
+Partition completion likewise has no comparison-only read-purpose certificate.
+Actual selected rows and native state/effect permissions still belong to their
+consumers. These owning bindings have bounded complete executable validation
+and a fresh independent connected source assessment; broader predicate removal,
+runtime Help and Phase acceptance remain open.
+
+ScopeProjection and ScopePlanning native calculation payloads carry SavedResult
+data only. Fresh payloads omit nested before/next; existing-v1 readers ignore
+those obsolete members even when absent or unreadable. Actual transition states
+come from CNCF's outer receipt and its native definition catalog, not a second
+payload history. Private preparation still supplies the genuine intent; decoded
+results do not grant publication or new effects. Current SavedResult behavior
+has bounded direct-Operation/executable validation and independent source review;
+broader predicate removal, runtime Help and Phase acceptance remain open.
+
+Retained ScopeProjection reads the declared Built proposal, ownership and handoff
+documents for presence, typed readability and their selected addresses. It does
+not compare their bodies with saved checkpoint copies. Readable same-reference
+documentation changes leave the native-derived result unchanged; missing,
+malformed or differently addressed deliverables fail at document consumption.
+Unrelated files are not checked, and observation does not rewrite documents or
+append native history. Other remaining source/copy checks are separate adopted
+removal work, not justified by this document-read contract.
 
 An advance while the genuine scope task is pending returns that same issued
 work. After a valid result is committed, the completion returns a WAIT
@@ -158,3 +251,30 @@ fixtures, not this guard. Selected positive tests do not close that boundary.
 Broader transports and public skills retain their
 separate Phase assignments. Rendered/runtime Help remains unverified; supporting
 tests alone do not establish practical Phase or release acceptance.
+
+Planning snapshot storage admits the declared wire fields and types, not a
+reconstructed copy or proof that a whole candidate frontier is executable.
+Standalone, native payload and existing full checkpoint readers share this
+contract. A typed passive record can be stored even when candidate relationships
+are unusable; Workflow routing and selected document/preview use must interpret
+those relationships at their actual use boundary. Decoding never grants native
+state, publication or document-write authority. Further removal of duplicated
+consumer checks remains open; this separation is not overall Phase acceptance.
+
+A freshly constructed planning outcome is copied with its already reached
+Workflow variant. The copier does not compare its copied boundary documents or
+reclassify its own emitted record; Human calculation uses this constructed
+disposition directly. Saved raw records are a different input: selected Preview
+obtains document material through the document consumer before rendering, rather
+than repeating that consumer's full frontier inspection at each Preview layer.
+Neither projection admits native state nor grants document application authority.
+Other duplicated consumer/owner checks remain under the Phase 5 removal audit.
+
+Public advance carries its already decoded command and observed original Start
+mode through internal routing. Selecting PREVIEW or APPLY does not by itself
+read the whole saved frontier again. The chosen handler still reads its own
+actual native source and mode before effects. A saved-frontier reader returns
+passive data without interpreting its meaning for selected documents; the
+document consumer must refuse unusable input. Component-level reading does not
+repeat the native owner's full history-prefix comparison. This does not remove
+the framework's remaining comparison or imply overall Phase acceptance.

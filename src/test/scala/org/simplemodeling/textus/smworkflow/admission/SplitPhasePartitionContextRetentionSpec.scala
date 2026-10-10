@@ -12,7 +12,7 @@ import SplitPhasePartitionContextFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class SplitPhasePartitionContextRetentionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def prepared(value: C.Record = record) =
@@ -26,7 +26,9 @@ final class SplitPhasePartitionContextRetentionSpec extends AnyWordSpec with Mat
     def loadC(): Consequence[Option[Record]] = if (!created) Consequence.success(actual) else fault match {
       case "missing" => Consequence.success(None)
       case "failed" => Consequence.stateConflict("private readback interruption")
-      case "divergent" => Consequence.success(Some(row(record.copy(owner = record.owner.copy(
+      case "crossed" => Consequence.success(Some(row(record.copy(reference = record.reference.copy(identity = "foreign")))))
+      case "malformed" => Consequence.success(Some(Record.data(J.storageField -> "not-json")))
+      case "presentation" => Consequence.success(Some(row(record.copy(owner = record.owner.copy(
         presentation = record.owner.presentation.copy(currentSituation = "other-observation"))))))
       case _ => Consequence.success(actual)
     }
@@ -62,37 +64,68 @@ final class SplitPhasePartitionContextRetentionSpec extends AnyWordSpec with Mat
       admitted.record.owner.instanceRevision shouldBe instance.revision
     }
 
-    "refuse full-data and selected-revision conflicts without overwriting the identity" in {
+    "resolve existing inert data without requiring unchanged diagnostics or historical facts" in {
       Given("one observed complete record")
       val changedFacts = facts.copy(partition = facts.partition.copy(estimates = facts.partition.estimates.copy(
         items = facts.partition.estimates.items.updated(0, facts.partition.estimates.items.head.copy(duration = E.Duration.Known(261))))))
-      val variants = Vector(record.copy(reference = record.reference.copy(revision = "2")),
-        record.copy(owner = record.owner.copy(continuation = record.owner.continuation.copy(value = "other-continuation"))),
+      val variants = Vector(record.copy(owner = record.owner.copy(continuation = record.owner.continuation.copy(value = "other-continuation"))),
         record.copy(owner = record.owner.copy(presentation = record.owner.presentation.copy(currentSituation = "other-situation"))),
         record.copy(facts = changedFacts))
-      When("independently constructed complete candidates reuse the same physical identity")
-      Then("all conflicts fail without Create or replacement")
-      variants.foreach { value =>
+      When("independently prepared candidates select the existing physical identity")
+      val results = variants.map { value =>
         val storage = new Storage
         storage.actual = Some(row(record))
-        SplitPhasePartitionContextRetention.retainC(prepared(value), storage).isSuccess shouldBe false
+        (storage, SplitPhasePartitionContextRetention.retainC(prepared(value), storage))
+      }
+      Then("the existing raw record is observed without overwrite or an execution grant")
+      results.foreach { case (storage, result) =>
+        take(result) shouldBe record
         storage.creates shouldBe 0
         storage.actual shouldBe Some(row(record))
       }
     }
 
+    "refuse a crossed selected revision without overwriting the identity" in {
+      Given("a stored record selected using another revision")
+      val storage = new Storage
+      storage.actual = Some(row(record))
+      val value = record.copy(reference = record.reference.copy(revision = "2"))
+      When("retention resolves that selected address")
+      val result = SplitPhasePartitionContextRetention.retainC(prepared(value), storage)
+      Then("the address mismatch is refused without Create or replacement")
+      result.isSuccess shouldBe false
+      storage.creates shouldBe 0
+      storage.actual shouldBe Some(row(record))
+    }
+
+    "observe committed presentation data without certifying an unchanged body" in {
+      Given("a successful Create whose immediate read has compatible presentation data")
+      val storage = new Storage
+      storage.fault = "presentation"
+      When("the actual selected record is read after Create")
+      val observed = take(SplitPhasePartitionContextRetention.retainC(prepared(), storage))
+      Then("the observation is returned as inert data, not a transaction failure or executable admission")
+      observed.owner.presentation.currentSituation shouldBe "other-observation"
+      observed.reference shouldBe record.reference
+      storage.creates shouldBe 1
+    }
+
     "publish no success for uncertain Create or readback and recover committed data without retry machinery" in {
       Given("a fixed identity and private observation interruptions")
-      for (fault <- Vector("before-create", "after-create", "missing", "failed", "divergent")) {
+      for (fault <- Vector("before-create", "after-create", "missing", "failed", "crossed", "malformed")) {
         val storage = new Storage
         storage.fault = fault
         When(s"the one Create or immediate observation is interrupted: $fault")
-        indeterminate(SplitPhasePartitionContextRetention.retainC(prepared(), storage))
+        val interrupted = SplitPhasePartitionContextRetention.retainC(prepared(), storage)
+        Then("no successful publication is inferred from uncertain Create or unavailable selected data")
+        indeterminate(interrupted)
         storage.creates shouldBe 1
-        Then("only a separately requested later observation can recover committed data")
         if (fault != "before-create") {
           storage.fault = "none"
-          take(SplitPhasePartitionContextRetention.retainC(prepared(), storage)) shouldBe record
+          When("a separately requested later call observes the committed data")
+          val recovered = take(SplitPhasePartitionContextRetention.retainC(prepared(), storage))
+          Then("the committed data is recovered without another Create")
+          recovered shouldBe record
           storage.creates shouldBe 1
         } else storage.actual shouldBe None
       }

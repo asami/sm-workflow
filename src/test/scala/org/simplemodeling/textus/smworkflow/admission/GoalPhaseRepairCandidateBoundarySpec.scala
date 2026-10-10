@@ -89,7 +89,7 @@ final class GoalPhaseRepairCandidateBoundarySpec extends AnyWordSpec with Matche
         RiskLevel("standard"), ReasoningLevel.Deep, true),
       MinimalPresentation("Review Step", "Fixture review")))
     val review = StepReviewEvidence("repair-review-1", candidate.revision,
-      now.minusSeconds(60).toString, now.plusSeconds(3600).toString,
+      now.minusSeconds(60).toString,
       "full-step", "Repair needed", "fixture-review-receipt")
     val submitted = ContinuationResult(
       issued.handle, provided.runId, pending.continuation.continuationId,
@@ -131,7 +131,7 @@ final class GoalPhaseRepairCandidateBoundarySpec extends AnyWordSpec with Matche
     "invalidate retained evidence when only planning bytes change" in {
       val candidate = take(StepCloseRequestAdapter.submissionC(original)).candidate.reference
       val focused = StepReviewEvidence("original-focused", candidate.revision,
-        now.minusSeconds(60).toString, now.plusSeconds(3600).toString,
+        now.minusSeconds(60).toString,
         "focused:docs", "Original planning review", "original-review-receipt")
       val (issued, submitted) = fixture(Vector(focused))
       val intent = take(GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued, submitted, now))
@@ -156,18 +156,18 @@ final class GoalPhaseRepairCandidateBoundarySpec extends AnyWordSpec with Matche
       prepared.intent.repairJudgment.result.value.decision shouldBe "repair"
     }
 
-    "re-evaluate expiry without demanding that the already admitted repair judgment remain fresh" in {
+    "preserve applicable evidence after the former expiry while still requiring the repair re-review" in {
       val (issued, submitted) = fixture()
       val intent = take(GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued, submitted, now))
       val prepared = take(GoalPhaseRepairCandidateBoundary.prepareCurrentC(intent,
         snapshotPort(originalSnapshot), now.plusSeconds(3601)))
       prepared.currentRequest.reviewEvidence shouldBe submitted.result.value.reviewEvidence
-      prepared.evaluation.acceptedEvidence shouldBe empty
-      prepared.evaluation.gaps.flatMap(_.defects) should contain (EvidenceDefect.Stale)
+      prepared.evaluation.acceptedEvidence shouldBe Vector(submitted.result.value.reviewEvidence.head.evidenceIdentity)
+      prepared.evaluation.gaps shouldBe empty
       prepared.requiresNewReview shouldBe true
     }
 
-    "reject non-repair, stale and mismatched review results before retaining an intent" in {
+    "reject non-repair and mismatched review results without treating elapsed time as withdrawal" in {
       val (issued, submitted) = fixture()
       val accepted = submitted.copy(result = submitted.result.copy(value =
         submitted.result.value.copy(decision = "accept")))
@@ -176,23 +176,23 @@ final class GoalPhaseRepairCandidateBoundarySpec extends AnyWordSpec with Matche
       GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued,
         submitted.copy(contextSnapshot = submitted.contextSnapshot.copy(workflowRevision = "stale")), now) shouldBe
         a[Consequence.Failure[?]]
-      GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued, submitted,
-        now.plusSeconds(3601)) shouldBe a[Consequence.Failure[?]]
+      take(GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued, submitted,
+        now.plusSeconds(3601))).repairJudgment shouldBe submitted
       GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued,
         submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(
           reviewEvidence = Vector(submitted.result.value.reviewEvidence.head.copy(reviewedRevision = "c" * 64))))),
         now) shouldBe a[Consequence.Failure[?]]
     }
 
-    "reject absent artifact bytes and an observation before judgment admission" in {
+    "reject absent artifact bytes without treating clock ordering as judgment authority" in {
       val (issued, submitted) = fixture()
       val intent = take(GoalPhaseRepairCandidateBoundary.retainIntentC(artifact, issued, submitted, now))
       GoalPhaseRepairCandidateBoundary.prepareCurrentC(intent, snapshotPort(null), now) shouldBe
         a[Consequence.Failure[?]]
       GoalPhaseRepairCandidateBoundary.prepareCurrentC(intent,
         snapshotPort(originalSnapshot.copy(planning = null)), now) shouldBe a[Consequence.Failure[?]]
-      GoalPhaseRepairCandidateBoundary.prepareCurrentC(intent, snapshotPort(originalSnapshot),
-        now.minusSeconds(1)) shouldBe a[Consequence.Failure[?]]
+      take(GoalPhaseRepairCandidateBoundary.prepareCurrentC(intent, snapshotPort(originalSnapshot),
+        now.minusSeconds(1))).requiresNewReview shouldBe true
       GoalPhaseRepairCandidateBoundary.prepareCurrentC(null, snapshotPort(originalSnapshot), now) shouldBe
         a[Consequence.Failure[?]]
     }

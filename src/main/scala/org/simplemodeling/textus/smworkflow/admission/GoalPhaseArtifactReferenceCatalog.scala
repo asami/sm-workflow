@@ -14,14 +14,7 @@ import GoalPhaseCallScopedSnapshot.Scope
 private[smworkflow] object GoalPhaseArtifactReferenceCatalog {
   final class DataStorePort(storeName: String, collection: DataStore.CollectionId, maximumBytes: Int)
       extends ReferencePort {
-    def verifyForCallC(scope: Scope, core: ActionCall.Core): Consequence[Unit] = _loadC(scope, core).map(_ => ())
     def resolveForCallC(scope: Scope, core: ActionCall.Core): Consequence[References] = _loadC(scope, core)
-    def verifySelectionForCallC(scope: Scope, selected: References, core: ActionCall.Core): Consequence[Unit] =
-      if (selected == null) Consequence.stateConflict("Artifact selected pair is absent")
-      else _loadC(scope, core).flatMap { current =>
-        if (current == selected) Consequence.unit
-        else Consequence.stateConflict("Artifact catalog selection changed before publication")
-      }
 
     private def _loadC(scope: Scope, core: ActionCall.Core): Consequence[References] = for {
       key <- GoalPhaseArtifactReferenceRecord.keyC(scope)

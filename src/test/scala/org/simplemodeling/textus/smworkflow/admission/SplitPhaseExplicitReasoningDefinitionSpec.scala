@@ -74,7 +74,7 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
       })
       val request = R.Request(S.ContextReference("context", "1"), P.SourceReference("source", "1"), authority,
         O.DemandReference("original-demand", "1"), items, S.ResultReference("assigned-reasoning-result", "1"))
-      val enriched = R.Judgment(request.context, R.Decision.Enriched, "Classify the original unknown work",
+      val enriched = R.Judgment(R.Decision.Enriched, "Classify the original unknown work",
         items.zip(R.Classification.values.toVector).map { (item, classification) =>
           R.Assignment(item.identity, classification, "Original closure classification")
         }, Vector(S.EvidenceReference("source-analysis", "1")))
@@ -92,13 +92,13 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
       generatedrequest.productElementNames.toVector shouldBe Vector("context", "source", "authority", "demand", "items", "result")
       generatedrequest.result.identity shouldBe request.result.identity
       generatedrequest.result.revision shouldBe request.result.revision
-      generatedresults.head.productElementNames.toVector shouldBe Vector("context", "decision", "rationale", "assignments", "evidence")
+      generatedresults.head.productElementNames.toVector shouldBe Vector("decision", "rationale", "assignments", "evidence")
       generatedrequest.items.map(_.identity.value) shouldBe items.map(_.identity.value)
       generatedrequest.items.head.closure.authority.identity shouldBe authority.identity
       generatedrequest.items.head.closure.prerequisiteItems.head.value shouldBe "item-0"
       generatedresults.head.assignments.map(_.classification) shouldBe Vector("ExpensiveReasoning", "SettledExecution")
       generatedresults.last.assignments shouldBe empty
-      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.value.SplitPhaseReasoningSemanticResult(null, \"Enriched\", \"rationale\", Vector.empty, Vector.empty, nextOperation = \"apply\")")
+      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.value.SplitPhaseReasoningSemanticResult(\"Enriched\", \"rationale\", Vector.empty, Vector.empty, nextOperation = \"apply\")")
     }
   }
 

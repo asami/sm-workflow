@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedPartitionCompletion as P,
   SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPartitionComputation as E,
   SplitPhaseExplicitBoundaryValidation as B, SplitPhaseExplicitPlanningAdvance as W,
@@ -10,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedPartitionC
 /**
  * Immutable application data, never a grant or a stored assertion of success.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 private[smworkflow] object SplitPhasePartitionEnrichmentPublication {
   final case class Record(result: S.ResultReference, context: S.ContextReference,
@@ -23,9 +22,6 @@ private[smworkflow] object SplitPhasePartitionEnrichmentPublication {
   final class Projection private[SplitPhasePartitionEnrichmentPublication] (
     val record: Record, val estimates: Option[E.Estimates], val handoffs: Option[B.HandoffPlan],
     val planning: Option[W.Data], val candidates: Vector[CandidateDocuments])
-
-  final class Recovered private[SplitPhasePartitionEnrichmentPublication] (
-    val plan: P.Plan, val current: InstanceRecord)
 
   /** Only admitted semantic gaps replace data. All known values and authorities
     * come from the existing semantic projection, not a second estimation pass.
@@ -55,26 +51,4 @@ private[smworkflow] object SplitPhasePartitionEnrichmentPublication {
       case _: S.DecisionNeeded => Consequence.success(None)
     }
 
-  /** Decoded rows alone cannot create usable recovery. Compare the entire native
-    * completion prefix and the complete independently read application rows.
-    */
-  def verifyC(plan: P.Plan, current: InstanceRecord, publication: Option[Record],
-    estimates: Option[E.Estimates], handoffs: Option[B.HandoffPlan], planning: Option[W.Data],
-    candidates: Vector[CandidateDocuments]): Consequence[Recovered] =
-    if (plan == null || current == null || publication == null || estimates == null || handoffs == null ||
-        planning == null || candidates == null)
-      Consequence.stateConflict("SplitPhase enrichment recovery observations are incomplete")
-    else for {
-      actual <- current.validateC
-      _ <- P.verifyCompletedPrefixC(plan, actual)
-      projected <- projectC(plan)
-      _ <- projected match {
-        case Some(expected) if publication.contains(expected.record) &&
-            estimates == expected.estimates && handoffs == expected.handoffs &&
-            planning == expected.planning && candidates == expected.candidates => Consequence.unit
-        case None if publication.isEmpty && estimates.isEmpty && handoffs.isEmpty &&
-            planning.isEmpty && candidates.isEmpty => Consequence.unit
-        case _ => Consequence.stateConflict("SplitPhase enrichment publication or complete resolved rows differ")
-      }
-    } yield new Recovered(plan, actual)
 }

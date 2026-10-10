@@ -16,9 +16,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
   SplitPhaseTypedStartPreparation as TP, SplitPhaseExplicitPartitionSemantic as SP}
 
 /**
- * Versioned closed inert frame, not a constructor for execution capabilities.
+ * Versioned inert frame, not a constructor for execution capabilities.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-partition-completion-checkpoint.v1"
@@ -32,7 +32,6 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
 
   def encodeC(value: A.Record): Consequence[String] = _guarded {
     for {
-      _ <- A.inspectC(value)
       context <- C.encodeC(value.context)
       start <- T.encodeC(value.start)
       issued <- S.encodeWorkOrderC(value.issued)
@@ -52,9 +51,10 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
       _invalid("frame is missing unsupported or oversized")
     else for {
       json <- parser.parse(raw.substring(schema.length + 1)).fold(_ => _invalid("JSON is malformed"), Consequence.success)
-      payload <- json.hcursor.get[Payload]("payload").fold(_ => _invalid("payload is incomplete"), Consequence.success)
-      _ <- if (json == _envelope(payload) && payload.mappingReference.isDefined == payload.checkpoint.isDefined)
-        Consequence.unit else _invalid("closed fields or mapping selection differ")
+      data <- _payload_c(json)
+      payload <- data.as[Payload].fold(_ => _invalid("payload is incomplete"), Consequence.success)
+      _ <- if (payload.mappingReference.isDefined == payload.checkpoint.isDefined)
+        Consequence.unit else _invalid("mapping selection differs")
       catalog <- WorkflowInstanceRecordJsonV1.catalogC(definitions)
       context <- C.decodeC(payload.contextReference, payload.context)
       start <- T.decodeC(payload.startReference, payload.start)
@@ -67,11 +67,17 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
       header <- payload.header.fold(Consequence.success(Option.empty[SplitPhasePartitionEnrichmentPublication.Record]))(h =>
         E.decodeC(SP.ResultReference(completion.result.resultReference.identity, completion.result.resultReference.revision), h).map(Some(_)))
       value = A.Record(context, start, issued, completion, before, next, checkpoint, header, payload.wire)
-      _ <- A.inspectC(value)
-      canonical <- encodeC(value)
-      _ <- if (completion.result.continuationId == identity && canonical == raw) Consequence.unit
-        else _invalid("exact continuation or nested canonical frame differs")
+      _ <- if (completion.result.continuationId == identity) Consequence.unit
+        else _invalid("selected continuation differs")
     } yield value
+  }
+  // Read declared members, not a saved/encoder copy. Nested codecs admit their
+  // own frame data, independently of this frame's whitespace or Set ordering.
+  private def _payload_c(value: Json): Consequence[Json] = {
+    val root = value.asObject.filter(o =>
+      o("schemaVersion").flatMap(_.asString).contains(schema))
+    val payload = root.flatMap(_("payload"))
+    payload.map(Consequence.success).getOrElse(_invalid("schema or declared fields differ"))
   }
   private def _envelope(payload: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> payload.asJson)
   private def _invalid[A](why: String): Consequence[A] = Consequence.stateConflict("SplitPhase AI checkpoint codec " + why)

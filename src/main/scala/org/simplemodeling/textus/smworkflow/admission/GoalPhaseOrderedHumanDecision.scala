@@ -20,7 +20,7 @@ import GoalPhaseOrderedProgression as O
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
@@ -83,23 +83,23 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     resume: (Source, O.State, InstanceRecord, Answer, ActionCall.Core) => Consequence[String],
     acknowledgement: String => Consequence[Unit]) {
     def advanceC(source: Source, core: ActionCall.Core): Consequence[String] = for {
-      plan <- prepareC(source)
+      projected <- prepareC(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using core.executionContext)
-      _ <- existing match {
-        case Some(value) if value == plan.question && F.prefix(source.session.current, plan.pending) => Consequence.unit
+      plan <- existing match {
+        case Some(value) if F.prefix(source.session.current, projected.pending) => selectIssuedC(projected, value)
         case Some(_) => F.invalid("ordered Human question crosses its retained decision source")
         case None => for {
           _ <- if (F.same(source.session.current, source.from)) Consequence.unit
             else F.invalid("advanced ordered Decision has no actual issued question")
-          saved <- questions.suspendC(plan.intent, plan.question)(using core.executionContext)
-          actual <- questions.loadC(identity(source))(using core.executionContext)
-          _ <- if (F.same(saved.instance, plan.pending) && actual.contains(plan.question)) Consequence.unit
+          saved <- questions.suspendC(projected.intent, projected.question)(using core.executionContext)
+          _ <- if (saved.instance.identity == source.from.identity && saved.instance.revision == projected.pending.revision)
+            Consequence.unit
             else uncertain("ordered Human issue committed readback is unavailable; observe without republishing")
           _ <- acknowledgement("ordered-human-issued")
-        } yield ()
+        } yield projected.copy(pending = saved.instance)
       }
-      retained <- retainedC(source, core)
+      retained <- retainedForPlanC(plan, core)
       wire <- retained match {
         case None => WorkflowDecisionJsonV1.encodeC(plan.question, inputCodec)
         case Some((state, next, result)) => if (result.result.value.choice == "ResumeAssignedWork")
@@ -111,15 +111,26 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     /** Read-only traversal of the actual answer, never publication or effects. */
     def retainedC(source: Source, core: ActionCall.Core):
         Consequence[Option[(O.State, InstanceRecord, ContinuationResult[Answer])]] = for {
-      plan <- prepareC(source)
-      native <- completionC(source.session.storage)
-      saved <- native.loadRetainedC(identity(source))(using core.executionContext)
+      projected <- prepareC(source)
+      questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
+      issued <- questions.loadC(identity(source))(using core.executionContext).flatMap {
+        case Some(value) => Consequence.success(value)
+        case None => F.invalid("ordered Human answer has no actual issued question")
+      }
+      plan <- selectIssuedC(projected, issued)
+      observed <- retainedForPlanC(plan, core)
+    } yield observed
+
+    private def retainedForPlanC(plan: Prepared, core: ActionCall.Core):
+        Consequence[Option[(O.State, InstanceRecord, ContinuationResult[Answer])]] = for {
+      native <- completionC(plan.source.session.storage)
+      saved <- native.loadRetainedC(identity(plan.source))(using core.executionContext)
       observed <- saved match {
         case None => Consequence.success(None)
         case Some(value) => for {
           next <- observeC(plan, value.completion, value.completion.result)
-          state <- if (value.completion.result.result.value.choice == "ResumeAssignedWork") resumedC(source, value.completion.result)
-            else Consequence.success(source.controller)
+          state <- if (value.completion.result.result.value.choice == "ResumeAssignedWork") resumedC(plan.source, value.completion.result)
+            else Consequence.success(plan.source.controller)
         } yield Some((state, next, value.completion.result))
       }
     } yield observed
@@ -145,18 +156,25 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             private var delegate = Option.empty[ActionCall]
             def execute(): Consequence[OperationResponse] = for {
               source <- sourceReader(submitted.handle.instanceIdentity.value, submitted.continuationId, core)
-              plan <- prepareC(source)
+              projected <- prepareC(source)
               questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
               issued <- questions.loadC(submitted.continuationId)(using core.executionContext)
-              _ <- if (issued.contains(plan.question) && F.prefix(source.session.current, plan.pending)) Consequence.unit
+              question <- issued.map(Consequence.success).getOrElse(F.invalid("ordered Human answer has no actual issued question"))
+              plan <- selectIssuedC(projected, question)
+              _ <- if (F.prefix(source.session.current, plan.pending)) Consequence.unit
                 else F.invalid("ordered Human answer lacks its actual question or native prefix")
-              _ <- WorkflowProtocolV1.admitDecisionResultC(plan.question, submitted).map(_ => ())
               native <- completionC(source.session.storage)
               saved <- native.loadRetainedC(submitted.continuationId)(using core.executionContext)
               response <- saved match {
-                case Some(value) => observeC(plan, value.completion, submitted).flatMap(waitC(_, submitted)).map(OperationResponse.Scalar(_))
+                case Some(value) => for {
+                  _ <- WorkflowProtocolV1.admitDecisionResultC(plan.question, submitted).map(_ => ())
+                  _ <- if (NativeHumanQuestionSelection.sameAnswerTarget(value.completion.result, submitted) &&
+                      value.completion.result.result.value.choice == submitted.result.value.choice) Consequence.unit
+                    else F.invalid("ordered Human retry selects another retained answer or choice")
+                  next <- observeC(plan, value.completion, value.completion.result)
+                  wire <- waitC(next, value.completion.result)
+                } yield OperationResponse.Scalar(wire)
                 case None => for {
-                  _ <- admitAnswerC(submitted.result.value)
                   _ <- GoalPhaseParticipantAdmission.admitC(source.session.command.participantIdentity, core.executionContext)
                   _ <- installation.evidence.admitC(core, plan.question, submitted, source.session.command.participantIdentity)
                   bound <- freshC(core, provided, plan, submitted)
@@ -191,32 +209,24 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           def encodeC(resume: ContinuationRuntime.Resume) = F.invalid("ordered Human acknowledgement requires committed readback")
           override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[Answer],
             completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
-            _ <- if (result == submitted && completed.exists(F.same(_, expected)) && resume != null &&
+            actual <- completed.map(Consequence.success).getOrElse(uncertain("ordered Human completion has no committed instance"))
+            _ <- if (actual.identity == expected.identity && actual.revision == expected.revision && actual.suspension.isEmpty &&
+                actual.currentProgression == expected.currentProgression && resume != null &&
                 resume.result == StateMachineOperationResult(closingType, submitted.resultReference)) Consequence.unit
               else uncertain("ordered Human completion has no actual adjacent closing result")
             _ <- acknowledgement("ordered-human-completed")
-            saved <- native.loadRetainedC(submitted.continuationId)(using core.executionContext).flatMap(
-              _.map(Consequence.success).getOrElse(uncertain("ordered Human committed answer is absent; observe without retry")))
-            // The owning call already admitted the source and exact question.
-            // After commit, read the actual persisted frontier without starting
-            // process effects in the completed UnitOfWork.
-            current <- instances.loadC(plan.source.from.identity)(using core.executionContext).flatMap {
-              case Some(value) => value.validateC
-              case None => uncertain("ordered Human committed native instance is absent; observe without retry")
-            }
-            selected = plan.copy(source = plan.source.copy(session = plan.source.session.copy(current = current)))
-            observed <- observeC(selected, saved.completion, submitted)
-            wire <- waitC(observed, submitted)
+            // Managed completion supplies authoritative committed state. The
+            // response performs no second store/body/semantic admission.
+            wire <- waitC(actual, result)
           } yield OperationResponse.Scalar(wire)
         }
         val closing = new WorkflowCompletionServiceOperation.ClosingProgram[Answer] {
           def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = for {
-            _ <- if (result == submitted && F.same(current, plan.pending) && F.same(plan.source.session.current, current))
+            _ <- if (F.same(current, plan.pending))
               Consequence.unit else F.invalid("ordered Human closing crosses its actual suspension")
-            next <- completedC(plan, result)
             program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
               ActionExecution.Completed(StateMachineOperationResult(closingType, result.resultReference)))
-          } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+          } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(expected))
         }
         WorkflowDecisionCompletionServiceOperation.bindC(S.providedDefinition, provided, WorkflowJsonCommandRequest.definition,
           spec.ResponseDefinition.void, codec, questions, instances, closing, native,
@@ -246,7 +256,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       intent = WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,
         d.configuration, source.from, source.from.revision, entry,
         ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available))
-      admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
+      pending <- source.from.appendC(source.from.revision, entry)
       handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, source.from)
       question = WorkflowInteraction[Input, Nothing](handle, WorkflowContinuation.Decision(
         ContinuationRequest(continuation.runId, continuation.continuationId, continuation.expectedRevision, required.identity,
@@ -254,7 +264,10 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
         MinimalPresentation("Ordered GoalPhase needs Human direction", Json.obj("choices" -> Json.arr(choices.map(Json.fromString)*),
           "notice" -> Json.fromString("Resume requests the same semantic work; it grants no commands, review acceptance, Plan amendment or repair allowance.")).noSpaces)))
-    } yield Prepared(source, question, intent, admitted.next)
+    } yield Prepared(source, question, intent, pending)
+
+    private def selectIssuedC(plan: Prepared, saved: WorkflowInteraction[Input, Nothing]): Consequence[Prepared] =
+      GoalPhaseOrderedHumanDecision.selectIssuedC(plan.question, saved).map(question => plan.copy(question = question))
 
     private def completedC(plan: Prepared, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
       _ <- WorkflowProtocolV1.admitDecisionResultC(plan.question, result).map(_ => ())
@@ -273,14 +286,23 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     } yield next
     private def observeC(plan: Prepared, saved: WorkflowCompletionRecordJsonV1.Record[Answer], result: ContinuationResult[Answer]) = for {
       next <- completedC(plan, result)
-      _ <- if (saved.result == result && saved.instanceRevision == next.revision &&
+      _ <- if (saved.instanceRevision == next.revision &&
           saved.closingResult.contains(StateMachineOperationResult(closingType, result.resultReference)) &&
           F.prefix(plan.source.session.current, next)) Consequence.unit
         else F.invalid("retained ordered Human answer crosses its actual completion or native prefix")
     } yield next
   }
 
-  private def requiredC: Consequence[StateMachineRequiredOperation] = {
+  private[admission] def selectIssuedC(expected: WorkflowInteraction[Input, Nothing],
+    saved: WorkflowInteraction[Input, Nothing]): Consequence[WorkflowInteraction[Input, Nothing]] = for {
+    selected <- NativeHumanQuestionSelection.selectC(expected, saved)
+    e = expected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
+    q = selected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
+    _ <- if (q.requestingResult == e.requestingResult && S.sameAssignment(q.work, e.work)) Consequence.unit
+      else F.invalid("ordered Human question selects another requesting result or work assignment")
+  } yield selected
+
+  def requiredC: Consequence[StateMachineRequiredOperation] = {
     val matches = domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1.workflow.requiredOperations
       .filter(_.identity.capability == "goal-phase-ordered-human-capability")
     if (matches.size != 1 || matches.head.actionIdentity != "PresentOrderedGoalDecision" ||

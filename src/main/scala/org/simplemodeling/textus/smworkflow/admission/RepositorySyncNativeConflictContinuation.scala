@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object RepositorySyncNativeConflictContinuation {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositorySyncWorkResult")
@@ -180,7 +180,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       val op = provided.providedOperations.find(o => o.service == completionOperation.service && o.name == completionOperation.operation)
       if (op.isEmpty) return invalid("conflict completion is absent from generated provided ABI")
       val instances = CallScopedWorkflowInstances.managed(declaration.configuration, definition, declaration.instances, declaration.continuations)
-      var selected = Option.empty[(Plan, ContinuationResult[S.Result], InstanceRecord)]
       val issued = new IssuedWorkOrderPersistence[I.Request] {
         def putIfAbsentC(work: WorkflowInteraction[I.Request, Nothing]) = invalid("completion cannot issue semantic work")
         def loadC(id: ContinuationIdentity) = core match {
@@ -197,24 +196,9 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         }
         def encodeC(resume: ContinuationRuntime.Resume) = invalid("completion acknowledgement requires actual native commit")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Result],
-          completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
-          val captured = selected
-          selected = None
-          captured match {
-            case Some((plan, result, next)) if core.nonEmpty && result == submitted &&
-                completed.exists(same(_, next)) && resume != null &&
-                resume.result == StateMachineOperationResult(closingType, submitted.resultReference) => for {
-              actual <- native.loadRetainedC(submitted.continuationId)(using core.get.executionContext)
-              _ <- actual match {
-                case Some(value) if value.completion.result == submitted && value.completion.instanceRevision == next.revision &&
-                    value.completion.closingResult.contains(resume.result) => Consequence.unit
-                case _ => uncertain("conflict completion committed readback differs; observe without retry")
-              }
-              wire <- waitC(next, submitted)
-            } yield OperationResponse.Scalar(wire)
-            case _ => uncertain("conflict completion lacks its selected matching native closing result")
-          }
-        }
+          completed: Option[InstanceRecord]): Consequence[OperationResponse] =
+          completed.map(record => waitC(record, submitted).map(OperationResponse.Scalar(_)))
+            .getOrElse(uncertain("conflict completion has no native committed state"))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
         def selectC(submitted: ContinuationResult[S.Result], current: InstanceRecord) = core match {
@@ -231,7 +215,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
               else invalid("conflict result differs from its actual issue, current suspension or original native source")
             next <- completedC(plan, submitted, policy)
           } yield {
-            selected = Some((plan, submitted, next))
             val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
               ActionExecution.Completed(StateMachineOperationResult(closingType, submitted.resultReference)))
             WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
@@ -299,8 +282,7 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         else "Human decision remains required. This AI result grants no consent, file change or command authority."))))
   } yield wire
   private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  private def prefix(current: InstanceRecord, prior: InstanceRecord) = current.identity == prior.identity &&
-    SplitPhaseDefinitionBinding.sameDefinition(current.definition, prior.definition) && current.history.take(prior.history.size) == prior.history
+  private def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native conflict continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

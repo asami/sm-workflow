@@ -26,13 +26,15 @@ private[smworkflow] final class SplitPhaseCalibrationDataStorePort private[admis
     core: ActionCall.Core): Consequence[Option[Input]] = loadForCallC(reference, core).flatMap {
     case None => Consequence.success(None)
     case Some(stored) => for {
+      _ <- if (currentWorkItem != null && currentWorkItem.identity == stored.request.workItem.identity) Consequence.unit
+        else Consequence.stateConflict("SplitPhase calibration current work item does not resolve the selected target")
       snapshotRaw <- requiredC(readC(stored.request.snapshot.reference, Purpose.Snapshot,
         SplitPhaseCalibrationSourceJsonV1.snapshotField, core))
       snapshot <- SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(stored.request.snapshot.reference, snapshotRaw)
       policyRaw <- requiredC(readC(stored.request.policy.reference, Purpose.Policy,
         SplitPhaseCalibrationSourceJsonV1.policyField, core))
       policy <- SplitPhaseCalibrationSourceJsonV1.decodePolicyC(stored.request.policy.reference, policyRaw)
-      input <- SplitPhaseExplicitCalibrationRecordJsonV1.loadForCalculationC(stored, Request(snapshot, policy, currentWorkItem))
+      input <- SplitPhaseExplicitDurationCalibration.loadC(Request(snapshot, policy, currentWorkItem))
     } yield Some(input)
   }
 

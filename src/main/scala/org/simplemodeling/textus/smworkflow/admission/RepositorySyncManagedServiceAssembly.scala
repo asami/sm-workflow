@@ -17,7 +17,7 @@ import RepositorySyncManagedFetch as Fetch
 /** Additive trusted-host entry/owning-advance pair, not default installation.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   val advanceSchema = "sm-workflow.repository-sync-advance.v1"
@@ -25,9 +25,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     "instanceIdentity" -> Json.fromString(identity)).noSpaces
   def decodeAdvanceC(raw: String): Consequence[String] = io.circe.parser.parse(Option(raw).getOrElse("")).fold(
     _ => Consequence.stateConflict("RepositorySync advance JSON is invalid"), json =>
-      if (json.asObject.exists(_.keys.toSet == Set("schemaVersion", "instanceIdentity")) &&
-          json.hcursor.get[String]("schemaVersion").contains(advanceSchema))
-        json.hcursor.get[String]("instanceIdentity").toOption.filter(v => v.nonEmpty && v.trim == v && !v.exists(_.isControl))
+      if (json.hcursor.get[String]("schemaVersion").contains(advanceSchema))
+        json.hcursor.get[String]("instanceIdentity").toOption
           .map(Consequence.success).getOrElse(Consequence.stateConflict("RepositorySync advance identity is invalid"))
       else Consequence.stateConflict("RepositorySync advance selects no stage, argument vector or receipt"))
 

@@ -12,6 +12,22 @@ items enter semantic preparation, and newly absorbed mechanical stages are empty
 Allocation/reply-allocation policy removal does not prevent restoration; no new
 native history, row, candidate computation or semantic work is published.
 
+The value equality above is an observable restoration expectation, not a
+runtime proof against a second complete copy. Planner restoration does not
+reproject its result solely for whole-snapshot comparison. Reasoning objective
+restoration owns one admission restore from its native-bound retained source;
+the planner uses that same constructed duration frontier in its trace instead
+of restoring a second copy and comparing complete admission bodies.
+This Phase5 correction was initially UNVERIFIED pending fresh validation/review;
+other
+enumeration/projection/checkpoint/Context duplication remains adopted OPEN.
+
+Subsequent Actual57 passed160/160 in the three complete affected suites,
+SBT0/wrapper0/lockreleased2026-10-09 00:29:10JST; fresh independent R20 technical/
+conformance assessment is bounded PASS. The single-owner restore and planner
+copy-proof removal are bounded verified; no general changed-data compatibility,
+necessity exemption for remaining checks or Phase/Goal acceptance is claimed.
+
 ## R2 — no passive execution grant
 
 Given absent native observations or a real checkpoint with another disposition,
@@ -53,8 +69,11 @@ runtime evidence, not established by the pure intent or its private Plan.
 Given a genuine selected native reasoning source, When the internal issuer runs
 under the actual authenticated original advance call, Then it independently
 reobserves that source using its genuine mechanical, partition, scope or Human
-reader. Full saved provenance and publication postimage must agree. Current is
-read from native storage, not taken as authority from the old selected witness.
+reader. That reader's actual source supplies the calculation; the old selected
+witness contributes the origin route, not a full-body or unchanged-data proof.
+Unused Start metadata changes do not prevent issue or retained observation.
+Current is read from native storage, not taken as authority from the old witness
+or compared with an earlier read solely to certify that nothing changed.
 The port retains metadata only; it borrows the actual canonical Subsystem
 storage/common pool and restores call binding on return, including failures.
 
@@ -81,6 +100,20 @@ expired-core refusal. The interruption hook runs only after an actual native
 commit and cannot supply or emulate publication evidence. E2 also refuses an
 absent selected source and private port construction.
 
+The existing mechanical managed/interrupted E1 episodes additionally retain an
+older genuine source while its stored unused Start idempotency key differs.
+Actual source selection, one atomic issue, identical requested semantic work,
+interrupted acknowledgment and retained/physical-reopen completion must succeed
+without comparing that old complete source. This connected correction was
+initially UNVERIFIED. Actual163 retained its original two fixture failures;
+fresh independent connected review found the one initial-setup condition defect
+and no additional product gap. Its prescribed one-condition M1 tail is directly
+verified by Actual164's complete managed suite142/142, SBT0/wrapper0/lockreleased
+and current-request acceptance, plus exact parent inspection/diff check.
+Unchanged Direct16327/27 retains only its own scope; no combined169/169 rerun
+or rewritten original review PASS is claimed. This bounded closure does not
+certify other source/current/work/prefix predicates necessary or whole acceptance.
+
 These internal port examples are not public advance/CLI/default installation
 proof. Successful managed issue/completion for all four origins, native staged
 collision rollback, actual provided reasoning completion/successor and the full
@@ -96,8 +129,9 @@ internal examples or by their source authoring.
 
 Given genuine native-bound reasoning source data, its actual saved WorkOrder and
 current suspension, When the participant returns the assigned requested result,
-Then Workflow admits the common result envelope, assigned reply and execution
-evidence, classifies only the requested unknown items, and derives fresh planning
+Then the native owning completion admits the common result envelope and state;
+the application consumes the assigned reply and execution evidence, classifies
+only the requested unknown items, and derives fresh planning
 and demand versions itself. Known classifications, authority and the cached
 candidate/projection/duration frontier are preserved. It continues only the
 objective calculation and projects its full downstream state without invoking
@@ -107,14 +141,16 @@ DecisionNeeded prepares no partial classifications or planning successor and
 does not invent a Terminal. Crossed reply/evidence, missing classifications and
 attempts to rewrite known work refuse. Completion preparation changes no native
 history: the projected next record and closing value are data, not a receipt.
-Recovery requires the actual adjacent completed native prefix and retained
-result; a still-suspended native record with a constructed completion record is
-refused. No public reasoning task is exposed as answerable by this preparation.
+Retained observation instead reads the actual native completion and saved
+successor; it does not replay this preparation as a completed-state certificate.
+No public reasoning task is exposed as answerable by pure preparation.
 
 E1's managed branches exercise both first roots and actual retained/reopened
 issued work without allocation policies. They prepare Enriched and DecisionNeeded
-successors and reject crossed/partial/known-item results and fabricated completed
-history, while asserting native state remains the actual suspension throughout.
+successors and reject crossed/partial/known-item results while asserting native
+state remains the actual suspension throughout. Pure preparation is not required
+to certify a suspension by comparing it with a newly projected issue. The actual
+native completion consumes the issued/current state at its owning boundary.
 Successful managed completion, staged successor/readback, all four-origin public
 routing and installed Preview/Apply remain part of the connected delivery batch,
 not acceptance implied by these data-boundary assertions.
@@ -133,10 +169,37 @@ Workflow admits unknown-only semantics and derives the successor versions.
 Native result/closing state and one complete successor row commit together in
 the Subsystem's canonical managed UoW/common pool. Enriched saves the full cached
 planning successor; DecisionNeeded saves an explicit absent downstream, not a
-partial plan or Terminal. Acknowledgment requires actual native/result/row
-readback. An identical later reply observes the saved answer without another
+partial plan or Terminal. Acknowledgment consumes the actual instance returned
+by the owning native managed completion after commit. It does not reconstruct
+the source, reread the successor or compare a second complete Plan/closing/result
+copy to certify that success. Missing actual instance or selected response data
+is indeterminate because no truthful response can be projected. An identical later reply observes the saved answer without another
 write or AI call; a changed reply refuses. SQLite physical reopen requires no
 allocation policy or previous conversation.
+
+Fresh semantic preparation rehydrates the original known demand calculation and
+uses the actual issued request's context/result assignment. It does not project
+an entire replacement issue, compare complete current/next or issued/work copies,
+retain that unused issue copy, or duplicate native result/type admission in the
+query selector and semantic preparation. The native owning completion checks
+actual result/state/scope/CAS. The application semantic consumer correlates the
+assigned reply and answer evidence; the semantic kernel enforces exact ordered
+unknown coverage and preserves known classifications. These checks address
+another reply's calculation, uncited execution evidence or known-item rewrites,
+not proof that a saved body stayed unchanged.
+
+E1 now leaves supported saved presentation and non-scope Context diagnostics in
+place through actual fresh public completion. Crossed reply/evidence, incomplete
+or known-item classifications and stale native revision/executable scope are
+submitted through the real result Operation before its valid answer; they must
+publish neither completion nor successor. The removed pure pending-equality
+expectation is not a native-state oracle. Subsequent actual180 validates all eight
+selected E1 examples (8/8, SBT0/wrapper0/shared lock released) after the sole native
+type qualification in the fixture. Fresh independent connected whole-program
+Step review PASS covers only this three-program fresh-consumption correction.
+Original179 compile failure remains recorded with no E1 assertions executed;
+actual178 remains its earlier separate retained-consumption evidence. Neither
+bounded result completes the whole Phase or endorses other surviving predicates.
 
 E1's managed branches exercise both original first roots, launcher and owning
 Operation submission, repeated answer/changed answer, physical completion reopen
@@ -154,7 +217,52 @@ that suspension is pending, its declared reasoning completion contract routes
 ahead of older scope/partition stages. Normal owning Operation and launcher,
 including physical reopen without allocators, return exactly the saved task
 without another append. A prior interrupted issue is observed, not reissued.
+Pending advance consumes the native issued assignment selected by its current
+suspension. The owning query's context and current expected revision select the
+task; original frontier restoration and issue-copy comparison are not read
+requirements. Saved presentation and non-scope Context diagnostics are returned
+as saved, while malformed native payloads refuse at their actual native reader.
+This change does not yet remove reconstruction from fresh semantic admission or
+retained result/Human consumption. The new E1 assertions are UNVERIFIED until
+fresh selected runner execution and connected independent review.
+Subsequent actual177 executed all eight existing E1 examples:8/8,one completed
+suite,SBT0/wrapper0/sharedlockreleased,with fresh connected independent Step
+review PASS and no new blockers. This verifies only pending-task consumption
+and committed-response projection, not the remaining fresh/retained reasoning
+reconstruction or full Phase/runtime acceptance. Exact source and native
+evidence are retained in the Phase5.1/causal journal and actual177 records.
 Preview continuation is specified separately below; APPLY is not implied.
+
+The subsequent retained-consumption correction separates saved result reads
+from fresh semantic work. Retained observation selects the actual native
+completion, its issued request, original participant/frontier, nullable saved
+successor and completed history entry. It does not reconstruct the old issue,
+re-admit the saved Judgment, recalculate objective planning, compare complete
+saved bodies or reject unrelated physical row fields. The saved successor's
+result reference must belong to the actual native completion; otherwise the
+consumer would return another result's calculation. Physical identity is owned
+by fixed-key storage lookup, not a second payload-id certificate.
+
+E1 now exercises actual public repeated result and retained observation with
+different supported enumeration diagnostics, unrelated physical metadata and
+saved issued presentation. Those data remain observable without another native
+append; a crossed saved result assignment refuses. Only test-owned cells are
+restored before existing reopen/Preview expectations. Human direction consumes
+the saved DecisionNeeded and real completed native base. Only NEW Human
+interpretation prepares unknown-only semantic work and calculates a successor,
+preserving known classifications. No retained AI calculation is replayed merely
+to read that source. Fresh AI preparation and remaining Human state checks are
+separate OPEN paths. This eight-program correction is authored but UNVERIFIED
+pending fresh complete managed/direct suites and independent connected review.
+
+Subsequent actual178 completed both whole selected suites:173/173, SBT0,
+wrapper0, shared lock released, complete-current-request ACCEPTED178@1subject170.
+Fresh connected read-only Step review PASS covered all eight whole primary
+programs and their real consumers. This supplies bounded acceptance for the
+saved-result consumption correction above, not acceptance of separate fresh
+AI/Human/native/snapshot/Preview/Apply predicates or the full Phase. Original
+source, exact evidence and limitations are retained in Phase5.1, the causal
+journal and session-178 records; historical failures remain unchanged.
 
 ## R7 — selected Preview and observable recovery
 
@@ -205,10 +313,12 @@ question and original native-source verification.
 ProvideResolution selects separately stored
 `sm-workflow.split-human-reasoning-resolution.v1` interpretation data, naming
 this Decision and the original saved AI result. Workflow requires exact ordered
-unknown-item coverage, original context, rationale and answer-bound evidence,
+unknown-item coverage against the original issued context, rationale and answer-bound evidence,
 preserves every known item, and calculates planning/demand versions and packing.
-Incomplete, crossed-item/context/evidence/Decision/result data refuses before
+Incomplete or crossed item/evidence/Decision/result data refuses before
 completion. The original AI DecisionNeeded is never rewritten as Enriched.
+The interpretation carries no context echo; obsolete context fields in compatible
+stored interpretation payloads are ignored rather than becoming a resume gate.
 
 Canonical Human answer, adjacent native state and full selected successor commit
 in one managed UoW/common pool. Defer/Cancel instead commit the stopped result

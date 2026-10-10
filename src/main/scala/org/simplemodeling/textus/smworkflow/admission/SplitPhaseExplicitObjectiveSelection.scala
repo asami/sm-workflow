@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import SplitPhaseExplicitCandidateAdmissibility.{Assessment, DurationRanked}
+import SplitPhaseExplicitCandidateAdmissibility.{DurationRanked, NoAdmissible, EvidenceRequired}
 import SplitPhaseExplicitPartitionComputation.Candidate
 import SplitPhaseExplicitProposalPrecheck.{SourceReference, AuthorityReference, WorkItemIdentity}
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitBoundaryValidation as B}
@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitBoundar
   * Selection is an objective preview, not proposal admission or execution authority.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
   final case class CostPolicyReference(identity: String, revision: String)
@@ -40,6 +40,7 @@ private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
   final case class HandoffAuthority(handoff: B.Handoff, producingItems: Vector[WorkItemIdentity], receivingItems: Vector[WorkItemIdentity])
   final case class AuthorityProjection(sourceAuthority: AuthorityReference, handoffs: Vector[HandoffAuthority])
   sealed trait Outcome { def input: Input }
+  type HumanRestoration = NoAdmissible | EvidenceRequired | Outcome
   final class RecordRequired private[SplitPhaseExplicitObjectiveSelection] (
     val input: Input, val required: RequiredRecord, val leaders: Vector[Candidate], val costScores: Vector[CostScore]
   ) extends Outcome
@@ -58,11 +59,9 @@ private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
   /** Current records come from the owning authorized readers. This validates
     * external data and its distinct relationships, not prior computation again.
     */
-  def loadC(duration: DurationRanked, frozen: Records, current: Records): Consequence[Input] =
+  def loadC(duration: DurationRanked, current: Records): Consequence[Input] =
     if (duration == null || !complete(current))
       Consequence.stateConflict("SplitPhase explicit objective policy or demand data is incomplete")
-    else if (frozen != current)
-      Consequence.stateConflict("SplitPhase explicit objective complete current records differ")
     else {
       val source = duration.input.enumerated.input.boundary.shape.records.source
       val items = duration.input.enumerated.input.records.estimates.items.map(_.identity)
@@ -148,30 +147,31 @@ private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
       Consequence.success(new Input(required.input.duration, admitted.resolved.objectives))
     }
 
-  /** Copy saved objective outputs from native-bound Human publication. This is
-    * not calculateC, a policy refresh, a winner selection or an execution grant.
+  /** Restore admission once from the native-bound Human publication, then copy
+    * its saved objective outputs. Non-ranked outcomes pass through unchanged.
+    * This is not calculateC, a policy refresh or an execution grant.
     */
-  def restoreHumanC(retained: SplitPhaseExplicitCandidateProjection.RetainedHuman,
-    duration: DurationRanked): Consequence[Outcome] = {
-    import SplitPhasePlanningSnapshot as R
-    if (retained == null || duration == null ||
-        duration.input.enumerated != retained.frontier.projected.get.input.enumerated)
-      Consequence.stateConflict("SplitPhase objective restoration requires the same native Human frontier")
+  def restoreHumanC(retained: SplitPhaseExplicitCandidateProjection.RetainedHuman): Consequence[HumanRestoration] = {
+    if (retained == null)
+      Consequence.stateConflict("SplitPhase objective restoration requires native Human provenance")
     else SplitPhaseExplicitCandidateAdmissibility.restoreHumanC(retained).flatMap {
-      case saved: DurationRanked if _same_duration(duration, saved) =>
-        _restore_c(retained.frontier.projected.get, retained.observed.record.downstream, duration)
-      case _ => Consequence.stateConflict("SplitPhase objective restoration requires the same complete native Human admission")
+      case unavailable: NoAdmissible => Consequence.success[HumanRestoration](unavailable)
+      case required: EvidenceRequired => Consequence.success[HumanRestoration](required)
+      case saved: DurationRanked =>
+        _restore_c(retained.frontier.projected.get, retained.observed.record.downstream, saved)
     }
   }
 
-  def restoreReasoningC(retained: SplitPhaseExplicitCandidateProjection.RetainedReasoning,
-    duration: DurationRanked): Consequence[Outcome] =
-    if (retained == null || duration == null || duration.input.enumerated != retained.projected.input.enumerated)
-      Consequence.stateConflict("SplitPhase objective restoration requires the same native reasoning frontier")
+  /** One native-bound retained input owns both admission and objective restore.
+    * There is no second duration argument or reconstructed-body comparison.
+    */
+  def restoreReasoningC(retained: SplitPhaseExplicitCandidateProjection.RetainedReasoning): Consequence[Outcome] =
+    if (retained == null)
+      Consequence.stateConflict("SplitPhase objective restoration requires native reasoning provenance")
     else SplitPhaseExplicitCandidateAdmissibility.restoreReasoningC(retained).flatMap {
-      case saved: DurationRanked if _same_duration(duration, saved) =>
-        _restore_c(retained.projected, retained.source.snapshot, duration)
-      case _ => Consequence.stateConflict("SplitPhase objective restoration requires the same complete native reasoning admission")
+      case saved: DurationRanked =>
+        _restore_c(retained.projected, retained.source.snapshot, saved)
+      case _ => Consequence.stateConflict("SplitPhase retained reasoning lacks its duration frontier")
     }
 
   private def _restore_c(projected: SplitPhaseExplicitCandidateProjection.Projected,
@@ -181,7 +181,7 @@ private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
         val boundaries = projected.candidates.map(built =>
           R.CandidateKey(built.candidate.cutAfterIndices) -> built.boundary).toMap
         val records = snapshot.selection.planning.objectives
-        loadC(duration, records, records).flatMap { input =>
+        loadC(duration, records).flatMap { input =>
           def _costs_(values: Vector[R.CostScoreView]): Vector[CostScore] = values.map(value =>
             CostScore(candidates(value.key), BigInt(value.potentialSavingUnits), BigInt(value.materialSavingUnits)))
           def _overheads_(values: Vector[R.OverheadScoreView]): Vector[OverheadScore] = values.map(value =>
@@ -199,17 +199,6 @@ private[smworkflow] object SplitPhaseExplicitObjectiveSelection {
             case None => Consequence.stateConflict("SplitPhase retained Human objective is absent")
           }
         }
-  }
-
-  private def _same_duration(left: DurationRanked, right: DurationRanked): Boolean = {
-    def _proof_(value: Option[B.Validated]) = value.map(proof => (proof.shape.records, proof.records))
-    def _assessment_(value: Assessment) = (value.candidate, _proof_(value.boundary),
-      value.shortReview.map(review => (review.rebalanceAttempts, review.mergeAttempts, review.rejection)), value.status)
-    left.input.enumerated == right.input.enumerated &&
-      left.input.boundaries.map(_proof_) == right.input.boundaries.map(_proof_) &&
-      left.assessments.map(_assessment_) == right.assessments.map(_assessment_) &&
-      left.eligible == right.eligible && left.durationLeaders == right.durationLeaders &&
-      left.rejectedCandidates == right.rejectedCandidates
   }
 
   private def authorityProjection(boundary: B.Validated): AuthorityProjection = {

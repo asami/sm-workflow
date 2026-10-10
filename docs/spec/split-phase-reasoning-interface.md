@@ -23,12 +23,15 @@ identity, reason and complete original closure. The request also carries the
 exact result identity/revision selected by Workflow, not by the participant.
 Preparation requires that explicit, nonblank assignment and offers no two-argument
 default or automatic allocation. Missing assignment cannot construct a prepared request.
-The common response must use that assigned reference; another identity or
-revision is rejected for both alternatives. The semantic result carries context,
+Reduced public submission resolves that assigned reference internally; historical
+complete envelopes still carry the actual assigned destination, and a crossed
+destination is rejected at its owning consumer. The semantic result carries only
 decision, rationale, ordered classifications with per-item rationale and evidence
 references. Classification names are ExpensiveReasoning and SettledExecution.
-AI cannot supply replacement planning/demand references, policies, actors,
-commands, stages or a winner. The existing application codec's payload decodes
+AI does not select replacement planning/demand references, policies, actors,
+commands, stages or a winner. Unused legacy context copies and extra control
+claims are ignored, not compared or converted into those choices. The existing
+application codec's payload decodes
 directly into generated raw value classes without alias or schema adaptation.
 That representability is not semantic admission; current facts, coverage and
 execution evidence remain the separate owning Workflow's responsibility.
@@ -42,7 +45,9 @@ must not silently migrate it or authorize a task under the new capability.
 All25 entry/Human derivations retain their previous states and terminal dominance
 with the reasoning Awaiting constituent present.
 The assigned-reply request uses sm-workflow.split-phase-reasoning-request.v2;
-request.v1 has no fallback or implicit assignment. Judgment result.v1 is unchanged.
+request.v1 has no fallback or implicit assignment. Judgment keeps its result.v1
+schema; new producers omit the unused context echo, and readers consume the
+semantic fields of older stored answers without decoding or comparing that copy.
 
 ## Evidence boundary
 

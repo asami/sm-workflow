@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedHumanCom
   * result row, event, command, consent or resource owner is introduced.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseHumanTerminal {
   enum Outcome { case Blocked, Cancelled }
@@ -34,18 +34,18 @@ private[smworkflow] object SplitPhaseHumanTerminal {
       throw new IllegalArgumentException("Invalid SplitPhase Human terminal result"))
     def decode(value: Json): Either[String, Result] = for {
       json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Terminal payload is absent or oversized")
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload")).toRight("Terminal envelope differs")
+      root <- json.asObject.toRight("Terminal envelope differs")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Terminal schema differs")
-      body <- root("payload").flatMap(_.asObject).filter(_.keys.toSet == Set("outcome", "context", "decision", "answer"))
+      body <- root("payload").flatMap(_.asObject)
         .toRight("Terminal fields differ")
       outcome <- body("outcome").flatMap(_.asString) match {
         case Some("BLOCKED") => Right(Outcome.Blocked)
         case Some("CANCELLED") => Right(Outcome.Cancelled)
         case _ => Left("Terminal outcome differs")
       }
-      context <- _reference(body("context").get)
+      context <- _reference(body("context").getOrElse(Json.Null))
       decision <- body("decision").flatMap(_.asString).filter(_canonical).toRight("Terminal Decision differs")
-      answer <- _reference(body("answer").get)
+      answer <- _reference(body("answer").getOrElse(Json.Null))
     } yield Result(outcome, S.ContextReference(context.identity, context.revision), ContinuationIdentity(decision), answer)
   }
 
@@ -118,7 +118,7 @@ private[smworkflow] object SplitPhaseHumanTerminal {
   private def _reference_json(identity: String, revision: String): Json =
     Json.obj("identity" -> Json.fromString(identity), "revision" -> Json.fromString(revision))
   private def _reference(value: Json): Either[String, ContextReference] = for {
-    fields <- value.asObject.filter(_.keys.toSet == Set("identity", "revision")).toRight("Terminal reference fields differ")
+    fields <- value.asObject.toRight("Terminal reference fields differ")
     identity <- fields("identity").flatMap(_.asString).filter(_canonical).toRight("Terminal reference identity differs")
     revision <- fields("revision").flatMap(_.asString).filter(_canonical).toRight("Terminal reference revision differs")
   } yield ContextReference(identity, revision)

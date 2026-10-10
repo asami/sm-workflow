@@ -13,14 +13,14 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 /**
  * Deterministic material only; not a filesystem-effect or APPLY acceptance spec.
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def snapshot(s: Base, allocate: Boolean = true): R.Record = {
-    val input = take(E.loadC(s.initial, s.records, s.records))
+    val input = take(E.loadC(s.initial, s.records))
     val data = W.Data(W.DataReference("document-input", "1"), s.source.reference, s.source.authority,
       None, O.Records(None, None, None))
-    val outcome = take(W.advanceC(take(W.selectC(input, data, data)))) match {
+    val outcome = take(W.advanceC(take(W.selectC(input, data)))) match {
       case need: W.AllocationRequired if allocate => take(W.continueMechanicalAllocatedC(
         take(SplitPhaseCandidateAllocationFixture.policy.allocateMechanicalC(need, M.Reference("documents", "1")))))
       case other => other
@@ -29,6 +29,27 @@ final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers wi
   }
 
   "Selected document material" should {
+    "render a saved preview only after its document consumer accepts the actual selected frontier" in {
+      Given("one selected saved partition and raw copies with unusable objective or candidate relationships")
+      val saved = snapshot(base(Vector(360, 360)))
+      val selected = saved.objective.get.asInstanceOf[R.ObjectiveView.Selected]
+      val broken = Vector(saved.copy(objective = None),
+        saved.copy(objective = Some(selected.copy(key = R.CandidateKey(Vector(99))))),
+        saved.copy(projection = Some(R.ProjectionView.Projected(Vector.empty))))
+      When("public passive preview requests material from the same raw input")
+      val material = take(SplitPhaseSelectedDocuments.projectC(saved))
+      val preview = take(SplitPhaseManagedSelectedPreview.projectC(saved, "preview-context", "2"))
+      val refused = (broken :+ null).map(value =>
+        SplitPhaseManagedSelectedPreview.projectC(value, "preview-context", "2"))
+      Then("valid context and exact document material are presented, while crossed input emits no preview")
+      preview.hcursor.get[String]("mode").toOption shouldBe Some("PREVIEW")
+      preview.hcursor.downField("context").get[String]("identity").toOption shouldBe Some("preview-context")
+      preview.hcursor.downField("context").get[String]("revision").toOption shouldBe Some("2")
+      preview.hcursor.downField("documentProjection").focus shouldBe Some(material.json)
+      preview.hcursor.get[Vector[Int]]("cutAfterIndices").toOption shouldBe Some(selected.key.cutAfterIndices)
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
     for (minutes <- Vector(Vector(360, 360), Vector.fill(4)(180))) {
       s"render only the selected saved partition for $minutes without source overwrite material" in {
         Given("a fully computed whole frontier and no repository path, filesystem or write grant")
@@ -79,7 +100,7 @@ final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers wi
           c.copy(closureCriteria = original.initial.shape.records.proposal.children.find(_.phase == c.phase).get
             .ownedUnfinishedItems.flatMap(byItem(_))))))
       val changed = original.copy(sourceBoundary = boundary,
-        initial = take(B.loadC(original.initial.shape, records, records)))
+        initial = take(B.loadC(original.initial.shape, records)))
       When("the mechanically selected frontier becomes Markdown and typed JSON")
       val material = take(SplitPhaseSelectedDocuments.projectC(snapshot(changed)))
       Then("table or fence injection cannot change presentation structure and JSON retains the original data")

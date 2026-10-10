@@ -119,7 +119,7 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
           take(SplitPhaseCalibrationSourceJsonV1.encodeSnapshotC(snapshot))),
         (collection("Snapshot"), driftHistory.reference.identity, SplitPhaseCalibrationSourceJsonV1.snapshotField,
           take(SplitPhaseCalibrationSourceJsonV1.encodeSnapshotC(driftHistory.copy(observations = snapshot.observations.updated(0,
-            snapshot.observations.head.copy(actualMinutes = 121)))))),
+            snapshot.observations.head.copy(actualMinutes = 210)))))),
         (collection("Policy"), policy.reference.identity, SplitPhaseCalibrationSourceJsonV1.policyField,
           take(SplitPhaseCalibrationSourceJsonV1.encodePolicyC(policy))),
         (collection("Policy"), driftPolicy.reference.identity, SplitPhaseCalibrationSourceJsonV1.policyField,
@@ -176,12 +176,28 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
                 constructed :+= input
                 loaded += 1
                 take(reader.loadInputForCallC(Reference("absent", "1"), item, capsule)) shouldBe None
-                Vector("foreign", "malformed", "missing-payload", "history-drift-input", "policy-drift-input",
+                Vector("foreign", "malformed", "missing-payload",
                   "missing-source-input", "crossed-source-revision").foreach(id =>
                   reader.loadInputForCallC(Reference(id, "1"), item, capsule) shouldBe a[Consequence.Failure[?]])
+                Given("declared source rows whose actual values differ from the historical request copies")
+                When("the current managed reader resolves those history and policy references")
+                val changedhistory = take(reader.loadInputForCallC(Reference("history-drift-input", "1"), item, capsule)).get
+                val changedpolicy = take(reader.loadInputForCallC(Reference("policy-drift-input", "1"), item, capsule)).get
+                val historyestimate = take(calculateC(changedhistory)).asInstanceOf[Outcome.Known].estimateMinutes
+                val policyestimate = take(calculateC(changedpolicy)).asInstanceOf[Outcome.Known].estimateMinutes
+                Then("current deterministic inputs, not the copied values, determine the estimates")
+                historyestimate shouldBe 190
+                policyestimate shouldBe 140
                 reader.loadForCallC(record.reference.copy(revision = "2"), capsule) shouldBe a[Consequence.Failure[?]]
-                reader.loadInputForCallC(record.reference, item.copy(normalizedUnits = 3), capsule)
-                  .shouldBe(a[Consequence.Failure[?]])
+                Given("a current work item with updated units and the same actual selected target")
+                When("the reader constructs calculation input from that work item")
+                val changeditem = take(reader.loadInputForCallC(record.reference,
+                  item.copy(normalizedUnits = 3, explicitBaselineMinutes = None), capsule)).get
+                val itemestimate = take(calculateC(changeditem)).asInstanceOf[Outcome.Known].estimateMinutes
+                val foreigntarget = reader.loadInputForCallC(record.reference, item.copy(identity = "different-target"), capsule)
+                Then("current units and baseline are admitted while a different target remains unresolved")
+                itemestimate shouldBe 205
+                foreigntarget shouldBe a[Consequence.Failure[?]]
                 reader.loadForCallC(record.reference, capsule.copy(component = None)) shouldBe a[Consequence.Failure[?]]
               }
               capsule.executionContext.dataStoreSpace.captureBinding() shouldBe prior

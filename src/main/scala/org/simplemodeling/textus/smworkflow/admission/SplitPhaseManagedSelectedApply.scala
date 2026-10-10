@@ -41,6 +41,12 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     observation: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
     original <- F.loadForAdvanceC(command, declaration, catalog, core)
+    result <- advanceObservedC(command, original, declaration, catalog, core, observation)
+  } yield result
+
+  def advanceObservedC(command: SplitPhaseAdvanceCommand, original: F.Observed,
+    declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
+    core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
     prepared <- E.prepareC(original, command.context.identity, command.context.revision)
     storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
       SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition), declaration.instances, declaration.continuations)

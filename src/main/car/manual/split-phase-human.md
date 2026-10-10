@@ -44,12 +44,16 @@ submission acknowledgement must not be mistaken for that later Terminal.
 ## Closed answer payload
 
 The application answer schema is `sm-workflow.split-human-direction-answer.v1`.
-Its envelope has only `schemaVersion` and `payload`. The payload contains
-`choice`, whose only field is `value`. Valid values are `ProvideResolution`,
-`Defer` and `Cancel`. ProvideResolution also requires a `resolution` object
-with exactly `identity` and `revision`; the other two choices have no resolution
-field. Extra fields and undeclared choices are rejected. The encoded answer
-payload is bounded to 4 KiB of valid UTF-8; references are canonical and bounded.
+Canonical output uses `schemaVersion` and `payload`, with `choice.value` in the
+payload. The choice alternatives are closed: `ProvideResolution`, `Defer` and
+`Cancel`. ProvideResolution requires a `resolution` object with canonical,
+bounded `identity` and `revision`; canonical Defer/Cancel output omits it.
+The decoder consumes these typed fields, not an exact set of JSON keys: unused
+annotations on the envelope, payload, choice or resolution reference are
+ignored. Defer/Cancel also ignore an unused resolution field. Missing or
+malformed consumed fields, a different schema and undeclared choices are
+rejected. Ignored data grants no Human consent, command permission or executable
+authority. The encoded answer payload remains bounded to 4 KiB of valid UTF-8.
 CNCF separately owns the enclosing Decision-result contract.
 
 A resolution reference names separately stored interpretation data. It is not
@@ -71,6 +75,13 @@ saved AI result and whole planning frontier. The input schema is
 `sm-workflow.split-reasoning-human-input.v1`, bounded to 1 MiB of valid UTF-8.
 Return only the answer through the question's unchanged public
 `submitSplitHumanDirection` completion; clients do not choose subsequent work.
+
+The reasoning input reader consumes typed context and saved presentation strings,
+not an exact set of unused JSON annotations or a reconstructed copy certificate.
+Owning Workflow selection resolves the actual reasoning assignment and saved
+result. Separate interpretation and stopped-terminal readers likewise ignore
+unused fields without turning those fields into Human consent or execution
+authority; required typed meaning and actual selected targets still apply.
 
 ProvideResolution names separate host-supplied
 `sm-workflow.split-human-reasoning-resolution.v1` data, linked to that exact
@@ -126,6 +137,51 @@ connected in the paired Human assembly selected by the normal factory. Restorati
 copies saved downstream facts without fresh interpretation, allocation or
 ranking and does not grant a new native transition or Terminal. Do not use a
 passive decoded checkpoint as an execution capability.
+
+Retained ProvideResolution requires its declared Built proposal, ownership and
+handoff documents to exist and be typed-readable at their selected addresses,
+including after physical storage reopen. Their complete bodies need not match
+historical checkpoint copies. Compatible documentation changes do not recompute
+the saved result, request new consent, rewrite output or advance native state.
+Missing, malformed or differently addressed deliverables fail at the existing
+document-read boundary; unrelated files are outside that lookup. This does not
+certify the necessity of other remaining source/copy checks.
+
+Human publication creates no application result-copy row. Retained reads derive
+the native address from the genuine Human completion and consume the actual
+native result and receipt states. Old full, malformed, crossed-reference or absent
+application copies cannot select or reject that result and are not rewritten.
+Old human-checkpoints.* metadata is unused; only actual document targets are
+required. Native payloads ignore removed Question/Completion/Issued/prior-Scope
+certificate fields. Original checkpoint and invocation mode come from the
+independently observed Human source. Missing native receipt is actual absence;
+native state/CAS prevents stale replay after native progress. Real native target
+and required generated-document readability remain actual consuming boundaries.
+This does not certify remaining source/frontier/resource checks as necessary.
+
+This no-application-copy correction is authored but UNVERIFIED pending fresh
+complete executable suites and a new independent connected review; earlier
+bounded PASS evidence does not cover this changed input.
+That authoring cutoff is now followed by bounded executable validation and an
+independent connected source assessment. Its sole stale empty-row fixture finding
+was corrected without restoring a copy row; the complete changed managed suite
+then passed142/142. Runtime Help and full Phase acceptance remain open.
+
+The owning Human successor selects storage using the actual current Subsystem
+configuration, without comparing it to a saved construction target set. This
+does not grant another collection or new consent; managed storage still owns
+actual access and transition effects. This owning binding has bounded complete
+executable validation and a fresh independent connected source assessment;
+broader predicate removal, runtime Help and Phase acceptance remain open.
+
+HumanResolution's native payload now carries SavedResult calculation data
+without nested before/next histories. Old nested state members are ignored,
+including absent or unreadable copies; actual states come from CNCF's outer
+receipt. The payload decoder does not manufacture state or select a definition
+from copied histories. Private preparation still supplies its genuine native
+intent and actual effect owners handle state/CAS. Current SavedResult behavior
+has bounded direct-Operation/executable validation and independent source review;
+other predicate removal, runtime Help and Phase acceptance remain open.
 
 ## Remaining acceptance
 

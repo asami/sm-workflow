@@ -24,13 +24,13 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
   }
   private def compute(enumerated: E.Enumerated): Outcome = {
     val raw = allocationRecords(enumerated)
-    take(projectC(take(loadC(enumerated, raw, raw))))
+    take(projectC(take(loadC(enumerated, raw))))
   }
   private def enumeration(source: Base, template: B.Validated): E.Enumerated =
-    take(E.enumerateC(take(E.loadC(template, source.records, source.records)))).asInstanceOf[E.Enumerated]
+    take(E.enumerateC(take(E.loadC(template, source.records)))).asInstanceOf[E.Enumerated]
   private def withOwnership(template: B.Validated, ownership: B.Ownership): B.Validated = {
     val records = template.records.copy(ownership = ownership)
-    take(B.loadC(template.shape, records, records))
+    take(B.loadC(template.shape, records))
   }
 
   "Workflow-owned explicit candidate projection" should {
@@ -39,7 +39,7 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
       val source = base(Vector.fill(4)(180), overhead = 20)
       val enumerated = enumerate(source)
       val raw = allocationRecords(enumerated)
-      val input = take(loadC(enumerated, raw, raw))
+      val input = take(loadC(enumerated, raw))
       When("Workflow projects the complete candidate set without AI-created proposals")
       val result = take(projectC(input)).asInstanceOf[Projected]
       Then("all canonical candidates retain computed durations, criteria, ownership and reference provenance")
@@ -77,7 +77,7 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
       val plan = template.records.handoffs.copy(handoffs = Vector(original),
         incomingByChild = phases.map(p => p -> (if (p == phases(2)) Vector(original.identity) else Vector.empty)).toMap)
       val records = template.records.copy(handoffs = plan)
-      val admitted = take(B.loadC(template.shape, records, records))
+      val admitted = take(B.loadC(template.shape, records))
       When("different candidate cuts keep or internalize that same transfer")
       val projected = compute(enumeration(source, admitted)).asInstanceOf[Projected]
       val local = projected.candidates.find(_.candidate.cutAfterIndices == Vector(0, 2)).get
@@ -158,8 +158,8 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
       val template = proof(source, candidate, "two-child-template")
       val shapeRecords = template.shape.records.copy(inventory = template.shape.records.inventory.copy(
         occupiedPhases = Set(P.PhaseIdentity("77"), P.PhaseIdentity("77.2"))))
-      val shape = take(P.loadC(shapeRecords, shapeRecords)).asInstanceOf[P.ShapeReady]
-      val admitted = take(B.loadC(shape, template.records, template.records))
+      val shape = take(P.loadC(shapeRecords)).asInstanceOf[P.ShapeReady]
+      val admitted = take(B.loadC(shape, template.records))
       When("a computed candidate requires the occupied third child identity")
       val result = compute(enumeration(source, admitted)).asInstanceOf[Requirements]
       val decisions = result.candidates.collect { case d: DecisionRequired => d }
@@ -171,7 +171,7 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
         decision.numbering.get.records.proposal.children.map(_.phase) should contain (P.PhaseIdentity("77.2"))
       }
     }
-    "refuse malformed crossed changed or incomplete host allocations once at loading" in {
+    "project current host allocations and refuse malformed crossed or incomplete coverage" in {
       Given("external allocations that cannot represent exactly the selected canonical candidates")
       val enumerated = enumerate(base(Vector.fill(4)(180)))
       val raw = allocationRecords(enumerated)
@@ -185,9 +185,11 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
         raw.copy(reference = AllocationReference("allocation", "")), raw.copy(allocations = null), null)
       val changed = raw.copy(allocations = raw.allocations.updated(0, head.copy(proposal = head.proposal.copy(revision = "2"))))
       When("complete current allocation data reaches its construction boundary")
-      val results = invalid.map(r => loadC(enumerated, r, r)) ++ Vector(loadC(enumerated, raw, changed), loadC(null, raw, raw))
-      Then("no matching reference text or partial candidate cover can manufacture a Projected result")
+      val results = invalid.map(r => loadC(enumerated, r)) :+ loadC(null, raw)
+      val projected = take(projectC(take(loadC(enumerated, changed)))).asInstanceOf[Projected]
+      Then("current allocation references drive documents while incomplete or crossed data fails")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      projected.candidates.head.boundary.shape.records.proposal.reference shouldBe head.proposal.copy(revision = "2")
     }
     "connect complete mechanical projection to cost selection without caller-created admission flags" in {
       Given("one admitted template, computed cuts, host identities and declared expensive versus settled work")
@@ -201,7 +203,7 @@ final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with M
             if (i == 0) O.Demand.ExpensiveReasoning else O.Demand.SettledExecution)))), None)
       When("Workflow feeds all newly constructed boundaries through admissibility and objective calculation")
       val assessed = take(A.assessC(take(A.loadC(enumerated, projected.candidates.map(b => Some(b.boundary)))))).asInstanceOf[A.DurationRanked]
-      val result = take(O.calculateC(take(O.loadC(assessed, costs, costs)))).asInstanceOf[O.Selected]
+      val result = take(O.calculateC(take(O.loadC(assessed, costs)))).asInstanceOf[O.Selected]
       Then("the cost winner comes only from deterministic construction and no missing candidate proof reaches AI")
       result.stage shouldBe O.Stage.Cost
       result.candidate.cutAfterIndices shouldBe Vector(0)

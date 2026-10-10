@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
   * Host reference allocation and semantic scope refinement remain distinct.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseExplicitCandidateProjection {
   final case class AllocationReference(identity: String, revision: String)
@@ -86,11 +86,9 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
   /** Allocations are exact current host data, not identities assigned by AI.
     * Admitted template and enumeration are consumed without re-enumeration.
     */
-  def loadC(enumerated: E.Enumerated, frozen: Records, current: Records): Consequence[Input] =
+  def loadC(enumerated: E.Enumerated, current: Records): Consequence[Input] =
     if (enumerated == null || !complete(current))
       Consequence.stateConflict("SplitPhase explicit candidate allocations are incomplete")
-    else if (frozen != current)
-      Consequence.stateConflict("SplitPhase explicit candidate complete allocations differ")
     else {
       val original = enumerated.input.boundary
       val allocations = current.allocations
@@ -129,7 +127,7 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
       for {
         raw <- snapshot.selection.planning.allocations.map(Consequence.success)
           .getOrElse(_scope_invalid("saved allocation data is absent"))
-        input <- loadC(retained.enumerated, raw, raw)
+        input <- loadC(retained.enumerated, raw)
         views <- snapshot.projection match {
           case Some(value: R.ProjectionView.Requirements) => Consequence.success(value.candidates)
           case _ => _scope_invalid("saved whole requirement is absent")
@@ -148,12 +146,12 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
     case value: R.CandidateProjectionView.BuiltView =>
       val records = P.Records(proposal.source, proposal.inventory, value.proposal)
       for {
-        shape <- P.loadC(records, records).flatMap {
+        shape <- P.loadC(records).flatMap {
           case ready: P.ShapeReady => Consequence.success(ready)
           case _ => _scope_invalid("saved Built shape changed to a Decision")
         }
         raw = B.Records(boundary.boundary, value.ownership, value.handoffs)
-        loaded <- B.loadC(shape, raw, raw)
+        loaded <- B.loadC(shape, raw)
       } yield new Built(candidate, loaded, value.localHandoffs)
     case value: R.CandidateProjectionView.SemanticView =>
       Consequence.success(new SemanticRequired(candidate, value.gaps))
@@ -161,7 +159,7 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
       case DecisionReason.OneRepositoryPerChildRequired =>
         Consequence.success(new DecisionRequired(candidate, value.reason, value.repositories, None))
       case DecisionReason.PhaseNumberingRequired => value.numbering match {
-        case Some(saved) => P.loadC(saved.records, saved.records).flatMap {
+        case Some(saved) => P.loadC(saved.records).flatMap {
           case loaded: P.DecisionRequired if loaded.reason == saved.reason =>
             Consequence.success(new DecisionRequired(candidate, value.reason, value.repositories, Some(loaded)))
           case _ => _scope_invalid("saved numbering Decision changed")
@@ -181,7 +179,7 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
       for {
         raw <- snapshot.selection.planning.allocations.map(Consequence.success)
           .getOrElse(_scope_invalid("saved reasoning allocation is absent"))
-        input <- loadC(retained.enumerated, raw, raw)
+        input <- loadC(retained.enumerated, raw)
         views <- snapshot.projection match {
           case Some(value: R.ProjectionView.Projected) => Consequence.success(value.candidates)
           case _ => _scope_invalid("saved reasoning whole Built frontier is absent")
@@ -222,9 +220,6 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
             new ScopeApplied(original, snapshot.first, observed.source.admitted, values, projected): ScopeOutcome
           }
       }
-      passive <- SplitPhaseScopeProjectionSnapshot.projectC(restored)
-      _ <- if (passive == snapshot) Consequence.unit
-        else _scope_invalid("restored whole published frontier differs from actual committed data")
     } yield restored
 
   private def _restore_published_candidate_c(proposal: P.Records, boundary: B.Records,
@@ -422,7 +417,7 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
         val proposal = P.ProposalRecord(allocation.proposal, selected.source.reference, selected.source.phase,
           selected.source.authority, children)
         val shaperecords = P.Records(selected.source, selected.inventory, proposal)
-        P.loadC(shaperecords, shaperecords).flatMap {
+        P.loadC(shaperecords).flatMap {
           case decision: P.DecisionRequired =>
             Consequence.success(new DecisionRequired(candidate, DecisionReason.PhaseNumberingRequired, Vector.empty, Some(decision)))
           case shape: P.ShapeReady =>
@@ -432,7 +427,7 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
             val plan = B.HandoffPlan(allocation.handoffs, selected.source.reference, allocation.proposal, handoffs,
               phases.map(p => p -> handoffs.filter(_.receivingChild == p).map(_.identity)).toMap, original.records.handoffs.edges)
             val records = B.Records(original.records.boundary, ownership, plan)
-            B.loadC(shape, records, records).map(boundary => new Built(candidate, boundary, local))
+            B.loadC(shape, records).map(boundary => new Built(candidate, boundary, local))
         }
       }
     }

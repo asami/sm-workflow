@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Test allocations are data only, not genuine human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[admission] object SplitPhaseTypedStartFixture {
   val original = SplitPhasePartitionContextFixture
@@ -108,24 +108,31 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       removed.isSuccess shouldBe false
     }
 
-    "reject complete current-data drift even when references are unchanged" in {
+    "consume current data without certifying saved bodies or diagnostic echoes" in {
       Given("the original Start allocations and a source with unchanged identity but changed authority revision")
       val driftedsource = source.copy(authority = source.authority.copy(revision = "2"))
-      When("preparation compares the full current source to the retained record")
+      When("the current source and proposal disagree on their actual authority")
       val authority = T.prepareC(record, driftedsource, Some(proposal), selection, catalog, configuration)
-      Then("authority revision drift is refused")
+      Then("the incompatible source/proposal relation is refused, not merely a changed copy")
       authority.isSuccess shouldBe false
       Given("a same-reference proposal whose child estimate has changed")
       val changed = proposal.copy(children = proposal.children.updated(0, proposal.children.head.copy(expectedMinutes = 361)))
-      When("preparation compares the full current proposal")
-      val estimate = T.prepareC(record, source, Some(changed), selection, catalog, configuration)
-      Then("proposal payload drift is refused despite its unchanged reference")
-      estimate.isSuccess shouldBe false
+      When("preparation consumes the current proposal")
+      val estimate = take(T.prepareC(record, source, Some(changed), selection, catalog, configuration))
+      Then("the actual changed estimate is carried forward instead of the old saved body")
+      estimate.record.proposal shouldBe Some(changed)
       When("the current selection carries a different recommendation")
-      val recommendation = T.prepareC(record, source, Some(proposal), selection.copy(recommendationReference = Some("other")),
-        catalog, configuration)
-      Then("the changed recommendation is refused")
-      recommendation.isSuccess shouldBe false
+      val currentselection = selection.copy(recommendationReference = Some("other"))
+      val recommendation = take(T.prepareC(record, source, Some(proposal), currentselection, catalog, configuration))
+      Then("the current selection is consumed without a recommendation-copy gate")
+      recommendation.record.selection shouldBe currentselection
+      Given("an obsolete record with unusable host-body and generated-definition echoes")
+      val obsolete = record.copy(configuration = null, selection = null, source = null, proposal = null,
+        workflowIdentity = null, workflowRevision = null)
+      When("actual host inputs and the actual configured catalog are supplied")
+      val current = take(T.prepareC(obsolete, source, Some(proposal), selection, catalog, configuration))
+      Then("only allocation and actual command are retained from that record")
+      current.record shouldBe record
       When("the retained selection has no selected input")
       val missing = prepare(record.copy(selection = selection.copy(selectedInput = None)))
       Then("missing input is refused")
@@ -148,28 +155,75 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       val foreign = prepare(record.copy(source = source.copy(authority = source.authority.copy(identity = "foreign"))))
       Then("foreign authority is refused")
       foreign.isSuccess shouldBe false
-      When("the record selects a different Workflow definition revision")
-      val revision = prepare(record.copy(workflowRevision = WorkflowDefinitionRevision("other")))
-      Then("definition drift is refused")
+      When("the actual host selection selects a different Workflow definition revision")
+      val revision = prepare(record.copy(selection = selection.copy(workflowRevision = WorkflowDefinitionRevision("other"))))
+      Then("an incompatible actual invocation is refused by its owning admission")
       revision.isSuccess shouldBe false
     }
 
-    "close all nested raw fields without decoding an executable state or legacy record" in {
+    "store allocation targets and read old rows without decoding obsolete copies" in {
+      Given("current allocation data and its old complete v1 representation")
+      val expected = T.Allocation(record.reference, record.instanceIdentity, command, source.reference, Some(proposal.reference))
+      val newraw = take(J.encodeAllocationC(record))
+      val newjson = parser.parse(newraw.substring(J.allocationSchema.length + 1)).toOption.get
+      val oldjson = json(take(J.encodeC(record)))
+      val obsolete = payload(oldjson)(o => o.add("configuration", Json.Null).add("selection", Json.False)
+        .add("workflowIdentity", Json.Null).add("workflowRevision", Json.False)
+        .add("source", Json.obj("reference" -> o("source").get.hcursor.downField("reference").focus.get))
+        .add("proposal", Json.obj("reference" -> o("proposal").get.hcursor.downField("reference").focus.get)))
+      When("the current allocation and old copy-heavy row are read")
+      val decoded = Vector(take(J.decodeAllocationC(record.reference, newraw)),
+        take(J.decodeAllocationC(record.reference, raw(obsolete))))
+      Then("both supply only consumed targets; new producers retain no body/config/selection/definition copy")
+      decoded.foreach(_ shouldBe expected)
+      newjson.hcursor.downField("payload").focus.get.asObject.get.keys.toSet shouldBe
+        Set("reference", "instanceIdentity", "command", "source", "proposal")
+      Given("routing-only rows in both existing formats with no usable fresh-input targets or old copies")
+      val routingrows = Vector(J.allocationSchema -> newjson, J.schema -> oldjson).map { case (version, json) =>
+        version + ":" + payload(json)(_.remove("source").add("proposal", Json.False)
+          .add("configuration", Json.Null).add("selection", Json.Null)
+          .add("workflowIdentity", Json.Null).add("workflowRevision", Json.False)).noSpaces
+      }
+      When("original routing reads those rows without preparing fresh Start input")
+      val routes = routingrows.map(wire => take(J.decodeRoutingC(record.reference, wire)))
+      Then("only actual reference, native instance and command are consumed")
+      routes.foreach(_ shouldBe record.routing)
+      When("fresh allocation reading needs their absent source targets")
+      val unreadabletargets = routingrows.map(wire => J.decodeAllocationC(record.reference, wire))
+      Then("fresh preparation cannot use missing consumed data")
+      unreadabletargets.foreach(_.isSuccess shouldBe false)
+      Given("a legacy row with an absent consumed proposal target and one with an absent consumed source target")
+      val missingproposal = payload(oldjson)(_.add("proposal", Json.obj("children" -> Json.arr())))
+      val missingsource = payload(oldjson)(_.add("source", Json.obj("phase" -> Json.fromString("1"))))
+      When("the malformed consumed targets and a wrong physical revision are requested")
+      val rejected = Vector(J.decodeAllocationC(record.reference, raw(missingproposal)),
+        J.decodeAllocationC(record.reference, raw(missingsource)),
+        J.decodeAllocationC(record.reference.copy(revision = "2"), newraw))
+      Then("actual unreadable or incorrectly addressed targets fail before managed execution")
+      rejected.foreach(_.isSuccess shouldBe false)
+    }
+
+    "decode consumed checkpoint data without regenerating a whole-copy certificate" in {
       Given("the exact typed Start wire and variants with altered nested or root fields")
       val original = json(take(J.encodeC(record)))
-      val variants = Vector(original.mapObject(_.add("prepared", Json.True)),
-        original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
-        payload(original)(_.remove("proposal")), payload(original)(_.add("digest", Json.fromString("legacy"))),
-        payload(original)(o => o.add("source", o("source").get.mapObject(_.add("digest", Json.fromString("legacy"))))),
+      val variants = Vector(original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
         payload(original)(o => o.add("source", o("source").get.mapObject(_.remove("authority")))),
         payload(original)(o => o.add("command", o("command").get.mapObject(_.add("prepared", Json.True)))),
         payload(original)(o => o.add("selection", o("selection").get.mapObject(_.remove("selectedInput")))))
       variants.foreach { v =>
-        When("an altered root or nested field set is decoded")
+        When("an incompatible consumed schema or field is decoded")
         val decoded = J.decodeC(record.reference, raw(v))
-        Then("the altered field set is refused")
+        Then("the actual consumed data cannot be decoded")
         decoded.isSuccess shouldBe false
       }
+      Given("passive unknown members in the envelope, payload and consumed source record")
+      val compatible = original.mapObject(_.add("prepared", Json.True))
+      val unknowns = Vector(compatible, payload(original)(_.add("digest", Json.fromString("obsolete"))),
+        payload(original)(o => o.add("source", o("source").get.mapObject(_.add("digest", Json.fromString("obsolete"))))))
+      When("the consumed typed record is decoded without whole JSON regeneration")
+      val actual = unknowns.map(v => take(J.decodeC(record.reference, raw(v))))
+      Then("unused passive members neither reject the data nor authorize an operation")
+      actual.foreach(_ shouldBe record)
       When("the exact wire is requested with a different reference revision")
       val revision = J.decodeC(record.reference.copy(revision = "2"), raw(original))
       Then("the reference mismatch is refused")
@@ -190,10 +244,13 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       val spaced = take(J.decodeC(record.reference, J.schema + ":" + original.spaces2))
       Then("whitespace does not change the inert record")
       spaced shouldBe record
-      When("a record with a null source reference is encoded")
-      val nullsource = J.encodeC(record.copy(source = source.copy(reference = null)))
-      Then("malformed source data is refused")
-      nullsource.isSuccess shouldBe false
+      Given("inert data containing a null consumed source reference")
+      val nullsource = original.mapObject(root => root.add("payload", root("payload").get.mapObject(payload =>
+        payload.add("source", payload("source").get.mapObject(_.add("reference", Json.Null))))))
+      When("the malformed wire record is consumed by the actual typed reader")
+      val unreadable = J.decodeC(record.reference, J.schema + ":" + nullsource.noSpaces)
+      Then("the malformed consumed source fails at reading, not an encoder roundtrip certificate")
+      unreadable.isSuccess shouldBe false
       When("a record with a null command input is encoded")
       val nullcommand = J.encodeC(record.copy(command = command.copy(input = null)))
       Then("malformed command data is refused")

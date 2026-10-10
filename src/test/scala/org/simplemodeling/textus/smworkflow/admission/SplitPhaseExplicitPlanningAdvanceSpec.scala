@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
  */
 final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def partition(source: Base, template: Option[B.Validated] = None): E.Input =
-    take(E.loadC(template.getOrElse(source.initial), source.records, source.records))
+    take(E.loadC(template.getOrElse(source.initial), source.records))
   private def objectiveRecords(source: Base, threshold: Long = 300): O.Records = O.Records(
     Some(O.CostPolicy(O.CostPolicyReference("cost", "1"), source.source.reference, source.source.authority,
       O.ProfileIdentity("expensive"), O.ProfileIdentity("lower"), 2, 1, threshold)),
@@ -35,7 +35,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
     }
     Data(DataReference("planning-data", "1"), source.reference, source.authority, allocations, objectives)
   }
-  private def advance(input: E.Input, data: Data): Outcome = take(advanceC(take(selectC(input, data, data))))
+  private def advance(input: E.Input, data: Data): Outcome = take(advanceC(take(selectC(input, data))))
   private def withHandoff(source: Base, producer: Int, receiver: Int): B.Validated = {
     val template = source.initial
     val phases = template.shape.records.proposal.children.map(_.phase)
@@ -44,7 +44,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
     val plan = template.records.handoffs.copy(handoffs = Vector(h),
       incomingByChild = phases.map(p => p -> (if (p == phases(receiver)) Vector(h.identity) else Vector.empty)).toMap)
     val records = template.records.copy(handoffs = plan)
-    take(B.loadC(template.shape, records, records))
+    take(B.loadC(template.shape, records))
   }
 
   "Deterministic typed planning advance" should {
@@ -75,7 +75,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
       val mixed = source.initial.records.copy(ownership = source.initial.records.ownership.copy(
         children = source.initial.records.ownership.children.zipWithIndex.map((child, i) =>
           child.copy(repository = B.RepositoryIdentity(if (i < 2) "repo-A" else "repo-B")))))
-      val templates = Vector(template, take(B.loadC(source.initial.shape, mixed, mixed)))
+      val templates = Vector(template, take(B.loadC(source.initial.shape, mixed)))
       When("the Workflow's policy supplies all references without choosing a candidate or processor")
       val outcomes = templates.map { boundary =>
         val input = partition(source, Some(boundary))
@@ -131,7 +131,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
       val estimates = source.records.estimates.copy(items = source.records.estimates.items.updated(1,
         source.records.estimates.items(1).copy(duration = E.Duration.Unresolved("novel-work"))))
       val records = source.records.copy(estimates = estimates)
-      val input = take(E.loadC(source.initial, records, records))
+      val input = take(E.loadC(source.initial, records))
       When("Workflow advances with no allocation or cost evidence")
       val result = advance(input, hostData(input, allocate = false)).asInstanceOf[PartitionSemanticRequired]
       Then("the participant receives only the unknown item and edge, not known work for reinterpretation")
@@ -191,7 +191,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
       val records = source.initial.records.copy(ownership = source.initial.records.ownership.copy(
         children = source.initial.records.ownership.children.zipWithIndex.map((child, i) =>
           child.copy(repository = B.RepositoryIdentity(if (i < 2) "repo-A" else "repo-B")))))
-      val template = take(B.loadC(source.initial.shape, records, records))
+      val template = take(B.loadC(source.initial.shape, records))
       val input = partition(source, Some(template))
       When("candidate projection finds a mixed-repository child")
       val result = advance(input, hostData(input)).asInstanceOf[ProjectionRequired]
@@ -252,7 +252,7 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
         .foreach(b => b.localHandoffs.size + b.boundary.records.handoffs.handoffs.size shouldBe 1)
       result.trace.mechanicalStages.size shouldBe 4
     }
-    "separate selected data from admitted purpose records and refuse drift without free construction" in {
+    "consume current selection and admit nested purpose records only when reached" in {
       Given("raw selected data with changed facts, crossed source, malformed identity or invalid nested allocations")
       val source = base(Vector(260, 180, 260))
       val input = partition(source)
@@ -262,11 +262,13 @@ final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Match
         data.copy(reference = DataReference("", "1")), data.copy(allocations = null), data.copy(objectives = null), null)
       val crossed = data.copy(allocations = data.allocations.map(_.copy(source = data.source.copy(revision = "2"))))
       When("the outer selection and then the reached allocation boundary admit their own distinct data")
-      val selections = invalid.map(r => selectC(input, r, r)) ++ Vector(selectC(input, data, drift), selectC(null, data, data))
-      val reached = advanceC(take(selectC(input, crossed, crossed)))
+      val selections = invalid.map(r => selectC(input, r)) :+ selectC(null, data)
+      val reached = advanceC(take(selectC(input, crossed)))
+      val calculated = advance(input, drift).asInstanceOf[Planned]
       Then("selection cannot stand in for allocation admission and callers cannot construct successful planning states")
       selections.foreach(_ shouldBe a[Consequence.Failure[?]])
       reached shouldBe a[Consequence.Failure[?]]
+      calculated.objective.costScores.head.materialSavingUnits shouldBe BigInt(880)
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.Selection(null, null)")
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.Planned(null, null, null, null)")
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.Trace(null, None, None, None)")

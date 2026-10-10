@@ -28,9 +28,9 @@ final class SplitPhaseCandidateAllocationPolicySpec extends AnyWordSpec with Mat
   private val _result = S.ResultReference("canonical-result", "1")
   private def _need(objectives: O.Records = O.Records(None, None, None)): W.AllocationRequired = {
     val source = base(Vector(260, 180, 260))
-    val input = take(E.loadC(source.initial, source.records, source.records))
+    val input = take(E.loadC(source.initial, source.records))
     val data = W.Data(W.DataReference("original-planning", "1"), source.source.reference, source.source.authority, None, objectives)
-    take(W.advanceC(take(W.selectC(input, data, data)))).asInstanceOf[W.AllocationRequired]
+    take(W.advanceC(take(W.selectC(input, data)))).asInstanceOf[W.AllocationRequired]
   }
 
   "Explicit candidate allocation policy" should {

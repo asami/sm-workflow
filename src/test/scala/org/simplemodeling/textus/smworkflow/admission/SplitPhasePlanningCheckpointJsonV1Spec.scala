@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Json, JsonObject, parser}
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRevision}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,7 +12,7 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def json(raw: String, schema: String = J.schema): Json = parser.parse(raw.substring(schema.length + 1)).toOption.get
@@ -21,6 +21,40 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
 
   "Closed passive checkpoint frames" should {
+    "store a mechanical locator rather than a duplicate computation and resolve legacy used members" in {
+      Given("one actual mechanical capture and an existing full v1 mapping")
+      val saved = capture().record
+      val locator = K.Locator(saved.reference, saved.origin)
+      val legacy = json(take(J.encodeC(saved)))
+      val unused = payload(legacy)(o => o.remove("originalContext").remove("snapshot")
+        .add("originalStart", Json.fromString("unused old copy")))
+      When("a compact row and legacy rows project the selected native origin")
+      val encoded = take(J.encodeLocatorC(locator))
+      val observed = Vector(encoded, raw(legacy), raw(unused)).map(value => take(J.decodeLocatorC(reference, value)))
+      Then("all select the same native result without decoding or certifying unused copies")
+      observed shouldBe Vector.fill(3)(locator)
+      json(encoded, J.locatorSchema).hcursor.downField("payload").keys.get.toSet shouldBe Set("reference", "origin")
+      J.decodeC(reference, raw(unused)).isSuccess shouldBe false
+    }
+
+    "reject crossed or malformed used locator fields without accepting a fallback result" in {
+      Given("one declared compact mechanical address")
+      val saved = capture().record
+      val encoded = take(J.encodeLocatorC(K.Locator(saved.reference, saved.origin)))
+      val frame = json(encoded, J.locatorSchema)
+      val malformed = Vector(
+        payload(frame)(_.remove("origin")), payload(frame)(_.add("extra", Json.True)),
+        frame.hcursor.downField("payload").downField("origin").downField("Mechanical")
+          .downField("checkpoint").withFocus(_.mapObject(_.remove("revision"))).top.get,
+        frame.mapObject(_.add("schemaVersion", Json.fromString("unsupported"))))
+      When("used addresses schema types or byte bounds are invalid")
+      val results = malformed.map(value => J.decodeLocatorC(reference, raw(value, J.locatorSchema))) ++ Vector(
+        J.decodeLocatorC(reference.copy(revision = "other"), encoded), J.decodeLocatorC(reference, null),
+        J.decodeLocatorC(reference, encoded + (" " * J.maximumPayloadBytes)))
+      Then("no discarded used field newest address or alternate native origin is admitted")
+      results.foreach(_.isSuccess shouldBe false)
+    }
+
     "roundtrip complete original Start context snapshot and both origins" in {
       Given("actual constructed mechanical and semantic-completion captures")
       val captures = Vector(capture(), take(K.captureCompletionC(completion(), reference)).get)
@@ -33,25 +67,108 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       }
     }
 
-    "refuse unknown missing crossed and unsupported mapping data at every wrapper boundary" in {
-      Given("a closed complete mapping with explicit selected references")
+    "read both origins and selected index data without requiring wire formatting" in {
+      Given("mechanical and completion mappings with their selected context indices")
+      val captures = Vector(capture(), take(K.captureCompletionC(completion(), reference)).get)
+      val frames = captures.map(saved => json(take(J.encodeC(saved.record))))
+      val indices = captures.map(saved => json(take(J.encodeIndexC(saved.index)), J.indexSchema))
+      When("existing v1 mapping and index envelopes use formatted JSON")
+      val mappings = frames.map(frame => take(J.decodeC(reference, J.schema + ":" + frame.spaces2)))
+      val observed = captures.zip(indices).map { (saved, frame) =>
+        take(J.decodeIndexC(saved.index.instance, saved.index.context, J.indexSchema + ":" + frame.spaces2))
+      }
+      Then("selected raw values survive without an executable capability or representation certificate")
+      mappings shouldBe captures.map(_.record)
+      observed shouldBe captures.map(_.index)
+    }
+
+    "consume both origins without rejecting unused nested diagnostics" in {
+      Given("actual mappings for both origin variants plus unused proof fields")
+      val originals = Vector(capture(), take(K.captureCompletionC(completion(), reference)).get).map(_.record)
+      val frames = originals.map(saved => json(take(J.encodeC(saved))))
+      val malformed = frames.flatMap { frame =>
+        val origin = frame.hcursor.downField("payload").downField("origin").focus.get
+        val variant = origin.asObject.get.keys.head
+        val nested = origin.hcursor.downField(variant).focus.get
+        Vector(
+          frame.hcursor.downField("payload").downField("origin").downField(variant)
+            .withFocus(_.mapObject(_.remove(nested.asObject.get.keys.head))).top.get,
+          frame.hcursor.downField("payload").downField("reference")
+            .withFocus(_.mapObject(_.add("identity", Json.fromInt(1)))).top.get)
+      }
+      val extensions = frames.map { frame =>
+        val variant = frame.hcursor.downField("payload").downField("origin").focus.get.asObject.get.keys.head
+        frame.hcursor.downField("payload").downField("origin").downField(variant)
+          .withFocus(_.mapObject(_.add("unchanged", Json.True))).top.get
+          .hcursor.downField("payload").downField("startReference")
+          .withFocus(_.mapObject(_.add("certificate", Json.True))).top.get
+      }
+      When("the malformed raw members reach the existing v1 reader")
+      val results = malformed.map(frame => J.decodeC(reference, raw(frame)))
+      val extended = extensions.map(frame => take(J.decodeC(reference, raw(frame))))
+      Then("unused certificates do not gate selected original data, while missing consumed fields and incompatible types fail")
+      results.foreach(_.isSuccess shouldBe false)
+      extended shouldBe originals
+    }
+
+    "ignore wrapper diagnostics but refuse missing crossed and unsupported consumed mapping data" in {
+      Given("a complete selected mapping with inert wrapper and reference diagnostics")
       val saved = capture().record; val encoded = json(take(J.encodeC(saved)))
-      val variants = Vector(encoded.mapObject(_.add("unknown", Json.True)),
-        payload(encoded)(_.remove("originalStart")), payload(encoded)(_.add("unknown", Json.True)),
+      val extensions = Vector(encoded.mapObject(_.add("unknown", Json.True)),
+        payload(encoded)(_.add("unknown", Json.True)),
         payload(encoded)(o => o.add("reference", o("reference").get.mapObject(_.add("unknown", Json.True)))),
-        payload(encoded)(_.add("committedRevision", Json.fromLong(8))),
+        payload(encoded)(o => o.add("contextReference", o("contextReference").get.mapObject(_.add("claim", Json.Null)))))
+      val variants = Vector(payload(encoded)(_.remove("originalStart")),
         payload(encoded)(_.add("contextReference", Json.obj("identity" -> Json.fromString("foreign"), "revision" -> Json.fromString("1")))),
         encoded.mapObject(_.add("schemaVersion", Json.fromString("v0"))))
       When("malformed outer and nested frames are decoded")
-      Then("all variants refuse rather than silently dropping fields")
-      variants.foreach(v => J.decodeC(reference, raw(v)).isSuccess shouldBe false)
-      J.decodeC(reference.copy(revision = "other"), raw(encoded)).isSuccess shouldBe false
-      J.decodeC(reference, null).isSuccess shouldBe false
-      J.decodeC(reference, "wrong:" + encoded.noSpaces).isSuccess shouldBe false
-      J.encodeC(null).isSuccess shouldBe false
+      val extended = extensions.map(value => take(J.decodeC(reference, raw(value))))
+      val refused = variants.map(v => J.decodeC(reference, raw(v))) ++ Vector(
+        J.decodeC(reference.copy(revision = "other"), raw(encoded)), J.decodeC(reference, null),
+        J.decodeC(reference, "wrong:" + encoded.noSpaces), J.encodeC(null))
+      Then("unused diagnostics neither change the selected mapping nor reject it; actual missing or incompatible input fails")
+      extended.foreach(_ shouldBe saved)
+      refused.foreach(_.isSuccess shouldBe false)
     }
 
-    "bind immutable index queries and enforce whole UTF-8 frame limits" in {
+    "read historical copies without certifying their agreement with the computed snapshot or native revisions" in {
+      Given("mechanical and completion payloads whose historical context copies are not current transition inputs")
+      val originals = Vector(capture().record, take(K.captureCompletionC(completion(), reference)).get.record)
+      val changed = originals.map { saved =>
+        val context = saved.originalContext
+        val partition = context.facts.partition
+        saved.copy(originalContext = context.copy(facts = context.facts.copy(partition = partition.copy(
+          estimates = partition.estimates.copy(reference = partition.estimates.reference.copy(revision = "old-copy"))))),
+          predecessorRevision = InstanceRevision(41), committedRevision = InstanceRevision(42))
+      }
+      When("new payloads are emitted and existing full v1 mapping and native payload frames are read")
+      val mappings = changed.map(saved => take(J.decodeC(reference, take(J.encodeC(saved)))))
+      val nativepayloads = changed.map(saved => J.payloadCodec.decode(J.payloadCodec.encode(saved)))
+      val legacy = originals.map(saved => take(J.decodeC(reference, raw(payload(json(take(J.encodeC(saved))))(
+        _.add("committedRevision", Json.fromLong(42)))))))
+      Then("passive data survives without granting capture or rejecting a computed result because old copies differ")
+      mappings shouldBe changed
+      nativepayloads shouldBe changed.map(Right(_))
+      mappings.map(_.snapshot) shouldBe originals.map(_.snapshot)
+      legacy.map(_.committedRevision) shouldBe Vector.fill(2)(InstanceRevision(42))
+    }
+
+    "read typed passive snapshot data through both legacy origins without constructing frontier admission" in {
+      Given("full v1 mechanical and completion mappings with no selected frontier objective")
+      val originals = Vector(capture().record, take(K.captureCompletionC(completion(), reference)).get.record)
+      val changed = originals.map(saved => saved.copy(snapshot = saved.snapshot.copy(objective = None)))
+      When("the existing standalone mapping and native payload readers decode those nested snapshots")
+      val decoded = changed.map(saved => take(J.decodeC(reference, take(J.encodeC(saved)))))
+      val nativepayloads = changed.map(saved => J.payloadCodec.decode(J.payloadCodec.encode(saved)))
+      val selected = decoded.map(saved => org.simplemodeling.textus.smworkflow.admission.SplitPhaseSelectedDocuments
+        .projectC(saved.snapshot))
+      Then("passive fields survive but decoding creates neither a capture nor a selected-plan capability")
+      decoded shouldBe changed
+      nativepayloads shouldBe changed.map(Right(_))
+      selected.foreach(_.isSuccess shouldBe false)
+    }
+
+    "resolve selected index queries and enforce whole UTF-8 frame limits" in {
       Given("a complete index for one exact original context")
       val saved = capture(); val encoded = take(J.encodeIndexC(saved.index))
       When("query facts fields or byte bounds differ")
@@ -63,6 +180,24 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       J.encodeIndexC(saved.index.copy(mapping = reference.copy(identity = "語" * (J.maximumPayloadBytes / 2)))).isSuccess shouldBe false
       J.decodeC(reference, J.schema + ":" + ("語" * (J.maximumPayloadBytes / 2))).isSuccess shouldBe false
       J.encodeIndexC(null).isSuccess shouldBe false
+    }
+
+    "reject undeclared nested index fields without encoding an expected index copy" in {
+      Given("a selected stored context index")
+      val saved = capture()
+      val frame = json(take(J.encodeIndexC(saved.index)), J.indexSchema)
+      val malformed = Vector(
+        frame.hcursor.downField("payload").downField("instance")
+          .withFocus(_.mapObject(_.add("proof", Json.True))).top.get,
+        frame.hcursor.downField("payload").downField("context")
+          .withFocus(_.mapObject(_.remove("revision"))).top.get,
+        frame.hcursor.downField("payload").downField("mapping")
+          .withFocus(_.mapObject(_.add("revision", Json.fromInt(1)))).top.get)
+      When("those declared-field and type violations reach index decoding")
+      val results = malformed.map(value => J.decodeIndexC(saved.index.instance, saved.index.context,
+        raw(value, J.indexSchema)))
+      Then("each invalid address is refused without newest-reference fallback")
+      results.foreach(_.isSuccess shouldBe false)
     }
   }
 }

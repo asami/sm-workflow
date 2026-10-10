@@ -184,7 +184,6 @@ object GoalPhaseReviewBoundary {
     val matches = generated.providedOperations.filter(operation =>
       operation.service == "GoalPhaseService" && operation.name == completionName)
     if (generated.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        generated.generator != GeneratedProvidedApiAbi.generatorIdentity ||
         generated.identity != record.definition.workflowIdentity.value ||
         generated.version != record.definition.workflowRevision.value ||
         required == null || required.resultType != Some(StateMachineResultTypeReference(resultType)) ||

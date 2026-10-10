@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Actual owning-call capture is specified in the managed checkpoint chapter.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct. 10, 2026
   */
 final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Scope successor capture" should {
@@ -47,8 +47,8 @@ final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSp
         key shouldBe "scope-successor:" + nativekey
         key.getBytes(UTF_8).length should be <= 1024
       }
-      "refuse incomplete source roles and check the final prefixed physical key" in {
-        Given("valid short roles and a native key which only its extra purpose prefix makes oversized")
+      "refuse incomplete source roles and retain the private legacy address helper" in {
+        Given("valid short roles and an obsolete application-copy address, not a runtime selection gate")
         val first = K.Reference("first", "1")
         val work = ContinuationIdentity("scope")
         val result = ContextReference("result", "1")
@@ -61,7 +61,7 @@ final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSp
           C.referenceC(first, work, result.copy(identity = "")))
         val nativekey = take(M.keyC(M.Reference(oversized.identity, oversized.revision)))
         val refused = C.keyC(oversized)
-        Then("no incomplete source gains a locator and the final physical prefix cannot bypass the byte limit")
+        Then("source-role construction rejects incomplete inputs; the legacy-only address helper remains separate from native selection")
         invalid.foreach(_ shouldBe a[Consequence.Failure[?]])
         nativekey.getBytes(UTF_8).length should be <= 1024
         ("scope-successor:" + nativekey).getBytes(UTF_8).length should be > 1024
@@ -81,20 +81,19 @@ final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSp
     "full passive frame refusal" which {
       "reject absent unsupported malformed and oversized frames without constructing a native capability" in {
         Given("a selected successor purpose and untrusted full-frame inputs")
-        val definition = take(SplitPhaseRuntimeCatalog.loadC()).definition
         val reference = C.Reference("scope-projection:selected", "1")
         val prefix = J.schema + ":"
         val frames = Vector(null, "sm-workflow.split-phase-scope-checkpoint.v0:{}", prefix + "{",
           prefix + "{}", prefix + "語" * (J.maximumPayloadBytes / 3 + 1))
-        When("the complete frame decoder and passive inspector receive those inputs")
-        val refused = frames.map(raw => J.decodeC(reference, raw, definition))
-        val unselected = J.decodeC(null, prefix + "{}", definition)
-        val absent = Vector(C.inspectC(null, definition), J.encodeC(null, definition), J.encodeNativeC(null, definition))
+        When("the complete frame decoder and passive encoders receive those inputs")
+        val refused = frames.map(raw => J.decodeC(reference, raw))
+        val unselected = J.decodeC(null, prefix + "{}")
+        val absent = Vector(J.encodeC(null))
         Then("every input is a typed refusal and no execution object is reconstructed")
         refused.foreach(_ shouldBe a[Consequence.Failure[?]])
         unselected shouldBe a[Consequence.Failure[?]]
         absent.foreach(_ shouldBe a[Consequence.Failure[?]])
-        J.payloadCodec(definition).typeIdentity shouldBe C.payloadType
+        J.payloadCodec.typeIdentity shouldBe C.payloadType
         J.schema should not be SplitPhaseScopeProjectionSnapshotJsonV1.schema
       }
     }

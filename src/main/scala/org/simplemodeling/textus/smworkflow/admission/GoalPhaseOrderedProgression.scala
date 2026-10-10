@@ -1,6 +1,9 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
+import io.circe.{Decoder, Encoder}
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import GoalPhaseWorkClassification.given
 
 /** Deterministic Phase controller, not a Service or a persistence provider.
   * Native adapters must admit selection, actual command receipts and independent
@@ -11,9 +14,25 @@ import org.goldenport.Consequence
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
   final case class Step(identity: String, purpose: String, ownedPaths: Vector[String],
-    dependencies: Vector[String], checks: Vector[String])
+    dependencies: Vector[String], checks: Vector[String],
+    workClassification: Option[GoalPhaseWorkClassification.Assignment] = None)
+  object Step {
+    given Encoder[Step] = deriveEncoder[Step].mapJson(_.mapObject(_.filter {
+      case ("workClassification", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Step] = deriveDecoder
+  }
   final case class Plan(identity: String, revision: String, phase: String, repository: String,
-    steps: Vector[Step], phaseChecks: Vector[String], repairLimit: Int = 0)
+    steps: Vector[Step], phaseChecks: Vector[String], repairLimit: Int = 0,
+    phaseReviewClassification: Option[GoalPhaseWorkClassification.Classification] = None)
+  object Plan {
+    given Encoder[Plan] = deriveEncoder[Plan].mapJson(_.mapObject(_.filter {
+      case ("phaseReviewClassification", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Plan] = deriveDecoder
+  }
   final case class Snapshot(head: String, tree: String)
   final case class Commit(identity: String, parent: String, tree: String)
   final case class ClosedStep(step: String, commit: Commit, review: String)
@@ -177,7 +196,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||
         plan.steps == null || plan.steps.isEmpty || plan.steps.size > 64 ||
-        !identities(plan.phaseChecks) || plan.phaseChecks.isEmpty || plan.repairLimit < 0 || plan.repairLimit > 64)
+        !identities(plan.phaseChecks) || plan.phaseChecks.isEmpty || plan.repairLimit < 0 || plan.repairLimit > 64 ||
+        plan.phaseReviewClassification == null || plan.phaseReviewClassification.exists(value =>
+          value == null || value.kind != GoalPhaseWorkClassification.Kind.REVIEW || value.validateC.toOption.isEmpty))
       return invalid("selected complete Phase plan or bounded repair policy is missing")
     val ids = plan.steps.map(s => Option(s).map(_.identity).getOrElse(""))
     if (!identities(ids)) return invalid("selected Step identities are empty or duplicated")
@@ -185,7 +206,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (s == null || !text(s.purpose) || s.ownedPaths == null || s.ownedPaths.isEmpty ||
           s.ownedPaths.size > 256 || s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
           !identities(s.dependencies) || !s.dependencies.forall(ids.take(index).contains) ||
-          !identities(s.checks) || s.checks.isEmpty) invalid("Step coverage, earlier dependencies or selected checks are invalid")
+          !identities(s.checks) || s.checks.isEmpty || s.workClassification == null ||
+          s.workClassification.exists(value => value == null || value.validateC.toOption.isEmpty))
+        invalid("Step coverage, earlier dependencies, selected checks or WorkClassification are invalid")
       else Consequence.unit
     }}
   }

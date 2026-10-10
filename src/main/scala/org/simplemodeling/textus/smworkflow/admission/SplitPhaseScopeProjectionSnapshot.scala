@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitCandida
 /** Passive successor data, never a native receipt or executable frontier.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
   enum CandidateOutput {
@@ -49,7 +49,7 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
         })
       }
       val record = Record(outcome.checkpoint, outcome.reply.request.result, outcome.reply.judgment, frontier)
-      inspectC(record).map(_ => record)
+      Consequence.success(record)
     }
   }
 
@@ -57,14 +57,14 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
   def inspectC(record: Record): Consequence[Unit] = _guarded {
     if (record == null || record.first == null || record.result == null || record.frontier == null)
       _invalid("successor data is incomplete")
-    else for {
-      _ <- K.inspectC(record.first)
-      facts = record.first.snapshot.selection
-      shape <- P.loadC(facts.proposal, facts.proposal).flatMap {
+    else {
+      val facts = record.first.snapshot.selection
+      for {
+      shape <- P.loadC(facts.proposal).flatMap {
         case ready: P.ShapeReady => Consequence.success(ready)
         case _ => _invalid("original selected proposal requires a numbering Decision")
       }
-      _ <- B.loadC(shape, facts.boundary, facts.boundary)
+      _ <- B.loadC(shape, facts.boundary)
       _ <- record.first.snapshot.projection.toVector.flatMap(_.candidates).collect {
         case built: R.CandidateProjectionView.BuiltView => built
       }.foldLeft(Consequence.unit) { (prior, built) =>
@@ -78,7 +78,8 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
           _inspect_candidates_c(record, candidates)
         case _ => _invalid("frontier and actual semantic decision differ")
       }
-    } yield ()
+      } yield ()
+    }
   }
 
   /** Cross-joins after the prior publication and Human data have been inspected.
@@ -172,7 +173,7 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
       _invalid("known Human representability gaps precede numbering Decisions")
     } else {
       val records = P.Records(facts.proposal.source, facts.proposal.inventory, proposal)
-      P.loadC(records, records).flatMap {
+      P.loadC(records).flatMap {
         case held: P.DecisionRequired if decision.reason == Q.DecisionReason.PhaseNumberingRequired &&
             decision.repositories.isEmpty && decision.numbering.contains(R.NumberingView(held.reason, held.records)) => Consequence.unit
         case _ => _invalid("new numbering Decision differs from original inventory and allocations")
@@ -214,11 +215,11 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
             documents.handoffs.edges == facts.boundary.handoffs.edges &&
             documents.ownership == _expected_ownership(first, proposal, allocation.ownership)) Consequence.unit
           else _invalid("new document transfers or original validation policy differ")
-        shape <- P.loadC(shaperecords, shaperecords).flatMap {
+        shape <- P.loadC(shaperecords).flatMap {
           case ready: P.ShapeReady => Consequence.success(ready)
           case _ => _invalid("new Built proposal instead requires a numbering Decision")
         }
-        _ <- B.loadC(shape, boundaryrecords, boundaryrecords).map(_ => ())
+        _ <- B.loadC(shape, boundaryrecords).map(_ => ())
       } yield ()
     }
   }
@@ -268,11 +269,11 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshot {
         Vector(Q.LocalHandoff(handoff, owners.head, producing, receiving)) else Vector.empty
     }
     for {
-      shape <- P.loadC(records, records).flatMap {
+      shape <- P.loadC(records).flatMap {
         case ready: P.ShapeReady => Consequence.success(ready)
         case _ => _invalid("retained Built proposal requires a numbering Decision")
       }
-      _ <- B.loadC(shape, boundary, boundary)
+      _ <- B.loadC(shape, boundary)
       _ <- if (documents.localHandoffs == local) Consequence.unit
         else _invalid("retained local handoff bodies are incomplete or differ from original ranges")
     } yield ()

@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.*
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -23,7 +23,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
 
   private def _pending(unknown: Vector[Int] = Vector(1), overhead: Boolean = true): W.ReasoningRequired = {
     val source = base(Vector(260, 180, 260))
-    val input = take(E.loadC(source.initial, source.records, source.records))
+    val input = take(E.loadC(source.initial, source.records))
     val demands = source.inventory.orderedUnfinishedItems.zipWithIndex.map { (id, index) =>
       O.ItemDemand(id, if (unknown.contains(index)) O.Demand.Unresolved(s"kernel-$index")
         else if (index == 0) O.Demand.ExpensiveReasoning else O.Demand.SettledExecution)
@@ -37,7 +37,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
     )
     val data = W.Data(W.DataReference("original-planning", "1"), source.source.reference,
       source.source.authority, None, objectives)
-    val need = take(W.advanceC(take(W.selectC(input, data, data)))).asInstanceOf[W.AllocationRequired]
+    val need = take(W.advanceC(take(W.selectC(input, data)))).asInstanceOf[W.AllocationRequired]
     val allocated = take(SplitPhaseCandidateAllocationFixture.policy.allocateC(need,
       S.ResultReference("reasoning-fixture-allocation", "1")))
     take(W.continueAllocatedC(allocated)).asInstanceOf[W.ReasoningRequired]
@@ -45,12 +45,12 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
 
   private def _judgment(prepared: R.Prepared,
     classification: R.Classification = R.Classification.SettledExecution): R.Judgment =
-    R.Judgment(prepared.request.context, R.Decision.Enriched, "Only issued unknown work was classified",
+    R.Judgment(R.Decision.Enriched, "Only issued unknown work was classified",
       prepared.request.items.map(item => R.Assignment(item.identity, classification, "Original closure work is classified")),
       Vector(S.EvidenceReference("reasoning-evidence", "1")))
 
   private def _admit(prepared: R.Prepared, judgment: R.Judgment): R.Admitted =
-    take(R.admitC(prepared, prepared.pending.selection, _result, _references, judgment)).asInstanceOf[R.Admitted]
+    take(R.admitC(prepared, _result, _references, judgment)).asInstanceOf[R.Admitted]
 
   "E2 Workflow owns the reasoning reply assignment" must _assigned_reply_spec {
     "refuse absent or blank reply assignments without changing the computed need" in {
@@ -83,8 +83,8 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         val crossed = Vector(_result.copy(identity = "another-reasoning-result"), _result.copy(revision = "2"))
 
         When("the same semantic response arrives under another result identity or revision, followed by the assigned reply")
-        val refused = crossed.map(reference => R.admitC(prepared, prepared.pending.selection, reference, references, judgment))
-        val admitted = take(R.admitC(prepared, prepared.pending.selection, _result, references, judgment))
+        val refused = crossed.map(reference => R.admitC(prepared, reference, references, judgment))
+        val admitted = take(R.admitC(prepared, _result, references, judgment))
 
         Then("neither crossed reply is admitted, while the exact assigned reply retains its original question and semantic alternative")
         refused.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -149,7 +149,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
             items = demands.items.updated(1, demands.items(1).copy(demand = O.Demand.SettledExecution))))))
         admitted.resolved.objectives.demands.get.items.head shouldBe demands.items.head
         admitted.resolved.objectives.demands.get.items.last shouldBe demands.items.last
-        judgment.productElementNames.toVector shouldBe Vector("context", "decision", "rationale", "assignments", "evidence")
+        judgment.productElementNames.toVector shouldBe Vector("decision", "rationale", "assignments", "evidence")
       }
 
       "refuse missing, reordered, duplicate or known-item classification coverage" in {
@@ -165,7 +165,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         )
 
         When("each invalid response is admitted without interpreting additional work")
-        val results = invalid.map(values => R.admitC(prepared, prepared.pending.selection, _result,
+        val results = invalid.map(values => R.admitC(prepared, _result,
           _references, judgment.copy(assignments = values)))
 
         Then("no partial, crossed or extra classification becomes resolved data")
@@ -187,49 +187,63 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         )
 
         When("the separate host-selected references reach the natural response boundary")
-        val results = invalid.map(refs => R.admitC(prepared, prepared.pending.selection, _result, refs, judgment))
+        val results = invalid.map(refs => R.admitC(prepared, _result, refs, judgment))
 
         Then("the old immutable record cannot silently acquire new contents or missing host ownership")
         results.foreach(_ shouldBe a[Consequence.Failure[?]])
       }
 
-      "refuse complete current-data drift hidden behind unchanged reference names" in {
-        Given("a pending classification and current data with changed prices, policies, known demand or allocations")
+      "consume current prices policies known demands allocations and estimates without historical-copy proof" in {
+        Given("one unresolved classification and compatible current pricing, policies, known demand, allocated proposal and estimates")
         val prepared = take(R.prepareC(_context, _pending(), _result))
         val saved = prepared.pending.selection
         val objectives = saved.data.objectives
-        val drift = Vector(
+        val datasets = Vector(
           saved.data.copy(objectives = objectives.copy(cost = Some(objectives.cost.get.copy(expensiveUnitsPerMinute = 3)))),
           saved.data.copy(objectives = objectives.copy(overhead = Some(objectives.overhead.get.copy(perCommitUnits = 9)))),
           saved.data.copy(objectives = objectives.copy(demands = Some(objectives.demands.get.copy(
             items = objectives.demands.get.items.updated(0, objectives.demands.get.items.head.copy(demand = O.Demand.SettledExecution)))))),
-          saved.data.copy(allocations = Some(saved.data.allocations.get.copy(allocations = saved.data.allocations.get.allocations.reverse)))
-        ).map(data => take(W.selectC(saved.partition, data, data)))
+          saved.data.copy(allocations = Some(saved.data.allocations.get.copy(allocations =
+            saved.data.allocations.get.allocations.updated(0,
+              saved.data.allocations.get.allocations.head.copy(proposal =
+                saved.data.allocations.get.allocations.head.proposal.copy(identity = "current-candidate-proposal"))))))
+        )
         val estimates = saved.partition.records.estimates
-        val records = saved.partition.records.copy(estimates = estimates.copy(items = estimates.items.updated(0,
-          estimates.items.head.copy(duration = E.Duration.Known(261)))))
-        val input = take(E.loadC(saved.partition.boundary, records, records))
-        val current = drift :+ take(W.selectC(input, saved.data, saved.data))
-
-        When("an otherwise valid result is compared with the actual complete current planning input")
-        val results = current.map(value => R.admitC(prepared, value, _result, _references, _judgment(prepared)))
-
-        Then("matching context and policy locators cannot conceal changes to the original calculation facts")
-        results.foreach(_ shouldBe a[Consequence.Failure[?]])
+        val records = saved.partition.records.copy(estimates = estimates.copy(items = estimates.items.map(item =>
+          if (item.duration == E.Duration.Known(260)) item.copy(duration = E.Duration.Known(261)) else item)))
+        When("the host constructs each actual current reasoning need and consumes its one prepared input")
+        val input = take(E.loadC(saved.partition.boundary, records))
+        val selections = datasets.map(data => take(W.selectC(saved.partition, data))) :+ take(W.selectC(input, saved.data))
+        val results = selections.map { selection =>
+          val pending = take(W.advanceC(selection)).asInstanceOf[W.ReasoningRequired]
+          val current = take(R.prepareC(_context, pending, _result))
+          _admit(current, _judgment(current))
+        }
+        Then("current known facts remain actual inputs, while only the requested unresolved demand is classified")
+        results.head.resolved.objectives.cost.get.expensiveUnitsPerMinute shouldBe 3
+        results(1).resolved.objectives.overhead.get.perCommitUnits shouldBe 9
+        results(2).resolved.objectives.demands.get.items.head.demand shouldBe O.Demand.SettledExecution
+        results(3).resolved.allocations.get.allocations shouldBe datasets(3).allocations.get.allocations
+        results(3).resolved.allocations.get.allocations.head.proposal.identity shouldBe "current-candidate-proposal"
+        results.last.current.partition.records.estimates.items.map(_.duration) shouldBe
+          Vector(E.Duration.Known(261), E.Duration.Known(180), E.Duration.Known(261))
+        results.foreach(_.resolved.objectives.demands.get.items(1).demand shouldBe O.Demand.SettledExecution)
+        results.foreach(_.resolved.reference shouldBe _references.planning.get)
+        saved.data.objectives.cost.get.expensiveUnitsPerMinute shouldBe 2
       }
 
-      "refuse absent evidence, duplicate evidence and crossed semantic context" in {
-        Given("raw judgments with incomplete provenance or the wrong requested context")
+      "refuse absent evidence and duplicate evidence" in {
+        Given("raw judgments with incomplete evidence for the requested semantic task")
         val prepared = take(R.prepareC(_context, _pending(), _result))
         val judgment = _judgment(prepared)
         val invalid = Vector(
-          judgment.copy(context = _context.copy(revision = "2")), judgment.copy(evidence = Vector.empty),
+          judgment.copy(evidence = Vector.empty),
           judgment.copy(evidence = judgment.evidence ++ judgment.evidence), judgment.copy(evidence = Vector(null)),
           judgment.copy(assignments = null), judgment.copy(rationale = ""), judgment.copy(decision = null), null
         )
 
         When("the malformed semantic responses reach their admission boundary")
-        val results = invalid.map(value => R.admitC(prepared, prepared.pending.selection, _result, _references, value))
+        val results = invalid.map(value => R.admitC(prepared, _result, _references, value))
 
         Then("no response is promoted to an admitted classification")
         results.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -291,7 +305,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         val judgment = _judgment(prepared).copy(decision = R.Decision.DecisionNeeded, assignments = Vector.empty)
 
         When("Workflow admits a complete decision-needed response with no resolution references")
-        val result = take(R.admitC(prepared, prepared.pending.selection, _result,
+        val result = take(R.admitC(prepared, _result,
           R.ResolutionReferences(None, None), judgment)).asInstanceOf[R.DecisionNeeded]
 
         Then("the original full request and result evidence remain available without a fabricated objective or Human interaction")
@@ -307,9 +321,9 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         val judgment = _judgment(prepared).copy(decision = R.Decision.DecisionNeeded)
 
         When("partial assignments and replacement data are separately admitted as DecisionNeeded")
-        val assignments = R.admitC(prepared, prepared.pending.selection, _result,
+        val assignments = R.admitC(prepared, _result,
           R.ResolutionReferences(None, None), judgment)
-        val references = R.admitC(prepared, prepared.pending.selection, _result,
+        val references = R.admitC(prepared, _result,
           _references, judgment.copy(assignments = Vector.empty))
 
         Then("neither path can enter the deterministic objective continuation")
@@ -330,7 +344,7 @@ final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Mat
         prepared shouldBe a[Consequence.Failure[?]]
         continued shouldBe a[Consequence.Failure[?]]
         assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitReasoningSemantic.Prepared(null, null)")
-        assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitReasoningSemantic.Admitted(null, null, null, null, null)")
+        assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitReasoningSemantic.Admitted(null, null, null, null)")
         assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.ReasoningContinued(null, null)")
       }
     }

@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
@@ -9,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
  * @since   Sep. 28, 2026
  * @version Oct.  8, 2026
  */
-final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with Matchers {
+final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncMergeValidationAssessment as V
   import RepositorySyncMergeReviewAdmission as R
   import java.time.Instant
@@ -397,7 +398,7 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
   private val now = Instant.parse("2026-09-28T00:00:00Z")
   private def review(reference: String, disposition: R.Disposition = R.Disposition.Accept,
     findings: Vector[R.Finding] = Vector.empty) = R.Review(reference, now.minusSeconds(60),
-      now.plusSeconds(3600), disposition, findings, "review rationale", "8" * 64)
+      disposition, findings, "review rationale")
 
   "RepositorySync pending merge review CAM" should {
     "reuse a fresh full-merge review supplied initially or later without issuing semantic work" in {
@@ -435,7 +436,8 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
       }
     }
 
-    "enforce caller-supplied time and full review even when no product test is selected" in {
+    "retain applicable full review before its event time and after former expiry even without product tests" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R1; Example: E1; a documentation-only merge with full review")
       val f = new Fixture(mergePaths = Vector("README.md"))
       f.changes = Vector(V.Change("README.md", V.ChangeKind.Documentation, Vector.empty))
       f.expectedChecks = Vector.empty
@@ -444,17 +446,19 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
         review(submission.candidate.reference.revision), R.Scope.FullMerge, "reviewer-1"))
       take(R.assessC(submission, now)).accepted shouldBe false
       take(R.assessC(submission, evidence.payload.value.reviewedAt, Vector(evidence))).accepted shouldBe true
-      take(R.assessC(submission, evidence.payload.value.validUntil, Vector(evidence))).accepted shouldBe true
+      When("observation occurs before the event time or after the former expiry")
       Vector(now.minusSeconds(120), now.plusSeconds(7200)).foreach { instant =>
         val assessed = take(R.assessC(submission, instant, Vector(evidence)))
-        assessed.evaluation.gaps.head.defects should contain (EvidenceDefect.Stale)
+        Then("time alone does not invalidate otherwise applicable evidence")
+        assessed.accepted shouldBe true
       }
       R.assessC(submission, null, Vector(evidence)) shouldBe a[Consequence.Failure[?]]
       val malformed = evidence.copy(payload = evidence.payload.copy(value = evidence.payload.value.copy(rationale = "")))
       take(R.assessC(submission, now, Vector(malformed))).accepted shouldBe false
     }
 
-    "re-admit validation and candidate identities before consuming review evidence" in {
+    "retain selected candidate references while checking actual validation type and repository scope" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R2; Example: E6; a retained validated candidate")
       val f = new Fixture
       val validated = take(f.validate())
       val submission = take(R.submissionC("merge-review-1", validated))
@@ -462,8 +466,17 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
       val weak = submission.copy(candidate = submission.candidate.copy(payload = submission.candidate.payload.copy(
         value = validated.copy(plan = validated.plan.copy(selectedChecks = Vector.empty)))))
       R.assessC(weak, now) shouldBe a[Consequence.Failure[?]]
+      submission.candidate.reference.revision shouldBe "merge-review-1"
+      When("an explicitly selected legacy address is read without recomputing its content proof")
+      val legacy = submission.copy(candidate = submission.candidate.copy(reference =
+        submission.candidate.reference.copy(revision = "0" * 64)))
+      val evidence = take(R.evidenceC("old-review", legacy.candidate.reference,
+        review(legacy.candidate.reference.revision), R.Scope.FullMerge, "reviewer-1"))
+      Then("the selected address survives and actual target/type conflicts still fail")
+      take(R.assessC(legacy, now, Vector(evidence))).accepted shouldBe true
+      take(RepositorySyncMergeReviewBoundary.requestC(legacy)).candidateRevision shouldBe "0" * 64
       R.assessC(submission.copy(candidate = submission.candidate.copy(reference =
-        submission.candidate.reference.copy(revision = "0" * 64))), now) shouldBe a[Consequence.Failure[?]]
+        submission.candidate.reference.copy(identity = "other-repository:pending-merge"))), now) shouldBe a[Consequence.Failure[?]]
       R.assessC(submission.copy(candidate = submission.candidate.copy(payload =
         submission.candidate.payload.copy(typeIdentity = "other-candidate"))), now) shouldBe a[Consequence.Failure[?]]
       R.assessC(null, now) shouldBe a[Consequence.Failure[?]]
@@ -502,9 +515,8 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
       val evidence = take(R.evidenceC("review-1", submission.candidate.reference, validReview, R.Scope.FullMerge, "reviewer-1"))
       R.assessC(submission.copy(evidence = Vector(evidence)), now,
         Vector(evidence.copy(identity = "review-2"))) shouldBe a[Consequence.Failure[?]]
-      val invalid = Vector(null, validReview.copy(reviewedRevision = "bad"), validReview.copy(reviewedAt = null),
-        validReview.copy(validUntil = now.minusSeconds(120)), validReview.copy(disposition = null),
-        validReview.copy(findings = null), validReview.copy(evidenceDigest = "bad"),
+      val invalid = Vector(null, validReview.copy(reviewedRevision = ""), validReview.copy(reviewedAt = null),
+        validReview.copy(disposition = null), validReview.copy(findings = null),
         validReview.copy(findings = Vector(null)), validReview.copy(rationale = null))
       invalid.foreach(value => R.evidenceC("review-1", submission.candidate.reference, value,
         R.Scope.FullMerge, "reviewer-1") shouldBe a[Consequence.Failure[?]])
@@ -516,12 +528,14 @@ final class RepositorySyncMergeValidationAssessmentSpec extends AnyWordSpec with
         R.Scope.FullMerge, "") shouldBe a[Consequence.Failure[?]]
     }
 
-    "invalidate the old review when validation receipts or declared review policy change" in {
+    "distinguish a new selected target from changed diagnostic receipts at the same target" in {
       val f = new Fixture
       val submission = take(R.submissionC("merge-review-1", take(f.validate())))
       val evidence = take(R.evidenceC("review-1", submission.candidate.reference,
         review(submission.candidate.reference.revision), R.Scope.FullMerge, "reviewer-1"))
       f.validationTransform = _.copy(inspectionDigest = "0" * 64)
+      val unchangedTarget = take(R.submissionC("merge-review-1", take(f.validate())))
+      take(R.assessC(unchangedTarget, now, Vector(evidence))).accepted shouldBe true
       val revalidated = take(R.submissionC("merge-review-2", take(f.validate())))
       take(R.assessC(revalidated, now, Vector(evidence))).evaluation.gaps.head.defects should contain (EvidenceDefect.WrongTarget)
       f.validationTransform = identity

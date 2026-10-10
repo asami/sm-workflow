@@ -6,12 +6,12 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPreparation as T,
   SplitPhaseExplicitPartitionContext as C, SplitPhaseExplicitPartitionSemantic as S,
-  SplitPhaseExplicitPlanningAdvance as W, SplitPhaseTypedPartitionWorkIssue as I}
+  SplitPhaseExplicitPlanningAdvance as W}
 
 /** Pure result boundary. Neither decoded results nor allocation data can create
   * Pending/Plan; publication remains the canonical host's responsibility.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseTypedPartitionCompletion {
   final case class Allocation(result: S.ResultReference, resolutions: S.ResolutionReferences)
@@ -33,71 +33,6 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
       wire <- _wait_c(plan.pending, plan.submitted, Some(mechanical), plan.next)
     } yield new Plan(plan.pending, plan.submitted, plan.semantic, Some(mechanical), plan.next, plan.closing, wire)
 
-  /** Observe an explicit stored planning version. Neither current host policy
-    * nor either allocator is consulted to recover this mechanical continuation.
-    */
-  def recoverPlanningC(plan: Plan, data: Option[W.Data]): Consequence[Plan] =
-    if (plan == null || data == null) Consequence.stateConflict("SplitPhase stored planning observation is incomplete")
-    else plan.mechanical match {
-      case Some(need: W.AllocationRequired) => data match {
-        case Some(value) => for {
-          allocated <- SplitPhaseCandidateAllocationPolicy.recoverC(need,
-            S.ResultReference(plan.submitted.resultReference.identity, plan.submitted.resultReference.revision), value)
-          recovered <- continueAllocatedC(plan, allocated)
-        } yield recovered
-        case None => Consequence.stateConflict("SplitPhase retained mechanical allocation dataset is absent")
-      }
-      case _ if data.isEmpty => Consequence.success(plan)
-      case _ => Consequence.stateConflict("SplitPhase stored planning version has no matching mechanical allocation need")
-    }
-
-  /** Reconstruct from the actual durable history and retained raw result, never
-    * from an allocator retry or a supplied completed snapshot. Later legitimate
-    * native history is preserved and does not select a different completion.
-    */
-  def recoverC(raw: C.Record, facts: C.Facts, start: T.Prepared, current: InstanceRecord,
-    issued: WorkflowInteraction[S.Request, Nothing], retained: WorkflowCompletionRecordJsonV1.Record[S.Judgment],
-    configuration: Configuration, catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[Plan] =
-    if (raw == null || raw.owner == null || raw.owner.instanceRevision == null ||
-        current == null || retained == null || retained.instanceRevision == null ||
-        raw.owner.instanceRevision.value > Long.MaxValue - 2L ||
-        retained.instanceRevision.value != raw.owner.instanceRevision.value + 2L)
-      Consequence.stateConflict("SplitPhase recovery requires its exact adjacent retained completion")
-    else for {
-      actual <- current.validateC
-      prefix <- _completed_prefix_c(actual, retained.instanceRevision)
-      _ <- if (prefix.history.size >= 3) Consequence.unit
-        else Consequence.stateConflict("SplitPhase recovery lacks original suspended history")
-      suspended = _prefix_record(prefix, prefix.history.dropRight(1))
-      pending <- pendingC(raw, facts, start, suspended, issued, configuration, catalog)
-      plan <- admitC(pending, retained.result)
-      _ <- if (retained.closingResult.contains(plan.closing) &&
-          SplitPhaseDefinitionBinding.sameRecord(prefix, plan.next)) Consequence.unit
-        else Consequence.stateConflict("SplitPhase retained closing value or completed history differs")
-    } yield plan
-
-  def verifyCompletedPrefixC(plan: Plan, current: InstanceRecord): Consequence[Unit] =
-    if (plan == null || current == null) Consequence.stateConflict("SplitPhase completed prefix is absent")
-    else for {
-      actual <- current.validateC
-      prefix <- _completed_prefix_c(actual, plan.next.revision)
-      _ <- if (SplitPhaseDefinitionBinding.sameRecord(prefix, plan.next)) Consequence.unit
-        else Consequence.stateConflict("SplitPhase native completed prefix differs from reconstructed Plan")
-    } yield ()
-
-  private def _completed_prefix_c(current: InstanceRecord, revision: InstanceRevision): Consequence[InstanceRecord] = {
-    val index = current.history.indexWhere(_.revision == revision)
-    if (index < 0) Consequence.stateConflict("SplitPhase retained revision is absent from native history")
-    else _prefix_record(current, current.history.take(index + 1)).validateC
-  }
-
-  private def _prefix_record(current: InstanceRecord, history: Vector[HistoryEntry]): InstanceRecord = {
-    val last = history.last
-    current.copy(revision = last.revision, lifecycle = last.lifecycle, currentProgression = last.currentProgression,
-      correlation = last.correlation, causation = last.causation, derivedCompositeOccurrence = last.derivedCompositeOccurrence,
-      committedPredecessor = last.committedPredecessor, suspension = last.suspension, history = history)
-  }
-
   def pendingC(raw: C.Record, facts: C.Facts, start: T.Prepared, current: InstanceRecord,
     issued: WorkflowInteraction[S.Request, Nothing], configuration: Configuration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[Pending] =
@@ -116,10 +51,7 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
         case _ => Consequence.stateConflict("SplitPhase pending requires its canonical issued reply")
       }
       allocated <- SplitPhasePartitionReplyAllocationPolicy.observeIssuedC(binding, reply)
-      expected <- I.prepareC(binding, allocated)
-      _ <- if (SplitPhaseDefinitionBinding.sameRecord(expected.projected, actual) && expected.interaction == issued)
-        Consequence.unit else Consequence.stateConflict("SplitPhase completion differs from its exact issued work or suspended history")
-    } yield new Pending(binding, actual, issued, Allocation(reply.result, reply.resolutions))
+    } yield new Pending(binding, actual, issued, Allocation(allocated.reply.result, allocated.reply.resolutions))
 
   def admitC(pending: Pending, submitted: ContinuationResult[S.Judgment]): Consequence[Plan] =
     if (pending == null ||
@@ -137,9 +69,9 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
         case S.Decision.DecisionNeeded => S.ResolutionReferences(None, None)
         case _ => allocation.resolutions
       }
-      semantic <- S.admitC(context.semantic, context.selection, allocation.result, refs, submitted.result.value)
+      semantic <- S.admitC(context.semantic, allocation.result, refs, submitted.result.value)
       mechanical <- semantic match {
-        case enriched: S.Enriched => S.resumeC(enriched.admitted, context.selection.data, context.selection.data).map(Some(_))
+        case enriched: S.Enriched => S.resumeC(enriched.admitted, context.selection.data).map(Some(_))
         case _: S.DecisionNeeded => Consequence.success(None)
       }
       current = pending.current
@@ -150,6 +82,12 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
       closing = StateMachineOperationResult(closingType, submitted.resultReference)
       wire <- _wait_c(pending, submitted, mechanical, next)
     } yield new Plan(pending, submitted, semantic, mechanical, next, closing, wire)
+
+  /** Response projection only. The owning managed completion supplies its
+    * committed native state; this is not admission or a second completion.
+    */
+  def committedWireC(plan: Plan, instance: InstanceRecord): Consequence[String] =
+    _wait_c(plan.pending, plan.submitted, plan.mechanical, instance)
 
   private def _wait_c(pending: Pending, submitted: ContinuationResult[S.Judgment],
     mechanical: Option[W.Outcome], next: InstanceRecord): Consequence[String] = {

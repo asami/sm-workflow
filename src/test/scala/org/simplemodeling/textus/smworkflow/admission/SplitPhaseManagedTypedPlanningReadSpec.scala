@@ -171,10 +171,25 @@ final class SplitPhaseManagedTypedPlanningReadSpec extends AnyWordSpec with Matc
                   (collection("selections"), selection.selectionId, ProfileSelectionJsonV1.storageField,
                     take(ProfileSelectionJsonV1.encodeStorageC(selection.copy(recommendationReference = Some("changed")))),
                     take(ProfileSelectionJsonV1.encodeStorageC(selection))))
-                changes.foreach { case (c, id, field, changed, original) =>
+                changes.zipWithIndex.foreach { case ((c, id, field, changed, original), index) =>
+                  Given("one current input changed under its selected reference")
                   take(installer.writeC(c, id, Record.data(field -> changed), true))
-                  port.prepareForCallC(record.reference, capsule).isSuccess shouldBe false
-                  port.bindPlanningForCallC(context.reference, capsule).isSuccess shouldBe false
+                  When("fresh Start preparation and planning binding consume the actual current value")
+                  val prepared = port.prepareForCallC(record.reference, capsule)
+                  val bound = port.bindPlanningForCallC(context.reference, capsule)
+                  Then("incompatible authority is refused while compatible current data are carried forward")
+                  if (index == 0) {
+                    prepared.isSuccess shouldBe false
+                    bound.isSuccess shouldBe false
+                  } else {
+                    val actual = take(prepared).get.record
+                    val planning = take(bound).get
+                    planning.start.record shouldBe actual
+                    if (index == 1) {
+                      actual.proposal.get.children.head.expectedMinutes shouldBe 361
+                      planning.context.selection.partition.boundary.shape.records.proposal shouldBe actual.proposal.get
+                    } else actual.selection.recommendationReference shouldBe Some("changed")
+                  }
                   take(installer.writeC(c, id, Record.data(field -> original), true))
                 }
                 take(port.bindPlanningForCallC(context.reference, capsule)).get.start.record shouldBe record

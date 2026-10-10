@@ -11,7 +11,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value.{RepositorySyncMergeReviewRequest, RepositorySyncMergeValidationAdmissionCommand}
-import RepositorySyncMergeValidationAssessment.{digest, name}
+import RepositorySyncMergeValidationAssessment.name
 
 /** A declared full-merge review gap becomes a common Continuation only after
   * exact retained validation/history admission. The host persists the projected
@@ -45,9 +45,11 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
     if (submission == null || submission.candidate == null || submission.candidate.payload == null)
       Consequence.stateConflict("RepositorySync retained review candidate is missing")
     else for {
-      admitted <- RepositorySyncMergeReviewAdmission.submissionC(submission.identity, submission.candidate.payload.value)
-      _ <- if (admitted.candidate == submission.candidate) Consequence.unit
-        else Consequence.stateConflict("RepositorySync retained review candidate differs")
+      admitted <- submission.validateC
+      validated <- RepositorySyncMergeValidationAssessment.readmitC(admitted.candidate.payload.value)
+      _ <- if (admitted.candidate.payload.typeIdentity == RepositorySyncMergeReviewAdmission.candidateType &&
+          admitted.candidate.reference.identity == s"${validated.plan.context.boundary.snapshot.repositoryIdentity}:pending-merge")
+        Consequence.unit else Consequence.stateConflict("RepositorySync retained review candidate has incompatible scope or type")
     } yield _request(admitted)
 
   private def _request(submission: RepositorySyncMergeReviewAdmission.Submission): RepositorySyncMergeReviewRequest = {
@@ -103,10 +105,12 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
     reviewOperation: StateMachineRequiredOperation,
     selections: ProfileStartAdmission.SelectionPort,
     mappings: RepositorySyncStartExecution.TrackingMappingPort,
-    configuration: Configuration
+    configuration: Configuration,
+    savedContinuation: Option[org.goldenport.cncf.workflow.ContinuationIdentity] = None
   ): Consequence[Planned] =
     if (!_command(command) || instance == null || submission == null ||
-        submission.candidate == null || submission.candidate.payload == null)
+        submission.candidate == null || submission.candidate.payload == null ||
+        savedContinuation == null || savedContinuation.exists(value => value == null || !name(value.value)))
       Consequence.stateConflict("RepositorySync review command or instance is incomplete")
     else for {
       declared <- RepositorySyncDefinitionBinding.bindC
@@ -143,10 +147,9 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
         else Consequence.stateConflict("RepositorySync review routing is ambiguous")
     } yield Planned(assessed, routed.headOption.map { resolution =>
       val target = assessed.evaluation.target
-      val reviewKey = digest(Vector(submission.identity, target.revision, validated.digest, provided.runId.value))
       val input = _request(submission)
       new PendingReview(Continuation(provided.runId,
-        org.goldenport.cncf.workflow.ContinuationIdentity(s"${active.identity.value}:8:$reviewKey:merge-review"),
+        savedContinuation.getOrElse(org.goldenport.cncf.workflow.ContinuationIdentity(s"${active.identity.value}:8:merge-review")),
         StateMachineRevision("8"), resolution.target.asInstanceOf[Target.SemanticAction].operation,
         provided.context), TypedValue("RepositorySyncMergeReviewRequest", input), active, target.revision)
     })
@@ -199,7 +202,13 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
       _ <- if (_sameDefinition(suspended.definition, declared)) Consequence.unit
         else Consequence.stateConflict("RepositorySync review WorkOrder definition changed")
       claim <- runtime.recoverClaimC(pending.continuation.continuationId)
-      _ <- if (claim != null && claim.continuation == pending.continuation) Consequence.unit
+      _ <- if (claim != null && claim.continuation != null &&
+          claim.continuation.runId == pending.continuation.runId &&
+          claim.continuation.continuationId == pending.continuation.continuationId &&
+          claim.continuation.expectedRevision == pending.continuation.expectedRevision &&
+          claim.continuation.requiredOperation == pending.continuation.requiredOperation &&
+          claim.continuation.context != null && GoalPhaseClosureAuthority.sameContextScope(
+            claim.continuation.context.snapshot, pending.continuation.context.snapshot)) Consequence.unit
         else Consequence.stateConflict("RepositorySync claimed review differs from retained provenance")
       handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, suspended)
       work <- WorkflowProtocolV1.issueRecoveredWorkOrderC(handle, pending.continuation.continuationId,
@@ -207,14 +216,10 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
         requirement, presentation, runtime, issued)
     } yield work
 
-  // DefinitionBinding is an opaque class, not a value-equality case class.
-  // Rehydration must compare every public admitted fact rather than references.
+  // Rehydration resolves the execution definition; diagnostic metadata is not
+  // a certificate of unchanged content.
   private[admission] def _sameDefinition(left: DefinitionBinding, right: DefinitionBinding): Boolean =
-    left != null && right != null && left.workflowIdentity == right.workflowIdentity &&
-      left.workflowRevision == right.workflowRevision && left.sourceCorrelation == right.sourceCorrelation &&
-      left.producerAbiIdentity == right.producerAbiIdentity && left.workflowAbiIdentity == right.workflowAbiIdentity &&
-      left.bootstrapAbiIdentity == right.bootstrapAbiIdentity && left.producerRevision == right.producerRevision &&
-      left.fixtureSha256 == right.fixtureSha256
+    SplitPhaseDefinitionBinding.sameDefinition(left, right)
 
   private[admission] def _sameRecord(left: InstanceRecord, right: InstanceRecord): Boolean =
     left != null && right != null && _sameDefinition(left.definition, right.definition) &&
@@ -267,7 +272,6 @@ private[smworkflow] object RepositorySyncMergeReviewBoundary {
       provided.context != null && provided.context.summary != null &&
       provided.context.summary.trim.nonEmpty && provided.context.snapshot != null &&
       provided.context.snapshot.workflowRevision == provided.workflowRevision &&
-      provided.context.snapshot.evidenceRevision == Some(validated.digest) &&
       provided.context.snapshot.modelRevision == Some(validated.plan.policy.reviewPolicyVersion) &&
       provided.context.requiredFacts != null && provided.context.references != null &&
       (provided.context.requiredFacts ++ provided.context.references).forall(reference =>

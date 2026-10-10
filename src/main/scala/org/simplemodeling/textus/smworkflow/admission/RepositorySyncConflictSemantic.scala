@@ -37,7 +37,8 @@ private[smworkflow] object RepositorySyncConflictSemantic {
     }
   } yield ()
 
-  private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
+  private final class Codec[A](val typeIdentity: String, schema: String, shape: Json => Boolean,
+    normalize: Json => Json = (value: Json) => value)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, A] = for {
@@ -45,15 +46,35 @@ private[smworkflow] object RepositorySyncConflictSemantic {
         .flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
         .toRight("Native conflict payload envelope is missing, oversized or incompatible")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Native conflict payload schema differs")
-      parsed <- root("payload").get.as[A].left.map(_.message)
-      // Typed shape admission, not a stored byte snapshot or an unchanged-input
-      // certificate. Circe object equality ignores member presentation order.
-      _ <- Either.cond(encode(parsed) == value, (), "Native conflict payload has undeclared nested fields")
+      body = root("payload").get
+      _ <- Either.cond(shape(body), (), "Native conflict payload has undeclared or missing nested fields")
+      parsed <- normalize(body).as[A].left.map(_.message)
     } yield parsed
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[I.Request] =
-    new Codec[I.Request]("RepositorySyncConflictRequest", "sm-workflow.repository-sync-conflict-request.v1")
+    new Codec[I.Request]("RepositorySyncConflictRequest", "sm-workflow.repository-sync-conflict-request.v1", requestShape, normalizeRequest)
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
-    new Codec[Result]("RepositorySyncConflictResult", "sm-workflow.repository-sync-conflict-result.v1")
+    new Codec[Result]("RepositorySyncConflictResult", "sm-workflow.repository-sync-conflict-result.v1", resultShape)
+
+  // Admission checks declared fields directly, once. It does not recreate an
+  // encoded payload to certify that old storage matches today's producer.
+  private[admission] def exact(value: Json, required: Set[String], optional: Set[String] = Set.empty): Boolean =
+    Option(value).flatMap(_.asObject).exists(o => required.subsetOf(o.keys.toSet) && o.keys.toSet.subsetOf(required ++ optional))
+  private[admission] def requestShape(value: Json): Boolean =
+    exact(value, Set("instanceIdentity", "conflictRevision", "localTip", "remoteTip", "conflicts")) &&
+      value.hcursor.downField("conflicts").focus.flatMap(_.asArray).exists(_.forall { c =>
+        exact(c, Set("identity", "path", "base", "local", "remote"), Set("mode", "worktree")) &&
+          Vector("base", "local", "remote").forall(k => c.hcursor.downField(k).focus.exists(exact(_, Set("identity", "text"))))
+      })
+  private[admission] def resolutionShape(value: Json): Boolean = exact(value, Set("conflictIdentity", "text"))
+  private[admission] def resultShape(value: Json): Boolean =
+    exact(value, Set("decision", "resolutions", "rationale")) &&
+      value.hcursor.downField("resolutions").focus.flatMap(_.asArray).exists(_.forall(resolutionShape))
+  private[admission] def normalizeRequest(value: Json): Json = value.mapObject { root =>
+    root.add("conflicts", root("conflicts").get.mapArray(_.map(_.mapObject { fields =>
+      val mode = if (fields.contains("mode")) fields else fields.add("mode", Json.fromString("100644"))
+      if (mode.contains("worktree")) mode else mode.add("worktree", Json.fromString(""))
+    })))
+  }
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync conflict semantic " + reason)
 }

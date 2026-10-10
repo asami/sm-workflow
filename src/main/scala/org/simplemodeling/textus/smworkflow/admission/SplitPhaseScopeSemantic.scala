@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
   * issue, current checkpoint, planner capability or authority.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseScopeSemantic {
   final case class Gap(original: B.Handoff, producingItems: Vector[P.WorkItemIdentity],
@@ -20,7 +20,7 @@ private[smworkflow] object SplitPhaseScopeSemantic {
   final case class Scope(handoff: B.HandoffIdentity, producingItems: Vector[P.WorkItemIdentity],
     receivingItems: Vector[P.WorkItemIdentity], rationale: String)
   enum Decision { case Enriched, DecisionNeeded }
-  final case class Judgment(context: S.ContextReference, checkpoint: K.Reference, decision: Decision,
+  final case class Judgment(decision: Decision,
     rationale: String, scopes: Vector[Scope], evidence: Vector[S.EvidenceReference])
   final class Admitted private[SplitPhaseScopeSemantic] (val request: Request, val judgment: Judgment)
 
@@ -65,12 +65,12 @@ private[smworkflow] object SplitPhaseScopeSemantic {
     */
   def inspectC(request: Request, result: ContextReference, judgment: Judgment): Consequence[Unit] = for {
     _ <- _request_shape_c(request)
-    _ <- if (judgment != null && judgment.context == request.context && judgment.checkpoint == request.checkpoint &&
+    _ <- if (judgment != null &&
         result == ContextReference(request.result.identity, request.result.revision) && judgment.decision != null &&
         _name(judgment.rationale) && judgment.scopes != null && judgment.evidence != null &&
         judgment.evidence.nonEmpty && judgment.evidence.distinct == judgment.evidence &&
         judgment.evidence.forall(e => e != null && _name(e.identity) && _name(e.revision))) Consequence.unit
-      else _invalid("result context, checkpoint, host reference, rationale or evidence differs")
+      else _invalid("host reference, rationale or evidence is incomplete or crossed")
     _ <- judgment.decision match {
       case Decision.DecisionNeeded if judgment.scopes.isEmpty => Consequence.unit
       case Decision.Enriched => _inspect_scopes_c(request, judgment.scopes)

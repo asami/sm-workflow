@@ -17,7 +17,7 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhasePartitionEnrichmentPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _binding = take(T.bindPartitionC(prepared, partition))
@@ -28,7 +28,7 @@ final class SplitPhasePartitionEnrichmentPublicationSpec extends AnyWordSpec wit
     val work = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
     val request = work.input.get.value
     val enriched = decision == S.Decision.Enriched
-    val judgment = S.Judgment(request.context, decision, "explicit-semantic-only",
+    val judgment = S.Judgment(decision, "explicit-semantic-only",
       if (enriched) request.items.map(i => S.NovelEstimate(i.identity, 120, 180, "bounded", "novel-closure")) else Vector.empty,
       if (enriched) request.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
         SplitPhasePartitionEnumeration.EdgeDisposition.Either, "independent-closure")) else Vector.empty,
@@ -76,61 +76,16 @@ final class SplitPhasePartitionEnrichmentPublicationSpec extends AnyWordSpec wit
         edges = plan.semantic.asInstanceOf[S.Enriched].admitted.resolvedEdges)
       projected.handoffs.get.edges.map(_.authority) shouldBe facts.boundary.handoffs.edges.map(_.authority)
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePartitionEnrichmentPublication.Projection(null, None, None, None, Vector.empty)")
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePartitionEnrichmentPublication.Recovered(null, null)")
       U.projectC(null).isSuccess shouldBe false
-    }
-
-    "construct usable recovery only after complete row comparison and preserve later native history" in {
-      Given("the expected publication and its complete independently observed rows")
-      val plan = _plan()
-      val expected = take(U.projectC(plan)).get
-      val entry = plan.next.history.last.copy(sequence = HistorySequence(4), revision = InstanceRevision(4),
-        causation = CausationReference("later-native-operation"))
-      val later = take(plan.next.appendC(plan.next.revision, entry))
-      When("the current native instance includes a legitimate later entry")
-      val recovered = take(U.verifyC(plan, later, Some(expected.record), expected.estimates, expected.handoffs,
-        expected.planning, expected.candidates))
-      Then("recovery retains the current history without allocation, rollback or another semantic result")
-      recovered.current shouldBe later
-      recovered.plan shouldBe plan
-      recovered.plan.next.revision shouldBe InstanceRevision(3)
-      recovered.plan.mechanical shouldBe plan.mechanical
-      U.verifyC(plan, later, None, expected.estimates, expected.handoffs, expected.planning, expected.candidates).isSuccess shouldBe false
-      U.verifyC(plan, later, Some(expected.record.copy(completedRevision = 4)), expected.estimates, expected.handoffs,
-        expected.planning, expected.candidates)
-        .isSuccess shouldBe false
-      U.verifyC(plan, later, Some(expected.record), expected.estimates.map(e => e.copy(reference = e.reference.copy(revision = "2"))),
-        expected.handoffs, expected.planning, expected.candidates).isSuccess shouldBe false
-      val changed = expected.estimates.map(e => e.copy(items = e.items.updated(0, e.items.head.copy(duration = E.Duration.Known(1)))))
-      U.verifyC(plan, later, Some(expected.record), changed, expected.handoffs, expected.planning, expected.candidates).isSuccess shouldBe false
-      val crossed = expected.handoffs.map(h => h.copy(edges = h.edges.updated(0,
-        h.edges.head.copy(authority = h.edges.head.authority.copy(revision = "2")))))
-      U.verifyC(plan, later, Some(expected.record), expected.estimates, crossed, expected.planning, expected.candidates).isSuccess shouldBe false
-      U.verifyC(plan, plan.pending.current, Some(expected.record), expected.estimates, expected.handoffs,
-        expected.planning, expected.candidates).isSuccess shouldBe false
-      U.verifyC(plan, later, Some(expected.record), expected.estimates, expected.handoffs, None, expected.candidates)
-        .isSuccess shouldBe false
-      val alteredplanning = expected.planning.map(p => p.copy(authority = p.authority.copy(revision = "foreign")))
-      U.verifyC(plan, later, Some(expected.record), expected.estimates, expected.handoffs, alteredplanning, expected.candidates)
-        .isSuccess shouldBe false
-      if (expected.candidates.nonEmpty) {
-        val candidate = expected.candidates.head
-        val altered = expected.candidates.updated(0, candidate.copy(ownership = candidate.ownership.copy(
-          reference = candidate.ownership.reference.copy(revision = "foreign"))))
-        U.verifyC(plan, later, Some(expected.record), expected.estimates, expected.handoffs, expected.planning, altered)
-          .isSuccess shouldBe false
-      }
     }
 
     "publish no enrichment rows for unresolved human direction" in {
       Given("a completion admitting DecisionNeeded with no partial semantic answer")
       val plan = _plan(S.Decision.DecisionNeeded)
-      When("publication is projected and recovery checks its empty set")
+      When("publication projects that selected semantic disposition")
       take(U.projectC(plan)) shouldBe None
-      val recovered = take(U.verifyC(plan, plan.next, None, None, None, None, Vector.empty))
       Then("the original human-direction need survives without fabricated enrichment")
-      recovered.plan.mechanical shouldBe None
-      U.verifyC(plan, plan.next, None, Some(facts.partition.estimates), None, None, Vector.empty).isSuccess shouldBe false
+      plan.mechanical shouldBe None
     }
 
     "close every raw field and exact version without decoding an admitted recovery state" in {

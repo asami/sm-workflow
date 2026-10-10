@@ -65,10 +65,10 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
   private val instance = "test-selected-apply"
   private def fixture(minutes: Vector[Int] = Vector(360, 360)): Fixture = {
     val s = base(minutes)
-    val input = take(E.loadC(s.initial, s.records, s.records))
+    val input = take(E.loadC(s.initial, s.records))
     val data = W.Data(W.DataReference("document-effect-input", "1"), s.source.reference, s.source.authority,
       None, O.Records(None, None, None))
-    val need = take(W.advanceC(take(W.selectC(input, data, data)))).asInstanceOf[W.AllocationRequired]
+    val need = take(W.advanceC(take(W.selectC(input, data)))).asInstanceOf[W.AllocationRequired]
     val selected = take(W.continueMechanicalAllocatedC(take(SplitPhaseCandidateAllocationFixture.policy
       .allocateMechanicalC(need, M.Reference("document-effect", "1")))))
     val snapshot = take(R.projectC(selected)).record

@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Passive successor examples use actual constructed pure scope inputs only.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct.  9, 2026
   */
 final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _fixture(): (W.ProjectionRequired, K.Record, S.Request) = {
@@ -24,12 +24,12 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
     val template = proof(source, candidate, "successor-template", handoffPairs = Vector(0 -> 1))
     val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, template).record
     val facts = checkpoint.snapshot.selection
-    val selection = take(W.selectC(take(E.loadC(template, facts.partition, facts.partition)), facts.planning, facts.planning))
+    val selection = take(W.selectC(take(E.loadC(template, facts.partition)), facts.planning))
     val need = take(W.advanceC(selection)).asInstanceOf[W.ProjectionRequired]
     (need, checkpoint, take(S.requestC(checkpoint)))
   }
   private def _reply(request: S.Request, broad: Boolean): S.Admitted = take(S.admitC(request,
-    ContextReference(request.result.identity, request.result.revision), S.Judgment(request.context, request.checkpoint,
+    ContextReference(request.result.identity, request.result.revision), S.Judgment(
       S.Decision.Enriched, "original transfer analysis", request.gaps.map(gap => S.Scope(gap.original.identity,
         if (broad) gap.producingItems else gap.producingItems.takeRight(1),
         if (broad) gap.receivingItems else gap.receivingItems.take(1), "necessary items")),
@@ -80,7 +80,7 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
         Given("the actual assigned semantic result requests Human direction without scopes")
         val (need, checkpoint, request) = _fixture()
         val reply = take(S.admitC(request, ContextReference(request.result.identity, request.result.revision),
-          S.Judgment(request.context, request.checkpoint, S.Decision.DecisionNeeded, "human interpretation needed",
+          S.Judgment(S.Decision.DecisionNeeded, "human interpretation needed",
             Vector.empty, Vector(T.EvidenceReference("direction-evidence", "1")))))
         When("that genuine pure outcome is copied")
         val record = take(V.projectC(take(Q.applyScopeC(need, checkpoint, reply))))
@@ -97,10 +97,10 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
         val template = proof(source, candidate, "decision-successor", handoffPairs = Vector(0 -> 1))
         val boundaries = template.records.copy(ownership = template.records.ownership.copy(children =
           template.records.ownership.children.zipWithIndex.map((child, index) => child.copy(repository = B.RepositoryIdentity(s"repo-$index")))))
-        val boundary = take(B.loadC(template.shape, boundaries, boundaries))
+        val boundary = take(B.loadC(template.shape, boundaries))
         val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, boundary).record
         val facts = checkpoint.snapshot.selection
-        val selection = take(W.selectC(take(E.loadC(boundary, facts.partition, facts.partition)), facts.planning, facts.planning))
+        val selection = take(W.selectC(take(E.loadC(boundary, facts.partition)), facts.planning))
         val need = take(W.advanceC(selection)).asInstanceOf[W.ProjectionRequired]
         val request = take(S.requestC(checkpoint))
         val outcome = take(Q.applyScopeC(need, checkpoint, _reply(request, false)))
@@ -129,12 +129,12 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
         val template = proof(source, candidate, "numbering-successor", handoffPairs = Vector(0 -> 1))
         val shapes = template.shape.records.copy(inventory = template.shape.records.inventory.copy(occupiedPhases =
           Set(SplitPhaseExplicitProposalPrecheck.PhaseIdentity("77"), SplitPhaseExplicitProposalPrecheck.PhaseIdentity("77.3"))))
-        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes, shapes))
+        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes))
           .asInstanceOf[SplitPhaseExplicitProposalPrecheck.ShapeReady]
-        val boundary = take(B.loadC(shape, template.records, template.records))
+        val boundary = take(B.loadC(shape, template.records))
         val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, boundary).record
         val facts = checkpoint.snapshot.selection
-        val selection = take(W.selectC(take(E.loadC(boundary, facts.partition, facts.partition)), facts.planning, facts.planning))
+        val selection = take(W.selectC(take(E.loadC(boundary, facts.partition)), facts.planning))
         val need = take(W.advanceC(selection)).asInstanceOf[W.ProjectionRequired]
         val request = take(S.requestC(checkpoint))
         When("the calculated held frontier is copied with its existing numbering records")
@@ -158,8 +158,8 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
           "ownership-successor", handoffPairs = Vector(0 -> 1))
         val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, template).record
         val facts = checkpoint.snapshot.selection
-        val need = take(W.advanceC(take(W.selectC(take(E.loadC(template, facts.partition, facts.partition)),
-          facts.planning, facts.planning)))).asInstanceOf[W.ProjectionRequired]
+        val need = take(W.advanceC(take(W.selectC(take(E.loadC(template, facts.partition)),
+          facts.planning)))).asInstanceOf[W.ProjectionRequired]
         val record = take(V.projectC(take(Q.applyScopeC(need, checkpoint, _reply(take(S.requestC(checkpoint)), false)))))
         val candidates = record.frontier.asInstanceOf[V.Frontier.Applied].candidates
         val index = candidates.indexWhere(_.output match {
@@ -172,11 +172,11 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
           documents.ownership.copy(children = owners.updated(owners.size - 1,
             owners.last.copy(dependencies = Vector(owners.head.phase)))))
         val shapes = SplitPhaseExplicitProposalPrecheck.Records(facts.proposal.source, facts.proposal.inventory, documents.proposal)
-        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes, shapes))
+        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes))
           .asInstanceOf[SplitPhaseExplicitProposalPrecheck.ShapeReady]
         changes.foreach { ownership =>
           val boundary = B.Records(facts.boundary.boundary, ownership, documents.handoffs)
-          take(B.loadC(shape, boundary, boundary))
+          take(B.loadC(shape, boundary))
         }
         When("those leaf-admissible ownership documents replace the calculated candidate")
         val inspected = changes.map(ownership => V.inspectC(record.copy(frontier = V.Frontier.Applied(
@@ -192,13 +192,13 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
           "gap-precedence-successor", handoffPairs = Vector(0 -> 1))
         val shapes = template.shape.records.copy(inventory = template.shape.records.inventory.copy(occupiedPhases =
           Set(SplitPhaseExplicitProposalPrecheck.PhaseIdentity("77"), SplitPhaseExplicitProposalPrecheck.PhaseIdentity("77.3"))))
-        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes, shapes))
+        val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(shapes))
           .asInstanceOf[SplitPhaseExplicitProposalPrecheck.ShapeReady]
-        val boundary = take(B.loadC(shape, template.records, template.records))
+        val boundary = take(B.loadC(shape, template.records))
         val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, boundary).record
         val facts = checkpoint.snapshot.selection
-        val need = take(W.advanceC(take(W.selectC(take(E.loadC(boundary, facts.partition, facts.partition)),
-          facts.planning, facts.planning)))).asInstanceOf[W.ProjectionRequired]
+        val need = take(W.advanceC(take(W.selectC(take(E.loadC(boundary, facts.partition)),
+          facts.planning)))).asInstanceOf[W.ProjectionRequired]
         val request = take(S.requestC(checkpoint))
         val broad = take(V.projectC(take(Q.applyScopeC(need, checkpoint, _reply(request, true)))))
         val narrow = take(V.projectC(take(Q.applyScopeC(need, checkpoint, _reply(request, false)))))
@@ -250,11 +250,11 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
           "local-original-successor", handoffPairs = Vector(0 -> 1))
         val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, template).record
         val facts = checkpoint.snapshot.selection
-        val need = take(W.advanceC(take(W.selectC(take(E.loadC(template, facts.partition, facts.partition)),
-          facts.planning, facts.planning)))).asInstanceOf[W.ProjectionRequired]
+        val need = take(W.advanceC(take(W.selectC(take(E.loadC(template, facts.partition)),
+          facts.planning)))).asInstanceOf[W.ProjectionRequired]
         val request = take(S.requestC(checkpoint))
         val reply = take(S.admitC(request, ContextReference(request.result.identity, request.result.revision),
-          S.Judgment(request.context, request.checkpoint, S.Decision.DecisionNeeded, "human interpretation needed",
+          S.Judgment(S.Decision.DecisionNeeded, "human interpretation needed",
             Vector.empty, Vector(T.EvidenceReference("local-original-evidence", "1")))))
         val record = take(V.projectC(take(Q.applyScopeC(need, checkpoint, reply))))
         val projection = record.first.snapshot.projection.get
@@ -277,13 +277,11 @@ final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Match
         val first = record.first.copy(originalContext = record.first.originalContext.copy(facts =
           record.first.originalContext.facts.copy(boundary = boundary)), snapshot = record.first.snapshot.copy(
             selection = facts.copy(boundary = boundary), projection = Some(projection.copy(candidates = candidates, scopes = scopes))))
-        val partialfirst = K.inspectC(first)
         val partialjudgment = S.requestC(first).flatMap(r => S.inspectC(r,
           ContextReference(record.result.identity, record.result.revision), record.judgment))
         val inspected = V.inspectC(record.copy(first = first))
         val genuine = V.inspectC(record)
         Then("matching shallow facts cannot make the malformed local original complete while genuine Human data remains valid")
-        take(partialfirst) shouldBe ()
         take(partialjudgment) shouldBe ()
         candidates.collectFirst {
           case built: SplitPhasePlanningSnapshot.CandidateProjectionView.BuiltView

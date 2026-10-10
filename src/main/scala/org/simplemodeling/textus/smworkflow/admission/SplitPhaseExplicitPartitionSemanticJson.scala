@@ -14,7 +14,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 /** Application data only. Common envelopes stay CNCF-owned; decoding never
   * constructs Prepared/Admitted or establishes an issued WorkOrder or authority.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
   val maximumPayloadBytes = 1024 * 1024
@@ -25,7 +25,7 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
   private given Decoder[S.Decision] = Decoder.decodeString.emap(value =>
     S.Decision.values.find(_.toString == value).toRight("Unknown explicit partition semantic decision"))
 
-  final class ClosedCodec[A] private[SplitPhaseExplicitPartitionSemanticJson] (
+  final class Codec[A] private[SplitPhaseExplicitPartitionSemanticJson] (
     val schema: String, val typeIdentity: String, serializable: A => Boolean
   )(using Encoder[A], Decoder[A]) extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encodeC(value: A): Consequence[Json] =
@@ -41,15 +41,13 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
       if (value == null || payloadBytes(value) > maximumPayloadBytes)
         Left("Explicit partition semantic payload is absent or oversized")
       else for {
-        root <- value.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload"))
-          .toRight("Explicit partition semantic envelope fields differ")
-        _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Unsupported explicit partition semantic schema")
-        decoded <- root("payload").get.as[A].left.map(_.message)
-        canonical <- encodeC(decoded).toOption.toRight("Explicit partition semantic data is incomplete")
-        _ <- Either.cond(canonical == value, (), "Explicit partition semantic nested fields differ")
+        version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
+        _ <- Either.cond(version == schema, (), "Unsupported explicit partition semantic schema")
+        payload <- value.hcursor.get[Json]("payload").left.map(_.message)
+        decoded <- payload.as[A].left.map(_.message)
       } yield decoded
 
-    /** One checked immutable payload is encoded into exactly one common frame. */
+    /** Encode one application payload into one common frame. */
     private[SplitPhaseExplicitPartitionSemanticJson] def checkedC[R](value: A)(write: WorkflowResultJsonV1.PayloadCodec[A] => Consequence[R]): Consequence[R] =
       encodeC(value).flatMap { json =>
         val owner = this
@@ -61,9 +59,9 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
       }
   }
 
-  val requestCodec = new ClosedCodec[S.Request]("sm-workflow.split-phase-partition-semantic-request.v2",
+  val requestCodec = new Codec[S.Request]("sm-workflow.split-phase-partition-semantic-request.v2",
     "SplitPhasePartitionSemanticRequest", requestData)
-  val resultCodec = new ClosedCodec[S.Judgment]("sm-workflow.split-phase-partition-semantic-result.v1",
+  val resultCodec = new Codec[S.Judgment]("sm-workflow.split-phase-partition-semantic-result.v1",
     "SplitPhasePartitionSemanticResult", judgmentData)
 
   def encodeWorkOrderC(value: WorkflowInteraction[S.Request, Nothing]): Consequence[String] =
@@ -90,7 +88,7 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
     r.reply.resolutions != null && r.reply.resolutions.estimates != null && r.reply.resolutions.handoffs != null &&
     r.reply.resolutions.estimates.forall(x => x != null && x.identity != null && x.revision != null) &&
     r.reply.resolutions.handoffs.forall(x => x != null && x.identity != null && x.revision != null)
-  private def judgmentData(r: S.Judgment): Boolean = r != null && context(r.context) && r.decision != null && r.rationale != null &&
+  private def judgmentData(r: S.Judgment): Boolean = r != null && r.decision != null && r.rationale != null &&
     r.estimates != null && r.estimates.forall(e => e != null && work(e.identity) && e.assumptions != null && e.noveltyBasis != null) &&
     r.boundaries != null && r.boundaries.forall(e => e != null && work(e.afterItem) && e.disposition != null && e.rationale != null) &&
     r.evidence != null && r.evidence.forall(e => e != null && e.identity != null && e.revision != null)

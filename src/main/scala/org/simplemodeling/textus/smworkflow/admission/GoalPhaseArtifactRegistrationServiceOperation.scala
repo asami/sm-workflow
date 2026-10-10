@@ -41,8 +41,6 @@ private[smworkflow] object GoalPhaseArtifactRegistrationServiceOperation {
       request <- GoalPhaseStepCloseJson.decodeC(subject.noSpaces)
       _ <- StepCloseRequestAdapter.submissionC(request).map(_ => ())
       references <- GoalPhaseArtifactReferenceRecord.decodeReferencesC(selection, maximumBytes)
-      _ <- if (references.program.digest == request.programDigest && references.planning.digest == request.planningDigest)
-        Consequence.unit else Consequence.stateConflict("Artifact command content differs from its Step candidate")
     } yield Command(request, references) })
   }
 

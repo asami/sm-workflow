@@ -146,6 +146,74 @@ Cycle limits remain necessary even when the measured trend looks favorable. A so
 
 The resulting principle is: permit bounded exploration and slow convergence, detect widening change surfaces early, preserve AI semantic/self-assessment as separate evidence, and guarantee that automatic Fix cycling always terminates or hands control to an explicit decision/error path.
 
+## Earlier interpretation: ten counted fixes, exclusions and bounded observation
+
+The accounting interpretation below is superseded by the two-counter decision
+that follows. Its bounded-observation decision remains current.
+
+The user selected an initial hard limit of 10 counted Fix cycles. This is a
+backstop for an abnormal/runaway loop during unattended overnight operation,
+expected to be exceptional rather than a normal repair budget. It deliberately
+limits counted repairs even while their trend appears favorable. A successful
+result at the limit can still close; further counted repair enters handoff.
+
+HYGIENE and minor bug corrections do not consume soft/hard cycle counts.
+History-comment adjustments and GWT explanatory-comment insertion/repositioning
+are included in hygiene when executable behavior is unchanged. Large structural
+refactoring is not exempt merely for intending equivalent behavior. Minor bug
+fixes include small compile corrections and local restoration of an already
+agreed behavior; not every SIMPLE_LOGIC change is minor. Record the assessment
+and rationale, without inventing an unchanged-content proof. Mixed substantive
+and exempt work consumes one cycle.
+
+Excluded fixes remain in the actual history and trend evaluation, with normal
+applicable validation. Exclusion must not reset failure history or neutralize
+stalled/diverging/AI-BLOCKED handling. Do not introduce a hidden total-attempt
+limit that counts excluded work again. Count the current logical Fix loop across
+chat/process continuations, not all old fixes accumulated over the project's life.
+
+The user also accepted the present observation level because more exact data
+collection has technical and cost limits. Use the current ConvergenceVector and
+existing validation/provider facts; richer failure identities are useful when
+already available but are not new mandatory instrumentation. Missing values stay
+unknown. Expand bounded AI feedback about progress, remaining issues, temporary
+scope growth and required decisions as operational experience warrants, rather
+than requiring a more elaborate deterministic analyzer now. AI hints stay
+advisory except the existing explicit BLOCKED signal.
+
+This clarifies the earlier blanket hard-limit wording: the bound is on counted
+repair work, not every hygiene/minor revision. Runtime accounting/guard work
+belongs to Phase 5; semantic assessment/hints belong to the Phase 6 skill
+connection; Phase 7 consumes those common paths. This document update does not
+reclassify past receipts, change live counters or mark any implementation tested.
+
+## Final clarification: convergence parameter and absolute automatic-cycle limit
+
+The user identified that excluding hygiene/minor corrections from every limit
+could allow endless automatic repair, then confirmed the separation: ordinary
+repair count is a parameter of convergence judgment; the hard limit always stops
+further automatic repair. This supersedes the earlier exclusion from both limits.
+
+Keep two counts in the same logical Fix loop. Substantive fixes increment the
+ordinary count. Hygiene/minor fixes do not, but their outcomes and repetition
+still affect convergence judgment. Every dispatched Fix batch increments the
+separate automatic-cycle count, regardless of classification. One batch with its
+applicable validation/review is one cycle, not one per file, finding or test run.
+Reserve that cycle at dispatch and retain it across interruption/restart.
+
+The default absolute hard limit is 10 automatic cycles. A successful tenth result
+may close; any further repair requires typed FIX_CYCLE_LIMIT handoff, including
+hygiene/minor-only repair or favorable convergence/AI feedback. No automatic
+reset, allowance renewal or relabeling bypass is permitted. Ordinary count and
+soft threshold inform convergence rather than unconditionally stopping useful
+work; all-cycle trend handling can stop earlier when warranted.
+
+Phase 5 implements both counts and deterministic guard transitions, Phase 6
+supplies bounded semantic assessments/hints, and Phase 7 uses the common policy.
+Preserve active-loop history across chats/processes without charging unrelated
+future loops. This documentation update changes no live workflow counters or
+implementation and adds no expensive measurement prerequisite.
+
 
 ## Comparative study: VirtusLab Orca review/fix loop
 
@@ -175,6 +243,58 @@ Orca's stage-as-Git-commit/resume-point model is not imported because sm-workflo
 
 The comparison therefore reinforces the direction: use AI for semantic implementation/review/fix, reconcile its structured results deterministically, keep unresolved work explicitly identified, rerun required machine validation after edits, reuse fresh evidence, and make loop termination a Workflow concern rather than an agent prompt convention.
 
+## Integration decision: evidence-confirmed issue progress and bounded reuse
+
+The comparative-study section above is preserved from the user's GitHub journal
+at commit `9c34ceba98d3810bc77a78907c9ffb4ba64f572c`. It records the investigation;
+the following integration refines its proposed adoption. This update does not
+independently re-audit Orca source or adopt its three-turn default.
+
+Stable issue identity and request/result reconciliation strengthen convergence:
+they distinguish actual resolution, recurring findings and newly discovered work.
+Keep that state inside existing Workflow/Candidate/Evidence storage, with no
+parallel integrity ledger or stage-as-commit lifecycle. Sources that cannot
+supply cross-observation identity keep local finding IDs and unknown mapping;
+missing identity is not a new prerequisite or reason to stop development.
+
+The integration distinguishes FIXED claims from evidence-confirmed RESOLVED.
+A claim remains unresolved until relevant fresh test/review evidence supports
+closure. An issue omitted from a narrowed review is not resolved. DECLINED stays
+unresolved; UNRESOLVED permits honest partial progress without a false FIXED or
+BLOCKED report. Unknown/unrequested IDs, duplicates, missing entries and malformed
+results are ordinary input-contract errors, not a reason to build tamper checks.
+Preserve actual Candidate work when a structured report is invalid.
+
+The zero-fix rule is a strong stall signal, not unconditional rejection of a
+partially completed repair. Existing validation/trend evidence may show progress
+inside one open issue. AI hints explain that evidence but cannot alone override
+guard policy. With no supported progress, use STALLED handling rather than
+blindly repeat the same request. AI BLOCKED stops immediately. The two-counter
+contract remains: ordinary substantive repairs inform convergence; every repair
+batch, including partial/hygiene/minor work, counts toward the absolute hard
+limit of 10. New issue IDs or plan revisions do not renew the active allowance.
+
+Issue counts describe known scoped findings and validated per-cycle transitions,
+not all product defects. Do not count fixer claims as resolved or repeated
+observations as new/reopened events. Missing correspondence stays unknown.
+Collection remains bounded to available evidence; no extra measurement system,
+per-issue test/review cycle or costly data collection is required.
+
+Intermediate review may narrow under admitted policy while covering affected
+boundaries; required SMOKE, Slice FOCUSED, final review and ADMISSION remain.
+Resume reuses applicable completed evidence using existing Candidate, definition,
+scope and relevant execution-input bindings, including overlay selection. A
+restart or committing previously tested work alone does not invalidate it.
+No TTL, hashes, full copies, unchanged-content certificates or stage commits are
+introduced. Changed relevant inputs still invalidate corresponding evidence.
+
+Phase 5 owns typed issue state, reconciliation, guard inputs and evidence reuse;
+Phase 6 connects structured fixer/reviewer responses and bounded hints; Phase 7
+exercises the same behavior across repository and overlay contexts. Local
+acceptance cases 1–39 are retained and Orca-derived/refined cases become 40–49,
+avoiding the GitHub draft's overlapping 33–38 numbers. This is a specification
+update, not executed acceptance or a change to a live Goal/counter.
+
 
 ## Follow-up decision: CNCF Validation/Test Metadata ABI replaces suite registry
 
@@ -185,3 +305,86 @@ Operation/scenario is the primary granularity, with class/specification metadata
 FOCUSED becomes feature-driven rather than registry-driven. Slice planning selects feature identities; sm-workflow runs FOCUSED-tagged operations whose features match the admitted Slice selection. If the classification itself is insufficient, the Slice revises Test Architecture metadata explicitly rather than creating an ad-hoc runtime test list.
 
 CNCF owns the portable semantic ABI and annotation/property merge/discovery semantics. sm-workflow owns runtime policy such as the one-minute ADMISSION and ten-minute FULL targets, execution receipts, freshness and warnings. cbd-support consumes the same ABI statically. This removes duplicated management data and makes metadata changes themselves visible Test Architecture changes.
+
+
+## Producer phase and coordinated consumer plan
+
+CNCF Phase 103 now owns the ABI/discovery producer work. sm-workflow Phase 5
+drives and consumes it; Phase 6 edits source metadata/test architecture through
+skills; Phase 7 applies the same queries across repository/overlay inputs.
+This supersedes the earlier journal's registry/source-definition-file planning;
+old discussion remains history. GitHub input revision:
+`f9213defae3a76332101d9bbcdc8ae0d87edb77d`.
+
+The current note removes residual registry wording from selection, receipts,
+admission and improvement. Runtime receipts reference resolved operations,
+metadata/ABI revisions and execution context. Query policy remains sm-workflow
+configuration; it does not become a second test membership authority. Metadata
+changes follow Candidate/review/admission, including coverage-reduction review.
+Operation expected duration is not automatically aggregate query duration.
+
+The locally refined Issue lifecycle, partial-progress rule, both counters and
+absolute hard limit of 10 remain in force. Acceptance cases 1–49 are preserved
+with metadata-dependent updates; ABI consumer cases are added as 50–54.
+
+All three projects' coordination documents are updated here. cbd-support's
+implementation remains assigned to Mac mini; its static-analysis/KPI completion
+does not gate CNCF producer acceptance or sm-workflow's initial runtime slice.
+Its runtime-observation comparisons consume bounded evidence references rather
+than running tests itself or changing metadata automatically.
+
+
+Mac mini's consumer review is incorporated in CNCF Phase 103 and cbd-support
+Phase 14: explicit feature population, discovery completeness/unannotated entries,
+operation/source revision, and comparable duration scope. Runtime handoff keeps
+query/build/setup/operation measurements distinct and missing facts Unknown.
+The shared ADMISSION 1 -> 0 declaration fixture exercises both consumers without
+requiring fabricated runtime receipts or an implicit tested-feature denominator.
+
+
+## Clarification: retain the management file as a Slice validation plan
+
+The user corrected the blanket withdrawal of the management-file idea. Retain
+it with a distinct responsibility: CNCF metadata declares test purpose/feature/
+execution requirements; the Slice management file defines acceptance conditions,
+metadata queries, supplemental Test Operation references and typed parameters;
+execution Evidence records actual selected/executed inputs and results. The plan
+must not copy metadata into a second declaration authority.
+
+Normally select FOCUSED plus feature and supplement gaps with explicit refs,
+without forcing one-off source metadata edits. Plan changes use normal admission;
+execution requirements and final validation obligations remain. Evidence binds
+plan revision and actual invocation parameters, deduplicating identical invocations
+without collapsing intentionally different parameter cases. CBD Support separates
+declared, planned and executed coverage and their deltas. This supersedes earlier
+wording that could be read as prohibiting all Slice management files.
+
+## Indicator purpose and developer-requested replanning — 2026-10-07
+
+The developer clarified how to use the indicator output already planned for
+sm-workflow: notice potential inefficiency, stagnation or divergence, then decide
+whether to ask AI to reconstruct the development plan. Indicators provide a
+reason to investigate and supporting material, not proof that the plan is wrong.
+
+Examples include successful local fixes without practical acceptance progress,
+new/reopened issues growing faster than resolutions, repeated validation cost
+without further acceptance evidence, and unplanned dependency work. Interpret
+only available evidence; missing relationships remain unknown. Bounded AI hints
+can explain context without adding instrumentation, scans, tests or comparison
+records.
+
+The loop is observation -> developer judgment/request -> AI diagnosis and plan
+proposal -> developer adoption -> updated plan execution -> later observation.
+Reordering work or combining batches may be sufficient; scope reduction is not
+assumed. When scope allocation changes, update current completion conditions and
+validation planning consistently, preserve deferred-item identities/destinations
+and actual history, and do not confuse historical requirements with current
+completion obligations. Replanning does not reset counters or renew an unresolved
+repair loop.
+
+Phase 5's existing output supplies the observations. Phase 6's existing
+human-selected improvement and thinking-mode/skill interface supports the request.
+This is a purpose/usage clarification, not a new replanning engine, automatic
+optimizer, release gate or stop rule. Existing typed guard decisions, explicit
+AI BLOCKED and the absolute cycle limit remain unchanged. No active development
+plan, Goal or implementation was changed by recording this decision.

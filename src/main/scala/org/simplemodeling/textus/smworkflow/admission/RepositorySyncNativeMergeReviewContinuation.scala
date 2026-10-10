@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitNativeMergeReview")
@@ -42,9 +42,10 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         case Some(work) => for {
           input <- inputC(work)
           selected <- prepareC(source, input)
-          _ <- if (work == selected.work && prefix(source.current, selected.next)) Consequence.unit
-            else invalid("retained issue differs from its selected review or native history")
-        } yield selected
+          original <- selectIssuedC(selected.work, work)
+          _ <- if (prefix(source.current, selected.next)) Consequence.unit
+            else invalid("retained issue crosses its native frontier")
+        } yield selected.copy(work = original)
         case None => for {
           _ <- if (same(source.current, source.validated.record)) Consequence.unit
             else invalid("advanced native history has no actual review issue")
@@ -53,9 +54,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
           _ <- if (same(saved.instance, selected.next)) Consequence.unit
             else uncertain("review suspension committed readback differs; observe without retry")
-          actual <- native.loadC(continuationId(source.validated))(using core.executionContext)
-          _ <- if (actual.contains(selected.work)) Consequence.unit
-            else uncertain("review issue committed readback differs; observe without retry")
         } yield selected
       }
       wire <- if (same(source.current, plan.next) || same(source.current, source.validated.record))
@@ -94,8 +92,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           result <- retained match {
             case Some(value) if value.completion.result.result.value.decision == "accept" => for {
               input <- work.map(inputC).getOrElse(invalid("accepted review has no actual paired issue"))
-              plan <- prepareC(source, input)
-              _ <- if (work.contains(plan.work)) Consequence.unit else invalid("accepted review issue differs")
+              projected <- prepareC(source, input)
+              original <- selectIssuedC(projected.work, work.get)
+              plan = projected.copy(work = original)
               next <- completedC(plan, value.completion.result, policy)
               _ <- if (prefix(source.current, next) && value.completion.instanceRevision == next.revision &&
                   value.completion.closingResult.contains(StateMachineOperationResult(closingType,
@@ -138,9 +137,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           input.localTip == source.validated.payload.before.head &&
           source.validated.payload.mergeHead.contains(input.remoteTip) &&
           source.validated.payload.indexTree.contains(input.indexTree) &&
-          input.validationPolicyIdentity == state.policy.identity && input.validationPolicyRevision == state.policy.revision &&
-          input.validationMode == state.policy.mode && input.validationReason == state.policy.reason &&
-          input.selectedChecks == state.policy.checks.map(_.identity) && input.checks == state.receipts)
+          input.validationMode == state.mode && input.selectedChecks == state.selected.map(_.identity))
         Consequence.unit else invalid("review input differs from actual selected native validation")
       required <- RepositorySyncDefinitionBinding.nativeReviewOperationC
       from = source.validated.record
@@ -158,7 +155,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       intent = WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,
         declaration.configuration, from, from.revision, entry,
         ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available))
-      admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
+      next <- from.appendC(from.revision, entry)
       handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, from)
       work = WorkflowInteraction[I.Request, Nothing](handle, WorkflowContinuation.WorkOrder(
         ContinuationRequest(continuation.runId, continuation.continuationId, continuation.expectedRevision,
@@ -167,7 +164,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_MERGE"),
           ReasoningLevel.Standard, true), MinimalPresentation("Independent native merge review",
           "Return only the assigned semantic review. Workflow owns result admission and all repository effects.")))
-    } yield Plan(source, input, intent, admitted.next, work)
+    } yield Plan(source, input, intent, next, work)
 
     private[RepositorySyncNativeMergeReviewContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result]):
         Consequence[spec.OperationDefinition] = {
@@ -175,7 +172,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       val op = provided.providedOperations.find(o => o.service == completionOperation.service && o.name == completionOperation.operation)
       if (op.isEmpty) return invalid("review completion is absent from generated provided ABI")
       val instances = CallScopedWorkflowInstances.managed(declaration.configuration, definition, declaration.instances, declaration.continuations)
-      var selected = Option.empty[(Plan, ContinuationResult[S.Result], InstanceRecord)]
       val issued = new IssuedWorkOrderPersistence[I.Request] {
         def putIfAbsentC(work: WorkflowInteraction[I.Request, Nothing]) = invalid("completion cannot issue semantic work")
         def loadC(id: ContinuationIdentity) = core match {
@@ -192,24 +188,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         }
         def encodeC(resume: ContinuationRuntime.Resume) = invalid("completion acknowledgement requires actual native commit")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Result],
-          completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
-          val captured = selected
-          selected = None
-          captured match {
-            case Some((plan, result, next)) if core.nonEmpty && result == submitted &&
-                completed.exists(same(_, next)) && resume != null &&
-                resume.result == StateMachineOperationResult(closingType, submitted.resultReference) => for {
-              actual <- native.loadRetainedC(submitted.continuationId)(using core.get.executionContext)
-              _ <- actual match {
-                case Some(value) if value.completion.result == submitted && value.completion.instanceRevision == next.revision &&
-                    value.completion.closingResult.contains(resume.result) => Consequence.unit
-                case _ => uncertain("review completion committed readback differs; observe without retry")
-              }
-              wire <- waitC(next, submitted)
-            } yield OperationResponse.Scalar(wire)
-            case _ => uncertain("review completion lacks its selected matching native closing result")
-          }
-        }
+          completed: Option[InstanceRecord]): Consequence[OperationResponse] =
+          completed.map(record => waitC(record, submitted).map(OperationResponse.Scalar(_)))
+            .getOrElse(uncertain("review completion has no native committed state"))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
         def selectC(submitted: ContinuationResult[S.Result], current: InstanceRecord) = core match {
@@ -221,13 +202,14 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
             }
             input <- inputC(work)
             source <- sourceC(work.handle.instanceIdentity.value, call)
-            plan <- prepareC(source, input)
+            projected <- prepareC(source, input)
+            original <- selectIssuedC(projected.work, work)
+            plan = projected.copy(work = original)
             _ <- evidence.admitC(call, input, submitted)
-            _ <- if (work == plan.work && same(current, plan.next) && same(source.current, current)) Consequence.unit
+            _ <- if (same(current, plan.next) && same(source.current, current)) Consequence.unit
               else invalid("review result differs from its actual issue, current suspension or original native source")
             next <- completedC(plan, submitted, policy)
           } yield {
-            selected = Some((plan, submitted, next))
             val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
               ActionExecution.Completed(StateMachineOperationResult(closingType, submitted.resultReference)))
             WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
@@ -290,6 +272,33 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       Consequence.success(order.request.input.get.value.asInstanceOf[I.Request])
     case _ => invalid("issued review work has no assigned native input")
   }
+  /** Current executable route and owning slot resolve; original meaning and
+    * presentation are consumed, never compared with a regenerated WorkOrder.
+    */
+  private[admission] def selectIssuedC(expected: WorkflowInteraction[I.Request, Nothing],
+    saved: WorkflowInteraction[I.Request, Nothing]): Consequence[WorkflowInteraction[I.Request, Nothing]] =
+    if (expected == null || saved == null || saved.handle != expected.handle) invalid("review issue has another execution reference")
+    else (expected.current, saved.current) match {
+      case (planned: WorkflowContinuation.WorkOrder[I.Request], original: WorkflowContinuation.WorkOrder[I.Request]) => for {
+        _ <- saved.handle.validateC
+        requirement <- original.requirement.validateC
+        _ <- inputC(saved)
+        e = planned.request
+        q = original.request
+        _ <- if (q.runId == e.runId && q.continuationId == e.continuationId && q.expectedRevision == e.expectedRevision &&
+          q.requiredOperation == e.requiredOperation && q.operation == e.operation && q.resultType == e.resultType &&
+          q.completionOperation == e.completionOperation && q.completion == e.completion && q.evidence == e.evidence &&
+          GoalPhaseClosureAuthority.sameContextScope(q.context.snapshot, e.context.snapshot) &&
+          requirement.reviewRequired && requirement.capabilities.contains(CapabilityRequirement(e.requiredOperation.capability))) Consequence.unit
+          else invalid("review issue crosses its slot, Required contract, model scope or independent-review requirement")
+      } yield saved
+      case _ => invalid("review issue is not its actual WorkOrder")
+    }
+  private[admission] def sameResultTarget(left: ContinuationResult[S.Result], right: ContinuationResult[S.Result]): Boolean =
+    left != null && right != null && left.result != null && right.result != null &&
+      left.handle == right.handle && left.runId == right.runId && left.continuationId == right.continuationId &&
+      left.expectedRevision == right.expectedRevision && left.resultReference == right.resultReference &&
+      left.result.typeIdentity == right.result.typeIdentity
   private def continuationId(source: N.Stage): ContinuationIdentity =
     ContinuationIdentity(source.record.identity.value + ":native-review:" + source.record.revision.value)
   private def waitC(next: InstanceRecord, result: ContinuationResult[S.Result]): Consequence[String] = for {
@@ -300,8 +309,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           "The independent review is saved. Repair, Human decision or authorized final convergence remains incomplete."))))
   } yield wire
   private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  private def prefix(current: InstanceRecord, prior: InstanceRecord) = current.identity == prior.identity &&
-    SplitPhaseDefinitionBinding.sameDefinition(current.definition, prior.definition) && current.history.take(prior.history.size) == prior.history
+  private def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native review continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.syntax.all.*
-import io.circe.{Json, Decoder, Encoder}
+import io.circe.{Json, Decoder, DecodingFailure, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -31,12 +31,16 @@ import WorkflowManagedProcessExecution as Process
 private[smworkflow] object RepositorySyncManagedFetch {
   val startOperation = StateMachineOperationIdentity("RepositorySyncService", "startRepositorySync")
   val advanceOperation = StateMachineOperationIdentity("RepositorySyncService", "advanceRepositorySync")
-  val schema = "sm-workflow.repository-sync-managed-fetch.v1"
+  val schema = "sm-workflow.repository-sync-managed-fetch.v2"
   final case class Declaration(configuration: Configuration, instances: DataStore.CollectionId,
     continuations: DataStore.CollectionId, input: RepositorySyncStartInput,
     target: RepositoryGitRuntimePrograms.Target)
-  final case class Payload(stage: String, originalCommand: Json, repositoryRoot: String,
+  final case class Payload(stage: String, originalCommand: Option[RepositorySyncStartCommand], repositoryRoot: String,
     before: Option[Git.Observed], expectedTip: Option[String], after: Option[Git.Observed], effect: Option[String])
+  private given Encoder[RepositorySyncStartCommand] = Encoder.instance(RepositorySyncStartServiceOperation.commandJson)
+  private given Decoder[RepositorySyncStartCommand] = Decoder.instance(cursor =>
+    RepositorySyncStartServiceOperation.decodeCommandC(cursor.value.noSpaces).toOption
+      .toRight(DecodingFailure("Managed Start command is incomplete", cursor.history)))
   private given Encoder[Payload] = deriveEncoder
   private given Decoder[Payload] = deriveDecoder
   final case class Session(storage: WorkflowComponentStorage,
@@ -51,21 +55,29 @@ private[smworkflow] object RepositorySyncManagedFetch {
       case _ => invalid("advance has no original managed native Start")
     }
     original = started.receipt.payload.value
-    command <- RepositorySyncStartServiceOperation.decodeCommandC(original.originalCommand.noSpaces)
-    _ <- if (command.input == declaration.input && original.repositoryRoot == declaration.target.root.toString &&
+    command <- original.originalCommand.map(Consequence.success).getOrElse(invalid("original managed Start command is missing"))
+    _ <- if (sameTarget(command.input, declaration.input) && original.repositoryRoot == declaration.target.root.toString &&
         started.receipt.next.identity.value == identity) Consequence.unit else invalid("original tracking scope differs from the current host")
     _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, core.executionContext)
   } yield Session(storage, started, command)
 
   def codec(start: Boolean): WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = if (start) "RepositorySyncStartResult" else "RepositorySyncAdvanceResult"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
+    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema),
+      "payload" -> (if (start) value.asJson else value.asJson.mapObject(_.remove("originalCommand"))))
     def decode(value: Json): Either[String, Payload] = for {
       root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
         .toRight("Managed repository payload envelope differs")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Managed repository schema differs")
-      payload <- root("payload").get.as[Payload].left.map(_ => "Managed repository payload is incomplete")
-      _ <- Either.cond(if (start) payload.stage == "Started" && payload.before.isEmpty && payload.expectedTip.isEmpty &&
+      version <- root("schemaVersion").flatMap(_.asString).toRight("Managed repository schema is missing")
+      _ <- Either.cond(Set(schema, "sm-workflow.repository-sync-managed-fetch.v1")(version), (), "Managed repository schema differs")
+      fields <- root("payload").get.asObject.toRight("Managed repository payload is incomplete")
+      required = Set("stage", "repositoryRoot", "before", "expectedTip", "after", "effect")
+      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
+        fields.keys.toSet.subsetOf(required ++ (if (start || version.endsWith(".v1")) Set("originalCommand") else Set.empty[String])),
+        (), "Managed repository payload has undeclared fields")
+      selected = if (start) fields else fields.remove("originalCommand")
+      payload <- Json.fromJsonObject(selected).as[Payload].left.map(_ => "Managed repository payload is incomplete")
+      _ <- Either.cond(if (start) payload.stage == "Started" && payload.originalCommand.nonEmpty && payload.before.isEmpty && payload.expectedTip.isEmpty &&
           payload.after.isEmpty && payload.effect.isEmpty
         else Set("Fetching", "Fetched").contains(payload.stage) && payload.before.nonEmpty && payload.expectedTip.nonEmpty &&
           (payload.stage == "Fetching" && payload.after.isEmpty && payload.effect.isEmpty ||
@@ -85,7 +97,17 @@ private[smworkflow] object RepositorySyncManagedFetch {
       invalid("host storage/tracking declaration differs")
     else d.configuration.validateC.map(_ => ())
 
-  /** Explicit allocated invocation references, never a hash of source text. */
+  /** Actual repository/tracking/effect scope, not a policy-version witness. */
+  private[admission] def sameTarget(left: RepositorySyncStartInput, right: RepositorySyncStartInput): Boolean =
+    left != null && right != null && left.repositoryIdentity == right.repositoryIdentity &&
+      left.localBranch == right.localBranch && left.trackingRemote == right.trackingRemote &&
+      left.trackingBranch == right.trackingBranch && left.remoteEndpointIdentity == right.remoteEndpointIdentity &&
+      left.syncMode == right.syncMode
+
+  private[admission] def sameInvocation(left: RepositorySyncStartCommand, right: RepositorySyncStartCommand): Boolean =
+    left != null && right != null && sameTarget(left.input, right.input) && left.selectionIdentity == right.selectionIdentity &&
+      left.participantIdentity == right.participantIdentity && left.idempotencyKey == right.idempotencyKey
+
   def identityC(command: RepositorySyncStartCommand): Consequence[InstanceIdentity] =
     if (command == null || command.selectionIdentity == null || command.idempotencyKey == null)
       invalid("selected invocation is incomplete")
@@ -102,31 +124,33 @@ private[smworkflow] object RepositorySyncManagedFetch {
     for {
     _ <- validateDeclarationC(declaration)
     _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, core.executionContext)
-    selected <- selections.loadForCallC(command.selectionIdentity, core).flatMap {
-      case Some(value) => Consequence.success(value)
-      case _ => invalid("original host selection is absent")
-    }
-    request <- RepositorySyncStartCommandAdapter.admitC(command, new ProfileStartAdmission.SelectionPort {
-      def loadC(id: String) = Consequence.success(Some(selected).filter(_.selectionId == id))
-    })
-    commandJson <- io.circe.parser.parse(RepositorySyncStartServiceOperation.encodeCommand(command))
-      .fold(_ => invalid("Start command encoding failed"), Consequence.success)
-    _ <- if (command.input == declaration.input && selected.selectedInput.contains(TypedValue("RepositorySyncStartInput",
-        commandJson.hcursor.downField("input").focus.get))) Consequence.unit
-      else invalid("complete selected input differs from the fixed host mapping")
     identity <- identityC(command)
     storage <- bindC(declaration, definition, core)
     instances <- storage.bindInstancesC()(using core.executionContext)
     starts <- storage.bindMechanicalC(startOperation, codec(true))
     prior <- starts.loadRetainedC(reference(identity.value, "start"))(using core.executionContext)
-    payload = Payload("Started", commandJson, declaration.target.root.toString, None, None, None, None)
     current <- prior match {
       case Some(value) =>
-        if (value.receipt.operation == startOperation && value.receipt.payload.value == payload &&
+        if (value.receipt.operation == startOperation && value.receipt.payload.value.originalCommand.exists(sameInvocation(_, command)) &&
+            sameTarget(command.input, declaration.input) && value.receipt.payload.value.repositoryRoot == declaration.target.root.toString &&
             value.receipt.next.identity == identity && value.receipt.next.currentProgression.exists(_.value == "sync.BoundaryAssessment"))
           Consequence.success(value.current)
         else invalid("saved native Start belongs to another selection")
       case None => for {
+        selected <- selections.loadForCallC(command.selectionIdentity, core).flatMap {
+          case Some(value) => Consequence.success(value)
+          case _ => invalid("original host selection is absent")
+        }
+        request <- RepositorySyncStartCommandAdapter.admitC(command, new ProfileStartAdmission.SelectionPort {
+          def loadC(id: String) = Consequence.success(Some(selected).filter(_.selectionId == id))
+        })
+        chosen <- selected.selectedInput match {
+          case Some(value) if value.typeIdentity == "RepositorySyncStartInput" => RepositorySyncStartServiceOperation.decodeInputC(value.value)
+          case _ => invalid("selected native Start has no actual typed repository input")
+        }
+        _ <- if (sameTarget(command.input, declaration.input) && sameTarget(command.input, chosen)) Consequence.unit
+          else invalid("selected native Start crosses its actual repository/tracking/effect scope")
+        payload = Payload("Started", Some(command), declaration.target.root.toString, None, None, None, None)
         initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
           CorrelationReference(request.invocationReference), CausationReference("managed-start:" + identity.value),
           None, None, None, Vector.empty).validateC
@@ -148,24 +172,26 @@ private[smworkflow] object RepositorySyncManagedFetch {
 
   def advanceC(identity: String, declaration: Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     acknowledgement: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
-    storage <- bindC(declaration, definition, core)
-    starts <- storage.bindMechanicalC(startOperation, codec(true))
-    advances <- storage.bindMechanicalC(advanceOperation, codec(false))
-    started <- starts.loadRetainedC(reference(identity, "start"))(using core.executionContext).flatMap {
-      case Some(value) if value.receipt.operation == startOperation => Consequence.success(value)
-      case _ => invalid("advance has no original managed native Start")
-    }
+    session <- sessionC(identity, declaration, definition, core)
+    fetched <- fetchC(session, declaration, core, acknowledgement)
+    wire <- waitC(fetched._1, "Repository tracking observed", "Actual relation: " +
+      fetched._2.after.get.counts.get.relation.toString + ". Integration and final convergence are not complete.")
+  } yield wire
+
+  private[admission] def fetchC(session: Session, declaration: Declaration, core: ActionCall.Core,
+    acknowledgement: () => Consequence[Unit]): Consequence[(InstanceRecord, Payload)] = for {
+    advances <- session.storage.bindMechanicalC(advanceOperation, codec(false))
+    started = session.started
+    identity = started.receipt.next.identity.value
     original = started.receipt.payload.value
-    command <- RepositorySyncStartServiceOperation.decodeCommandC(original.originalCommand.noSpaces)
-    _ <- if (command.input == declaration.input && original.repositoryRoot == declaration.target.root.toString &&
-        started.receipt.next.identity.value == identity) Consequence.unit else invalid("original tracking scope differs from the current host")
-    _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, core.executionContext)
+    command = session.command
     completed <- advances.loadRetainedC(reference(identity, "fetch-observed"))(using core.executionContext)
     fetched <- completed match {
       case Some(value) =>
         if (value.receipt.operation == advanceOperation && value.receipt.payload.value.stage == "Fetched" &&
-            value.receipt.payload.value.originalCommand == original.originalCommand &&
-            same(value.current, value.receipt.next) && value.current.currentProgression.exists(_.value == "sync.FetchAdmitted"))
+            value.receipt.payload.value.repositoryRoot == original.repositoryRoot &&
+            SplitPhaseDefinitionBinding.includesState(value.current, value.receipt.next) &&
+            value.receipt.next.currentProgression.exists(_.value == "sync.FetchAdmitted"))
           Consequence.success(value.receipt.next -> value.receipt.payload.value)
         else invalid("saved fetched receipt differs from current native progress")
       case None => for {
@@ -173,7 +199,6 @@ private[smworkflow] object RepositorySyncManagedFetch {
         prepared <- prior match {
           case Some(value) =>
             if (value.receipt.payload.value.stage == "Fetching" &&
-                value.receipt.payload.value.originalCommand == original.originalCommand &&
                 value.receipt.payload.value.repositoryRoot == original.repositoryRoot &&
                 same(value.receipt.current, started.receipt.next) && same(value.current, value.receipt.next))
               Consequence.success((value.receipt.next, value.receipt.payload.value, false))
@@ -186,7 +211,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
             expected <- Git.remoteTipC(core, command.input.trackingBranch)
             _ <- if (domain.statemachine.RepositorySyncBoundaryLifecycle.permits("BoundaryAssessment", "fetch-started", "Fetching"))
               Consequence.unit else invalid("fetch intent is not declared by CML")
-            payload = original.copy(stage = "Fetching", before = Some(before), expectedTip = Some(expected))
+            payload = Payload("Fetching", None, original.repositoryRoot, Some(before), Some(expected), None, None)
             next <- advances.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration,
               reference(identity, "fetch-started"), started.current, started.current.revision,
               history(started.current, "sync.Fetching", "managed-fetch-intent:" + identity),
@@ -221,9 +246,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
           TypedValue(codec(false).typeIdentity, result)), empty)(using core.executionContext)
       } yield saved.receipt.next -> saved.receipt.payload.value
     }
-    wire <- waitC(fetched._1, "Repository tracking observed", "Actual relation: " +
-      fetched._2.after.get.counts.get.relation.toString + ". Integration and final convergence are not complete.")
-  } yield wire
+  } yield fetched
 
   private[admission] def bindC(d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
     validateDeclarationC(d).flatMap(_ => if (core == null || core.executionContext == null ||

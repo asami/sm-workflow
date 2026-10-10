@@ -58,11 +58,9 @@ private[smworkflow] object SplitPhaseExplicitPartitionContext {
         !name(frozen.reference.revision) || frozen.owner == null || frozen.facts == null ||
         current == null || instance == null || configuration == null || catalog == null)
       Consequence.stateConflict("SplitPhase partition context requires complete host data and current facts")
-    else if (frozen.facts != current)
-      Consequence.stateConflict("SplitPhase partition context complete current facts differ")
     else {
       val owner = frozen.owner
-      if (owner.handle == null || owner.instanceRevision == null || owner.configuration != configuration ||
+      if (owner.handle == null || owner.instanceRevision == null ||
           owner.start == null || !name(owner.start.identity) || !name(owner.start.revision) ||
           owner.continuation == null || !name(owner.continuation.value) || owner.completion != completionOperation ||
           owner.requirement == null || owner.presentation == null)
@@ -75,16 +73,17 @@ private[smworkflow] object SplitPhaseExplicitPartitionContext {
           else Consequence.stateConflict("SplitPhase partition context differs from its exact active instance")
         _ <- owner.requirement.validateC
         _ <- owner.presentation.validateC
-        // Complete frozen/current equality was already established above.
-        // Admit the selected raw records' own invariants, not the snapshot again.
-        shape <- P.loadC(current.proposal, current.proposal).flatMap {
+        // Each selected current input is admitted once by its owning constructor.
+        // Historical copies and configuration are not no-change certificates.
+        shape <- P.loadC(current.proposal).flatMap {
           case ready: P.ShapeReady => Consequence.success(ready)
           case _: P.DecisionRequired => Consequence.stateConflict("SplitPhase partition context requires resolved host numbering")
         }
-        boundary <- B.loadC(shape, current.boundary, current.boundary)
-        partition <- E.loadC(boundary, current.partition, current.partition)
-        selection <- W.selectC(partition, current.planning, current.planning)
-      } yield new PreparedPlanning(frozen, selection, instance)
+        boundary <- B.loadC(shape, current.boundary)
+        partition <- E.loadC(boundary, current.partition)
+        selection <- W.selectC(partition, current.planning)
+      } yield new PreparedPlanning(frozen.copy(owner = owner.copy(configuration = configuration),
+        facts = current), selection, instance)
     }
   private def name(value: String): Boolean = value != null && value.nonEmpty && value.trim == value
 }

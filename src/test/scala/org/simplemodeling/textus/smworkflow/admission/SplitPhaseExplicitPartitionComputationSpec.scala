@@ -27,7 +27,7 @@ final class SplitPhaseExplicitPartitionComputationSpec extends AnyWordSpec with 
       phase, source.authority, phases.zip(ids).map((p, id) => SplitPhaseExplicitProposalPrecheck.Child(p, Vector(id), 360, true)))
     val selected = SplitPhaseExplicitProposalPrecheck.Records(source,
       SplitPhaseExplicitProposalPrecheck.InventoryRecord(InventoryReference("inventory", "1"), source.reference, phase, ids, Set(phase)), proposal)
-    val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(selected, selected)).asInstanceOf[ShapeReady]
+    val shape = take(SplitPhaseExplicitProposalPrecheck.loadC(selected)).asInstanceOf[ShapeReady]
     val b = SplitPhaseExplicitBoundaryValidation
     val criteria = ids.map(id => b.ClosureCriterion(s"close-${id.value}"))
     val boundary = b.Boundary(b.BoundaryReference("boundary", "1"), source.reference, phase, source.authority,
@@ -40,12 +40,12 @@ final class SplitPhaseExplicitPartitionComputationSpec extends AnyWordSpec with 
       Vector.empty, phases.map(_ -> Vector.empty[b.HandoffIdentity]).toMap,
       ids.init.zip(dispositions).map((id, d) => b.Edge(id, d, source.authority)))
     val raw = b.Records(boundary, ownership, handoffs)
-    (take(b.loadC(shape, raw, raw)), Records(Estimates(EstimateReference("estimates", "1"), source.reference,
+    (take(b.loadC(shape, raw)), Records(Estimates(EstimateReference("estimates", "1"), source.reference,
       ids.zip(minutes).map((id, value) => Item(id, Duration.Known(value)))), Policy(PolicyReference("policy", "1"), overhead, maximum)))
   }
   private def uniform(minutes: Vector[Int], disposition: EdgeDisposition = EdgeDisposition.Either,
     overhead: Int = 20, maximum: Int = 4096) = fixture(minutes, Vector.fill(minutes.size - 1)(disposition), overhead, maximum)
-  private def input(f: (SplitPhaseExplicitBoundaryValidation.Validated, Records)): Input = take(loadC(f._1, f._2, f._2))
+  private def input(f: (SplitPhaseExplicitBoundaryValidation.Validated, Records)): Input = take(loadC(f._1, f._2))
   private def enumeration(f: (SplitPhaseExplicitBoundaryValidation.Validated, Records)): Enumerated =
     take(enumerateC(input(f))).asInstanceOf[Enumerated]
 
@@ -79,7 +79,7 @@ final class SplitPhaseExplicitPartitionComputationSpec extends AnyWordSpec with 
       val raw = base._2.copy(estimates = base._2.estimates.copy(items = base._2.estimates.items.updated(2,
         base._2.estimates.items(2).copy(duration = Duration.Unresolved("novel-work")))))
       When("numeric enumeration encounters that semantic work")
-      val result = take(enumerateC(take(loadC(base._1, raw, raw)))).asInstanceOf[SemanticRequired]
+      val result = take(enumerateC(take(loadC(base._1, raw)))).asInstanceOf[SemanticRequired]
       Then("no fabricated minutes or cuts replace the unresolved evidence")
       result.unresolvedItems shouldBe Vector(UnresolvedItem(WorkItemIdentity("item-2"), "novel-work"))
       result.unresolvedAfterItems shouldBe Vector(WorkItemIdentity("item-0"))
@@ -104,8 +104,8 @@ final class SplitPhaseExplicitPartitionComputationSpec extends AnyWordSpec with 
       tooLong.rejectedByCeiling shouldBe 1
       huge.reason shouldBe NoCandidateReason.EverySplitExceedsEightHours
     }
-    "reject raw data drift malformed policy and crossed ordered source coverage once at loading" in {
-      Given("the same selected references with changed facts or malformed raw data")
+    "calculate current overhead and reject malformed policy or crossed ordered source coverage" in {
+      Given("current overhead and malformed policy or source data")
       val (boundary, raw) = uniform(Vector(180, 180, 180))
       val altered = raw.copy(policy = raw.policy.copy(phaseOverheadMinutes = 21))
       val invalid = Vector(raw.copy(estimates = raw.estimates.copy(source = raw.estimates.source.copy(revision = "2"))),
@@ -120,9 +120,11 @@ final class SplitPhaseExplicitPartitionComputationSpec extends AnyWordSpec with 
         raw.copy(policy = raw.policy.copy(maximumCombinations = 0)),
         raw.copy(policy = raw.policy.copy(maximumCombinations = 4097)), null)
       When("full current records reach their natural construction boundary")
-      val results = invalid.map(r => loadC(boundary, r, r)) :+ loadC(boundary, raw, altered) :+ loadC(null, raw, raw)
-      Then("contradictory input is refused without retry or repair and revisions do not replace full facts")
+      val results = invalid.map(r => loadC(boundary, r)) :+ loadC(null, raw)
+      val calculated = take(enumerateC(take(loadC(boundary, altered)))).asInstanceOf[Enumerated]
+      Then("current overhead changes computed ranges while contradictory input fails")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      calculated.candidates.head.children.map(_.expectedMinutes) shouldBe Vector(201, 381)
     }
     "preserve exact combination bounds and the largest admitted item count" in {
       Given("4096 combinations, an excessive search space and 128 mandatory-cut items")

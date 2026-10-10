@@ -63,7 +63,7 @@ final class GoalPhaseHumanDecisionServiceOperationSpec extends AnyWordSpec with 
       val receipt = GoalPhaseHumanInteractionVerification.Receipt("reference", "fixture-issuer", "human",
         GoalPhaseHumanInteractionVerification.purpose, GoalPhaseHumanInteractionVerification.Binding(
           org.goldenport.cncf.component.ComponentInstanceId.default(handle.componentIdentity), publicQuestion,
-          GoalPhaseHumanDecisionContract.Answer("keep-open"), "relay"), now, now.plusSeconds(10))
+          GoalPhaseHumanDecisionContract.Answer("keep-open"), "relay"), now)
       val receiptJson = take(GoalPhaseHumanAnswerRecord.encodeJsonC(receipt))
       take(GoalPhaseHumanAnswerRecord.decodeJsonC(receiptJson)) shouldBe receipt
       take(GoalPhaseHumanAnswerRecord.decodeStorageC(take(GoalPhaseHumanAnswerRecord.encodeStorageC(receipt)))) shouldBe receipt

@@ -111,7 +111,7 @@ private[smworkflow] object SplitPhaseCandidateAllocationPolicy {
           records.reference == null || !_reference(records.reference.identity, records.reference.revision) ||
           !references.forall((identity, revision) => _reference(identity, revision)))
         Consequence.stateConflict("SplitPhase candidate allocation changes original facts or has unsupported references")
-      else Q.loadC(need.enumerated, records, records)
+      else Q.loadC(need.enumerated, records)
     }
 
   private def _string_c(host: ResolvedConfiguration, key: String, limit: Int): Consequence[String] =

@@ -5,21 +5,20 @@ import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.workflow.{WorkflowMechanicalTransition as M, WorkflowMechanicalTransitionJsonV1,
-  WorkflowCompletionRecordJsonV1, WorkflowInstanceRecordJsonV1}
+import org.goldenport.cncf.workflow.WorkflowMechanicalTransition as M
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.record.Record as StorageRecord
-import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as J, SplitPhasePlanningSnapshot as R,
-  SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPartitionSemanticJson as SJ,
+  SplitPhaseExplicitPartitionSemantic as S,
   SplitPhaseExplicitPlanningInputJsonV1 as F}
 
-/** Complete Create data and codec preflight only. No store/lease/program is
+/** Complete Create data only. No speculative native receipt is encoded.
+  * No store/lease/program is
   * retained or executed; native execution must separately admit its public call.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointPublication {
   final case class Row(collection: DataStore.CollectionId, identity: String, payload: StorageRecord)
@@ -31,7 +30,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
     def localCollections: Vector[DataStore.CollectionId] = Vector(publication, planning, proposals, ownerships, handoffs, estimates)
   }
   final class Prepared private[SplitPhasePlanningCheckpointPublication] (val captured: K.Captured,
-    val targets: Targets, val rows: Vector[Row], val anticipatedNativeBytes: String)
+    val targets: Targets, val rows: Vector[Row])
 
   def bindTargetsC(host: ResolvedConfiguration, declaration: SplitPhaseManagedStartAssembly.Declaration): Consequence[Targets] =
     SplitPhasePartitionEnrichmentStorage.bindC(host, declaration).map(p => new Targets(p.storeName, p.collection,
@@ -53,26 +52,10 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
     if (captured == null || targets == null || closingEffects == null || captured.record.originalStart.configuration.workflowStore.name != targets.storeName)
       invalid("publication preparation is incomplete or crosses its store")
     else for {
-      _ <- K.inspectC(captured.record)
-      _ <- if (captured.index == K.index(captured.record) && captured.next.revision == captured.record.committedRevision &&
-          captured.before.identity == captured.record.originalStart.instanceIdentity && captured.next.identity == captured.before.identity)
-        Consequence.unit else invalid("captured publication lineage differs")
-      before <- WorkflowInstanceRecordJsonV1.encodeC(captured.before)
-      next <- WorkflowInstanceRecordJsonV1.encodeC(captured.next)
-      native <- captured.record.origin match {
-        case K.Origin.Mechanical(anchor) => captured.mechanicalIntent match {
-          case Some(intent) if captured.completion.isEmpty && intent.reference == anchor &&
-              intent.current == captured.before && intent.payload.value == captured.record =>
-            WorkflowMechanicalTransitionJsonV1.encodeC(M.Receipt(anchor, SmWorkflowComponent.componentId,
-              K.advanceOperation, captured.before, captured.next, intent.payload), J.payloadCodec)
-          case _ => invalid("mechanical intent differs from its captured record")
-        }
-        case _: K.Origin.PartitionCompletion => captured.completion match {
-          case Some(value) if captured.mechanicalIntent.isEmpty => WorkflowCompletionRecordJsonV1.encodeC(value, SJ.resultCodec)
-          case _ => invalid("actual completion envelope is absent")
-        }
+      mapping <- captured.record.origin match {
+        case _: K.Origin.Mechanical => J.encodeLocatorC(K.Locator(captured.record.reference, captured.record.origin))
+        case _: K.Origin.PartitionCompletion => J.encodeC(captured.record)
       }
-      mapping <- J.encodeC(captured.record)
       index <- J.encodeIndexC(captured.index)
       mappingKey <- mappingKeyC(captured.record.reference)
       indexKey <- indexKeyC(captured.index.instance, captured.index.context)
@@ -99,25 +82,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
         row(targets.handoffs, document.handoffs.reference.identity, F.storageField, handoff)) }
       rows = estimates ++ handoffs ++ planning ++ documents ++ closingEffects ++ Vector(
         row(targets.publication, mappingKey, J.storageField, mapping), row(targets.publication, indexKey, J.indexStorageField, index))
-      _ <- validateRowsC(rows, targets)
-    } yield new Prepared(captured, targets, rows, native)
-  }
-
-  /** Passive descriptor capacity, not provider acknowledgement or a grant. */
-  def validateRowsC(rows: Vector[Row], targets: Targets): Consequence[Unit] = guarded {
-    if (rows == null || targets == null || rows.size > 64 || rows.exists(_ == null) ||
-        rows.map(r => (r.collection, r.identity)).distinct.size != rows.size)
-      invalid("Create set is incomplete, duplicated or exceeds 64 effects")
-    else rows.foldLeft(Consequence.unit) { (previous, r) => previous.flatMap { _ =>
-      if (!targets.localCollections.contains(r.collection) || r.collection == targets.instances ||
-          r.collection == targets.continuations || !canonical(r.identity) || r.identity.getBytes(UTF_8).length > 1024 ||
-          r.payload == null || r.payload.fields.size != 1 || r.payload.fields.exists(_.key == "id"))
-        invalid("Create target or payload differs from declared local purposes")
-      else r.payload.getString(r.payload.fields.head.key) match {
-        case Some(wire) if wire.getBytes(UTF_8).length <= J.maximumPayloadBytes => Consequence.unit
-        case _ => invalid("Create payload is not a bounded complete string frame")
-      }
-    }}
+    } yield new Prepared(captured, targets, rows)
   }
 
   private def row(collection: DataStore.CollectionId, id: String, field: String, wire: String): Row =

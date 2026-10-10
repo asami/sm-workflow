@@ -23,31 +23,21 @@ private[smworkflow] object RepositorySyncNativeProgression {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None): Consequence[String] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
-    adapter <- session.storage.bindMechanicalC(Fetch.advanceOperation, Fetch.codec(false))
-    existing <- adapter.loadRetainedC(Fetch.reference(identity, "fetch-observed"))(using core.executionContext)
-    _ <- existing match {
-      case Some(_) => Consequence.unit
-      case None => Fetch.advanceC(identity, declaration, definition, core, fetchAcknowledgement).map(_ => ())
-    }
-    fetched <- adapter.loadRetainedC(Fetch.reference(identity, "fetch-observed"))(using core.executionContext).flatMap {
-      case Some(value) if value.receipt.payload.value.stage == "Fetched" &&
-          value.receipt.payload.value.originalCommand == session.started.receipt.payload.value.originalCommand &&
-          value.receipt.payload.value.repositoryRoot == declaration.target.root.toString => Consequence.success(value)
-      case _ => invalid("owning progress requires the genuine selected native fetch receipt")
-    }
+    fetched <- Fetch.fetchC(session, declaration, core, fetchAcknowledgement)
     store <- bindC(session, declaration, core, acknowledgement)
     continued <- if (convergence.nonEmpty) for {
       integrated <- store.loadC("integration-validated")
       accepted <- integrated match {
         case Some(value) => for {
-          source <- store.loadC("integrated")
+          original <- store.loadC("integrated").flatMap {
+            case Some(source) => Consequence.success(source)
+            case None => invalid("retained integration validation has no actual source")
+          }
+          source <- RepositorySyncNativeMergeValidation.integrationSourceC(original)
+          policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
+          _ <- RepositorySyncNativeMergeValidation.completedC(value, source, policy, merge = false)
           _ <- if (value.payload.stage == "IntegrationValidated" && value.payload.mergeHead.isEmpty &&
-              value.payload.validation.exists(s => validationPolicy.contains(s.policy) &&
-                source.exists(original => original.payload.stage == "Integrated" &&
-                  original.record.revision.value.toString == s.sourceRevision &&
-                  original.payload.after == value.payload.after && original.payload.before == value.payload.before &&
-                  original.payload.method == value.payload.method && original.payload.mergeHead.isEmpty)) &&
-              session.started.current.history.take(value.record.history.size) == value.record.history &&
+              SplitPhaseDefinitionBinding.includesState(session.started.current, value.record) &&
               session.started.current.suspension.isEmpty) Consequence.unit
             else invalid("retained integration validation crosses its genuine source or current host policy")
         } yield Some(value)
@@ -60,7 +50,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
     } yield wire else Consequence.success(None)
     wire <- continued match {
       case Some(value) => Consequence.success(value)
-      case None => progressC(store, fetched.receipt.next, fetched.receipt.payload.value.after.get,
+      case None => progressC(store, fetched._1, fetched._2.after.get,
         conflicts, validationPolicy, review, convergence)
     }
   } yield wire

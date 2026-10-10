@@ -10,13 +10,13 @@ import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, InstanceRecord}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, HistoryEntry, InstanceRecord}
 
 /** Binds actual generated Workflow/Provided API and Candidate-Admission
   * descriptors. Required review declarations are never added to entry metadata.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct.  8, 2026
   */
 private[smworkflow] object SplitPhaseDefinitionBinding {
   // Bound each generated producer descriptor explicitly: one deeply nested
@@ -51,18 +51,34 @@ private[smworkflow] object SplitPhaseDefinitionBinding {
   def bindC: Consequence[DefinitionBinding] =
     candidateC.flatMap(WorkflowInstancePersistence.bindCandidateDefinitionC)
 
-  // Persistence may rehydrate an opaque binding. Compare all immutable public
-  // ABI facts, not object identity or a partial identity/revision tuple.
+  // Resolve an execution definition, not a proof that its producer metadata
+  // or presentation has remained unchanged.
   def sameDefinition(left: DefinitionBinding, right: DefinitionBinding): Boolean =
     left != null && right != null && left.workflowIdentity == right.workflowIdentity &&
-      left.workflowRevision == right.workflowRevision && left.sourceCorrelation == right.sourceCorrelation &&
-      left.producerAbiIdentity == right.producerAbiIdentity && left.workflowAbiIdentity == right.workflowAbiIdentity &&
-      left.bootstrapAbiIdentity == right.bootstrapAbiIdentity && left.producerRevision == right.producerRevision &&
-      left.fixtureSha256 == right.fixtureSha256
+      left.workflowRevision == right.workflowRevision
 
   def sameRecord(left: InstanceRecord, right: InstanceRecord): Boolean =
     left != null && right != null && sameDefinition(left.definition, right.definition) &&
-      left.copy(definition = right.definition) == right
+      left.identity == right.identity && left.revision == right.revision && left.lifecycle == right.lifecycle &&
+      left.currentProgression == right.currentProgression && left.correlation == right.correlation &&
+      left.causation == right.causation && left.derivedCompositeOccurrence == right.derivedCompositeOccurrence &&
+      left.committedPredecessor == right.committedPredecessor && left.suspension == right.suspension
+
+  /** Resolve the actual selected historical state, not a certificate that the
+    * complete preceding history is unchanged. History remains stored as facts.
+    */
+  def includesState(current: InstanceRecord, prior: InstanceRecord): Boolean =
+    current != null && prior != null && current.identity == prior.identity &&
+      sameDefinition(current.definition, prior.definition) && current.revision != null && prior.revision != null &&
+      (if (current.revision == prior.revision) sameRecord(current, prior)
+       else current.revision.value > prior.revision.value && current.history != null &&
+         current.history.exists(entry => entry != null && entry.revision == prior.revision && _same_frontier(entry, prior)))
+
+  private def _same_frontier(entry: HistoryEntry, record: InstanceRecord): Boolean =
+    entry.lifecycle == record.lifecycle && entry.currentProgression == record.currentProgression &&
+      entry.correlation == record.correlation && entry.causation == record.causation &&
+      entry.derivedCompositeOccurrence == record.derivedCompositeOccurrence &&
+      entry.committedPredecessor == record.committedPredecessor && entry.suspension == record.suspension
 
   def candidateC: Consequence[CandidateWorkflowAbi.Definition] = {
     val workflow = SplitPhaseWorkflowStateMachineWorkflow2.workflow
@@ -75,11 +91,7 @@ private[smworkflow] object SplitPhaseDefinitionBinding {
         workflow.identity != "SplitPhaseWorkflow" ||
         workflow.version != "split-phase-selected-application-v12" ||
         provided.identity != workflow.identity || provided.version != workflow.version ||
-        provided.source != domain.statemachine.providedapi.StateMachineProvidedApiAbi.WorkflowSourceCorrelation(
-          domain.statemachine.providedapi.StateMachineProvidedApiAbi.SourceIdentity(workflow.source.root.line),
-          domain.statemachine.providedapi.StateMachineProvidedApiAbi.SourceIdentity(workflow.source.definition.line)) ||
         provided.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        provided.generator != GeneratedProvidedApiAbi.generatorIdentity ||
         workflow.states.map(_.name) != states || producers.size != 1 ||
         workflow.actions.map(action => action.identity -> action.kind) !=
           Vector("AssessNovelSplitWork" -> "JUDGMENT", "AdmitSplitSemanticInputs" -> "ADMISSION",
@@ -113,8 +125,8 @@ private[smworkflow] object SplitPhaseDefinitionBinding {
       if (actual != expected || workflow.requiredOperations.exists(spi => !workflow.actions.exists(_.identity == spi.actionIdentity)))
         Consequence.stateConflict("SplitPhase generated review Required SPI is incompatible")
       else {
-        // Only structural serialization of generated facts; CNCF readmits both
-        // independent producer projections and checks their full correlation.
+        // Structural serialization of generated executable declarations.
+        // CNCF validates their operation/type/policy compatibility, not provenance.
         val spiJson = workflow.requiredOperations.map { spi =>
           val action = workflow.actions.find(_.identity == spi.actionIdentity).get
           Json.obj(

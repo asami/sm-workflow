@@ -9,11 +9,11 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDirection as H,
   SplitPhaseHumanDirectionAnswerContract as A, SplitPhaseHumanAnswerVerification as V}
 
-/** Pure native answer postimage plus separately verified current-call evidence.
+/** Pure native answer successor plus separately admitted current-call evidence.
   * Neither calculation grants persistence, resolves planning data or terminates.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  5, 2026
+  * @version Oct.  8, 2026
   */
 private[smworkflow] object SplitPhaseNativeHumanAnswer {
   final class Verified private[SplitPhaseNativeHumanAnswer] (
@@ -65,14 +65,14 @@ private[smworkflow] object SplitPhaseNativeHumanAnswer {
     } yield next
 
   def admitForCallC(plan: H.Plan, submitted: ContinuationResult[A.Answer],
-    current: InstanceRecord, core: ActionCall.Core, verifier: V.Verifier): Consequence[Verified] =
+    current: InstanceRecord, core: ActionCall.Core, evidence: V.EvidencePort): Consequence[Verified] =
     if (core == null || core.component.isEmpty) _invalid("owning completion call is absent")
     else for {
       next <- prepareC(plan, submitted, current)
-      binding = V.Binding(core.component.get.core.instanceId, plan.question, submitted,
+      binding = V.AnswerContext(core.component.get.core.instanceId, plan.question, submitted,
         plan.source.record.snapshot.first.originalStart.command.participantIdentity)
-      evidence <- V.admitForCallC(binding, core, verifier)
-    } yield new Verified(next, evidence)
+      admitted <- V.admitForCallC(binding, core, evidence)
+    } yield new Verified(next, admitted)
 
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase native Human answer " + reason)

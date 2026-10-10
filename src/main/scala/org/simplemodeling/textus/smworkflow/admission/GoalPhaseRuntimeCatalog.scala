@@ -107,8 +107,7 @@ private[smworkflow] object GoalPhaseRuntimeCatalog {
     val expected = ProducerModel(model, generator, judgments, admissions, relations, required)
     val matches = received.models.filter(_.model.workflow.exists(value =>
       expected.model.workflow.exists(key => key.identity == value.identity && key.version == value.version)))
-    if (compiled.schemaVersion == received.schemaVersion && received.generator == generator &&
-        matches == Vector(expected)) Consequence.unit
+    if (matches.size == 1 && CandidateAdmissionProducerAbi.compatiblePolicy(matches.head, expected)) Consequence.unit
     else Consequence.configurationInvalid("GoalPhase runtime producer policy differs from compiled definition")
   }
 
@@ -125,7 +124,8 @@ private[smworkflow] object GoalPhaseRuntimeCatalog {
     val expected = CandidateWorkflowAbi.Workflow(compiled.identity, compiled.version,
       compiled.source.root.line.getOrElse(-1), compiled.source.definition.line.getOrElse(-1),
       compiled.states.map(_.name), actions, required)
-    if (compiled.schemaVersion == CandidateWorkflowAbi.schemaVersion && received.workflow == expected)
+    if (compiled.schemaVersion == CandidateWorkflowAbi.schemaVersion &&
+        CandidateWorkflowAbi.compatibleWorkflow(received.workflow, expected))
       Consequence.unit
     else Consequence.configurationInvalid("GoalPhase runtime catalog differs from compiled Workflow")
   }
@@ -133,16 +133,9 @@ private[smworkflow] object GoalPhaseRuntimeCatalog {
   def admitBindingC(catalog: Catalog, declaration: GoalPhaseManagedStartAssembly.Declaration,
     producer: CandidateAdmissionProducerAbi.Artifact
   ): Consequence[Unit] =
-    if (catalog == null || declaration == null || declaration.definition == null ||
-        producer != catalog.producer)
+    if (catalog == null || declaration == null || declaration.definition == null || producer == null)
       Consequence.configurationInvalid("GoalPhase Factory differs from its admitted runtime catalog")
-    else declaration.definition.validateC.flatMap { actual =>
-      val expected = catalog.definition
-      if (actual.workflowIdentity == expected.workflowIdentity && actual.workflowRevision == expected.workflowRevision &&
-          actual.sourceCorrelation == expected.sourceCorrelation && actual.producerAbiIdentity == expected.producerAbiIdentity &&
-          actual.workflowAbiIdentity == expected.workflowAbiIdentity && actual.bootstrapAbiIdentity == expected.bootstrapAbiIdentity &&
-          actual.producerRevision == expected.producerRevision && actual.fixtureSha256 == expected.fixtureSha256)
-        Consequence.unit
-      else Consequence.configurationInvalid("GoalPhase Factory definition differs from admitted runtime bytes")
-    }
+    else if (!SplitPhaseDefinitionBinding.sameDefinition(declaration.definition, catalog.definition))
+      Consequence.configurationInvalid("GoalPhase Factory execution definition is not resolved by this catalog")
+    else admitCompiledProducerC(producer)
 }

@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.security.MessageDigest
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
@@ -11,28 +10,21 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
-/** Bytes from host-selected managed references, not Blob metadata admission.
-  * The host must resolve the current versioned pair; an immutable Factory-time
-  * pair would not represent repaired artifacts in a long-lived application.
+/** Bytes from selected managed references, not Blob metadata certification.
+  * Resolve the current pair once through its owning call; read actual bounded
+  * payloads without a digest or post-read unchanged-selection gate.
   * @since   Oct.  1, 2026
   * @version Oct.  8, 2026
   */
 private[smworkflow] object GoalPhaseBlobArtifactSnapshot {
-  final case class Reference(id: EntityId, storageRef: BlobStorageRef, byteSize: Long, digest: String)
+  final case class Reference(id: EntityId, storageRef: BlobStorageRef)
   final case class References(selectionIdentity: String, selectionRevision: Long,
     program: Reference, planning: Reference)
   trait ReferencePort {
-    /** Actual storage lease verification, never merely a datastore binding.
-      * The host reader owns this capability; no permissive default is supplied.
+    /** Resolve selected references through the current call's actual storage
+      * permission. Selection is input, not an unchanged-content certificate.
       */
-    def verifyForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core): Consequence[Unit]
     def resolveForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core): Consequence[References]
-    /** Re-admit the exact selected pair and its scope after reading bytes.
-      * Lease liveness alone cannot establish that reference selection survived.
-      * No permissive default or implicit second selection is supplied.
-      */
-    def verifySelectionForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, selected: References,
-      core: ActionCall.Core): Consequence[Unit]
   }
 
   def bindC(storeName: String, references: ReferencePort, maximumArtifactBytes: Int):
@@ -48,7 +40,8 @@ private[smworkflow] object GoalPhaseBlobArtifactSnapshot {
     value.id.collection == BlobRepository.CollectionId && value.storageRef != null &&
     _text(value.storageRef.store) && _text(value.storageRef.container) &&
     value.storageRef.key != null && BlobStoreSupport.validKey(value.storageRef.key) &&
-    value.byteSize >= 0 && value.byteSize <= limit && value.digest != null && value.digest.matches("[0-9a-f]{64}")
+    value.storageRef.version != null && value.storageRef.etag != null &&
+    value.storageRef.version.forall(_text) && value.storageRef.etag.forall(_text)
 
   private[admission] def validateReferencesC(pair: References, limit: Int): Consequence[Unit] =
     if (limit > 0 && limit < Int.MaxValue && pair != null && _text(pair.selectionIdentity) &&
@@ -71,15 +64,12 @@ private[smworkflow] object GoalPhaseBlobArtifactSnapshot {
         val space = executionContext.dataStoreSpace
         val prior = space.captureBinding()
         try for {
-          _ <- references.verifyForCallC(scope, core)
           _ <- bind_component_application_datastore_c(storeName)
           pair <- references.resolveForCallC(scope, core)
           _ <- validateReferencesC(pair, limit)
           service <- BlobPayloadSupport.service(core.component.get)
           program <- service.blobStore.get(pair.program.storageRef).flatMap(verifyReadC(pair.program, _, limit))
           planning <- service.blobStore.get(pair.planning.storageRef).flatMap(verifyReadC(pair.planning, _, limit))
-          _ <- references.verifyForCallC(scope, core)
-          _ <- references.verifySelectionForCallC(scope, pair, core)
         } yield GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning)
         finally space.restoreBinding(prior)
       }
@@ -89,15 +79,13 @@ private[smworkflow] object GoalPhaseBlobArtifactSnapshot {
 
   private[admission] def verifyReadC(expected: Reference, actual: BlobReadResult, limit: Int): Consequence[Vector[Byte]] =
     if (limit <= 0 || limit == Int.MaxValue || !_valid(expected, limit) || actual == null || actual.payload == null ||
-        actual.id != expected.id || actual.storageRef != expected.storageRef || actual.byteSize != expected.byteSize ||
-        actual.digest != expected.digest)
+        actual.id != expected.id || actual.storageRef != expected.storageRef)
       Consequence.stateConflict("GoalPhase Blob result differs from its host reference")
     else try {
       val stream = actual.payload.openInputStream()
-      val bytes = try stream.readNBytes(expected.byteSize.toInt + 1) finally stream.close()
-      val digest = MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
-      if (bytes.length.toLong == expected.byteSize && digest == expected.digest) Consequence.success(bytes.toVector)
-      else Consequence.stateConflict("GoalPhase actual Blob bytes differ from their host reference")
+      val bytes = try stream.readNBytes(limit + 1) finally stream.close()
+      if (bytes.length <= limit) Consequence.success(bytes.toVector)
+      else Consequence.stateConflict("GoalPhase actual Blob bytes exceed the configured read limit")
     } catch {
       case NonFatal(_) => Consequence.stateConflict("GoalPhase bounded Blob bytes are unavailable")
     }

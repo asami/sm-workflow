@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def objectives(s: Base, threshold: Long = 300): O.Records = O.Records(
@@ -27,9 +27,9 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
     Some(O.OverheadPolicy(O.OverheadPolicyReference("overhead", "1"), s.source.reference, s.source.authority, 1, 0, 0, 0, 0)))
   private def run(s: Base, records: O.Records = O.Records(None, None, None),
     boundary: Option[B.Validated] = None, allocate: Boolean = true): R.Record = {
-    val input = take(E.loadC(boundary.getOrElse(s.initial), s.records, s.records))
+    val input = take(E.loadC(boundary.getOrElse(s.initial), s.records))
     val data = W.Data(W.DataReference("original", "1"), s.source.reference, s.source.authority, None, records)
-    val first = take(W.advanceC(take(W.selectC(input, data, data))))
+    val first = take(W.advanceC(take(W.selectC(input, data))))
     val outcome = first match {
       case need: W.AllocationRequired if allocate => take(W.continueMechanicalAllocatedC(
         take(SplitPhaseCandidateAllocationFixture.policy.allocateMechanicalC(need, M.Reference("checkpoint", "1")))))
@@ -61,7 +61,7 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
         "candidate", "review", "evidence", phases(0), "candidate-changed", s.source.authority)
       val h = s.initial.records.copy(handoffs = s.initial.records.handoffs.copy(handoffs = Vector(handoff),
         incomingByChild = phases.map(p => p -> (if (p == phases(1)) Vector(handoff.identity) else Vector.empty)).toMap))
-      val human = run(s, known, Some(take(B.loadC(s.initial.shape, h, h))))
+      val human = run(s, known, Some(take(B.loadC(s.initial.shape, h))))
       val records = Vector(planned, run(groupedSource), run(unknown, allocate = false), run(s, allocate = false),
         run(base(Vector(481, 481)), allocate = false), run(base(Vector(120, 120))), run(s), run(s, reasoning),
         run(groupedSource, boundary = Some(grouped)), human)
@@ -71,7 +71,6 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       decoded shouldBe records
       records.foreach { r =>
         J.payloadCodec.decode(J.payloadCodec.encode(r)) shouldBe Right(r)
-        take(J.encodeC(r)) shouldBe take(J.encodeC(r))
       }
       J.payloadCodec.typeIdentity shouldBe "SplitPhasePlanningSnapshot"
       J.storageField shouldBe "splitPhasePlanningSnapshotPayload"
@@ -97,10 +96,9 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       When("the decoder reads both presentations")
       val formatted = take(J.decodeC(J.schema + ":" + json.spaces2))
       val reversed = take(J.decodeC(wire(reordered)))
-      Then("raw equality is semantic, while subsequent encoding stays stable")
+      Then("declared data is read without an encoder presentation certificate")
       formatted shouldBe r
       reversed shouldBe r
-      take(J.encodeC(reversed)) shouldBe take(J.encodeC(r))
     }
 
     "refuse unknown and missing nested fields, variants, schemas and primitive types" in {
@@ -141,7 +139,7 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       malformed.foreach(j => J.decodeC(wire(j)).isSuccess shouldBe false)
     }
 
-    "refuse crossed candidate coverage, proof refs, document refs and stage compositions" in {
+    "store passive typed frontiers without admitting crossed candidate meaning at use" in {
       Given("complete valid candidate documents and their bound assessments")
       val r = planned; val p = r.projection.get.asInstanceOf[R.ProjectionView.Projected]
       val a = r.admission.get.asInstanceOf[R.AdmissionView.DurationRanked]
@@ -151,13 +149,43 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
           ownership = p.candidates.head.ownership.copy(proposal = P.ProposalReference("foreign", "1"))))))),
         r.copy(admission = Some(a.copy(assessments = a.assessments.updated(0,
           a.assessments.head.copy(boundaryProof = Some(R.CandidateKey(Vector(99)))))))),
-        r.copy(objective = None), r.copy(projection = None), r.copy(selection = null))
-      When("invalid raw records are offered for storage")
-      val refused = crossed.map(J.encodeC)
-      Then("they cannot become a serializable partial or executable checkpoint")
-      refused.foreach(_.isSuccess shouldBe false)
-      crossed.foreach(v => intercept[IllegalArgumentException](J.payloadCodec.encode(v)))
-      J.encodeC(null).isSuccess shouldBe false
+        r.copy(objective = None), r.copy(projection = None))
+      When("standalone and native payloads are read and a Workflow consumer uses their meaning")
+      val decoded = crossed.map(value => take(J.decodeC(take(J.encodeC(value)))))
+      val nativepayloads = crossed.map(value => J.payloadCodec.decode(J.payloadCodec.encode(value)))
+      val interpreted = decoded.map(value => (R.dispositionC(value),
+        SplitPhaseSelectedDocuments.projectC(value), SplitPhaseManagedSelectedPreview.projectC(value, "context", "1")))
+      val absent = Vector(J.encodeC(r.copy(selection = null)), J.encodeC(null))
+      Then("storage preserves data but cannot produce a selected plan or document material")
+      decoded shouldBe crossed
+      nativepayloads shouldBe crossed.map(Right(_))
+      interpreted.foreach { (disposition, documents, preview) =>
+        disposition.isSuccess shouldBe false
+        documents.isSuccess shouldBe false
+        preview.isSuccess shouldBe false
+      }
+      absent.foreach(_.isSuccess shouldBe false)
+    }
+
+    "reject nested undeclared fields and missing optional members directly at the raw boundary" in {
+      Given("declared raw facts and frontier leaves including optional fields and duration variants")
+      val json = J.payloadCodec.encode(planned)
+      val paths = Vector(List("payload", "selection", "proposal", "source", "authority"),
+        List("payload", "selection", "planning", "objectives"),
+        List("payload", "objective", "Selected"), List("payload", "admission", "DurationRanked"))
+      val extras = paths.map(path => edit(json, path)(_.mapObject(_.add("certificate", Json.True))))
+      val omissions = Vector(edit(json, List("payload"))(_.mapObject(_.remove("projection"))),
+        edit(json, List("payload", "selection", "planning"))(_.mapObject(_.remove("allocations"))))
+      val durationextra = edit(json, List("payload", "selection", "partition", "estimates", "items"))(
+        _.mapArray(values => values.updated(0, values.head.mapObject(item => item.add("duration",
+          item("duration").get.mapObject(_.add("certificate", Json.True)))))))
+      val malformed = extras ++ omissions :+ durationextra
+      When("the raw decoder receives those additions and omissions without reencoding any record")
+      val decoded = malformed.map(value => J.decodeC(wire(value)))
+      val nativepayloads = malformed.map(J.payloadCodec.decode)
+      Then("undeclared or missing members cannot be silently discarded by generic decoding")
+      decoded.foreach(_.isSuccess shouldBe false)
+      nativepayloads.foreach(_.isLeft shouldBe true)
     }
 
     "enforce the UTF-8 bound without truncating unknown work or implying native receipt capacity" in {

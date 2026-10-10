@@ -23,12 +23,9 @@ private[admission] object HumanDecisionContractFixture {
     WorkflowDefinitionRevision("revision-1"), InstanceIdentity("human-contract-instance"))
   val candidate = StepCloseRequest("submission", "step", "a" * 64, "b" * 64, Vector.empty)
   val revision = take(StepCloseRequestAdapter.submissionC(candidate)).candidate.reference.revision
-  val digest = java.security.MessageDigest.getInstance("SHA-256")
-    .digest(GoalPhaseStepCloseJson.encode(candidate).getBytes(java.nio.charset.StandardCharsets.UTF_8))
-    .map(byte => f"${byte & 0xff}%02x").mkString
   val intent = GoalPhaseClosureAuthority.Intent(handle, StateMachineRevision("3"),
-    ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision), evidenceRevision = Some(digest)),
-    GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, candidate, revision, digest), "fixture-intent")
+    ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision)),
+    GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, candidate, revision), "fixture-intent")
   val routing = GoalPhaseClosureDecisionTemplate(StateMachineRequiredOperationIdentity("fixture.human-decision"),
     StateMachineOperationIdentity("HumanContractFixture", "presentQuestion"),
     StateMachineOperationIdentity("HumanContractFixture", "recordAnswer"))

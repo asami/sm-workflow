@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
@@ -14,7 +13,7 @@ import org.goldenport.protocol.spec as spec
  */
 private[smworkflow] object SplitPhaseManagedTypedStartAssembly {
   final class InvocationRevision private[SplitPhaseManagedTypedStartAssembly] (val value: String)
-  final case class Host(asOf: () => Instant, verifier: SplitPhaseTypedStartHumanVerification.Verifier)
+  final case class Host(evidence: SplitPhaseTypedStartHumanVerification.EvidencePort)
   val revisionKey = SplitPhaseTypedStartReadPolicy.prefix + "invocation-record-revision"
   def revisionC(host: ResolvedConfiguration): Consequence[InvocationRevision] =
     if (host == null) Consequence.configurationInvalid("SplitPhase typed invocation revision is absent")
@@ -25,7 +24,7 @@ private[smworkflow] object SplitPhaseManagedTypedStartAssembly {
     }
   def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, host: Host)(using ExecutionContext): Consequence[spec.OperationDefinition] =
-    if (params == null || host == null || host.asOf == null || host.verifier == null)
+    if (params == null || host == null || host.evidence == null)
       Consequence.configurationInvalid("SplitPhase typed public Start requires explicit native host dependencies")
     else for {
       revision <- revisionC(params.configuration)

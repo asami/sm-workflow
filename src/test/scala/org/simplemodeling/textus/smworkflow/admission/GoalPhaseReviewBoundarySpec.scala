@@ -32,7 +32,8 @@ import org.simplemodeling.textus.smworkflow.value.{ReviewStepResult, StepCloseRe
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ *  version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-09-26T00:00:00Z")
@@ -171,7 +172,7 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
       take(issuedStore.loadC(pending.continuation.continuationId)) shouldBe Some(issued)
 
       val reviewEvidence = StepReviewEvidence("review-result-1", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-25T23:59:00Z", "full-step", "reviewed", "receipt")
       val submitted = ContinuationResult(
         issued.handle, work.request.runId, work.request.continuationId,
         work.request.expectedRevision, work.request.context.snapshot,
@@ -343,11 +344,6 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
         sidecar, issued, repair, now, instances, configuration, snapshotPort, commitPort
       ) shouldBe a[Consequence.Failure[?]]
       committed shouldBe empty
-      GoalPhaseStepClosureBoundary.closeReviewedC(
-        sidecar, issued, submitted, Instant.parse("2026-09-26T02:00:00Z"),
-        instances, configuration, snapshotPort, commitPort
-      ) shouldBe a[Consequence.Failure[?]]
-      committed shouldBe empty
       currentSnapshot = currentSnapshot.copy(program = "changed program\n".getBytes(StandardCharsets.UTF_8).toVector)
       GoalPhaseStepClosureBoundary.closeReviewedC(
         sidecar, issued, submitted, now, instances, configuration, snapshotPort, commitPort
@@ -393,9 +389,12 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
       ) shouldBe a[Consequence.Failure[?]]
       committed should have size 1
       stored.map(_.revision) shouldBe Some(InstanceRevision(3L))
+      When("the applicable full-Step review closes after clock passage and the interrupted append is retried")
       val closed = take(GoalPhaseStepClosureBoundary.closeReviewedC(
-        sidecar, issued, submitted, now, instances, configuration, snapshotPort, commitPort
+        sidecar, issued, submitted, Instant.parse("2026-09-26T02:00:00Z"),
+        instances, configuration, snapshotPort, commitPort
       ))
+      Then("clock passage does not withdraw the review and the same actual commit closes the Step once")
       committed should have size 1
       committedSnapshots shouldBe Vector(GoalPhaseStepClosureBoundary.ArtifactSnapshot(programContent, planningContent))
       committed.head.idempotencyKey should fullyMatch regex "[0-9a-f]{64}"
@@ -433,14 +432,14 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
 
     "prepare no review continuation when full-Step evidence is current" in {
       val evidence = StepReviewEvidence("review-1", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-25T23:59:00Z", "full-step", "reviewed", "receipt")
       take(GoalPhaseReviewBoundary.planC(
         request.copy(reviewEvidence = Vector(evidence)), now, active, provided, reviewOperation)) shouldBe None
     }
 
     "close a pre-reviewed Step without issuing a review WorkOrder" in {
       val evidence = StepReviewEvidence("review-1", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-25T23:59:00Z", "full-step", "reviewed", "receipt")
       val reviewedRequest = request.copy(reviewEvidence = Vector(evidence))
       val component = SmWorkflowComponent.componentId
       val handle = take(WorkflowHandle.fromRecordC(component, active))
@@ -623,7 +622,7 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
         work.request.completionOperation shouldBe
           StateMachineOperationIdentity("GoalPhaseService", "submitStepReview")
         val evidence = StepReviewEvidence("review-auto-1", candidateRevision,
-          "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z",
+          "2026-09-25T23:59:00Z",
           if (decision == "accept") "full-step" else "focused:docs", "reviewed", "receipt")
         val submitted = ContinuationResult(
           issued.handle, work.request.runId, work.request.continuationId,
@@ -710,22 +709,21 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
 
     "preserve a successful scoped review while publishing and completing a full-review WorkOrder" in {
       val focused = StepReviewEvidence("scoped-review-1", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z",
+        "2026-09-25T23:59:00Z",
         "focused:src/main/scala/Step.scala", "scoped review passed", "scoped-receipt")
       val input = request.copy(reviewEvidence = Vector(focused))
       exerciseFocusedReview(input, viaCli = true) shouldBe
         exerciseFocusedReview(input, viaCli = false)
     }
 
-    "retain stale and expired evidence without using it to bypass full-review completion" in {
+    "retain wrong-target and focused evidence without using it to bypass full-review completion" in {
       val focused = StepReviewEvidence("scoped-review-1", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z",
+        "2026-09-25T23:59:00Z",
         "focused:docs", "scoped review passed", "scoped-receipt")
       val previousFull = focused.copy(evidenceIdentity = "previous-full-review",
         reviewedRevision = "f" * 64, scope = "full-step")
-      val expired = focused.copy(validUntil = "2026-09-25T23:59:30Z")
       val inputs = Vector(request.copy(reviewEvidence = Vector(focused, previousFull)),
-        request.copy(reviewEvidence = Vector(expired)))
+        request.copy(reviewEvidence = Vector(focused)))
       inputs.foreach { input =>
         exerciseFocusedReview(input, viaCli = true) shouldBe
           exerciseFocusedReview(input, viaCli = false)
@@ -758,6 +756,7 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
     * The initial scoped evidence is never promoted to a full review or dropped.
     */
   private def exerciseFocusedReview(input: StepCloseRequest, viaCli: Boolean): String = {
+    Given("a current Step candidate whose focused or crossed evidence does not cover its full review")
     val assessed = take(GoalPhaseStepCloseRouting.assessC(input, now, active, reviewOperation))
     assessed.admissionSatisfied shouldBe false
     assessed.submission.evidence.map(_.identity) shouldBe input.reviewEvidence.map(_.evidenceIdentity)
@@ -847,12 +846,14 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
             case _ => Consequence.stateConflict("scoped review fixture returned no common JSON envelope")
           }
 
+      When("the actual close Operation issues the distinct full-Step review")
       val workWire = take(invoke("requestStepClose", GoalPhaseStepCloseJson.encode(input)))
       val issued = take(WorkflowWorkOrderJsonV1.decodeC(workWire, GoalPhaseStepCloseJson.payloadCodec))
       val work = issued.current match {
         case value: WorkflowContinuation.WorkOrder[?] => value
         case other => fail(s"Expected a full-review WorkOrder, found $other")
       }
+      Then("the original candidate and actual native review are retained without a commit")
       issued.handle shouldBe handle
       work.requirement shouldBe requirement
       work.request.requiredOperation shouldBe StateMachineRequiredOperationIdentity("review-step-capability")
@@ -866,8 +867,9 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
       stored.suspension.map(_.continuationIdentity.value) shouldBe Some(work.request.continuationId.value)
       val suspended = stored
       val claim = take(runtime.recoverClaimC(work.request.continuationId))
+      Given("full-Step review evidence for the actual candidate and two genuinely incompatible review results")
       val full = StepReviewEvidence("full-review-completion", candidateRevision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "full review passed", "full-receipt")
+        "2026-09-25T23:59:00Z", "full-step", "full review passed", "full-receipt")
       val submitted = ContinuationResult(issued.handle, work.request.runId, work.request.continuationId,
         work.request.expectedRevision, work.request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("accept", "full-Step review passed", Vector(full))),
@@ -878,21 +880,28 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
         submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(
           reviewEvidence = Vector(full.copy(scope = "focused:docs"))))),
         submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(
-          reviewEvidence = Vector(full.copy(reviewedRevision = "f" * 64))))),
-        submitted.copy(contextSnapshot = submitted.contextSnapshot.copy(workspaceRevision = Some("stale"))))
+          reviewEvidence = Vector(full.copy(reviewedRevision = "f" * 64))))))
+      When("the public completion Operation receives focused or wrong-candidate review evidence")
       invalid.foreach { value =>
-        invoke("submitStepReview", resultWire(value)) shouldBe a[Consequence.Failure[?]]
+        val rejected = invoke("submitStepReview", resultWire(value))
+        Then("the incompatible review fails without changing the suspension, commit or owning claim")
+        rejected shouldBe a[Consequence.Failure[?]]
         stored shouldBe suspended
         commits shouldBe empty
         take(runtime.recoverClaimC(work.request.continuationId)) shouldBe claim
         take(issuedStore.loadC(work.request.continuationId)) shouldBe Some(issued)
       }
-      val admitted = take(GoalPhaseReviewResultAdapter.assessC(sidecar, issued, submitted, now))
+      When("the full review carries a workspace diagnostic that is not a native applicability condition")
+      val diagnostic = submitted.copy(contextSnapshot = submitted.contextSnapshot.copy(workspaceRevision = Some("historical-workspace-note")))
+      val admitted = take(GoalPhaseReviewResultAdapter.assessC(sidecar, issued, diagnostic, now))
+      Then("full candidate evidence remains applicable without a diagnostic copy certificate")
       admitted.closureReady shouldBe true
       admitted.evaluation.acceptedEvidence shouldBe Vector(full.evidenceIdentity)
-      val terminalWire = take(invoke("submitStepReview", resultWire(submitted)))
+      When("the actual public completion consumes that applicable review")
+      val terminalWire = take(invoke("submitStepReview", resultWire(diagnostic)))
       val terminal = take(WorkflowTerminalJsonV1.decodeC(
         terminalWire, GoalPhaseStepCloseServiceOperation.terminalCodec))
+      Then("one real review completion and commit close the original Step")
       terminal.handle shouldBe issued.handle
       terminal.current shouldBe a[WorkflowContinuation.Terminal[?]]
       stored.lifecycle shouldBe Lifecycle.Completed
@@ -905,7 +914,10 @@ final class GoalPhaseReviewBoundarySpec extends AnyWordSpec with Matchers with G
       commits.head.planningDigest shouldBe input.planningDigest
       closeInvocations shouldBe 1
       take(issuedStore.loadC(work.request.continuationId)) shouldBe Some(issued)
-      invoke("submitStepReview", resultWire(submitted)) shouldBe a[Consequence.Failure[?]]
+      When("the completed review is submitted again")
+      val replay = invoke("submitStepReview", resultWire(diagnostic))
+      Then("its consumed state prevents another commit")
+      replay shouldBe a[Consequence.Failure[?]]
       commits.size shouldBe 1
       terminalWire
     } finally subsystem.shutdown()

@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import cats.syntax.all.*
 import io.circe.{Json, parser}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -38,7 +39,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
   SplitPhaseExplicitPartitionContextJsonV1 as CJ, SplitPhaseExplicitPlanningAdvance as W,
   SplitPhaseScopeProjectionCheckpointJsonV1 as NJ, SplitPhaseScopeProjectionCheckpointPreparation as NC,
   SplitPhaseScopeProjectionCheckpointPublication as NU, SplitPhaseScopeProjectionSnapshot as NV,
-  SplitPhaseManagedScopeProjectionCheckpoint as NM}
+  SplitPhaseManagedScopeProjectionCheckpoint as NM, SplitPhasePlanningCheckpointDataStorePort as Reads}
 import SplitPhasePlanningCheckpointFixture.{f, anchor}
 import SplitPhaseObservedCheckpointFixture.*
 import SplitPhaseExplicitPartitionFixture.take
@@ -48,7 +49,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * still do not establish production human ingress or default installation.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+ * @version Oct. 11, 2026
   */
 final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "managedcheckpoint", name))
@@ -72,13 +73,37 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     F.Purpose.values.map(p => (ip + p.key) -> ConfigurationValue.StringValue(target(p).print)) ++
     SplitPhaseCandidateAllocationFixture.values
   private def host(v: Map[String, ConfigurationValue]) = ResolvedConfiguration(HostConfiguration(v), ConfigurationTrace.empty)
+  private def _earlier_host: ResolvedConfiguration = host(values.updated(ip + F.Purpose.Estimates.key,
+    ConfigurationValue.StringValue(collection("unusedconstructionestimates").print)))
+  private lazy val _relocated_catalog: SplitPhaseRuntimeCatalog.Catalog = {
+    def _relocate_(value: Json): Json = value.asObject match {
+      case Some(fields) => Json.fromFields(fields.toVector.map { (name, member) =>
+        name -> (if (name == "line") member.asNumber.flatMap(_.toInt)
+          .map(line => Json.fromInt(line + 17)).getOrElse(member) else _relocate_(member))
+      })
+      case None => value.asArray.map(items => Json.fromValues(items.map(_relocate_))).getOrElse(value)
+    }
+    val workflow = parser.parse(Files.readString(Path.of("target/cozy/statemachine-workflow-abi.json")))
+      .fold(error => fail(error.toString), identity)
+    val producer = parser.parse(Files.readString(Path.of("target/cozy/candidate-admission-producer-abi.json")))
+      .fold(error => fail(error.toString), identity)
+    take(SplitPhaseRuntimeCatalog.parseC(_relocate_(workflow).noSpaces, _relocate_(producer).noSpaces))
+  }
   private def query(saved: K.Captured) = SplitPhaseAdvanceCommand(saved.before.identity.value,
     SplitPhasePartitionContextReference(saved.record.originalContext.reference.identity, saved.record.originalContext.reference.revision))
+  private def _root_c(call: Probe, saved: K.Captured): Consequence[K.Record] = for {
+    reads <- Reads.bindC(call.core.component.get.subsystem.get.configuration, declaration, f.catalog)
+    selected <- reads.loadMappingForCallC(query(saved), call.core)
+    actual <- selected match {
+      case Some((_, value)) => Consequence.success(value)
+      case None => Consequence.stateConflict("Private observation requires an actual selected native checkpoint")
+    }
+  } yield actual
   private def originalRows(saved: K.Captured): Vector[(DataStore.CollectionId, String, Record)] = {
-    _original_rows(O.Original(saved.record.originalContext, saved.record.originalStart, saved.record.originalContext.facts))
+    _original_rows(O.Original(saved.record.originalContext, saved.record.originalStart, saved.record.originalContext.facts), saved.record.originalStart)
   }
-  private def _original_rows(original: O.Original): Vector[(DataStore.CollectionId, String, Record)] = {
-    val start = original.start; val context = original.context; val facts = original.facts
+  private def _original_rows(original: O.Original, start: SplitPhaseTypedStartPreparation.Record): Vector[(DataStore.CollectionId, String, Record)] = {
+    val context = original.context; val facts = original.facts
     val rows = Vector(
       (F.Purpose.Source, facts.proposal.source.reference.identity, take(F.encodeSourceC(facts.proposal.source))),
       (F.Purpose.Inventory, facts.proposal.inventory.reference.identity, take(F.encodeInventoryC(facts.proposal.inventory))),
@@ -119,23 +144,453 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     def execute(): Consequence[OperationResponse] = task(this).map(_ => OperationResponse.Scalar("internal-checkpoint-probe"))
   }
 
+  /** Actual declared-document reads through the existing owning load/execute.
+    * Corruption and restoration affect only exact rows in the private test DB.
+    */
+  private def _specify_generated_documents[A](call: Probe, targets: U.Targets,
+    document: SplitPhasePlanningSnapshot.CandidateProjectionView.BuiltView,
+    load: () => Consequence[A], execute: () => Consequence[A], expected: A,
+    native: InstanceRecord): Unit = {
+    val proposal = document.proposal.copy(children = document.proposal.children.updated(0,
+      document.proposal.children.head.copy(expectedMinutes = document.proposal.children.head.expectedMinutes + 1)))
+    val ownership = document.ownership.copy(method = document.ownership.method + " updated documentation")
+    val handoffs = document.handoffs.copy(handoffs = document.handoffs.handoffs.map(value =>
+      value.copy(input = value.input + " updated documentation")))
+    val rows = Vector(
+      (targets.proposals, proposal.reference.identity, take(F.encodeProposalC(proposal)),
+        take(F.encodeProposalC(proposal.copy(reference = proposal.reference.copy(identity = proposal.reference.identity + "-foreign"))))),
+      (targets.ownerships, ownership.reference.identity, take(F.encodeOwnershipC(ownership)),
+        take(F.encodeOwnershipC(ownership.copy(reference = ownership.reference.copy(identity = ownership.reference.identity + "-foreign"))))),
+      (targets.handoffs, handoffs.reference.identity, take(F.encodeHandoffsC(handoffs)),
+        take(F.encodeHandoffsC(handoffs.copy(reference = handoffs.reference.copy(identity = handoffs.reference.identity + "-foreign"))))))
+    rows.foreach { case (collection, identity, changedwire, foreignwire) =>
+      Given("a declared generated document with typed-readable, same-reference changed content")
+      val original = take(call.rowC(collection, identity)).get
+      val changed = Record.data(F.storageField -> changedwire)
+      try {
+        take(call.writeC(collection, identity, changed, update = true))
+        When("the owning retained load and execution consume the declared document")
+        val observed = load()
+        val repeated = execute()
+        Then("the native-derived result remains observable without saved-body equality or document rewriting")
+        take(observed) shouldBe expected
+        take(repeated) shouldBe expected
+        take(call.rowC(collection, identity)).get.getString(F.storageField) shouldBe Some(changedwire)
+        assertNative(call, native)
+
+        Given("the actual selected document row has an unrelated non-null SQL column")
+        take(call.writeC(collection, identity,
+          Record.data(F.storageField -> changedwire, "unusedPhysicalColumn" -> "not a document certificate"), update = true))
+        When("the owning load and execution read only the declared document field")
+        val extendedload = load()
+        val extendedexecute = execute()
+        Then("extra physical columns do not reject readable selected content or cause rewriting")
+        take(extendedload) shouldBe expected
+        take(extendedexecute) shouldBe expected
+        take(call.rowC(collection, identity)).get.getString("unusedPhysicalColumn") shouldBe Some("not a document certificate")
+        assertNative(call, native)
+
+        Given("that exact declared document is absent from the private fixture store")
+        take(call.deleteFixtureRowC(collection, identity))
+        When("the same owning load and execution try to consume the missing deliverable")
+        val missingload = load()
+        val missingexecute = execute()
+        Then("absence fails at declared-document consumption without recreating native or document progress")
+        missingload.isSuccess shouldBe false
+        missingexecute.isSuccess shouldBe false
+        take(call.rowC(collection, identity)) shouldBe None
+        assertNative(call, native)
+
+        Given("the declared row is restored with an unreadable document payload")
+        take(call.writeC(collection, identity, Record.data(F.storageField -> "corrupt-declared-document")))
+        When("the owning load and execution decode the selected malformed deliverable")
+        val malformedload = load()
+        val malformedexecute = execute()
+        Then("neither consuming path accepts unreadable generated data or advances native state")
+        malformedload.isSuccess shouldBe false
+        malformedexecute.isSuccess shouldBe false
+        assertNative(call, native)
+
+        Given("the selected declared row contains a readable document addressed to another reference")
+        take(call.writeC(collection, identity, Record.data(F.storageField -> foreignwire), update = true))
+        When("the owning load and execution resolve that crossed document address")
+        val foreignload = load()
+        val foreignexecute = execute()
+        Then("a different deliverable cannot stand in for the actual selected reference")
+        foreignload.isSuccess shouldBe false
+        foreignexecute.isSuccess shouldBe false
+        assertNative(call, native)
+      } finally {
+        take(call.writeC(collection, identity, original, update = take(call.rowC(collection, identity)).nonEmpty))
+      }
+      Given("the private fixture restores the original declared row after observation")
+      When("the owning load and execution read the original deliverable again")
+      val restoredload = load()
+      val restoredexecute = execute()
+      Then("the retained result recovers without a new publication or native append")
+      take(restoredload) shouldBe expected
+      take(restoredexecute) shouldBe expected
+      assertNative(call, native)
+    }
+  }
+
+  /** Inert fixture annotations inside passive Human payloads only. */
+  private def _with_unused_fields(value: Json): Json = value.asObject match {
+    case Some(fields) => Json.obj(fields.toVector.map((key, child) => key -> _with_unused_fields(child))*)
+      .mapObject(_.add("unused", Json.obj("command" -> Json.True, "grant" -> Json.True)))
+    case None => value.asArray.map(items => Json.arr(items.map(_with_unused_fields)*)).getOrElse(value)
+  }
+
+  /** Private old-format payload setup; actual receipt envelope/instance stay untouched. */
+  private def _store_passive_postimage(call: Probe, reference: M.Reference): Unit = {
+    val key = take(M.keyC(reference))
+    val row = take(call.rowC(declaration.continuations, key)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(row.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val before = json.hcursor.downField("current").focus.get
+    val changed = json.hcursor.downField("payload").downField("value").downField("payload")
+      .withFocus(_.mapObject(_.add("before", before).add("next", before))).top.get
+    take(call.writeC(declaration.continuations, key, Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), true))
+  }
+
+  /** Exercise unused legacy states through the owning readers, not a schema seal. */
+  private def _specify_passive_checkpoint_states[A](call: Probe, reference: M.Reference,
+    current: InstanceRecord, expected: A)(read: => Consequence[A], execute: => Consequence[A]): Unit = {
+    val key = take(M.keyC(reference))
+    val original = take(call.rowC(declaration.continuations, key)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(original.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val variants = Vector(
+      json.hcursor.downField("payload").downField("value").downField("payload")
+        .withFocus(_.mapObject(_.remove("before").remove("next"))).top.get,
+      json.hcursor.downField("payload").downField("value").downField("payload")
+        .withFocus(_.mapObject(_.add("before", Json.False).add("next", Json.fromString("unreadable-unused-history")))).top.get)
+    try {
+      variants.foreach { value =>
+        Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; the actual native calculation with absent or unreadable unused nested state copies")
+        val wire = prefix + value.noSpaces
+        take(call.writeC(declaration.continuations, key, Record.data("mechanicalPayload" -> wire), true))
+        When("owning load and execution consume the result using its actual outer receipt states")
+        val loaded = take(read)
+        val repeated = take(execute)
+        Then("the saved result and actual state return without a copy gate, rewrite or another append")
+        loaded shouldBe expected
+        repeated shouldBe expected
+        take(call.rowC(declaration.continuations, key)).get.getString("mechanicalPayload") shouldBe Some(wire)
+        assertNative(call, current)
+      }
+      for (field <- Vector("current", "next")) {
+        Given("the actual outer native receipt state is malformed rather than an unused payload copy")
+        take(call.writeC(declaration.continuations, key, Record.data("mechanicalPayload" ->
+          (prefix + json.mapObject(_.add(field, Json.False)).noSpaces)), true))
+        When("owning load and execution attempt to consume that actual native receipt")
+        val refusedload = read
+        val refusedexecution = execute
+        Then("the native state consumer refuses without substitute state, publication or another append")
+        refusedload.isSuccess shouldBe false
+        refusedexecution.isSuccess shouldBe false
+        assertNative(call, current)
+      }
+    } finally take(call.writeC(declaration.continuations, key, original, true))
+  }
+
+  private def _specify_native_checkpoint_selection[A](call: Probe, reference: M.Reference,
+    current: InstanceRecord)(read: => Consequence[A]): Unit = {
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R16; Example: E35; a real receipt and an independently existing second native instance")
+    val key = take(M.keyC(reference))
+    val row = take(call.rowC(declaration.continuations, key)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(row.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val identity = InstanceIdentity(current.identity.value + "-checkpoint-other")
+    val other = take(instances.loadForCallC(f.configuration, identity, call.core)).getOrElse(
+      take(instances.createForCallC(f.configuration, f.initial.copy(identity = identity), call.core)))
+    val otherjson = parser.parse(take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.encodeC(other))).toOption.get
+    val changed = Vector(json.mapObject(_.add("component", Json.fromString("org.example.Foreign"))),
+      json.hcursor.downField("operation").withFocus(_.mapObject(_.add("operation", Json.fromString("other")))).top.get,
+      json.hcursor.downField("payload").withFocus(_.mapObject(_.add("typeIdentity", Json.fromString("other")))).top.get,
+      json.hcursor.downField("reference").withFocus(_.mapObject(_.add("revision", Json.fromString("other")))).top.get,
+      json.mapObject(_.add("next", otherjson)))
+    changed.foreach { value =>
+      When("the owner consumes one crossed native owner/Operation/type/reference or genuinely existing instance target")
+      take(call.writeC(declaration.continuations, key, Record.data("mechanicalPayload" -> (prefix + value.noSpaces)), true))
+      val refused = read
+      Then("the actual receipt or selected-instance boundary refuses, with both instances unchanged")
+      refused.isSuccess shouldBe false
+      assertNative(call, current)
+      take(instances.loadForCallC(f.configuration, identity, call.core)).get shouldBe other
+      take(call.writeC(declaration.continuations, key, row, true))
+    }
+  }
+
+  /** Private obsolete-row mutations exercise real owning consumers, not a codec oracle. */
+  private def _specify_unused_successor_copy[A](call: Probe, target: DataStore.CollectionId,
+    key: String, field: String, wire: String, expected: A, current: InstanceRecord)(
+    read: => Consequence[A], execute: => Consequence[A]): Unit = {
+    val original = take(call.rowC(target, key))
+    val separator = wire.indexOf(':')
+    val frame = parser.parse(wire.substring(separator + 1)).toOption.get
+    val payload = frame.hcursor.downField("payload").focus.get
+    val prefix = wire.substring(0, separator + 1)
+    val legacy = frame.hcursor.downField("payload").withFocus(_.mapObject(fields =>
+      fields.toVector.foldLeft(fields) { case (changed, (name, _)) =>
+        if (name == "reference") changed else changed.add(name, Json.fromString("unused-malformed-copy"))
+      })).top.get
+    val variants = Vector(
+      Record.data(field -> (prefix + legacy.spaces2)),
+      Record.data(field -> "not-json"),
+      Record.data(field -> (prefix + frame.mapObject(_.add("payload",
+        payload.mapObject(_.remove("reference")))).noSpaces)),
+      Record.data(field -> (prefix + frame.hcursor.downField("payload").downField("reference")
+        .withFocus(_.mapObject(_.add("revision", Json.fromString("foreign")))).top.get.noSpaces)),
+      Record.data("unusedPhysicalColumn" -> "no selected field"))
+    try {
+      Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; a real native successor and a missing unused application copy")
+      original.foreach(_ => take(call.deleteFixtureRowC(target, key)))
+      When("owning load and execution consume the genuine predecessor-derived native address")
+      val withoutcopy = take(read)
+      val repeatedwithoutcopy = take(execute)
+      Then("the actual result returns without creating an application copy or appending again")
+      withoutcopy shouldBe expected
+      repeatedwithoutcopy shouldBe expected
+      take(call.rowC(target, key)) shouldBe None
+      assertNative(call, current)
+      variants.foreach { row =>
+        Given("an obsolete full, malformed, crossed-address or unrelated physical row at the old copy address")
+        take(call.writeC(target, key, row))
+        When("the owning consumers read and execute the real native successor")
+        val loaded = take(read)
+        val repeated = take(execute)
+        Then("the unused row cannot select or reject the result and is not decoded, compared or rewritten")
+        loaded shouldBe expected
+        repeated shouldBe expected
+        row.fields.foreach(member => take(call.rowC(target, key)).get.getString(member.key) shouldBe row.getString(member.key))
+        assertNative(call, current)
+        take(call.deleteFixtureRowC(target, key))
+      }
+    } finally {
+      if (take(call.rowC(target, key)).nonEmpty) take(call.deleteFixtureRowC(target, key))
+      original.foreach(row => take(call.writeC(target, key, row)))
+    }
+  }
+
+  /** Real owning Scope reads select native results without application locators. */
+  private def _specify_scope_native_result(call: Probe, port: NM.Port, command: SplitPhaseAdvanceCommand,
+    targets: U.Targets, expected: NC.Record): Unit = {
+    Given("an earlier Scope binding selecting another unused estimates collection, with the actual current owner and native result")
+    val earlier = take(NM.bindC(_earlier_host, declaration, f.catalog))
+    When("that binding reads and executes the retained result through the actual current owning call")
+    val actual = take(earlier.loadForCallC(command, call.core)).get
+    val repeated = take(earlier.executeForCallC(command, call.core))
+    Then("actual current targets return the same Scope result without a construction-copy proof or append")
+    actual.record shouldBe expected
+    repeated.record shouldBe expected
+    assertNative(call, expected.next)
+    _specify_passive_checkpoint_states(call, M.Reference(expected.reference.identity, expected.reference.revision),
+      expected.next, expected)(port.loadForCallC(command, call.core).map(_.get.record),
+      port.executeForCallC(command, call.core).map(_.record))
+    _specify_unused_successor_copy(call, targets.publication, take(NC.keyC(expected.reference)), NJ.storageField,
+      take(NJ.encodeC(expected)), expected, expected.next)(
+      port.loadForCallC(command, call.core).map(_.get.record), port.executeForCallC(command, call.core).map(_.record))
+
+    val reference = M.Reference(expected.reference.identity, expected.reference.revision)
+    val nativekey = take(M.keyC(reference))
+    val nativerow = take(call.rowC(declaration.continuations, nativekey)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(nativerow.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val extended = json.hcursor.downField("payload").downField("value").downField("payload")
+      .withFocus(_.mapObject(_.add("scopeWork", Json.False).add("scopePredecessor", Json.Null).add("scopeIssued", Json.arr()))).top.get
+    Given("an actual native receipt retaining only inert removed legacy certificate members")
+    try {
+      take(call.writeC(declaration.continuations, nativekey, Record.data("mechanicalPayload" -> (prefix + extended.noSpaces)), true))
+      _store_passive_postimage(call, reference)
+      When("the native payload reader and owning Scope consumer read the saved result")
+      val loaded = take(port.loadForCallC(command, call.core)).get
+      val repeated = take(port.executeForCallC(command, call.core))
+      Then("removed certificates are ignored and actual receipt state supplies the native postimage")
+      loaded.record shouldBe expected
+      repeated.record shouldBe expected
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow, true))
+    _specify_native_checkpoint_selection(call, reference, expected.next)(port.loadForCallC(command, call.core))
+    Given("the selected native receipt is actually missing after its native append")
+    try {
+      take(call.deleteFixtureRowC(declaration.continuations, nativekey))
+      When("owning load and execution try to consume the missing result")
+      val missingload = port.loadForCallC(command, call.core)
+      val missingexecution = port.executeForCallC(command, call.core)
+      Then("actual CAS prevents a stale replay without reissuing, appending or recreating the receipt")
+      take(missingload) shouldBe None
+      missingexecution.isSuccess shouldBe false
+      take(call.rowC(declaration.continuations, nativekey)) shouldBe None
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow,
+      update = take(call.rowC(declaration.continuations, nativekey)).nonEmpty))
+  }
+
+  /** Owning Human observations consume native results, not full application copies. */
+  private def _specify_human_native_result(call: Probe, port: SplitPhaseManagedHumanResolutionCheckpoint.Port,
+    command: SplitPhaseAdvanceCommand,
+    expected: SplitPhaseHumanResolutionCheckpointPreparation.Record): Unit = {
+    Given("an earlier Human binding selecting another unused estimates collection, with the actual owning source and native result")
+    val earlier = take(SplitPhaseManagedHumanResolutionCheckpoint.bindC(_earlier_host, declaration, f.catalog))
+    When("that binding reads and executes the retained Human result through the actual current owning call")
+    val actual = take(earlier.loadForCallC(command, call.core)).get
+    val repeated = take(earlier.executeForCallC(command, call.core))
+    Then("actual current targets return the same Human result without a construction-copy proof, consent or append")
+    actual.record shouldBe expected
+    repeated.record shouldBe expected
+    assertNative(call, expected.next)
+    _specify_passive_checkpoint_states(call, M.Reference(expected.reference.identity, expected.reference.revision),
+      expected.next, expected)(port.loadForCallC(command, call.core).map(_.get.record),
+      port.executeForCallC(command, call.core).map(_.record))
+    _specify_unused_successor_copy(call, collection("humancheckpoints"),
+      take(SplitPhaseHumanResolutionCheckpointPreparation.keyC(expected.reference)),
+      SplitPhaseHumanResolutionCheckpointJsonV1.storageField,
+      take(SplitPhaseHumanResolutionCheckpointJsonV1.encodeC(expected)), expected, expected.next)(
+      port.loadForCallC(command, call.core).map(_.get.record), port.executeForCallC(command, call.core).map(_.record))
+
+    val reference = M.Reference(expected.reference.identity, expected.reference.revision)
+    val nativekey = take(M.keyC(reference))
+    val nativerow = take(call.rowC(declaration.continuations, nativekey)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(nativerow.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val extended = json.hcursor.downField("payload").downField("value").downField("payload")
+      .withFocus(_.mapObject(_.add("priorScope", Json.False).add("humanQuestion", Json.Null)
+        .add("humanCompletion", Json.arr()).add("humanIssued", Json.fromString("unused")))).top.get
+    Given("the native Human result retains unreadable removed certificate fields and an old passive postimage")
+    try {
+      take(call.writeC(declaration.continuations, nativekey, Record.data("mechanicalPayload" -> (prefix + extended.noSpaces)), true))
+      _store_passive_postimage(call, reference)
+      When("the native payload reader and owning Human consumer read that retained result")
+      val loaded = take(port.loadForCallC(command, call.core)).get
+      val repeated = take(port.executeForCallC(command, call.core))
+      Then("unused certificates are ignored and actual receipt states supply the native result postimage")
+      loaded.record shouldBe expected
+      repeated.record shouldBe expected
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow, true))
+
+    Given("the native Human receipt is actually missing after its native append")
+    try {
+      take(call.deleteFixtureRowC(declaration.continuations, nativekey))
+      When("owning load and execution attempt to consume that missing result")
+      val missingload = port.loadForCallC(command, call.core)
+      val missingexecution = port.executeForCallC(command, call.core)
+      Then("actual CAS prevents a stale replay without reinterpreting, appending or recreating the receipt")
+      take(missingload) shouldBe None
+      missingexecution.isSuccess shouldBe false
+      take(call.rowC(declaration.continuations, nativekey)) shouldBe None
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow,
+      update = take(call.rowC(declaration.continuations, nativekey)).nonEmpty))
+  }
+
+  /** Owning ScopePlanning reads consume saved native results, not source copies. */
+  private def _specify_scope_planning_native_result(call: Probe, port: SplitPhaseManagedScopePlanningCheckpoint.Port,
+    command: SplitPhaseAdvanceCommand, targets: U.Targets,
+    expected: SplitPhaseScopePlanningCheckpointPreparation.Record): Unit = {
+    Given("an earlier ScopePlanning binding selecting another unused estimates collection, with the actual owning Scope and native result")
+    val earlier = take(SplitPhaseManagedScopePlanningCheckpoint.bindC(_earlier_host, declaration, f.catalog))
+    When("that binding reads and executes the retained planning result through the actual current owning call")
+    val actual = take(earlier.loadForCallC(command, call.core)).get
+    val repeated = take(earlier.executeForCallC(command, call.core))
+    Then("actual current targets return the saved planning result without a construction-copy proof or append")
+    actual.record shouldBe expected
+    repeated.record shouldBe expected
+    assertNative(call, expected.next)
+    _specify_passive_checkpoint_states(call, M.Reference(expected.reference.identity, expected.reference.revision),
+      expected.next, expected)(port.loadForCallC(command, call.core).map(_.get.record),
+      port.executeForCallC(command, call.core).map(_.record))
+    _specify_unused_successor_copy(call, targets.publication,
+      take(SplitPhaseScopePlanningCheckpointPreparation.keyC(expected.reference)),
+      SplitPhaseScopePlanningCheckpointJsonV1.storageField,
+      take(SplitPhaseScopePlanningCheckpointJsonV1.encodeC(expected)), expected, expected.next)(
+      port.loadForCallC(command, call.core).map(_.get.record), port.executeForCallC(command, call.core).map(_.record))
+
+    val reference = M.Reference(expected.reference.identity, expected.reference.revision)
+    val nativekey = take(M.keyC(reference))
+    val nativerow = take(call.rowC(declaration.continuations, nativekey)).get
+    val prefix = "cncf.workflow-json.v1:"
+    val json = parser.parse(nativerow.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+    val extended = json.hcursor.downField("payload").downField("value").downField("payload")
+      .withFocus(_.mapObject(_.add("priorScope", Json.False))).top.get
+    Given("the actual native ScopePlanning result has an unreadable removed Scope copy and an old passive postimage")
+    try {
+      take(call.writeC(declaration.continuations, nativekey, Record.data("mechanicalPayload" -> (prefix + extended.noSpaces)), true))
+      _store_passive_postimage(call, reference)
+      When("the native reader and owning ScopePlanning load and execution consume the result")
+      val loaded = take(port.loadForCallC(command, call.core)).get
+      val repeated = take(port.executeForCallC(command, call.core))
+      Then("the removed copy is ignored and actual outer receipt states supply the same saved calculation")
+      loaded.record shouldBe expected
+      repeated.record shouldBe expected
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow, true))
+
+    Given("the actual selected native calculation is missing after its native append")
+    try {
+      take(call.deleteFixtureRowC(declaration.continuations, nativekey))
+      When("owning load and execution attempt to consume that missing calculation")
+      val missingload = port.loadForCallC(command, call.core)
+      val missingexecution = port.executeForCallC(command, call.core)
+      Then("actual CAS prevents a stale replay without another calculation, append or recreated receipt")
+      take(missingload) shouldBe None
+      missingexecution.isSuccess shouldBe false
+      take(call.rowC(declaration.continuations, nativekey)) shouldBe None
+      assertNative(call, expected.next)
+    } finally take(call.writeC(declaration.continuations, nativekey, nativerow,
+      update = take(call.rowC(declaration.continuations, nativekey)).nonEmpty))
+  }
+
+  private def _specify_stale_checkpoint[A](call: Probe, intent: M.Intent[A], rows: Vector[U.Row], storename: String,
+    codec: org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec[A], expected: InstanceRecord): Unit = {
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R15; Example: E32; passive historical descriptors and the real current native predecessor")
+    val binding = call.executionContext.dataStoreSpace.captureBinding()
+    val prior = rows.map(row => take(call.rowC(row.collection, row.identity)))
+    val receiptkey = take(M.keyC(intent.reference))
+    val priorreceipt = take(call.rowC(declaration.continuations, receiptkey))
+    val programs = rows.map { row =>
+      val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(call.core,
+        storename, row.collection, DataStore.StringEntryId(row.identity)))
+      take(storage.stageCreateC(row.payload))
+    }
+    val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+      [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+      (before, next) => before.flatMap(_ => next))
+    val native = take(take(org.goldenport.cncf.workflow.WorkflowComponentStorage.bindC(
+      ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+      SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
+      declaration.instances, declaration.continuations)).bindMechanicalC(K.advanceOperation, codec))
+    When("the actual managed native executor consumes the historical expectedRevision and all staged Creates")
+    val rejected = native.executeC(intent, program)(using call.executionContext)
+    Then("actual stale applicability refuses with no native append, receipt, application or document change")
+    rejected shouldBe a[Consequence.Failure[?]]
+    rejected.toString should include ("CWF77-WORKFLOW-PERSISTENCE-007")
+    assertNative(call, expected)
+    rows.map(row => take(call.rowC(row.collection, row.identity))) shouldBe prior
+    take(call.rowC(declaration.continuations, receiptkey)) shouldBe priorreceipt
+    call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+  }
+
   private def withHost(path: Path, declared: Map[String, ConfigurationValue] = values,
     denied: Option[DataStore.CollectionId] = None, operationName: String = K.advanceOperation.operation,
     participant: String = "participant", rowCheck: () => Consequence[Unit] = () => Consequence.unit,
     publicadvance: Boolean = false, retainedmechanical: Option[(K.Record, InstanceRecord)] = None,
     executionclock: Option[java.time.Clock] = None,
-    humanverifier: Option[SplitPhaseHumanAnswerVerification.Verifier] = None,
+    humanverifier: Option[SplitPhaseHumanAnswerVerification.EvidencePort] = None,
     humanreadback: () => Consequence[Unit] = () => Consequence.unit,
     terminalreadback: () => Consequence[Unit] = () => Consequence.unit,
     reasoningcompletion: Boolean = false,
     processruntime: Option[(org.goldenport.cncf.processexecution.ProcessExecutionDriver,
-      org.goldenport.cncf.processexecution.ProcessExecutionAdmission)] = None)
+      org.goldenport.cncf.processexecution.ProcessExecutionAdmission)] = None,
+    advancecommand: Option[SplitPhaseAdvanceCommand] = None)
     (task: (Probe, Managed.Port) => Consequence[Unit]): Unit = {
     // A process-enabled host needs the same canonical WorkArea prerequisite as
     // the normal runtime. ExecutionContext.create() alone is intentionally inert.
     if (processruntime.nonEmpty) org.goldenport.cncf.context.GlobalContext.set(
       org.goldenport.cncf.context.GlobalContext(org.goldenport.cncf.workarea.WorkAreaSpace.create(
         org.goldenport.cncf.config.RuntimeConfig.default)))
+    val selectedcommand = advancecommand.getOrElse(query(capture()))
     val ctx = ExecutionContext.create()
     val configured = host(declared ++ Map("textus.subsystem.user-mode" -> ConfigurationValue.StringValue("standalone"),
       "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"), "textus.datastore.path" -> ConfigurationValue.StringValue(path.toString)))
@@ -144,9 +599,8 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     val storage = take(EventStorePersistenceDeclaration.createC("events", collection("cursor"), collection("events"), collection("indexes"),
       Vector(EventStorePersistenceDeclaration.WorkflowGrant(SmWorkflowComponent.componentId, "workflow", declaration.instances, declaration.continuations))))
     val targets = take(U.bindTargetsC(configured, declaration))
-    val humanpublications = if (declared.contains(SplitPhaseHumanResolutionCheckpointPublication.prefix + "record-collection"))
-      Vector(take(SplitPhaseHumanResolutionCheckpointPublication.bindTargetsC(configured, declaration)).publication)
-      else Vector.empty[DataStore.CollectionId]
+    // Only private obsolete-row probes use this grant; product binding has no Human copy target.
+    val humanpublications = Vector(collection("humancheckpoints"))
     val grants = take(ComponentRecordStorageDeclaration.createC((targets.localCollections ++ humanpublications).filterNot(denied.contains)
       .map(c => ComponentRecordStorageDeclaration.CreateGrant(SmWorkflowComponent.componentId, "workflow", c))))
     val bootstrap = take(SubsystemEventStoreBootstrap.createC(policy, storage,
@@ -173,7 +627,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 case None => Consequence.unit
                 case Some((expected, current)) =>
                   When("the owning advance fixture observes its retained root within the actual managed dispatch")
-                  port.loadMechanicalForCallC(query(capture()), call.core).flatMap {
+                  port.loadMechanicalForCallC(selectedcommand, call.core).flatMap {
                     case Some(observed) =>
                       Then("the complete original root and later native current record remain exact")
                       observed.record shouldBe expected
@@ -203,16 +657,16 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             localSubject = Some(GenericSubsystemLocalSubjectBinding(id = participant, roles = Vector("user"), capabilities = Vector("user"),
               attributes = Map.empty, securityLevel = Some("user")))))))))
       val actor = take(IngressSecurityResolver.resolve(SubsystemExecutionProfile.Fixed, built.logic.executionContext(), Map.empty)).executionContext
-      val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(capture())))
+      val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(selectedcommand))
       take(owner.executeOperationResponseInContext(Request.of(component = built.name, service = "SplitPhaseService", operation = probeoperationname,
         arguments = List(Argument("arg1", wire))), actor))
       take(new CncfRuntime().executeCommandResponse(owner, Array(s"${built.name}/SplitPhaseService/$probeoperationname", "--json", wire)))
       captured.size shouldBe 2
       retainedmechanical match {
-        case None => port.loadMechanicalForCallC(query(capture()), captured.last).isSuccess shouldBe false
+        case None => port.loadMechanicalForCallC(selectedcommand, captured.last).isSuccess shouldBe false
         case Some(_) =>
           When("the captured owning core is reused after both managed dispatches have ended")
-          val rejected = port.loadMechanicalForCallC(query(capture()), captured.last)
+          val rejected = port.loadMechanicalForCallC(selectedcommand, captured.last)
           Then("the expired call grants no mechanical storage access despite its correct Operation and participant")
           rejected.isSuccess shouldBe false
       }
@@ -271,41 +725,25 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       U.Row(targets.handoffs, document.handoffs.reference.identity,
         Record.data(F.storageField -> take(F.encodeHandoffsC(document.handoffs))))))
     When("the full empty-event publication descriptors are prepared twice without executing a program")
-    val publication = take(NU.prepareC(captured, targets, f.catalog.definition))
-    val repeated = take(NU.prepareC(captured, targets, f.catalog.definition))
-    val mapping = publication.rows.last
-    val decoded = take(NJ.decodeC(captured.record.reference, mapping.payload.getString(NJ.storageField).get, f.catalog.definition))
-    val catalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(f.catalog.definition)))
-    val native = take(org.goldenport.cncf.workflow.WorkflowMechanicalTransitionJsonV1.decodeC(
-      publication.anticipatedNativeBytes, catalog, NJ.payloadCodec(f.catalog.definition)))
+    val publication = take(NU.prepareC(captured, targets))
+    val repeated = take(NU.prepareC(captured, targets))
     val actualnewrows = publication.rows.map(row => take(call.rowC(row.collection, row.identity)))
     val retainedafter = retained.map { (collection, identity) => take(call.rowC(collection, identity)).get }
     val rootafter = take(call.rowC(targets.publication, rootkey)).get
     val indexafter = take(call.rowC(targets.publication, indexkey)).get
     val nativeafter = take(instances.loadForCallC(f.configuration, captured.record.before.identity, call.core)).get
-    Then("only new Built documents and the complete immutable successor mapping are proposed, with no write or grant")
+    Then("only new Built documents are proposed, with no application-copy producer, write or grant")
     publication.captured shouldBe captured
     publication.targets shouldBe targets
-    publication.rows.dropRight(1) shouldBe expectedrows
-    publication.rows.size shouldBe newdocuments.size * 3 + 1
+    publication.rows shouldBe expectedrows
+    publication.rows.size shouldBe newdocuments.size * 3
     captured.record.snapshot.frontier match {
-      case NV.Frontier.HumanDirectionRequired => publication.rows.size shouldBe 1
+      case NV.Frontier.HumanDirectionRequired => publication.rows shouldBe Vector.empty
       case _: NV.Frontier.Applied =>
         newdocuments.nonEmpty shouldBe true
         retained.nonEmpty shouldBe true
     }
-    publication.rows.size + NU.NATIVE_RECEIPT_CREATES should be <= NU.MAX_TOTAL_CREATES
-    mapping.collection shouldBe targets.publication
-    mapping.identity shouldBe take(NC.keyC(captured.record.reference))
-    mapping.identity should not be rootkey
-    mapping.identity should not be indexkey
-    mapping.payload.fields.map(_.key) shouldBe Vector(NJ.storageField)
-    decoded shouldBe captured.record
-    native.payload.value shouldBe captured.record
-    native.current shouldBe captured.record.before
-    native.next shouldBe captured.record.next
     repeated.rows shouldBe publication.rows
-    repeated.anticipatedNativeBytes shouldBe publication.anticipatedNativeBytes
     actualnewrows.foreach(_ shouldBe None)
     retainedafter shouldBe retainedbefore
     rootafter shouldBe rootbefore
@@ -313,35 +751,76 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     nativeafter shouldBe nativebefore
     call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
 
-    Given("fixed scope purposes and structural descriptors whose count excludes the additional native receipt")
-    val capacityrows = Vector.tabulate(64)(index => U.Row(targets.publication, s"capacity-$index",
-      Record.data(NJ.storageField -> "structural-descriptor-not-a-committed-frame")))
-    val crossed = Vector(capacityrows.head.copy(collection = targets.instances),
-      capacityrows.head.copy(collection = targets.estimates),
-      capacityrows.head.copy(payload = Record.data(J.indexStorageField -> "not-a-successor-field")),
-      capacityrows.head.copy(identity = "foreign\nidentity"),
-      capacityrows.head.copy(payload = Record.data(NJ.storageField -> ("語" * (NJ.maximumPayloadBytes / 3 + 1)))))
-    val compileddefinition = take(SplitPhaseDefinitionBinding.bindC)
-    When("capacity, duplicate, crossed-purpose, payload and absent-source descriptors are admitted structurally")
-    val capacityaccepted = NU.validateRowsC(capacityrows.take(63), targets)
-    val capacityrefused = NU.validateRowsC(capacityrows, targets)
-    val duplicated = NU.validateRowsC(Vector(capacityrows.head, capacityrows.head), targets)
-    val purposefailures = crossed.map(row => NU.validateRowsC(Vector(row), targets))
-    val missing = Vector(NU.validateRowsC(null, targets), NU.validateRowsC(capacityrows.take(1), null))
-    val preparationfailures = Vector(NU.prepareC(null, targets, f.catalog.definition),
-      NU.prepareC(captured, null, f.catalog.definition), NU.prepareC(captured, targets, null),
-      NU.prepareC(captured, targets, compileddefinition))
+    Given("complete65-row descriptors and the genuine unexecuted Scope intent")
+    val capacityrows = Vector.tabulate(65)(index => U.Row(targets.proposals, s"capacity-$index",
+      Record.data(F.storageField -> "structural-document-descriptor")))
+    When("preparation cannot derive documents because its original capture or declared targets are absent")
+    val preparationfailures = Vector(NU.prepareC(null, targets), NU.prepareC(captured, null))
     val afterrefusals = take(instances.loadForCallC(f.configuration, captured.record.before.identity, call.core)).get
-    Then("63 local descriptors fit the64 TOTAL limit while all inconsistent data is refused without native mutation")
-    capacityaccepted shouldBe Consequence.unit
-    capacityrefused shouldBe a[Consequence.Failure[?]]
-    duplicated shouldBe a[Consequence.Failure[?]]
-    purposefailures.foreach(_ shouldBe a[Consequence.Failure[?]])
-    missing.foreach(_ shouldBe a[Consequence.Failure[?]])
+    Then("no publication is derived and the actual native state and binding remain unchanged")
     preparationfailures.foreach(_ shouldBe a[Consequence.Failure[?]])
     afterrefusals shouldBe nativebefore
     call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
-    assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseScopeProjectionCheckpointPublication.Prepared(null, null, Vector.empty, \"\")")
+    _specify_native_create_refusal(call, captured.intent, NJ.payloadCodec, capacityrows, targets.storeName, nativebefore)
+    assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseScopeProjectionCheckpointPublication.Prepared(null, null, Vector.empty)")
+  }
+
+  /** Real already captured Scope/Human intents share the actual consuming owner.
+    * This helper refuses effects; it does not construct native completion data.
+    */
+  private def _specify_native_create_refusal[A](call: Probe, intent: M.Intent[A],
+    codec: org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec[A],
+    rows: Vector[U.Row], storename: String, expected: InstanceRecord): Unit = {
+    Given("a genuine owning Scope or Human intent, complete65-row descriptors and the actual native executor")
+    rows.size shouldBe 65
+    val binding = call.executionContext.dataStoreSpace.captureBinding()
+    val native = take(take(org.goldenport.cncf.workflow.WorkflowComponentStorage.bindC(
+      ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+      SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
+      declaration.instances, declaration.continuations)).bindMechanicalC(K.advanceOperation, codec))
+    val receiptkey = take(M.keyC(intent.reference))
+    for ((row, reason) <- Vector(
+      rows.head.copy(collection = declaration.instances) -> "Component record Create scope is not declared",
+      rows.head.copy(payload = Record.data("id" -> "caller-selected", F.storageField -> "closed-data")) ->
+        "Component record payload cannot select its physical identity")) {
+      Given("the current owning call and data requesting protected storage or a payload-selected physical identity")
+      When("the actual Subsystem issues a fixed-target capability and stageCreateC consumes its payload")
+      val refused = org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(
+        call.core, storename, row.collection, DataStore.StringEntryId(row.identity)).flatMap(_.stageCreateC(row.payload))
+      Then("the responsible native storage boundary refuses before effects, without a passive row verifier")
+      refused match {
+        case Consequence.Failure(conclusion) => conclusion.display shouldBe reason
+        case _ => fail("Invalid actual storage request incorrectly returned success")
+      }
+      assertNative(call, expected)
+      take(call.rowC(declaration.continuations, receiptkey)) shouldBe None
+      take(call.rowC(rows.head.collection, rows.head.identity)) shouldBe None
+      call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+    }
+    for ((selected, reason) <- Vector(
+      rows -> "Mechanical program exceeds its bounded Create plan",
+      Vector(rows.head, rows.head) -> "Mechanical program duplicates a Create target")) {
+      Given("every selected row staged through the current owning ComponentRecordStorage")
+      val programs = selected.map { row =>
+        val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(
+          call.core, storename, row.collection, DataStore.StringEntryId(row.identity)))
+        take(storage.stageCreateC(row.payload))
+      }
+      val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+        [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+        (before, next) => before.flatMap(_ => next))
+      When("the genuine Scope or Human native owner consumes an oversized or duplicate actual Create program")
+      val refused = native.executeC(intent, program)(using call.executionContext)
+      Then("the exact program-consumer cause refuses every effect without changing native state or current binding")
+      refused match {
+        case Consequence.Failure(conclusion) => conclusion.display shouldBe reason
+        case _ => fail("Invalid Scope or Human actual Create program incorrectly returned success")
+      }
+      assertNative(call, expected)
+      take(call.rowC(declaration.continuations, receiptkey)) shouldBe None
+      selected.foreach(row => take(call.rowC(row.collection, row.identity)) shouldBe None)
+      call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+    }
   }
 
   private def _public_advance_c(call: Probe, wire: String, cli: Boolean): Consequence[OperationResponse] = {
@@ -364,7 +843,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     val work = issued.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
     val input = work.input.get.value
     val enriched = decision == S.Decision.Enriched
-    val judgment = S.Judgment(input.context, decision, "requested-semantics-only",
+    val judgment = S.Judgment(decision, "requested-semantics-only",
       if (enriched) input.items.map(i => S.NovelEstimate(i.identity, 120, maximumminutes, "bounded-work", "novel-closure")) else Vector.empty,
       if (enriched) input.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
         SplitPhasePartitionEnumeration.EdgeDisposition.Either, "independent-closure")) else Vector.empty,
@@ -399,7 +878,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         estimates.items.updated(0, estimates.items.head.copy(duration =
           SplitPhaseExplicitPartitionComputation.Duration.Unresolved("original semantic estimate required"))))))
       val context = saved.record.originalContext.copy(facts = facts)
-      _original_rows(O.Original(context, saved.record.originalStart, facts)).foreach { case (c, id, row) =>
+      _original_rows(O.Original(context, saved.record.originalStart, facts), saved.record.originalStart).foreach { case (c, id, row) =>
         take(call.writeC(c, id, row))
       }
       take(instances.createForCallC(f.configuration, f.initial, call.core))
@@ -414,7 +893,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     val issued = take(WorkflowWorkOrderJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, true))), SJ.requestCodec))
     val order = issued.current.asInstanceOf[WorkflowContinuation.WorkOrder[SS.Request]].request
     val input = order.input.get.value
-    val judgment = SS.Judgment(input.context, input.checkpoint, decision, "managed publication transfer analysis",
+    val judgment = SS.Judgment(decision, "managed publication transfer analysis",
       if (decision == SS.Decision.Enriched) input.gaps.map(gap => SS.Scope(gap.original.identity,
         if (broadscope) gap.producingItems else gap.producingItems.takeRight(1),
         if (broadscope || broadreceiver) gap.receivingItems else gap.receivingItems.take(1), "actual producer and receiver")) else Vector.empty,
@@ -430,8 +909,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     val indexkey = take(U.indexKeyC(saved.before.identity, saved.record.originalContext.reference))
     val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
       take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-    val root = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-      take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+    val root = take(_root_c(call, saved))
     val current = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
     Then("the genuine root and actual scope completion are active and unsuspended, not application Terminal")
     root.origin.isInstanceOf[K.Origin.PartitionCompletion] shouldBe partitionroot
@@ -469,14 +947,15 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       targets.proposals -> allocation.proposal.identity, targets.ownerships -> allocation.ownership.identity,
       targets.handoffs -> allocation.handoffs.identity))
     val documents = locations.map { (collection, identity) => (collection, identity, take(call.rowC(collection, identity))) }
-    Given("complete interpretation data, separately seeded as fixture data rather than canonical consent")
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R17; Example: E36; complete interpretation with unused fields at every depth, not canonical consent")
+    val storedwire = HJ.schema + ":" + _with_unused_fields(parser.parse(take(HJ.encodeC(record))).toOption.get).noSpaces
     if (take(call.rowC(dataid, record.reference.identity)).isEmpty)
-      take(call.writeC(dataid, record.reference.identity, Record.data(HJ.storageField -> take(HJ.encodeStorageC(record)))))
+      take(call.writeC(dataid, record.reference.identity, Record.data(HJ.storageField -> storedwire)))
     When("the real owning DataStore reads the retained interpretation field")
     val storedrow = take(call.rowC(dataid, record.reference.identity)).get
     Then("the value remains an opaque String with the complete exact storage representation")
     storedrow.fields.find(_.key == HJ.storageField).get.value.single.isInstanceOf[String] shouldBe true
-    storedrow.getString(HJ.storageField) shouldBe Some(take(HJ.encodeStorageC(record)))
+    storedrow.getString(HJ.storageField) shouldBe Some(storedwire)
     When("the actual owning reader selects exactly the answer's data reference and Workflow interprets the full published frontier")
     val selected = take(port.loadForCallC(record.reference, call.core)).get
     val admitted = take(HR.admitC(observed, selected))
@@ -515,15 +994,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     val captured = take(SplitPhaseHumanResolutionCheckpointPreparation.captureC(next))
     val capture = captured.record
     val downstream = take(SplitPhasePlanningSnapshot.projectC(next.asInstanceOf[W.HumanResolutionContinued].outcome))
-    Then("the full historical inputs, ordered frontier and downstream result remain distinct from an AI scope record")
-    capture.priorScope shouldBe observed.plan.source.record
-    capture.humanQuestion shouldBe observed.plan.question
-    capture.humanCompletion shouldBe observed.completion
+    Then("the consumed interpretation, ordered frontier and downstream result remain distinct from an AI scope record")
     capture.reference shouldBe take(SplitPhaseHumanResolutionCheckpointPreparation.referenceC(
       observed.completion.result.continuationId, observed.completion.result.resultReference))
     take(SplitPhaseHumanResolutionCheckpointPreparation.keyC(capture.reference))
       .getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be <= 1024
-    capture.humanIssued shouldBe observed.plan.next
     capture.resolution shouldBe record
     capture.frontier.map(_.key.cutAfterIndices) shouldBe allocations.map(_.cutAfterIndices)
     capture.frontier.map(_.transfers) shouldBe frontier.candidates.map(_.transfers)
@@ -550,83 +1025,78 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     captured.intent shouldBe M.Intent(captured.intent.configuration,
       M.Reference(capture.reference.identity, capture.reference.revision), capture.before,
       capture.before.revision, capture.next.history.last,
-      TypedValue(SplitPhaseHumanResolutionCheckpointPreparation.payloadType, capture))
+      TypedValue(SplitPhaseHumanResolutionCheckpointPreparation.payloadType, capture.savedResult))
     assertNative(call, observed.answered)
     documents.foreach { (collection, identity, prior) => take(call.rowC(collection, identity)) shouldBe prior }
     call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
 
     Given("the complete captured calculation and an independently selected generated definition, with no publication grant")
     val humanjson = SplitPhaseHumanResolutionCheckpointJsonV1
-    val inspection = SplitPhaseHumanResolutionCheckpointInspection
-    val definition = f.catalog.definition
     val fixtureid = "human-checkpoint-codec-fixture"
     When("the owning fixture stores and reads only the opaque complete codec text through the real shared-pool DataStore")
-    val wire = take(humanjson.encodeC(capture, definition))
+    val wire = take(humanjson.encodeC(capture))
     if (take(call.rowC(dataid, fixtureid)).isEmpty)
       take(call.writeC(dataid, fixtureid, Record.data(humanjson.storageField -> wire)))
     val row = take(call.rowC(dataid, fixtureid)).get
-    val restored = take(humanjson.decodeC(capture.reference, row.getString(humanjson.storageField).get, definition))
-    val nativewire = take(humanjson.encodeNativeC(capture, definition))
-    val nativecatalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(definition)))
-    val receipt = take(org.goldenport.cncf.workflow.WorkflowMechanicalTransitionJsonV1.decodeC(
-      nativewire, nativecatalog, humanjson.payloadCodec(definition)))
-    Then("the complete data and native-envelope projection roundtrip without a native append, application record or private proof")
+    val restored = take(humanjson.decodeC(capture.reference, row.getString(humanjson.storageField).get))
+    Then("the consumed saved-result data roundtrips without a synthetic native-envelope preflight")
     row.fields.find(_.key == humanjson.storageField).get.value.single.isInstanceOf[String] shouldBe true
     row.getString(humanjson.storageField) shouldBe Some(wire)
-    take(humanjson.encodeC(restored, definition)) shouldBe wire
-    take(humanjson.encodeC(receipt.payload.value, definition)) shouldBe wire
-    take(NJ.encodeC(restored.priorScope, definition)) shouldBe take(NJ.encodeC(capture.priorScope, definition))
-    restored.humanQuestion shouldBe capture.humanQuestion
-    restored.humanCompletion shouldBe capture.humanCompletion
+    humanjson.schema + ":" + humanjson.payloadCodec.encode(restored).noSpaces shouldBe wire
     restored.resolution shouldBe capture.resolution
     restored.frontier shouldBe capture.frontier
     restored.downstream shouldBe capture.downstream
-    SplitPhaseDefinitionBinding.sameRecord(restored.humanIssued, capture.humanIssued) shouldBe true
-    SplitPhaseDefinitionBinding.sameRecord(restored.before, capture.before) shouldBe true
-    SplitPhaseDefinitionBinding.sameRecord(restored.next, capture.next) shouldBe true
-    receipt.reference shouldBe M.Reference(capture.reference.identity, capture.reference.revision)
-    receipt.component shouldBe SmWorkflowComponent.componentId
-    receipt.operation shouldBe K.advanceOperation
-    inspection.inspectC(restored, definition).isSuccess shouldBe true
     assertNative(call, observed.answered)
     documents.foreach { (collection, identity, prior) => take(call.rowC(collection, identity)) shouldBe prior }
     call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
 
-    Given("crossed canonical/native/data/frontier joins and closed-frame corruptions of the same complete checkpoint")
-    val passive = Vector(capture.copy(reference = capture.reference.copy(revision = "foreign")),
-      capture.copy(humanIssued = capture.before), capture.copy(before = capture.next), capture.copy(next = capture.before),
-      capture.copy(humanCompletion = capture.humanCompletion.copy(instanceRevision = capture.next.revision)),
-      capture.copy(resolution = capture.resolution.copy(decision = HR.DecisionReference("foreign-decision"))),
-      capture.copy(resolution = capture.resolution.copy(reference = capture.resolution.reference.copy(revision = "foreign"))),
-      capture.copy(frontier = capture.frontier.tail),
-      capture.copy(frontier = capture.frontier.updated(0, capture.frontier.head.copy(output =
-        capture.frontier.head.output match {
-          case NV.CandidateOutput.Built(value, published) => NV.CandidateOutput.Built(value, !published)
-          case other => other
-        }))),
-      capture.copy(frontier = capture.frontier.updated(0, capture.frontier.head.copy(transfers = Vector.empty))))
+    Given("compatible unused metadata and removed legacy question/source certificates on the same Human result")
     val frame = parser.parse(wire.substring(humanjson.schema.length + 1)).toOption.get
-    val corrupt = Vector(frame.mapObject(_.add("extra", Json.Null)),
-      frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("extra", Json.Null))).top.get,
-      frame.hcursor.downField("payload").downField("humanQuestion").withFocus(_.mapObject(_.add("extra", Json.Null))).top.get)
+    val compatible = Vector(frame.mapObject(_.add("extra", Json.Null)),
+      frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("extra", Json.Null)
+        .add("priorScope", Json.False).add("humanQuestion", Json.fromString("unused"))
+        .add("humanCompletion", Json.arr()).add("humanIssued", Json.Null))).top.get)
+    When("typed decoding consumes the result without re-admitting removed historical copies")
+    val accepted = compatible.map(value => take(humanjson.decodeC(capture.reference,
+      humanjson.schema + ":" + value.noSpaces)))
+    Then("the actual consumed Human facts survive; unused metadata is inert and grants no publication")
+    frame.hcursor.downField("payload").focus.get.asObject.get.keys.toSet.intersect(Set("before", "next")) shouldBe Set.empty[String]
+    accepted.foreach { value =>
+      value.frontier shouldBe capture.frontier
+      value.downstream shouldBe capture.downstream
+      value.resolution shouldBe capture.resolution
+    }
+    assertNative(call, observed.answered)
+
+    Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; an inert capture with a historical preparation postimage")
+    val oldpostimage = capture.copy(next = capture.before)
+    When("typed decoding consumes it without reconstructing an append certificate")
+    val passivepostimage = take(humanjson.decodeC(capture.reference, take(humanjson.encodeC(oldpostimage))))
+    Then("serialization omits the unused capture state and decoding returns result data without inventing native state")
+    passivepostimage shouldBe capture.savedResult
+    passivepostimage.downstream shouldBe capture.downstream
+    assertNative(call, observed.answered)
+
+    Given("crossed selected result addresses, incomplete frontier coverage and malformed consumed fields")
+    val passive = Vector(capture.copy(reference = capture.reference.copy(revision = "foreign")),
+      capture.copy(frontier = capture.frontier.tail))
+    val corrupt = Vector(frame.mapObject(_.remove("payload")),
+      frame.mapObject(_.add("schemaVersion", Json.fromString("incompatible"))),
+      frame.hcursor.downField("payload").downField("frontier").withFocus(_ => Json.arr()).top.get,
+      frame.hcursor.downField("payload").downField("resolution").withFocus(_ => Json.False).top.get)
     val malformed = Vector(wire.substring(humanjson.schema.length + 1), "foreign:" + frame.noSpaces,
       humanjson.schema + ":" + "x" * humanjson.maximumPayloadBytes,
       humanjson.schema + ":" + 0xd800.toChar)
-    When("passive inspection and the complete-frame codec consume those crossed or malformed facts")
-    val refuseddata = passive.map(value => inspection.inspectC(value, definition))
-    val refusedencoding = passive.map(value => humanjson.encodeC(value, definition))
+    When("the existing typed result codec consumes those selected or malformed facts")
+    val refuseddecoded = passive.map(value => humanjson.encodeC(value).flatMap(
+      humanjson.decodeC(capture.reference, _)))
     val refusedframes = (corrupt.map(value => humanjson.schema + ":" + value.noSpaces) ++ malformed)
-      .map(value => humanjson.decodeC(capture.reference, value, definition))
-    val foreignselected = humanjson.decodeC(capture.reference.copy(revision = "foreign"), wire, definition)
-    val absentdefinition = humanjson.decodeC(capture.reference, wire, null)
-    val absentrecord = inspection.inspectC(null, definition)
-    Then("all contradictions refuse without shortening data, effects, a substitute record or execution permission")
-    refuseddata.foreach(_.isSuccess shouldBe false)
-    refusedencoding.foreach(_.isSuccess shouldBe false)
+      .map(value => humanjson.decodeC(capture.reference, value))
+    val foreignselected = humanjson.decodeC(capture.reference.copy(revision = "foreign"), wire)
+    Then("missing consumed typed data or mismatched frontier coverage refuses without effects or substitute data")
+    refuseddecoded.foreach(_.isSuccess shouldBe false)
     refusedframes.foreach(_.isSuccess shouldBe false)
     foreignselected.isSuccess shouldBe false
-    absentdefinition.isSuccess shouldBe false
-    absentrecord.isSuccess shouldBe false
     assertNative(call, observed.answered)
     documents.foreach { (collection, identity, prior) => take(call.rowC(collection, identity)) shouldBe prior }
     take(call.rowC(dataid, fixtureid)).get.getString(humanjson.storageField) shouldBe Some(wire)
@@ -710,7 +1180,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             children = originaltemplate.records.ownership.children.zipWithIndex.map { (child, index) =>
               child.copy(repository = SplitPhaseExplicitBoundaryValidation.RepositoryIdentity(s"repository-$index"))
             }))
-          take(SplitPhaseExplicitBoundaryValidation.loadC(originaltemplate.shape, records, records))
+          take(SplitPhaseExplicitBoundaryValidation.loadC(originaltemplate.shape, records))
         } else originaltemplate
         val saved = forBoundary(source, template)
         val workroot = Files.createDirectories(Path.of("target", "sm-workflow", "work", "scope-publication-spec"))
@@ -750,7 +1220,9 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           Given("the actual completed scope after physical pool shutdown, without allocation policies for " + mode)
           withHost(path, retainedvalues) { (call, _) =>
             val owner = call.core.component.get.subsystem.get
-            val port = take(NM.bindC(owner.configuration, declaration, f.catalog))
+            var observations = 0
+            val port = take(NM.bindWithReadbackObservationC(owner.configuration, declaration, f.catalog,
+              () => { observations += 1; Consequence.unit }))
             val scope = take(SplitPhaseManagedScopeSemantic.bindC(ComponentCreate(owner, ComponentOrigin.Builtin), declaration, f.catalog))
             val targets = take(U.bindTargetsC(owner.configuration, declaration))
             val rootkey = take(U.mappingKeyC(first.get.reference))
@@ -778,25 +1250,25 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             repeatedroute.source.current shouldBe completedroute.source.current
             repeatedroute.completion shouldBe completedroute.completion
             routingnative shouldBe expected.fold(before.get)(record =>
-              if (scenario == "collision") before.get else record.next)
+              if (scenario == "collision" && decision == SplitPhaseScopeSemantic.Decision.Enriched) before.get else record.next)
             routingroot shouldBe rootrow
             routingindex shouldBe indexrow
             call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
             if (expected.isEmpty) {
               When("the genuine owning completion is captured without publication")
               val captured = take(NC.captureC(take(scope.prepareProjectionForCallC(query(saved), call.core))))
-              val descriptors = take(NU.prepareC(captured, targets, f.catalog.definition))
+              val descriptors = take(NU.prepareC(captured, targets))
               val absent = take(port.loadForCallC(query(saved), call.core))
               Then("exact first absence is not a grant and the full capture has the actual first root")
               absent shouldBe None
               captured.record.snapshot.first shouldBe first.get
               captured.record.before shouldBe before.get
-              descriptors.rows.size + 1 should be <= NU.MAX_TOTAL_CREATES
               expected = Some(captured.record)
               if (scenario == "collision") {
-                Given("an independently existing new-document row, or a malformed immutable Human mapping")
+                Given("an independently existing new-document row, or an unrelated obsolete Human-direction copy")
                 val collided = if (decision == SplitPhaseScopeSemantic.Decision.Enriched) descriptors.rows.head
-                  else descriptors.rows.last.copy(payload = Record.data(NJ.storageField -> "malformed"))
+                  else U.Row(targets.publication, take(NC.keyC(captured.record.reference)),
+                    Record.data(NJ.storageField -> "malformed"))
                 take(call.writeC(collided.collection, collided.identity, collided.payload))
                 collisionrow = Some(collided)
               }
@@ -804,7 +1276,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val expectedrecord = expected.get
             val reference = M.Reference(expectedrecord.reference.identity, expectedrecord.reference.revision)
             val nativekey = take(M.keyC(reference))
-            if (scenario == "collision") {
+            if (scenario == "collision" && decision == SplitPhaseScopeSemantic.Decision.Enriched) {
               When("managed publication encounters the independent collision on each owning call")
               val refused = port.executeForCallC(query(saved), call.core)
               val actualnative = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
@@ -839,12 +1311,15 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 uncertain.isSuccess shouldBe false
                 committed shouldBe expectedrecord.next
               }
-              When("the owning port publishes or independently recovers the immutable saved successor twice")
+              Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R13; Example: E30; actual owning successor observation, not a prepared-copy certificate")
+              val priorobservations = observations
+              When("the owning port publishes or independently recovers the saved successor twice and loads its actual observation")
               val observed = take(port.executeForCallC(query(saved), call.core))
               val repeated = take(port.executeForCallC(query(saved), call.core))
               val loaded = take(port.loadForCallC(query(saved), call.core)).get
               val native = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
-              Then("complete native/application/documents agree and repeated or reopened calls append nothing")
+              Then("three owning calls consume three observations, preserve the actual successor and append nothing on repeated or reopened calls")
+              observations shouldBe priorobservations + 3
               observed.record shouldBe expectedrecord
               repeated.record shouldBe expectedrecord
               loaded.record shouldBe expectedrecord
@@ -853,6 +1328,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               native.history.dropRight(1) shouldBe before.get.history
               native.lifecycle shouldBe Lifecycle.Active
               native.suspension shouldBe None
+              _specify_scope_native_result(call, port, query(saved), targets, expectedrecord)
               Given("the genuine committed whole frontier and cached allocations after " + mode)
               When("Workflow restores it and absorbs only still-needed deterministic planning")
               val continued = take(W.continuePublishedScopeC(loaded))
@@ -923,7 +1399,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               deniedload.isSuccess shouldBe false
               deniedexecute.isSuccess shouldBe false
               assertNative(call, expectedrecord.next)
-              Given("a same-reference published proposal whose complete body changes independently")
+              Given("the declared Built deliverables of the actually selected scope frontier")
               val document = expectedrecord.snapshot.frontier match {
                 case NV.Frontier.Applied(candidates) => candidates.collectFirst {
                   case NV.Candidate(_, _, NV.CandidateOutput.Built(value, false)) => value
@@ -934,21 +1410,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                   case value: SplitPhasePlanningSnapshot.CandidateProjectionView.BuiltView => value
                 }.get
               }
-              val drifted = document.proposal.copy(children = document.proposal.children.updated(0,
-                document.proposal.children.head.copy(expectedMinutes = document.proposal.children.head.expectedMinutes + 1)))
-              take(call.writeC(targets.proposals, document.proposal.reference.identity,
-                Record.data(F.storageField -> take(F.encodeProposalC(drifted))), update = true))
-              When("retained load and execution independently observe the altered document body")
-              val driftload = port.loadForCallC(query(saved), call.core)
-              val driftexecute = port.executeForCallC(query(saved), call.core)
-              Then("matching references alone do not establish complete readback and no new native append occurs")
-              driftload.isSuccess shouldBe false
-              driftexecute.isSuccess shouldBe false
-              assertNative(call, expectedrecord.next)
-              Given("the private fixture restores its exact original proposal bytes after the refusal")
-              take(call.writeC(targets.proposals, document.proposal.reference.identity,
-                Record.data(F.storageField -> take(F.encodeProposalC(document.proposal))), update = true))
-              When("the complete original committed data is independently observed again")
+              _specify_generated_documents(call, targets, document,
+                () => port.loadForCallC(query(saved), call.core).map(_.get.record),
+                () => port.executeForCallC(query(saved), call.core).map(_.record),
+                expectedrecord, expectedrecord.next)
+              When("the restored declared documents are independently observed again")
               val recovered = take(port.loadForCallC(query(saved), call.core)).get
               Then("the existing successor is recovered rather than recreated")
               recovered.record shouldBe expectedrecord
@@ -1001,7 +1467,58 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     import org.goldenport.cncf.workflow.WorkflowResultJsonV1
     import SplitPhaseHumanDirectionAnswerContract as A
     import SplitPhaseNativeHumanAnswer as HA
+    import SplitPhaseNativeHumanDirection as H
     val request = question.current.asInstanceOf[WorkflowContinuation.Decision[SplitPhaseNativeHumanDirection.Input]].request
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R4; Example: E7; a genuinely issued Scope Decision and owning native plan")
+    val original = question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]]
+    val savedQuestion = question.copy(current = original.copy(
+      presentation = MinimalPresentation("Saved Human title", "Saved Human notice"),
+      request = request.copy(context = request.context.copy(summary = "Saved Human context",
+        snapshot = request.context.snapshot.copy(workspaceRevision = Some("saved-workspace-diagnostic"),
+          evidenceRevision = Some("saved-evidence-diagnostic"))))))
+    When("presentation and diagnostic context differ from today's regenerated question")
+    val selectedPlan = take(H.selectIssuedC(plan, savedQuestion))
+    val inspected = H.inspectStoredC(plan.source.record, savedQuestion, native)
+    Then("the saved question is consumed without another body certificate or native mutation")
+    selectedPlan.question shouldBe savedQuestion
+    take(org.goldenport.cncf.workflow.WorkflowDecisionJsonV1.decodeC(selectedPlan.wire, H.inputCodec)) shouldBe savedQuestion
+    inspected.isSuccess shouldBe true
+    take(instances.loadForCallC(f.configuration, native.identity, call.core)).get shouldBe native
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R4; Example: E8; the same genuine question with actual crossed targets")
+    val input = request.input.get.value
+    val foreignContext = input.copy(context = input.context.copy(identity = "foreign-context"))
+    val foreignScope = input.copy(scopeCheckpoint = input.scopeCheckpoint.copy(identity = "foreign-scope-checkpoint"))
+    val crossedQuestions = Vector(
+      question.copy(current = original.copy(request = request.copy(input = Some(TypedValue(H.inputCodec.typeIdentity, foreignContext))))),
+      question.copy(current = original.copy(request = request.copy(input = Some(TypedValue(H.inputCodec.typeIdentity, foreignScope))))),
+      question.copy(current = original.copy(request = request.copy(continuationId = org.goldenport.cncf.workflow.ContinuationIdentity("foreign-slot")))),
+      question.copy(current = original.copy(request = request.copy(operation = org.goldenport.cncf.workflow.StateMachineOperationIdentity("ForeignHuman", "answer")))),
+      question.copy(current = original.copy(request = request.copy(context = request.context.copy(snapshot =
+        request.context.snapshot.copy(modelRevision = Some("foreign-model")))))))
+    When("the selected context checkpoint slot executable route or model is foreign")
+    val selections = crossedQuestions.map(H.selectIssuedC(plan, _))
+    Then("real scope conflicts are rejected without requiring full question equality")
+    selections.foreach(_.isSuccess shouldBe false)
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R4; Example: E9; the genuine encoded Scope input")
+    val payload = H.inputCodec.encode(input)
+    val body = payload.hcursor.downField("payload").focus.get
+    val annotations = Vector(body.mapObject(_.add("command", Json.True)),
+      body.mapObject(fields => fields.add("context", fields("context").get.mapObject(_.add("grant", Json.True)))),
+      body.mapObject(fields => fields.add("frontier", fields("frontier").get.mapObject(_.add("authority", Json.True)))))
+    When("unused command grant and authority annotations are decoded beside the declared fields")
+    val annotated = (annotations.map(value => payload.mapObject(_.add("payload", value))) :+ _with_unused_fields(payload))
+      .map(H.inputCodec.decode)
+    Then("the original passive Input survives without acquiring execution authority or changing native state")
+    annotated.foreach(_ shouldBe Right(input))
+    take(instances.loadForCallC(f.configuration, native.identity, call.core)).get shouldBe native
+    Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R17; Example: E37; missing references or wrong consumed nested types")
+    val malformed = Vector(body.mapObject(_.remove("context")), body.mapObject(_.add("checkpoint", Json.True)),
+      body.mapObject(fields => fields.add("context", fields("context").get.mapObject(_.add("identity", Json.True)))),
+      body.mapObject(fields => fields.add("frontier", fields("frontier").get.mapObject(_.add("value", Json.True)))))
+    When("a public input lacks a usable original reference or complete frontier")
+    val decodedInputs = malformed.map(value => H.inputCodec.decode(payload.mapObject(_.add("payload", value))))
+    Then("declared typed input rejects them without a separate shape walk or serialized image")
+    decodedInputs.foreach(_.isLeft shouldBe true)
     Given("the genuine whole-frontier Decision, exact native suspension and every declared passive answer")
     val answers = Vector[A.Answer](A.Answer.ProvideResolution(SplitPhaseExplicitPartitionSemantic.ContextReference("human-resolution", "1")),
       A.Answer.Defer, A.Answer.Cancel)
@@ -1113,20 +1630,18 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         var answered = Option.empty[InstanceRecord]
         var submitted = Option.empty[ContinuationResult[A.Answer]]
         var ack = Option.empty[String]
-        val verifier = new V.Verifier {
-          val issuerIdentity = "independent-managed-human-spec"
-          def verifyForCallC(reference: V.EvidenceReference, expected: V.Binding, core: ActionCall.Core) = {
+        val evidence = new V.EvidencePort {
+          def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) = {
             checks += 1
-            expected.question shouldBe question.get
-            expected.result shouldBe submitted.get
-            expected.submittingParticipant shouldBe "participant"
-            reference shouldBe V.EvidenceReference("independent-human-consent", "1")
-            if (!allowed) Consequence.success(None)
-            else {
-              val now = core.executionContext.clock.instant()
-              Consequence.success(Some(V.Receipt(reference, issuerIdentity, "independent-human",
-                V.purpose, expected, now, now.plusSeconds(60))))
-            }
+            val enrolled = take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(V.AnswerContext(
+              core.component.get.core.instanceId, question.get, submitted.get, "participant")))
+            target shouldBe enrolled
+            reference shouldBe ContextReference("independent-human-consent", "1")
+            val observed = if (!allowed) None else Some(NativeHostEvidence.Evidence(NativeHostEvidence.schema, V.purpose,
+              ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision), reference.identity, reference.revision,
+              "independent-managed-human-spec", "independent-human", enrolled, core.executionContext.clock.instant().minusSeconds(86400).toString))
+            NativeHostEvidenceFixtureAdmission.admitC(core, "independent-managed-human-spec", NativeHostEvidence.Purpose.SplitAnswer,
+              ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision), target, observed)
           }
         }
         val observation = () => {
@@ -1153,14 +1668,31 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             (_, _) => Consequence.success(Vector.empty))
           result <- native.loadRetainedC(submitted.get.continuationId)(using call.executionContext)
         } yield result.map(_.completion)
-        withHost(path, declared, publicadvance = true, humanverifier = Some(verifier), humanreadback = observation,
+        withHost(path, declared, publicadvance = true, humanverifier = Some(evidence), humanreadback = observation,
           terminalreadback = terminalobservation) { (call, _) =>
           if (!initialized) {
             _complete_scope_fixture(call, saved, if (correction) SplitPhaseScopeSemantic.Decision.Enriched
               else SplitPhaseScopeSemantic.Decision.DecisionNeeded, partitionroot, broadreceiver = correction)
             When("the actual public advance publishes the complete frontier and issues its Human Decision")
             val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(saved)))
-            val issued = take(WorkflowDecisionJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, partitionroot))), H.inputCodec))
+            val original = take(WorkflowDecisionJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, partitionroot))), H.inputCodec))
+            val issued = if (!partitionroot && answer == A.Answer.Defer && !interrupted && objectivecase == "duration") {
+              Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R4; Example: E10; a saved physical question with different presentation and diagnostic context")
+              val decision = original.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]]
+              val selected = original.copy(current = decision.copy(presentation = MinimalPresentation("Original retained display", "Retained notice"),
+                request = decision.request.copy(context = decision.request.context.copy(summary = "Retained context",
+                  snapshot = decision.request.context.snapshot.copy(workspaceRevision = Some("saved-diagnostic-workspace"))))))
+              take(call.writeC(declaration.continuations, decision.request.continuationId.value,
+                Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + take(WorkflowDecisionJsonV1.encodeC(selected, H.inputCodec)))), update = true))
+              selected
+            } else original
+            Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R17; Example: E36; compatible annotations in the actual retained Decision input")
+            val issuedjson = parser.parse(take(WorkflowDecisionJsonV1.encodeC(issued, H.inputCodec))).toOption.get
+            val annotatedissue = issuedjson.hcursor.downField("request").downField("input").downField("value")
+              .withFocus(_with_unused_fields).top.get
+            When("the private fixture adds inert annotations to the saved question without altering the native envelope or state")
+            take(call.writeC(declaration.continuations, issued.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId.value,
+              Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + annotatedissue.noSpaces)), update = true))
             val current = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             question = Some(issued)
             pending = Some(current)
@@ -1176,7 +1708,8 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               take(WorkflowDecisionJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, cli))), H.inputCodec)) shouldBe issued
               assertNative(call, current)
             }
-            val resultwire = take(WorkflowResultJsonV1.encodeC(submitted.get, A.payloadCodec))
+            val resultjson = parser.parse(take(WorkflowResultJsonV1.encodeC(submitted.get, A.payloadCodec))).toOption.get
+            val resultwire = resultjson.hcursor.downField("result").downField("value").withFocus(_with_unused_fields).top.get.noSpaces
             When("the original authenticated relay submits without any independently admitted Human receipt")
             val refused = _public_operation_c(call, H.completionOperation.operation, resultwire, false)
             Then("authentication alone grants no answer append or successful acknowledgement")
@@ -1234,10 +1767,22 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             checks shouldBe 2
             if (interrupted) observations shouldBe 1
           }
+          Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R2; Example: E11; the committed answer with changed diagnostic transport only")
+          val diagnostic = submitted.get.copy(contextSnapshot = submitted.get.contextSnapshot.copy(
+            workspaceRevision = Some("new-diagnostic-workspace"), evidenceRevision = Some("new-diagnostic-evidence")),
+            evidence = submitted.get.evidence.copy(workerIdentity = Some("new-diagnostic-relay")))
+          When("the same answer target and direction are resubmitted without renewed independent evidence")
+          val diagnosticResponse = _scalar(take(_public_operation_c(call, H.completionOperation.operation,
+            take(WorkflowResultJsonV1.encodeC(diagnostic, A.payloadCodec)), false)))
+          Then("the response consumes the original saved answer and adds no native state or host admission")
+          diagnosticResponse shouldBe ack.get
+          assertNative(call, answered.get)
+          checks shouldBe 2
           When("the same question is offered a changed answer or a different independent evidence reference")
           val alternative = if (answer == A.Answer.Cancel) A.Answer.Defer else A.Answer.Cancel
           val conflicting = Vector(submitted.get.copy(result = TypedValue(A.resultType, alternative)),
-            submitted.get.copy(resultReference = ContextReference("different-consent", "1")))
+            submitted.get.copy(resultReference = ContextReference("different-consent", "1")),
+            submitted.get.copy(contextSnapshot = submitted.get.contextSnapshot.copy(modelRevision = Some("foreign-model"))))
           conflicting.foreach { result =>
             val refused = _public_operation_c(call, H.completionOperation.operation,
               take(WorkflowResultJsonV1.encodeC(result, A.payloadCodec)), true)
@@ -1383,7 +1928,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         val ap = SplitPhaseCandidateAllocationPolicy.prefix
         val rp = SplitPhasePartitionReplyAllocationPolicy.prefix
         val retainedvalues = declared.filterNot((key, _) => key.startsWith(ap) || key.startsWith(rp))
-        withHost(path, retainedvalues, publicadvance = true, humanverifier = Some(verifier), humanreadback = observation,
+        withHost(path, retainedvalues, publicadvance = true, humanverifier = Some(evidence), humanreadback = observation,
           terminalreadback = terminalobservation) { (call, _) =>
           When("the original relay observes the exact complete result after physical reopen")
           val observed = _scalar(take(_public_operation_c(call, H.completionOperation.operation,
@@ -1405,7 +1950,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           Consequence.unit
         }
         Given("the same stored answer and shared pool are reopened under a foreign authenticated relay")
-        withHost(path, retainedvalues, participant = "foreign", publicadvance = true, humanverifier = Some(verifier), humanreadback = observation,
+        withHost(path, retainedvalues, participant = "foreign", publicadvance = true, humanverifier = Some(evidence), humanreadback = observation,
           terminalreadback = terminalobservation) { (call, _) =>
           When("that relay requests the saved completion rather than submitting new consent")
           val refused = _public_operation_c(call, H.completionOperation.operation,
@@ -1428,7 +1973,13 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         if (answer.isInstanceOf[A.Answer.ProvideResolution]) {
           for (datapass <- Vector("first owning input read", "owning input read after physical pool reopen")) {
             var resolutioncalls = 0
-            withHost(path, declared) { (call, _) =>
+            val datapassvalues = if (publication == "passive" && datapass == "owning input read after physical pool reopen")
+              declared ++ Map(
+                SplitPhaseHumanResolutionCheckpointPublication.prefix + "store-name" -> ConfigurationValue.StringValue("workflow"),
+                SplitPhaseHumanResolutionCheckpointPublication.prefix + "record-collection" ->
+                  ConfigurationValue.StringValue(collection("humancheckpoints").print))
+              else declared
+            withHost(path, datapassvalues) { (call, _) =>
               Given(datapass + " with the same canonical Human completion and exact resolution reference")
               _specify_human_resolution(call, saved, submitted.get, correction)
               resolutioncalls += 1
@@ -1442,21 +1993,27 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                   CausationReference("fixture-later-history"), current.derivedCompositeOccurrence,
                   current.committedPredecessor, None)))
                 take(instances.appendForCallC(f.configuration, current.identity, current.revision, later.history.last, call.core))
-                When("the owning native observer restores the answer after later progress and fresh capture receives its calculation")
+                When("the owning native observer restores the answer after later progress and passive capture receives its calculation")
                 val observed = take(SplitPhaseManagedHumanCompletion.observeAnswerForAdvanceC(query(saved), declaration, f.catalog, call.core))
                 val reader = take(SplitPhaseHumanResolutionReadPolicy.bindC(call.core.component.get.subsystem.get.configuration, declaration))
                 val data = take(reader.loadForCallC(SplitPhaseHumanScopeResolution.Reference("independent-resolution", "1"), call.core)).get
                 val admitted = take(SplitPhaseHumanScopeResolution.admitC(observed, data))
                 val frontier = take(SplitPhaseExplicitCandidateProjection.applyHumanResolutionC(admitted))
                 val calculation = take(W.continueHumanResolutionC(frontier))
-                val refused = SplitPhaseHumanResolutionCheckpointPreparation.captureC(calculation)
-                Then("valid historical observation does not permit a second fresh successor or alter the later history")
+                val captured = take(SplitPhaseHumanResolutionCheckpointPreparation.captureC(calculation))
+                val targets = take(SplitPhaseHumanResolutionCheckpointPublication.bindTargetsC(
+                  call.core.component.get.subsystem.get.configuration, declaration))
+                val prepared = take(SplitPhaseHumanResolutionCheckpointPublication.prepareC(captured, targets))
+                Then("historical capture and descriptors are passive, retaining the original expected revision without effects")
                 observed.current shouldBe later
                 observed.answered shouldBe current
                 calculation shouldBe a[W.HumanResolutionContinued]
-                refused.isSuccess shouldBe false
+                captured.intent.current shouldBe current
+                captured.intent.expectedRevision shouldBe current.revision
                 assertNative(call, later)
                 checks shouldBe 2
+                _specify_stale_checkpoint(call, captured.intent, prepared.rows, targets.storeName,
+                  SplitPhaseHumanResolutionCheckpointJsonV1.payloadCodec, later)
               }
               Consequence.unit
             }
@@ -1479,7 +2036,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                   "inert Human successor acknowledgement interruption")
               } else Consequence.unit
             }
-            withHost(path, declared) { (call, _) =>
+            withHost(path, declared.filterNot((key, _) => key.startsWith(HP.prefix))) { (call, _) =>
               publicationcalls += 1
               val owner = call.core.component.get.subsystem.get.configuration
               val binding = call.executionContext.dataStoreSpace.captureBinding()
@@ -1493,64 +2050,38 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 val admitted = take(SplitPhaseHumanScopeResolution.admitC(humananswer, data))
                 val computed = take(SplitPhaseExplicitCandidateProjection.applyHumanResolutionC(admitted))
                 val captured = take(HK.captureC(take(W.continueHumanResolutionC(computed))))
-                When("the pure publisher prepares all and only new Built Creates, plus the complete application frame")
-                val prepared = take(HP.prepareC(captured, targets, f.catalog.definition))
+                When("the publisher prepares only new Built Creates without Human copy configuration")
+                val prepared = take(HP.prepareC(captured, targets))
                 expected = Some(captured.record)
                 val newbuilt = captured.record.frontier.collect { case NV.Candidate(_, _, NV.CandidateOutput.Built(value, false)) => value }
-                Then("previous Built documents are preserved and capacity includes the extra native receipt")
-                prepared.rows.size shouldBe newbuilt.size * 3 + 1
-                prepared.rows.filterNot(_.collection == targets.publication).map(_.identity).toSet shouldBe
+                Then("previous Built documents are preserved without a speculative TOTAL-count certificate")
+                prepared.rows.size shouldBe newbuilt.size * 3
+                prepared.rows.map(_.identity).toSet shouldBe
                   newbuilt.flatMap(value => Vector(value.proposal.reference.identity, value.ownership.reference.identity,
                     value.handoffs.reference.identity)).toSet
-                When("the complete successor is independently interpreted as a native frame")
-                val nativebytes = take(HJ.encodeNativeC(captured.record, f.catalog.definition))
-                Then("the publisher anticipates that complete native frame")
-                prepared.anticipatedNativeBytes shouldBe nativebytes
-                Given("sixty-three complete side-row descriptors and the extra native receipt")
-                val capacity = Vector.tabulate(63)(index => U.Row(targets.documents.proposals, s"capacity-$index",
+                Given("sixty-five complete descriptors and the genuine unexecuted Human intent")
+                val capacity = Vector.tabulate(65)(index => U.Row(targets.documents.proposals, s"capacity-$index",
                   Record.data(F.storageField -> "complete-descriptor-fixture")))
-                When("the complete side-row set is interpreted against the total Create limit")
-                val acceptedcapacity = HP.validateRowsC(capacity, targets)
-                Then("sixty-three side rows leave room for the native receipt")
-                acceptedcapacity.isSuccess shouldBe true
-                When("one further side row is interpreted against that same total limit")
-                val exceededcapacity = HP.validateRowsC(capacity :+ U.Row(targets.documents.proposals, "capacity-63",
-                  Record.data(F.storageField -> "complete-descriptor-fixture")), targets)
-                Then("sixty-four side rows cannot also accommodate the native receipt")
-                exceededcapacity.isSuccess shouldBe false
-                When("a duplicate side-row identity is interpreted")
-                val duplicatecapacity = HP.validateRowsC(capacity :+ capacity.head, targets)
-                Then("duplicate Create identities are refused")
-                duplicatecapacity.isSuccess shouldBe false
-                When("a side row claims the protected native instance purpose")
-                val nativealias = HP.validateRowsC(Vector(capacity.head.copy(collection = declaration.instances)), targets)
-                Then("side-row publication cannot alias the native instance purpose")
-                nativealias.isSuccess shouldBe false
-                When("an otherwise complete row has an oversized identity")
-                val oversizedidentity = HP.validateRowsC(Vector(capacity.head.copy(identity = "x" * 1025)), targets)
-                Then("the oversized Create identity is refused")
-                oversizedidentity.isSuccess shouldBe false
-                When("a complete row payload contains a malformed UTF-8 surrogate")
-                val malformedpayload = HP.validateRowsC(Vector(capacity.head.copy(payload = Record.data(F.storageField -> 0xd800.toChar.toString))), targets)
-                Then("the malformed payload is refused")
-                malformedpayload.isSuccess shouldBe false
+                _specify_native_create_refusal(call, captured.intent, HJ.payloadCodec, capacity, targets.storeName,
+                  take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get)
                 Given("the complete reserved native, input and document collection purposes")
                 val reserved = targets.documents.localCollections ++ Vector(declaration.instances, declaration.continuations,
                   collection("contexts"), collection("starts"), collection("selections"), collection("humanresolutions")) ++
                   F.Purpose.values.toVector.map(target)
                 reserved.distinct.foreach { alias =>
-                  When(s"the Human publication collection is interpreted as reserved purpose ${alias.print}")
+                  When(s"unused old Human copy metadata names ${alias.print}")
                   val aliased = HP.bindTargetsC(host(declared.updated(HP.prefix + "record-collection", ConfigurationValue.StringValue(alias.print))),
                     declaration)
-                  Then("publication purpose aliasing is refused")
-                  aliased.isSuccess shouldBe false
+                  Then("unused copy metadata selects no effect and does not reject actual document targets")
+                  take(aliased).documents.localCollections shouldBe targets.documents.localCollections
+                  take(aliased).storeName shouldBe targets.storeName
                 }
                 When("publication targets are interpreted without fresh Human input metadata")
                 val retainedtargets = HP.bindTargetsC(host(declared.filterNot((key, _) => key.startsWith(SplitPhaseHumanResolutionReadPolicy.prefix))), declaration)
                 Then("the retained observation configuration remains admissible")
                 retainedtargets.isSuccess shouldBe true
                 When("the publisher receives no captured successor")
-                val missingcapture = HP.prepareC(null, targets, f.catalog.definition)
+                val missingcapture = HP.prepareC(null, targets)
                 Then("missing capture is refused before publication")
                 missingcapture.isSuccess shouldBe false
                 When("the owning port observes the still-unpublished Human successor")
@@ -1561,7 +2092,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
 
                 if (publication == "publication-collision") {
                   Given("an independently existing row at one newly required Built Create identity")
-                  val collision = prepared.rows.find(_.collection != targets.publication).get
+                  val collision = prepared.rows.head
                   take(call.writeC(collision.collection, collision.identity, Record.data(F.storageField -> "collision-fixture")))
                   val before = prepared.rows.map(row => take(call.rowC(row.collection, row.identity)))
                   When("the real managed native UoW attempts the complete Create set")
@@ -1588,14 +2119,46 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                       case _ => fail("Interrupted Human successor publication incorrectly returned success")
                     }
                   } else {
-                    Then("the owning publication returns the complete captured successor")
-                    take(result).record shouldBe captured.record
+                    Then("the owning publication returns its actual committed record and current instance")
+                    val committed = take(result)
+                    committed.record shouldBe captured.record
+                    committed.current shouldBe captured.record.next
+                    committed.source.answered shouldBe humananswer.answered
                   }
+                  Given("a genuinely committed native Human successor without an application copy")
+                  val publicationkey = take(HK.keyC(captured.record.reference))
+                  When("the private probe checks the former application-copy address")
+                  val unusedcopy = take(call.rowC(collection("humancheckpoints"), publicationkey))
+                  Then("publication did not create a result-selection copy")
+                  unusedcopy shouldBe None
+                  Given("an old passive postimage in the native payload, not the actual native receipt envelope")
+                  When("the fixture adds inert native metadata without changing a consumed Human fact")
+                  _store_passive_postimage(call, M.Reference(captured.record.reference.identity, captured.record.reference.revision))
+                  Then("the real native successor remains committed and no extra acknowledgement occurs")
+                  assertNative(call, captured.record.next)
+                  publicationobservations shouldBe 1
+                  Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R14; Example: E31; a genuinely committed Human successor and one acknowledgement observation")
                   When("the owner independently reads back the committed native successor, application and Built documents")
                   val observed = take(port.loadForCallC(query(saved), call.core)).get
-                  Then("the complete committed result matches the captured successor")
+                  Then("the actual saved source and successor are consumed without another publication")
                   observed.record shouldBe captured.record
                   observed.current shouldBe captured.record.next
+                  observed.source.answered shouldBe humananswer.answered
+                  observed.record.before shouldBe humananswer.answered
+                  observed.record.next shouldBe captured.record.next
+                  publicationobservations shouldBe 1
+                  _specify_native_checkpoint_selection(call,
+                    M.Reference(captured.record.reference.identity, captured.record.reference.revision), observed.current)(
+                    port.loadForCallC(query(saved), call.core))
+                  _specify_human_native_result(call, port, query(saved), captured.record)
+                  When("owning execute consumes that independently read publication again")
+                  val acknowledged = take(port.executeForCallC(query(saved), call.core))
+                  Then("the observed current source and record return without a second acknowledgement or append")
+                  acknowledged.record shouldBe observed.record
+                  acknowledged.current shouldBe observed.current
+                  acknowledged.source.answered shouldBe observed.source.answered
+                  publicationobservations shouldBe 1
+                  assertNative(call, observed.current)
                   When("the planner restores the native-bound published Human downstream instead of recalculating it")
                   val resumed = take(W.restorePublishedHumanC(observed))
                   val resumedview = take(SplitPhasePlanningSnapshot.projectC(resumed.outcome))
@@ -1647,38 +2210,15 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                     case NV.Candidate(_, _, NV.CandidateOutput.Built(_, published)) => published
                   }
                   recapture.isSuccess shouldBe false
-                  Given("that same native Human publication and independently valid proofs owned by another repository")
-                  val nativehuman = take(SplitPhaseExplicitCandidateProjection.restorePublishedHumanC(observed))
-                  val originalduration = take(SplitPhaseExplicitCandidateAdmissibility.restoreHumanC(nativehuman))
-                    .asInstanceOf[SplitPhaseExplicitCandidateAdmissibility.DurationRanked]
-                  val foreignrepository = SplitPhaseExplicitBoundaryValidation.RepositoryIdentity("different-retained-human-repository")
-                  val crossedproofs = originalduration.input.boundaries.map(_.map { proof =>
-                    val changed = proof.records.copy(ownership = proof.records.ownership.copy(
-                      children = proof.records.ownership.children.map(child => child.copy(repository = foreignrepository))))
-                    take(SplitPhaseExplicitBoundaryValidation.loadC(proof.shape, changed, changed))
-                  })
-                  When("a duration admission with the same enumeration but those other ownership proofs is supplied to objective restoration")
-                  val crossedinput = take(SplitPhaseExplicitCandidateAdmissibility.loadC(originalduration.input.enumerated, crossedproofs))
-                  val crossedduration = take(SplitPhaseExplicitCandidateAdmissibility.assessC(crossedinput))
-                    .asInstanceOf[SplitPhaseExplicitCandidateAdmissibility.DurationRanked]
-                  val crossedrestoration = objectives.restoreHumanC(nativehuman, crossedduration)
-                  Then("the complete native admission is required before any copied objective can be returned")
-                  crossedduration.input.enumerated shouldBe originalduration.input.enumerated
-                  crossedduration.input.boundaries.flatMap(_.toVector.flatMap(_.records.ownership.children.map(_.repository)))
-                    .distinct shouldBe Vector(foreignrepository)
-                  crossedduration.input.boundaries.map(_.map(_.records)) should not be (
-                    originalduration.input.boundaries.map(_.map(_.records)))
-                  crossedrestoration match {
-                    case Consequence.Failure(conclusion) =>
-                      conclusion.display shouldBe "SplitPhase objective restoration requires the same complete native Human admission"
-                    case _ => fail("Objective restoration incorrectly accepted ownership proofs from another repository")
-                  }
                   When("the planner receives no owning Human publication observation")
                   val missingobservation = W.restorePublishedHumanC(null)
                   Then("passive data or absence cannot supply native continuation provenance")
                   missingobservation.isSuccess shouldBe false
-                  prepared.rows.foreach { row =>
-                    val stored = take(call.rowC(row.collection, row.identity)).get
+                  When("the owner reads every newly published document through its actual declared target")
+                  val saveddocuments = prepared.rows.map(row =>
+                    row -> take(call.rowC(row.collection, row.identity)).get)
+                  Then("actual generated document content is committed without an application result-copy dependency")
+                  saveddocuments.foreach { (row, stored) =>
                     stored.getString(row.payload.fields.head.key) shouldBe row.payload.getString(row.payload.fields.head.key)
                   }
                   assertNative(call, captured.record.next)
@@ -1753,26 +2293,26 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 assertNative(call, later.get)
                 publicationobservations shouldBe 1
                 checks shouldBe 2
-                Given("a corrupt retained application frame after successful production publication")
+                Given("the declared Built deliverables of the physically reopened Human publication")
                 val targets = take(HP.bindTargetsC(owner, declaration))
-                val key = take(HK.keyC(expected.get.reference))
-                val original = take(call.rowC(targets.publication, key)).get
-                take(call.writeC(targets.publication, key, Record.data(HJ.storageField -> "corrupt-retained-frame"), update = true))
-                When("both retained observation and execution encounter the contradictory publication")
-                val corruptobservation = port.loadForCallC(query(saved), call.core)
-                Then("retained observation refuses the corrupt frame")
-                corruptobservation.isSuccess shouldBe false
-                When("retained execution encounters the same contradictory publication")
-                val corruptexecution = port.executeForCallC(query(saved), call.core)
-                Then("neither path falls back to fresh input or mutates canonical native progress")
-                corruptexecution.isSuccess shouldBe false
-                assertNative(call, later.get)
-                Given("the original valid retained application frame is restored")
-                take(call.writeC(targets.publication, key, original, update = true))
-                When("the owner observes the restored retained publication")
-                val restored = take(port.loadForCallC(query(saved), call.core)).get
-                Then("the original complete result remains observable without new effects")
-                restored.record shouldBe expected.get
+                val document = expected.get.frontier.collectFirst {
+                  case NV.Candidate(_, _, NV.CandidateOutput.Built(value, false)) => value
+                }.orElse(expected.get.frontier.collectFirst {
+                  case NV.Candidate(_, _, NV.CandidateOutput.Built(value, true)) => value
+                }).get
+                _specify_generated_documents(call, targets.documents, document,
+                  () => port.loadForCallC(query(saved), call.core).map(_.get.record),
+                  () => port.executeForCallC(query(saved), call.core).map(_.record),
+                  expected.get, later.get)
+                Then("document consumption does not repeat publication observation or Human consent")
+                publicationobservations shouldBe 1
+                checks shouldBe 2
+                Given("the physically reopened native result remains usable with absent or corrupt unused Human copies")
+                _specify_unused_successor_copy(call, collection("humancheckpoints"),
+                  take(HK.keyC(expected.get.reference)), HJ.storageField, take(HJ.encodeC(expected.get)), expected.get, later.get)(
+                  port.loadForCallC(query(saved), call.core).map(_.get.record),
+                  port.executeForCallC(query(saved), call.core).map(_.record))
+                Then("unused application rows do not repeat publication observation or Human consent")
                 publicationobservations shouldBe 1
                 checks shouldBe 2
                 Consequence.unit
@@ -1846,58 +2386,65 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           call.executionContext.clock.instant() shouldBe now
           current shouldBe pending.get
           answers.foreach { answer =>
-            Given("an independently supplied receipt bound to the entire issued question, result and original participant")
+            Given("independent host input attesting the actual question target, direction and original relay")
             val submitted = ContinuationResult(question.get.handle, request.runId, request.continuationId, request.expectedRevision,
               request.context.snapshot, TypedValue(A.resultType, answer), ContextReference("independent-human-answer", "3"),
               Vector.empty, ExecutionEvidence(Vector(ContextReference("independent-human-answer", "3")), Some("participant")))
-            val expected = HV.Binding(call.core.component.get.core.instanceId, question.get, submitted, "participant")
-            val receipt = HV.Receipt(HV.EvidenceReference("independent-human-answer", "3"), "independent-provider", "human-user",
-              HV.purpose, expected, now, now.plusSeconds(60))
-            def _verifier_(value: Option[HV.Receipt]): HV.Verifier = new HV.Verifier {
-              val issuerIdentity = "independent-provider"
-              def verifyForCallC(reference: HV.EvidenceReference, binding: HV.Binding, core: ActionCall.Core) = {
-                reference shouldBe receipt.reference
-                binding shouldBe expected
+            val context = HV.AnswerContext(call.core.component.get.core.instanceId, question.get, submitted, "participant")
+            val attestation = take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(context))
+            val lookup = ThreeWorkflowHostEvidencePorts.key("independent-human-answer", "3")
+            val issued = NativeHostEvidence.Evidence(NativeHostEvidence.schema, HV.purpose, lookup,
+              "independent-human-answer", "3", "independent-provider", "human-user", attestation, now.minusSeconds(86400).toString)
+            var evidencereads = 0
+            def _evidence_(value: Option[NativeHostEvidence.Evidence]): HV.EvidencePort = new HV.EvidencePort {
+              def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) = {
+                evidencereads += 1
+                reference shouldBe submitted.resultReference
+                target shouldBe attestation
                 (core eq call.core) shouldBe true
-                Consequence.success(value)
+                NativeHostEvidenceFixtureAdmission.admitC(core, "independent-provider", NativeHostEvidence.Purpose.SplitAnswer,
+                  lookup, target, value)
               }
             }
-            When("the current-call answer is admitted using the independent host verifier")
-            val verified = take(HA.admitForCallC(plan.get, submitted, current, call.core, _verifier_(Some(receipt))))
-            val observed = take(verified.evidence.receiptForCallC(call.core))
+            When("the current-call answer is admitted at its independent host input boundary")
+            val verified = take(HA.admitForCallC(plan.get, submitted, current, call.core, _evidence_(Some(issued))))
+            val observed = verified.evidence.forCallC(call.core)
             val expectednext = take(HA.prepareC(plan.get, submitted, current))
-            Then("only the exact question/result receives a call-bound receipt and pure postimage, not a storage effect")
-            observed shouldBe receipt
+            Then("the host is admitted once and only the actual issued direction receives a call-bound admission and pure postimage")
+            observed.isSuccess shouldBe true
+            evidencereads shouldBe 1
             verified.next shouldBe expectednext
             previous.foreach { case (admitted, priorcore) =>
               When("evidence retained from a previous actual managed call is used in this distinct call")
-              val crossed = admitted.receiptForCallC(call.core)
+              val crossed = admitted.forCallC(call.core)
               Then("the earlier call's admission does not transfer by equal question or data")
               (priorcore eq call.core) shouldBe false
               crossed.isSuccess shouldBe false
             }
             currentadmitted = Some(verified.evidence)
             When("a different authenticated relay identity is claimed for the same actual current call")
-            val foreign = HV.admitForCallC(expected.copy(submittingParticipant = "foreign"), call.core, _verifier_(Some(receipt)))
-            Then("authentication of the original relay does not admit another participant or call the independent verifier")
+            val foreign = HV.admitForCallC(context.copy(submittingParticipant = "foreign"), call.core, _evidence_(Some(issued)))
+            Then("authentication of the original relay does not admit another participant or call the host input boundary")
             foreign.isSuccess shouldBe false
-            Given("absent or altered independent evidence, including exact expiry at the current execution clock")
-            val variants = Vector(None, Some(receipt.copy(reference = receipt.reference.copy(revision = "foreign"))),
-              Some(receipt.copy(issuer = "foreign")), Some(receipt.copy(purposeIdentity = "split-phase-start")),
-              Some(receipt.copy(humanParticipant = "")), Some(receipt.copy(binding = expected.copy(submittingParticipant = "foreign"))),
-              Some(receipt.copy(binding = expected.copy(result = submitted.copy(resultReference = ContextReference("foreign", "3"))))),
-              Some(receipt.copy(occurredAt = now.plusSeconds(1))), Some(receipt.copy(validUntil = now)),
-              Some(receipt.copy(validUntil = now.minusSeconds(1))))
+            evidencereads shouldBe 1
+            Given("absent or altered independent evidence, including a future event time")
+            val foreignRelay = take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(context.copy(submittingParticipant = "foreign")))
+            val foreignReference = take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(context.copy(
+              result = submitted.copy(resultReference = ContextReference("foreign", "3")))))
+            val variants = Vector(None, Some(issued.copy(revision = "foreign")),
+              Some(issued.copy(issuer = "foreign")), Some(issued.copy(purpose = "split-phase-start")),
+              Some(issued.copy(participant = "")),
+              Some(issued.copy(binding = foreignRelay)), Some(issued.copy(binding = foreignReference)),
+              Some(issued.copy(occurredAt = now.plusSeconds(1).toString)))
             variants.foreach { variant =>
-              When("the independent verifier returns that absent stale or crossed receipt")
-              val rejected = HA.admitForCallC(plan.get, submitted, current, call.core, _verifier_(variant))
+              When("that absent, future-dated or crossed input is read at the host boundary")
+              val rejected = HA.admitForCallC(plan.get, submitted, current, call.core, _evidence_(variant))
               Then("no verified Human answer is constructed")
               rejected.isSuccess shouldBe false
             }
-            Given("an unavailable verifier, not an authentication-derived receipt")
-            val unavailable = new HV.Verifier {
-              val issuerIdentity = "independent-provider"
-              def verifyForCallC(reference: HV.EvidenceReference, expected: HV.Binding, core: ActionCall.Core) =
+            Given("an unavailable host input, not authentication-derived consent")
+            val unavailable = new HV.EvidencePort {
+              def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) =
                 throw new IllegalStateException("private host evidence unavailable")
             }
             When("independent evidence observation throws")
@@ -1935,7 +2482,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           val rows = template.records.ownership.children
           val records = template.records.copy(ownership = template.records.ownership.copy(children = rows.updated(1,
             rows(1).copy(repository = SplitPhaseExplicitBoundaryValidation.RepositoryIdentity("second-repository")))))
-          take(SplitPhaseExplicitBoundaryValidation.loadC(template.shape, records, records))
+          take(SplitPhaseExplicitBoundaryValidation.loadC(template.shape, records))
         } else template
         val saved = forBoundary(source, boundary)
         val decision = if (scenario == "semantic-direction") SplitPhaseScopeSemantic.Decision.DecisionNeeded
@@ -1957,8 +2504,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           val indexkey = take(U.indexKeyC(saved.before.identity, saved.record.originalContext.reference))
           val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
             take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-          val root = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-            take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+          val root = take(_root_c(call, saved))
           Then("the retained original first root has its actual Mechanical or PartitionCompletion provenance")
           root shouldBe first.get
           root.origin.isInstanceOf[K.Origin.PartitionCompletion] shouldBe partitionroot
@@ -2024,11 +2570,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               val crossedinput = request.input.get.value.copy(scopeCheckpoint = request.input.get.value.scopeCheckpoint.copy(revision = "foreign"))
               val crossedpayload = H.inputCodec.encode(request.input.get.value).hcursor.downField("payload").downField("scopeCheckpoint")
                 .downField("revision").withFocus(_ => Json.fromString("foreign")).top.get
-              Then("the complete frontier survives, while WorkOrder reinterpretation, extension and crossed purpose data refuse")
+              Then("the complete frontier survives unused annotations, while WorkOrder reinterpretation and crossed purpose data refuse")
               decoded shouldBe question
               generated.asJson shouldBe payload
               workorder.isSuccess shouldBe false
-              H.inputCodec.decode(extended).isLeft shouldBe true
+              H.inputCodec.decode(extended) shouldBe Right(request.input.get.value)
               H.inputCodec.decode(crossedpayload).isLeft shouldBe true
               H.frontierC(crossedinput).isSuccess shouldBe false
               assertNative(call, native)
@@ -2139,8 +2685,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               input.gaps.map(_.original) shouldBe Vector(template.records.handoffs.handoffs.head)
               val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
                 take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-              val root = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-                take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+              val root = take(_root_c(call, saved))
               root.originalContext shouldBe saved.record.originalContext
               root.originalStart shouldBe saved.record.originalStart
               input.checkpoint shouldBe root.reference
@@ -2155,7 +2700,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               expectednative.get.suspension.get.continuationIdentity.value shouldBe order.continuationId.value
               _scalar(take(_public_advance_c(call, wire, true))) shouldBe first
               assertNative(call, expectednative.get)
-              val judgment = SS.Judgment(input.context, input.checkpoint, decision, "original-transfer-closure-analysis",
+              val judgment = SS.Judgment(decision, "original-transfer-closure-analysis",
                 if (decision == SS.Decision.Enriched) input.gaps.map(gap => SS.Scope(gap.original.identity,
                   gap.producingItems.takeRight(1), gap.receivingItems.take(1), "actual evidence producer and receiver")) else Vector.empty,
                 Vector(SplitPhaseExplicitPartitionSemantic.EvidenceReference("public-scope-evidence", "1")))
@@ -2165,9 +2710,9 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 ExecutionEvidence(Vector(ContextReference("public-scope-evidence", "1")), Some("participant")))
               submitted = Some(result)
               completionwire = Some(take(WorkflowResultJsonV1.encodeC(result, SJ.resultCodec)))
-              Given("a crossed host result reference and a foreign original scope context")
+              Given("a crossed host result reference and incomplete evidence for the original scope task")
               val crossed = result.copy(resultReference = result.resultReference.copy(identity = "participant-result"))
-              val foreign = result.copy(result = result.result.copy(value = judgment.copy(context = judgment.context.copy(revision = "foreign"))))
+              val foreign = result.copy(result = result.result.copy(value = judgment.copy(evidence = Vector.empty)))
               for (bad <- Vector(crossed, foreign); cli <- Vector(false, true)) {
                 When("the invalid reply is submitted by " + (if (cli) "CLI" else "Service"))
                 val rejected = _public_operation_c(call, SI.completionOperation.operation,
@@ -2220,11 +2765,10 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             assertNative(call, expectednative.get)
             val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
               take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-            val root = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-              take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+            val root = take(_root_c(call, saved))
             root shouldBe expectedroot.get
             _original_rows(O.Original(saved.record.originalContext, saved.record.originalStart,
-              saved.record.originalContext.facts)).foreach { case (collection, identity, expected) =>
+              saved.record.originalContext.facts), saved.record.originalStart).foreach { case (collection, identity, expected) =>
               val actual = take(call.rowC(collection, identity)).get
               expected.fields.foreach(field => actual.getString(field.key) shouldBe expected.getString(field.key))
             }
@@ -2254,11 +2798,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val repeatedsnapshot = take(SplitPhasePlanningSnapshot.projectC(repeated.original))
             val native = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val rootrow = take(call.rowC(targets.publication, rootkey)).get
-            val root = take(J.decodeC(expectedroot.get.reference, rootrow.getString(J.storageField).get))
+            val root = take(_root_c(call, saved))
             val retainedwork = take(scopeport.loadForCallC(prepared.source.plan.work.current
               .asInstanceOf[WorkflowContinuation.WorkOrder[SS.Request]].request.continuationId, call.core)).get
             val originals = _original_rows(O.Original(saved.record.originalContext, saved.record.originalStart,
-              saved.record.originalContext.facts)).map { case (collection, identity, expected) =>
+              saved.record.originalContext.facts), saved.record.originalStart).map { case (collection, identity, expected) =>
               expected -> take(call.rowC(collection, identity)).get
             }
             Then("native provenance and the complete cached frontier survive without reissue or publication")
@@ -2274,6 +2818,21 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             originals.foreach { case (expected, actual) => expected.fields.foreach(field =>
               actual.getString(field.key) shouldBe expected.getString(field.key)) }
             call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
+            for (historicalcollection <- Vector(collection("starts"), collection("contexts"))) {
+              Given("an unused historical Start or Context row after the actual mechanical computation")
+              val identity = if (historicalcollection == collection("starts")) saved.record.originalStart.reference.identity
+                else saved.record.originalContext.reference.identity
+              val prior = take(call.rowC(historicalcollection, identity)).get
+              take(call.writeC(historicalcollection, identity, Record.data(prior.fields.head.key -> "unused-historical-copy"), true))
+              When("the owning scope operation restores the retained native calculation and genuine semantic reply")
+              val actual = take(scopeport.prepareProjectionForCallC(query(saved), call.core))
+              Then("no independent Start or Context body becomes a mechanical continuation gate")
+              actual.source.source.record shouldBe expectedroot.get
+              actual.source.completion.result shouldBe submitted.get
+              actual.source.source.current shouldBe expectednative.get
+              assertNative(call, expectednative.get)
+              take(call.writeC(historicalcollection, identity, prior, true))
+            }
             decision match {
               case SS.Decision.DecisionNeeded =>
                 prepared.outcome.isInstanceOf[SplitPhaseExplicitCandidateProjection.ScopeHumanDirectionRequired] shouldBe true
@@ -2297,14 +2856,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val capturekey = take(SplitPhaseScopeProjectionCheckpointPreparation.keyC(capture.record.reference))
             val unchangednative = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val unchangedroot = take(call.rowC(targets.publication, rootkey)).get
-            Then("all native source data is retained and only one inert append is prepared without committing it")
+            Then("the consumed frontier and completion are retained and one inert append is prepared without committing it")
             capture.record shouldBe recaptured.record
             capture.intent shouldBe recaptured.intent
             capture.record.snapshot shouldBe fullsnapshot
-            capture.record.scopeWork shouldBe expectedwork.get
             capture.record.scopeCompletion shouldBe prepared.source.completion
-            capture.record.scopePredecessor shouldBe prepared.source.source.predecessor
-            capture.record.scopeIssued shouldBe prepared.source.plan.next
             capture.record.before shouldBe expectednative.get
             capture.record.next.history.dropRight(1) shouldBe expectednative.get.history
             capture.record.next.revision shouldBe expectednative.get.revision.next
@@ -2316,7 +2872,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             capture.intent.expectedRevision shouldBe capture.record.before.revision
             capture.intent.entry shouldBe capture.record.next.history.last
             capture.intent.reference shouldBe M.Reference(capture.record.reference.identity, capture.record.reference.revision)
-            capture.intent.payload shouldBe TypedValue(SplitPhaseScopeProjectionCheckpointPreparation.payloadType, capture.record)
+            capture.intent.payload shouldBe TypedValue(SplitPhaseScopeProjectionCheckpointPreparation.payloadType, capture.record.savedResult)
             capturekey.startsWith("scope-successor:") shouldBe true
             capturekey should not be rootkey
             unchangednative shouldBe expectednative.get
@@ -2324,83 +2880,70 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
             Given("the genuine captured full scope checkpoint and its existing native definitions")
             val fullrecord = capture.record
-            val definitioncatalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(f.catalog.definition)))
-            When("the full passive wrapper and complete native envelope are encoded and independently decoded")
-            val fullwire = take(NJ.encodeC(fullrecord, f.catalog.definition))
-            val decodedfull = take(NJ.decodeC(fullrecord.reference, fullwire, f.catalog.definition))
-            val nativewire = take(NJ.encodeNativeC(fullrecord, f.catalog.definition))
-            val decodednative = take(org.goldenport.cncf.workflow.WorkflowMechanicalTransitionJsonV1.decodeC(
-              nativewire, definitioncatalog, NJ.payloadCodec(f.catalog.definition)))
+            When("the consumed passive payload wrapper is encoded and independently decoded")
+            val fullwire = take(NJ.encodeC(fullrecord))
+            val decodedfull = take(NJ.decodeC(fullrecord.reference, fullwire))
             val untouchednative = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val untouchedroot = take(call.rowC(targets.publication, rootkey)).get
-            Then("the actual work completion closing result and all four native histories survive without any commit")
+            Then("the consumed completion and native transition data survive without any commit or historical certificate")
             decodedfull.reference shouldBe fullrecord.reference
             decodedfull.snapshot shouldBe fullrecord.snapshot
-            decodedfull.scopeWork shouldBe fullrecord.scopeWork
             decodedfull.scopeCompletion shouldBe fullrecord.scopeCompletion
             decodedfull.scopeCompletion.closingResult.nonEmpty shouldBe true
-            Vector(decodedfull.scopePredecessor -> fullrecord.scopePredecessor,
-              decodedfull.scopeIssued -> fullrecord.scopeIssued, decodedfull.before -> fullrecord.before,
-              decodedfull.next -> fullrecord.next).foreach { (actual, expected) =>
-              SplitPhaseDefinitionBinding.sameRecord(actual, expected) shouldBe true
-            }
-            decodednative.reference shouldBe capture.intent.reference
-            decodednative.component shouldBe SmWorkflowComponent.componentId
-            decodednative.operation shouldBe K.advanceOperation
-            SplitPhaseDefinitionBinding.sameRecord(decodednative.current, fullrecord.before) shouldBe true
-            SplitPhaseDefinitionBinding.sameRecord(decodednative.next, fullrecord.next) shouldBe true
-            decodednative.payload.typeIdentity shouldBe NC.payloadType
-            decodednative.payload.value.snapshot shouldBe fullrecord.snapshot
-            decodednative.payload.value.scopeCompletion shouldBe fullrecord.scopeCompletion
+            decodedfull shouldBe fullrecord.savedResult
             untouchednative shouldBe expectednative.get
             untouchedroot shouldBe rootrow
             call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
             _specify_scope_publication(call, capture, take(U.bindTargetsC(host(values), declaration)))
-            Given("the same full wrapper with crossed purpose definition native prefix missing closing data or extra nested fields")
-            val compileddefinition = take(SplitPhaseDefinitionBinding.bindC)
-            val order = fullrecord.scopeWork.current.asInstanceOf[WorkflowContinuation.WorkOrder[SS.Request]]
-            val input = order.request.input.get
-            val alteredwork = fullrecord.scopeWork.copy(current = order.copy(request = order.request.copy(
-              input = Some(input.copy(value = input.value.copy(result = input.value.result.copy(revision = "foreign")))))))
-            val invalidrecords = Vector(fullrecord.copy(scopeWork = alteredwork),
-              fullrecord.copy(scopeCompletion = fullrecord.scopeCompletion.copy(closingResult = None)),
-              fullrecord.copy(before = fullrecord.scopeIssued))
+            Given("the consumed passive result, foreign references and inert legacy source certificates")
+            val invalidrecords = Vector(fullrecord.copy(scopeCompletion = fullrecord.scopeCompletion.copy(closingResult = None)),
+              fullrecord.copy(before = fullrecord.next))
             val fulljson = parser.parse(fullwire.substring(NJ.schema.length + 1)).toOption.get
             val payload = fulljson.hcursor.downField("payload").focus.get
-            val extra = payload.mapObject(_.add("scopeWork",
-              payload.hcursor.downField("scopeWork").focus.get.mapObject(_.add("unexpected", Json.fromBoolean(true)))))
+            val extra = payload.mapObject(_.add("scopeWork", Json.fromString("unused-malformed-legacy-work"))
+              .add("scopePredecessor", Json.False).add("scopeIssued", Json.Null))
             val extendedwire = NJ.schema + ":" + fulljson.mapObject(_.add("payload", extra)).noSpaces
-            When("those independent inconsistencies reach typed encoding or selected full-frame decoding")
-            val rejectedrecords = invalidrecords.map(record => NJ.encodeC(record, f.catalog.definition))
-            val rejectedpurpose = NJ.decodeC(fullrecord.reference.copy(revision = "foreign"), fullwire, f.catalog.definition)
-            val rejectedextension = NJ.decodeC(fullrecord.reference, extendedwire, f.catalog.definition)
-            val rejecteddefinition = NJ.decodeC(fullrecord.reference, fullwire, compileddefinition)
-            val missingdefinition = NJ.decodeC(fullrecord.reference, fullwire, null)
-            Then("none is normalized into a different valid source or native grant")
-            rejectedrecords.foreach(_ shouldBe a[Consequence.Failure[?]])
+            When("typed payload readers consume actual fields and ignore removed legacy certificates")
+            val passiverecords = invalidrecords.map(record => take(NJ.decodeC(record.reference,
+              take(NJ.encodeC(record)))))
+            val rejectedpurpose = NJ.decodeC(fullrecord.reference.copy(revision = "foreign"), fullwire)
+            val legacy = take(NJ.decodeC(fullrecord.reference, extendedwire))
+            Then("passive data grants no transition authority, old certificates do not gate reading and foreign selected data is refused")
+            passiverecords.zip(invalidrecords).foreach { (actual, expected) =>
+              actual.scopeCompletion shouldBe expected.scopeCompletion
+              actual shouldBe expected.savedResult
+            }
             rejectedpurpose shouldBe a[Consequence.Failure[?]]
-            rejectedextension shouldBe a[Consequence.Failure[?]]
-            rejecteddefinition shouldBe a[Consequence.Failure[?]]
-            missingdefinition shouldBe a[Consequence.Failure[?]]
-            Given("a passive copy changing only human presentation near the full app frame byte bound")
-            val originalbytes = order.presentation.currentSituation.getBytes(UTF_8).length
-            val availablebytes = NJ.maximumPayloadBytes - fullwire.getBytes(UTF_8).length + originalbytes - 8
-            val inflatedorder = order.copy(presentation = order.presentation.copy(currentSituation = "語" * (availablebytes / 3)))
-            val inflated = fullrecord.copy(scopeWork = fullrecord.scopeWork.copy(current = inflatedorder))
-            When("the app frame is encoded and decoded but the larger complete native envelope is preflighted")
-            val inflatedwire = take(NJ.encodeC(inflated, f.catalog.definition))
-            val inflateddecoded = take(NJ.decodeC(inflated.reference, inflatedwire, f.catalog.definition))
-            val refusedenvelope = NJ.encodeNativeC(inflated, f.catalog.definition)
+            legacy shouldBe fullrecord.savedResult
+            payload.asObject.get.keys.toSet.intersect(Set("scopeWork", "scopePredecessor", "scopeIssued")) shouldBe Set.empty[String]
+            Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R10; Example: E24; actual checkpoint data with unused grant claims or missing consumed fields")
+            val extensions = Vector(payload.mapObject(_.add("undeclaredGrant", Json.True)),
+              payload.mapObject(o => o.add("reference", o("reference").get.mapObject(_.add("undeclaredGrant", Json.True)))))
+            val badpayloads = Vector(payload.mapObject(_.remove("scopeCompletion")),
+              payload.mapObject(o => o.add("reference", o("reference").get.mapObject(_.remove("revision")))))
+            When("the typed reader consumes those frames without constructing a source certificate")
+            val refusedshapes = badpayloads.map(value => NJ.decodeC(fullrecord.reference,
+              NJ.schema + ":" + fulljson.mapObject(_.add("payload", value)).spaces2))
+            val extended = extensions.map(value => take(NJ.decodeC(fullrecord.reference,
+              NJ.schema + ":" + fulljson.mapObject(_.add("payload", value)).spaces2)))
+            val compatible = take(NJ.decodeC(fullrecord.reference, NJ.schema + ":" + fulljson.spaces2))
+            val nativeafter = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
+            Then("formatting and unused grant claims do not gate the checkpoint or grant effects; missing consumed data fails conversion")
+            refusedshapes.foreach(_.isSuccess shouldBe false)
+            extended.foreach(_ shouldBe fullrecord.savedResult)
+            compatible.scopeCompletion shouldBe fullrecord.scopeCompletion
+            nativeafter shouldBe expectednative.get
+            call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
+            Given("an oversized external legacy certificate which is no longer emitted by the producer")
+            val inflated = extra.mapObject(_.add("scopeWork", Json.fromString("語" * (NJ.maximumPayloadBytes / 3 + 1))))
+            val inflatedwire = NJ.schema + ":" + fulljson.mapObject(_.add("payload", inflated)).noSpaces
+            When("the existing raw byte-bound reader receives the oversized external frame")
+            val refusedframe = NJ.decodeC(fullrecord.reference, inflatedwire)
             val stillnative = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val stillroot = take(call.rowC(targets.publication, rootkey)).get
-            Then("the valid app payload fits while aggregate native capacity is refused without a write or permit")
-            availablebytes should be > 0
-            inflatedwire.getBytes(UTF_8).length should be <= NJ.maximumPayloadBytes
-            inflatedwire.getBytes(UTF_8).length should be >= (NJ.maximumPayloadBytes - 11)
-            inflateddecoded.scopeWork shouldBe inflated.scopeWork
-            inflateddecoded.scopeCompletion shouldBe fullrecord.scopeCompletion
-            inflateddecoded.snapshot shouldBe fullrecord.snapshot
-            refusedenvelope shouldBe a[Consequence.Failure[?]]
+            Then("the existing resource boundary refuses the oversized raw input without retaining comparison-only bloat or granting a write")
+            inflatedwire.getBytes(UTF_8).length should be > NJ.maximumPayloadBytes
+            refusedframe shouldBe a[Consequence.Failure[?]]
             stillnative shouldBe expectednative.get
             stillroot shouldBe rootrow
             call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
@@ -2427,16 +2970,18 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               (targets.proposals, builtin.proposal.reference.identity,
                 Record.data(F.storageField -> take(F.encodeProposalC(changedproposal)))))
             for ((collection, identity, changed) <- driftrows) {
-              When("the owning call observes changed complete data under the same record identity")
+              When("the owning call restores the native scope result with an unused input or a readable generated document changed")
               val priorrow = take(call.rowC(collection, identity)).get
-              val refused = try {
+              val observed = try {
                 take(call.writeC(collection, identity, changed, update = true))
                 scopeport.prepareProjectionForCallC(query(saved), call.core)
               } finally take(call.writeC(collection, identity, priorrow, update = true))
               val unchanged = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
               val restoredrow = take(call.rowC(collection, identity)).get
-              Then("matching identity strings confer no restored capability and no native transition occurs")
-              refused.isSuccess shouldBe false
+              Then("the actual native result is consumed without a copy certificate or another native transition")
+              val restored = take(observed)
+              restored.source.source.record shouldBe expectedroot.get
+              restored.source.completion.result shouldBe submitted.get
               unchanged shouldBe expectednative.get
               restoredrow shouldBe priorrow
               call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
@@ -2496,14 +3041,32 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val before = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val rootbefore = take(call.rowC(targets.publication, rootkey)).get
             val indexbefore = take(call.rowC(targets.publication, indexkey)).get
-            When("the owning call observes its retained completed frontier but requests a fresh successor capture")
+            When("the owning call observes its retained frontier and prepares an inert historical successor intent")
             val retained = take(scopeport.prepareProjectionForCallC(query(saved), call.core))
             val snapshot = take(SplitPhaseScopeProjectionSnapshot.projectC(retained.outcome))
-            val rejected = SplitPhaseScopeProjectionCheckpointPreparation.captureC(retained)
+            val captured = take(NC.captureC(retained))
+            val descriptors = take(NU.prepareC(captured, targets))
+            val programs = descriptors.rows.map { row =>
+              val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(call.core,
+                targets.storeName, row.collection, DataStore.StringEntryId(row.identity)))
+              take(storage.stageCreateC(row.payload))
+            }
+            val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+              [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+              (before, next) => before.flatMap(_ => next))
+            val native = take(take(WorkflowComponentStorage.bindC(
+              ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+              SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
+              declaration.instances, declaration.continuations))
+              .bindMechanicalC(K.advanceOperation, NJ.payloadCodec))
+            When("the actual managed native executor consumes the obsolete expected revision and all Creates, including none")
+            val rejected = native.executeC(captured.intent, program)(using call.executionContext)
             val after = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             val rootafter = take(call.rowC(targets.publication, rootkey)).get
             val indexafter = take(call.rowC(targets.publication, indexkey)).get
-            Then("retained observation stays available while the obsolete predecessor grants no new capture or state change")
+            val receipt = take(call.rowC(declaration.continuations, take(M.keyC(captured.intent.reference))))
+            val rows = descriptors.rows.map(value => take(call.rowC(value.collection, value.identity)))
+            Then("passive preparation succeeds but actual stale execution grants no append, receipt or local row")
             before shouldBe laternative
             laternative.history.dropRight(1) shouldBe completedpredecessor.history
             laternative.revision shouldBe completedpredecessor.revision.next
@@ -2515,7 +3078,13 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             retained.source.source.record shouldBe expectedroot.get
             snapshot.first shouldBe expectedroot.get
             snapshot.judgment shouldBe submitted.get.result.value
+            captured.record.snapshot shouldBe snapshot
+            captured.intent.current shouldBe completedpredecessor
+            captured.intent.expectedRevision shouldBe completedpredecessor.revision
             rejected shouldBe a[Consequence.Failure[?]]
+            rejected.toString should include ("CWF77-WORKFLOW-PERSISTENCE-007")
+            receipt shouldBe None
+            rows.foreach(_ shouldBe None)
             after shouldBe before
             rootafter shouldBe rootbefore
             indexafter shouldBe indexbefore
@@ -2554,7 +3123,6 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           val path = Files.createTempDirectory(workroot, "partition-root-scope-").resolve("host.sqlite")
           val declared = values ++ SplitPhasePartitionReplyFixture.values
           val targets = take(U.bindTargetsC(host(declared), declaration))
-          val purposes = take(SplitPhasePartitionCompletionCheckpointDataStorePort.capturePurposesC(host(declared)))
           val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(saved)))
           var partition = Option.empty[AC.Record]
           var scopework = Option.empty[WorkflowInteraction[SS.Request, Nothing]]
@@ -2565,7 +3133,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             if (expectednative.isEmpty) {
               Given("the real public continuation pair and only the private original Start rows")
               When("public advance receives those original unresolved facts at the actual typed Start")
-              _original_rows(original).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+              _original_rows(original, saved.record.originalStart).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
               take(instances.createForCallC(f.configuration, f.initial, call.core))
               take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
               val issued = take(WorkflowWorkOrderJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, false))), PJ.requestCodec))
@@ -2587,7 +3155,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               val root = completed.checkpoint.get
               Then("the first root is the actual partition completion, never a relabeled mechanical fixture")
               completed.context shouldBe context
-              completed.start shouldBe original.start
+              completed.start.routing shouldBe original.start
               completed.issued shouldBe issued
               completed.completion.result shouldBe submitted
               completed.before shouldBe issuednative
@@ -2596,7 +3164,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               root.origin shouldBe K.Origin.PartitionCompletion(submitted.continuationId,
                 PS.ResultReference(submitted.resultReference.identity, submitted.resultReference.revision))
               root.originalContext shouldBe context
-              root.originalStart shouldBe original.start
+              root.originalStart.routing shouldBe original.start
               ack.current.asInstanceOf[WorkflowContinuation.Wait].expectedRevision.value shouldBe completed.next.revision.value.toString
               Given("the genuine partition-completed root with its whole mixed candidate frontier")
               When("public advance selects the next semantic scope requirement from that retained root")
@@ -2615,7 +3183,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               root.snapshot.projection.get.asInstanceOf[SplitPhasePlanningSnapshot.ProjectionView.Requirements]
                 .candidates.exists(_.isInstanceOf[SplitPhasePlanningSnapshot.CandidateProjectionView.BuiltView]) shouldBe true
               Given("only the scope reply requested by the issued scope WorkOrder")
-              val judgment = SS.Judgment(input.context, input.checkpoint, decision, "partition-root transfer evidence",
+              val judgment = SS.Judgment(decision, "partition-root transfer evidence",
                 if (decision == SS.Decision.Enriched) input.gaps.map(gap => SS.Scope(gap.original.identity,
                   gap.producingItems.takeRight(1), gap.receivingItems.take(1), "actual producer and receiver")) else Vector.empty,
                 Vector(PS.EvidenceReference("partition-root-scope-evidence", "1")))
@@ -2652,7 +3220,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             When("both public transports advance and the original partition completion is independently observed")
             val later = Vector(false, true).map(cli => _public_advance_c(call, wire, cli))
             val observed = take(SplitPhaseManagedTypedPartitionCompletion.observeForCallC(partition.get.completion.result.continuationId,
-              declaration, f.catalog, targets, purposes, call.core)).get
+              declaration, f.catalog, call.core)).get
             val current = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
             Then("no reissue or invented Terminal occurs and the original native completion remains exact")
             later.foreach {
@@ -2669,7 +3237,6 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             key.startsWith(SplitPhasePartitionReplyAllocationPolicy.prefix))
           for (mode <- Vector("owning-observation", "physical-reopen")) {
             Given("the genuine completed rows after host/pool closure, without allocation policies for " + mode)
-            val definitioncatalog = take(org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1.catalogC(Vector(f.catalog.definition)))
             withHost(path, retainedvalues) { (call, _) =>
               val scopeport = take(SplitPhaseManagedScopeSemantic.bindC(
                 ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin), declaration, f.catalog))
@@ -2678,31 +3245,23 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               val prepared = take(scopeport.prepareProjectionForCallC(query(saved), call.core))
               val captured = take(NC.captureC(prepared))
               val repeated = take(NC.captureC(take(scopeport.prepareProjectionForCallC(query(saved), call.core))))
-              val encoded = take(NJ.encodeC(captured.record, f.catalog.definition))
-              val decoded = take(NJ.decodeC(captured.record.reference, encoded, f.catalog.definition))
-              val nativewire = take(NJ.encodeNativeC(captured.record, f.catalog.definition))
-              val envelope = take(org.goldenport.cncf.workflow.WorkflowMechanicalTransitionJsonV1.decodeC(
-                nativewire, definitioncatalog, NJ.payloadCodec(f.catalog.definition)))
+              val encoded = take(NJ.encodeC(captured.record))
+              val decoded = take(NJ.decodeC(captured.record.reference, encoded))
               val rootrow = take(call.rowC(targets.publication, take(U.mappingKeyC(partition.get.checkpoint.get.reference)))).get
               val root = take(J.decodeC(partition.get.checkpoint.get.reference, rootrow.getString(J.storageField).get))
               val current = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
-              val originals = _original_rows(original).map { case (c, id, row) => row -> take(call.rowC(c, id)).get }
+              val originals = _original_rows(original, saved.record.originalStart).map { case (c, id, row) => row -> take(call.rowC(c, id)).get }
               Then("all original partition provenance and the complete frontier survive with no native or application write")
               captured.record.snapshot.first shouldBe partition.get.checkpoint.get
               captured.record.snapshot.first.originalContext shouldBe context
-              captured.record.snapshot.first.originalStart shouldBe original.start
-              captured.record.scopePredecessor shouldBe partition.get.next
-              captured.record.scopeWork shouldBe scopework.get
+              captured.record.snapshot.first.originalStart.routing shouldBe original.start
               captured.record.scopeCompletion.result shouldBe scoperesult.get
               captured.record.scopeCompletion.closingResult shouldBe Some(org.goldenport.cncf.workflow.StateMachineOperationResult(
                 SI.closingType, scoperesult.get.resultReference))
               captured.record.before shouldBe expectednative.get
               captured.record.next.history.dropRight(1) shouldBe expectednative.get.history
               captured.record.next.revision shouldBe expectednative.get.revision.next
-              decoded shouldBe captured.record
-              envelope.payload.value shouldBe captured.record
-              envelope.current shouldBe captured.record.before
-              envelope.next shouldBe captured.record.next
+              decoded shouldBe captured.record.savedResult
               repeated.record shouldBe captured.record
               root shouldBe partition.get.checkpoint.get
               current shouldBe expectednative.get
@@ -2752,7 +3311,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           withHost(path, currentvalues, publicadvance = true) { (call, _) =>
             if (expected.isEmpty) {
               Given("only original rows and revision1, with no private WorkOrder issue or completion call")
-              _original_rows(original).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+              _original_rows(original, f.record).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
               take(instances.createForCallC(f.configuration, f.initial, call.core))
               take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
               When("the real public advance issues the requested WorkOrder")
@@ -2785,7 +3344,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               val actual = take(AJ.decodeC(submitted.continuationId, raw.getString(AJ.storageField).get, Vector(f.catalog.definition)))
               Then("the canonical original issue, exact reply and adjacent native completion are committed together")
               actual.context shouldBe original.context
-              actual.start shouldBe original.start
+              actual.start.routing shouldBe original.start
               actual.issued shouldBe issued
               actual.completion.result shouldBe submitted
               actual.before shouldBe issuednative
@@ -2839,7 +3398,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             }
             assertNative(call, expected.get.next)
             retainedrows.foreach { case (c, id, row) => take(call.rowC(c, id)) shouldBe Some(row) }
-            _original_rows(original).foreach { case (c, id, row) =>
+            _original_rows(original, f.record).foreach { case (c, id, row) =>
               val current = take(call.rowC(c, id)).get
               row.fields.foreach(field => current.getString(field.key) shouldBe row.getString(field.key))
             }
@@ -2868,7 +3427,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         withHost(path, declared, publicadvance = true) { (call, _) =>
           Given("an authenticated owning host for " + mode)
           if (expected.isEmpty) {
-            _original_rows(original).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+            _original_rows(original, f.record).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
             take(instances.createForCallC(f.configuration, f.initial, call.core))
             take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
           }
@@ -2950,8 +3509,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           results.foreach(_.isSuccess shouldBe false)
           val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
             take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-          val record = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-            take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+          val record = take(_root_c(call, saved))
           if (expected.isEmpty) {
             expected = Some(record)
             expectednative = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core))
@@ -2970,6 +3528,57 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           expectednative.get.suspension shouldBe None
           take(call.rowC(declaration.continuations, saved.record.originalContext.owner.continuation.value)) shouldBe None
           call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
+          Consequence.unit
+        }
+      }
+    }
+  }
+
+  "Public fresh mechanical current inputs" should {
+    "compute from actual current estimates without using the stored context copy as an unchanged-data gate" in {
+      Given("a historical context and a valid current estimates row whose known duration is now 261 minutes")
+      val saved = capture()
+      val estimates = saved.record.originalContext.facts.partition.estimates
+      val changed = estimates.copy(items = estimates.items.updated(0, estimates.items.head.copy(
+        duration = SplitPhaseExplicitPartitionComputation.Duration.Known(261))))
+      val path = Files.createTempDirectory("smwf-current-estimates-").resolve("host.sqlite")
+      val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(saved)))
+      var installed = false
+      var expected = Option.empty[K.Record]
+      var expectednative = Option.empty[InstanceRecord]
+      var expectedwire = Option.empty[String]
+      for (mode <- Vector("fresh", "physical-reopen")) {
+        withHost(path, publicadvance = true) { (call, _) =>
+          if (!installed) {
+            take(installC(call, saved))
+            take(call.writeC(target(F.Purpose.Estimates), estimates.reference.identity,
+              Record.data(F.storageField -> take(F.encodeEstimatesC(changed))), true))
+            installed = true
+          }
+          When("the real public advance operation consumes current inputs in " + mode + " without invoking its CLI")
+          val result = _public_advance_c(call, wire, false)
+          val actual = take(_root_c(call, saved))
+          val native = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
+          val terminalwire = _scalar(take(result))
+          val terminal = take(org.goldenport.cncf.workflow.WorkflowTerminalJsonV1.decodeC(terminalwire,
+            SplitPhaseManagedSelectedPreview.payloadCodec))
+          val payload = terminal.current.asInstanceOf[WorkflowContinuation.Terminal[Json]].result.value
+          Then("the actual duration produces a unique selected Preview Terminal and reopening does not repeat its native history")
+          payload.hcursor.get[String]("mode").toOption shouldBe Some("PREVIEW")
+          take(SplitPhasePlanningSnapshot.dispositionC(actual.snapshot)) shouldBe SplitPhasePlanningSnapshot.Disposition.Planned
+          actual.snapshot.selection.partition.estimates.items.head.duration shouldBe
+            SplitPhaseExplicitPartitionComputation.Duration.Known(261)
+          actual.originalContext.facts.partition.estimates.items.head.duration shouldBe
+            SplitPhaseExplicitPartitionComputation.Duration.Known(261)
+          actual.committedRevision shouldBe saved.before.revision.next
+          native.lifecycle shouldBe Lifecycle.Completed
+          native.suspension shouldBe None
+          native.revision shouldBe actual.committedRevision.next.next
+          if (expected.isEmpty) {
+            expected = Some(actual); expectednative = Some(native); expectedwire = Some(terminalwire)
+          } else {
+            actual shouldBe expected.get; native shouldBe expectednative.get; terminalwire shouldBe expectedwire.get
+          }
           Consequence.unit
         }
       }
@@ -3007,8 +3616,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           val indexkey = take(U.indexKeyC(saved.before.identity, saved.record.originalContext.reference))
           val index = take(J.decodeIndexC(saved.before.identity, saved.record.originalContext.reference,
             take(call.rowC(targets.publication, indexkey)).get.getString(J.indexStorageField).get))
-          val root = take(J.decodeC(index.mapping, take(call.rowC(targets.publication,
-            take(U.mappingKeyC(index.mapping)))).get.getString(J.storageField).get))
+          val root = take(_root_c(call, saved))
           root.originalStart shouldBe saved.record.originalStart
           val selected = take(SplitPhaseSelectedDocuments.projectC(root.snapshot))
           selected.source shouldBe projection.source
@@ -3122,6 +3730,34 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
   }
 
   "Current-state observation before public advance" should {
+    "consume a compatible real catalog with changed diagnostic locations across native execution and physical reopen" in {
+      Given("official generated artifacts with only diagnostic line locations changed and privately admitted by the actual catalog owner")
+      val catalog = _relocated_catalog
+      catalog.workflow.workflow.rootLine should not be f.catalog.workflow.workflow.rootLine
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-relocated-catalog-").resolve("host.sqlite")
+      var installed = false
+      for (mode <- Vector("initial", "physical-reopen")) {
+        withHost(path, values) { (call, _) =>
+          Given("the real original rows and selected native predecessor for " + mode)
+          if (!installed) { take(installC(call, saved)); installed = true }
+          val port = take(Managed.bindC(_earlier_host, declaration, catalog))
+          When("the owning call executes or observes the genuine prepared transition through that admitted catalog")
+          val executed = take(port.executePreparedForCallC(saved, call.core))
+          val loaded = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+          Then("the saved calculation and actual native progression survive without reproof of source locations or the whole declaration")
+          executed.record shouldBe saved.record
+          loaded.record shouldBe saved.record
+          executed.current.revision shouldBe saved.next.revision
+          executed.current.history shouldBe saved.next.history
+          loaded.current.history shouldBe saved.next.history
+          assertNative(call, saved.next)
+          assertRows(call, saved)
+          Consequence.unit
+        }
+      }
+    }
+
     "read active, suspended and completed native history across SQLite reopen without allocating a checkpoint" in {
       Given("privately seeded original Start rows and native state, but no issued work or checkpoint")
       val saved = capture()
@@ -3165,7 +3801,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseManagedPlanningCheckpoint.ObservedCurrent(null, null)")
     }
 
-    "refuse crossed commands and independently changed original rows without writing or reconstructing planning" in {
+    "refuse crossed commands and unreadable routing metadata without certifying unused original input copies" in {
       Given("an actual native predecessor with independent original rows")
       val saved = capture()
       val path = Files.createTempDirectory("smwf-current-original-").resolve("host.sqlite")
@@ -3184,10 +3820,11 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         originalRows(saved).foreach { case (collection, identity, row) =>
           Given("one independently malformed original row")
           take(call.writeC(collection, identity, Record.data(row.fields.head.key -> "malformed-original"), true))
-          When("current-state observation reads that complete independent data")
+          When("current-state routing consumes only its raw Start and Context metadata")
           val result = port.loadCurrentForCallC(command, call.core)
-          Then("the malformed row is refused, not replaced by planning computation")
-          result.isSuccess shouldBe false
+          Then("unreadable selected routing metadata is refused while unused independent rows do not gate observation")
+          if (collection == this.collection("starts") || collection == this.collection("contexts")) result.isSuccess shouldBe false
+          else take(result).current shouldBe saved.before
           take(call.writeC(collection, identity, row, true))
         }
         Given("a changed source value that retains the original reference")
@@ -3195,10 +3832,10 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         val changedsource = source.copy(authority = source.authority.copy(identity = "different-source-authority"))
         take(call.writeC(target(F.Purpose.Source), source.reference.identity,
           Record.data(F.storageField -> take(F.encodeSourceC(changedsource))), true))
-        When("current-state observation compares the full independent source with the original Start")
+        When("current-state routing observes native state without preparing new source input")
         val changedresult = port.loadCurrentForCallC(command, call.core)
-        Then("equal references do not hide the changed original authority")
-        changedresult.isSuccess shouldBe false
+        Then("the unused independent source does not become a no-change gate or a grant to execute")
+        take(changedresult).current shouldBe saved.before
         Given("the exact original source restored for subsequent observation")
         take(call.writeC(target(F.Purpose.Source), source.reference.identity,
           Record.data(F.storageField -> take(F.encodeSourceC(source))), true))
@@ -3215,8 +3852,8 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           Record.data(TJ.storageField -> take(TJ.encodeC(changedstart))), true))
         When("retained-output observation runs before any mapping or work exists")
         val crossedretained = port.loadRetainedForCallC(command, call.core)
-        Then("semantic original-command drift is refused rather than presented as empty fresh output")
-        crossedretained.isSuccess shouldBe false
+        Then("an unused stored idempotency key does not certify cached absence or create fresh execution authority")
+        take(crossedretained) shouldBe None
         assertNative(call, saved.before)
         _assert_no_checkpoint(call, saved)
         Given("the exact original Start row restored")
@@ -3326,7 +3963,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             withHost(path, declared, publicadvance = true) { (call, _) =>
               if (expected.isEmpty) {
                 Given("only private original Start rows, with one estimate requiring genuine partition work")
-                _original_rows(O.Original(context, saved.record.originalStart, unresolved)).foreach { case (c, id, row) =>
+                _original_rows(O.Original(context, saved.record.originalStart, unresolved), saved.record.originalStart).foreach { case (c, id, row) =>
                   take(call.writeC(c, id, row))
                 }
                 take(instances.createForCallC(f.configuration, f.initial, call.core))
@@ -3402,7 +4039,6 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 value.request.items.head.closure shouldBe source.sourceBoundary.items(1)
               }
               projected.map(_.work).distinct.size shouldBe 1
-              projected.map(_.wire).distinct.size shouldBe 1
               projected.foreach { value =>
                 val order = value.work.current.asInstanceOf[WorkflowContinuation.WorkOrder[Reasoning.Request]].request
                 value.source should be theSameInstanceAs native
@@ -3422,7 +4058,6 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 order.completionOperation shouldBe SplitPhaseTypedReasoningWorkIssue.completionOperation
                 value.prepared.request.result shouldBe Semantic.ResultReference(order.continuationId.value + ":result",
                   value.next.revision.value.toString)
-                take(WorkflowWorkOrderJsonV1.decodeC(value.wire, SplitPhaseExplicitReasoningSemanticJson.requestCodec)) shouldBe value.work
               }
               assertNative(call, expectednative.get)
               call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
@@ -3520,8 +4155,31 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                       else Consequence.unit
                     })))
                 }
+                if (!partitionroot && issuecase != "public-issue" && mode == "first issue" && observations == 0) {
+                  Given("the old genuine selected source and a changed unused Start idempotency key in the actual private receipt")
+                  val reference = nativesource.checkpoint.origin.asInstanceOf[K.Origin.Mechanical].checkpoint
+                  val key = take(M.keyC(reference))
+                  val row = take(call.rowC(declaration.continuations, key)).get
+                  val prefix = "cncf.workflow-json.v1:"
+                  val json = parser.parse(row.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+                  val start = nativesource.checkpoint.originalStart
+                  val changedstart = start.copy(command = start.command.copy(idempotencyKey = "unused-reasoning-start-key"))
+                  val changed = json.hcursor.downField("payload").downField("value").downField("payload")
+                    .downField("originalStart").withFocus(_ => Json.fromString(take(TJ.encodeC(changedstart)))).top.get
+                  take(call.writeC(declaration.continuations, key,
+                    Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), update = true))
+                  When("the owning reader observes the actual native calculation rather than certifying the earlier copy")
+                  val actualsource = take(Source.mechanicalC(take(port.loadMechanicalForCallC(query(saved), call.core)).get))
+                  Then("only unused metadata differs; the actual frontier, postimage and assigned reasoning work are unchanged")
+                  actualsource.checkpoint should not be selected.get.checkpoint
+                  actualsource.checkpoint.originalStart.command.idempotencyKey shouldBe "unused-reasoning-start-key"
+                  actualsource.snapshot shouldBe nativesource.snapshot
+                  actualsource.publicationPostimage shouldBe nativesource.publicationPostimage
+                  take(Projection.prepareC(actualsource)).work shouldBe projected.work
+                  assertNative(call, expectednative.get)
+                }
                 val firstinterruption = issuecase == "interrupted-readback" && observations == 0
-                When("the owning issuer reobserves the original selected source, publishes only at exact absence, or reads the saved task")
+                When("the owning issuer consumes its reobserved native source without comparing the old copy, publishes only at exact absence, or reads the saved task")
                 // The old witness has its old current. The port must reobserve
                 // native current, not copy the witness or capture a physical lease.
                 val response = issuer.get.issueForCallC(selected.get, call.core)
@@ -3561,7 +4219,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 val pending = take(SplitPhaseTypedReasoningCompletion.pendingC(nativesource, actualcurrent, actualwork))
                 val evidence = Semantic.EvidenceReference("native-reasoning-result-evidence", "1")
                 def reasoningResult(decision: Reasoning.Decision): ContinuationResult[Reasoning.Judgment] = {
-                  val judgment = Reasoning.Judgment(request.context, decision, "unknown-only-classification",
+                  val judgment = Reasoning.Judgment(decision, "unknown-only-classification",
                     if (decision == Reasoning.Decision.Enriched) request.items.map(item =>
                       Reasoning.Assignment(item.identity, Reasoning.Classification.SettledExecution,
                         "this bounded implementation follows settled architecture")) else Vector.empty,
@@ -3575,7 +4233,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 val result = reasoningResult(Reasoning.Decision.Enriched)
                 val plan = take(SplitPhaseTypedReasoningCompletion.admitC(pending, result))
                 val admitted = plan.semantic.asInstanceOf[Reasoning.Admitted]
-                val previousdemands = pending.issue.prepared.pending.selection.data.objectives.demands.get
+                val previousdemands = pending.prepared.pending.selection.data.objectives.demands.get
                 val demands = admitted.resolved.objectives.demands.get
                 Then("known classifications and original authority are retained without another allocation, projection or native append")
                 demands.items(0) shouldBe previousdemands.items(0)
@@ -3603,7 +4261,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 decision.downstream shouldBe None
                 decision.next.suspension shouldBe None
                 assertNative(call, actualcurrent)
-                When("a reply crosses its assignment, evidence, known-item boundary or actual native completed history")
+                When("a reply crosses its assignment, evidence or known-item boundary")
                 val crossed = Vector(
                   result.copy(resultReference = ContextReference("foreign-reasoning-result", "1")),
                   result.copy(result = result.result.copy(value = result.result.value.copy(assignments = Vector.empty))),
@@ -3612,13 +4270,8 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                       Reasoning.Classification.SettledExecution, "attempt to rewrite known work")))),
                   result.copy(evidence = result.evidence.copy(references = Vector(ContextReference("unrelated-evidence", "1"))))
                 )
-                val retained = WorkflowCompletionRecordJsonV1.Record(plan.next.revision, result, Some(plan.closing))
-                Then("the natural result boundary refuses without accepting a projected completion as a native publication")
+                Then("the semantic result consumer refuses a crossed reply or a rewrite of known work without a native append")
                 crossed.foreach(reply => SplitPhaseTypedReasoningCompletion.admitC(pending, reply).isSuccess shouldBe false)
-                SplitPhaseTypedReasoningCompletion.pendingC(nativesource, nativesource.publicationPostimage,
-                  actualwork).isSuccess shouldBe false
-                SplitPhaseTypedReasoningCompletion.recoverC(nativesource, actualcurrent, actualwork,
-                  retained).isSuccess shouldBe false
                 assertNative(call, actualcurrent)
                 When("the same source is requested again inside this actual owning call")
                 val repeated = take(issuer.get.issueForCallC(selected.get, call.core))
@@ -3653,11 +4306,41 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             observations shouldBe expectedobservations
             Given("R6: the pending native reasoning suspension after closing and reopening the public host")
             withHost(path, retainedvalues, publicadvance = true) { (call, _) =>
+              val identity = issuedwork.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[Reasoning.Request]].request.continuationId
+              val order = issuedwork.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[Reasoning.Request]]
+              val saveddiagnostics = issuedwork.get.copy(current = order.copy(
+                presentation = order.presentation.copy(summary = Some("saved reasoning explanation")),
+                request = order.request.copy(context = order.request.context.copy(
+                  summary = "saved reasoning context", references = Vector(ContextReference("saved-diagnostic", "old")),
+                  snapshot = order.request.context.snapshot.copy(workspaceRevision = Some("old-workspace"),
+                    evidenceRevision = Some("old-evidence"))))))
+              val diagnosticwire = take(WorkflowWorkOrderJsonV1.encodeC(saveddiagnostics, ReasoningJson.requestCodec))
+              Given("the actual native task with changed presentation and non-scope Context diagnostics")
+              take(call.writeC(declaration.continuations, identity.value,
+                Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + diagnosticwire)), update = true))
+              When("real public advance reads that saved task without reconstructing its original reasoning frontier")
+              val diagnosticpending = take(WorkflowWorkOrderJsonV1.decodeC(
+                _scalar(take(_public_advance_c(call, wire, cli = false))), ReasoningJson.requestCodec))
+              Then("the saved diagnostics are returned without an issue-copy certificate or a native append")
+              diagnosticpending shouldBe saveddiagnostics
+              assertNative(call, issuednext.get)
+              Given("a malformed payload in that same test-owned native issue row")
+              take(call.writeC(declaration.continuations, identity.value,
+                Record.data("issuedWorkPayload" -> "malformed-reasoning-task"), update = true))
+              When("public advance reaches its owning native issued reader")
+              val malformed = _public_advance_c(call, wire, cli = false)
+              Then("that reader refuses the unusable task without another issue or history change")
+              malformed.isSuccess shouldBe false
+              assertNative(call, issuednext.get)
+              // Restore the supported saved diagnostics, not an earlier task
+              // copy: the following real fresh completion must consume them.
+              take(call.writeC(declaration.continuations, identity.value,
+                Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + diagnosticwire)), update = true))
               When("public advance selects the actual reasoning completion contract before scope or partition routing")
               val pending = take(WorkflowWorkOrderJsonV1.decodeC(
                 _scalar(take(_public_advance_c(call, wire, cli = true))), ReasoningJson.requestCodec))
-              Then("it observes precisely the assigned saved work without any native append or allocation")
-              pending shouldBe issuedwork.get
+              Then("it observes the supported saved task that remains in place for fresh completion without any native append")
+              pending shouldBe saveddiagnostics
               assertNative(call, issuednext.get)
               Consequence.unit
             }
@@ -3665,7 +4348,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val actualrequest = actualorder.input.get.value
             val answerdecision = if (issuecase == "interrupted-readback") Reasoning.Decision.DecisionNeeded else Reasoning.Decision.Enriched
             val resultevidence = Semantic.EvidenceReference("public-reasoning-completion-evidence", "1")
-            val judgment = Reasoning.Judgment(actualrequest.context, answerdecision, "unknown-only-public-result",
+            val judgment = Reasoning.Judgment(answerdecision, "unknown-only-public-result",
               if (answerdecision == Reasoning.Decision.Enriched) actualrequest.items.map(item =>
                 Reasoning.Assignment(item.identity, Reasoning.Classification.SettledExecution, "settled bounded implementation"))
               else Vector.empty, Vector(resultevidence))
@@ -3686,15 +4369,43 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 val successorkey = "reasoning-successor:" + take(M.keyC(M.Reference(actualorder.continuationId.value,
                   submitted.resultReference.revision)))
                 if (!collisiontested) {
-                  Given("an independently existing successor row in this private fixture before result submission")
-                  take(call.writeC(targets.publication, successorkey, Record.data(successorfield -> "owned-fixture-collision")))
-                  When("the real result Operation stages its native completion and successor against that collision")
-                  val refused = _public_operation_c(call, Projection.completionOperation.operation, resultwire, cli = false)
+                  Given("a real pending assignment with crossed semantic input or native revision and scope")
                   val storage = take(WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get,
                     ComponentOrigin.Builtin), SmWorkflowComponent.componentId, declaration.configuration,
                     Vector(f.catalog.definition), declaration.instances, declaration.continuations))
                   val native = take(storage.bindCompletionC(Projection.completionOperation, ReasoningJson.requestCodec,
                     ReasoningJson.resultCodec, Projection.closingType, (_, _) => Consequence.success(Vector.empty)))
+                  val semanticconflicts = Vector(
+                    "reply assignment" -> submitted.copy(resultReference = ContextReference("foreign-reasoning-result", "1")),
+                    "answer evidence" -> submitted.copy(evidence = submitted.evidence.copy(references = Vector.empty))) ++
+                    (if (answerdecision == Reasoning.Decision.Enriched) Vector(
+                      "missing unknown classification" -> submitted.copy(result = submitted.result.copy(value = judgment.copy(assignments = Vector.empty))),
+                      "known-item rewrite" -> submitted.copy(result = submitted.result.copy(value = judgment.copy(assignments =
+                        judgment.assignments :+ Reasoning.Assignment(source.inventory.orderedUnfinishedItems.head,
+                          Reasoning.Classification.SettledExecution, "not part of the unknown assignment")))))
+                    else Vector("partial DecisionNeeded" -> submitted.copy(result = submitted.result.copy(value = judgment.copy(assignments =
+                      Vector(Reasoning.Assignment(actualrequest.items.head.identity, Reasoning.Classification.SettledExecution,
+                        "DecisionNeeded cannot supply a partial classification")))))))
+                  val nativeconflicts = Vector(
+                    "stale native revision" -> submitted.copy(expectedRevision = org.goldenport.cncf.workflow.StateMachineRevision(actualorder.expectedRevision.value + ":stale")),
+                    "crossed executable scope" -> submitted.copy(contextSnapshot = submitted.contextSnapshot.copy(workflowRevision = "foreign-workflow-scope")))
+                  for ((reason, answer) <- semanticconflicts ++ nativeconflicts) {
+                    When("the real result Operation consumes " + reason + " at its semantic or native completion boundary")
+                    val rejectedwire = take(WorkflowResultJsonV1.encodeC(answer, ReasoningJson.resultCodec))
+                    val rejected = _public_operation_c(call, Projection.completionOperation.operation, rejectedwire, cli = false)
+                    Then("the harmful answer cannot complete or publish a successor while supported saved diagnostics remain usable")
+                    rejected.isSuccess shouldBe false
+                    take(native.loadRetainedC(actualorder.continuationId)(using call.executionContext)) shouldBe None
+                    take(call.rowC(targets.publication, successorkey)) shouldBe None
+                    val rejectedkey = "reasoning-successor:" + take(M.keyC(M.Reference(actualorder.continuationId.value,
+                      answer.resultReference.revision)))
+                    take(call.rowC(targets.publication, rejectedkey)) shouldBe None
+                    assertNative(call, issuednext.get)
+                  }
+                  Given("an independently existing successor row in this private fixture before result submission")
+                  take(call.writeC(targets.publication, successorkey, Record.data(successorfield -> "owned-fixture-collision")))
+                  When("the real result Operation stages its native completion and successor against that collision")
+                  val refused = _public_operation_c(call, Projection.completionOperation.operation, resultwire, cli = false)
                   Then("no native completion or revision is committed and the independent row is not overwritten")
                   refused.isSuccess shouldBe false
                   take(native.loadRetainedC(actualorder.continuationId)(using call.executionContext)) shouldBe None
@@ -3704,7 +4415,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                   take(call.deleteFixtureRowC(targets.publication, successorkey))
                   collisiontested = true
                 }
-                When("the participant returns only its assigned Judgment through the launcher or owning Operation")
+                When("the participant returns its assigned Judgment against the supported saved diagnostics without restoring an original issue copy")
                 val response = take(_public_operation_c(call, Projection.completionOperation.operation, resultwire,
                   cli = reopen == "public result"))
                 val wire = _scalar(response)
@@ -3713,20 +4424,23 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 if (completed.isEmpty) { completed = Some(observed.current); acknowledgement = Some(wire) }
                 Then("the native completion and complete successor are retained without another AI call, allocation or append")
                 wire shouldBe acknowledgement.get
+                val wait = take(org.goldenport.cncf.workflow.WorkflowWaitJsonV1.decodeC(wire))
+                  .current.asInstanceOf[WorkflowContinuation.Wait]
+                wait.expectedRevision.value shouldBe observed.current.revision.value.toString
                 observed.current shouldBe completed.get
-                observed.plan.submitted shouldBe submitted
-                observed.plan.next shouldBe completed.get
-                observed.plan.next.history.dropRight(1) shouldBe issuednext.get.history
-                observed.plan.next.revision shouldBe issuednext.get.revision.next
-                observed.plan.next.suspension shouldBe None
-                observed.plan.closing shouldBe StateMachineOperationResult(Projection.closingType, submitted.resultReference)
+                observed.completion.result shouldBe submitted
+                observed.next shouldBe completed.get
+                observed.next.history.dropRight(1) shouldBe issuednext.get.history
+                observed.next.revision shouldBe issuednext.get.revision.next
+                observed.next.suspension shouldBe None
+                observed.completion.closingResult shouldBe Some(StateMachineOperationResult(Projection.closingType, submitted.resultReference))
                 if (answerdecision == Reasoning.Decision.Enriched) {
-                  observed.plan.downstream.nonEmpty shouldBe true
-                  completedplanning = observed.plan.downstream
-                  observed.plan.downstream.get.partition shouldBe expected.get.snapshot.partition
-                  observed.plan.downstream.get.projection shouldBe expected.get.snapshot.projection
-                  observed.plan.downstream.get.admission shouldBe expected.get.snapshot.admission
-                } else observed.plan.downstream shouldBe None
+                  observed.downstream.nonEmpty shouldBe true
+                  completedplanning = observed.downstream
+                  observed.downstream.get.partition shouldBe expected.get.snapshot.partition
+                  observed.downstream.get.projection shouldBe expected.get.snapshot.projection
+                  observed.downstream.get.admission shouldBe expected.get.snapshot.admission
+                } else observed.downstream shouldBe None
                 assertNative(call, completed.get)
                 When("a repeated result attempts to replace the already committed semantic answer")
                 val crossed = submitted.copy(result = submitted.result.copy(value = judgment.copy(rationale = "different answer")))
@@ -3735,17 +4449,72 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 Then("historical observation refuses the different result without changing native completion")
                 refused.isSuccess shouldBe false
                 assertNative(call, completed.get)
-                Given("the saved successor's identical semantic JSON with harmless presentation whitespace")
+                Given("the saved successor calculation and unrelated physical metadata without a reconstructed Plan certificate")
                 val stored = take(call.rowC(targets.publication, successorkey)).get.getString(successorfield).get
                 val prefix = "sm-workflow.reasoning-successor.v1:"
-                val formatted = prefix + io.circe.parser.parse(stored.substring(prefix.length)).toOption.get.spaces2
+                val storedjson = io.circe.parser.parse(stored.substring(prefix.length)).toOption.get
+                val diagnostics = observed.downstream.map { snapshot =>
+                  val partition = snapshot.partition.asInstanceOf[Snapshot.PartitionView.Enumerated]
+                  partition.evaluatedCount should be < snapshot.selection.partition.policy.maximumCombinations
+                  snapshot.copy(partition = partition.copy(evaluatedCount = partition.evaluatedCount + 1,
+                    rejectedByCeiling = partition.rejectedByCeiling + 1))
+                }
+                val diagnosticjson = storedjson.mapObject(_.add("downstream", diagnostics
+                  .map(snapshot => Json.fromString(take(SplitPhasePlanningSnapshotJsonV1.encodeC(snapshot))))
+                  .getOrElse(Json.Null)))
+                take(call.writeC(targets.publication, successorkey, Record.data(successorfield -> (prefix + diagnosticjson.noSpaces),
+                  "unusedPhysicalColumn" -> "not a saved calculation certificate"), update = true))
+                When("the real public repeated result and owning retained reader consume the saved calculation")
+                val diagnosticresponse = _scalar(take(_public_operation_c(call, Projection.completionOperation.operation, resultwire, cli = false)))
+                val diagnosticobservation = take(SplitPhaseManagedReasoningCompletion.observeForCallC(actualorder.continuationId,
+                  declaration, f.catalog, call.core)).get
+                Then("stored diagnostics survive without semantic readmission whole-body comparison or another native append")
+                diagnosticresponse shouldBe acknowledgement.get
+                diagnosticobservation.downstream shouldBe diagnostics
+                diagnosticobservation.completion.result shouldBe submitted
+                take(call.rowC(targets.publication, successorkey)).get.getString("unusedPhysicalColumn") shouldBe
+                  Some("not a saved calculation certificate")
+                assertNative(call, completed.get)
+                Given("the actual issued task has different saved presentation after its native result completed")
+                val issuedpayload = take(call.rowC(declaration.continuations, actualorder.continuationId.value))
+                  .get.getString("issuedWorkPayload").get
+                val originalorder = issuedwork.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[Reasoning.Request]]
+                val diagnostictask = issuedwork.get.copy(current = originalorder.copy(
+                  presentation = originalorder.presentation.copy(summary = Some("retained saved explanation"))))
+                take(call.writeC(declaration.continuations, actualorder.continuationId.value,
+                  Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + take(WorkflowWorkOrderJsonV1.encodeC(
+                    diagnostictask, ReasoningJson.requestCodec)))), update = true))
+                When("the real repeated result and retained observation select that actual issued task")
+                val retainedtaskresponse = _scalar(take(_public_operation_c(call, Projection.completionOperation.operation, resultwire, cli = false)))
+                val retainedtask = take(SplitPhaseManagedReasoningCompletion.observeForCallC(actualorder.continuationId,
+                  declaration, f.catalog, call.core)).get
+                Then("source selection does not reconstruct the old WorkOrder or certify its unchanged publication prefix")
+                retainedtaskresponse shouldBe acknowledgement.get
+                retainedtask.work shouldBe diagnostictask
+                retainedtask.downstream shouldBe diagnostics
+                assertNative(call, completed.get)
+                take(call.writeC(declaration.continuations, actualorder.continuationId.value,
+                  Record.data("issuedWorkPayload" -> issuedpayload), update = true))
+                Given("that selected successor row names a different retained result")
+                val crossedjson = diagnosticjson.mapObject(_.add("result", Json.arr(Json.fromString("foreign-reasoning-result"),
+                  Json.fromString(submitted.resultReference.revision))))
+                take(call.writeC(targets.publication, successorkey, Record.data(successorfield -> (prefix + crossedjson.noSpaces)), update = true))
+                When("the actual public result Operation resolves the successor belonging to this native completion")
+                val crossedsuccessor = _public_operation_c(call, Projection.completionOperation.operation, resultwire, cli = false)
+                Then("another result's calculation cannot substitute for the selected completion and native state stays unchanged")
+                crossedsuccessor.isSuccess shouldBe false
+                assertNative(call, completed.get)
+                // Restore only this fixture-owned payload for the separate
+                // physical reopen and Preview expectations below.
+                Given("the original saved successor JSON restored with harmless presentation whitespace")
+                val formatted = prefix + storedjson.spaces2
                 take(call.writeC(targets.publication, successorkey, Record.data(successorfield -> formatted), update = true))
                 When("retained observation reads the formatted record rather than a copied canonical-byte proof")
                 val formattedobservation = take(SplitPhaseManagedReasoningCompletion.observeForCallC(actualorder.continuationId,
                   declaration, f.catalog, call.core)).get
                 Then("full semantic successor data and the native completion remain unchanged")
-                formattedobservation.plan.downstream shouldBe observed.plan.downstream
-                formattedobservation.plan.submitted shouldBe submitted
+                formattedobservation.downstream shouldBe observed.downstream
+                formattedobservation.completion.result shouldBe submitted
                 assertNative(call, completed.get)
                 Consequence.unit
               }
@@ -3880,9 +4649,9 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseRetainedReasoningSource.Source(null, null, null)")
           assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPlanningAdvance.ReasoningRestored(null, null)")
           assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseManagedPlanningCheckpoint.Observed(null, null, null)")
-          assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedReasoningWorkIssue.Plan(null, null, null, null, null, null)")
+          assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedReasoningWorkIssue.Plan(null, null, null, null, null)")
           assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseManagedReasoningIssue.Port(null, null, null)")
-          assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedReasoningCompletion.Pending(null, null, null)")
+          assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedReasoningCompletion.Pending(null, null)")
           Consequence.unit
         }
       }
@@ -3951,7 +4720,9 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
             val nativekey = take(M.keyC(M.Reference(reference.identity, reference.revision)))
             val targets = take(U.bindTargetsC(owner, declaration))
             val binding = call.executionContext.dataStoreSpace.captureBinding()
-            val port = take(PlanningPort.bindC(owner, declaration, f.catalog))
+            var observations = 0
+            val port = take(PlanningPort.bindWithReadbackObservationC(owner, declaration, f.catalog,
+              () => { observations += 1; Consequence.unit }))
             retainedcore = Some(call.core)
             retainedport = Some(port)
             if (mode == "collision" && !injected) {
@@ -3959,28 +4730,19 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               take(call.writeC(targets.publication, key, Record.data(PlanningJson.storageField -> "collision")))
               injected = true
             }
-            if (mode == "collision") {
-              When("owning advance sees that one-sided application state")
+            if (injected && Set("missing-native", "missing-both").contains(mode)) {
+              Given("the actual calculation receipt is missing after native progress, regardless of an old copy")
+              When("retained load and execution try to consume or replay that native calculation")
+              val absent = take(port.loadForCallC(query(saved), call.core))
               val rejected = port.executeForCallC(query(saved), call.core)
-              Then("it refuses without recalculation, native append or overwriting the independent row")
-              rejected.isSuccess shouldBe false
-              assertNative(call, scope.record.next)
-              take(call.rowC(declaration.continuations, nativekey)) shouldBe None
-              take(call.rowC(targets.publication, key)).get.getString(PlanningJson.storageField) shouldBe Some("collision")
-            } else if (injected) {
-              When("retained advance reads the damaged calculation after actual native progress for " + mode)
-              val rejected = port.executeForCallC(query(saved), call.core)
-              Then("one-sided, corrupt or later-prefix absence is an error, never a fresh calculation")
+              Then("load reports actual absence and CAS prevents a stale calculation from appending again")
+              absent shouldBe None
               rejected.isSuccess shouldBe false
               assertNative(call, expected.get.next)
-              take(call.rowC(declaration.continuations, nativekey)).nonEmpty shouldBe
-                !Set("missing-native", "missing-both").contains(mode)
+              take(call.rowC(declaration.continuations, nativekey)) shouldBe None
               val application = take(call.rowC(targets.publication, key))
-              if (Set("missing-application", "missing-both").contains(mode)) application shouldBe None
-              else if (mode == "malformed-application")
-                application.get.getString(PlanningJson.storageField) shouldBe Some("malformed")
-              else application.get.getString(PlanningJson.storageField) shouldBe
-                Some(take(PlanningJson.encodeC(expected.get, f.catalog.definition)))
+              if (mode == "missing-both") application shouldBe None
+              else application.get.getString(PlanningJson.storageField) shouldBe Some(take(PlanningJson.encodeC(expected.get)))
             } else {
               if (mode == "interrupted-readback" && !interrupted) {
                 Given("a one-time observation refusal after actual managed native commit")
@@ -3998,24 +4760,25 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 }
                 interrupted = true
               }
-              When("owning advance publishes or observes the already committed calculation twice")
+              Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R14; Example: E31; actual scope planning with an inert owning-read counter")
+              When("owning advance publishes or observes the already committed calculation twice and loads it")
               val observed = take(port.executeForCallC(query(saved), call.core))
               val repeated = take(port.executeForCallC(query(saved), call.core))
               val loaded = take(port.loadForCallC(query(saved), call.core)).get
               if (expected.isEmpty) expected = Some(observed.record)
               Then("the whole saved calculation and native append are exact, with no new retained processor stages")
+              observations shouldBe 3
               observed.record shouldBe expected.get
               repeated.record shouldBe expected.get
               loaded.record shouldBe expected.get
-              observed.record.priorScope shouldBe prior.get
+              observed.scope.record shouldBe prior.get
               observed.record.before shouldBe prior.get.next
               observed.current shouldBe observed.record.next
               observed.current.history.dropRight(1) shouldBe prior.get.next.history
               observed.mechanicalStages shouldBe Vector.empty
               observed.record.downstream.selection shouldBe first.get.snapshot.selection
               observed.record.downstream.partition shouldBe first.get.snapshot.partition
-              take(PlanningJson.decodeC(reference, take(PlanningJson.encodeC(observed.record, f.catalog.definition)),
-                f.catalog.definition)) shouldBe observed.record
+              take(PlanningJson.decodeC(reference, take(PlanningJson.encodeC(observed.record)))) shouldBe observed.record.savedResult
               Given("that genuine native calculation and all its known demands, original authority and closures")
               When("reasoning selection asks only for its actual saved disposition")
               val reasoningsource = Source.scopePlanningC(observed)
@@ -4040,20 +4803,52 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 take(Snapshot.dispositionC(observed.record.downstream)) shouldBe Snapshot.Disposition.Planned
               }
               Given("the genuine scope observation now has independent later native progress")
-              When("a caller tries to recapture it as a fresh calculation")
-              val recaptured = Planning.captureC(take(W.continuePublishedScopeC(observed.scope)))
-              Then("the retained prefix grants no fresh append at the older scope postimage")
-              recaptured.isSuccess shouldBe false
+              When("a caller passively captures the historical scope calculation")
+              val recaptured = take(Planning.captureC(take(W.continuePublishedScopeC(observed.scope))))
+              Then("historical data and its original expectedRevision are available without authorizing a fresh append")
+              recaptured.intent.current shouldBe observed.scope.record.next
+              recaptured.intent.expectedRevision shouldBe observed.scope.record.next.revision
               assertNative(call, observed.record.next)
+              _specify_stale_checkpoint(call, recaptured.intent, Vector.empty, targets.storeName,
+                PlanningJson.payloadCodec, observed.record.next)
+              Given("a native calculation that has no application-copy producer")
+              When("the owner checks the old copy address after first publication or independent reopen")
+              val unusedcopy = take(call.rowC(targets.publication, key))
+              Then("ordinary calculation writes no copy and pre-existing obsolete rows remain unmodified")
+              if (!injected) unusedcopy shouldBe None
+              else if (mode == "collision") unusedcopy.get.getString(PlanningJson.storageField) shouldBe Some("collision")
+              else if (mode == "malformed-application") unusedcopy.get.getString(PlanningJson.storageField) shouldBe Some("malformed")
+              else if (mode == "missing-application") unusedcopy shouldBe None
+              Given("an old passive postimage in the actual native calculation payload")
+              When("the owning reader consumes actual native receipt states rather than an inert copy")
+              _store_passive_postimage(call, M.Reference(reference.identity, reference.revision))
+              val diagnosticread = take(port.loadForCallC(query(saved), call.core)).get
+              val diagnosticexecute = take(port.executeForCallC(query(saved), call.core))
+              Then("actual owning consumption preserves the whole downstream and native history, without JSON copy proof or another append")
+              diagnosticread.record.downstream shouldBe observed.record.downstream
+              diagnosticexecute.record.downstream shouldBe observed.record.downstream
+              diagnosticread.current shouldBe observed.current
+              diagnosticexecute.current shouldBe observed.current
+              diagnosticread.record.before shouldBe observed.record.before
+              diagnosticread.record.next shouldBe observed.record.next
+              diagnosticexecute.record.before shouldBe observed.record.before
+              diagnosticexecute.record.next shouldBe observed.record.next
+              observations shouldBe 5
+              assertNative(call, observed.record.next)
+              _specify_scope_planning_native_result(call, port, query(saved), targets, observed.record)
+              _specify_native_checkpoint_selection(call, M.Reference(reference.identity, reference.revision), observed.current)(
+                port.loadForCallC(query(saved), call.core))
               if (mode == "malformed-application" && !injected) {
                 Given("the exact application row in this private diagnostic database")
                 When("the test-only probe corrupts its complete frame")
-                take(call.writeC(targets.publication, key, Record.data(PlanningJson.storageField -> "malformed"), update = true))
+                take(call.writeC(targets.publication, key, Record.data(PlanningJson.storageField -> "malformed")))
                 Then("native progress remains committed while that application value is malformed")
                 assertNative(call, observed.record.next)
                 injected = true
               } else if (mode.startsWith("missing-") && !injected) {
                 Given("the exact application/native rows in this private diagnostic database")
+                // Deliberately add a private old copy to prove it supplies no native calculation.
+                take(call.writeC(targets.publication, key, Record.data(PlanningJson.storageField -> take(PlanningJson.encodeC(observed.record)))))
                 When("the test-only probe removes only the selected fixture records for " + mode)
                 if (Set("missing-application", "missing-both").contains(mode))
                   take(call.deleteFixtureRowC(targets.publication, key))
@@ -4131,23 +4926,26 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         var humanchecks = 0
         var humanquestion = Option.empty[WorkflowInteraction[HumanDirection.Input, Nothing]]
         var humanresult = Option.empty[ContinuationResult[HumanAnswer.Answer]]
-        val verifier = new Human.Verifier {
-          def issuerIdentity = "scope-preview-independent-test-human-verifier"
-          def verifyForCallC(reference: Human.EvidenceReference, expected: Human.Binding, core: ActionCall.Core) = {
+        val evidence = new Human.EvidencePort {
+          def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) = {
             humanchecks += 1
-            if (!humanresolution) Consequence.securityPermissionDenied[Option[Human.Receipt]]("ALL-Built scope has no Human answer")
+            if (!humanresolution) Consequence.securityPermissionDenied[Unit]("ALL-Built scope has no Human answer")
             else {
-              expected.question shouldBe humanquestion.get
-              expected.result shouldBe humanresult.get
-              reference shouldBe Human.EvidenceReference("independent-human-consent", "1")
+              val enrolled = take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(Human.AnswerContext(
+                core.component.get.core.instanceId, humanquestion.get, humanresult.get, "participant")))
+              target shouldBe enrolled
+              reference shouldBe ContextReference("independent-human-consent", "1")
               val now = core.executionContext.clock.instant()
-              Consequence.success(Some(Human.Receipt(reference, issuerIdentity, "independent-human",
-                Human.purpose, expected, now, now.plusSeconds(60))))
+              val lookup = ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision)
+              NativeHostEvidenceFixtureAdmission.admitC(core, "scope-preview-independent-test-human-source",
+                NativeHostEvidence.Purpose.SplitAnswer, lookup, target, Some(NativeHostEvidence.Evidence(NativeHostEvidence.schema,
+                  Human.purpose, lookup, reference.identity, reference.revision, "scope-preview-independent-test-human-source",
+                  "independent-human", enrolled, now.minusSeconds(86400).toString)))
             }
           }
         }
         val wire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(saved)))
-        withHost(path, declared, publicadvance = true, humanverifier = if (humanresolution) Some(verifier) else None) { (call, _) =>
+        withHost(path, declared, publicadvance = true, humanverifier = if (humanresolution) Some(evidence) else None) { (call, _) =>
           if (!initialized) {
             _complete_scope_fixture(call, saved, if (humanresolution) SplitPhaseScopeSemantic.Decision.DecisionNeeded
               else SplitPhaseScopeSemantic.Decision.Enriched, partitionroot, partitionminutes = 260)
@@ -4184,7 +4982,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         var terminalwire = Option.empty[String]
         var terminalnative = Option.empty[InstanceRecord]
         for (reopen <- Vector("first public continuation", "physical terminal reopen")) {
-          withHost(path, retainedvalues, publicadvance = true, humanverifier = Some(verifier)) { (call, _) =>
+          withHost(path, retainedvalues, publicadvance = true, humanverifier = Some(evidence)) { (call, _) =>
             When("owning public advance continues the complete ALL-Built scope under removed allocation policies for " + reopen)
             if (terminalwire.isEmpty && needsreasoning) {
               val issued = take(WorkflowWorkOrderJsonV1.decodeC(_scalar(take(_public_advance_c(call, wire, true))),
@@ -4198,7 +4996,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               _scalar(take(_public_advance_c(call, wire, false))) shouldBe
                 take(SplitPhaseExplicitReasoningSemanticJson.encodeWorkOrderC(issued))
               val evidence = Semantic.EvidenceReference("scope-preview-reasoning-evidence", "1")
-              val judgment = Reasoning.Judgment(input.context, Reasoning.Decision.Enriched,
+              val judgment = Reasoning.Judgment(Reasoning.Decision.Enriched,
                 "settled unknown scope work", input.items.map(item => Reasoning.Assignment(item.identity,
                   Reasoning.Classification.SettledExecution, "bounded settled implementation")), Vector(evidence))
               val result = ContinuationResult(issued.handle, order.runId, order.continuationId, order.expectedRevision,
@@ -4286,8 +5084,10 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
                 .executeForCallC(query(saved), call.core))
               val calculated = take(W.continuePublishedScopeC(scope))
               val captured = take(Planning.captureC(calculated))
-              val prepared = take(Planning.prepareC(captured, targets, f.catalog.definition))
-              val row = prepared.rows.head
+              // Deliberate private side effect tests canonical UoW rollback;
+              // ordinary ScopePlanning supplies no application-copy Create.
+              val row = U.Row(targets.publication, take(Planning.keyC(captured.record.reference)),
+                Record.data(PlanningJson.storageField -> "private-collision-side-effect"))
               val storage = take(ComponentRecordStorage.bindForCallC(call.core, targets.storeName, row.collection,
                 DataStore.StringEntryId(row.identity)))
               val program = take(storage.stageCreateC(row.payload))
@@ -4296,7 +5096,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
               val native = take(take(WorkflowComponentStorage.bindC(ComponentCreate(owner, ComponentOrigin.Builtin),
                 SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
                 declaration.instances, declaration.continuations))
-                .bindMechanicalC(K.advanceOperation, PlanningJson.payloadCodec(f.catalog.definition)))
+                .bindMechanicalC(K.advanceOperation, PlanningJson.payloadCodec))
               When("the same canonical native executor attempts the staged application and receipt transaction")
               val rejected = native.executeC(captured.intent, program)(using call.executionContext)
               Then("the conflicting Create fails without acknowledging a native calculation")
@@ -4341,7 +5141,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         withHost(path, declared) { (call, port) =>
           Given("the current owning call with physical SQLite state for " + mode)
           if (expected.isEmpty) {
-            _original_rows(original).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+            _original_rows(original, f.record).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
             take(instances.createForCallC(f.configuration, f.initial, call.core))
             take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
             When("the unsuspended state is observed before the private issue-time fixture prepares work")
@@ -4443,7 +5243,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       }
     }
 
-    "refuse complete issued-frame and independently stored data drift without mutation" in {
+    "consume saved WorkOrder diagnostics while refusing actual foreign issued bindings and ignoring unused Start-input changes" in {
       Given("one genuine native WorkOrder and independently stored original data")
       val saved = capture()
       val original = O.Original(f.context, f.record, f.facts)
@@ -4453,7 +5253,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       withHost(path, values ++ SplitPhasePartitionReplyFixture.values) { (call, port) =>
         Given("the actual issue-time fixture only on its first invocation")
         if (!installed) {
-          _original_rows(original).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+          _original_rows(original, f.record).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
           take(instances.createForCallC(f.configuration, f.initial, call.core))
           take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
           val bound = take(SplitPhaseTypedStartPreparation.bindPartitionC(f.prepared,
@@ -4468,24 +5268,25 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         val work = expected.get
         val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[SplitPhaseExplicitPartitionSemantic.Request]]
         val request = order.request
-        val input = request.input.get.value
+        val row = take(call.rowC(declaration.continuations, original.context.owner.continuation.value)).get
         val changedrequests = Vector(request.copy(expectedRevision = org.goldenport.cncf.workflow.StateMachineRevision("99")),
           request.copy(runId = org.goldenport.cncf.workflow.StateMachineRunIdentity("foreign")),
-          request.copy(context = request.context.copy(references = Vector.empty)),
-          request.copy(input = Some(request.input.get.copy(value = input.copy(items = Vector.empty)))),
-          request.copy(input = Some(request.input.get.copy(value = input.copy(boundaries = Vector.empty)))),
-          request.copy(input = Some(request.input.get.copy(value = input.copy(reply = input.reply.copy(result =
-            input.reply.result.copy(identity = input.reply.resolutions.estimates.get.identity)))))),
           request.copy(completionOperation = org.goldenport.cncf.workflow.StateMachineOperationIdentity("foreign", "operation")))
-        When("the inert correspondence checker receives crossed full frame data")
-        val framedresults = changedrequests.map(changed => O.verifyPendingPartitionC(original, native,
-          work.copy(current = order.copy(request = changed))).isSuccess)
-        val presentationresult = O.verifyPendingPartitionC(original, native,
-          work.copy(current = order.copy(presentation = order.presentation.copy(summary = Some("different")))))
-        Then("each frame mismatch is refused without constructing a pending completion or performing an effect")
-        framedresults shouldBe Vector.fill(changedrequests.size)(false)
-        presentationresult.isSuccess shouldBe false
-        val row = take(call.rowC(declaration.continuations, original.context.owner.continuation.value)).get
+        for (changed <- changedrequests) {
+          Given("the actual physical issued payload selecting a foreign run, revision or completion route")
+          val selected = work.copy(current = order.copy(request = changed))
+          take(call.writeC(declaration.continuations, original.context.owner.continuation.value,
+            Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + take(
+              org.goldenport.cncf.workflow.WorkflowWorkOrderJsonV1.encodeC(selected,
+                SplitPhaseExplicitPartitionSemanticJson.requestCodec)))), true))
+          When("the actual native issued reader resolves that saved source for pending observation")
+          val refused = port.loadPendingPartitionForCallC(query(saved), call.core)
+          Then("foreign binding data fails at its native consumer without effects or a recreated issue")
+          refused.isSuccess shouldBe false
+          assertNative(call, native)
+          _assert_no_checkpoint(call, saved)
+          take(call.writeC(declaration.continuations, original.context.owner.continuation.value, row, true))
+        }
         Given("the actual published payload made unreadable while its row identity remains")
         take(call.writeC(declaration.continuations, original.context.owner.continuation.value,
           Record.data("issuedWorkPayload" -> "malformed-issued-payload"), true))
@@ -4495,15 +5296,15 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         malformedresult.isSuccess shouldBe false
         take(call.writeC(declaration.continuations, original.context.owner.continuation.value, row, true))
         Given("the independent original source payload changed under the same reference")
-        val source = original.start.source
+        val source = f.record.source
         take(call.writeC(target(F.Purpose.Source), source.reference.identity, Record.data(F.storageField ->
           take(F.encodeSourceC(source.copy(authority = source.authority.copy(identity = "foreign"))))), true))
-        When("advance reads the changed source")
+        When("advance observes the already assigned native work without preparing a new source input")
         val sourceresult = port.loadPendingPartitionForCallC(query(saved), call.core)
-        Then("equal source references do not conceal complete data drift")
-        sourceresult.isSuccess shouldBe false
+        Then("an unused independent source copy does not gate cached work or cause reissue")
+        take(sourceresult) shouldBe expected
         take(call.writeC(target(F.Purpose.Source), source.reference.identity, Record.data(F.storageField -> take(F.encodeSourceC(source))), true))
-        val start = original.start
+        val start = f.record
         val changedcommands = Vector(start.command.copy(idempotencyKey = "different-valid-key"),
           start.command.copy(input = start.command.input.copy(sourceAuthorityReference = "different-authority")),
           start.command.copy(input = start.command.input.copy(sourcePhaseIdentity = "99")),
@@ -4521,10 +5322,16 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           val wire = take(TJ.encodeC(changed))
           take(TJ.decodeC(start.reference, wire)) shouldBe changed
           take(call.writeC(collection("starts"), start.reference.identity, Record.data(TJ.storageField -> wire), true))
-          When("advance observes pending work using that semantically crossed Start command")
+          When("advance observes pending work without consuming fresh Start input")
           val crossed = port.loadPendingPartitionForCallC(query(saved), call.core)
-          Then("it refuses without changing original selection/source/proposal, native history, actual work or checkpoint")
-          crossed.isSuccess shouldBe false
+          Then("the same genuine WorkOrder is returned without selection/source/proposal changes or reissue")
+          take(crossed) shouldBe expected
+          When("fresh Start preparation separately consumes the changed command and unchanged actual selection")
+          val freshreads = take(SplitPhaseTypedStartReadPolicy.bindC(call.core.component.get.subsystem.get.configuration,
+            declaration, f.catalog))
+          val fresh = freshreads.prepareForCallC(start.reference, call.core)
+          Then("that incompatible fresh invocation is refused at its owning admission, not the pending-query boundary")
+          fresh.isSuccess shouldBe false
           take(call.rowC(collection("selections"), start.selection.selectionId)) shouldBe selectionrow
           take(call.rowC(target(F.Purpose.Source), source.reference.identity)) shouldBe sourcerow
           take(call.rowC(target(F.Purpose.Proposal), start.proposal.get.reference.identity)) shouldBe proposalrow
@@ -4543,14 +5350,24 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           _assert_no_checkpoint(call, saved)
           call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
         }
-        Given("inert Start/context records whose selected command agrees but complete source or proposal differs")
+        Given("Start rows whose selected routing agrees but unused captured source or proposal differs")
         val changedstarts = Vector(start.copy(source = source.copy(authority = source.authority.copy(revision = "different"))),
           start.copy(proposal = start.proposal.map(proposal => proposal.copy(children = Vector.empty))))
-        When("pending correspondence compares those complete raw records")
-        val relationresults = changedstarts.map(changed => O.verifyPendingPartitionC(original.copy(start = changed), native, work).isSuccess)
-        Then("same references do not conceal a changed Start-to-context source or proposal")
-        relationresults shouldBe Vector(false, false)
+        for (changed <- changedstarts) {
+          Given("one changed captured Start body in the actual private store")
+          take(call.writeC(collection("starts"), start.reference.identity,
+            Record.data(TJ.storageField -> take(TJ.encodeC(changed))), true))
+          When("pending observation consumes only actual saved routing")
+          val observed = port.loadPendingPartitionForCallC(query(saved), call.core)
+          Then("unused captured body echoes do not reject or recreate already assigned work")
+          take(observed) shouldBe expected
+          assertNative(call, native)
+          take(call.rowC(declaration.continuations, original.context.owner.continuation.value)) shouldBe Some(row)
+          _assert_no_checkpoint(call, saved)
+        }
         Given("the exact original source and actual issued payload restored")
+        take(call.writeC(collection("starts"), start.reference.identity,
+          Record.data(TJ.storageField -> take(TJ.encodeC(start))), true))
         When("advance observes the stored work again")
         val restored = take(port.loadPendingPartitionForCallC(query(saved), call.core))
         Then("the original interaction and native history are preserved with no checkpoint publication")
@@ -4558,6 +5375,116 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         assertNative(call, native)
         take(call.rowC(declaration.continuations, original.context.owner.continuation.value)) shouldBe Some(row)
         _assert_no_checkpoint(call, saved)
+        Consequence.unit
+      }
+    }
+
+    "return and complete saved diagnostic work through actual Operations and physical reopen without an issue-copy certificate" in {
+      Given("a genuine native issue in one private SQLite host and compatible saved presentation and Context diagnostics")
+      val saved = capture()
+      val original = O.Original(f.context, f.record, f.facts)
+      val path = Files.createTempDirectory("smwf-pending-diagnostics-").resolve("host.sqlite")
+      val issuevalues = values ++ SplitPhasePartitionReplyFixture.values
+      var installed = false
+      var retainedwork = Option.empty[WorkflowInteraction[SplitPhaseExplicitPartitionSemantic.Request, Nothing]]
+      var retainednative = Option.empty[InstanceRecord]
+      var submitted = Option.empty[ContinuationResult[SplitPhaseExplicitPartitionSemantic.Judgment]]
+      var acknowledgement = Option.empty[String]
+      val querywire = take(SplitPhaseAdvanceCommandJsonV1.encodeC(query(saved)))
+      withHost(path, issuevalues, publicadvance = true) { (call, _) =>
+        if (!installed) {
+          _original_rows(original, f.record).foreach { case (c, id, row) => take(call.writeC(c, id, row)) }
+          take(instances.createForCallC(f.configuration, f.initial, call.core))
+          take(instances.appendForCallC(f.configuration, saved.before.identity, initialRevision, saved.before.history.head, call.core))
+          val bound = take(SplitPhaseTypedStartPreparation.bindPartitionC(f.prepared,
+            take(SplitPhaseExplicitPartitionContext.prepareC(original.context, original.facts, saved.before, f.configuration, f.catalog))))
+          val issuing = take(SplitPhaseManagedTypedPartitionIssue.bindC(ComponentCreate(call.core.component.get.subsystem.get,
+            ComponentOrigin.Builtin), declaration, f.catalog))
+          val actual = take(org.goldenport.cncf.workflow.WorkflowWorkOrderJsonV1.decodeC(
+            take(issuing.issueForCallC(bound, call.core)), SplitPhaseExplicitPartitionSemanticJson.requestCodec))
+          val order = actual.current.asInstanceOf[WorkflowContinuation.WorkOrder[SplitPhaseExplicitPartitionSemantic.Request]]
+          val selected = actual.copy(current = order.copy(presentation = order.presentation.copy(summary = Some("saved explanation")),
+            request = order.request.copy(context = order.request.context.copy(summary = "original saved partition work",
+              references = Vector(ContextReference("diagnostic-context", "old")),
+              snapshot = order.request.context.snapshot.copy(workspaceRevision = Some("old-workspace"),
+                evidenceRevision = Some("old-evidence"))))))
+          val wire = take(org.goldenport.cncf.workflow.WorkflowWorkOrderJsonV1.encodeC(selected,
+            SplitPhaseExplicitPartitionSemanticJson.requestCodec))
+          take(call.writeC(declaration.continuations, original.context.owner.continuation.value,
+            Record.data("issuedWorkPayload" -> ("cncf.workflow-json.v1:" + wire)), true))
+          retainedwork = Some(selected)
+          installed = true
+        }
+        val selected = retainedwork.get
+        val native = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
+        val row = take(call.rowC(declaration.continuations, original.context.owner.continuation.value))
+        val binding = call.executionContext.dataStoreSpace.captureBinding()
+        When("actual public advance consumes the saved native issue through its owning pending reader")
+        val returned = take(org.goldenport.cncf.workflow.WorkflowWorkOrderJsonV1.decodeC(
+          _scalar(take(_public_advance_c(call, querywire, false))), SplitPhaseExplicitPartitionSemanticJson.requestCodec))
+        Then("the complete saved interaction survives without reissue, a diagnostic-copy gate or effects")
+        returned shouldBe selected
+        assertNative(call, native)
+        take(call.rowC(declaration.continuations, original.context.owner.continuation.value)) shouldBe row
+        _assert_no_checkpoint(call, saved)
+        call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+        retainedwork = Some(returned)
+        retainednative = Some(native)
+        Consequence.unit
+      }
+      Given("a physically reopened host without issue-time reply policy and the actual saved semantic work")
+      val rp = SplitPhasePartitionReplyAllocationPolicy.prefix
+      val issuednative = retainednative.get
+      withHost(path, issuevalues.filterNot((key, _) => key.startsWith(rp)), publicadvance = true) { (call, _) =>
+        val returned = retainedwork.get
+        if (submitted.isEmpty) {
+          When("actual advance observes the same pending assignment after reopening, before its first result")
+          val observed = take(org.goldenport.cncf.workflow.WorkflowWorkOrderJsonV1.decodeC(
+            _scalar(take(_public_advance_c(call, querywire, false))), SplitPhaseExplicitPartitionSemanticJson.requestCodec))
+          Then("saved diagnostics and native state survive without a new allocation or issue")
+          observed shouldBe returned
+          assertNative(call, issuednative)
+        }
+        Given("only the answer to that actual saved assignment, not an echoed issue-time Context or presentation")
+        val reply = _semantic_result(returned, SplitPhaseExplicitPartitionSemantic.Decision.Enriched)
+        val binding = call.executionContext.dataStoreSpace.captureBinding()
+        When("the owning public completion Operation consumes the semantic result and executes its actual managed closing")
+        val response = _scalar(take(_public_operation_c(call, SplitPhaseExplicitPartitionContext.completionOperation.operation,
+          take(org.goldenport.cncf.workflow.WorkflowResultJsonV1.encodeC(reply, SplitPhaseExplicitPartitionSemanticJson.resultCodec)), false)))
+        val current = take(instances.loadForCallC(f.configuration, saved.before.identity, call.core)).get
+        val completion = take(SplitPhaseManagedTypedPartitionCompletion.bindHostC(
+          ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin), declaration, f.catalog))
+        val retained = take(completion.loadRetainedForCallC(original.context.owner.continuation, call.core)).get
+        val reads = take(SplitPhasePartitionCompletionCheckpointDataStorePort.bindC(
+          call.core.component.get.subsystem.get.configuration, declaration, f.catalog))
+        val calculation = take(reads.loadForCallC(original.context.owner.continuation, call.core))
+        Then("one actual native completion and whole calculated semantic output are saved without regenerated-WorkOrder equality")
+        current.history.dropRight(1) shouldBe issuednative.history
+        current.revision shouldBe issuednative.revision.next
+        current.suspension shouldBe None
+        retained.result shouldBe reply
+        calculation.completion.result shouldBe reply
+        calculation.issued shouldBe returned
+        calculation.checkpoint.get.snapshot.selection.partition.estimates.items.head shouldBe f.facts.partition.estimates.items.head
+        call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+        submitted = Some(reply)
+        acknowledgement = Some(response)
+        retainednative = Some(current)
+        Consequence.unit
+      }
+      Given("the actual persisted completion after another physical reopen")
+      withHost(path, issuevalues.filterNot((key, _) => key.startsWith(rp)), publicadvance = true) { (call, _) =>
+        When("the owning completion reader and repeated public result submission consume the saved result")
+        val completion = take(SplitPhaseManagedTypedPartitionCompletion.bindHostC(
+          ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin), declaration, f.catalog))
+        val retained = take(completion.loadRetainedForCallC(original.context.owner.continuation, call.core)).get
+        val response = _scalar(take(_public_operation_c(call, SplitPhaseExplicitPartitionContext.completionOperation.operation,
+          take(org.goldenport.cncf.workflow.WorkflowResultJsonV1.encodeC(submitted.get,
+            SplitPhaseExplicitPartitionSemanticJson.resultCodec)), false)))
+        Then("the original completion and acknowledgement survive without another native append or reissue")
+        retained.result shouldBe submitted.get
+        response shouldBe acknowledgement.get
+        assertNative(call, retainednative.get)
         Consequence.unit
       }
     }
@@ -4654,23 +5581,426 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       }
     }
 
-    "refuse independent malformed payloads without recomputation or native mutation" in {
-      Given("one actual committed checkpoint with every independently stored row")
+    "read only the selected locator native receipt and declared generated documents without unchanged-input proofs" in {
+      Given("one actual committed checkpoint with selected outputs and unused historical input rows")
       val saved = capture(); val t = take(U.bindTargetsC(host(values), declaration)); val path = Files.createTempDirectory("smwf-managed-drift-").resolve("host.sqlite")
       var installed = false
-      When("original, effective, candidate and index rows are each independently corrupted and restored")
       withHost(path) { (call, port) =>
         if (!installed) { take(installC(call, saved)); take(port.executePreparedForCallC(saved, call.core)); installed = true }
-        val rows = originalRows(saved) ++ take(U.prepareC(saved, t)).rows.map(r => (r.collection, r.identity, r.payload))
+        val publication = take(U.prepareC(saved, t)).rows
+        val documentkeys = O.builtDocuments(saved.record.snapshot).flatMap(d => Vector(
+          t.proposals -> d.proposal.reference.identity, t.ownerships -> d.ownership.reference.identity,
+          t.handoffs -> d.handoffs.reference.identity)).toSet
+        val usedkeys = documentkeys ++ publication.filter(r => r.payload.getString(J.storageField).nonEmpty ||
+          r.payload.getString(J.indexStorageField).nonEmpty).map(r => r.collection -> r.identity)
+        val rows = (originalRows(saved) ++ publication.map(r => (r.collection, r.identity, r.payload)))
+          .distinctBy((c, id, _) => c -> id)
         rows.foreach { case (c, id, original) =>
+          Given("the independent row selected only if used by this cached mechanical observation")
           original.fields.size shouldBe 1
           take(call.writeC(c, id, Record.data(original.fields.head.key -> "malformed-complete-payload"), true))
-          port.loadMechanicalForCallC(query(saved), call.core).isSuccess shouldBe false
+          When("the owning call reads the cached result without preparing new inputs")
+          val result = port.loadMechanicalForCallC(query(saved), call.core)
+          Then("selected output readability is required, but unused input copies do not gate native results")
+          if (usedkeys.contains(c -> id)) result.isSuccess shouldBe false
+          else take(result).get.record shouldBe saved.record
           take(call.writeC(c, id, original, true))
           take(port.loadMechanicalForCallC(query(saved), call.core)).get.record shouldBe saved.record
         }
-        Then("restoration recovers the exact mapping and canonical revision never changes")
+        Given("the selected physical native receipt is missing, while the locator and generated documents remain")
+        val nativekey = take(M.keyC(anchor))
+        val nativerow = take(call.rowC(declaration.continuations, nativekey)).get
+        take(call.deleteFixtureRowC(declaration.continuations, nativekey))
+        When("the cached mechanical reader resolves its actual native result")
+        val absent = port.loadMechanicalForCallC(query(saved), call.core)
+        Then("it refuses instead of trusting a stored application copy or recomputing a receipt")
+        absent.isSuccess shouldBe false
+        take(call.writeC(declaration.continuations, nativekey, nativerow))
+        take(port.loadMechanicalForCallC(query(saved), call.core)).get.record shouldBe saved.record
         assertNative(call, saved.next); assertRows(call, saved)
+        Consequence.unit
+      }
+    }
+
+    "reopen compact and legacy mechanical locators without decoding unused payload copies" in {
+      Given("an actually committed native receipt and its generated readable documents")
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-mechanical-locator-").resolve("host.sqlite")
+      val targets = take(U.bindTargetsC(host(values), declaration))
+      val key = take(U.mappingKeyC(saved.record.reference))
+      var installed = false
+      for (mode <- Vector("compact", "legacy", "legacy-unused-copies", "reopen")) {
+        withHost(path) { (call, port) =>
+          if (!installed) { take(installC(call, saved)); take(port.executePreparedForCallC(saved, call.core)); installed = true }
+          Given("the selected stored locator in " + mode + " form")
+          if (mode == "legacy" || mode == "legacy-unused-copies") {
+            val encoded = take(J.encodeC(saved.record))
+            val json = parser.parse(encoded.substring(J.schema.length + 1)).toOption.get
+            val legacy = if (mode == "legacy") encoded else J.schema + ":" + json.mapObject(_.add("payload",
+              json.hcursor.downField("payload").focus.get.mapObject(_.remove("snapshot").remove("originalContext")
+                .add("originalStart", Json.fromString("unused non-frame copy"))))).noSpaces
+            take(call.writeC(targets.publication, key, Record.data(J.storageField -> legacy), true))
+          }
+          val priorbinding = call.executionContext.dataStoreSpace.captureBinding()
+          When("the actual owning call resolves the selected native receipt twice")
+          val first = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+          val second = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+          Then("the canonical computed result is returned without reconstructing or certifying legacy copies")
+          first.record shouldBe saved.record
+          second.record shouldBe saved.record
+          assertNative(call, saved.next)
+          call.executionContext.dataStoreSpace.captureBinding() shouldBe priorbinding
+          Consequence.unit
+        }
+      }
+    }
+
+    "require declared generated document readability without recertifying its full stored body" in {
+      Given("a real native checkpoint whose selected proposal row remains a valid declared document")
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-mechanical-document-").resolve("host.sqlite")
+      val targets = take(U.bindTargetsC(host(values), declaration))
+      var installed = false
+      withHost(path) { (call, port) =>
+        if (!installed) { take(installC(call, saved)); take(port.executePreparedForCallC(saved, call.core)); installed = true }
+        val selected = O.builtDocuments(saved.record.snapshot).head.proposal
+        val changed = selected.copy(children = selected.children.updated(0,
+          selected.children.head.copy(expectedMinutes = selected.children.head.expectedMinutes + 1)))
+        take(call.writeC(targets.proposals, selected.reference.identity,
+          Record.data(F.storageField -> take(F.encodeProposalC(changed))), true))
+        When("cached observation reads the current declared document, not a whole-body equality certificate")
+        val observed = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+        Then("the actual native computation remains authoritative and observation appends nothing")
+        observed.record shouldBe saved.record
+        assertNative(call, saved.next)
+        Given("that selected generated proposal is then absent")
+        take(call.deleteFixtureRowC(targets.proposals, selected.reference.identity))
+        When("the same observation resolves declared output availability")
+        val absent = port.loadMechanicalForCallC(query(saved), call.core)
+        Then("the missing declared document is refused, not replaced from an unused saved copy")
+        absent.isSuccess shouldBe false
+        assertNative(call, saved.next)
+        take(call.writeC(targets.proposals, selected.reference.identity,
+          Record.data(F.storageField -> take(F.encodeProposalC(selected)))))
+        Consequence.unit
+      }
+    }
+
+    "refuse crossed selected addresses and native operation inputs at their owning read boundary" in {
+      Given("a real native commit and its selected physical checkpoint rows")
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-mechanical-owner-input-").resolve("host.sqlite")
+      val targets = take(U.bindTargetsC(host(values), declaration))
+      var installed = false
+      withHost(path) { (call, port) =>
+        if (!installed) {
+          take(installC(call, saved))
+          take(port.executePreparedForCallC(saved, call.core))
+          installed = true
+        }
+        val nativekey = take(M.keyC(anchor))
+        val nativerow = take(call.rowC(declaration.continuations, nativekey)).get
+        val prefix = "cncf.workflow-json.v1:"
+        val json = parser.parse(nativerow.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+        val changes = Vector(json.mapObject(_.add("component", Json.fromString("org.example.Foreign"))),
+          json.mapObject(o => o.add("operation", o("operation").get.mapObject(_.add("operation", Json.fromString("other"))))),
+          json.mapObject(o => o.add("payload", o("payload").get.mapObject(_.add("typeIdentity", Json.fromString("other"))))),
+          json.mapObject(o => o.add("reference", o("reference").get.mapObject(_.add("revision", Json.fromString("other"))))))
+        changes.foreach { changed =>
+          Given("one actually stored incompatible native owner, operation, payload type or selected reference")
+          take(call.writeC(declaration.continuations, nativekey,
+            Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), true))
+          When("the owning operation resolves the selected native computation")
+          val refused = port.loadMechanicalForCallC(query(saved), call.core)
+          Then("the CNCF input owner refuses without a downstream copy certificate or native append")
+          refused.isSuccess shouldBe false
+          assertNative(call, saved.next)
+          take(call.writeC(declaration.continuations, nativekey, nativerow, true))
+        }
+        Given("the physical context index now declares a different selected context revision")
+        val indexkey = take(U.indexKeyC(saved.index.instance, saved.index.context))
+        val indexrow = take(call.rowC(targets.publication, indexkey)).get
+        take(call.writeC(targets.publication, indexkey, Record.data(J.indexStorageField ->
+          take(J.encodeIndexC(saved.index.copy(context = saved.index.context.copy(revision = "other"))))), true))
+        When("the operation resolves that actually crossed application address")
+        val crossed = port.loadMechanicalForCallC(query(saved), call.core)
+        Then("selection refuses at the address owner and compatible restored inputs remain readable")
+        crossed.isSuccess shouldBe false
+        take(call.writeC(targets.publication, indexkey, indexrow, true))
+        take(port.loadMechanicalForCallC(query(saved), call.core)).get.record shouldBe saved.record
+        assertNative(call, saved.next)
+        Consequence.unit
+      }
+    }
+
+    "observe actual native computation after legacy historical-copy metadata changes and physical reopen" in {
+      Given("one real committed mechanical result and an old full native payload with unused input copies")
+      val saved = capture()
+      val context = saved.record.originalContext
+      val partition = context.facts.partition
+      val legacy = saved.record.copy(originalContext = context.copy(facts = context.facts.copy(partition = partition.copy(
+        estimates = partition.estimates.copy(reference = partition.estimates.reference.copy(revision = "old-copy"))))),
+        predecessorRevision = InstanceRevision(41), committedRevision = InstanceRevision(42))
+      val path = Files.createTempDirectory("smwf-mechanical-legacy-copy-").resolve("host.sqlite")
+      var installed = false
+      for (mode <- Vector("owning-read", "physical-reopen")) withHost(path) { (call, port) =>
+        if (!installed) {
+          take(installC(call, saved))
+          take(port.executePreparedForCallC(saved, call.core))
+          val key = take(M.keyC(anchor))
+          val row = take(call.rowC(declaration.continuations, key)).get
+          val prefix = "cncf.workflow-json.v1:"
+          val json = parser.parse(row.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+          val changed = json.hcursor.downField("payload").downField("value")
+            .withFocus(_ => J.payloadCodec.encode(legacy)).top.get
+          take(call.writeC(declaration.continuations, key, Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), true))
+          installed = true
+        }
+        When("the operation resolves its actual native receipt on " + mode)
+        val observed = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+        Then("native transition state and computed output remain authoritative without a historical-copy certificate")
+        observed.record shouldBe legacy
+        observed.record.snapshot shouldBe saved.record.snapshot
+        observed.publicationPostimage shouldBe saved.next
+        observed.current shouldBe saved.next
+        assertNative(call, saved.next)
+        Consequence.unit
+      }
+    }
+
+    "read passive native frontier data without admitting its crossed snapshot for selected use" in {
+      Given("one real mechanical publication whose stored typed snapshot has no objective")
+      val saved = capture()
+      val passive = saved.record.copy(snapshot = saved.record.snapshot.copy(objective = None))
+      val path = Files.createTempDirectory("smwf-mechanical-passive-frontier-").resolve("host.sqlite")
+      var installed = false
+      for (mode <- Vector("owning-read", "physical-reopen")) withHost(path) { (call, port) =>
+        if (!installed) {
+          take(installC(call, saved))
+          take(port.executePreparedForCallC(saved, call.core))
+          val key = take(M.keyC(anchor))
+          val row = take(call.rowC(declaration.continuations, key)).get
+          val prefix = "cncf.workflow-json.v1:"
+          val json = parser.parse(row.getString("mechanicalPayload").get.substring(prefix.length)).toOption.get
+          val changed = json.hcursor.downField("payload").downField("value")
+            .withFocus(_ => J.payloadCodec.encode(passive)).top.get
+          take(call.writeC(declaration.continuations, key,
+            Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), true))
+          installed = true
+        }
+        When("the owning frontier reader resolves passive data and a selected consumer tries use on " + mode)
+        val observed = take(port.loadMechanicalForCallC(query(saved), call.core)).get
+        val frontier = take(SplitPhaseManagedPlanningFrontier.loadForAdvanceC(query(saved), declaration, f.catalog, call.core))
+        val selected = SplitPhaseSelectedDocuments.projectC(frontier.snapshot)
+        Then("storage conveys no selected frontier capability and neither observation nor refused use appends")
+        observed.record shouldBe passive
+        frontier.snapshot shouldBe passive.snapshot
+        frontier.original.original.start shouldBe saved.record.originalStart.routing
+        frontier.publicationPostimage shouldBe saved.next
+        frontier.current shouldBe saved.next
+        selected.isSuccess shouldBe false
+        observed.current shouldBe saved.next
+        assertNative(call, saved.next)
+        Consequence.unit
+      }
+    }
+
+    "refuse an oversized actual native receipt after passive rows succeed without committing effects" in {
+      Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; the truthful original Start history followed by an actual later native entry with large causation")
+      val initial = SplitPhaseObservedCheckpointFixture.current
+      val later = take(initial.appendC(initial.revision, initial.history.head.copy(
+        sequence = HistorySequence(2), revision = InstanceRevision(2), causation = CausationReference("x" * 530000))))
+      val saved = capture(SplitPhasePlanningCheckpointFixture.bound(current = later))
+      val path = Files.createTempDirectory("smwf-mechanical-native-size-").resolve("host.sqlite")
+      var installed = false
+      for (mode <- Vector("owning-execution", "physical-reopen")) withHost(path, advancecommand = Some(query(saved))) { (call, port) =>
+        if (!installed) {
+          take(installC(call, saved))
+          take(instances.appendForCallC(f.configuration, later.identity, initial.revision, later.history.last, call.core))
+          installed = true
+        }
+        val binding = call.executionContext.dataStoreSpace.captureBinding()
+        val targets = take(U.bindTargetsC(call.core.component.get.subsystem.get.configuration, declaration))
+        When("the passive publisher prepares consumed rows without a discarded native receipt on " + mode)
+        val prepared = U.prepareC(saved, targets)
+        Then("actual row preparation succeeds and grants no mutation")
+        prepared.isSuccess shouldBe true
+        assertNative(call, later)
+        _assert_no_checkpoint(call, saved)
+
+        Given("the actual publication rows staged through the owning component storage and canonical native executor")
+        val actual = take(prepared)
+        val programs = actual.rows.map { row =>
+          val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(call.core, targets.storeName, row.collection,
+            DataStore.StringEntryId(row.identity)))
+          take(storage.stageCreateC(row.payload))
+        }
+        val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+          [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+          (before, next) => before.flatMap(_ => next))
+        val native = take(take(org.goldenport.cncf.workflow.WorkflowComponentStorage.bindC(
+          ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+          SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
+          declaration.instances, declaration.continuations)).bindMechanicalC(K.advanceOperation, J.payloadCodec))
+        When("the actual native executor encodes its complete receipt before consuming staged effects")
+        val rejected = native.executeC(saved.mechanicalIntent.get, program)(using call.executionContext)
+        Then("the real whole-receipt size boundary is the exact refusal cause and no effect or binding changes")
+        rejected match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display shouldBe "Mechanical receipt encoding is absent or exceeds its bound"
+          case _ => fail("Oversized actual native receipt incorrectly returned success")
+        }
+        assertNative(call, later)
+        _assert_no_checkpoint(call, saved)
+        call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+
+        When("the owning managed checkpoint port independently attempts the same actual native transition")
+        val refused = port.executePreparedForCallC(saved, call.core)
+        Then("managed refusal also leaves the actual predecessor, receipt absence, all proposed rows and binding unchanged")
+        refused.isSuccess shouldBe false
+        assertNative(call, later)
+        _assert_no_checkpoint(call, saved)
+        call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+        Consequence.unit
+      }
+    }
+
+    "commit 64 actual local Creates with a separate native receipt and retain them after physical reopen" in {
+      Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; truthful planning intent and actual SQLite owning dispatch")
+      val saved = capture()
+      val path = Files.createTempDirectory(Files.createDirectories(Path.of("target", "spec", "native-create-capacity")),
+        "run-").resolve("host.sqlite")
+      var installed = false
+      var committed = false
+      for (mode <- Vector("owning-execution", "physical-reopen")) withHost(path, advancecommand = Some(query(saved))) { (call, _) =>
+        if (!installed) {
+          take(installC(call, saved))
+          installed = true
+        }
+        val binding = call.executionContext.dataStoreSpace.captureBinding()
+        val owner = call.core.component.get.subsystem.get
+        val targets = take(U.bindTargetsC(owner.configuration, declaration))
+        val original = saved.record.originalContext.facts.proposal.proposal
+        val rows = Vector.tabulate(64) { number =>
+          val identity = s"native-capacity-$number"
+          val document = original.copy(reference = original.reference.copy(identity = identity))
+          U.Row(targets.proposals, identity, Record.data(F.storageField -> take(F.encodeProposalC(document))))
+        }
+        rows.size shouldBe 64
+
+        val native = take(take(org.goldenport.cncf.workflow.WorkflowComponentStorage.bindC(
+          ComponentCreate(owner, ComponentOrigin.Builtin), SmWorkflowComponent.componentId,
+          declaration.configuration, Vector(f.catalog.definition), declaration.instances,
+          declaration.continuations)).bindMechanicalC(K.advanceOperation, J.payloadCodec))
+        if (!committed) {
+          Given("all64 rows staged by the owning ComponentRecordStorage with the genuine unexecuted planning intent")
+          val programs = rows.map { row =>
+            val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(
+              call.core, targets.storeName, row.collection, DataStore.StringEntryId(row.identity)))
+            take(storage.stageCreateC(row.payload))
+          }
+          val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+            [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+            (before, next) => before.flatMap(_ => next))
+          When("the actual native owner commits64 local Creates and its additional receipt in one transition")
+          val completed = take(native.executeC(saved.mechanicalIntent.get, program)(using call.executionContext))
+          Then("the real committed native successor is returned without a63-local-row limit")
+          completed.receipt.next shouldBe saved.next
+          committed = true
+        }
+        When("the actual owning native reader and document rows are observed on " + mode)
+        val retained = take(native.loadRetainedC(saved.mechanicalIntent.get.reference)(using call.executionContext)).get
+        val documents = rows.map(row => take(call.rowC(row.collection, row.identity)).get.getString(F.storageField))
+        Then("one native receipt and all64 committed document payloads survive repeated dispatch and physical reopen")
+        retained.current shouldBe saved.next
+        retained.receipt.next shouldBe saved.next
+        documents shouldBe rows.map(_.payload.getString(F.storageField))
+        take(call.rowC(declaration.continuations, take(M.keyC(saved.mechanicalIntent.get.reference)))).nonEmpty shouldBe true
+        assertNative(call, saved.next)
+        call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+        Consequence.unit
+      }
+    }
+
+    "refuse oversized or duplicated actual Create programs after passive preparation without committing effects" in {
+      Given("Spec: docs/spec/split-phase-checkpoint-frame-applicability.md; truthful captured planning and an actual SQLite owning call")
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-mechanical-create-consumption-").resolve("host.sqlite")
+      var installed = false
+      for (mode <- Vector("owning-execution", "physical-reopen")) withHost(path) { (call, _) =>
+        if (!installed) {
+          take(installC(call, saved))
+          installed = true
+        }
+        val binding = call.executionContext.dataStoreSpace.captureBinding()
+        val targets = take(U.bindTargetsC(call.core.component.get.subsystem.get.configuration, declaration))
+        val baseline = take(U.prepareC(saved, targets))
+        val index = take(J.encodeIndexC(saved.index))
+        val extra = Vector.tabulate(65 - baseline.rows.size)(number => U.Row(targets.publication,
+          s"capacity-$number", Record.data(J.indexStorageField -> index)))
+        When("the passive publisher prepares complete overflow and duplicate-target rows on " + mode)
+        val overflow = take(U.prepareC(saved, targets, extra))
+        val duplicated = take(U.prepareC(saved, targets, Vector(baseline.rows.head)))
+        Then("neither actual row vector is truncated or rejected as a speculative execution plan")
+        overflow.rows.size shouldBe 65
+        duplicated.rows.count(row => row.collection == baseline.rows.head.collection &&
+          row.identity == baseline.rows.head.identity) shouldBe 2
+        assertNative(call, saved.before)
+        _assert_no_checkpoint(call, saved)
+
+        val native = take(take(org.goldenport.cncf.workflow.WorkflowComponentStorage.bindC(
+          ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+          SmWorkflowComponent.componentId, declaration.configuration, Vector(f.catalog.definition),
+          declaration.instances, declaration.continuations)).bindMechanicalC(K.advanceOperation, J.payloadCodec))
+        for ((prepared, reason) <- Vector(
+          overflow -> "Mechanical program exceeds its bounded Create plan",
+          duplicated -> "Mechanical program duplicates a Create target")) {
+          Given("actual rows staged through the current owning component storage, not a fabricated provider or receipt")
+          val programs = prepared.rows.map { row =>
+            val storage = take(org.goldenport.cncf.datastore.ComponentRecordStorage.bindForCallC(
+              call.core, targets.storeName, row.collection, DataStore.StringEntryId(row.identity)))
+            take(storage.stageCreateC(row.payload))
+          }
+          val program = programs.foldLeft(org.goldenport.ConsequenceT.pure[
+            [X] =>> org.goldenport.cncf.Program[org.goldenport.cncf.unitofwork.UnitOfWorkOp, X], Unit](()))(
+            (before, next) => before.flatMap(_ => next))
+          When("the actual native mechanical owner consumes the staged program on " + mode)
+          val rejected = native.executeC(saved.mechanicalIntent.get, program)(using call.executionContext)
+          Then("the consuming-program refusal has its exact cause and commits no native, receipt or proposed-row effect")
+          rejected match {
+            case Consequence.Failure(conclusion) => conclusion.display shouldBe reason
+            case _ => fail("Invalid actual Create program incorrectly returned success")
+          }
+          assertNative(call, saved.before)
+          _assert_no_checkpoint(call, saved)
+          prepared.rows.foreach(row => take(call.rowC(row.collection, row.identity)) shouldBe None)
+          call.executionContext.dataStoreSpace.captureBinding() shouldBe binding
+        }
+        Consequence.unit
+      }
+    }
+
+    "leave publication absent when the actual native predecessor advances after private capture" in {
+      Given("a valid constructed capture whose real native instance subsequently advances")
+      val saved = capture()
+      val path = Files.createTempDirectory("smwf-mechanical-stale-cas-").resolve("host.sqlite")
+      var installed = false
+      var advanced = Option.empty[InstanceRecord]
+      withHost(path) { (call, port) =>
+        if (!installed) {
+          take(installC(call, saved))
+          val entry = saved.before.history.last.copy(sequence = HistorySequence(2), revision = InstanceRevision(2),
+            causation = CausationReference("actual-other-transition"))
+          advanced = Some(take(instances.appendForCallC(f.configuration, saved.before.identity,
+            saved.before.revision, entry, call.core)))
+          installed = true
+        }
+        When("the stale capture attempts its actual atomic native transition without a separate copy preflight")
+        val rejected = port.executePreparedForCallC(saved, call.core)
+        Then("the transition owner rejects the stale predecessor and commits no receipt or generated rows")
+        rejected.isSuccess shouldBe false
+        assertNative(call, advanced.get)
+        _assert_no_checkpoint(call, saved)
         Consequence.unit
       }
     }

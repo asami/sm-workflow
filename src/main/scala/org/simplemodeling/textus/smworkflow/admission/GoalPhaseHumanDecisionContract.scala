@@ -39,9 +39,9 @@ private[smworkflow] object GoalPhaseHumanDecisionContract {
           intent.handle.instanceIdentity == null || intent.expectedRevision == null || intent.snapshot == null ||
           !canonical(intent.idempotencyKey, 256) ||
           !canonical(intent.input.reason, 256) || !canonical(intent.input.candidateRevision, 256) ||
-          !canonical(intent.input.requestDigest, 256) ||
-          request.context == null || request.input != Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)) ||
-          request.expectedRevision != intent.expectedRevision || request.context.snapshot != intent.snapshot ||
+          request.context == null || !request.input.exists(value => value != null &&
+            value.typeIdentity == GoalPhaseClosureAuthority.inputCodec.typeIdentity && GoalPhaseClosureAuthority.sameInputScope(value.value, intent.input)) ||
+          request.expectedRevision != intent.expectedRevision || !GoalPhaseClosureAuthority.sameContextScope(request.context.snapshot, intent.snapshot) ||
           request.runId == null || request.runId.value != intent.handle.instanceIdentity.value ||
           request.continuationId == null || !canonical(request.continuationId.value, 256) ||
           request.resultType != Some(StateMachineResultTypeReference(resultType)) ||
@@ -58,10 +58,7 @@ private[smworkflow] object GoalPhaseHumanDecisionContract {
         else GoalPhaseClosureDecisionTemplate(request.requiredOperation, request.operation, request.completionOperation).validateC
         _ <- intent.handle.validateC
         _ <- StepCloseRequestAdapter.submissionC(intent.input.candidate)
-        _ <- GoalPhaseClosureAuthority.inputCodec.decode(GoalPhaseClosureAuthority.inputCodec.encode(intent.input))
-          .fold(Consequence.stateConflict(_), _ => Consequence.unit)
-        _ <- if (request.context.requiredFacts == Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)) &&
-            request.context.references == Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)))
+        _ <- if (request.context.requiredFacts == Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)))
           Consequence.unit else Consequence.stateConflict("Human question context differs from its intent")
         _ <- WorkflowDecisionJsonV1.encodeC(WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing](intent.handle,
           WorkflowContinuation.Decision(request, MinimalPresentation("Human Decision", "Not command authorization"))),
@@ -85,12 +82,29 @@ private[smworkflow] object GoalPhaseHumanDecisionContract {
         Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)),
         Some(StateMachineResultTypeReference(resultType)), ContextBundle("Select the exact declared answer",
           Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-          Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+          Vector.empty, intent.snapshot),
         CompletionContract("human-decision-answer-v1", Vector.empty),
         EvidenceContract("independently-verified-human-interaction-v1", Vector.empty), routing.completionOperation)
       val question = Question(intent, request, choices)
       question.validateC.map(_ => question)
     }
+
+  /** Actual question/choice target, not a certificate that visible text,
+    * copied candidate bodies or diagnostic context stayed unchanged.
+    * Shape and answer admission remain owned by their input/storage boundary.
+    */
+  def sameQuestionScope(left: Question, right: Question): Boolean =
+    left != null && right != null && left.schemaVersion == questionSchema && right.schemaVersion == questionSchema &&
+      GoalPhaseClosureAuthority.sameIntentScope(left.intent, right.intent) && left.request != null && right.request != null && {
+        val a = left.request
+        val b = right.request
+        a.runId == b.runId && a.continuationId == b.continuationId && a.expectedRevision == b.expectedRevision &&
+          a.requiredOperation == b.requiredOperation && a.operation == b.operation &&
+          a.completionOperation == b.completionOperation && a.resultType == b.resultType &&
+          a.context != null && b.context != null && GoalPhaseClosureAuthority.sameContextScope(a.context.snapshot, b.context.snapshot) &&
+          a.input != null && b.input != null && a.input.exists(v => v != null && b.input.exists(w => w != null && v.typeIdentity == w.typeIdentity &&
+            GoalPhaseClosureAuthority.sameInputScope(v.value, w.value)))
+      }
 
   def encodeAnswerC(answer: Answer): Consequence[String] =
     if (answer == null || !canonical(answer.choiceIdentity, 128)) Consequence.stateConflict("Human answer is invalid")

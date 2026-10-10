@@ -41,3 +41,36 @@ Evidence: GoalPhaseLauncherAssemblySpec.scala:30-75 retains private take, compon
 Risk: naming inconsistency only; no behavioral defect is established.
 Maintenance boundary: a separately selected behavior-preserving naming task. These observations do not authorize cleanup in the present repair.
 <!-- cncf-phase-finding:HYG-SMWF-P2-CYCLE2-001:end -->
+
+<!-- cncf-phase-finding:HYG-174-001:begin -->
+### HYG-174-001 — Diagnostic SQLite fixture work-artifact placement
+
+Owner repository: sm-workflow
+Status: OPEN; nonblocking, unadmitted maintenance
+Source: actual independent `/root/pending_partition_actual174_readonly_review`, configured gpt-6.1-sol/high, bounded174 FINDINGS with separate CB-PENDING174-001.
+Evidence: SplitPhaseManagedPlanningCheckpointSpec.scala:5275 newly uses Files.createTempDirectory("smwf-pending-diagnostics-") in the OS temporary root instead of required target/ placement.
+Risk: work-artifact placement only; actual174146/146 and native terminal/current-request evidence remain trustworthy.
+Maintenance boundary: separately admitted fixture-placement correction preserving unique database, real public Operations, both callbacks and physical reopen. No cleanup, migration, current blocker promotion or automatic repair is authorized.
+<!-- cncf-phase-finding:HYG-174-001:end -->
+
+<!-- cncf-phase-finding:HYG-174-002:begin -->
+### HYG-174-002 — Pre-existing managed specification size and grouping
+
+Owner repository: sm-workflow
+Status: OPEN; nonblocking, unadmitted maintenance
+Source: actual independent `/root/pending_partition_actual174_readonly_review`, configured gpt-6.1-sol/high.
+Evidence: SplitPhaseManagedPlanningCheckpointSpec.scala has5800lines at actual171 and5921lines/146examples at174, beyond5000line/100example guidance. This is newly recorded demonstrably pre-existing debt, not malformed new behavior.
+Risk: broad fixture/vocabulary and multiple public/native surfaces complicate maintenance; no current correctness or reviewability failure established.
+Maintenance boundary: separately planned coverage-preserving split. Preserve shared host/fixture vocabulary and every behavior/expectation; no incident cleanup or counter/frame changes.
+<!-- cncf-phase-finding:HYG-174-002:end -->
+
+<!-- cncf-phase-finding:HYG-176-001:begin -->
+### HYG-176-001 — Orphaned private reference helper
+
+Owner repository: sm-workflow
+Status: OPEN; nonblocking, unadmitted maintenance
+Source: actual independent `/root/partition_reconstruction_actual176_readonly_review`, configured gpt-6.1-sol/high, bounded176 PASS/currentCB[].
+Evidence: SplitPhasePartitionEnrichmentStorage.scala:53 retains private `_exact(identity, revision)` after removal of its only storage-reader callers. Whole current source/caller inspection shows no caller.
+Risk: maintenance clarity only; the helper executes no admission gate or effect. Actual17614/14 and native terminal/current-request evidence remain trustworthy.
+Maintenance boundary: separately admitted unused-private-helper removal, preserving actual purpose metadata and bindTargetsC behavior. No cleanup, current blocker promotion, new repair frame or counter change is authorized.
+<!-- cncf-phase-finding:HYG-176-001:end -->

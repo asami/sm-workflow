@@ -56,7 +56,7 @@ object GoalPhaseReviewResultAdapter {
           submission <- StepCloseRequestAdapter.submissionC(original.get.value)
           declared = result.reviewEvidence.head
           evidence <- StepCloseRequestAdapter.reviewEvidenceC(original.get.value.stepIdentity, declared)
-          _ <- if (new StepClosureAdmission.Policy(asOf).isFresh(evidence, submission.candidate.reference))
+          _ <- if ((new StepClosureAdmission.Policy).isFresh(evidence, submission.candidate.reference))
             Consequence.unit
           else Consequence.stateConflict("GoalPhase review evidence is not current for the issued candidate")
           evaluation <- StepClosureAdmission.evaluateC(submission, asOf, Vector(evidence))

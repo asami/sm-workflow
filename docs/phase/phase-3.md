@@ -1,5 +1,15 @@
 # Phase 3: Resolved Failure Model for AI Implementation
 
+## Delivery sequence (2026-10-05)
+
+Follow the [incremental-use plan](README.md): a bounded practical Phase 2,
+then the Phase 5 runtime foundation and Phase 6 thinking-mode/skill integration.
+Gradual real use starts after Phase 6 acceptance and continues through Phase 7,
+followed by Phase 8 closure.
+Phase 3 is an orthogonal failure-model extension, not a prerequisite for that
+initial use sequence. Schedule it according to real modeled-development needs;
+its CNCF/Cozy dependencies and own completion condition remain unchanged.
+
 ## Goal
 
 Make ResolvedFailureModel a first-class implementation condition passed by sm-workflow to AI workers.

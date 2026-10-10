@@ -16,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
 /** The real result Operation derives its read query from native issued work.
   * It never substitutes an advance Core or grants advance's write authority.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseReasoningInvocation {
   def actorC(core: ActionCall.Core, participant: Option[String]): Consequence[Unit] =
@@ -75,7 +75,6 @@ private[smworkflow] object SplitPhaseReasoningInvocation {
       case Some(value) => Consequence.success(value)
       case None => Consequence.stateConflict("Reasoning result has no actual native issued work")
     }
-    _ <- WorkflowProtocolV1.admitResultC(work, submitted).map(_ => ())
     command <- queryC(work)
   } yield command
 }

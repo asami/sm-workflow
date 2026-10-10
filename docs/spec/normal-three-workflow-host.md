@@ -28,6 +28,27 @@ rejected. EntityCollectionId labels must obey their canonical syntax (use
 underscores rather than hyphens). Configuration must not alias an input purpose
 to the Workflow instance/Continuation pair.
 
+### H8 — Read declared host input, not a serializer-body certificate
+
+The `sm-workflow.three-workflow-host.v1` producer retains its existing fields.
+Its reader checks the declared nested object fields and decodes field types
+once. It does not re-encode the decoded Definition to prove equality with the
+complete input. Subsequent host assembly still resolves actual executable
+targets and validates its policy, scope and authority; successful decoding
+alone grants no command or Human permission.
+
+Executable examples in `NativeHostEvidenceSpec`:
+
+- H8-1: the ordinary Definition and a repeated array presentation of an existing
+  `semanticPaths` Set decode to the same typed meaning. A caller-added grant is
+  refused. Set normalization is not proof that input stayed unchanged.
+- H8-2: extra or missing fields at every nested object, a wrong schema, a wrong
+  primitive, null policy and wrong Set element types are refused by declared
+  shape/type admission, without a full re-encoding comparison.
+
+These examples are authored but UNVERIFIED until current-input runner execution;
+they do not establish whole-Phase removal or actual host/executor acceptance.
+
 ## Operations and completion
 
 The three native services publish fifteen workflow Operations: four GoalPhase,
@@ -123,10 +144,80 @@ SplitPhase advance additionally carries its typed partition context reference.
 Do not add a stage, cursor, winning candidate, argv, storage plan or permission
 to any advance command. The saved input and native state choose the next action.
 
-For a completion, retain the handle, run/continuation identity, expected revision,
-context snapshot, completion Operation and assigned result reference from the
-issued WorkOrder or Decision. Return the requested typed judgment/result and its
-evidence in a `WorkflowResultJsonV1` frame. The existence of a JSON frame neither
+SplitPhase's v1 decoder consumes its declared instance/context fields rather
+than requiring whole regenerated-JSON equality. Unused diagnostics, including
+extra root/payload/context members, do not reject resumption and never select a
+stage, action, command or storage target. Missing or wrongly typed consumed
+fields still fail conversion; the genuine managed Operation resolves actual
+context/Start/participant/native state. The connected diagnostic-tolerance,
+foreign-target and SQLite/separate-JVM reopen cases were extended on 2026-10-09.
+Fresh Actual106 verifies40/40 cases in four whole suites. Its independent
+review found only newly introduced local helper naming; the later M0 rename
+and references were checked separately without changing executed behavior or
+claiming post-rename compilation. Original source FINDINGS is preserved, not
+called independent PASS. Earlier Actual105 does not cover these subsequent
+edits, and neither result completes the remaining Phase5 interface. See the
+[advance input removal record](../journal/2026/10/2026-10-09-split-advance-unused-input-removal.md).
+
+The codec also no longer constructs a prospective physical planning-index key
+or repeats generated shape admission after typed decode. Required generated
+producer fields remain present and logical strings remain unnormalized data;
+actual context/Start/native consumers resolve meaning, while actual physical
+index read/publication enforces its bounded locator at consumption. Fresh
+Actual107 verifies28/28 codec+completeDirect cases and independent source PASS:
+a long absent context reaches owning lookup without changing pending state.
+This does not imply oversized keys work in real planning-index access or close
+all remaining checks/session/AI execution/full Phase5 obligations. See the
+[physical-key boundary record](../journal/2026/10/2026-10-10-split-advance-physical-key-boundary.md).
+
+GoalPhase and RepositorySync advance now likewise consume schema and the actual
+String instance without refusing unused root fields or pre-admitting logical
+identity canonicality. They do not interpret extra stage/argv/receipt/permission
+fields. Native Start/host/participant/current instance remain actual consuming
+boundaries. Split also removes the speculative16KiB/whole-String UTF8 preflight
+and does not check the prefix its encoder just produced; natural parser/typed
+fields/published prefix and actual physical/transport/resource owners remain.
+Fresh Actual108 verifies46/46 across five whole suites with independent source
+PASS. Genuine decorated Goal/Repository progression, missing native target/
+unchanged original state, and large-diagnostic pending Split/fresh/JVM behavior
+remain covered. This is bounded advance consumption, not session association,
+actual AI execution/result or full Phase5 acceptance. See the
+[three-advance correction record](../journal/2026/10/2026-10-10-three-advance-consumed-input.md).
+
+### Result submission without echoed control context (Phase5, scoped validation)
+
+The normal three-service assembly additionally accepts
+`schemaVersion: "sm-workflow.result-submission.v1"` at all nine result-submission
+Operations. Submit session context or the necessary issued request selector,
+`result.value`, `completionFacts` and `executionEvidence`. Partition, handoff-scope
+and reasoning semantic completions use their actual saved WorkOrder destination
+internally; an echoed `result.reference` is not required or consumed there.
+Other completion Operations still consume an actual result/evidence reference
+(`identity`, `revision`) under `result.reference`; it is not invented from an
+issued question. The value uses the selected Operation's
+payload codec listed above. Facts and evidence retain the Workflow protocol
+representation. Omitted facts mean none; omitted evidence means no observed
+executor evidence, never invented worker/model/context identities.
+
+No handle, run identity, expected revision, context snapshot or result-type echo
+is required. The server reads the actual saved WorkOrder or Decision identified
+through session resolution or the necessary request identity using that provided Operation's managed issued-work
+binding. It supplies internal context to the existing owning completion.
+Result meaning, actual reference/scope, current state, authority and atomic CAS
+remain with that completion. The wrapper creates no verifier, comparison record,
+claim, authorization or alternate transition path. Legacy complete-envelope
+input still uses the native decoder; the table above describes that encoding.
+
+Request identity disambiguates an actual issued generation, including a delayed
+answer; it is not authorization. Normal session association and targeted result
+submission have scoped direct Operation evidence (Actual11569/69; subsequent
+assigned-destination follow-through Actual11634/34). Neither infers a Codex chat
+identity or proves actual AI execution, all R1-R5/E1-E12 cases, or full Phase
+acceptance. See [the connected session contract](session-workflow-context-resolution.md)
+for exact remaining association, ambiguity, concurrent-update and consumed-input
+obligations.
+
+The existence of a JSON frame neither
 authenticates its participant nor creates independent review/Human evidence.
 For Phase2 those evidence records may be explicitly specification-owned input
 fixtures, prepared through the declared managed record grants.
@@ -199,15 +290,101 @@ and document writes must still execute through their configured CNCF runtime
 programs, on spec-owned repositories/remotes/files with bounded grants. A test
 must not return canned command success or use a direct SQLite write in their place.
 
+Native Goal/Repository Human questions now recover original saved meaning and
+presentation without whole regenerated-question equality. Actual assignment,
+requesting-result/native target, executable route/type/model and owned slot
+remain admission inputs. Managed completion supplies committed state directly;
+its acknowledgement does not reread full question/answer/source copies. A
+retained retry consumes the saved answer, ignores explanation-only differences
+and rejects a substituted choice/literal resolution. Repository Human/conflict
+v1 readers admit declared nested structure and optional defaults without
+re-encoding equality. See [Human question applicability](native-human-question-applicability.md).
+These changed Operation/spec inputs are UNVERIFIED. The separate independent
+Goal/Repository/Split Human host attestation has a selected-target correction
+below; native Split Human question/completion gates still require correction.
+
 ## Current evidence adapter and Phase 2 Operation verification
 
 `NativeHostEvidence` reads the `nativeHostEvidencePayload` framed record through
 the owning incoming DataStoreSpace and clock. Records bind a declared purpose,
-lookup identity, reference/revision, actual issuer/participant, complete current
-typed input/result and validity interval. The record codec is passive: encoding
+lookup identity, reference/revision, actual issuer/participant, selected effect
+scope or semantic attestation, and historical occurrence time. The record codec is passive: encoding
 JSON is not issuing evidence. No public completion Operation writes or attests
 these records. Missing evidence remains absent rather than creating consent,
 review acceptance or an authorization.
+
+The configured factory installs Reader-backed Human/review EvidencePorts as
+trusted component dependencies. Public requests cannot supply such a port or
+turn authentication into its successful admission. These ports return the
+host boundary's outcome, not an internally rechecked receipt. Independent
+record-read permission, current declared issuer/purpose, actual target/reference/
+actor and occurrence are checked by Reader. The direct-operation host-boundary
+example exercises a physical stored row, stale construction-time issuer versus
+current authority, absent/foreign evidence and future occurrence. This is
+UNVERIFIED test code and specification-issued input, not a genuine Human channel.
+
+The Phase 5 migration writes `sm-workflow.native-host-evidence.v7` records without
+`validUntil`. Its reader recognizes stored v1/v2/v3/v4/v5/v6 records, retains their actual scope,
+reference, issuer/participant and occurrence time, and disregards the obsolete
+optional expiry field. It does not renew authority or rewrite the stored row.
+Current v7 input rejects undeclared fields, including `validUntil`; recognizing a
+legacy expiry does not allow other caller-added claims. Applicability depends on
+the actual current call and its purpose/binding, not elapsed time. A future
+occurrence time remains a contradictory input, not a TTL.
+
+Step/Phase closing and Repository effects now store actual selected target
+facts, not full Plan/Start-command copies. Current producers/readers,
+legacy extraction and actual call consumers use that same scope contract.
+They retain actual invocation/participant/native frontier/candidate/chain/review/
+effect/physical target and issuer relationships. Review attestations separately
+retain actual candidate/assignment/model/result/reviewer/disposition without
+Plan/policy/diff/log/transport certificates; WorkRequest v2 removes review policy
+markers and v1 reads discard them. Split Human answers select original Scope or
+Reasoning targets without full question/frontier/Result copies. This follow-through
+is UNVERIFIED; neither prior Phase2 nor focused expiry PASS covers it. See
+[native host authority applicability](native-host-authority-applicability.md).
+Review-specific coverage and pending checks are in
+[native host review applicability](native-host-review-applicability.md).
+
+Goal/Repository Human evidence stores the actual issued question target,
+submitting participant/Human worker, requesting result/native assignment and
+choice/literal resolution, not full question/result/Plan/context/explanation
+copies. Human EvidencePorts delegate to Reader's single host-input admission;
+no copied receipt, issuer getter or second target/time check returns to consumers.
+Selected scope is produced once and actual-call admission remains.
+V1–v6 extraction preserves original meaning/time without rewrite or renewal;
+v7 rejects reintroduced copies. Independent Human ingress still remains separate
+from effect permission and completion cannot provision these records. See
+[native Human applicability](native-host-human-applicability.md). Changed
+codec/Operation/native parent-child inputs are UNVERIFIED; native Split Human
+question/history/completion gates and broader connected acceptance remain open.
+
+Split Start independently attests actual command/mode/actor/invocation and its
+Workflow/source-authority/selected-proposal target, not provider configuration,
+complete selection/recommendation or proposal-child copies. The normal Reader
+admits independently stored evidence using the current host declaration and call
+clock; the Start assembly has no separate verifier receipt or validity clock.
+Execution takes the admitted original prepared
+Start rather than a second argument whose complete body must match again.
+V1–v6 readers select original consent without decoding unused copies or renewing
+it; authorized Human relays and actual-call/state/CAS/scope/permissions remain.
+See [Split Start applicability](native-host-split-start-applicability.md).
+Source/spec changes are UNVERIFIED. Split preparation/planning retained-body
+gates and native Human completion still require connected correction.
+
+SplitPhase Start/answer and RepositorySync conflict-answer host records likewise
+have no mandatory expiry. Authentication, actual participant/owner/purpose and
+the genuine issued question/result relationship remain required. Expiry removal
+does not extend an ActionCall's managed storage lifetime, forgive an unrelated
+answer or waive independent host verification. This connected seam has normal
+generation and focused Operation/codec regression evidence; it is not Phase 5
+acceptance or evidence that
+the separate legacy Step/review/closure contracts have all migrated. The older
+GoalPhase Human-answer storage/public codec likewise writes its expiry-free v2
+receipt and recognizes historical v1 answers without expiry evaluation. Its CML
+receipt declaration no longer requires `validUntil`; normal producer generation
+and the affected focused specifications have run. Legacy decoding is structural and cannot itself
+issue Human admission or change the retained question/answer.
 
 Declare each configured purpose-specific record collection in the normal storage
 plan's Component Create-only grants, with the component owner and the same

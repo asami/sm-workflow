@@ -25,18 +25,15 @@ final class GoalPhaseClosureDecisionRetentionSpec extends AnyWordSpec with Match
     WorkflowDefinitionRevision("revision-1"), InstanceIdentity("decision-retention-instance"))
   private val candidate = StepCloseRequest("submission", "step", "a" * 64, "b" * 64, Vector.empty)
   private val revision = take(StepCloseRequestAdapter.submissionC(candidate)).candidate.reference.revision
-  private val digest = java.security.MessageDigest.getInstance("SHA-256")
-    .digest(GoalPhaseStepCloseJson.encode(candidate).getBytes(java.nio.charset.StandardCharsets.UTF_8))
-    .map(byte => f"${byte & 0xff}%02x").mkString
   private val intent = GoalPhaseClosureAuthority.Intent(handle, StateMachineRevision("3"),
-    ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision), evidenceRevision = Some(digest)),
-    GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, candidate, revision, digest), "fixture-intent")
+    ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision)),
+    GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, candidate, revision), "fixture-intent")
   private val decision = ContinuationRequest(StateMachineRunIdentity(handle.instanceIdentity.value), ContinuationIdentity("question-1"),
     intent.expectedRevision, StateMachineRequiredOperationIdentity("host.step-close-authority"),
     StateMachineOperationIdentity("HumanBoundaryFixture", "decideStepClose"),
     Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
     ContextBundle("Resolve exact authority", Vector(ContextReference(candidate.stepIdentity, revision)),
-      Vector(ContextReference(candidate.submissionIdentity, digest)), intent.snapshot),
+      Vector.empty, intent.snapshot),
     CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
     StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority"))
   private def wire(value: ContinuationRequest[GoalPhaseClosureAuthority.Input] = decision) =
@@ -44,6 +41,9 @@ final class GoalPhaseClosureDecisionRetentionSpec extends AnyWordSpec with Match
       WorkflowContinuation.Decision(value, MinimalPresentation("Stop", "No approval"))), GoalPhaseClosureAuthority.inputCodec))
   private def record(value: ContinuationRequest[GoalPhaseClosureAuthority.Input] = decision) = Record.data(
     GoalPhaseClosureDecisionRecord.storageField -> take(GoalPhaseClosureDecisionRecord.encodeStorageC(intent, wire(value))))
+  private def foreignRecord = Record.data(GoalPhaseClosureDecisionRecord.storageField ->
+    take(GoalPhaseClosureDecisionRecord.encodeStorageC(intent.copy(expectedRevision = StateMachineRevision("9")),
+      wire(decision.copy(expectedRevision = StateMachineRevision("9"))))))
   private final class Storage extends GoalPhaseClosureDecisionRetention.Port {
     var row = Option.empty[Record]
     var creates = 0
@@ -59,7 +59,10 @@ final class GoalPhaseClosureDecisionRetentionSpec extends AnyWordSpec with Match
       else fault match {
         case "missing" => Consequence.success(None)
         case "failed" => Consequence.stateConflict("Readback failed")
-        case "divergent" => Consequence.success(Some(record(decision.copy(continuationId = ContinuationIdentity("other-question")))))
+        case "foreign-scope" => Consequence.success(Some(foreignRecord))
+        case "selected-metadata" => Consequence.success(Some(record(decision.copy(
+          continuationId = ContinuationIdentity("stored-question"), context = decision.context.copy(
+            references = Vector(ContextReference("historical-provenance", "diagnostic-only")))))))
         case "malformed" => Consequence.success(Some(Record.data(GoalPhaseClosureDecisionRecord.storageField -> "invalid")))
         case "throw-read" => throw new IllegalStateException("Readback threw")
         case _ => Consequence.success(row)
@@ -183,8 +186,32 @@ final class GoalPhaseClosureDecisionRetentionSpec extends AnyWordSpec with Match
       storage.creates shouldBe 1
       storage.reads shouldBe 3
     }
-    "refuse different or malformed existing records without any Create" in {
-      Vector(record(decision.copy(continuationId = ContinuationIdentity("other-question"))),
+    "consume the selected scoped row without a proposed-body equality certificate" in {
+      Given("a stored Decision with its allocated question identity and historical diagnostic metadata")
+      val saved = decision.copy(continuationId = ContinuationIdentity("stored-question"),
+        context = decision.context.copy(snapshot = intent.snapshot.copy(workspaceRevision = Some("old-workspace")),
+          references = Vector(ContextReference("historical-provenance", "diagnostic-only"))))
+      val storage = new Storage
+      storage.row = Some(record(saved))
+      When("retention receives a newly constructed proposal for the same actual target")
+      val selected = take(retain(storage))
+      Then("the selected row is returned without comparing or replacing its entire body")
+      selected shouldBe saved
+      storage.reads shouldBe 1
+      storage.creates shouldBe 0
+      storage.row shouldBe Some(record(saved))
+      Given("a Create whose authoritative readback carries a different allocated question identity")
+      val readback = new Storage
+      readback.fault = "selected-metadata"
+      When("retention resolves the actual committed scoped request")
+      val observed = take(retain(readback))
+      Then("readback need not certify equality to the proposed payload")
+      observed.continuationId shouldBe ContinuationIdentity("stored-question")
+      readback.creates shouldBe 1
+      readback.reads shouldBe 2
+    }
+    "refuse foreign scope or malformed existing records without any Create" in {
+      Vector(foreignRecord,
         Record.data("unknown" -> "value"), Record.data(GoalPhaseClosureDecisionRecord.storageField -> "invalid"), null).foreach { row =>
         Given("a different or malformed stored decision row")
         val storage = new Storage
@@ -211,7 +238,7 @@ final class GoalPhaseClosureDecisionRetentionSpec extends AnyWordSpec with Match
       }
     }
     "keep post-Create failures indeterminate and recover the same row by observation" in {
-      Vector("missing", "failed", "divergent", "malformed", "throw-read", "failed-create", "throw-create").foreach { fault =>
+      Vector("missing", "failed", "foreign-scope", "malformed", "throw-read", "failed-create", "throw-create").foreach { fault =>
         Given("an empty store with a selected post-Create uncertainty fault")
         val storage = new Storage
         storage.fault = fault

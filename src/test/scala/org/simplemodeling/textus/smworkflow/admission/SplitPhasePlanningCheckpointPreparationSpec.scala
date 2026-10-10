@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Constructed local test data, never public ingress, execution or readback.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 private[admission] object SplitPhasePlanningCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -55,7 +55,7 @@ private[admission] object SplitPhasePlanningCheckpointFixture {
     val issued = SplitPhasePartitionReplyFixture.issue(take(T.bindPartitionC(f.prepared, f.partition)))
     val work = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
     val request = work.input.get.value
-    val judgment = S.Judgment(request.context, decision, "explicit-semantic-only",
+    val judgment = S.Judgment(decision, "explicit-semantic-only",
       if (decision == S.Decision.Enriched) request.items.map(i => S.NovelEstimate(i.identity, 120, 180,
         "bounded-work", "novel-closure")) else Vector.empty,
       if (decision == S.Decision.Enriched) request.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
@@ -107,7 +107,7 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
           SplitPhaseExplicitObjectiveSelection.OverheadPolicyReference("changed", "1"), allocation.data.source,
           allocation.data.authority, 1, 0, 0, 0, 0))))
       When("a fresh selection with equal references but different objectives is supplied")
-      val foreign = take(W.advanceC(take(W.selectC(retained.context.selection.partition, changed, changed))))
+      val foreign = take(W.advanceC(take(W.selectC(retained.context.selection.partition, changed))))
       Then("unchanged capture preserves complete data and foreign construction refuses")
       take(K.captureUnchangedC(retained, outcome, reference, anchor)).record.snapshot.selection.planning shouldBe allocation.data
       K.captureUnchangedC(retained, foreign, reference, anchor).isSuccess shouldBe false
@@ -132,23 +132,28 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
       take(K.captureCompletionC(completion(S.Decision.DecisionNeeded), reference)) shouldBe None
     }
 
-    "refuse crossed full records nulls and direct construction of capture capabilities" in {
-      Given("a valid passive mapping and no authenticated current call")
-      val saved = capture().record
-      When("full Start context or adjacent revisions differ")
-      val variants = Vector(saved.copy(committedRevision = InstanceRevision(3)),
-        saved.copy(originalStart = saved.originalStart.copy(source = saved.originalStart.source.copy(
-          authority = saved.originalStart.source.authority.copy(revision = "other")))),
-        saved.copy(originalContext = saved.originalContext.copy(owner = saved.originalContext.owner.copy(
-          start = saved.originalStart.reference.copy(revision = "other")))))
-      Then("shape inspection refuses and raw mappings cannot grant capture")
-      variants.foreach(v => K.inspectC(v).isSuccess shouldBe false)
-      K.inspectC(null).isSuccess shouldBe false
+    "refuse absent capture inputs without turning passive records into capture capabilities" in {
+      Given("absent planning inputs and an inert record type")
+      When("capture producers receive no constructed planning or completion")
+      val absent = Vector(K.captureCompletionC(null, reference),
+        K.captureUnchangedC(null, null, reference, anchor), K.captureAllocatedC(null, null, null, reference, anchor))
+      Then("capture is unavailable and raw mappings cannot grant it")
+      absent.foreach(_.isSuccess shouldBe false)
       K.inspectIndexC(null).isSuccess shouldBe false
-      K.captureCompletionC(null, reference).isSuccess shouldBe false
-      K.captureUnchangedC(null, null, reference, anchor).isSuccess shouldBe false
-      K.captureAllocatedC(null, null, null, reference, anchor).isSuccess shouldBe false
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPreparation.Captured(null, null, null, null, None, None)")
+    }
+
+    "reject missing mapping addresses at the capture input owner" in {
+      Given("one actual constructed selection and its allocated outcome")
+      val selected = bound()
+      val (allocation, outcome) = allocated(selected)
+      val retained = bound(knownFacts.copy(planning = allocation.data))
+      val unchanged = take(W.advanceC(retained.context.selection))
+      When("capture input omits its declared publication address")
+      val results = Vector(K.captureAllocatedC(selected, allocation, outcome, null, anchor),
+        K.captureUnchangedC(retained, unchanged, null, anchor), K.captureCompletionC(completion(), null))
+      Then("no publishable capture is constructed rather than certifying generated records afterward")
+      results.foreach(_.isSuccess shouldBe false)
     }
   }
 }

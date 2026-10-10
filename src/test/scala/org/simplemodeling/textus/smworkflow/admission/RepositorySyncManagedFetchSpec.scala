@@ -154,8 +154,10 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
     productCheck: Option[Boolean] = None,
     reviewEvidence: Option[FixtureReviewEvidence] = None,
     convergence: Option[FixtureEffectAuthority] = None,
-    selectionScenario: String = "selected") extends AutoCloseable {
+    selectionScenario: String = "selected", reviewPolicy: RepositorySyncNativeMergeReview.Policy = nativeReviewPolicy,
+    declaredInput: Option[RepositorySyncStartInput] = None) extends AutoCloseable {
     val driver = new Driver
+    private val declaration = e.declaration.copy(input = declaredInput.getOrElse(e.input))
     val programs = definitions(e, semanticConflicts, productCheck)
     val admission = take(ProcessExecutionAdmission.createC(take(ProcessExecutionPolicy.createC(programs)),
       if (grant) programs.map(p => ProcessExecutionGrant(p.capability)) else Vector.empty))
@@ -232,14 +234,15 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           val core = c
           def execute(): Consequence[OperationResponse] = for {
             definition <- RepositorySyncDefinitionBinding.bindC
-            session <- Fetch.sessionC(e.identity, e.declaration, definition, core)
-            store <- RepositorySyncNativeProgressStore.bindC(session, e.declaration, core, _ => Consequence.unit)
+            session <- Fetch.sessionC(e.identity, declaration, definition, core)
+            store <- RepositorySyncNativeProgressStore.bindC(session, declaration, core, _ => Consequence.unit)
             checkpoint <- store.loadC("checkpoint-created")
             intent <- store.loadC("integration-intent")
             pending <- store.loadC("pending-merge")
             actual <- RepositorySyncManagedGitObservation.inspectC(core)
             commit <- RepositorySyncManagedGitObservation.commitC(core, actual.observed.head)
             wire = Json.obj("head" -> Json.fromString(actual.observed.head), "tree" -> Json.fromString(actual.observed.tree),
+              "originalRepositoryPolicyVersion" -> Json.fromString(session.command.input.repositoryPolicyVersion),
               "parents" -> Json.arr(commit.parents.map(Json.fromString)*),
               "dirty" -> Json.fromInt(actual.observed.dirty.size),
               "mergeHead" -> actual.mergeHead.map(Json.fromString).getOrElse(Json.Null),
@@ -272,10 +275,10 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
       })
     }
     private val factory = new GoalPhaseConfiguredComponentFactory(Vector.empty, Vector.empty, (creation, _, _) =>
-      Assembly.bindHostC(creation, e.declaration, acknowledge, native, nativeAcknowledge,
+      Assembly.bindHostC(creation, declaration, acknowledge, native, nativeAcknowledge,
         if (semanticConflicts) RepositorySyncNativeConflictInput.Policy(Set("shared.txt"))
         else RepositorySyncNativeConflictInput.noSemanticPaths, validationPolicy,
-        reviewEvidence.map(evidence => RepositorySyncNativeMergeReview.Installation(nativeReviewPolicy, evidence)), convergence).map(service => spec.ServiceDefinition("RepositorySyncService",
+        reviewEvidence.map(evidence => RepositorySyncNativeMergeReview.Installation(reviewPolicy, evidence)), convergence).map(service => spec.ServiceDefinition("RepositorySyncService",
         spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(service.operations.operations.toVector ++ Vector(setup, inspect, stage)))))).primaryFactory
     private val component = take(factory.createPrimaryC(ComponentCreate(owner, ComponentOrigin.Builtin)))
     owner.add(component)
@@ -405,7 +408,7 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         } finally later.close()
       }
     }
-    "retain failed nonmerge checks without pushing replaying or silently changing the selected validation policy" in {
+    "retain failed nonmerge checks without pushing replaying or replacing their original outcome after metadata changes" in {
       Given("an owned local-ahead integration with an actual failing required managed check")
       val e = episode(scenario = "LocalAhead"); val authority = new FixtureEffectAuthority(e)
       val first = new Host(e, native = true, validationPolicy = Some(configuredValidation),
@@ -431,13 +434,13 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
         later.driver.count("sm-workflow-git-push") shouldBe 0
       } finally later.close()
-      Given("a host with a different check policy for the same saved nonmerge workflow")
+      Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R3; Example: E13; a host with different check metadata for the same saved failed result")
       val changed = new Host(e, native = true, validationPolicy = Some(configuredValidation.copy(revision = 2)),
         productCheck = Some(true), convergence = Some(authority))
       try {
-        When("another host silently changes the retained check policy")
-        changed.advance().isSuccess shouldBe false
-        Then("that change is refused before any check or push")
+        When("another host projects a different policy revision and a program that would now succeed")
+        waitRevision(take(changed.advance())) shouldBe revision
+        Then("the actual old failure remains nonterminal without rerunning a check or pushing")
         changed.driver.count("sm-workflow-repository-validation-1") shouldBe 0
         changed.driver.count("sm-workflow-git-push") shouldBe 0
       } finally changed.close()
@@ -476,7 +479,7 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
       }
     }
     "refuse changed native state or revoked host authority after nonmerge validation without inventing review acceptance" in {
-      Vector("local-edit", "authority", "policy").foreach { change =>
+      Vector("local-edit", "authority", "mode").foreach { change =>
         Given("an actually validated owned local-ahead integration, initially without convergence installation")
         val e = episode(scenario = "LocalAhead"); val authority = new FixtureEffectAuthority(e)
         val first = new Host(e, native = true, validationPolicy = Some(structuralValidation))
@@ -484,10 +487,10 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           first.prepare(); take(first.start()); take(first.advance())
           first.inspectNative().hcursor.get[String]("progression").toOption shouldBe Some("sync.IntegrationValidated")
         } finally first.close()
-        Given("the next host has an outside edit, revoked grants or a different validation policy")
+        Given("the next host has an outside edit, revoked grants or an incompatible validation mode")
         if (change == "local-edit") Files.writeString(e.target.root.resolve("outside-validation.txt"), "not selected\n")
         if (change == "authority") authority.allowed = Set.empty
-        val policy = if (change == "policy") structuralValidation.copy(revision = 2) else structuralValidation
+        val policy = if (change == "mode") configuredValidation else structuralValidation
         val later = new Host(e, native = true, validationPolicy = Some(policy), convergence = Some(authority))
         try {
           When("the owning advance attempts convergence of the saved nonmerge validation")
@@ -499,6 +502,31 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           later.driver.fetchStarts shouldBe 0
         } finally later.close()
       }
+    }
+    "converge actual successful nonmerge validation after compatible metadata changes without replaying checks" in {
+      Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R3; Example: E14; actual validated local-ahead work awaiting current convergence authority")
+      val e = episode(scenario = "LocalAhead"); val authority = new FixtureEffectAuthority(e)
+      val first = new Host(e, native = true, validationPolicy = Some(structuralValidation))
+      try {
+        first.prepare(); take(first.start()); take(first.advance())
+        first.inspectNative().hcursor.get[String]("progression").toOption shouldBe Some("sync.IntegrationValidated")
+      } finally first.close()
+      val later = new Host(e, native = true, validationPolicy = Some(structuralValidation.copy(identity = "new-metadata", revision = 8,
+        reason = "New explanation for future selections")), convergence = Some(authority),
+        declaredInput = Some(e.input.copy(repositoryPolicyVersion = "host-v8")))
+      try {
+        When("the same actual native candidate and original Start resolve under the current actual effect grant")
+        val terminal = take(later.advance()).print
+        take(WorkflowTerminalJsonV1.decodeC(terminal, RepositorySyncNativeConvergence.resultCodec)).handle.instanceIdentity.value shouldBe e.identity
+        Then("only the genuinely unstarted convergence effects execute and repeated advance consumes the same completion")
+        later.driver.count("sm-workflow-git-check-pending-index") shouldBe 0
+        later.driver.count("sm-workflow-git-commit-pending") shouldBe 0
+        later.driver.count("sm-workflow-git-push") shouldBe 1
+        later.driver.fetchStarts shouldBe 1
+        take(later.advance()).print shouldBe terminal
+        later.driver.count("sm-workflow-git-push") shouldBe 1
+        later.driver.fetchStarts shouldBe 1
+      } finally later.close()
     }
     "commit and nonforce-push only an actually accepted merge then return native Completed Terminal without replay" in {
       Vector("Diverged", "Conflict").foreach { scenario =>
@@ -630,9 +658,9 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         host.driver.count("sm-workflow-git-push") shouldBe 1
       } finally host.close()
     }
-    "issue actual independent full merge review and retain it across physical reopen without Git effects" in {
+    "issue actual independent full merge review and retain original meaning across compatible policy metadata changes without Git effects" in {
       Vector("Diverged", "Conflict").foreach { scenario =>
-        Given("actual selected validation and an explicitly installed fixture independent review verifier")
+        Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R2; Example: E7; actual selected validation and an explicitly installed fixture independent review verifier")
         val e = episode(scenario = scenario); val evidence = new FixtureReviewEvidence
         val first = new Host(e, native = true, semanticConflicts = scenario == "Conflict",
           validationPolicy = Some(structuralValidation), reviewEvidence = Some(evidence))
@@ -648,7 +676,10 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           val input = order.request.input.get.value
           input.checks.map(_.identity) shouldBe Vector("index-local", "index-remote")
           input.checks.forall(_.termination == "exited") shouldBe true
-          input.validationPolicyIdentity shouldBe structuralValidation.identity
+          input.validationMode shouldBe structuralValidation.mode
+          input.validationReason shouldBe structuralValidation.reason
+          input.productElementNames.toSet should not contain "validationPolicyIdentity"
+          input.productElementNames.toSet should not contain "reviewPolicyIdentity"
           input.localTip should not be input.remoteTip
           order.request.completionOperation shouldBe RepositorySyncNativeMergeReviewContinuation.completionOperation
           if (scenario == "Conflict") {
@@ -664,7 +695,9 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           first.driver.count("sm-workflow-git-check-pending-index") shouldBe 2
         } finally first.close()
         val later = new Host(e, native = true, semanticConflicts = scenario == "Conflict",
-          validationPolicy = Some(structuralValidation), reviewEvidence = Some(evidence))
+          validationPolicy = Some(structuralValidation.copy(identity = "changed-metadata", revision = 2,
+            reason = "A new policy explanation does not replace the original selected meaning")), reviewEvidence = Some(evidence),
+          reviewPolicy = nativeReviewPolicy.copy(identity = "changed-review-metadata", revision = 8))
         try {
           When("a newly opened physical SQLite host loads the same issue and admits its independently registered answer")
           reviewWork(take(later.advance())) shouldBe issued
@@ -836,8 +869,10 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           Then("the real check invocation count distinguishes pre-start from post-execution interruption")
           first.driver.count("sm-workflow-git-check-pending-index") shouldBe (if (stop.contains("prepared")) 0 else 1)
         } finally first.close()
-        Given("a physically reopened host consuming the actual native records")
-        val later = new Host(e, native = true, validationPolicy = Some(configuredValidation), productCheck = Some(true))
+        Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R1; Example: E8; a physically reopened host with changed policy metadata and an extra unselected binding")
+        val later = new Host(e, native = true, validationPolicy = Some(configuredValidation.copy(identity = "new-metadata", revision = 8,
+          reason = "Another explanation for future work", checks = configuredValidation.checks :+ RepositorySyncNativeMergeValidation.Check("unselected", 2))),
+          productCheck = Some(true))
         try {
           When("owning advance resumes")
           val revision = waitRevision(take(later.advance()))
@@ -869,19 +904,38 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
       } finally later.close()
     }
 
-    "refuse a different host policy rather than promoting retained checks into its validation" in {
+    "retain selected validation after policy metadata changes without rerunning checks or relabeling original meaning" in {
       Given("a merge validated under one explicit native policy")
       val e = episode(scenario = "Diverged")
       val first = new Host(e, native = true, validationPolicy = Some(structuralValidation))
       try { first.prepare(); take(first.start()); take(first.advance()) } finally first.close()
-      Given("the same durable instance with a different selected policy revision")
-      val later = new Host(e, native = true, validationPolicy = Some(structuralValidation.copy(revision = 2)))
+      Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R1; Example: E3; the same durable instance with different policy metadata")
+      val later = new Host(e, native = true, validationPolicy = Some(structuralValidation.copy(identity = "different-metadata", revision = 2,
+        reason = "Different explanation for new work")))
       try {
         When("owning advance consumes that instance")
-        later.advance().isSuccess shouldBe false
+        waitRecord(take(later.advance())).handle.instanceIdentity.value shouldBe e.identity
         Then("no old success is relabeled and no check is replayed")
         later.driver.count("sm-workflow-git-check-pending-index") shouldBe 0
       } finally later.close()
+    }
+    "refuse actual validation mode or selected executable-binding incompatibility without replay" in {
+      for ((original, changed) <- Vector(structuralValidation -> configuredValidation,
+        configuredValidation -> configuredValidation.copy(checks = Vector(RepositorySyncNativeMergeValidation.Check("fixture-check", 2))))) {
+        Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R1; Example: E4; actual retained selected checks")
+        val e = episode(scenario = "Diverged")
+        val first = new Host(e, native = true, validationPolicy = Some(original), productCheck = Some(true))
+        try { first.prepare(); take(first.start()); take(first.advance()) } finally first.close()
+        val later = new Host(e, native = true, validationPolicy = Some(changed), productCheck = Some(true))
+        try {
+          When("the host selects an incompatible product-test mode or no longer resolves the selected fixed check binding")
+          later.advance().isSuccess shouldBe false
+          Then("neither stored success nor an unstarted new check grants review or convergence")
+          later.driver.count("sm-workflow-git-check-pending-index") shouldBe 0
+          later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
+          later.driver.count("sm-workflow-git-push") shouldBe 0
+        } finally later.close()
+      }
     }
 
     "retain new structural findings common to both merge parents as failed validation" in {
@@ -1360,9 +1414,9 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         later.driver.fetchStarts shouldBe 0
       } finally later.close()
     }
-    "read the original host selection on Start and physical reopen without fixture selection callbacks" in {
-      Given("an owned Git repository and a selection installed privately through the same Subsystem DataStoreSpace")
-      val e = episode(); val first = new Host(e)
+    "retain original native Start and fetch across metadata changes without command-copy gates or fixture selection callbacks" in {
+      Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R3; Example: E12; actual selected input and a host declaration with different policy metadata")
+      val e = episode(); val first = new Host(e, declaredInput = Some(e.input.copy(repositoryPolicyVersion = "host-v2")))
       var started = Option.empty[Response]
       try {
         first.prepare()
@@ -1374,15 +1428,16 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         first.driver.fetchStarts shouldBe 1
       } finally first.close()
       Given("a physically reopened shared pool with no selection installer invocation")
-      val reopened = new Host(e)
+      val reopened = new Host(e, declaredInput = Some(e.input.copy(repositoryPolicyVersion = "host-v3")))
       try {
-        When("public Start reads the persisted selection and owning advance reads the original retained fetch")
-        val duplicate = take(reopened.start())
+        When("public Start retries the same actual invocation with another metadata projection and advance reads its retained fetch")
+        val duplicate = take(reopened.start(e.command.copy(input = e.input.copy(repositoryPolicyVersion = "request-v99"))))
         val retained = take(reopened.advance())
         Then("duplicate Start observes the original instance's current revision with no second fetch")
         waitRecord(duplicate).handle.instanceIdentity shouldBe waitRecord(started.get).handle.instanceIdentity
         waitRevision(duplicate) shouldBe waitRevision(retained)
         waitRecord(retained).handle.instanceIdentity.value shouldBe e.identity
+        reopened.inspectNative().hcursor.get[String]("originalRepositoryPolicyVersion").toOption shouldBe Some(e.input.repositoryPolicyVersion)
         reopened.driver.fetchStarts shouldBe 0
       } finally reopened.close()
     }

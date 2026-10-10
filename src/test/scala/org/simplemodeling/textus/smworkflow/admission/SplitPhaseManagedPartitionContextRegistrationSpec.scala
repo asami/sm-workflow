@@ -32,7 +32,7 @@ import J.Purpose
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class SplitPhaseManagedPartitionContextRegistrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "partitionregistry", name))
@@ -85,7 +85,7 @@ final class SplitPhaseManagedPartitionContextRegistrationSpec extends AnyWordSpe
         ComponentRecordStorageDeclaration.CreateGrant(SmWorkflowComponent.componentId, "workflow", c))))
       val command = SplitPhaseStartCommand(SplitPhaseStartInput("77", "PREVIEW", "authority", None, None, None),
         "selection", "participant", "start-key")
-      val interrupted = for (fault <- Vector("missing", "failed", "divergent"); cli <- Vector(false, true)) yield
+      val interrupted = for (fault <- Vector("missing", "failed", "crossed"); cli <- Vector(false, true)) yield
         (fault, cli, record.copy(reference = S.ContextReference(s"interrupted-$fault-$cli", "1")))
       var installed = false
       var interruptedCreates = 0
@@ -174,8 +174,7 @@ final class SplitPhaseManagedPartitionContextRegistrationSpec extends AnyWordSpe
                     def loadC() = if (!created) capability.loadC() else fault match {
                       case "missing" => Consequence.success(None)
                       case "failed" => Consequence.stateConflict("private committed readback interruption")
-                      case "divergent" => CJ.encodeC(submitted.copy(owner = submitted.owner.copy(
-                        presentation = submitted.owner.presentation.copy(currentSituation = "other-observation")))).map(raw =>
+                      case "crossed" => CJ.encodeC(submitted.copy(reference = submitted.reference.copy(identity = "foreign"))).map(raw =>
                         Some(Record.data(CJ.storageField -> raw)))
                     }
                   })
@@ -184,7 +183,7 @@ final class SplitPhaseManagedPartitionContextRegistrationSpec extends AnyWordSpe
               if (Set("ungranted", "foreign-grant", "untrusted").contains(mode))
                 take(installer.loadContextC(record.reference.identity)) shouldBe None
               if (Set("initial", "reopen").contains(mode) && observed.get.isSuccess)
-                take(reader.loadForCallC(submitted.reference, core)) shouldBe Some(submitted)
+                take(reader.loadForCallC(submitted.reference, core)) shouldBe observed.get.toOption
               if (masked.nonEmpty) take(reader.loadForCallC(submitted.reference, core)) shouldBe Some(submitted)
               if (submitted.reference.identity.startsWith("rejected-"))
                 take(installer.loadContextC(submitted.reference.identity)) shouldBe None
@@ -229,23 +228,41 @@ final class SplitPhaseManagedPartitionContextRegistrationSpec extends AnyWordSpe
             if (allowed) take(result) shouldBe record else result.isSuccess shouldBe false
           }
           if (allowed) {
-            Then("full context and revision conflicts are refused without overwriting the original or history")
-            Vector(record.copy(reference = record.reference.copy(revision = "2")),
-              record.copy(owner = record.owner.copy(presentation = record.owner.presentation.copy(currentSituation = "other-situation"))))
-              .foreach { conflict => submitted = conflict; invoke(false).isSuccess shouldBe false }
+            Given("the original context is already stored at its selected identity")
+            submitted = record.copy(reference = record.reference.copy(revision = "2"))
+            When("registration selects a crossed stored revision")
+            val crossed = invoke(false)
+            Then("reference resolution fails without overwriting the selected data")
+            crossed.isSuccess shouldBe false
+            Given("a compatible presentation changes without changing the stored address")
+            submitted = record.copy(owner = record.owner.copy(presentation = record.owner.presentation.copy(currentSituation = "other-situation")))
+            When("registration observes the existing inert context")
+            val compatible = take(invoke(false))
+            Then("stored diagnostics are returned without an unchanged-body certificate")
+            compatible shouldBe record
             submitted = record
-            take(invoke(false)) shouldBe record
             submitted = record.copy(reference = S.ContextReference("rejected-instance", "1"),
               owner = record.owner.copy(handle = record.owner.handle.copy(instanceIdentity = InstanceIdentity("absent"))))
-            invoke(false).isSuccess shouldBe false
-            submitted = record.copy(reference = S.ContextReference("rejected-drift", "1"))
+            When("new context input refers to an absent canonical instance")
+            val absent = invoke(false)
+            Then("actual owner preparation refuses the absent instance")
+            absent.isSuccess shouldBe false
+            Given("a selected current estimate differs compatibly from the historical submission")
+            submitted = record.copy(reference = S.ContextReference(s"current-drift-$mode", "1"))
             val drift = facts.partition.estimates.copy(items = facts.partition.estimates.items.updated(0,
               facts.partition.estimates.items.head.copy(duration = E.Duration.Known(261))))
             changeEstimate = Some(take(J.encodeEstimatesC(drift)))
-            invoke(false).isSuccess shouldBe false
+            When("new context data is constructed from the independently loaded current rows")
+            val current = take(invoke(false))
+            Then("the committed context uses the current estimate rather than refusing drift")
+            current.facts.partition.estimates.items.head.duration shouldBe E.Duration.Known(261)
+            current.reference shouldBe submitted.reference
             changeEstimate = Some(take(J.encodeEstimatesC(facts.partition.estimates)))
             submitted = record
-            take(invoke(false)) shouldBe record
+            When("a later call selects the original context and restored current inputs")
+            val restored = take(invoke(false))
+            Then("the original stored context remains readable without a replacement write")
+            restored shouldBe record
             changeEstimate = None
           }
           if (mode == "initial") {

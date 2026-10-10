@@ -14,10 +14,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeProjection
   SplitPhaseExplicitCandidateProjection as Q, SplitPhaseExplicitPartitionSemantic as T,
   SplitPhaseExplicitProposalPrecheck as P, SplitPhaseExplicitBoundaryValidation as B}
 
-/** Closed, bounded successor data. Decoding grants no native execution authority.
+/** Typed passive successor data. Decoding grants no native execution authority.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
   import SplitPhaseExplicitPartitionRawCodecs.given
@@ -75,12 +75,12 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
       json => _decode_json_c(json, Some(firstReference -> resultReference)))
 
   private def _json_c(record: V.Record): Consequence[Json] = _guarded {
-    for {
-      _ <- V.inspectC(record)
-      json <- _render_c(record)
-      decoded <- _decode_json_c(json, None)
-      _ <- if (decoded == record) Consequence.unit else _invalid("typed roundtrip differs")
-    } yield json
+    if (record == null || record.first == null || record.result == null || record.judgment == null || record.frontier == null)
+      _invalid("passive data is incomplete")
+    else _render_c(record).flatMap { json =>
+      if (_bytes(_prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.success(json)
+      else _invalid("whole frame exceeds UTF-8 bound")
+    }
   }
   private def _render_c(record: V.Record): Consequence[Json] = _guarded {
     val frontier = record.frontier match {
@@ -108,8 +108,7 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
     for {
       _ <- if (json != null && _bytes(_prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.unit
         else _invalid("whole frame exceeds UTF-8 bound")
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload")).map(Consequence.success)
-        .getOrElse(_invalid("root fields differ"))
+      root <- json.asObject.map(Consequence.success).getOrElse(_invalid("root is not an object"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit else _invalid("schema differs")
       payload <- root("payload").get.as[Payload].fold(_ => _invalid("payload shape differs"), Consequence.success)
       first <- C.payloadCodec.decode(payload.first).fold(_ => _invalid("first checkpoint differs"), Consequence.success)
@@ -126,11 +125,9 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
       record = V.Record(first, payload.result, judgment, frontier)
       _ <- if (selected.forall { case (mapping, result) => mapping == first.reference && result == record.result })
         Consequence.unit else _invalid("selected first checkpoint or assigned result revision differs")
-      _ <- V.inspectC(record)
-      canonical <- _render_c(record)
-      _ <- if (canonical == json) Consequence.unit else _invalid("nested fields or canonical frame differ")
     } yield record
   }
+
   private def _decode_output_c(key: R.CandidateKey, frame: OutputFrame): Consequence[V.CandidateOutput] = frame match {
     case OutputFrame("Built", Some(value), None, Vector()) => for {
       proposal <- I.decodeProposalC(value.proposalReference, value.proposal)

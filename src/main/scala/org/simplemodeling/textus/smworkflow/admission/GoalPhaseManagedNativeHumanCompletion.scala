@@ -61,14 +61,14 @@ private[smworkflow] object GoalPhaseManagedNativeHumanCompletion {
         bound <- {
           // One instance per current-call rebind, never shared between requests.
           var verified = Option.empty[GoalPhaseNativeHumanAnswer.Verified]
-          var verifiedQuestion = Option.empty[WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing]]
+          var verifiedPredecessor = Option.empty[WorkflowInstancePersistence.InstanceRecord]
           var verifiedResult = Option.empty[ContinuationResult[Answer]]
           val codec = new WorkflowCompletionServiceOperation.Codec[Answer] {
             val resultTypeIdentity = resultType
             def decodeC(request: Request): Consequence[ContinuationResult[Answer]] = request.arguments match {
               case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, answerPayloadCodec).flatMap { submitted =>
                 verified = None
-                verifiedQuestion = None
+                verifiedPredecessor = None
                 verifiedResult = None
                 call match {
                   // Declaration-time decoding is structural only. Rebinding
@@ -96,7 +96,7 @@ private[smworkflow] object GoalPhaseManagedNativeHumanCompletion {
                         selected.participantIdentity, submitted.resultReference.identity, asOf(), core, verifier)
                     } yield {
                       verified = Some(admitted)
-                      verifiedQuestion = Some(question)
+                      verifiedPredecessor = Some(current)
                       verifiedResult = Some(submitted)
                       submitted
                     }
@@ -110,11 +110,11 @@ private[smworkflow] object GoalPhaseManagedNativeHumanCompletion {
               completed: Option[WorkflowInstancePersistence.InstanceRecord]): Consequence[OperationResponse] = for {
               admitted <- verified.map(Consequence.success).getOrElse(
                 Consequence.stateConflict("Native human answer has no verified current-call receipt"))
-              observed <- completed.map(Consequence.success).getOrElse(
+              _ <- completed.map(_ => Consequence.unit).getOrElse(
                 Consequence.stateConflict("Native human answer has no committed instance"))
-              actual <- WorkflowInstanceRecordJsonV1.encodeC(observed)
-              expected <- WorkflowInstanceRecordJsonV1.encodeC(admitted.next)
-              _ <- if (actual == expected) Consequence.unit else Consequence.stateConflict("Native human answer committed state differs")
+              // CNCF's managed completion owns the actual committed instance
+              // and joint readback. Do not serialize and compare whole bodies
+              // against the prepared copy merely to certify no change.
               raw <- GoalPhaseHumanAnswerRecord.encodeJsonC(admitted.receipt)
               receipt <- parse(raw).fold(_ => Consequence.stateConflict("Native human receipt encoding failed"), Consequence.success(_))
             } yield OperationResponse.Scalar(Json.obj("schemaVersion" -> Json.fromString(resultSchema), "receipt" -> receipt).noSpaces)
@@ -124,18 +124,16 @@ private[smworkflow] object GoalPhaseManagedNativeHumanCompletion {
               for {
                 admitted <- verified.map(Consequence.success).getOrElse(
                   Consequence.stateConflict("Native human closing has no current-call admission"))
-                question <- verifiedQuestion.map(Consequence.success).getOrElse(
-                  Consequence.stateConflict("Native human closing has no admitted question"))
-                _ <- if (verifiedResult.contains(submitted)) Consequence.unit
+                predecessor <- verifiedPredecessor.map(Consequence.success).getOrElse(
+                  Consequence.stateConflict("Native human closing has no selected predecessor"))
+                _ <- if (verifiedResult.exists(value => NativeHumanQuestionSelection.sameAnswerTarget(value, submitted) &&
+                    value.result.value == submitted.result.value)) Consequence.unit
                   else Consequence.stateConflict("Native human closing result differs from admission")
-                next <- GoalPhaseNativeHumanAnswer.prepareC(question, submitted, current)
-                actual <- WorkflowInstanceRecordJsonV1.encodeC(next)
-                expected <- WorkflowInstanceRecordJsonV1.encodeC(admitted.next)
-                _ <- if (actual == expected) Consequence.unit
+                _ <- if (GoalPhaseStepClosureBoundary.sameRecord(current, predecessor)) Consequence.unit
                   else Consequence.stateConflict("Native human closing base changed after admission")
                 program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
                   ActionExecution.Completed(StateMachineOperationResult(closingType, submitted.resultReference)))
-              } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+              } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(admitted.next))
             }
           }
           WorkflowDecisionCompletionServiceOperation.bindC(definition, operations.head,

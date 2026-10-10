@@ -34,7 +34,7 @@ private[admission] object SplitPhaseExplicitPartitionFixture {
     Base(source, inventory, boundary, edges, records, initial)
   }
   def enumerate(base: Base): E.Enumerated =
-    take(E.enumerateC(take(E.loadC(base.initial, base.records, base.records)))).asInstanceOf[E.Enumerated]
+    take(E.enumerateC(take(E.loadC(base.initial, base.records)))).asInstanceOf[E.Enumerated]
   def proof(base: Base, candidate: E.Candidate, proposalIdentity: String,
     handoffPairs: Vector[(Int, Int)] = Vector.empty, finalOnly: Boolean = false,
     durationOverride: Option[Vector[Int]] = None): B.Validated = {
@@ -50,7 +50,7 @@ private[admission] object SplitPhaseExplicitPartitionFixture {
     handoffPairs: Vector[(Int, Int)], finalOnly: Boolean): B.Validated = {
     val proposal = P.ProposalRecord(P.ProposalReference(proposalIdentity, "1"), source.reference, source.phase, source.authority, children)
     val selected = P.Records(source, inventory, proposal)
-    val shape = take(P.loadC(selected, selected)).asInstanceOf[P.ShapeReady]
+    val shape = take(P.loadC(selected)).asInstanceOf[P.ShapeReady]
     val phases = children.map(_.phase)
     val byItem = boundary.items.map(item => item.identity -> item.closureCriteria).toMap
     val ownership = B.Ownership(B.OwnershipReference(s"ownership-$proposalIdentity", "1"), source.reference, proposal.reference,
@@ -65,6 +65,6 @@ private[admission] object SplitPhaseExplicitPartitionFixture {
     val plan = B.HandoffPlan(B.HandoffPlanReference(s"handoffs-$proposalIdentity", "1"), source.reference, proposal.reference,
       handoffs, phases.map(p => p -> handoffs.filter(_.receivingChild == p).map(_.identity)).toMap, edges)
     val records = B.Records(boundary, ownership, plan)
-    take(B.loadC(shape, records, records))
+    take(B.loadC(shape, records))
   }
 }

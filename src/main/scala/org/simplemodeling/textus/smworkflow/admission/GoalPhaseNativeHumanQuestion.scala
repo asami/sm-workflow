@@ -54,14 +54,7 @@ private[smworkflow] object GoalPhaseNativeHumanQuestion {
   def projectC(question: Question): Consequence[WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing]] =
     if (question == null) Consequence.stateConflict("Native human question is absent")
     else for {
-      _ <- question.validateC
-      _ <- admitRouteC(question.request)
-      generated = GoalPhaseWorkflowStateMachineWorkflow1.workflow
-      _ <- if (question.intent.handle.componentIdentity == SmWorkflowComponent.componentId &&
-          question.intent.handle.workflowIdentity.value == generated.identity &&
-          question.intent.handle.workflowRevision.value == generated.version &&
-          question.request.continuationId.value.startsWith("goal-phase-native-human:")) Consequence.unit
-        else Consequence.stateConflict("Native human question requires its own current-definition identity")
+      _ <- admitQuestionC(question)
       body = Json.obj("schemaVersion" -> Json.fromString(schema),
         "intentIdentity" -> Json.fromString(question.intent.idempotencyKey),
         "choices" -> Json.arr(question.choices.map(value => Json.obj(
@@ -99,13 +92,24 @@ private[smworkflow] object GoalPhaseNativeHumanQuestion {
             val intent = GoalPhaseClosureAuthority.Intent(issued.handle, request.expectedRevision,
               Option(request.context).map(_.snapshot).orNull, input.value, identity)
             val question = Question(intent, request, choices)
-            projectC(question).flatMap { exact =>
-              if (exact == issued) Consequence.success(question)
-              else Consequence.stateConflict("Native human Decision is not its exact closed projection")
-            }
+            admitQuestionC(question).map(_ => question)
           case _ => Consequence.stateConflict("Native human Decision has no typed intent")
         }})
       case _ => Consequence.stateConflict("Native human recovery requires an issued answerable Decision")
+    }
+
+  /** Validate the selected typed question, not equality to regenerated JSON or
+    * presentation. Diagnostic summaries and JSON layout are not restart gates.
+    */
+  private def admitQuestionC(question: Question): Consequence[Unit] =
+    question.validateC.flatMap { _ =>
+      val generated = GoalPhaseWorkflowStateMachineWorkflow1.workflow
+      if (question.request.completionOperation == completionOperation &&
+          question.intent.handle.componentIdentity == SmWorkflowComponent.componentId &&
+          question.intent.handle.workflowIdentity.value == generated.identity &&
+          question.intent.handle.workflowRevision.value == generated.version &&
+          question.request.continuationId.value.startsWith("goal-phase-native-human:")) Consequence.unit
+      else Consequence.stateConflict("Native human question has a different execution reference or route")
     }
 
   /** Adjacency is necessary, not proof that reviewIntent came from an accepted

@@ -53,9 +53,8 @@ private[smworkflow] object SplitPhaseExplicitBoundaryValidation {
     * authorized readers. A constructed result proves these application rules,
     * not human consent, a framework grant or complete proposal admission.
     */
-  def loadC(shape: ShapeReady, frozen: Records, current: Records): Consequence[Validated] =
+  def loadC(shape: ShapeReady, current: Records): Consequence[Validated] =
     if (shape == null || !complete(current)) Consequence.stateConflict("SplitPhase explicit boundary data is incomplete")
-    else if (frozen != current) Consequence.stateConflict("SplitPhase explicit boundary complete current records differ")
     else {
       val selected = shape.records
       val boundary = current.boundary

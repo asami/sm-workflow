@@ -79,10 +79,22 @@ final class GoalPhaseParticipantAdmissionSpec
       (core, expected)
     }
     def receipt(binding: Binding) = Receipt("interaction-1", "fixture-human-issuer", "independent-human",
-      purpose, binding, asOf.minusSeconds(1), asOf.plusSeconds(30))
+      purpose, binding, asOf.minusSeconds(86400))
     def verifier(value: Binding => Consequence[Option[Receipt]]) = new Verifier {
       val issuerIdentity = "fixture-human-issuer"
       def verifyForCallC(reference: String, expected: Binding, core: org.goldenport.cncf.action.ActionCall.Core) = value(expected)
+    }
+    "admit applicable Human evidence after arbitrary elapsed time without an expiry input" in {
+      Given("the authenticated owning call and independent evidence for exactly its question, answer and participant")
+      val (core, expected) = prepared(_resolve(SubsystemExecutionProfile.Authenticated, Map("access_token" -> "service-token")))
+      val evidence = receipt(expected)
+      forAll(Table("elapsedSeconds", 0L, 60L, 86400L, 31536000L)) { elapsed =>
+        When("the same-scope Human evidence is admitted beyond the former local deadline")
+        val admitted = admitForCallC(expected, evidence.reference, asOf.plusSeconds(elapsed), core,
+          verifier(_ => Consequence.success(Some(evidence))))
+        Then("time passage does not require renewal and the original attribution is preserved")
+        HumanDecisionContractFixture.take(admitted).receiptForCallC(core).toOption.get shouldBe evidence
+      }
     }
     "refuse authenticated User and Service calls without an independent verifier" in {
       Vector(SubjectKind.User, SubjectKind.Service).foreach { kind =>
@@ -161,11 +173,12 @@ final class GoalPhaseParticipantAdmissionSpec
       schema shouldBe a[Consequence.Failure[?]]
       calls shouldBe 0
     }
-    "refuse a different issuer, purpose, actor, question, visible choice, answer or interaction reference" in {
+    "refuse a foreign current issuer purpose actor actual question target answer or interaction reference" in {
       Given("the exact call binding and receipt, with variants changing one required interaction fact")
       val (core, expected) = prepared(_resolve(SubsystemExecutionProfile.Authenticated, Map("access_token" -> "service-token")))
       val original = receipt(expected)
-      val alteredQuestion = expected.question.copy(choices = expected.question.choices.updated(0, Choice("keep-open", "Different visible text")))
+      val alteredQuestion = expected.question.copy(request = expected.question.request.copy(
+        continuationId = org.goldenport.cncf.workflow.ContinuationIdentity("foreign-question")))
       Vector(original.copy(issuer = "foreign"), original.copy(reference = "interaction-2"),
         original.copy(humanParticipant = " "), original.copy(purposeIdentity = "command-authorization"),
         original.copy(binding = expected.copy(submittingParticipant = "foreign")),
@@ -179,13 +192,39 @@ final class GoalPhaseParticipantAdmissionSpec
           result shouldBe a[Consequence.Failure[?]]
         }
     }
-    "withhold admission for expired, future, absent, failed or throwing observations" in {
+    "consume observed visible text and diagnostics without a whole binding or second issuer witness" in {
+      Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R5; Example: E14; separately supplied legacy Goal evidence for the actual question and choice")
+      val (core, expected) = prepared(_resolve(SubsystemExecutionProfile.Authenticated, Map("access_token" -> "service-token")))
+      val savedQuestion = expected.question.copy(choices = expected.question.choices.map(value => value.copy(label = "Original saved " + value.label)),
+        request = expected.question.request.copy(context = expected.question.request.context.copy(summary = "Original saved context",
+          snapshot = expected.question.request.context.snapshot.copy(workspaceRevision = Some("saved-diagnostic-workspace")))))
+      val observed = receipt(expected.copy(question = savedQuestion))
+      var issuerReads = 0
+      var evidenceReads = 0
+      val port = new Verifier {
+        def issuerIdentity = {
+          issuerReads += 1
+          if (issuerReads == 1) observed.issuer else "unused-second-read"
+        }
+        def verifyForCallC(reference: String, binding: Binding, call: org.goldenport.cncf.action.ActionCall.Core) = {
+          evidenceReads += 1
+          Consequence.success(Some(observed))
+        }
+      }
+      When("this separate host ingress admits its raw observation once")
+      val admitted = HumanDecisionContractFixture.take(admitForCallC(expected, observed.reference, asOf, core, port))
+      val original = HumanDecisionContractFixture.take(admitted.receiptForCallC(core))
+      Then("saved evidence is consumed with one current issuer read, without proving unchanged text or declaration")
+      original shouldBe observed
+      issuerReads shouldBe 1
+      evidenceReads shouldBe 1
+    }
+    "withhold admission for future, absent, failed or throwing observations" in {
       Given("the exact interaction receipt and a fixed admission time")
       val (core, expected) = prepared(_resolve(SubsystemExecutionProfile.Authenticated, Map("access_token" -> "service-token")))
       val original = receipt(expected)
-      Vector(original.copy(validUntil = asOf.minusSeconds(1)), original.copy(occurredAt = asOf.plusSeconds(1)),
-        original.copy(occurredAt = null), original.copy(validUntil = null), null).foreach { value =>
-        When("the independent verifier reports expired, future or incomplete interaction timing")
+      Vector(original.copy(occurredAt = asOf.plusSeconds(1)), original.copy(occurredAt = null), null).foreach { value =>
+        When("the independent verifier reports future or incomplete interaction timing")
         val result = admitForCallC(expected, "interaction-1", asOf, core, verifier(_ => Consequence.success(Some(value))))
         Then("the invalid observation withholds human admission")
         result shouldBe a[Consequence.Failure[?]]
@@ -203,8 +242,8 @@ final class GoalPhaseParticipantAdmissionSpec
       Then("the incomplete observation withholds admission")
       absent shouldBe a[Consequence.Failure[?]]
     }
-    "refuse changing issuer attribution during a verification call" in {
-      Given("a verifier that changes its issuer identity during observation of the exact call")
+    "refuse an observation from an issuer no longer selected by the current host" in {
+      Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R5; Example: E15; the selected host issuer is withdrawn before admission of the observed evidence")
       val (core, expected) = prepared(_resolve(SubsystemExecutionProfile.Authenticated, Map("access_token" -> "service-token")))
       val port = new Verifier {
         var issuer = "fixture-human-issuer"
@@ -214,9 +253,9 @@ final class GoalPhaseParticipantAdmissionSpec
           Consequence.success(Some(receipt(binding)))
         }
       }
-      When("human verification observes the issuer-changing port")
+      When("the ingress reads current issuer authority after observing evidence from the former issuer")
       val result = admitForCallC(expected, "interaction-1", asOf, core, port)
-      Then("changing issuer attribution prevents admission")
+      Then("current issuer permission rejects the old evidence, not an unchanged-declaration proof")
       result shouldBe a[Consequence.Failure[?]]
     }
   }

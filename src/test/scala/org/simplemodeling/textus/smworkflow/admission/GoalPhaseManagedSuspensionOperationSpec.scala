@@ -331,12 +331,12 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           repairPorts) shouldBe a[Consequence.Failure[?]]
         val catalog = take(GoalPhaseRuntimeCatalog.parseC(resource("/workflow/goal-phase-workflow-abi.json"),
           resource("/workflow/goal-phase-candidate-admission-producer-abi.json")))
-        val differentBytes = take(GoalPhaseRuntimeCatalog.parseC(resource("/workflow/goal-phase-workflow-abi.json") + "\n",
+        val formattingOnlyCatalog = take(GoalPhaseRuntimeCatalog.parseC(resource("/workflow/goal-phase-workflow-abi.json") + "\n",
           resource("/workflow/goal-phase-candidate-admission-producer-abi.json")))
         new GoalPhaseManagedComponentFactory(null, declared, servicePorts, repairPorts).primaryFactory
           .createPrimaryC(params) shouldBe a[Consequence.Failure[?]]
-        new GoalPhaseManagedComponentFactory(differentBytes, declared, servicePorts, repairPorts).primaryFactory
-          .createPrimaryC(params) shouldBe a[Consequence.Failure[?]]
+        new GoalPhaseManagedComponentFactory(formattingOnlyCatalog, declared, servicePorts, repairPorts).primaryFactory
+          .createPrimaryC(params) shouldBe a[Consequence.Success[?]]
         GoalPhaseManagedComponentFactory.configuredC(null, servicePorts, repairPorts) shouldBe
           a[Consequence.Failure[?]]
         GoalPhaseManagedComponentFactory.configuredC(catalog, null, repairPorts) shouldBe
@@ -424,7 +424,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           val identity = take(EntityId.bridgeFromParts("cncf", name, BlobRepository.CollectionId, Instant.EPOCH, name))
           val stored = take(store.put(BlobPutRequest(identity, BlobKind.Binary, Some(name + ".bin"),
             ContentType.APPLICATION_OCTET_STREAM), Bag.binary(bytes.toArray)))
-          GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef, stored.byteSize, stored.digest)
+          GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef)
         }
         GoalPhaseBlobArtifactSnapshot.References("native-followup-artifact-pair", 0L,
           put("native_program", snapshotBytes.program), put("native_planning", snapshotBytes.planning))
@@ -542,7 +542,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[StepCloseRequest]].request
       val candidate = take(StepCloseRequestAdapter.submissionC(input)).candidate.reference
       val evidence = StepReviewEvidence("native-reviewed-result", candidate.revision,
-        "2026-09-30T23:59:00Z", "2026-10-01T01:00:00Z", "full-step", "actual candidate reviewed", "receipt")
+        "2026-09-30T23:59:00Z", "full-step", "actual candidate reviewed", "receipt")
       val accepted = ContinuationResult(work.handle, request.runId, request.continuationId,
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("accept", "review passed", Vector(evidence))),
@@ -550,8 +550,18 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val reviewing = currentHost()
       var automaticResponse = Option.empty[OperationResponse]
       try {
-        if (automatic) installPath(reviewing, reader, initialInvocation, () => unexpected += 1,
-          repairSnapshot = Some(assessedSnapshot), hostRecordReaders = true, acceptedReviewFollowup = followupPolicy,
+        val interruptedauthority = Option.when(interrupted)(GoalPhaseManagedReviewAssembly.AuthorityProjection(
+          assessedSnapshot, GoalPhaseClosureAuthority.Ports(new GoalPhaseClosureAuthority.CallScopedAuthorizationPort {
+            def loadForCallC(intent: GoalPhaseClosureAuthority.Intent, capsule: ActionCall.Core) =
+              _snapshot_lease_c(capsule).flatMap(_ => Consequence.stateConflict("test-owned current authority reader temporarily unavailable"))
+          }, new GoalPhaseClosureAuthority.DecisionPort {
+            def resolveC(intent: GoalPhaseClosureAuthority.Intent) =
+              Consequence.stateConflict("native follow-up never publishes a stop-only Decision")
+          }), nativeQuestion = Some(workflow)))
+        if (automatic && interrupted) installReview(reviewing, authorityProjection = interruptedauthority)
+        else if (automatic) installPath(reviewing, reader, initialInvocation, () => unexpected += 1,
+          repairSnapshot = Some(assessedSnapshot), authorityProjection = interruptedauthority,
+          hostRecordReaders = !interrupted, acceptedReviewFollowup = followupPolicy,
           initialArtifactMaximumBytes = Option.when(realBlob)(64))
         else installReview(reviewing)
         failSnapshot = interrupted
@@ -562,17 +572,70 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           val response = take(result)
           if (automatic) automaticResponse = Some(response)
         }
-        Then("accepted review remains retained, with a native follow-up only after successful fresh assessment")
+        Then("accepted review remains retained, with native follow-up only after a successful actual authority observation")
         val reviewed = take(storage(reviewing).loadC(started.get.instanceIdentity)).get
         reviewed.revision shouldBe InstanceRevision(if (automatic && !interrupted) 4L else 3L)
         reviewed.suspension.nonEmpty shouldBe (automatic && !interrupted)
-        if (automatic && !realBlob) snapshotReads shouldBe (if (interrupted) 1 else 2)
+        snapshotReads shouldBe 0
         if (realBlob) {
           snapshotReads shouldBe 0
-          blobReads shouldBe (if (!automatic) 2 else if (interrupted) 3 else 6)
+          blobReads shouldBe 2
         }
         reviewing.subsystem.executeOperationResponseInContext(reviewRequest(accepted), actor).isSuccess shouldBe false
       } finally take(reviewing.shutdownC())
+
+      if (!nativeAnswer) {
+        Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E19; an actual accepted review and an owning assessment, with the secondary selection collection unresolved")
+        val assessedhost = host(path, hostRecordConfiguration
+          .updated("textus.subsystem.user-mode", ConfigurationValue.StringValue("standalone"))
+          .updated(GoalPhaseHostRecordReadPolicy.prefix + "selection-collection",
+            ConfigurationValue.StringValue(collection("unobservedselections").print)))
+        var independent = Option.empty[Consequence[GoalPhaseHumanDecisionContract.Question]]
+        var published = Option.empty[GoalPhaseHumanDecisionContract.Question]
+        var competing = Option.empty[Consequence[GoalPhaseHumanDecisionContract.Question]]
+        val publisher = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
+          def resolveForCallC(identity: String, capsule: ActionCall.Core): Consequence[WorkflowHandle] = {
+            given ExecutionContext = capsule.executionContext
+            for {
+              _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, capsule.executionContext)
+              bindings <- WorkflowComponentStorage.bindC(ComponentCreate(capsule.component.get.subsystem.get, ComponentOrigin.Builtin),
+                component, config, Vector(definition), instances, continuations)
+              completion <- bindings.bindCompletionC(StateMachineOperationIdentity("GoalPhaseService", "submitStepReview"),
+                GoalPhaseStepCloseJson.payloadCodec, GoalPhaseReviewCompletionOperation.payloadCodec,
+                StateMachineResultTypeReference("ReviewStepResult"), (_, _) => Consequence.success(Vector.empty))
+              retained <- completion.loadRetainedC(request.continuationId).map(_.get)
+              records <- bindings.bindInstancesC()
+              current <- records.loadC(started.get.instanceIdentity).map(_.get)
+              assessment <- GoalPhaseClosureAuthority.assessReviewedC(artifact, work, retained.completion.result,
+                Instant.parse("2026-10-01T00:00:00Z"), current, new GoalPhaseClosureAuthority.AuthorizationPort {
+                  def loadC(intent: GoalPhaseClosureAuthority.Intent) = _snapshot_lease_c(capsule).map(_ => None)
+                })
+              _ = independent = Some(GoalPhaseManagedNativeHumanQuestion.advanceForCallC(request.continuationId,
+                HumanDecisionContractFixture.choices, capsule, workflow))
+              question <- GoalPhaseManagedNativeHumanQuestion.publishAssessedForCallC(retained.completion.result, current,
+                assessment, capsule, workflow)
+              _ = published = Some(question)
+              _ = competing = Some(GoalPhaseManagedNativeHumanQuestion.publishAssessedForCallC(retained.completion.result,
+                current, assessment, capsule, workflow))
+              result <- Consequence.stateConflict("Assessed native fixture stops before another review or command")
+            } yield result
+          }
+        }
+        try {
+          installPath(assessedhost, reader, publisher, () => unexpected += 1)
+          When("the owning assessment publishes without resolving the participant selection again, then a stale publisher attempts the same transition")
+          val publicationresult = assessedhost.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+            operation = "requestStepClose", arguments = List(Argument("arg1", GoalPhaseStepCloseJson.encode(input)))), actor)
+          Then("independent input resolution refuses, selected publication succeeds, and the transition boundary refuses the stale predecessor")
+          publicationresult shouldBe a[Consequence.Failure[?]]
+          independent.get shouldBe a[Consequence.Failure[?]]
+          published.nonEmpty shouldBe true
+          competing.get shouldBe a[Consequence.Failure[?]]
+          take(storage(assessedhost).loadC(started.get.instanceIdentity)).get.revision shouldBe InstanceRevision(4L)
+          take(storage(assessedhost).loadC(started.get.instanceIdentity)).get.history.size shouldBe 4
+          unexpected shouldBe 0
+        } finally take(assessedhost.shutdownC())
+      }
 
       var observed = Option.empty[Consequence[GoalPhaseHumanDecisionContract.Question]]
       var escaped = Option.empty[ActionCall.Core]
@@ -606,7 +669,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         selectedDeclaration = workflow
         Then("no question or extra history is published by those rejected current-call inputs")
         take(storage(publishing).loadC(started.get.instanceIdentity)).get.revision shouldBe
-          InstanceRevision(if (automatic && !interrupted) 4L else 3L)
+          InstanceRevision(if (!nativeAnswer || (automatic && !interrupted)) 4L else 3L)
         When("the admitted participant advances from the actual accepted review")
         def publicAdvance(wire: String = GoalPhaseNativeHumanAdvanceOperation.encodeCommand(request.continuationId)) =
           publishing.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
@@ -634,19 +697,21 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
               ExecutionContext.withSecurityContext(actor, actor.security.copy())).isSuccess shouldBe false
             failSnapshot = false
             if (interrupted || !automatic) {
-              Given("the review is retained but current bytes no longer match its pinned candidate")
+              Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E13; retained accepted review and different current bytes for a question-only transition")
               observedSnapshot = snapshotBytes.copy(program = Vector(42.toByte))
               if (realBlob) {
                 val reference = pair.get.program.storageRef
                 Files.write(payloadRoot.get.resolve(reference.container).resolve(reference.key),
                   snapshotBytes.program.map(_ => 42.toByte).toArray)
               }
-              When("the configured advance or recovery Operation attempts fresh native publication")
-              publishing.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
-                operation = operationName, arguments = List(Argument("arg1", commandWire))), actor).isSuccess shouldBe false
-              Then("changed bytes refuse before any question or successor is published")
-              take(storage(publishing).loadC(started.get.instanceIdentity)).get.revision shouldBe InstanceRevision(3L)
-              take(storage(publishing).loadC(started.get.instanceIdentity)).get.suspension shouldBe None
+              When("the owning advance or recovery publishes a native question without executing commit")
+              take(publishing.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+                operation = operationName, arguments = List(Argument("arg1", commandWire))), actor))
+              Then("the actual question transition uses managed state and CAS without an artifact-content certificate")
+              take(storage(publishing).loadC(started.get.instanceIdentity)).get.revision shouldBe InstanceRevision(4L)
+              take(storage(publishing).loadC(started.get.instanceIdentity)).get.suspension.nonEmpty shouldBe true
+              snapshotReads shouldBe 0
+              blobReads shouldBe (if (realBlob) 2 else 0)
               observedSnapshot = snapshotBytes
               if (realBlob) {
                 val reference = pair.get.program.storageRef
@@ -658,8 +723,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
             Array(selector, "--json", commandWire))).print;
           {
             if (automatic) automaticResponse.foreach(value => OperationResponse.Scalar(wire) shouldBe value)
-            val expectedSnapshotReads = if (!automatic) 3 else if (interrupted) 4 else 2
-            val expectedBlobReads = if (!automatic) 7 else if (interrupted) 8 else 6
+            val expectedSnapshotReads = 0
+            val expectedBlobReads = 2
             if (!realBlob) snapshotReads shouldBe expectedSnapshotReads
             else blobReads shouldBe expectedBlobReads
             take(publishing.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
@@ -679,7 +744,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         pending.currentProgression shouldBe Some(ProgressionReference("HumanPending"))
         pending.history.size shouldBe 4
         pending.suspension.get.continuationIdentity.value shouldBe actual.request.continuationId.value
-        When("equal retry, conflicting choices and an escaped call attempt to reuse that question")
+        When("retry, later choice proposals and an escaped call attempt to reuse that question")
         if (nativeAnswer) {
           questionFromResponse(take(publicAdvance())) shouldBe actual
           publishing.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
@@ -692,11 +757,11 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         } else {
           take(run(publishing)) shouldBe actual
           choices = choices.updated(0, choices.head.copy(label = "Another visible question"))
-          run(publishing).isSuccess shouldBe false
+          take(run(publishing)) shouldBe actual
         }
         choices = HumanDecisionContractFixture.choices
         GoalPhaseManagedNativeHumanQuestion.advanceForCallC(request.continuationId, choices, escaped.get, workflow).isSuccess shouldBe false
-        Then("the original pending question and history remain unchanged and no effect callback runs")
+        Then("the saved pending declarations are used, not compared to the later proposal, and no effect callback runs")
         take(storage(publishing).loadC(started.get.instanceIdentity)).get shouldBe pending
         org.goldenport.cncf.testutil.NativeHumanManagedHostObservation.counts(publishing) shouldBe (1, 0)
         unexpected shouldBe 0
@@ -705,6 +770,49 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       def queryRequest(identity: org.goldenport.cncf.workflow.ContinuationIdentity = question.request.continuationId) =
         Request.of(component = component.name, service = "GoalPhaseService", operation = GoalPhaseHumanCompletionQueryOperation.operationName,
           arguments = List(Argument("arg1", GoalPhaseHumanCompletionQueryOperation.encodeQuery(identity))))
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E20; the owning recovery entry has selected the actual accepted review and pending state, but cannot repeat participant selection")
+      val selectedhost = host(path, hostRecordConfiguration
+        .updated("textus.subsystem.user-mode", ConfigurationValue.StringValue("standalone"))
+        .updated(GoalPhaseHostRecordReadPolicy.prefix + "selection-collection",
+          ConfigurationValue.StringValue(collection("unobservedselections").print)))
+      var independentrecovery = Option.empty[Consequence[GoalPhaseHumanDecisionContract.Question]]
+      var selectedrecovery = Option.empty[GoalPhaseHumanDecisionContract.Question]
+      val recoverer = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
+        def resolveForCallC(identity: String, capsule: ActionCall.Core): Consequence[WorkflowHandle] = {
+          given ExecutionContext = capsule.executionContext
+          for {
+            _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, capsule.executionContext)
+            bindings <- WorkflowComponentStorage.bindC(ComponentCreate(capsule.component.get.subsystem.get, ComponentOrigin.Builtin),
+              component, config, Vector(definition), instances, continuations)
+            completion <- bindings.bindCompletionC(StateMachineOperationIdentity("GoalPhaseService", "submitStepReview"),
+              GoalPhaseStepCloseJson.payloadCodec, GoalPhaseReviewCompletionOperation.payloadCodec,
+              StateMachineResultTypeReference("ReviewStepResult"), (_, _) => Consequence.success(Vector.empty))
+            retained <- completion.loadRetainedC(request.continuationId).map(_.get)
+            records <- bindings.bindInstancesC()
+            current <- records.loadC(started.get.instanceIdentity).map(_.get)
+            _ = independentrecovery = Some(GoalPhaseManagedNativeHumanQuestion.advanceForCallC(request.continuationId,
+              choices, capsule, workflow))
+            recovered <- GoalPhaseManagedNativeHumanQuestion.recoverSelectedForCallC(retained.completion.result, current,
+              retained.completion.instanceRevision, capsule, workflow)
+            _ = selectedrecovery = Some(recovered)
+            result <- Consequence.stateConflict("Selected native recovery fixture stops before another review or command")
+          } yield result
+        }
+      }
+      try {
+        installPath(selectedhost, reader, recoverer, () => unexpected += 1)
+        When("the owning recovery selects the saved question without loading review, participant and predecessor again")
+        val recoveryresult = selectedhost.subsystem.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+          operation = "requestStepClose", arguments = List(Argument("arg1", GoalPhaseStepCloseJson.encode(input)))), actor)
+        Then("independent resolution refuses while internal recovery returns the actual saved question, with no append or artifact access")
+        recoveryresult shouldBe a[Consequence.Failure[?]]
+        independentrecovery.get shouldBe a[Consequence.Failure[?]]
+        selectedrecovery shouldBe Some(question)
+        take(storage(selectedhost).loadC(started.get.instanceIdentity)).get.history.size shouldBe 4
+        snapshotReads shouldBe 0
+        blobReads shouldBe (if (realBlob) 2 else 0)
+        unexpected shouldBe 0
+      } finally take(selectedhost.shutdownC())
       When("a fresh host recovers the question using only the retained review, selection and native history")
       val reopened = currentHost()
       try {
@@ -741,17 +849,25 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           take(storage(reopened).loadC(started.get.instanceIdentity)).get shouldBe pending
         }
         if (nativeAnswer) {
-          Given("an independently retained test-only human receipt for this exact native question and answer")
+          Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R5; Example: E17; independently enrolled test-only evidence for this actual native question and answer, with saved display diagnostics")
           val answer = GoalPhaseHumanDecisionContract.Answer(question.choices.head.identity)
+          val evidencesnapshot = question.request.context.snapshot.copy(workspaceRevision = Some("old-evidence-workspace-diagnostic"))
+          val evidenceQuestion = question.copy(choices = question.choices.map(value => value.copy(label = "Original evidence " + value.label)),
+            intent = question.intent.copy(snapshot = evidencesnapshot),
+            request = question.request.copy(context = question.request.context.copy(summary = "Original evidence context",
+              snapshot = evidencesnapshot)))
           val receipt = GoalPhaseHumanInteractionVerification.Receipt("native-human-proof", "test-only-human-issuer",
             "actual-human", GoalPhaseHumanInteractionVerification.purpose,
-            GoalPhaseHumanInteractionVerification.Binding(ComponentInstanceId.default(component), question, answer, "local-participant"),
-            Instant.parse("2026-09-30T23:59:00Z"), Instant.parse("2026-10-01T01:00:00Z"))
+            GoalPhaseHumanInteractionVerification.Binding(ComponentInstanceId.default(component), evidenceQuestion, answer, "local-participant"),
+            Instant.parse("2026-09-30T23:59:00Z"))
           var nativeVerificationCalls = 0
+          var nativeIssuerReads = 0
           val verifier = new GoalPhaseHumanInteractionVerification.Verifier {
-            val issuerIdentity = receipt.issuer
+            def issuerIdentity = { nativeIssuerReads += 1; receipt.issuer }
             def verifyForCallC(reference: String, expected: GoalPhaseHumanInteractionVerification.Binding, core: ActionCall.Core) =
-              { nativeVerificationCalls += 1; Consequence.success(Option.when(reference == receipt.reference && expected == receipt.binding)(receipt)) }
+              { nativeVerificationCalls += 1; Consequence.success(Option.when(reference == receipt.reference &&
+                  expected.question.request.continuationId == question.request.continuationId &&
+                  expected.answer == answer && expected.submittingParticipant == "local-participant")(receipt)) }
           }
           installPath(reopened, reader, probe, () => unexpected += 1,
             hostRecordReaders = true, nativeHumanVerifier = Some(verifier))
@@ -779,7 +895,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
               take(GoalPhaseHumanAnswerRecord.decodeJsonC(json.hcursor.downField("receipt").focus.get.noSpaces)) shouldBe receipt
             case other => fail(s"Expected committed native answer receipt: $other")
           }
-          Then("one atomic native completion retains the answer and adjacent HumanAnswered history without Step closure")
+          Then("one atomic native completion retains the actual evidence and adjacent HumanAnswered history without Step closure or copied-question proof")
+          nativeIssuerReads shouldBe nativeVerificationCalls
           val answered = take(storage(reopened).loadC(started.get.instanceIdentity)).get
           answered.revision shouldBe InstanceRevision(5L)
           answered.currentProgression shouldBe Some(ProgressionReference("HumanAnswered"))
@@ -879,7 +996,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("repair", "repair required", Vector(
           StepReviewEvidence("call-scoped-review", candidate.revision, "2026-09-30T23:59:00Z",
-            "2026-10-01T01:00:00Z", "full-step", "repair required", "receipt")))),
+            "full-step", "repair required", "receipt")))),
         ContextReference("call-scoped-review", candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
       val second = host(path)
       try {
@@ -948,7 +1065,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       } finally take(second.shutdownC())
     }
 
-    "read real host-selected Blob artifacts under the current lease and reject changed payload after reopen" in {
+    "read current bounded Blob artifacts after reopen without an unchanged content or selection certificate" in {
       import org.goldenport.cncf.blob.*
       import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
       import org.goldenport.cncf.component.builtin.blob.BlobComponent
@@ -965,32 +1082,20 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val initialStore = new LocalBlobStore(payloadRoot, name = "snapshot-local")
       def put(name: String, bytes: Vector[Byte]) = take(initialStore.put(BlobPutRequest(id(name), BlobKind.Binary,
         Some(name + ".bin"), ContentType.APPLICATION_OCTET_STREAM), Bag.binary(bytes.toArray)))
-      def ref(value: BlobPutResult) = Reference(value.id, value.storageRef, value.byteSize, value.digest)
+      def ref(value: BlobPutResult) = Reference(value.id, value.storageRef)
       val programRef = ref(put("program", program))
       val planningRef = ref(put("planning", planning))
       val pair = References("fixture-artifact-selection", 0L, programRef, planningRef)
       var currentPair = pair
       var changeSelectionOnRead = false
       var blobGets = 0
-      var checkedSelections = Vector.empty[(GoalPhaseCallScopedSnapshot.Scope, References)]
       var selections = 0
       var denyAfterSelection: Option[Int] = None
       val resolver = new ReferencePort {
-        def verifySelectionForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, selected: References,
-          core: ActionCall.Core) = _snapshot_lease_c(core).flatMap { _ =>
-          checkedSelections = checkedSelections :+ (scope -> selected)
-          if (selected == currentPair && scope.request.stepIdentity == input.stepIdentity &&
-              scope.request.submissionIdentity == input.submissionIdentity && scope.handle.instanceIdentity == active.identity &&
-              scope.purpose == GoalPhaseCallScopedSnapshot.Purpose.Candidate) Consequence.unit
-          else Consequence.stateConflict("Test host reference selection changed during Blob read")
-        }
-        def verifyForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = _snapshot_lease_c(core).flatMap { _ =>
-          if (denyAfterSelection.contains(selections)) Consequence.stateConflict("Test host revoked final artifact publication")
-          else Consequence.unit
-        }
-        def resolveForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = {
+        def resolveForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = _snapshot_lease_c(core).flatMap { _ =>
           selections += 1
-          if (scope.request.stepIdentity == input.stepIdentity && scope.request.submissionIdentity == input.submissionIdentity &&
+          if (denyAfterSelection.contains(selections)) Consequence.stateConflict("Test host denied actual reference resolution")
+          else if (scope.request.stepIdentity == input.stepIdentity && scope.request.submissionIdentity == input.submissionIdentity &&
               scope.handle.instanceIdentity == active.identity && scope.purpose == GoalPhaseCallScopedSnapshot.Purpose.Candidate)
             Consequence.success(currentPair)
           else Consequence.stateConflict("Host has no artifact pair for this Step")
@@ -1048,7 +1153,6 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         take(run(first)) shouldBe GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning)
         Then("both actual payloads match the pinned pair and no selection or Workflow effect is fabricated")
         selections shouldBe 1
-        checkedSelections shouldBe Vector(artifactScope -> pair)
         snapshot.loadC(input.stepIdentity) shouldBe a[Consequence.Failure[?]]
         snapshot.loadForScopeCallC(artifactScope, escaped.get) shouldBe a[Consequence.Failure[?]]
         selections shouldBe 1
@@ -1062,10 +1166,10 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Then("the same real bytes and exact host-selected reference pair survive resource reopen")
         selections shouldBe 2
 
-        When("the test host refuses final verification after selecting the pair and reading valid bytes")
+        When("the test host denies actual reference resolution for the next call")
         denyAfterSelection = Some(3)
         val revoked = run(reopened)
-        Then("the reader returns no snapshot even though both payload byte checks succeeded")
+        Then("the reader returns no snapshot and does not access Blob payloads")
         revoked shouldBe a[Consequence.Failure[?]]
         selections shouldBe 3
         denyAfterSelection = None
@@ -1074,11 +1178,10 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val getsBeforeRefresh = blobGets
         changeSelectionOnRead = true
         val changedSelection = run(reopened)
-        Then("valid bytes and a live storage lease cannot publish the now-stale selected pair")
-        changedSelection shouldBe a[Consequence.Failure[?]]
+        Then("the selected inputs are read without a second whole-pair equality certificate")
+        take(changedSelection) shouldBe GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning)
         blobGets shouldBe getsBeforeRefresh + 2
         selections shouldBe 4
-        checkedSelections.last shouldBe (artifactScope -> pair)
         currentPair.selectionRevision shouldBe 1L
         currentPair.program shouldBe pair.program
         currentPair.planning shouldBe pair.planning
@@ -1087,14 +1190,13 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         take(run(reopened)) shouldBe GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning)
         Then("the new observation is verified without replaying or relabelling the stale result")
         selections shouldBe 5
-        checkedSelections.last shouldBe (artifactScope -> currentPair)
 
         When("the owned planning payload changes at equal length while its metadata still reports the old digest")
         Files.write(payloadRoot.resolve(planningRef.storageRef.container).resolve(planningRef.storageRef.key),
           Vector[Byte](9, 9, 9).toArray)
-        val rejected = run(reopened)
-        Then("the actual-byte check rejects the whole snapshot instead of trusting stale Blob metadata")
-        rejected shouldBe a[Consequence.Failure[?]]
+        val changed = run(reopened)
+        Then("actual current bytes are returned; the workflow adds no content-tamper gate to Blob storage")
+        take(changed) shouldBe GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, Vector[Byte](9, 9, 9))
         selections shouldBe 6
         snapshot.loadForScopeCallC(artifactScope, escaped.get) shouldBe a[Consequence.Failure[?]]
         selections shouldBe 6
@@ -1145,11 +1247,11 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val id = take(EntityId.bridgeFromParts("cncf", name, BlobRepository.CollectionId, Instant.EPOCH, name))
         val stored = take(blobStore.put(BlobPutRequest(id, BlobKind.Binary, Some(name + ".bin"),
           ContentType.APPLICATION_OCTET_STREAM), Bag.binary(bytes.toArray)))
-        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef, stored.byteSize, stored.digest)
+        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef)
       }
       val pair = GoalPhaseBlobArtifactSnapshot.References("initial-artifact-pair", 0L,
         put("install_program", Vector[Byte](0, -1, 2)), put("install_planning", Vector[Byte](3, 4)))
-      val candidate = input.copy(programDigest = pair.program.digest, planningDigest = pair.planning.digest)
+      val candidate = input
       var scope: GoalPhaseCallScopedSnapshot.Scope = null
       var requestedPair = pair
       var registrationMode = true
@@ -1202,13 +1304,9 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val originalScope = take(GoalPhaseCallScopedSnapshot.scopeC(start, candidate,
           GoalPhaseCallScopedSnapshot.Purpose.Candidate))
         scope = originalScope
-        When("registration is attempted by an anonymous caller, with mismatched bytes, missing submission or foreign instance")
+        When("registration is attempted by an anonymous caller, with missing submission or foreign instance")
         run(first, context)
         installed.get shouldBe a[Consequence.Failure[?]]
-        requestedPair = pair.copy(program = pair.program.copy(digest = "c" * 64))
-        run(first)
-        installed.get shouldBe a[Consequence.Failure[?]]
-        requestedPair = pair
         for (bad <- Vector(
           take(GoalPhaseCallScopedSnapshot.scopeC(start, candidate.copy(submissionIdentity = "absent-submission"),
             GoalPhaseCallScopedSnapshot.Purpose.Candidate)),
@@ -1233,12 +1331,12 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         When("a different selection revision attempts to reuse the same catalog identity")
         requestedPair = pair.copy(selectionRevision = 1L)
         run(first)
-        installed.get shouldBe a[Consequence.Failure[?]]
-        blobReads shouldBe 4
+        take(installed.get) shouldBe pair
+        blobReads shouldBe 6
         requestedPair = pair
         GoalPhaseManagedArtifactInstallation.installForCallC(originalScope, pair, captured.get,
           declared, selection, associations, records, 64) shouldBe a[Consequence.Failure[?]]
-        blobReads shouldBe 4
+        blobReads shouldBe 6
         originalScope
       } finally take(first.shutdownC())
       val reopened = declaredHost()
@@ -1248,7 +1346,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         When("a fresh host reopens and retries without an artifact installer or reference fixture Map")
         run(reopened)
         take(installed.get) shouldBe pair
-        blobReads shouldBe 6
+        blobReads shouldBe 8
         take(storage(reopened).loadC(original.handle.instanceIdentity)).get.history.size shouldBe 1
       } finally take(reopened.shutdownC())
       val denied = host(path, artifactConfig)
@@ -1258,7 +1356,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         run(denied)
         Then("existing equal rows do not confer write authority or cause Blob access")
         installed.get shouldBe a[Consequence.Failure[?]]
-        blobReads shouldBe 6
+        blobReads shouldBe 8
       } finally take(denied.shutdownC())
     }
 
@@ -1283,7 +1381,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val id = take(EntityId.bridgeFromParts("cncf", name, BlobRepository.CollectionId, Instant.EPOCH, name))
         val stored = take(blobStore.put(BlobPutRequest(id, BlobKind.Binary, Some(name + ".bin"),
           ContentType.APPLICATION_OCTET_STREAM), Bag.binary(bytes.toArray)))
-        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef, stored.byteSize, stored.digest)
+        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef)
       }
       val pair = GoalPhaseBlobArtifactSnapshot.References("installed-catalog-pair", 2L, put("program", program), put("planning", planning))
       def scope(step: String) = take(GoalPhaseCallScopedSnapshot.scopeC(take(WorkflowHandle.fromRecordC(component, active)),
@@ -1298,12 +1396,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       var escaped: Option[ActionCall.Core] = None
       var observed: Option[Consequence[GoalPhaseStepClosureBoundary.ArtifactSnapshot]] = None
       var currentReader: GoalPhaseArtifactReferenceCatalog.DataStorePort = null
-      var liveMismatch: Option[Consequence[Unit]] = None
       val snapshot = take(GoalPhaseBlobArtifactSnapshot.bindC("workflow", new GoalPhaseBlobArtifactSnapshot.ReferencePort {
-        def verifyForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = currentReader.verifyForCallC(scope, core)
         def resolveForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = currentReader.resolveForCallC(scope, core)
-        def verifySelectionForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, pair: GoalPhaseBlobArtifactSnapshot.References,
-          core: ActionCall.Core) = currentReader.verifySelectionForCallC(scope, pair, core)
       }, 64))
       val probe = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
         def resolveForCallC(identity: String, capsule: ActionCall.Core): Consequence[WorkflowHandle] = {
@@ -1316,7 +1410,11 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
               try for {
                 _ <- bind_component_application_datastore_c("workflow")
                 store <- space.dataStore(records)
-                raw <- GoalPhaseArtifactReferenceRecord.encodeStorageC(original, pair, 64)
+                currentRaw <- GoalPhaseArtifactReferenceRecord.encodeStorageC(original, pair, 64)
+                legacy = io.circe.parser.parse(currentRaw.substring(currentRaw.indexOf('{'))).toOption.get
+                  .mapObject(_.add("schemaVersion", io.circe.Json.fromString("sm-workflow.goal-phase-artifact-references.v1"))
+                    .add("scope", io.circe.Json.obj("sourceProgramDigest" -> io.circe.Json.fromString("ignored-legacy-proof"))))
+                raw = "sm-workflow.goal-phase-artifact-references-json.v1:" + legacy.noSpaces
                 key <- GoalPhaseArtifactReferenceRecord.keyC(original)
                 wrongKey <- GoalPhaseArtifactReferenceRecord.keyC(wrong)
                 malformedKey <- GoalPhaseArtifactReferenceRecord.keyC(malformed)
@@ -1335,8 +1433,6 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
             shouldInstall = false; installs += 1
           } else Consequence.unit
           observed = Some(prepared.flatMap(_ => snapshot.loadForScopeCallC(requested, capsule)))
-          if (observed.exists(_.toOption.nonEmpty))
-            liveMismatch = Some(currentReader.verifySelectionForCallC(requested, pair.copy(selectionRevision = 3L), capsule))
           Consequence.stateConflict("Catalog test probe stops before Workflow progression")
         }
       }
@@ -1379,7 +1475,6 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Then("the production reader obtains the actual scoped row and both Blob payloads from the host")
         installs shouldBe 1
         blobReads shouldBe 2
-        liveMismatch.get shouldBe a[Consequence.Failure[?]]
         currentReader.resolveForCallC(original, escaped.get) shouldBe a[Consequence.Failure[?]]
       } finally take(first.shutdownC())
       val reopened = host(path, artifactConfig)
@@ -1390,7 +1485,6 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Then("catalog selection and real payloads survive common-pool shutdown and reopen")
         installs shouldBe 1
         blobReads shouldBe 4
-        liveMismatch.get shouldBe a[Consequence.Failure[?]]
         for (bad <- Vector(wrong, malformed, scope("absent-catalog"))) {
           requested = bad
           run(reopened) shouldBe a[Consequence.Failure[?]]
@@ -1398,7 +1492,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Then("wrong-scope, malformed and missing rows are denied before any further Blob access")
         blobReads shouldBe 4
         requested = original
-        currentReader.verifySelectionForCallC(original, pair.copy(selectionRevision = 3L), escaped.get) shouldBe
+        currentReader.resolveForCallC(original, escaped.get) shouldBe
           a[Consequence.Failure[?]]
       } finally take(reopened.shutdownC())
       val denied = host(path)
@@ -1433,16 +1527,18 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[StepCloseRequest]].request
       val candidate = take(StepCloseRequestAdapter.submissionC(candidateInput)).candidate.reference
       val evidence = StepReviewEvidence("authority-projection-review", candidate.revision,
-        "2026-09-30T23:59:00Z", "2026-10-01T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-30T23:59:00Z", "full-step", "reviewed", "receipt")
       val submitted = ContinuationResult(work.handle, request.runId, request.continuationId,
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("accept", "review passed", Vector(evidence))),
         ContextReference(evidence.evidenceIdentity, candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
       var reads = 0
+      var authoritycalls = Vector.empty[ActionCall.Core]
       val reader = new GoalPhaseClosureAuthorizationRecord.DataStorePort("workflow", collection("hostauthorizations"))
       val authority = new GoalPhaseClosureAuthority.CallScopedAuthorizationPort {
         def loadForCallC(intent: GoalPhaseClosureAuthority.Intent, core: ActionCall.Core) = {
           reads += 1
+          authoritycalls :+= core
           reader.loadForCallC(intent, core)
         }
       }
@@ -1456,7 +1552,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
             Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
             ContextBundle("Resolve exact local commit authority",
               Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-              Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+              Vector.empty, intent.snapshot),
             CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
             StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority")))
       }
@@ -1479,27 +1575,20 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val decision = take(WorkflowDecisionJsonV1.decodeC(response, GoalPhaseClosureAuthority.inputCodec))
         Then("the exact committed judgment precedes missing-authority Decision with no Step closure")
         decision.handle shouldBe work.handle
-        reads shouldBe 2
-        snapshotCalls.size shouldBe 2
-        snapshotScopes.foreach { scope =>
-          scope.handle.instanceIdentity shouldBe work.handle.instanceIdentity
-          scope.request.submissionIdentity shouldBe candidateInput.submissionIdentity
-          scope.candidateRevision shouldBe candidate.revision
-          scope.purpose shouldBe GoalPhaseCallScopedSnapshot.Purpose.Candidate
-        }
-        (snapshotCalls.head eq snapshotCalls.last) shouldBe true
-        snapshotCalls.foreach(_.component.get.componentId shouldBe component)
+        reads shouldBe 1
+        snapshotCalls shouldBe empty
+        snapshotScopes shouldBe empty
         When("snapshot access is attempted without the call or after its managed lease has ended")
         snapshot.loadC(candidateInput.stepIdentity) shouldBe a[Consequence.Failure[?]]
         GoalPhaseCallScopedSnapshot.forCall(snapshot, null).loadC(candidateInput.stepIdentity) shouldBe
           a[Consequence.Failure[?]]
-        GoalPhaseCallScopedSnapshot.forCall(snapshot, snapshotCalls.head).loadC(candidateInput.stepIdentity) shouldBe
+        GoalPhaseCallScopedSnapshot.forCall(snapshot, authoritycalls.head).loadC(candidateInput.stepIdentity) shouldBe
           a[Consequence.Failure[?]]
-        take(GoalPhaseCallScopedSnapshot.forScopeC(GoalPhaseCallScopedSnapshot.forCall(snapshot, snapshotCalls.head),
-          snapshotScopes.head.handle, snapshotScopes.head.request)).loadC(candidateInput.stepIdentity) shouldBe
+        take(GoalPhaseCallScopedSnapshot.forScopeC(GoalPhaseCallScopedSnapshot.forCall(snapshot, authoritycalls.head),
+          work.handle, candidateInput)).loadC(candidateInput.stepIdentity) shouldBe
           a[Consequence.Failure[?]]
         Then("no escaped view yields bytes or invokes the successful snapshot projection")
-        snapshotCalls.size shouldBe 2
+        snapshotCalls shouldBe empty
         val record = take(storage(second).loadC(active.identity)).get
         record.revision shouldBe InstanceRevision(3L)
         record.lifecycle shouldBe Lifecycle.Active
@@ -1508,8 +1597,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         When("the semantic Result is replayed")
         second.subsystem.executeOperationResponse(reviewRequest(submitted)) shouldBe a[Consequence.Failure[?]]
         Then("replay causes no authority lookup or additional history")
-        reads shouldBe 2
-        snapshotCalls.size shouldBe 2
+        reads shouldBe 1
+        snapshotCalls shouldBe empty
         take(storage(second).loadC(active.identity)) shouldBe Some(record)
         record
       } finally take(second.shutdownC())
@@ -1519,8 +1608,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         When("another reconstructed host receives the same Result")
         third.subsystem.executeOperationResponse(reviewRequest(submitted)) shouldBe a[Consequence.Failure[?]]
         Then("the committed review remains exact without re-admission or authority effects")
-        reads shouldBe 2
-        snapshotCalls.size shouldBe 2
+        reads shouldBe 1
+        snapshotCalls shouldBe empty
         take(storage(third).loadC(active.identity)) shouldBe Some(reviewed)
       } finally take(third.shutdownC())
       val fourth = host(path)
@@ -1554,19 +1643,20 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val close = Request.of(component = component.name, service = "GoalPhaseService", operation = "requestStepClose",
           arguments = List(Argument("arg1", GoalPhaseStepCloseJson.encode(candidateInput.copy(reviewEvidence = Vector(evidence))))))
         val response = scalar(take(subsystem.executeOperationResponse(close)))
-        Then("Step-close also uses its own active snapshot call and yields Decision without closing history")
+        Then("Step-close observes authority once in its own active call and yields Decision without reading artifacts or closing history")
         take(WorkflowDecisionJsonV1.decodeC(response, GoalPhaseClosureAuthority.inputCodec)).handle shouldBe work.handle
-        snapshotCalls.size shouldBe 4
-        (snapshotCalls(2) eq snapshotCalls(3)) shouldBe true
-        (snapshotCalls.head eq snapshotCalls(2)) shouldBe false
-        reads shouldBe 4
+        snapshotCalls shouldBe empty
+        snapshotScopes shouldBe empty
+        authoritycalls.size shouldBe 2
+        (authoritycalls.head eq authoritycalls.last) shouldBe false
+        reads shouldBe 2
         take(storage(fourth).loadC(active.identity)) shouldBe Some(reviewed)
-        GoalPhaseCallScopedSnapshot.forCall(snapshot, snapshotCalls.last).loadC(candidateInput.stepIdentity) shouldBe
+        GoalPhaseCallScopedSnapshot.forCall(snapshot, authoritycalls.last).loadC(candidateInput.stepIdentity) shouldBe
           a[Consequence.Failure[?]]
-        take(GoalPhaseCallScopedSnapshot.forScopeC(GoalPhaseCallScopedSnapshot.forCall(snapshot, snapshotCalls.last),
-          snapshotScopes.last.handle, snapshotScopes.last.request)).loadC(candidateInput.stepIdentity) shouldBe
+        take(GoalPhaseCallScopedSnapshot.forScopeC(GoalPhaseCallScopedSnapshot.forCall(snapshot, authoritycalls.last),
+          work.handle, candidateInput)).loadC(candidateInput.stepIdentity) shouldBe
           a[Consequence.Failure[?]]
-        snapshotCalls.size shouldBe 4
+        snapshotCalls shouldBe empty
       } finally take(fourth.shutdownC())
     }
 
@@ -1578,16 +1668,12 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val handle = take(WorkflowHandle.fromRecordC(component, active))
       val candidateRevision = take(StepClosureAdmission.candidateRefC(StepClosureAdmission.StepSnapshot(
         input.stepIdentity, input.programDigest, input.planningDigest))).revision
-      val requestDigest = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(GoalPhaseStepCloseJson.encode(input).getBytes(java.nio.charset.StandardCharsets.UTF_8))
-        .map(byte => f"${byte & 0xff}%02x").mkString
-      val snapshot = ContextSnapshot(handle.workflowRevision.value, Some(candidateRevision), None, Some(requestDigest))
+      val snapshot = ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(candidateRevision))
       val intent = GoalPhaseClosureAuthority.Intent(handle, StateMachineRevision(active.revision.value.toString),
-        snapshot, GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, input, candidateRevision, requestDigest),
+        snapshot, GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, input, candidateRevision),
         "recorded-closure-intent")
       val authorization = GoalPhaseClosureAuthority.Authorization(handle, intent.expectedRevision, snapshot,
-        requestDigest, "explicit-recorded-reference", "human", Instant.parse("2026-10-01T00:00:00Z"),
-        Instant.parse("2026-10-01T01:00:00Z"))
+        "explicit-recorded-reference", "human", Instant.parse("2026-10-01T00:00:00Z"))
       val decision = ContinuationRequest(
         StateMachineRunIdentity(handle.instanceIdentity.value),
         org.goldenport.cncf.workflow.ContinuationIdentity(s"authority-decision:${intent.idempotencyKey}"),
@@ -1596,7 +1682,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
         ContextBundle("Resolve exact local commit authority",
           Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-          Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+          Vector.empty, intent.snapshot),
         CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
         StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority"))
       val decisionWire = take(WorkflowDecisionJsonV1.encodeC(WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing](
@@ -1641,6 +1727,22 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
                     org.goldenport.record.Record.data(GoalPhaseClosureDecisionRecord.storageField -> "invalid"))
                   _ <- decisionStore.create(decisions, DataStore.StringEntryId("foreign"),
                     org.goldenport.record.Record.data(GoalPhaseClosureDecisionRecord.storageField -> decisionRaw))
+                  _ <- Vector("v1", "v2").foldLeft(Consequence.unit) { (prior, version) => prior.flatMap { _ =>
+                    val identity = s"recorded-closure-$version"
+                    val json = io.circe.parser.parse(raw.substring(raw.indexOf('{'))).toOption.get.mapObject(
+                      _.add("schemaVersion", io.circe.Json.fromString(s"sm-workflow.goal-phase-closure-authorization.$version"))
+                        .add("intentIdentity", io.circe.Json.fromString(identity))
+                        .add("requestDigest", io.circe.Json.True)
+                        .add("validUntil", io.circe.Json.fromString("unusable-old-expiry")))
+                    val legacy = s"sm-workflow.goal-phase-closure-authorization-json.$version:" + json.noSpaces
+                    for {
+                      _ <- store.create(authorizations, DataStore.StringEntryId(identity),
+                        org.goldenport.record.Record.data(GoalPhaseClosureAuthorizationRecord.storageField -> legacy))
+                      legacyDecision <- GoalPhaseClosureDecisionRecord.encodeStorageC(intent.copy(idempotencyKey = identity), decisionWire)
+                      _ <- decisionStore.create(decisions, DataStore.StringEntryId(identity),
+                        org.goldenport.record.Record.data(GoalPhaseClosureDecisionRecord.storageField -> legacyDecision))
+                    } yield ()
+                  }}
                 } yield ()
                 finally space.restoreBinding(prior)
               }
@@ -1705,6 +1807,15 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         observed shouldBe Some(Consequence.success(Some(authorization)))
         observedDecision shouldBe Some(Consequence.success(decision))
         take(storage(reopened).loadC(active.identity)) shouldBe Some(active)
+        for (version <- Vector("v1", "v2")) {
+          When(s"a reopened current call resolves the explicitly selected historical $version record identity")
+          requested = intent.copy(idempotencyKey = s"recorded-closure-$version")
+          take(reopened.subsystem.executeOperationResponse(startRequest(command))) shouldBe response
+          Then("old digest and expiry values are ignored without renewal, rewriting or invented lookup mapping")
+          observed shouldBe Some(Consequence.success(Some(authorization)))
+          observedDecision shouldBe Some(Consequence.success(decision))
+          take(storage(reopened).loadC(active.identity)) shouldBe Some(active)
+        }
         When("the lookup is absent")
         requested = intent.copy(idempotencyKey = "missing")
         reopened.subsystem.executeOperationResponse(startRequest(command)) shouldBe a[Consequence.Failure[?]]
@@ -1719,8 +1830,13 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           observed.get shouldBe a[Consequence.Failure[?]]
           observedDecision.get shouldBe a[Consequence.Failure[?]]
         }
-        When("the same stored Decision is requested with a different snapshot")
+        When("the same scoped Decision is requested with different diagnostic workspace information")
         requested = intent.copy(snapshot = snapshot.copy(workspaceRevision = Some("foreign")))
+        take(reopened.subsystem.executeOperationResponse(startRequest(command))) shouldBe response
+        Then("diagnostic information is not an unchanged-content certificate")
+        observedDecision shouldBe Some(Consequence.success(decision))
+        When("the stored Decision is requested for an actually different candidate target")
+        requested = intent.copy(snapshot = snapshot.copy(modelRevision = Some("foreign-target")))
         reopened.subsystem.executeOperationResponse(startRequest(command)) shouldBe a[Consequence.Failure[?]]
         Then("Decision scope mismatch fails without replacing its recorded request")
         observedDecision.get shouldBe a[Consequence.Failure[?]]
@@ -1728,7 +1844,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       } finally take(reopened.shutdownC())
     }
 
-    "query committed repair judgment after expiry and host reopen without replaying admission or effects" in {
+    "query committed repair judgment after former expiry and host reopen without replaying admission or effects" in {
       Given("a managed issued review and a host-bound read capability without a separate pool")
       val path = Files.createTempDirectory("goal-managed-retained-query-").resolve("host.sqlite")
       var queryEvents = 0
@@ -1758,9 +1874,9 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("repair", "Repair is required", Vector(
           StepReviewEvidence("retained-repair", candidate.revision, "2026-09-30T23:59:00Z",
-            "2026-10-01T01:00:00Z", "full-step", "repair reviewed", "receipt")))),
+            "full-step", "repair reviewed", "receipt")))),
         ContextReference("retained-repair", candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
-      When("normal dispatch commits the valid judgment before expiry")
+      When("normal dispatch commits the applicable judgment")
       val second = host(path)
       val completed = try {
         installReview(second)
@@ -1770,7 +1886,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         take(read.loadRetainedC(request.continuationId)).get.completion.result shouldBe submitted
         take(storage(second).loadC(active.identity)).get
       } finally take(second.shutdownC())
-      When("a reconstructed host reads that committed judgment after its evidence validity window")
+      When("a reconstructed host reads that committed judgment after its former validity window")
       val repairSpi = artifact.models.head.requiredSpi.find(_.actionIdentity.value == "RepairStep").get
       val repair = StateMachineRequiredOperation(StateMachineRequiredOperationIdentity(repairSpi.identity.value),
         repairSpi.actionIdentity.value, StateMachineOperationIdentity(repairSpi.operation.service.value,
@@ -1784,8 +1900,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val third = host(path)
       try {
         val publisher = installReview(third, Some(repairPorts)).get
-        GoalPhaseReviewResultAdapter.assessC(artifact, work, submitted,
-          Instant.parse("2026-10-01T02:00:00Z")) shouldBe a[Consequence.Failure[?]]
+        take(GoalPhaseReviewResultAdapter.assessC(artifact, work, submitted,
+          Instant.parse("2026-10-01T02:00:00Z"))).repairRequested shouldBe true
         val retained = take(reader(third).loadRetainedC(request.continuationId)).get
         Then("the retained result remains exact without fresh admission, transitions or event effects")
         retained.completion.result shouldBe submitted
@@ -1942,7 +2058,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
                 GoalPhaseStepClosureBoundary.ArtifactSnapshot(Vector[Byte](7, 8), Vector[Byte](9)))
               else Consequence.stateConflict("foreign repaired Step")
           }, Instant.parse("2026-10-01T02:00:00Z")))
-        Then("expired evidence is preserved but neither accepted nor used to omit a fresh full review")
+        Then("wrong-target evidence is preserved but not used to omit the required new full review")
         prepared.requiresNewReview shouldBe true
         prepared.contentChanged shouldBe true
         prepared.currentRequest.reviewEvidence shouldBe submitted.result.value.reviewEvidence
@@ -1998,7 +2114,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val accepted = ContinuationResult(reReview.get.handle, next.runId, next.continuationId, next.expectedRevision,
           next.context.snapshot, TypedValue("ReviewStepResult", ReviewStepResult("accept", "Repaired Step reviewed",
             Vector(StepReviewEvidence("new-full-review", nextCandidate.revision, "2026-10-01T01:59:00Z",
-              "2026-10-01T03:00:00Z", "full-step", "new candidate covered", "receipt")))),
+              "full-step", "new candidate covered", "receipt")))),
           ContextReference("new-full-review", nextCandidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
         take(sixth.subsystem.executeOperationResponse(reviewRequest(accepted)))
         Then("normal managed review completion records the new judgment without closing or committing the Step")
@@ -2064,7 +2180,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("accept", "review passed", Vector(
           StepReviewEvidence("start-review-result", candidate.revision, "2026-09-30T23:59:00Z",
-            "2026-10-01T01:00:00Z", "full-step", "reviewed", "receipt")))),
+            "full-step", "reviewed", "receipt")))),
         ContextReference("start-review-result", candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
       val reopened = host(path)
       try {
@@ -2141,7 +2257,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
           ContextBundle("Resolve exact local commit authority",
             Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-            Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+            Vector.empty, intent.snapshot),
           CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
           StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority")))
       }
@@ -2176,7 +2292,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         ContinuationResult(work.handle, request.runId, request.continuationId, request.expectedRevision,
           request.context.snapshot, TypedValue("ReviewStepResult", ReviewStepResult(decision, "review judgment",
             Vector(StepReviewEvidence(evidence, candidate.revision, "2026-09-30T23:59:00Z",
-              "2026-10-01T01:00:00Z", "full-step", "candidate covered", "receipt")))),
+              "full-step", "candidate covered", "receipt")))),
           ContextReference(evidence, candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
       }
       When("submitStepReview receives a repair judgment after host reopen")
@@ -2263,7 +2379,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         Then("the new judgment is retained once and configured authority absence yields Decision without closure")
         if (projectAuthority) {
           take(WorkflowDecisionJsonV1.decodeC(response, GoalPhaseClosureAuthority.inputCodec)).handle shouldBe associated.get
-          authorityReads shouldBe 2
+          authorityReads shouldBe 1
         } else take(WorkflowWaitJsonV1.decodeC(response)).current shouldBe a[WorkflowContinuation.Wait]
         val saved = take(storage(current).loadC(associated.get.instanceIdentity)).get
         saved.revision shouldBe InstanceRevision(7L)
@@ -2271,8 +2387,8 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         current.subsystem.executeOperationResponse(reviewRequest(accepted)) shouldBe a[Consequence.Failure[?]]
         take(storage(current).loadC(saved.identity)) shouldBe Some(saved)
         unexpectedCalls shouldBe 0
-        reads shouldBe ((if (interruptFollowup) 2 else 1) + (if (projectAuthority) 2 else 0))
-        authorityReads shouldBe (if (projectAuthority) 2 else 0)
+        reads shouldBe (if (interruptFollowup) 2 else 1)
+        authorityReads shouldBe (if (projectAuthority) 1 else 0)
         When("the snapshot is invoked outside dispatch or through a captured completed call")
         val observedReads = reads
         snapshot.loadC(input.stepIdentity) shouldBe a[Consequence.Failure[?]]
@@ -2457,19 +2573,19 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val id = take(EntityId.bridgeFromParts("cncf", name, BlobRepository.CollectionId, Instant.EPOCH, name))
         val stored = take(payloadStore.put(BlobPutRequest(id, BlobKind.Binary, Some(name + ".bin"),
           ContentType.APPLICATION_OCTET_STREAM), Bag.binary(bytes.toArray)))
-        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef, stored.byteSize, stored.digest)
+        GoalPhaseBlobArtifactSnapshot.Reference(stored.id, stored.storageRef)
       }
       val pair = GoalPhaseBlobArtifactSnapshot.References("public-artifact-pair", 0L,
         put("public_program", Vector[Byte](0, -1, 2)), put("public_planning", Vector[Byte](3, 4)))
       val artifactCommand = GoalPhaseArtifactRegistrationServiceOperation.Command(
-        input.copy(programDigest = pair.program.digest, planningDigest = pair.planning.digest), pair)
+        input.copy(programDigest = take(payloadStore.get(pair.program.storageRef)).digest,
+          planningDigest = take(payloadStore.get(pair.planning.storageRef)).digest), pair)
       val artifactWire = GoalPhaseArtifactRegistrationServiceOperation.encodeCommand(artifactCommand)
       val artifactSelector = s"${component.name}/GoalPhaseService/${GoalPhaseArtifactRegistrationServiceOperation.operationName}"
       def artifactRequest(value: String) = Request.of(component = component.name, service = "GoalPhaseService",
         operation = GoalPhaseArtifactRegistrationServiceOperation.operationName, arguments = List(Argument("arg1", value)))
       var artifactReceipt: Option[OperationResponse] = None
       var blobReads = 0
-      var onBlobRead: () => Unit = () => ()
       def installBlobs(current: SubsystemEventStoreBootstrap): Unit = {
         val store = new LocalBlobStore(payloadRoot, name = "public-artifacts")
         val blob = current.subsystem.findComponent(BuiltinComponentIdentity.BLOB).get
@@ -2478,7 +2594,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           def blobStore = new BlobStore {
             def name = store.name
             def put(request: BlobPutRequest, payload: org.goldenport.bag.BinaryBag) = store.put(request, payload)
-            def get(ref: BlobStorageRef) = { blobReads += 1; onBlobRead(); store.get(ref) }
+            def get(ref: BlobStorageRef) = { blobReads += 1; store.get(ref) }
             def delete(ref: BlobStorageRef) = store.delete(ref)
             def accessUrl(ref: BlobStorageRef) = store.accessUrl(ref)
             def status() = store.status()
@@ -2587,10 +2703,10 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         val badArtifact = io.circe.parser.parse(artifactWire).toOption.get.mapObject(_.add("receipt", io.circe.Json.obj())).noSpaces
         publichost.subsystem.executeOperationResponseInContext(artifactRequest(badArtifact), actor) shouldBe a[Consequence.Failure[?]]
         publichost.subsystem.executeOperationResponse(artifactRequest(artifactWire)) shouldBe a[Consequence.Failure[?]]
-        publichost.subsystem.executeOperationResponseInContext(artifactRequest(
+        take(publichost.subsystem.executeOperationResponseInContext(artifactRequest(
           GoalPhaseArtifactRegistrationServiceOperation.encodeCommand(artifactCommand.copy(selection =
-            pair.copy(selectionRevision = 1L)))), actor) shouldBe a[Consequence.Failure[?]]
-        blobReads shouldBe 4
+            pair.copy(selectionRevision = 1L)))), actor)) shouldBe artifactsAccepted
+        blobReads shouldBe 6
         When("a caller supplies extra authority/storage facts, noncanonical scope, or a foreign actor")
         val commandjson = io.circe.parser.parse(wire).toOption.get
         val extra = commandjson.mapObject(_.add("receipt", io.circe.Json.obj())).noSpaces
@@ -2612,7 +2728,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         When("CLI invokes the artifact command using normal configured local ingress without a server")
         take(cli.executeCommandResponse(publichost.subsystem, Array(artifactSelector, "--json", artifactWire))).print shouldBe
           artifactJson.noSpaces
-        blobReads shouldBe 6
+        blobReads shouldBe 8
         take(storage(publichost).loadC(started.instanceIdentity)).get.history.size shouldBe 1
         Vector(extra, badkey, foreign).foreach(value =>
           cli.executeCommandResponse(publichost.subsystem, Array(selector, "--json", value)) shouldBe a[Consequence.Failure[?]])
@@ -2689,7 +2805,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           case OperationResponse.Scalar(value: String) => artifactCli shouldBe value
           case other => fail(s"Expected retained artifact receipt: $other")
         }
-        blobReads shouldBe 10
+        blobReads shouldBe 12
         val cliresult = take(cli.executeCommandResponse(reopened.subsystem,
           Array(s"${component.name}/GoalPhaseService/${GoalPhaseRegistrationServiceOperation.operationName}", "--json", wire))).print
         Then("the CLI receipt remains identical across managed-pool shutdown and reopen")
@@ -2722,7 +2838,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         cliresult shouldBe a[Consequence.Failure[?]]
         undeclared.subsystem.executeOperationResponseInContext(artifactRequest(artifactWire), actor) shouldBe a[Consequence.Failure[?]]
         cli.executeCommandResponse(undeclared.subsystem, Array(artifactSelector, "--json", artifactWire)) shouldBe a[Consequence.Failure[?]]
-        blobReads shouldBe 10
+        blobReads shouldBe 12
         take(storage(undeclared).loadC(started.instanceIdentity)).get.history.size shouldBe 1
       } finally take(undeclared.shutdownC())
       var recoveryIdentity = Option.empty[org.goldenport.cncf.workflow.ContinuationIdentity]
@@ -2730,10 +2846,12 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       def recoveryRequest(identity: org.goldenport.cncf.workflow.ContinuationIdentity) = Request.of(component = component.name,
         service = "GoalPhaseService", operation = GoalPhaseReviewRecoveryServiceOperation.operationName,
         arguments = List(Argument("arg1", GoalPhaseReviewRecoveryServiceOperation.encodeCommand(identity))))
-      val acceptedReads = if (automatic) 18 else 12
-      val recoveredReads = if (automatic) 26 else 14
-      val artifactReopenReads = if (automatic) 28 else 16
-      val beforePreparationReads = if (automatic) 36 else 18
+      // Observation and question registration do not read artifact bytes.
+      // The later artifact command still reads its actual Blob pair.
+      val acceptedReads = 12
+      val recoveredReads = 12
+      val artifactReopenReads = 14
+      val beforePreparationReads = 14
       val reviewing = declaredHost(decisionWrites = automatic)
       val completed = try {
         installConfigured(reviewing)
@@ -2750,15 +2868,15 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         recoveryIdentity = Some(order.continuationId)
         order.input.get.value shouldBe artifactCommand.subject
         take(storage(reviewing).loadC(started.instanceIdentity)).get.revision shouldBe InstanceRevision(2L)
-        blobReads shouldBe 10
+        blobReads shouldBe 12
         val candidate = take(StepCloseRequestAdapter.submissionC(artifactCommand.subject)).candidate.reference
         val evidence = StepReviewEvidence("public-catalog-review", candidate.revision,
-          "2026-09-30T23:59:00Z", "2026-10-01T01:00:00Z", "full-step", "actual candidate reviewed", "receipt")
+          "2026-09-30T23:59:00Z", "full-step", "actual candidate reviewed", "receipt")
         acceptedCandidate = Some(artifactCommand.subject.copy(reviewEvidence = Vector(evidence)))
         val submitted = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision,
           order.context.snapshot, TypedValue("ReviewStepResult", ReviewStepResult("accept", "review passed", Vector(evidence))),
           ContextReference(evidence.evidenceIdentity, candidate.revision), Vector.empty, ExecutionEvidence(Vector.empty))
-        When("accepted review completion consumes the managed catalog and both actual Blob payloads")
+        When("accepted review completion observes authority for the registered candidate without an artifact preflight")
         val result = reviewing.subsystem.executeOperationResponseInContext(reviewRequest(submitted), actor)
         if (automatic) {
           Then("Workflow prepares the question automatically from the accepted result without a second command")
@@ -2832,19 +2950,62 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         unexpected shouldBe 0
       } finally take(afterReview.shutdownC())
 
-      def fixtureDigest(value: String) = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
       val acceptedInput = acceptedCandidate.get
-      val candidateRevision = take(StepCloseRequestAdapter.submissionC(acceptedInput)).candidate.reference.revision
-      val requestDigest = fixtureDigest(GoalPhaseStepCloseJson.encode(acceptedInput))
-      val intent = GoalPhaseClosureAuthority.Intent(started, StateMachineRevision(completed.revision.value.toString),
-        ContextSnapshot(started.workflowRevision.value, modelRevision = Some(candidateRevision), evidenceRevision = Some(requestDigest)),
-        GoalPhaseClosureAuthority.Input(GoalPhaseClosureAuthority.reason, acceptedInput, candidateRevision, requestDigest),
-        fixtureDigest(s"${started.instanceIdentity.value}:${completed.revision.value}:$requestDigest"))
+      val intent = take(GoalPhaseClosureAuthority.intentC(acceptedInput, started, completed))
       val decision = take(questionTemplate.requestC(intent))
       val decisionWire = take(WorkflowDecisionJsonV1.encodeC(WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing](
         started, WorkflowContinuation.Decision(decision, MinimalPresentation("Recorded closure stop", "No approval"))),
         GoalPhaseClosureAuthority.inputCodec))
+      Given("the accepted closure intent is already assessed, and the metadata writer cannot resolve the selection again")
+      val assessedhost = take(SubsystemEventStoreBootstrap.createC(policy, declaration,
+        ScopeContext(ScopeKind.Subsystem, "managed-goal", None, context.observability),
+        ResolvedConfiguration(HostConfiguration(Map(
+          "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
+          "textus.datastore.path" -> ConfigurationValue.StringValue(path.toString)) ++
+          cliconfiguration.updated(GoalPhaseHostRecordReadPolicy.prefix + "selection-collection",
+            ConfigurationValue.StringValue(collection("unobservedselections").print))), ConfigurationTrace.empty),
+        None, org.goldenport.cncf.path.AliasResolver.empty, decisionGrant))
+      var independentregistration = Option.empty[Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]]]
+      var assessedquestion = Option.empty[ContinuationRequest[GoalPhaseClosureAuthority.Input]]
+      var assessedcore = Option.empty[ActionCall.Core]
+      val assessedinstaller = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
+        def resolveForCallC(identity: String, capsule: ActionCall.Core): Consequence[WorkflowHandle] =
+          GoalPhaseParticipantAdmission.admitC(command.participantIdentity, capsule.executionContext).flatMap { _ =>
+            val workflow = GoalPhaseManagedStartAssembly.Declaration(config, definition, instances, continuations)
+            independentregistration = Some(GoalPhaseManagedClosureDecisionRegistration.registerForCallC(
+              recoveryIdentity.get, intent, decisionWire, capsule, workflow, collection("hostdecisions")))
+            assessedcore = Some(capsule)
+            GoalPhaseManagedClosureDecisionRegistration.retainAssessedForCallC(intent, decisionWire,
+              capsule, workflow, collection("hostdecisions")).flatMap { question =>
+              assessedquestion = Some(question)
+              Consequence.stateConflict("Assessed metadata fixture stops before review or command execution")
+            }
+          }
+      }
+      try {
+        installPath(assessedhost, selection, assessedinstaller, () => unexpected += 1)
+        When("the owning managed call retains its assessed question at the declared Create destination")
+        val registrationresult = assessedhost.subsystem.executeOperationResponseInContext(Request.of(
+          component = component.name, service = "GoalPhaseService", operation = "requestStepClose",
+          arguments = List(Argument("arg1", GoalPhaseStepCloseJson.encode(artifactCommand.subject)))), actor)
+        Then("independent registration refuses unresolved input, but assessed follow-up needs no second selection and grants no execution")
+        independentregistration.get shouldBe a[Consequence.Failure[?]]
+        assessedquestion shouldBe Some(decision)
+        registrationresult shouldBe a[Consequence.Failure[?]]
+        take(storage(assessedhost).loadC(started.instanceIdentity)).get shouldBe completed
+        blobReads shouldBe beforePreparationReads
+        unexpected shouldBe 0
+        When("the writer is invoked without a current call or with its escaped lease")
+        val workflow = GoalPhaseManagedStartAssembly.Declaration(config, definition, instances, continuations)
+        val nocall = GoalPhaseManagedClosureDecisionRegistration.retainAssessedForCallC(intent, decisionWire,
+          null, workflow, collection("hostdecisions"))
+        val escaped = GoalPhaseManagedClosureDecisionRegistration.retainAssessedForCallC(intent, decisionWire,
+          assessedcore.get, workflow, collection("hostdecisions"))
+        Then("the actual storage boundary refuses both without changing native state")
+        nocall shouldBe a[Consequence.Failure[?]]
+        escaped shouldBe a[Consequence.Failure[?]]
+        take(storage(assessedhost).loadC(started.instanceIdentity)).get shouldBe completed
+      } finally take(assessedhost.shutdownC())
       var decisionInstalled = false
       var recorded = Option.empty[Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]]]
       val decisionInstaller = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
@@ -2919,13 +3080,13 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           case other => fail(s"Expected prepared question JSON: $other")
         }
         projected.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseClosureAuthority.Input]].request shouldBe decision
-        blobReads shouldBe beforePreparationReads + 8
+        blobReads shouldBe beforePreparationReads
         When("standard CLI retries the same preparation without replacing metadata or appending Workflow")
         val repeated = take(new org.goldenport.cncf.cli.CncfRuntime().executeCommandResponse(recording.subsystem,
           Array(s"${component.name}/GoalPhaseService/${GoalPhaseReviewRecoveryServiceOperation.preparationOperationName}",
             "--json", preparationWire))).print
         take(WorkflowDecisionJsonV1.decodeC(repeated, GoalPhaseClosureAuthority.inputCodec)) shouldBe projected
-        blobReads shouldBe beforePreparationReads + 16
+        blobReads shouldBe beforePreparationReads
         take(storage(recording).loadC(started.instanceIdentity)).get shouldBe completed
         unexpected shouldBe 0
       } finally take(recording.shutdownC())
@@ -2979,7 +3140,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           take(storage(humanHost).loadC(started.instanceIdentity)).get shouldBe completed
           GoalPhaseManagedHumanQuestionRegistration.registerForCallC(recoveryIdentity.get, humanQuestion,
             escapedHumanCore.get, humanDeclaration) shouldBe a[Consequence.Failure[?]]
-          blobReads shouldBe beforePreparationReads + 16
+          blobReads shouldBe beforePreparationReads
           unexpected shouldBe 0
         } finally take(humanHost.shutdownC())
       }
@@ -2993,7 +3154,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           verifiedCalls += 1
           Consequence.success(Some(GoalPhaseHumanInteractionVerification.Receipt(reference, issuerIdentity,
             "fixture-independent-human", GoalPhaseHumanInteractionVerification.purpose, expected,
-            answerAsOf.minusSeconds(1), answerAsOf.plusSeconds(1))))
+            answerAsOf.minusSeconds(86400))))
         }
       }
       val answerInstaller = new GoalPhaseStepCloseServiceOperation.CallScopedInvocationPort {
@@ -3047,7 +3208,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           take(storage(answerHost).loadC(started.instanceIdentity)).get shouldBe completed
           GoalPhaseManagedHumanAnswerRegistration.registerForCallC(recoveryIdentity.get, humanQuestion.request.continuationId,
             answer, "managed-human-interaction", answerAsOf, escapedHumanCore.get, humanDeclaration, fixtureVerifier) shouldBe a[Consequence.Failure[?]]
-          blobReads shouldBe beforePreparationReads + 16
+          blobReads shouldBe beforePreparationReads
           unexpected shouldBe 0
         } finally take(answerHost.shutdownC())
       }
@@ -3121,7 +3282,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         publicHumanHost.subsystem.executeOperationResponseInContext(humanRequest(
           GoalPhaseHumanDecisionServiceOperation.answerOperationName, conflictingWire), actor) shouldBe a[Consequence.Failure[?]]
         take(storage(publicHumanHost).loadC(started.instanceIdentity)).get shouldBe completed
-        blobReads shouldBe beforePreparationReads + 16
+        blobReads shouldBe beforePreparationReads
         unexpected shouldBe 0
       } finally take(publicHumanHost.shutdownC())
       val reopenedHumanHost = declaredHost(answerWrites = true)
@@ -3160,34 +3321,25 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
         }
         restored.handle shouldBe started
         restored.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseClosureAuthority.Input]].request shouldBe decision
-        blobReads shouldBe beforePreparationReads + 20
+        blobReads shouldBe beforePreparationReads
         take(storage(resumed).loadC(started.instanceIdentity)).get shouldBe completed
         val cliResult = take(new org.goldenport.cncf.cli.CncfRuntime().executeCommandResponse(resumed.subsystem,
           Array(s"${component.name}/GoalPhaseService/${GoalPhaseReviewRecoveryServiceOperation.operationName}", "--json",
             GoalPhaseReviewRecoveryServiceOperation.encodeCommand(recoveryIdentity.get)))).print
         take(WorkflowDecisionJsonV1.decodeC(cliResult, GoalPhaseClosureAuthority.inputCodec)) shouldBe restored
-        blobReads shouldBe beforePreparationReads + 24
-        When("an independent canonical fixture writer advances the instance during the first Blob read")
-        var advancedRecord = Option.empty[InstanceRecord]
-        onBlobRead = () => {
-          onBlobRead = () => ()
-          advancedRecord = Some(take(storage(resumed).appendC(completed.identity, completed.revision,
-            completed.history.last.copy(sequence = HistorySequence(4L), revision = InstanceRevision(4L),
-              causation = CausationReference("test-competing-writer")))))
-        }
-        resumed.subsystem.executeOperationResponseInContext(recoveryRequest(recoveryIdentity.get), actor) match {
-          case Consequence.Failure(conclusion) => conclusion.display should include("authority lookup changed the Workflow instance")
-          case other => fail(s"Recovery published stale Decision after competing advancement: $other")
-        }
-        blobReads shouldBe beforePreparationReads + 26
-        val retained = advancedRecord.get
+        blobReads shouldBe beforePreparationReads
+        When("an independent canonical fixture writer advances the instance before a later recovery request")
+        val retained = take(storage(resumed).appendC(completed.identity, completed.revision,
+          completed.history.last.copy(sequence = HistorySequence(4L), revision = InstanceRevision(4L),
+            causation = CausationReference("test-competing-writer"))))
         retained.history.take(3) shouldBe completed.history
         take(storage(resumed).loadC(started.instanceIdentity)).get shouldBe retained
+        Then("the actual input state is no longer the reviewed revision, so recovery is refused without artifact reads")
         resumed.subsystem.executeOperationResponseInContext(recoveryRequest(recoveryIdentity.get), actor) match {
           case Consequence.Failure(conclusion) => conclusion.display should include("Recovery review is no longer current")
           case other => fail(s"Stale review recovered against revision 4: $other")
         }
-        blobReads shouldBe beforePreparationReads + 26
+        blobReads shouldBe beforePreparationReads
         unexpected shouldBe 0
         retained
       } finally take(resumed.shutdownC())
@@ -3202,7 +3354,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
           service = "GoalPhaseService", operation = GoalPhaseReviewRecoveryServiceOperation.preparationOperationName,
           arguments = List(Argument("arg1", GoalPhaseReviewRecoveryServiceOperation.encodePreparationCommand(recoveryIdentity.get)))), actor) shouldBe
           a[Consequence.Failure[?]]
-        blobReads shouldBe beforePreparationReads + 26
+        blobReads shouldBe beforePreparationReads
         unexpected shouldBe 0
       } finally take(finalHost.shutdownC())
     }
@@ -3548,7 +3700,7 @@ final class GoalPhaseManagedSuspensionOperationSpec extends AnyWordSpec with Mat
       val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[StepCloseRequest]].request
       val candidate = take(StepCloseRequestAdapter.submissionC(input)).candidate.reference
       val evidence = StepReviewEvidence("managed-review-result", candidate.revision,
-        "2026-09-30T23:59:00Z", "2026-10-01T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-30T23:59:00Z", "full-step", "reviewed", "receipt")
       val submitted = ContinuationResult(work.handle, request.runId, request.continuationId,
         request.expectedRevision, request.context.snapshot,
         TypedValue("ReviewStepResult", ReviewStepResult("accept", "review passed", Vector(evidence))),

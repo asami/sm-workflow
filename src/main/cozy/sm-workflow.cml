@@ -268,8 +268,6 @@ OperationResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| policyIdentity | string | 1 |
-| policyRevision | int | 1 |
 | changedPaths | string | * |
 | diff | string | 1 |
 | checks | GoalPhaseNativeCheckReceipt | * |
@@ -554,14 +552,10 @@ OperationResult
 | changedPaths | string | * |
 | localDiff | string | 1 |
 | remoteDiff | string | 1 |
-| validationPolicyIdentity | string | 1 |
-| validationPolicyRevision | int | 1 |
 | validationMode | string | 1 |
 | validationReason | string | 1 |
 | selectedChecks | string | * |
 | checks | RepositorySyncNativeValidationReceipt | * |
-| reviewPolicyIdentity | string | 1 |
-| reviewPolicyRevision | int | 1 |
 
 ## RepositorySyncNativeMergeReviewFinding
 
@@ -825,7 +819,6 @@ OperationResult
 | evidenceIdentity | string | 1            |
 | reviewedRevision | string | 1            |
 | reviewedAt       | string | 1            |
-| validUntil       | string | 1            |
 | scope            | string | 1            |
 | summary          | string | 1            |
 | provenance       | string | 1            |
@@ -924,10 +917,8 @@ OperationResult
 |-------------------+----------------------------------+--------------|
 | candidateRevision | string                           | 1            |
 | reviewedAt        | string                           | 1            |
-| validUntil        | string                           | 1            |
 | decision          | string                           | 1            |
 | rationale         | string                           | 1            |
-| evidenceDigest    | string                           | 1            |
 | findings          | RepositorySyncMergeReviewFinding | *            |
 
 ## RepositorySyncMergeReviewSubmissionResult
@@ -4621,7 +4612,6 @@ RepositorySyncHumanConflictAnswer
 | reason | string | 1 |
 | candidate | StepCloseRequest | 1 |
 | candidateRevision | string | 1 |
-| requestDigest | string | 1 |
 
 ## GoalPhaseHumanAnswerCommand
 
@@ -4697,7 +4687,6 @@ RepositorySyncHumanConflictAnswer
 | humanParticipant | string | 1 |
 | purpose | string | 1 |
 | occurredAt | string | 1 |
-| validUntil | string | 1 |
 
 ## GoalPhaseHumanAnswerResult
 
@@ -4792,8 +4781,6 @@ RepositorySyncHumanConflictAnswer
 |------+-------+--------------|
 | id | string | 1 |
 | storageRef | GoalPhaseArtifactStorageReference | 1 |
-| byteSize | long | 1 |
-| digest | string | 1 |
 
 ## GoalPhaseArtifactSelection
 
@@ -5971,7 +5958,6 @@ OperationResult
 
 | name | type | multiplicity |
 |------+-------+--------------|
-| context | SplitPhasePartitionContextReference | 1 |
 | decision | string | 1 |
 | rationale | string | 1 |
 | estimates | SplitPhasePartitionNovelEstimate | * |
@@ -6212,8 +6198,10 @@ SplitPhaseScopeSubmissionResult
 ##### DESCRIPTION
 
 Declare the local transactional admission paired with AssessReasoningDemand.
-Workflow checks exact unknown-item coverage, rationale/evidence and complete
-current source, closure and planning facts against the original request. Only
+Workflow consumes the one host-prepared current need and admits result context,
+assigned reply, exact unknown-item coverage, classifications, rationale/evidence
+and Workflow-selected output references at the semantic result boundary. It does
+not compare complete source, closure or planning copies with the original request. Only
 Workflow chooses replacement demand/planning references and resumes objective
 selection. This declaration is not a separately installed completion endpoint,
 native execution authority or an AI skill's permission to route processing.
@@ -6292,7 +6280,6 @@ OperationResult
 
 | name | type | multiplicity |
 |------+-------+--------------|
-| context | SplitPhasePartitionContextReference | 1 |
 | decision | string | 1 |
 | rationale | string | 1 |
 | assignments | SplitPhaseReasoningAssignment | * |
@@ -6381,8 +6368,6 @@ OperationResult
 
 | name | type | multiplicity |
 |------+-------+--------------|
-| context | SplitPhasePartitionContextReference | 1 |
-| checkpoint | SplitPhasePartitionContextReference | 1 |
 | decision | string | 1 |
 | rationale | string | 1 |
 | scopes | SplitPhaseResolvedHandoffScope | * |

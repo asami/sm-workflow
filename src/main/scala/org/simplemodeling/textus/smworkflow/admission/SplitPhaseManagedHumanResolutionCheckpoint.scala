@@ -25,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanResolution
   * Public downstream routing/default installation remain separate boundaries.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
   final class Observed private[SplitPhaseManagedHumanResolutionCheckpoint] (
@@ -33,7 +33,7 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
 
   final class Port private[SplitPhaseManagedHumanResolutionCheckpoint] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    targets: P.Targets, observation: () => Consequence[Unit]) {
+    observation: () => Consequence[Unit]) {
 
     def loadForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       _ <- _admit_c(core)
@@ -50,7 +50,8 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
     } yield saved
 
     /** No passive Captured argument and no immediate retry after uncertainty.
-      * Only exact canonical absence at HumanAnswered enables fresh calculation.
+      * Actual native receipt absence permits preparing a fresh intent; the
+      * native transition's current state/CAS owns whether it can commit.
       */
     def executeForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Observed] = for {
       _ <- _admit_c(core)
@@ -73,7 +74,7 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
           frontier <- Q.applyHumanResolutionC(admitted)
           outcome <- W.continueHumanResolutionC(frontier)
           captured <- C.captureC(outcome)
-          prepared <- P.prepareC(captured, actualtargets, catalog.definition)
+          prepared <- P.prepareC(captured, actualtargets)
           programs <- prepared.rows.foldLeft(Consequence.success(Vector.empty[ExecUowM[Unit]])) { (prior, row) => for {
             accumulated <- prior
             storage <- ComponentRecordStorage.bindForCallC(core, actualtargets.storeName, row.collection,
@@ -83,8 +84,8 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
           program = programs.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
             (before, next) => before.flatMap(_ => next))
           native <- _native_c(core)
-          committed <- native.executeC(captured.intent, program)(using core.executionContext) match {
-            case Consequence.Success(value) => Consequence.success(value)
+          _ <- native.executeC(captured.intent, program)(using core.executionContext) match {
+            case Consequence.Success(_) => Consequence.unit
             case _ => _uncertain("native commit is not established; observe later without retry")
           }
           _ <- observation() match {
@@ -92,12 +93,8 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
             case _ => _uncertain("postcommit observation interrupted; observe later without repeating publication")
           }
           observed <- loadForCallC(command, core) match {
-            case Consequence.Success(Some(value)) if value.record == captured.record &&
-                committed.receipt.payload.value == captured.record &&
-                SplitPhaseDefinitionBinding.sameRecord(committed.receipt.current, captured.record.before) &&
-                SplitPhaseDefinitionBinding.sameRecord(committed.receipt.next, captured.record.next) &&
-                SplitPhaseDefinitionBinding.sameRecord(value.current, captured.record.next) => Consequence.success(value)
-            case _ => _uncertain("authoritative committed readback differs or is unavailable; do not repeat publication")
+            case Consequence.Success(Some(value)) => Consequence.success(value)
+            case _ => _uncertain("committed observation is unavailable; do not repeat publication")
           }
         } yield observed
       }
@@ -110,48 +107,35 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
         case _ => _invalid("canonical answer is not Human resolution")
       }
       reference <- C.referenceC(source.completion.result.continuationId, source.completion.result.resultReference)
-      key <- C.keyC(reference)
-      storage <- ComponentRecordStorage.bindForCallC(core, actualtargets.storeName, actualtargets.publication,
-        DataStore.StringEntryId(key))
-      raw <- storage.loadC()
       native <- _native_c(core)
       retained <- native.loadRetainedC(M.Reference(reference.identity, reference.revision))(using core.executionContext)
-      result <- (raw, retained) match {
-        case (None, None) if SplitPhaseDefinitionBinding.sameRecord(source.current, source.answered) => Consequence.success(None)
-        case (Some(application), Some(actual)) => for {
-          wire <- _wire_c(application, J.storageField, key)
-          record <- J.decodeC(reference, wire, catalog.definition)
-          _ <- if (record.priorScope == source.plan.source.record && record.humanQuestion == source.plan.question &&
-              record.humanCompletion == source.completion &&
-              SplitPhaseDefinitionBinding.sameRecord(record.humanIssued, source.plan.next) &&
-              SplitPhaseDefinitionBinding.sameRecord(record.before, source.answered) &&
-              actual.receipt.reference == M.Reference(reference.identity, reference.revision) &&
-              actual.receipt.component == SmWorkflowComponent.componentId && actual.receipt.operation == K.advanceOperation &&
-              actual.receipt.payload.typeIdentity == C.payloadType && actual.receipt.payload.value == record &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.receipt.current, record.before) &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.receipt.next, record.next) &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.current, source.current)) Consequence.unit
-            else _invalid("full application, canonical answer or native retained source differs")
-          _ <- _documents_c(record, actualtargets, core)
-        } yield Some(new Observed(record, actual.current, source))
-        case _ => _invalid("one-sided successor or absent publication after later progress")
+      result <- retained match {
+        case None => Consequence.success(None)
+        case Some(actual) => for {
+          // Receipt purpose/owner/type are admitted by the native adapter. This
+          // reader owns only the command's selected instance, not copy stability.
+          _ <- if (actual.current.identity == source.current.identity) Consequence.unit
+            else _invalid("native Human successor selects another instance")
+          value = actual.receipt.payload.value
+          observed = C.Record(value.reference, value.resolution, value.frontier, value.downstream,
+            actual.receipt.current, actual.receipt.next)
+          _ <- _documents_c(observed, actualtargets, core)
+        } yield Some(new Observed(observed, actual.current, source))
       }
     } yield result
 
-    /** All Built documents, including earlier publications, are read in full.
-      * Missing/corrupt retained input never falls back to fresh interpretation.
+    /** Require declared Built deliverables to exist and be typed-readable,
+      * without comparing their bodies to saved copies or recalculating results.
       */
     private def _documents_c(record: C.Record, actualtargets: P.Targets, core: ActionCall.Core): Consequence[Unit] =
       record.frontier.foldLeft(Consequence.unit) { (prior, candidate) => prior.flatMap { _ => candidate.output match {
         case V.CandidateOutput.Built(value, _) => for {
           proposalwire <- _document_c(actualtargets, actualtargets.documents.proposals, value.proposal.reference.identity, core)
-          proposal <- F.decodeProposalC(value.proposal.reference, proposalwire)
+          _ <- F.decodeProposalC(value.proposal.reference, proposalwire)
           ownershipwire <- _document_c(actualtargets, actualtargets.documents.ownerships, value.ownership.reference.identity, core)
-          ownership <- F.decodeOwnershipC(value.ownership.reference, ownershipwire)
+          _ <- F.decodeOwnershipC(value.ownership.reference, ownershipwire)
           handoffwire <- _document_c(actualtargets, actualtargets.documents.handoffs, value.handoffs.reference.identity, core)
-          handoffs <- F.decodeHandoffsC(value.handoffs.reference, handoffwire)
-          _ <- if (proposal == value.proposal && ownership == value.ownership && handoffs == value.handoffs) Consequence.unit
-            else _invalid("complete committed Built documents differ")
+          _ <- F.decodeHandoffsC(value.handoffs.reference, handoffwire)
         } yield ()
         case _ => _invalid("retained checkpoint is not ALL-Built")
       }}}
@@ -163,20 +147,15 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
         case Some(value) => Consequence.success(value)
         case None => _invalid("committed Built document is absent")
       }
-      wire <- _wire_c(row, F.storageField, identity)
+      wire <- _wire_c(row, F.storageField)
     } yield wire
 
     private def _targets_c(core: ActionCall.Core): Consequence[P.Targets] =
-      P.bindTargetsC(core.component.get.subsystem.get.configuration, declaration).flatMap { actual =>
-        if (actual.storeName == targets.storeName && actual.publication == targets.publication &&
-            actual.documents.localCollections == targets.documents.localCollections &&
-            actual.documents.instances == targets.documents.instances && actual.documents.continuations == targets.documents.continuations)
-          Consequence.success(actual) else _invalid("actual owning purposes differ from bound metadata")
-      }
-    private def _native_c(core: ActionCall.Core): Consequence[WorkflowManagedMechanicalTransition[C.Record]] =
+      P.bindTargetsC(core.component.get.subsystem.get.configuration, declaration)
+    private def _native_c(core: ActionCall.Core): Consequence[WorkflowManagedMechanicalTransition[C.SavedResult]] =
       WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
         SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition), declaration.instances,
-        declaration.continuations).flatMap(_.bindMechanicalC(K.advanceOperation, J.payloadCodec(catalog.definition)))
+        declaration.continuations).flatMap(_.bindMechanicalC(K.advanceOperation, J.payloadCodec))
   }
 
   def bindC(host: ResolvedConfiguration, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -187,19 +166,17 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
   private[admission] def bindWithReadbackObservationC(host: ResolvedConfiguration,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     observation: () => Consequence[Unit]): Consequence[Port] =
-    if (host == null || declaration == null || catalog == null || observation == null)
-      _invalid("host, declaration, catalog or observation is absent")
-    else P.bindTargetsC(host, declaration).map(new Port(declaration, catalog, _, observation))
+    if (declaration == null || catalog == null || observation == null)
+      _invalid("declaration, catalog or observation is absent")
+    else Consequence.success(new Port(declaration, catalog, observation))
 
   private def _admit_c(core: ActionCall.Core): Consequence[Unit] =
     if (core != null && core.component.exists(value => value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty) &&
         core.action != null && core.action.request != null && core.action.request.service.contains(K.advanceOperation.service) &&
         core.action.request.operation == K.advanceOperation.operation) Consequence.unit
     else Consequence.securityPermissionDenied("Human successor requires its actual owning advance Operation")
-  private def _wire_c(record: StorageRecord, field: String, identity: String): Consequence[String] =
-    if (record == null || record.fields.map(_.key).toSet != Set("id", field) || record.fields.size != 2 ||
-        !record.getString("id").contains(identity)) _invalid("physical identity or complete payload fields differ")
-    else record.getString(field).map(Consequence.success).getOrElse(_invalid("complete stored frame is absent"))
+  private def _wire_c(record: StorageRecord, field: String): Consequence[String] =
+    record.getString(field).map(Consequence.success).getOrElse(_invalid("complete stored frame is absent"))
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase managed Human successor " + reason)
   private def _uncertain[A](reason: String): Consequence[A] =
     DataStoreConditionalTransitionFailure.transactionIndeterminate("SplitPhase managed Human successor " + reason)

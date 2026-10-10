@@ -2,6 +2,11 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.ByteBuffer
 import java.nio.charset.{CodingErrorAction, StandardCharsets}
+import io.circe.Json
+import io.circe.{Decoder, Encoder}
+import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ProcessExecutionTermination}
 import org.goldenport.cncf.workflow.*
@@ -28,7 +33,54 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else N.invalid("pending-merge validation policy is incomplete or contradictory")
   }
   final case class Receipt(identity: String, termination: String, exitCode: Option[Int], stdout: String, stderr: String)
-  final case class State(policy: Policy, sourceRevision: String, receipts: Vector[Receipt])
+  final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt])
+  private given Encoder[Check] = deriveEncoder
+  private given Decoder[Check] = deriveDecoder
+  private given Encoder[Receipt] = deriveEncoder
+  private given Decoder[Receipt] = deriveDecoder
+  private given Encoder[State] = deriveEncoder
+  private given Decoder[State] = deriveDecoder
+  private[admission] val stateCodec = new WorkflowResultJsonV1.PayloadCodec[State] {
+    val typeIdentity = "RepositorySyncNativeValidationState"
+    def encode(value: State): Json = value.asJson
+    def decode(value: Json): Either[String, State] = for {
+      fields <- value.asObject.filter(_.keys.toSet == Set("mode", "reason", "selected", "sourceRevision", "receipts"))
+        .toRight("native validation facts have undeclared or missing fields")
+      _ <- Either.cond(fields("selected").flatMap(_.asArray).exists(_.forall(v =>
+        v.asObject.exists(_.keys.toSet == Set("identity", "ordinal")))) &&
+        fields("receipts").flatMap(_.asArray).exists(_.forall(v => v.asObject.exists { f =>
+          Set("identity", "termination", "stdout", "stderr").subsetOf(f.keys.toSet) &&
+            f.keys.toSet.subsetOf(Set("identity", "termination", "stdout", "stderr", "exitCode"))
+        })), (), "native validation facts contain undeclared nested fields")
+      state <- Json.fromJsonObject(fields).as[State].left.map(_.message)
+      _ <- Either.cond(state.sourceRevision.matches("[1-9][0-9]*") && state.reason.nonEmpty &&
+        state.reason.length <= 4096 && state.selected.size <= 16 &&
+        state.selected.forall(c => id(c.identity) && !Set("index-local", "index-remote")(c.identity) && c.ordinal > 0 && c.ordinal <= 16) &&
+        state.selected.map(_.identity).distinct.size == state.selected.size &&
+        state.selected.map(_.ordinal).distinct.size == state.selected.size &&
+        ((state.mode == "explicit-no-product-tests" && state.selected.isEmpty) || (state.mode == "required" && state.selected.nonEmpty)) &&
+        state.receipts.size <= 18 && state.receipts.forall(r => id(r.identity) &&
+          r.stdout.getBytes(StandardCharsets.UTF_8).length <= 65536 && r.stderr.getBytes(StandardCharsets.UTF_8).length <= 65536 &&
+          !r.stdout.contains('\u0000') && !r.stderr.contains('\u0000') &&
+          ((r.termination == "exited" && r.exitCode.nonEmpty) || (r.termination == "indeterminate" && r.exitCode.isEmpty))),
+        (), "native validation facts are incomplete or contradictory")
+    } yield state
+  }
+  /** V1 kept the selected execution facts inside a policy copy. Extract only
+    * those facts; its identity/revision never becomes a new witness or authority.
+    */
+  private[admission] def legacyStateJson(value: Json): Either[String, Json] = value.asObject.toRight("legacy validation is missing").flatMap { fields =>
+    if (!fields.contains("policy")) Right(value)
+    else for {
+      _ <- Either.cond(fields.keys.toSet == Set("policy", "sourceRevision", "receipts"), (), "legacy validation has undeclared fields")
+      policy <- fields("policy").flatMap(_.asObject).toRight("legacy selected validation facts are missing")
+      _ <- Either.cond(policy.keys.toSet.subsetOf(Set("identity", "revision", "mode", "reason", "checks")), (), "legacy validation has undeclared policy fields")
+      mode <- policy("mode").toRight("legacy validation mode is missing")
+      reason <- policy("reason").toRight("legacy validation reason is missing")
+      checks <- policy("checks").toRight("legacy selected check bindings are missing")
+    } yield Json.obj("mode" -> mode, "reason" -> reason, "selected" -> checks,
+      "sourceRevision" -> fields("sourceRevision").get, "receipts" -> fields("receipts").get)
+  }
 
   def waitC(store: N.Store, pending: N.Stage, policy: Option[Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[String] = for {
@@ -64,30 +116,44 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     */
   def advanceIntegratedC(store: N.Store, integrated: N.Stage, policy: Policy): Consequence[N.Stage] = for {
     _ <- policy.validateC
-    _ <- if (integrated.payload.stage == "Integrated" && integrated.payload.mergeHead.isEmpty &&
-        integrated.payload.method.exists(Set("equal", "local-ahead", "fast-forward")) &&
-        integrated.payload.after.nonEmpty) Consequence.unit
-      else N.invalid("validation requires the genuine selected clean nonmerge integration")
-    source = integrated.copy(payload = integrated.payload.copy(indexTree = Some(integrated.payload.after.get.tree)))
+    source <- integrationSourceC(integrated)
     selected <- selectedC(store, source, policy, merge = false)
   } yield selected
+
+  private[admission] def integrationSourceC(integrated: N.Stage): Consequence[N.Stage] =
+    if (integrated.payload.stage == "Integrated" && integrated.payload.mergeHead.isEmpty &&
+        integrated.payload.method.exists(Set("equal", "local-ahead", "fast-forward")) &&
+        integrated.payload.after.nonEmpty) Consequence.success(integrated.copy(payload = integrated.payload.copy(indexTree = Some(integrated.payload.after.get.tree))))
+      else N.invalid("validation requires the genuine selected clean nonmerge integration")
+
+  private[admission] def completedC(value: N.Stage, source: N.Stage, policy: Policy, merge: Boolean): Consequence[Unit] = for {
+    state <- value.payload.validation.map(Consequence.success).getOrElse(N.invalid("retained validation facts are missing"))
+    _ <- matchesC(value, source, policy, state.selected.size + (if (merge) 2 else 1), merge)
+    _ <- if (successful(state.receipts, merge)) Consequence.unit else N.invalid("retained validation did not pass")
+  } yield ()
 
   private def selectedC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean): Consequence[N.Stage] = for {
     _ <- preconditionsC(store, pending)
     complete <- store.loadC(if (merge) "merge-validated" else "integration-validated")
     selected <- complete match {
       case Some(value) => for {
-        _ <- if (value.payload.validation.exists(s => s.policy == policy &&
-            s.sourceRevision == pending.record.revision.value.toString && s.receipts.size == policy.checks.size + (if (merge) 2 else 1) && successful(s.receipts, merge)))
-          Consequence.unit else N.invalid("retained merge validation crosses its selected policy or source")
+        _ <- completedC(value, pending, policy, merge)
       } yield value
-      case None => checksC(store, pending, policy, merge)
+      case None => for {
+        original <- store.loadC("validation-intent-0")
+        selection <- original match {
+          case Some(value) => matchesC(value, pending, policy, 0, merge).flatMap(_ =>
+            value.payload.validation.map(Consequence.success).getOrElse(N.invalid("original validation selection is missing")))
+          case None => Consequence.success(State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, Vector.empty))
+        }
+        checked <- checksC(store, pending, policy, selection, merge)
+      } yield checked
     }
   } yield selected
 
-  private def checksC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean): Consequence[N.Stage] = {
+  private def checksC(store: N.Store, pending: N.Stage, policy: Policy, selection: State, merge: Boolean): Consequence[N.Stage] = {
     val structural = if (merge) 2 else 1
-    val checks = Vector(Check("index-local", 0)) ++ (if (merge) Vector(Check("index-remote", 0)) else Vector.empty) ++ policy.checks
+    val checks = Vector(Check("index-local", 0)) ++ (if (merge) Vector(Check("index-remote", 0)) else Vector.empty) ++ selection.selected
     val checking = if (merge) "ValidationChecking" else "IntegrationValidationChecking"
     checks.zipWithIndex.foldLeft(Consequence.success(pending)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.validation.exists(s => s.receipts.size < index || !successful(s.receipts, merge))) Consequence.success(current)
@@ -96,14 +162,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         recorded <- store.loadC("validation-result-" + index)
         saved <- recorded match {
           case Some(value) => for {
-            _ <- matchesC(value, pending, policy, index + 1, checks)
+            _ <- matchesC(value, pending, policy, index + 1, merge, Some(selection.selected))
           } yield value
           case None => before match {
-            case Some(value) => matchesC(value, pending, policy, index, checks).map(_ => value)
+            case Some(value) => matchesC(value, pending, policy, index, merge, Some(selection.selected)).map(_ => value)
             case None => for {
               _ <- preconditionsC(store, pending)
               receipts = current.payload.validation.map(_.receipts).getOrElse(Vector.empty)
-              state = State(policy, pending.record.revision.value.toString, receipts)
+              state = selection.copy(receipts = receipts)
               intent <- store.saveC("validation-intent-" + index, "native-check-prepared", current.record,
                 pending.payload.copy(stage = checking, validation = Some(state)))
               _ <- store.acknowledgeC("merge-check-prepared:" + check.identity)
@@ -134,18 +200,28 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     }
   }
 
-  private def matchesC(stage: N.Stage, source: N.Stage, policy: Policy, count: Int, checks: Vector[Check]): Consequence[Unit] =
-    if (stage.payload.validation.exists(s => s.policy == policy && s.sourceRevision == source.record.revision.value.toString &&
+  private[admission] def applies(state: State, policy: Policy): Boolean =
+    state.mode == policy.mode && state.selected.forall(check => policy.checks.exists(_ == check))
+
+  private[admission] def matchesC(stage: N.Stage, source: N.Stage, policy: Policy, count: Int, merge: Boolean,
+    selected: Option[Vector[Check]] = None): Consequence[Unit] =
+    if (stage.payload.validation.exists(s => applies(s, policy) && s.sourceRevision == source.record.revision.value.toString &&
+        selected.forall(expected => expected.map(c => c.identity -> c.ordinal) == s.selected.map(c => c.identity -> c.ordinal)) &&
         s.receipts.size == count && s.receipts.map(_.identity) ==
-          checks.map(_.identity).take(count)) &&
-        stage.payload.indexTree == source.payload.indexTree && stage.payload.mergeHead == source.payload.mergeHead)
-      Consequence.unit else N.invalid("retained check crosses its actual policy, plan or pending merge")
+          (Vector("index-local") ++ (if (merge) Vector("index-remote") else Vector.empty) ++ s.selected.map(_.identity)).take(count)) &&
+        stage.payload.indexTree == source.payload.indexTree && stage.payload.mergeHead == source.payload.mergeHead &&
+        stage.payload.before.head == source.payload.before.head && stage.payload.before.tree == source.payload.before.tree &&
+        stage.payload.after.map(v => (v.branch, v.head, v.tree, v.trackingTip)) ==
+          source.payload.after.map(v => (v.branch, v.head, v.tree, v.trackingTip)) &&
+        SplitPhaseDefinitionBinding.includesState(stage.record, source.record))
+      Consequence.unit else N.invalid("retained check crosses its selected executable bindings, source or native candidate")
 
   private[admission] def preconditionsC(store: N.Store, pending: N.Stage): Consequence[Unit] = for {
     native <- G.inspectC(store.core)
     _ <- store.scopeC(native.observed)
     tree <- G.indexTreeC(store.core)
-    _ <- if (pending.payload.after.contains(native.observed) && pending.payload.indexTree.contains(tree) &&
+    _ <- if (pending.payload.after.exists(v => v.head == native.observed.head && v.tree == native.observed.tree &&
+        v.branch == native.observed.branch && v.trackingTip == native.observed.trackingTip) && pending.payload.indexTree.contains(tree) &&
         pending.payload.mergeHead == native.mergeHead && (if (pending.payload.mergeHead.nonEmpty)
           native.observed.head == pending.payload.before.head && native.observed.trackingTip == pending.payload.mergeHead &&
             native.observed.dirty.forall(p => !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!')

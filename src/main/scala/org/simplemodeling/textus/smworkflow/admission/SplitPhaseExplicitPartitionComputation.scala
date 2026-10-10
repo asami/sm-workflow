@@ -9,7 +9,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
   * not digest witnesses, caller assertions or permission to adopt a partition.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object SplitPhaseExplicitPartitionComputation {
   final case class EstimateReference(identity: String, revision: String)
@@ -67,11 +67,9 @@ private[smworkflow] object SplitPhaseExplicitPartitionComputation {
   /** The caller supplies independently selected current data through authorized
     * readers. This is data admission, not authority, consent or calibration proof.
     */
-  def loadC(boundary: Validated, frozen: Records, current: Records): Consequence[Input] =
+  def loadC(boundary: Validated, current: Records): Consequence[Input] =
     if (boundary == null || !complete(current))
       Consequence.stateConflict("SplitPhase explicit partition data is incomplete")
-    else if (frozen != current)
-      Consequence.stateConflict("SplitPhase explicit partition complete current records differ")
     else if (current.estimates.source != boundary.records.boundary.source ||
         current.estimates.items.map(_.identity) != boundary.records.boundary.items.map(_.identity))
       Consequence.stateConflict("SplitPhase explicit partition source or estimate coverage differs")
@@ -107,31 +105,33 @@ private[smworkflow] object SplitPhaseExplicitPartitionComputation {
     import SplitPhasePlanningSnapshot as R
     val facts = snapshot.selection
     for {
-        shape <- P.loadC(facts.proposal, facts.proposal).flatMap {
+        shape <- P.loadC(facts.proposal).flatMap {
           case ready: P.ShapeReady => Consequence.success(ready)
           case _ => Consequence.stateConflict("SplitPhase retained scope original shape no longer loads")
         }
-        boundary <- B.loadC(shape, facts.boundary, facts.boundary)
-        input <- loadC(boundary, facts.partition, facts.partition)
+        boundary <- B.loadC(shape, facts.boundary)
+        input <- loadC(boundary, facts.partition)
         cached <- snapshot.partition match {
           case value: R.PartitionView.Enumerated => Consequence.success(value)
           case _ => Consequence.stateConflict("SplitPhase retained scope has no cached enumeration")
         }
-        numeric = input.records.estimates.items.collect {
-          case Item(identity, Duration.Known(minutes)) => NumericItem(identity, minutes)
-        }
+        // Known durations and permitted cuts define an enumerated frontier.
+        // Cached ranges are consumed, not recalculated to certify a saved copy.
+        known = input.records.estimates.items.forall(_.duration match {
+          case Duration.Known(_) => true
+          case _ => false
+        })
         edges = input.boundary.records.handoffs.edges
-        _ <- if (numeric.size == input.records.estimates.items.size && cached.candidates.forall { value =>
+        _ <- if (known && cached.candidates.forall { value =>
             val cuts = value.key.cutAfterIndices
-            val legal = edges.zipWithIndex.forall { case (edge, index) => edge.disposition match {
+            edges.zipWithIndex.forall { case (edge, index) => edge.disposition match {
               case EdgeDisposition.CutOnly => cuts.contains(index)
               case EdgeDisposition.CrossOnly => !cuts.contains(index)
               case EdgeDisposition.Either => true
               case EdgeDisposition.Unresolved => false
             }}
-            legal && children(numeric, cuts, input.records.policy.phaseOverheadMinutes).contains(value.children)
           }) Consequence.unit
-          else Consequence.stateConflict("SplitPhase retained scope cached ranges differ from effective known facts")
+          else Consequence.stateConflict("SplitPhase retained enumeration requires known durations and permitted cuts")
         enumerated = new Enumerated(input, cached.evaluatedCount, cached.rejectedByCeiling,
           cached.candidates.map(value => new Candidate(value.key.cutAfterIndices, value.children)))
     } yield enumerated

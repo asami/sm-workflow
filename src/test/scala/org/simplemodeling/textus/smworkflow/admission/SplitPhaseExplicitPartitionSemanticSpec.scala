@@ -22,13 +22,13 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
       if (edges.contains(i)) EdgeDisposition.Unresolved else EdgeDisposition.Either))
     val records = source.records.copy(estimates = source.records.estimates.copy(items = source.records.estimates.items.zipWithIndex.map((item, i) =>
       if (unknown.contains(i)) item.copy(duration = E.Duration.Unresolved("novel-work")) else item)))
-    val input = take(E.loadC(source.initial, records, records))
+    val input = take(E.loadC(source.initial, records))
     val data = W.Data(W.DataReference("planning", "1"), source.source.reference, source.source.authority, None, O.Records(None, None, None))
-    val selected = take(W.selectC(input, data, data))
+    val selected = take(W.selectC(input, data))
     val pending = take(W.advanceC(selected)).asInstanceOf[W.PartitionSemanticRequired]
     Fixture(source, selected, take(prepareC(ContextReference("context", "1"), pending)))
   }
-  private def judgment(f: Fixture, maximum: Int = 180): Judgment = Judgment(f.context.reference, Decision.Enriched,
+  private def judgment(f: Fixture, maximum: Int = 180): Judgment = Judgment(Decision.Enriched,
     "semantic-analysis", f.context.pending.items.map(i => NovelEstimate(i.identity, math.min(160, maximum), maximum, "bounded-work", "new-closure")),
     f.context.pending.afterItems.map(id => BoundaryJudgment(id, EdgeDisposition.Either, "independent-closure")),
     Vector(EvidenceReference("source-analysis", "1")))
@@ -36,10 +36,10 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
     if (f.context.pending.items.isEmpty) None else Some(E.EstimateReference("resolved-estimates", "1")),
     if (f.context.pending.afterItems.isEmpty) None else Some(B.HandoffPlanReference("resolved-handoffs", "1")))
   private def admitted(f: Fixture, result: Judgment): Admitted =
-    take(admitC(f.context, f.selection, ResultReference("host-result", "1"), references(f), result)).asInstanceOf[Enriched].admitted
+    take(admitC(f.context, ResultReference("host-result", "1"), references(f), result)).asInstanceOf[Enriched].admitted
   private def currentSelection(f: Fixture, input: E.Input, data: Option[W.Data] = None): W.Selection = {
     val selected = data.getOrElse(f.selection.data)
-    take(W.selectC(input, selected, selected))
+    take(W.selectC(input, selected))
   }
   private def hostData(f: Fixture, input: E.Input, allocate: Boolean): W.Data = {
     val allocations = if (!allocate) None else {
@@ -101,8 +101,8 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
       val withoutAllocation = hostData(f, resolved, allocate = false)
       val complete = hostData(f, resolved, allocate = true)
       When("Workflow resumes with absent or complete host allocations")
-      val pending = take(resumeC(accepted, withoutAllocation, withoutAllocation)).asInstanceOf[W.AllocationRequired]
-      val result = take(resumeC(accepted, complete, complete)).asInstanceOf[W.Planned]
+      val pending = take(resumeC(accepted, withoutAllocation)).asInstanceOf[W.AllocationRequired]
+      val result = take(resumeC(accepted, complete)).asInstanceOf[W.Planned]
       Then("host work remains host work and complete data advances through all four processors to cost selection")
       pending.trace.mechanicalStages shouldBe Vector(W.Stage.PartitionEnumeration)
       result.objective.stage shouldBe O.Stage.Cost
@@ -131,10 +131,10 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
       val result = judgment(f).copy(decision = Decision.DecisionNeeded, estimates = Vector.empty, boundaries = Vector.empty)
       val noResolution = ResolutionReferences(None, None)
       When("the host admits the explicit Decision and refuses mixed Decision/enrichment data")
-      val accepted = take(admitC(f.context, f.selection, ResultReference("decision-result", "1"), noResolution, result)).asInstanceOf[DecisionNeeded]
-      val partial = admitC(f.context, f.selection, ResultReference("result", "1"), noResolution,
+      val accepted = take(admitC(f.context, ResultReference("decision-result", "1"), noResolution, result)).asInstanceOf[DecisionNeeded]
+      val partial = admitC(f.context, ResultReference("result", "1"), noResolution,
         result.copy(estimates = judgment(f).estimates))
-      val assigned = admitC(f.context, f.selection, ResultReference("result", "1"), references(f), result)
+      val assigned = admitC(f.context, ResultReference("result", "1"), references(f), result)
       Then("no estimates or resolved record state can be manufactured from the Decision")
       accepted.judgment shouldBe result
       accepted.context shouldBe f.context
@@ -157,7 +157,7 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
         result.copy(boundaries = Vector(edge.copy(rationale = ""))), result.copy(rationale = ""),
         result.copy(estimates = Vector(null)), result.copy(boundaries = Vector(null)))
       When("invalid values and an inclusive 480-minute endpoint reach result construction")
-      val rejected = invalid.map(r => admitC(f.context, f.selection, ResultReference("result", "1"), references(f), r))
+      val rejected = invalid.map(r => admitC(f.context, ResultReference("result", "1"), references(f), r))
       val inclusive = admitted(f, judgment(f, maximum = 480))
       Then("invalid inputs fail without repair and the declared upper endpoint is preserved exactly")
       rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -174,38 +174,64 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
         result.copy(boundaries = result.boundaries :+ result.boundaries.head),
         result.copy(boundaries = result.boundaries.updated(0, result.boundaries.head.copy(afterItem = P.WorkItemIdentity("foreign")))))
       When("coverage changes are submitted under the same context reference")
-      val results = invalid.map(r => admitC(f.context, f.selection, ResultReference("result", "1"), references(f), r))
+      val results = invalid.map(r => admitC(f.context, ResultReference("result", "1"), references(f), r))
       Then("the reference cannot permit known-input substitution or partial enrichment")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
-    "refuse complete current estimate policy source and planning-data drift despite identical locators" in {
-      Given("independently constructed current selections with changed complete facts")
+    "consume the current selected estimate policy source and planning data without historical-copy proof" in {
+      Given("one unresolved question and compatible current facts changed under their selected locators")
       val f = fixture()
       val original = f.selection.partition
-      val estimateRecords = original.records.copy(estimates = original.records.estimates.copy(items = original.records.estimates.items.updated(0,
+      val estimaterecords = original.records.copy(estimates = original.records.estimates.copy(items = original.records.estimates.items.updated(0,
         original.records.estimates.items.head.copy(duration = E.Duration.Known(261)))))
-      val policyRecords = original.records.copy(policy = original.records.policy.copy(phaseOverheadMinutes = 20))
-      val changedEstimates = currentSelection(f, take(E.loadC(original.boundary, estimateRecords, estimateRecords)))
-      val changedPolicy = currentSelection(f, take(E.loadC(original.boundary, policyRecords, policyRecords)))
-      val changedData = currentSelection(f, original, Some(f.selection.data.copy(reference = W.DataReference("planning", "2"))))
-      val inventoryRecords = original.boundary.shape.records.copy(inventory = original.boundary.shape.records.inventory.copy(
+      val policyrecords = original.records.copy(policy = original.records.policy.copy(phaseOverheadMinutes = 20))
+      val inventoryrecords = original.boundary.shape.records.copy(inventory = original.boundary.shape.records.inventory.copy(
         occupiedPhases = original.boundary.shape.records.inventory.occupiedPhases + P.PhaseIdentity("79")))
-      val shape = take(P.loadC(inventoryRecords, inventoryRecords)).asInstanceOf[P.ShapeReady]
-      val boundary = take(B.loadC(shape, original.boundary.records, original.boundary.records))
-      val changedSource = currentSelection(f, take(E.loadC(boundary, original.records, original.records)))
-      When("each changed current selection reaches the natural semantic result boundary")
-      val results = Vector(changedEstimates, changedPolicy, changedData, changedSource).map(s =>
-        admitC(f.context, s, ResultReference("result", "1"), references(f), judgment(f)))
-      Then("full selected facts are compared once without repeating enumeration or fabricating authority")
-      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      When("the host constructs current needs and admits the response using each single prepared input")
+      val changedestimates = currentSelection(f, take(E.loadC(original.boundary, estimaterecords)))
+      val changedpolicy = currentSelection(f, take(E.loadC(original.boundary, policyrecords)))
+      val changeddata = currentSelection(f, original, Some(f.selection.data.copy(reference = W.DataReference("planning", "2"))))
+      val shape = take(P.loadC(inventoryrecords)).asInstanceOf[P.ShapeReady]
+      val boundary = take(B.loadC(shape, original.boundary.records))
+      val changedsource = currentSelection(f, take(E.loadC(boundary, original.records)))
+      val admissions = Vector(changedestimates, changedpolicy, changeddata, changedsource).map { selection =>
+        val pending = take(W.advanceC(selection)).asInstanceOf[W.PartitionSemanticRequired]
+        val prepared = take(prepareC(f.context.reference, pending))
+        take(admitC(prepared, ResultReference("result", "1"), references(f), judgment(f))).asInstanceOf[Enriched].admitted
+      }
+      val results = admissions.map(E.resolvePartitionSemantic)
+      Then("the actual current values survive enrichment and only requested unknowns are replaced")
+      results.head.records.estimates.items.map(_.duration) shouldBe Vector(E.Duration.Known(261), E.Duration.Known(180), E.Duration.Known(260))
+      results(1).records.policy.phaseOverheadMinutes shouldBe 20
+      admissions(2).current.data.reference shouldBe W.DataReference("planning", "2")
+      results(3).boundary.shape.records.inventory.occupiedPhases should contain(P.PhaseIdentity("79"))
+      results.foreach(_.records.estimates.reference shouldBe references(f).estimates.get)
+      original.records.estimates.items.head.duration shouldBe E.Duration.Known(260)
     }
-    "refuse crossed context malformed evidence and old or wrongly assigned resolution references" in {
+    "refuse a response that no longer covers the actual current unknown scope" in {
+      Given("an earlier one-item response and current facts requiring a second unknown item")
+      val f = fixture()
+      val original = f.selection.partition
+      val records = original.records.copy(estimates = original.records.estimates.copy(items = original.records.estimates.items.updated(0,
+        original.records.estimates.items.head.copy(duration = E.Duration.Unresolved("new-work")))))
+      When("the host prepares the actual two-item need and admits old or current scope responses")
+      val selection = currentSelection(f, take(E.loadC(original.boundary, records)))
+      val pending = take(W.advanceC(selection)).asInstanceOf[W.PartitionSemanticRequired]
+      val prepared = take(prepareC(f.context.reference, pending))
+      val refused = admitC(prepared, ResultReference("result", "1"), references(f), judgment(f))
+      val current = f.copy(selection = selection, context = prepared)
+      val resolved = E.resolvePartitionSemantic(admitted(current, judgment(current)))
+      Then("coverage fails at the semantic boundary, while the complete current answer resolves both requested items")
+      prepared.request.items.map(_.identity) shouldBe Vector(P.WorkItemIdentity("item-0"), P.WorkItemIdentity("item-1"))
+      refused shouldBe a[Consequence.Failure[?]]
+      resolved.records.estimates.items.map(_.duration) shouldBe Vector(E.Duration.Known(180), E.Duration.Known(180), E.Duration.Known(260))
+    }
+    "refuse malformed evidence and old or wrongly assigned resolution references" in {
       Given("a valid response and separately invalid protocol or host reference data")
       val f = fixture()
       val result = judgment(f)
       val refs = references(f)
-      val invalidResults = Vector(result.copy(context = ContextReference("context", "2")),
-        result.copy(evidence = Vector.empty), result.copy(evidence = result.evidence ++ result.evidence),
+      val invalidResults = Vector(result.copy(evidence = Vector.empty), result.copy(evidence = result.evidence ++ result.evidence),
         result.copy(evidence = Vector(EvidenceReference("source", ""))), result.copy(evidence = Vector(null)),
         result.copy(decision = null), result.copy(estimates = null), result.copy(boundaries = null), result.copy(evidence = null), null)
       val invalidReferences = Vector(refs.copy(estimates = None), refs.copy(handoffs = None),
@@ -214,10 +240,10 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
         refs.copy(estimates = Some(E.EstimateReference("", "1"))), refs.copy(handoffs = Some(null)),
         refs.copy(estimates = null), null)
       When("those external values reach their exact result/reference construction boundary")
-      val results = invalidResults.map(r => admitC(f.context, f.selection, ResultReference("result", "1"), refs, r)) ++
-        invalidReferences.map(r => admitC(f.context, f.selection, ResultReference("result", "1"), r, result)) ++
-        Vector(admitC(f.context, f.selection, ResultReference("", "1"), refs, result),
-          admitC(f.context, null, ResultReference("result", "1"), refs, result))
+      val results = invalidResults.map(r => admitC(f.context, ResultReference("result", "1"), refs, r)) ++
+        invalidReferences.map(r => admitC(f.context, ResultReference("result", "1"), r, result)) ++
+        Vector(admitC(f.context, ResultReference("", "1"), refs, result),
+          admitC(null, ResultReference("result", "1"), refs, result))
       Then("no stale record version, alias or incomplete evidence constructs Admitted state")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
@@ -231,9 +257,9 @@ final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Mat
       missing shouldBe a[Consequence.Failure[?]]
       blank shouldBe a[Consequence.Failure[?]]
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.Prepared(null, null, null)")
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.Admitted(null, null, null, null, null, Vector.empty, Vector.empty)")
+      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.Admitted(null, null, null, null, Vector.empty, Vector.empty)")
       assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.BoundaryJudgment(null, null, \"rationale\", authority = null)")
-      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.Judgment(null, null, \"rationale\", Vector.empty, Vector.empty, Vector.empty, nextOperation = \"apply\")")
+      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic.Judgment(null, \"rationale\", Vector.empty, Vector.empty, Vector.empty, nextOperation = \"apply\")")
       assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionComputation.resolvePartitionSemantic(Vector.empty)")
       assertDoesNotCompile("org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitBoundaryValidation.resolvePartitionSemantic(Vector.empty)")
     }

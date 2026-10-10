@@ -4,11 +4,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
+import org.simplemodeling.textus.smworkflow.value.ReviewStepResult
 
 /** Workflow-owned current-call publication/recovery, not a public command or
   * a human verifier. No caller-supplied intent, instance or storage target.
@@ -19,30 +19,11 @@ private[smworkflow] object GoalPhaseManagedNativeHumanQuestion {
   def advanceForCallC(reviewIdentity: org.goldenport.cncf.workflow.ContinuationIdentity,
     choices: Vector[GoalPhaseHumanDecisionContract.Choice], core: ActionCall.Core,
     declaration: GoalPhaseManagedStartAssembly.Declaration): Consequence[GoalPhaseHumanDecisionContract.Question] =
-    advanceC(reviewIdentity, choices, core, declaration, None)
-
-  def publishAssessedForCallC(reviewIdentity: org.goldenport.cncf.workflow.ContinuationIdentity,
-    assessment: GoalPhaseClosureAuthority.Assessment, core: ActionCall.Core,
-    declaration: GoalPhaseManagedStartAssembly.Declaration): Consequence[GoalPhaseHumanDecisionContract.Question] =
-    if (assessment == null || assessment.intent == null || assessment.status != GoalPhaseClosureAuthority.AuthorityStatus.Missing)
-      Consequence.stateConflict("Native human publication requires an assessed missing authority")
-    else advanceC(reviewIdentity, GoalPhaseNativeHumanAdvanceOperation.choices, core, declaration, Some(assessment.intent))
-
-  private def advanceC(reviewIdentity: org.goldenport.cncf.workflow.ContinuationIdentity,
-    choices: Vector[GoalPhaseHumanDecisionContract.Choice], core: ActionCall.Core,
-    declaration: GoalPhaseManagedStartAssembly.Declaration,
-    assessedIntent: Option[GoalPhaseClosureAuthority.Intent]): Consequence[GoalPhaseHumanDecisionContract.Question] =
-    if (reviewIdentity == null || reviewIdentity.value == null || core == null || core.executionContext == null ||
-        core.component == null || declaration == null || declaration.configuration == null || declaration.definition == null ||
-        declaration.instances == null || declaration.continuations == null ||
-        !core.component.exists(value => value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty))
-      Consequence.stateConflict("Native human publication requires its owning current call")
-    else {
+    if (reviewIdentity == null || reviewIdentity.value == null)
+      Consequence.stateConflict("Native human advance requires its review reference")
+    else _storage_c(core, declaration).flatMap { storage =>
       given ExecutionContext = core.executionContext
       for {
-        storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
-          SmWorkflowComponent.componentId, declaration.configuration, Vector(declaration.definition),
-          declaration.instances, declaration.continuations)
         instances <- storage.bindInstancesC()
         reviewCompletion <- storage.bindCompletionC(StateMachineOperationIdentity("GoalPhaseService", "submitStepReview"),
           GoalPhaseStepCloseJson.payloadCodec, GoalPhaseReviewCompletionOperation.payloadCodec,
@@ -53,15 +34,11 @@ private[smworkflow] object GoalPhaseManagedNativeHumanQuestion {
         }
         reviewed = retained.completion.result
         current <- instances.loadC(reviewed.handle.instanceIdentity).flatMap {
-          case Some(value) => value.validateC
+          case Some(value) => Consequence.success(value)
           case _ => Consequence.stateConflict("Native human publication instance is unavailable")
         }
-        _ <- if (assessedIntent.isEmpty ||
-            (current.revision == retained.completion.instanceRevision &&
-              assessedIntent.get.expectedRevision == StateMachineRevision(current.revision.value.toString))) Consequence.unit
-          else Consequence.stateConflict("Native human assessed predecessor is no longer current")
-        // This real current-call read rejects escaped capsules, while actor
-        // admission remains independent of the participant-shaped request.
+        // Independent entry resolves the actual participant once. Internal
+        // projection/recovery consumes that selection, not a saved-copy proof.
         readers <- GoalPhaseHostRecordReaders.bindC(core.component.get.subsystem.get.configuration, declaration)
         selected <- readers.selection.loadForCallC(current.correlation.value, core).flatMap {
           case Some(value) if value.workflowIdentity == reviewed.handle.workflowIdentity &&
@@ -69,72 +46,106 @@ private[smworkflow] object GoalPhaseManagedNativeHumanQuestion {
           case _ => Consequence.stateConflict("Native human publication selection differs")
         }
         _ <- GoalPhaseParticipantAdmission.admitC(selected.participantIdentity, core.executionContext)
-        decisions <- storage.bindDecisionC(GoalPhaseNativeHumanQuestion.completionOperation, GoalPhaseClosureAuthority.inputCodec)
-        prepared <- if (current.revision == retained.completion.instanceRevision)
-          // Finish the old read-only guard before changing its expected base.
-          GoalPhaseManagedClosureDecisionRegistration.withRetainedIntentC(reviewIdentity, core, declaration) { intent =>
-            if (assessedIntent.exists(_ != intent))
-              Consequence.stateConflict("Native human publication intent differs from the assessed predecessor")
-            else GoalPhaseNativeHumanQuestion.prepareC(declaration.configuration, current, reviewIdentity, intent, choices)
-          }
-        else for {
-          base <- predecessorC(current, retained.completion.instanceRevision)
+        stored <- if (current.revision == retained.completion.instanceRevision) for {
           issued <- storage.bindIssuedC(StateMachineOperationIdentity("GoalPhaseService", "submitStepReview"), GoalPhaseStepCloseJson.payloadCodec)
           original <- issued.loadC(reviewIdentity).flatMap {
             case Some(value) if value.handle == reviewed.handle => value.current match {
               case WorkflowContinuation.WorkOrder(request, _, _) => request.input match {
                 case Some(value) if value.typeIdentity == "StepCloseRequest" => Consequence.success(value.value)
-                case _ => Consequence.stateConflict("Native human recovery has no retained typed review candidate")
+                case _ => Consequence.stateConflict("Native human advance has no typed issued review candidate")
               }
-              case _ => Consequence.stateConflict("Native human recovery predecessor is not review work")
+              case _ => Consequence.stateConflict("Native human advance has no issued review work")
             }
-            case _ => Consequence.stateConflict("Native human recovery has no matching retained review")
+            case _ => Consequence.stateConflict("Native human advance issued review is unresolved")
           }
           candidate = original.copy(reviewEvidence = (original.reviewEvidence ++ reviewed.result.value.reviewEvidence).distinct)
-          intent <- GoalPhaseClosureAuthority.intentC(candidate, reviewed.handle, base)
-          next <- GoalPhaseNativeHumanQuestion.prepareC(declaration.configuration, base, reviewIdentity, intent, choices)
-          _ <- sameC(current, next.next, "Native human recovery is not the exact reviewed successor")
-        } yield next
-        _ <- if (current.revision == retained.completion.instanceRevision)
-          decisions.suspendC(prepared.intent, prepared.issued).flatMap { saved =>
-            sameC(saved.instance, prepared.next, "Native human committed instance differs").recoverWith { _ =>
-              DataStoreConditionalTransitionFailure.transactionIndeterminate("Native human committed instance cannot be admitted")
-            }
-          }
-        else decisions.putIfAbsentC(prepared.issued).map(_ => ())
-        stored <- decisions.loadC(prepared.question.request.continuationId).flatMap {
-          case Some(value) if value == prepared.issued => GoalPhaseNativeHumanQuestion.recoverC(value)
-          case _ => DataStoreConditionalTransitionFailure.transactionIndeterminate("Native human committed question cannot be observed")
-        }
-        latest <- instances.loadC(current.identity).flatMap {
-          case Some(value) => Consequence.success(value)
-          case _ => DataStoreConditionalTransitionFailure.transactionIndeterminate("Native human committed instance is unavailable")
-        }
-        _ <- sameC(latest, prepared.next, "Native human question is no longer the current suspension")
+          intent <- GoalPhaseClosureAuthority.intentC(candidate, reviewed.handle, current)
+          result <- _publish_c(reviewed, current, intent, choices, declaration.configuration, storage)
+        } yield result
+        else _recover_c(reviewed, current, retained.completion.instanceRevision, storage)
       } yield stored
     }
 
-  /** Recover one historical prefix only; never persist it or downgrade current
-    * history. Exact re-preparation must equal the complete retained successor.
+  /** Follow the owning assessment directly. No second input/participant/intent
+    * resolution: publication's actual managed transaction owns the state CAS.
     */
-  private def predecessorC(current: InstanceRecord, revision: InstanceRevision): Consequence[InstanceRecord] =
-    if (revision == null || revision.value == Long.MaxValue || current.revision != revision.next ||
-        current.lifecycle != Lifecycle.Active || current.suspension.isEmpty ||
-        !current.currentProgression.contains(ProgressionReference("HumanPending")) || current.history.size < 2)
-      Consequence.stateConflict("Native human recovery is outside its adjacent pending revision")
-    else {
-      val prefix = current.history.dropRight(1)
-      val last = prefix.last
-      if (last.revision != revision) Consequence.stateConflict("Native human recovery predecessor revision differs")
-      else current.copy(revision = last.revision, lifecycle = last.lifecycle, currentProgression = last.currentProgression,
-        correlation = last.correlation, causation = last.causation, derivedCompositeOccurrence = last.derivedCompositeOccurrence,
-        committedPredecessor = last.committedPredecessor, suspension = last.suspension, history = prefix).validateC
+  private[admission] def publishAssessedForCallC(reviewed: ContinuationResult[ReviewStepResult], current: InstanceRecord,
+    assessment: GoalPhaseClosureAuthority.Assessment, core: ActionCall.Core,
+    declaration: GoalPhaseManagedStartAssembly.Declaration): Consequence[GoalPhaseHumanDecisionContract.Question] =
+    if (assessment == null || assessment.intent == null || assessment.status != GoalPhaseClosureAuthority.AuthorityStatus.Missing)
+      Consequence.stateConflict("Native human publication requires an assessed missing authority")
+    else _storage_c(core, declaration).flatMap { storage =>
+      given ExecutionContext = core.executionContext
+      _publish_c(reviewed, current, assessment.intent, GoalPhaseNativeHumanAdvanceOperation.choices, declaration.configuration, storage)
     }
 
-  private def sameC(actual: InstanceRecord, expected: InstanceRecord, message: String): Consequence[Unit] =
+  /** Internal recovery consumes the entry's canonical result and actual state.
+    * Resolve the saved suspension once; do not recreate its predecessor/intent
+    * or reload the instance to prove that a read-only observation is unchanged.
+    */
+  private[admission] def recoverSelectedForCallC(reviewed: ContinuationResult[ReviewStepResult], current: InstanceRecord,
+    reviewedRevision: InstanceRevision, core: ActionCall.Core,
+    declaration: GoalPhaseManagedStartAssembly.Declaration): Consequence[GoalPhaseHumanDecisionContract.Question] =
+    _storage_c(core, declaration).flatMap { storage =>
+      given ExecutionContext = core.executionContext
+      _recover_c(reviewed, current, reviewedRevision, storage)
+    }
+
+  private def _storage_c(core: ActionCall.Core, declaration: GoalPhaseManagedStartAssembly.Declaration):
+      Consequence[WorkflowComponentStorage] =
+    if (core == null || core.executionContext == null || core.component == null ||
+        declaration == null || declaration.configuration == null || declaration.definition == null ||
+        declaration.instances == null || declaration.continuations == null ||
+        !core.component.exists(value => value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty))
+      Consequence.stateConflict("Native human publication requires its owning current call")
+    else WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+      SmWorkflowComponent.componentId, declaration.configuration, Vector(declaration.definition),
+      declaration.instances, declaration.continuations)
+
+  private def _publish_c(reviewed: ContinuationResult[ReviewStepResult], current: InstanceRecord,
+    intent: GoalPhaseClosureAuthority.Intent, choices: Vector[GoalPhaseHumanDecisionContract.Choice],
+    configuration: Configuration, storage: WorkflowComponentStorage)(using ExecutionContext): Consequence[GoalPhaseHumanDecisionContract.Question] =
     for {
-      left <- WorkflowInstanceRecordJsonV1.encodeC(actual)
-      right <- WorkflowInstanceRecordJsonV1.encodeC(expected)
-      _ <- if (left == right) Consequence.unit else Consequence.stateConflict(message)
+      prepared <- GoalPhaseNativeHumanQuestion.prepareC(configuration, current,
+        reviewed.continuationId, intent, choices)
+      decisions <- storage.bindDecisionC(GoalPhaseNativeHumanQuestion.completionOperation, GoalPhaseClosureAuthority.inputCodec)
+      _ <- decisions.suspendC(prepared.intent, prepared.issued)
+    } yield prepared.question
+
+  private def _recover_c(reviewed: ContinuationResult[ReviewStepResult], current: InstanceRecord,
+    reviewedrevision: InstanceRevision, storage: WorkflowComponentStorage)(using ExecutionContext):
+      Consequence[GoalPhaseHumanDecisionContract.Question] =
+    if (reviewedrevision == null || current == null || current.suspension.isEmpty)
+      Consequence.stateConflict("Native human recovery has no selected pending suspension")
+    else for {
+      decisions <- storage.bindDecisionC(GoalPhaseNativeHumanQuestion.completionOperation, GoalPhaseClosureAuthority.inputCodec)
+      saved <- decisions.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(current.suspension.get.continuationIdentity.value)).flatMap {
+        case Some(value) => GoalPhaseNativeHumanQuestion.recoverC(value)
+        case _ => Consequence.stateConflict("Native human pending question reference is unresolved")
+      }
+      _ <- _admit_pending_c(current, saved, reviewedrevision, reviewed.continuationId, reviewed.resultReference)
+    } yield saved
+
+  private def _admit_pending_c(current: InstanceRecord, question: GoalPhaseHumanDecisionContract.Question,
+    reviewedrevision: InstanceRevision, reviewidentity: org.goldenport.cncf.workflow.ContinuationIdentity,
+    resultreference: ContextReference): Consequence[Unit] =
+    for {
+      active <- current.validateC
+      handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, active)
+      identity = question.request.continuationId.value
+      _ <- if (reviewedrevision.value < Long.MaxValue && active.revision == reviewedrevision.next &&
+          active.lifecycle == Lifecycle.Active && active.currentProgression.contains(ProgressionReference("HumanPending")) &&
+          question.intent.handle == handle && question.request.expectedRevision == StateMachineRevision(active.revision.value.toString) &&
+          question.intent.snapshot.workflowRevision == handle.workflowRevision.value &&
+          active.causation == CausationReference(identity + ":issued") && active.history.size >= 3 &&
+          active.history(active.history.size - 2).revision == reviewedrevision &&
+          active.history(active.history.size - 2).causation == CausationReference(
+            s"review-result:${resultreference.identity}@${resultreference.revision}") &&
+          active.history(active.history.size - 3).suspension.exists(_.continuationIdentity.value == reviewidentity.value) &&
+          active.suspension.exists(value => value.continuationIdentity.value == identity && value.expectedRevision == active.revision &&
+            value.contextSnapshot == ContextSnapshotReference(question.intent.snapshot.workflowRevision) &&
+            value.completion == CompletionReference(question.request.completion.identity) &&
+            value.evidence == EvidenceReference(question.request.evidence.identity))) Consequence.unit
+        else Consequence.stateConflict("Native human selected question is outside its actual current suspension")
     } yield ()
 }

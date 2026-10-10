@@ -49,7 +49,6 @@ private[smworkflow] object GoalPhaseStartExecution {
       _ <- if (current.identity == initial.identity &&
           current.definition.workflowIdentity == admitted.workflowIdentity &&
           current.definition.workflowRevision == admitted.workflowRevision &&
-          current.definition.fixtureSha256 == admitted.fixtureSha256 &&
           current.history.headOption.contains(_startEntry(initial))) Consequence.unit
         else Consequence.stateConflict("GoalPhase retained history does not establish this Start")
       original <- initial.appendC(initialRevision, _startEntry(initial))
@@ -141,7 +140,6 @@ private[smworkflow] object GoalPhaseStartExecution {
         record.definition == null ||
         record.definition.workflowIdentity != initial.definition.workflowIdentity ||
         record.definition.workflowRevision != initial.definition.workflowRevision ||
-        record.definition.fixtureSha256 != initial.definition.fixtureSha256 ||
         record.correlation != initial.correlation || record.causation != initial.causation ||
         record.derivedCompositeOccurrence.nonEmpty || record.committedPredecessor.nonEmpty ||
         record.suspension.nonEmpty)

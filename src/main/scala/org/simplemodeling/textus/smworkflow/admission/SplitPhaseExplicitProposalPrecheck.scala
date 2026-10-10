@@ -36,9 +36,8 @@ private[smworkflow] object SplitPhaseExplicitProposalPrecheck {
     * readers. Validate at this load/construction boundary only. No migration
     * from digest locators, newest-version lookup, locks or contention retries.
     */
-  def loadC(frozen: Records, current: Records): Consequence[Outcome] =
+  def loadC(current: Records): Consequence[Outcome] =
     if (!complete(current)) Consequence.stateConflict("SplitPhase explicit proposal input is incomplete")
-    else if (frozen != current) Consequence.stateConflict("SplitPhase explicit proposal complete current records differ")
     else {
       val source = current.source
       val inventory = current.inventory

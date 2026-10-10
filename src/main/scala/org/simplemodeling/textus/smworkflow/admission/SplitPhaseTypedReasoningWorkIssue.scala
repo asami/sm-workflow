@@ -12,14 +12,14 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseRetainedReasoni
   * is not an issued WorkOrder, mutation grant or owning-call storage binding.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 11, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseTypedReasoningWorkIssue {
   final class Plan private[SplitPhaseTypedReasoningWorkIssue] (
     val source: D.Source, val prepared: R.Prepared,
     val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, val next: InstanceRecord,
-    val work: WorkflowInteraction[R.Request, Nothing], val wire: String) {
+    val work: WorkflowInteraction[R.Request, Nothing]) {
     val mechanicalStages: Vector[W.Stage] = Vector.empty
   }
 
@@ -83,8 +83,7 @@ private[smworkflow] object SplitPhaseTypedReasoningWorkIssue {
         required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
         owner.requirement, MinimalPresentation("ReasoningDemandRequired",
           "Return only unknown-item classifications and evidence to the assigned reply; Workflow owns the next action.")))
-    wire <- J.encodeWorkOrderC(work)
-  } yield new Plan(source, prepared, intent, admitted.next, work, wire)
+  } yield new Plan(source, prepared, intent, admitted.next, work)
 
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase reasoning issue projection " + reason)

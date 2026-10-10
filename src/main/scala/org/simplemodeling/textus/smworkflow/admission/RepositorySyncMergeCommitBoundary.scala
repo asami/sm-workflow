@@ -19,7 +19,7 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
   final case class Request(idempotencyKey: String, instanceIdentity: String,
     repositoryIdentity: String, worktreeIdentity: String, localRef: String,
     candidateRevision: String, validationDigest: String, reviewPolicyVersion: String,
-    reviewReference: ContextReference, reviewReceiptDigest: String,
+    reviewReference: ContextReference,
     pendingHeadOid: String, orderedParents: Vector[String], treeOid: String,
     treeDigest: String, changedPaths: Vector[String])
   final case class Receipt(request: Request, commitOid: String, orderedParents: Vector[String],
@@ -60,17 +60,16 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
       }
       prefix <- B.prefixC(current, 9L)
       readmitted <- S.completedReceiptC(review.submitted, prefix, ports)
-      _ <- if (readmitted == review) Consequence.unit
+      _ <- if (readmitted.retained.runId == review.retained.runId &&
+          readmitted.retained.submission.candidate.reference == review.retained.submission.candidate.reference) Consequence.unit
         else Consequence.stateConflict("RepositorySync retained review provenance changed")
-      candidate <- RepositorySyncDefinitionBinding.candidateC
-      assessed <- RepositorySyncMergeReviewResultAdapter.assessC(candidate, review.retained.submission,
-        review.issued, review.submitted, ports.asOf())
-      _ <- if (assessed.accepted) Consequence.unit
+      // completedReceiptC has already assessed the selected issued Result.
+      // Select its actual judgment without repeating semantic admission here.
+      _ <- if (review.submitted.result.value.decision == "accept") Consequence.unit
         else Consequence.stateConflict("RepositorySync merge commit requires accepted full-merge review")
-      wire <- WorkflowResultJsonV1.encodeC(review.submitted, RepositorySyncMergeReviewResultAdapter.payloadCodec)
       input <- B.requestC(review.retained.submission)
       pending = review.retained.submission.candidate.payload.value.plan.context.merge.pending
-      request = _request(prefix, input, pending, reference, wire)
+      request = _request(prefix, input, pending, reference)
       retained <- commits.loadC(request.idempotencyKey)
       receipt <- retained match {
         case Some(value) => _receiptC(request, value)
@@ -114,13 +113,13 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
 
   private def _request(current: InstanceRecord,
     input: org.simplemodeling.textus.smworkflow.value.RepositorySyncMergeReviewRequest,
-    pending: RepositorySyncMergeAssessment.PendingState, reference: ContextReference, wire: String): Request = {
-    val reviewDigest = digest(Vector("repository-sync-retained-review-v1", wire))
-    val key = digest(Vector("repository-sync-two-parent-commit-v1", current.identity.value,
-      current.definition.workflowRevision.value, B.inputCodec.encode(input).noSpaces, reviewDigest))
+    pending: RepositorySyncMergeAssessment.PendingState, reference: ContextReference): Request = {
+    val address = Vector(current.identity.value, reference.identity, reference.revision)
+      .map(value => s"${value.length}:$value").mkString
+    val key = "repository-sync-two-parent-commit:" + address
     Request(key, current.identity.value, input.repositoryIdentity, pending.state.worktreeIdentity,
       s"refs/heads/${pending.state.localBranch}", input.candidateRevision, input.validationDigest,
-      input.reviewPolicyVersion, reference, reviewDigest, input.pendingHeadOid,
+      input.reviewPolicyVersion, reference, input.pendingHeadOid,
       input.orderedParents, input.pendingTreeOid, input.pendingTreeDigest, input.changedPaths)
   }
 
@@ -145,17 +144,14 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
       }
       prefix <- B.prefixC(current, 9L)
       readmitted <- S.completedReceiptC(review.submitted, prefix, ports)
-      _ <- if (readmitted == review) Consequence.unit
+      _ <- if (readmitted.retained.runId == review.retained.runId &&
+          readmitted.retained.submission.candidate.reference == review.retained.submission.candidate.reference) Consequence.unit
         else Consequence.stateConflict("RepositorySync retained commit review provenance changed")
-      candidate <- RepositorySyncDefinitionBinding.candidateC
-      assessed <- RepositorySyncMergeReviewResultAdapter.assessC(candidate, review.retained.submission,
-        review.issued, review.submitted, ports.asOf())
-      _ <- if (assessed.accepted) Consequence.unit
+      _ <- if (review.submitted.result.value.decision == "accept") Consequence.unit
         else Consequence.stateConflict("RepositorySync retained commit requires accepted review")
-      wire <- WorkflowResultJsonV1.encodeC(review.submitted, RepositorySyncMergeReviewResultAdapter.payloadCodec)
       input <- B.requestC(review.retained.submission)
       pending = review.retained.submission.candidate.payload.value.plan.context.merge.pending
-      request = _request(prefix, input, pending, reference, wire)
+      request = _request(prefix, input, pending, reference)
       receipt <- commits.loadC(request.idempotencyKey).flatMap {
         case Some(value) => _receiptC(request, value)
         case _ => Consequence.stateConflict("RepositorySync retained commit receipt is missing")
@@ -194,7 +190,7 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
       val r = value.request
       digest(Vector("repository-sync-two-parent-commit-receipt-v1", r.idempotencyKey, r.instanceIdentity,
         r.repositoryIdentity, r.worktreeIdentity, r.localRef, r.candidateRevision, r.validationDigest,
-        r.reviewPolicyVersion, r.reviewReference.identity, r.reviewReference.revision, r.reviewReceiptDigest,
+        r.reviewPolicyVersion, r.reviewReference.identity, r.reviewReference.revision,
         r.pendingHeadOid, r.treeOid, r.treeDigest, r.orderedParents.size.toString,
         r.changedPaths.size.toString, value.commitOid, value.executionDigest) ++ r.orderedParents ++ r.changedPaths)
     }
@@ -218,13 +214,13 @@ private[smworkflow] object RepositorySyncMergeCommitBoundary {
       case _ => Consequence.stateConflict("RepositorySync WorkflowInstance changed during commit admission")
     }
   private def _oid(value: String): Boolean = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
-  private def _validRequest(r: Request): Boolean = r != null && hash(r.idempotencyKey) &&
+  private def _validRequest(r: Request): Boolean = r != null && _text(r.idempotencyKey) &&
     r.instanceIdentity != null && r.instanceIdentity.trim.nonEmpty &&
     _text(r.repositoryIdentity) && _text(r.worktreeIdentity) && r.localRef != null &&
-    r.localRef.startsWith("refs/heads/") && hash(r.candidateRevision) && hash(r.validationDigest) &&
+    r.localRef.startsWith("refs/heads/") && _text(r.candidateRevision) && hash(r.validationDigest) &&
     _text(r.reviewPolicyVersion) && r.reviewReference != null &&
     r.reviewReference.identity != null && r.reviewReference.identity.trim.nonEmpty &&
-    _text(r.reviewReference.revision) && hash(r.reviewReceiptDigest) && _oid(r.pendingHeadOid) &&
+    _text(r.reviewReference.revision) && _oid(r.pendingHeadOid) &&
     r.orderedParents != null && r.orderedParents.size == 2 && r.orderedParents.distinct.size == 2 &&
     r.orderedParents.head == r.pendingHeadOid && r.orderedParents.forall(value => _oid(value) && value.length == r.pendingHeadOid.length) &&
     _oid(r.treeOid) && r.treeOid.length == r.pendingHeadOid.length && hash(r.treeDigest) &&

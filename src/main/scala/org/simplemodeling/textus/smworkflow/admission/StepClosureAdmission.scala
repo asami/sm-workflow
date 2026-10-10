@@ -11,7 +11,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 /** Application-owned Step-close evidence policy over CNCF's optional CAM model.
   * This evaluates a candidate; it neither selects a transition nor commits files.
   * @since Sep. 26, 2026
-  * @version Sep. 26, 2026
+  * @version Oct.  8, 2026
   */
 object StepClosureAdmission {
   val candidateType = "sm-workflow.step-snapshot.v1"
@@ -34,7 +34,6 @@ object StepClosureAdmission {
   final case class ReviewEvidence(
     reviewedRevision: String,
     reviewedAt: Instant,
-    validUntil: Instant,
     summary: String
   )
 
@@ -66,8 +65,7 @@ object StepClosureAdmission {
   def evidenceC(identity: String, target: CandidateRef, review: ReviewEvidence,
     scope: ReviewScope, provenance: String): Consequence[Evidence] =
     if (!_name(identity) || target == null || review == null || !_validScope(scope) ||
-        !_name(provenance) || !_name(review.summary) || review.reviewedAt == null ||
-        review.validUntil == null || review.validUntil.isBefore(review.reviewedAt))
+        !_name(provenance) || !_name(review.summary) || review.reviewedAt == null)
       Consequence.stateConflict("Step-review evidence is incomplete")
     else AdmissionEvidence(identity, fullReviewRequirement, target,
       TypedValue(evidenceType, review), TypedValue(scopeType, scope), provenance).validateC
@@ -76,15 +74,16 @@ object StepClosureAdmission {
     AdmissionRequirement(fullReviewRequirement, RequirementKind.Semantic,
       evidenceType, TypedValue(scopeType, ReviewScope.FullStep))
 
-  /** Time is supplied by the caller; admission never reads an ambient clock. */
-  final class Policy(asOf: Instant) extends EvidencePolicy[ReviewEvidence, ReviewScope] {
+  /** The framework policy hook assesses applicability, not elapsed-time freshness.
+    * reviewedAt is historical evidence; clock passage neither withdraws a review
+    * nor admits evidence for a different candidate or coverage requirement.
+    */
+  final class Policy extends EvidencePolicy[ReviewEvidence, ReviewScope] {
     def isFresh(evidence: Evidence, target: CandidateRef): Boolean =
-      asOf != null && evidence != null && evidence.payload != null &&
+      evidence != null && evidence.payload != null &&
         Option(evidence.payload.value).exists { review =>
-          _name(review.summary) && review.reviewedAt != null &&
-            review.validUntil != null && !review.validUntil.isBefore(review.reviewedAt) &&
-            review.reviewedRevision == target.revision &&
-            !review.reviewedAt.isAfter(asOf) && !review.validUntil.isBefore(asOf)
+          _name(review.summary) && review.reviewedAt != null && target != null &&
+            review.reviewedRevision == target.revision
         }
 
     def covers(evidence: Evidence, requirement: AdmissionRequirement[ReviewScope]): Boolean =
@@ -94,7 +93,7 @@ object StepClosureAdmission {
 
   def evaluateC(submission: Submission, asOf: Instant,
     laterEvidence: Vector[Evidence] = Vector.empty): Consequence[AdmissionEvaluation[ReviewScope]] =
-    CandidateAdmissionModel.evaluateC(submission, Vector(fullReview), new Policy(asOf), laterEvidence)
+    CandidateAdmissionModel.evaluateC(submission, Vector(fullReview), new Policy, laterEvidence)
 
   private def _covers(actual: ReviewScope, required: ReviewScope): Boolean =
     (actual, required) match {

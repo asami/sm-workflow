@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value.{StepCloseRequest, StepReviewE
  * @version Oct.  8, 2026
  */
 private[smworkflow] object GoalPhaseStepCloseJson {
-  val schemaVersion = "sm-workflow.step-close.v1"
+  val schemaVersion = "sm-workflow.step-close.v2"
+  private val legacySchemaVersion = "sm-workflow.step-close.v1"
 
   val payloadCodec: WorkflowResultJsonV1.PayloadCodec[StepCloseRequest] =
     new WorkflowResultJsonV1.PayloadCodec[StepCloseRequest] {
@@ -23,7 +24,7 @@ private[smworkflow] object GoalPhaseStepCloseJson {
         "stepIdentity" -> Json.fromString(value.stepIdentity),
         "programDigest" -> Json.fromString(value.programDigest),
         "planningDigest" -> Json.fromString(value.planningDigest),
-        "reviewEvidence" -> Json.arr(value.reviewEvidence.map(_encodeEvidence)*)
+        "reviewEvidence" -> Json.arr(value.reviewEvidence.map(encodeEvidence)*)
       )
 
       def decode(value: Json): Either[String, StepCloseRequest] = for {
@@ -38,7 +39,7 @@ private[smworkflow] object GoalPhaseStepCloseJson {
         evidence <- items.foldLeft[Either[String, Vector[StepReviewEvidence]]](Right(Vector.empty)) {
           (prior, item) => for {
             accumulated <- prior
-            decoded <- _decodeEvidence(item)
+            decoded <- decodeEvidence(item)
           } yield accumulated :+ decoded
         }
       } yield StepCloseRequest(submission, step, program, planning, evidence)
@@ -56,34 +57,34 @@ private[smworkflow] object GoalPhaseStepCloseJson {
       json <- parse(wire).left.map(_ => "invalid Step-close JSON")
       root <- _fields(json, Set("schemaVersion", "request"))
       version <- _string(root, "schemaVersion")
-      _ <- Either.cond(version == schemaVersion, (), "unsupported Step-close JSON schema")
+      _ <- Either.cond(version == schemaVersion || version == legacySchemaVersion, (), "unsupported Step-close JSON schema")
       requestJson <- root("request").toRight("Step-close JSON has no request")
       request <- payloadCodec.decode(requestJson)
     } yield request
     decoded.fold(Consequence.stateConflict(_), Consequence.success)
   }
 
-  private def _encodeEvidence(value: StepReviewEvidence): Json = Json.obj(
+  private[admission] def encodeEvidence(value: StepReviewEvidence): Json = Json.obj(
     "evidenceIdentity" -> Json.fromString(value.evidenceIdentity),
     "reviewedRevision" -> Json.fromString(value.reviewedRevision),
     "reviewedAt" -> Json.fromString(value.reviewedAt),
-    "validUntil" -> Json.fromString(value.validUntil),
     "scope" -> Json.fromString(value.scope),
     "summary" -> Json.fromString(value.summary),
     "provenance" -> Json.fromString(value.provenance)
   )
 
-  private def _decodeEvidence(value: Json): Either[String, StepReviewEvidence] = for {
-    fields <- _fields(value, Set("evidenceIdentity", "reviewedRevision", "reviewedAt",
-      "validUntil", "scope", "summary", "provenance"))
+  private[admission] def decodeEvidence(value: Json): Either[String, StepReviewEvidence] = for {
+    fields <- value.asObject.filter { fields =>
+      val required = Set("evidenceIdentity", "reviewedRevision", "reviewedAt", "scope", "summary", "provenance")
+      fields.keys.toSet == required || fields.keys.toSet == required + "validUntil"
+    }.toRight("Step review has an incompatible shape")
     identity <- _string(fields, "evidenceIdentity")
     revision <- _string(fields, "reviewedRevision")
     reviewedAt <- _string(fields, "reviewedAt")
-    validUntil <- _string(fields, "validUntil")
     scope <- _string(fields, "scope")
     summary <- _string(fields, "summary")
     provenance <- _string(fields, "provenance")
-  } yield StepReviewEvidence(identity, revision, reviewedAt, validUntil, scope, summary, provenance)
+  } yield StepReviewEvidence(identity, revision, reviewedAt, scope, summary, provenance)
 
   private def _fields(value: Json, required: Set[String]): Either[String, JsonObject] =
     value.asObject match {

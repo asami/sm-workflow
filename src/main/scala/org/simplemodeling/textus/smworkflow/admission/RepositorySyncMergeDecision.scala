@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncMergeReviewReque
   */
 private[smworkflow] object RepositorySyncMergeDecision {
   final case class Input(candidate: RepositorySyncMergeReviewRequest,
-    reviewResultReference: ContextReference, reviewResultDigest: String)
+    reviewResultReference: ContextReference)
   final case class Intent(handle: WorkflowHandle, runId: StateMachineRunIdentity,
     reviewContinuationId: org.goldenport.cncf.workflow.ContinuationIdentity,
     expectedRevision: StateMachineRevision, snapshot: ContextSnapshot,
@@ -33,22 +33,22 @@ private[smworkflow] object RepositorySyncMergeDecision {
       "candidate" -> RepositorySyncMergeReviewBoundary.inputCodec.encode(value.candidate),
       "reviewResultReference" -> Json.obj(
         "identity" -> Json.fromString(value.reviewResultReference.identity),
-        "revision" -> Json.fromString(value.reviewResultReference.revision)),
-      "reviewResultDigest" -> Json.fromString(value.reviewResultDigest))
+        "revision" -> Json.fromString(value.reviewResultReference.revision)))
     def decode(value: Json): Either[String, Input] = for {
-      fields <- value.asObject.filter(_.keys.toSet == Set("candidate", "reviewResultReference", "reviewResultDigest"))
+      fields <- value.asObject.filter { root =>
+        val required = Set("candidate", "reviewResultReference")
+        root.keys.toSet == required || root.keys.toSet == required + "reviewResultDigest"
+      }
         .toRight("invalid RepositorySync Decision input shape")
       candidate <- RepositorySyncMergeReviewBoundary.inputCodec.decode(fields("candidate").get)
       ref <- fields("reviewResultReference").flatMap(_.asObject)
         .filter(_.keys.toSet == Set("identity", "revision")).toRight("invalid RepositorySync Decision review reference")
       identity <- _string(ref, "identity")
       revision <- _string(ref, "revision")
-      digest <- _string(fields, "reviewResultDigest")
-      _ <- Either.cond(digest.matches("[0-9a-f]{64}"), (), "invalid RepositorySync Decision review digest")
-    } yield Input(candidate, ContextReference(identity, revision), digest)
+    } yield Input(candidate, ContextReference(identity, revision))
   }
 
-  /** The caller re-admits the complete saved review chain before and after this
+  /** The caller assesses the selected saved review and actual current state.
     * projection. Revision nine stays active and unsuspended: this is not a new
     * resumable engine boundary or permission to commit the reviewed candidate.
     */
@@ -66,12 +66,10 @@ private[smworkflow] object RepositorySyncMergeDecision {
           receipt.submitted.handle == handle && receipt.submitted.result.value.decision == "decision-needed") Consequence.unit
         else Consequence.stateConflict("RepositorySync Decision requires the exact stopped merge review")
       candidate <- RepositorySyncMergeReviewBoundary.requestC(receipt.retained.submission)
-      resultWire <- WorkflowResultJsonV1.encodeC(receipt.submitted, RepositorySyncMergeReviewResultAdapter.payloadCodec)
-      digest = RepositorySyncMergeValidationAssessment.digest(Vector("repository-sync-retained-review-v1", resultWire))
       intent = Intent(handle, receipt.retained.runId, receipt.submitted.continuationId,
         StateMachineRevision("9"), receipt.submitted.contextSnapshot,
-        Input(candidate, receipt.submitted.resultReference, digest),
-        s"repository-sync-merge-decision:${handle.instanceIdentity.value}:$digest")
+        Input(candidate, receipt.submitted.resultReference),
+        s"repository-sync-merge-decision:${handle.instanceIdentity.value}:${receipt.submitted.continuationId.value}:9")
       request <- port.resolveC(intent)
       review <- RepositorySyncDefinitionBinding.reviewOperationC
       _ <- _requestC(intent, request, review)
@@ -85,11 +83,12 @@ private[smworkflow] object RepositorySyncMergeDecision {
     val candidate = ContextReference(intent.input.candidate.submissionIdentity, intent.input.candidate.candidateRevision)
     if (request == null || request.context == null || request.requiredOperation == null ||
         request.runId != intent.runId || request.continuationId == intent.reviewContinuationId ||
-        request.expectedRevision != intent.expectedRevision || request.context.snapshot != intent.snapshot ||
-        request.input != Some(TypedValue(inputCodec.typeIdentity, intent.input)) ||
+        request.expectedRevision != intent.expectedRevision ||
+        !GoalPhaseClosureAuthority.sameContextScope(request.context.snapshot, intent.snapshot) ||
+        !request.input.exists(value => value != null && value.typeIdentity == inputCodec.typeIdentity && value.value != null &&
+          value.value.reviewResultReference == intent.input.reviewResultReference && sameCandidateScope(value.value.candidate, intent.input.candidate)) ||
         request.resultType == null || request.resultType.nonEmpty ||
         request.context.requiredFacts == null || !request.context.requiredFacts.contains(candidate) ||
-        request.context.references == null || !request.context.references.contains(intent.input.reviewResultReference) ||
         request.operation == null || request.completionOperation == null ||
         request.operation.service == "RepositorySyncService" || request.completionOperation.service == "RepositorySyncService" ||
         request.requiredOperation == review.identity || request.operation == review.operation ||
@@ -97,6 +96,12 @@ private[smworkflow] object RepositorySyncMergeDecision {
       Consequence.stateConflict("RepositorySync Decision host request differs from its frozen intent")
     else Consequence.unit // Common wire admission validates the remaining metadata.
   }
+
+  private[admission] def sameCandidateScope(left: RepositorySyncMergeReviewRequest, right: RepositorySyncMergeReviewRequest): Boolean =
+    left != null && right != null && left.submissionIdentity == right.submissionIdentity &&
+      left.repositoryIdentity == right.repositoryIdentity && left.candidateRevision == right.candidateRevision &&
+      left.reviewPolicyVersion == right.reviewPolicyVersion &&
+      left.pendingHeadOid == right.pendingHeadOid && left.pendingTreeOid == right.pendingTreeOid
 
   private def _string(fields: JsonObject, key: String): Either[String, String] =
     fields(key).flatMap(_.asString).filter(_.trim.nonEmpty).toRight(s"missing RepositorySync Decision $key")

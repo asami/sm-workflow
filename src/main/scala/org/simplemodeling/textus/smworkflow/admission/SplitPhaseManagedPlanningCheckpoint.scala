@@ -10,19 +10,20 @@ import org.goldenport.cncf.security.SecuritySubject
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowManagedMechanicalTransition}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord, Lifecycle}
-import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowInteraction
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.{WorkflowContinuation, WorkflowInteraction}
 import org.goldenport.protocol.Argument
 import org.goldenport.configuration.ResolvedConfiguration
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as J, SplitPhasePlanningCheckpointPublication as U,
-  SplitPhasePlanningCheckpointObservation as O, SplitPhasePartitionCompletionCheckpointDataStorePort as D}
+  SplitPhasePlanningCheckpointObservation as O,
+  SplitPhasePlanningCheckpointDataStorePort as Reads}
 
 /** Internal managed dependency, not an installed public advance action or
   * WorkflowInteraction. All physical work borrows the actual owning call.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
   /** Observed native data only. It does not authorize fresh planning or prove
@@ -42,7 +43,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
   }
   final class Port private[SplitPhaseManagedPlanningCheckpoint] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    targets: U.Targets, purposes: D.ReadPurposes, rowObservation: () => Consequence[Unit]) {
+    rowObservation: () => Consequence[Unit]) {
 
     /** Read current progression before any planning or issue allocation. The
       * original context may precede legitimate later native history.
@@ -53,8 +54,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       reads <- currentReadsC(core)
       original <- reads.loadOriginalForCommandC(command, core)
       _ <- actorC(core, Some(original.start.command.participantIdentity)).map(_ => ())
-      _ <- if (original.start.configuration == declaration.configuration &&
-          original.start.instanceIdentity.value == command.instanceIdentity) Consequence.unit
+      _ <- if (original.start.instanceIdentity.value == command.instanceIdentity) Consequence.unit
         else invalid("current-state query differs from its original Start or bound configuration")
       instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
         declaration.instances, declaration.continuations)
@@ -83,7 +83,17 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
             case Some(value) => Consequence.success(value)
             case None => invalid("current suspension has no actual published partition WorkOrder")
           }
-          _ <- O.verifyPendingPartitionC(observed.original, observed.current, issued)
+          // Native issued storage has resolved this saved WorkOrder's source.
+          // This query consumes only the current suspension selection, not a
+          // regenerated input, presentation, Context or issue-history copy.
+          _ <- issued.current match {
+            case order: WorkflowContinuation.WorkOrder[?] if
+                issued.handle.instanceIdentity == observed.current.identity &&
+                observed.current.suspension.exists(boundary =>
+                  boundary.continuationIdentity.value == order.request.continuationId.value) &&
+                order.request.expectedRevision.value == observed.current.revision.value.toString => Consequence.unit
+            case _ => invalid("saved partition work is not the current native suspension")
+          }
         } yield Some(issued)
       }
     } yield result
@@ -94,43 +104,33 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       */
     def loadRetainedForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Retained]] = for {
       observed <- loadCurrentForCallC(command, core)
-      _ <- O.verifyInvocationC(observed.original)
-      actualpurposes <- D.capturePurposesC(core.component.get.subsystem.get.configuration)
-      _ <- if (purposes.sameAs(actualpurposes)) Consequence.unit
-        else invalid("actual retained-output read purposes differ from bound metadata")
       _ <- if (observed.current.suspension.isEmpty) Consequence.unit
         else invalid("suspended native state requires its actual pending work, not retained-output absence")
       reads <- currentReadsC(core)
-      mapping <- reads.loadMappingForCallC(command, core)
-      result <- mapping match {
-        case Some((index, saved)) => for {
-          _ <- if (saved.originalContext == observed.original.context && saved.originalStart == observed.original.start)
-            Consequence.unit else invalid("retained mapping differs from independently observed original data")
-          value <- saved.origin match {
-            case K.Origin.Mechanical(_) => observeC(command, index, saved, reads, core).flatMap { actual =>
-              if (SplitPhaseDefinitionBinding.sameRecord(actual.current, observed.current))
-                Consequence.success(new RetainedMechanical(actual): Retained)
-              else invalid("native current data differs across retained mechanical reads")
-            }
-            case K.Origin.PartitionCompletion(_, _) => _retained_completion_c(observed, Some(saved), core)
-          }
-        } yield Some(value)
+      selected <- reads.loadSelectionForCallC(command, core)
+      result <- selected match {
+        case Some(selection) => (selection.record.origin match {
+            case K.Origin.Mechanical(_) => observeC(selection, reads, core)
+              .map(actual => new RetainedMechanical(actual): Retained)
+            case K.Origin.PartitionCompletion(_, _) => _retained_completion_c(observed, Some(selection.record), reads, core)
+          }).map(Some(_))
         case None if observed.current.lifecycle == Lifecycle.Active &&
             observed.current.revision == observed.original.context.owner.instanceRevision => Consequence.success(None)
-        case None => _retained_completion_c(observed, None, core).map(Some(_))
+        case None => _retained_completion_c(observed, None, reads, core).map(Some(_))
       }
     } yield result
 
-    private def _retained_completion_c(observed: ObservedCurrent, checkpoint: Option[K.Record], core: ActionCall.Core):
+    private def _retained_completion_c(observed: ObservedCurrent, checkpoint: Option[K.Record], reads: Reads, core: ActionCall.Core):
         Consequence[Retained] = for {
       loaded <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(observed.original.context.owner.continuation,
-        declaration, catalog, targets, purposes, core)
+        declaration, catalog, core)
       actual <- loaded match {
-        case Some(value) if value.record.context == observed.original.context && value.record.start == observed.original.start &&
+        case Some(value) if value.record.context == observed.original.context &&
             value.record.checkpoint == checkpoint && SplitPhaseDefinitionBinding.sameRecord(value.current, observed.current) =>
           Consequence.success(value)
         case _ => invalid("advanced native state has no matching actual original completion or selected checkpoint")
       }
+      _ <- checkpoint.fold(Consequence.unit)(reads.requireDocumentsForCallC(_, core))
     } yield new RetainedPartitionCompletion(actual)
 
     def executePreparedForCallC(captured: K.Captured, core: ActionCall.Core): Consequence[Observed] =
@@ -140,20 +140,10 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
         command <- actorC(core, Some(captured.record.originalStart.command.participantIdentity))
         _ <- queryC(command, captured.record)
         reads <- currentReadsC(core)
-        existing <- reads.loadMappingForCallC(command, core)
+        existing <- reads.loadSelectionForCallC(command, core)
         result <- existing match {
-          case Some((index, mapping)) => observeC(command, index, mapping, reads, core)
+          case Some(selected) => observeC(selected, reads, core)
           case None => for {
-            original <- reads.loadOriginalForCallC(captured.record, core)
-            instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
-              declaration.instances, declaration.continuations)
-            predecessor <- instances.loadForCallC(declaration.configuration, captured.before.identity, core).flatMap {
-              case Some(value) => Consequence.success(value)
-              case None => invalid("canonical predecessor is absent")
-            }
-            _ <- O.verifyOriginalC(captured.record, original, predecessor)
-            _ <- if (SplitPhaseDefinitionBinding.sameRecord(predecessor, captured.before)) Consequence.unit
-              else invalid("constructed predecessor differs from current native data")
             prepared <- U.prepareC(captured, reads.targets)
             programs <- prepared.rows.foldLeft(Consequence.success(Vector.empty[ExecUowM[Unit]])) { (prior, row) => for {
               accumulated <- prior
@@ -164,15 +154,12 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
             program = programs.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
               (before, next) => before.flatMap(_ => next))
             native <- nativeC(core)
-            committed <- native.executeC(captured.mechanicalIntent.get, program)(using core.executionContext) match {
-              case Consequence.Success(value) => Consequence.success(value)
+            _ <- native.executeC(captured.mechanicalIntent.get, program)(using core.executionContext) match {
+              case Consequence.Success(_) => Consequence.unit
               case _ => uncertain("native commit is not established; observe on a later call")
             }
             observed <- loadMechanicalForCallC(command, core) match {
-              case Consequence.Success(Some(value)) if value.record == captured.record &&
-                  committed.receipt.payload.value == captured.record &&
-                  SplitPhaseDefinitionBinding.sameRecord(committed.receipt.current, captured.before) &&
-                  SplitPhaseDefinitionBinding.sameRecord(committed.receipt.next, captured.next) => Consequence.success(value)
+              case Consequence.Success(Some(value)) => Consequence.success(value)
               case _ => uncertain("complete committed readback differs or is unavailable; do not retry")
             }
           } yield observed
@@ -190,10 +177,10 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
 
     private def readMechanicalC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       reads <- currentReadsC(core)
-      loaded <- reads.loadMappingForCallC(command, core)
+      loaded <- reads.loadSelectionForCallC(command, core)
       result <- loaded match {
         case None => Consequence.success(None)
-        case Some((index, mapping)) => observeC(command, index, mapping, reads, core).map(Some(_))
+        case Some(selected) => observeC(selected, reads, core).map(Some(_))
       }
     } yield result
 
@@ -224,33 +211,27 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
             case K.Origin.PartitionCompletion(value, _) => Consequence.success(value)
             case _ => invalid("mechanical origin is not an AI completion")
           }
-          observed <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, targets, purposes, core)
+          observed <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, core)
           _ <- if (observed.exists(_.record.checkpoint.contains(saved))) Consequence.unit
             else invalid("original AI completion differs from its exact selected mapping")
+          _ <- reads.requireDocumentsForCallC(saved, core)
         } yield observed
       }
     } yield result
 
-    private def observeC(command: SplitPhaseAdvanceCommand, index: K.ContextIndex, mapping: K.Record,
-      reads: SplitPhasePlanningCheckpointDataStorePort, core: ActionCall.Core): Consequence[Observed] = for {
-      _ <- queryC(command, mapping)
-      _ <- if (mapping.originalStart.configuration == declaration.configuration) Consequence.unit
-        else invalid("saved original configuration differs from the current bound declaration")
-      original <- reads.loadOriginalForCallC(mapping, core)
-      _ <- SplitPhaseReasoningInvocation.actorC(core, Some(original.start.command.participantIdentity))
-      anchor <- mapping.origin match {
-        case K.Origin.Mechanical(value) => Consequence.success(value)
-        case _ => invalid("AI-origin checkpoint needs its genuine completion observation, not a mechanical fallback")
-      }
-      native <- nativeC(core)
-      retained <- native.loadRetainedC(anchor)(using core.executionContext).flatMap {
+    private def observeC(selected: Reads.Selection,
+      reads: SplitPhasePlanningCheckpointDataStorePort, core: ActionCall.Core): Consequence[Observed] = {
+      val mapping = selected.record
+      for {
+      _ <- SplitPhaseReasoningInvocation.actorC(core, Some(mapping.originalStart.command.participantIdentity))
+      retained <- selected.mechanical match {
         case Some(value) => Consequence.success(value)
-        case None => invalid("actual native retained receipt is absent")
+        case None => invalid("AI-origin checkpoint needs its genuine completion observation, not a mechanical fallback")
       }
-      data <- reads.loadDataForCallC(index, mapping, original, core)
+      _ <- reads.requireDocumentsForCallC(mapping, core)
       _ <- rowObservation()
-      _ <- O.verifyMechanicalC(data, retained.receipt)
-    } yield new Observed(mapping, retained.receipt.next, retained.current)
+      } yield new Observed(mapping, retained.receipt.next, retained.current)
+    }
 
     private def nativeC(core: ActionCall.Core): Consequence[WorkflowManagedMechanicalTransition[K.Record]] =
       WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
@@ -258,11 +239,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
         declaration.instances, declaration.continuations).flatMap(_.bindMechanicalC(K.advanceOperation, J.payloadCodec))
 
     private def currentReadsC(core: ActionCall.Core): Consequence[SplitPhasePlanningCheckpointDataStorePort] =
-      SplitPhasePlanningCheckpointDataStorePort.bindC(core.component.get.subsystem.get.configuration, declaration, catalog).flatMap { reads =>
-        if (reads.targets.storeName == targets.storeName && reads.targets.localCollections == targets.localCollections &&
-            reads.targets.instances == targets.instances && reads.targets.continuations == targets.continuations) Consequence.success(reads)
-        else invalid("actual call purposes differ from bound metadata")
-      }
+      SplitPhasePlanningCheckpointDataStorePort.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
   }
 
   def bindC(host: ResolvedConfiguration, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -274,20 +251,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     rowObservation: () => Consequence[Unit]): Consequence[Port] =
     if (declaration == null || catalog == null || rowObservation == null) invalid("admitted current catalog is absent")
-    else for {
-      compiled <- SplitPhaseDefinitionBinding.candidateC
-      _ <- if (catalog.workflow.workflow == compiled.workflow) Consequence.unit
-        else invalid("admitted packaged Workflow differs from the complete compiled declaration")
-      expected <- org.goldenport.cncf.workflow.WorkflowInstancePersistence.bindCandidateDefinitionC(catalog.workflow)
-      _ <- if (SplitPhaseDefinitionBinding.sameDefinition(catalog.definition, expected)) Consequence.unit
-        else invalid("catalog binding differs from its complete admitted artifact")
-      op <- SplitPhaseDefinitionBinding.providedDefinition.providedOperations.find(o =>
-        o.service == K.advanceOperation.service && o.name == K.advanceOperation.operation &&
-        o.inputType.contains("SplitPhaseAdvanceCommand") && o.resultType.contains("SplitPhaseAdvanceResult"))
-        .map(Consequence.success).getOrElse(invalid("generated advance declaration differs"))
-      targets <- U.bindTargetsC(host, declaration)
-      purposes <- D.capturePurposesC(host)
-    } yield new Port(declaration, catalog, targets, purposes, rowObservation)
+    else Consequence.success(new Port(declaration, catalog, rowObservation))
 
   private def actorC(core: ActionCall.Core, participant: Option[String]): Consequence[SplitPhaseAdvanceCommand] =
     if (core == null || core.action == null || core.action.request == null || core.executionContext == null ||

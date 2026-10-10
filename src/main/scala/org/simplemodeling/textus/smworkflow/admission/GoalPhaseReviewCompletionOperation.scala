@@ -43,7 +43,7 @@ object GoalPhaseReviewCompletionOperation {
       def encode(value: ReviewStepResult): Json = Json.obj(
         "decision" -> Json.fromString(value.decision),
         "rationale" -> Json.fromString(value.rationale),
-        "reviewEvidence" -> Json.arr(value.reviewEvidence.map(_encodeEvidence)*)
+        "reviewEvidence" -> Json.arr(value.reviewEvidence.map(GoalPhaseStepCloseJson.encodeEvidence)*)
       )
 
       def decode(value: Json): Either[String, ReviewStepResult] = for {
@@ -55,7 +55,7 @@ object GoalPhaseReviewCompletionOperation {
         evidence <- items.foldLeft[Either[String, Vector[StepReviewEvidence]]](Right(Vector.empty)) {
           (prior, item) => for {
             accumulated <- prior
-            decoded <- _decodeEvidence(item)
+            decoded <- GoalPhaseStepCloseJson.decodeEvidence(item)
           } yield accumulated :+ decoded
         }
       } yield ReviewStepResult(decision, rationale, evidence)
@@ -355,7 +355,7 @@ object GoalPhaseReviewCompletionOperation {
   ): Consequence[OperationResponse] =
     if (core == null || core.executionContext == null || submitted == null ||
         submitted.result == null || submitted.result.value == null ||
-        submitted.result.value.decision != "accept" || current == null ||
+        submitted.continuationId == null || current == null ||
         current.lifecycle != Lifecycle.Active || current.suspension.nonEmpty || preparation == null ||
         preparation.exists(value => value == null || value.validateC.toOption.isEmpty || value.declaration.configuration != configuration) ||
         nativeQuestion == null || nativeQuestion.exists(value => value == null || value.configuration != configuration) ||
@@ -365,60 +365,55 @@ object GoalPhaseReviewCompletionOperation {
       given ExecutionContext = core.executionContext
       for {
           retained <- managed.loadRetainedC(submitted.continuationId).flatMap {
-            case Some(value) if value.completion.result == submitted &&
-                value.completion.instanceRevision == current.revision => Consequence.success(value)
-            case _ => Consequence.stateConflict("Managed accepted projection lacks exact committed review")
+            case Some(value) if value.completion.instanceRevision == current.revision &&
+                value.completion.result.result.value.decision == "accept" => Consequence.success(value)
+            case _ => Consequence.stateConflict("Managed accepted projection lacks a current committed accepted review")
           }
-          work <- issued.loadC(submitted.continuationId).flatMap {
-            case Some(value) => Consequence.success(value)
-            case _ => Consequence.stateConflict("Managed accepted projection lacks issued review")
-          }
-          _ <- preparation match {
-            case None => Consequence.unit
-            case Some(value) => GoalPhaseReviewDecisionPreparation.prepareForCallC(value, artifact, asOf, issued,
-              instances, managed, snapshot, authority, submitted, current, core)
-          }
-          validateRetained = () => managed.loadRetainedC(submitted.continuationId).flatMap {
-              case Some(latest) if latest.completion == retained.completion => Consequence.unit
-              case _ => Consequence.stateConflict("Managed accepted proof changed during authority lookup")
-            }
-          response <- nativeQuestion match {
-            case Some(declaration) => for {
-              assessment <- GoalPhaseClosureAuthority.assessReviewedC(artifact, work, submitted,
-                asOf(), current, instances, configuration, GoalPhaseCallScopedSnapshot.forCall(snapshot, core),
-                authority.forCall(core).authorizations, validateRetained)
-              question <- GoalPhaseManagedNativeHumanQuestion.publishAssessedForCallC(submitted.continuationId,
-                assessment, core, declaration)
-              response <- GoalPhaseNativeHumanAdvanceOperation.responseC(question)
-            } yield response
-            case None => GoalPhaseClosureAuthority.closeReviewedOrDecisionC(artifact, work, submitted,
-              asOf(), current, instances, configuration, GoalPhaseCallScopedSnapshot.forCall(snapshot, core),
-              null, authority.forCall(core), false, validateRetained).map(OperationResponse.Scalar(_))
-          }
+          actual = retained.completion.result
+          response <- projectSelectedForCallC(artifact, asOf, issued, instances, configuration,
+            snapshot, authority, actual, current, core, preparation, nativeQuestion)
       } yield response
     }
 
-  private def _encodeEvidence(value: StepReviewEvidence): Json = Json.obj(
-    "evidenceIdentity" -> Json.fromString(value.evidenceIdentity),
-    "reviewedRevision" -> Json.fromString(value.reviewedRevision),
-    "reviewedAt" -> Json.fromString(value.reviewedAt),
-    "validUntil" -> Json.fromString(value.validUntil),
-    "scope" -> Json.fromString(value.scope),
-    "summary" -> Json.fromString(value.summary),
-    "provenance" -> Json.fromString(value.provenance)
-  )
-
-  private def _decodeEvidence(value: Json): Either[String, StepReviewEvidence] = for {
-    fields <- _fields(value, Set("evidenceIdentity", "reviewedRevision", "reviewedAt",
-      "validUntil", "scope", "summary", "provenance"))
-    identity <- _string(fields, "evidenceIdentity")
-    revision <- _string(fields, "reviewedRevision")
-    reviewedAt <- _string(fields, "reviewedAt")
-    validUntil <- _string(fields, "validUntil")
-    scope <- _string(fields, "scope")
-    summary <- _string(fields, "summary")
-    provenance <- _string(fields, "provenance")
-  } yield StepReviewEvidence(identity, revision, reviewedAt, validUntil, scope, summary, provenance)
+  /** Internal follow-up of the entry's selected canonical completion. It is
+    * not another public input admission or a saved-copy equality check.
+    */
+  private[smworkflow] def projectSelectedForCallC(
+    artifact: CandidateAdmissionProducerAbi.Artifact, asOf: () => Instant,
+    issued: IssuedWorkOrderPersistence[StepCloseRequest], instances: WorkflowInstancePersistence,
+    configuration: Configuration, snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
+    authority: GoalPhaseClosureAuthority.Ports,
+    actual: ContinuationResult[ReviewStepResult], current: InstanceRecord, core: ActionCall.Core,
+    preparation: Option[GoalPhaseReviewDecisionPreparation.Configuration],
+    nativeQuestion: Option[GoalPhaseManagedStartAssembly.Declaration]
+  ): Consequence[OperationResponse] = {
+      given ExecutionContext = core.executionContext
+      for {
+          work <- issued.loadC(actual.continuationId).flatMap {
+            case Some(value) => Consequence.success(value)
+            case _ => Consequence.stateConflict("Managed accepted projection lacks issued review")
+          }
+          response <- nativeQuestion match {
+            case Some(declaration) => for {
+              assessment <- GoalPhaseClosureAuthority.assessReviewedC(artifact, work, actual,
+                asOf(), current, authority.forCall(core).authorizations)
+              question <- GoalPhaseManagedNativeHumanQuestion.publishAssessedForCallC(actual, current,
+                assessment, core, declaration)
+              response <- GoalPhaseNativeHumanAdvanceOperation.responseC(question)
+            } yield response
+            case None =>
+              val scopedauthority = authority.forCall(core)
+              val selectedauthority = preparation.fold(scopedauthority)(value =>
+                GoalPhaseClosureAuthority.Ports(scopedauthority.authorizations, new GoalPhaseClosureAuthority.DecisionPort {
+                  def resolveC(intent: GoalPhaseClosureAuthority.Intent) =
+                    GoalPhaseReviewDecisionPreparation.resolveForCallC(value, intent, core)
+                }))
+              GoalPhaseClosureAuthority.closeReviewedOrDecisionC(artifact, work, actual,
+                asOf(), current, instances, configuration, GoalPhaseCallScopedSnapshot.forCall(snapshot, core),
+                null, selectedauthority, false).map(OperationResponse.Scalar(_))
+          }
+      } yield response
+    }
 
   private def _fields(value: Json, required: Set[String]): Either[String, JsonObject] =
     value.asObject match {

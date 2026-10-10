@@ -65,9 +65,8 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
           val wire = f.reviewWire(f.reviewResult(work, "accept"))
           When("accepted review completes through the registered Service or CLI Operation")
           val response = take(f.invoke("submitStepReview", wire))
-          Then("both authority reads use the completion call's component and context")
-          f.authorityCores.size shouldBe 2
-          (f.authorityCores.head eq f.authorityCores.last) shouldBe true
+          Then("one actual authority observation uses the completion call's component and context")
+          f.authorityCores.size shouldBe 1
           f.authorityCores.head.component.get.componentId shouldBe SmWorkflowComponent.componentId
           f.authorityCores.head.action.request.operation shouldBe "submitStepReview"
           f.authorityPorts.authorizations.loadC(f.captured.get) shouldBe a[Consequence.Failure[?]]
@@ -88,7 +87,7 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
           val replay = f.invoke("submitStepReview", wire)
           Then("canonical completion rejects replay without additional authority reads or commits")
           replay shouldBe a[Consequence.Failure[?]]
-          f.authorityCores.size shouldBe 2
+          f.authorityCores.size shouldBe 1
           f.commits.size shouldBe (if (granted) 1 else 0)
         } finally f.subsystem.shutdown()
       }
@@ -109,7 +108,8 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
           stopped.handle shouldBe started.handle
           f.saved.issued shouldBe work
           f.saved.submitted shouldBe result
-          f.saved.reviewed shouldBe f.stored
+          f.saved.instanceIdentity shouldBe f.stored.identity
+          f.saved.instanceRevision shouldBe f.stored.revision
           f.captured.get.input.candidate.reviewEvidence shouldBe result.result.value.reviewEvidence
           f.stored.revision shouldBe InstanceRevision(3L)
           f.stored.lifecycle shouldBe Lifecycle.Active
@@ -201,7 +201,7 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
           val started = take(f.start())
           f.associateClose(started.handle)
           val evidence = StepReviewEvidence("proactive-full-review", f.originalCandidate,
-            "2026-09-27T23:59:00Z", "2026-09-28T01:00:00Z", "full-step", "reviewed", "fixture-reviewer")
+            "2026-09-27T23:59:00Z", "full-step", "reviewed", "fixture-reviewer")
           f.autoGrant = granted
           val wire = take(f.invoke("requestStepClose", GoalPhaseStepCloseJson.encode(
             f.request.copy(reviewEvidence = Vector(evidence)))))
@@ -255,7 +255,7 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
       }
     }
 
-    "recover a failed Decision display from the retained proof without resubmitting Result" in {
+    "recover a failed Decision display from the selected receipt without resubmitting Result" in {
       val f = new Fixture(withAuthority = true)
       try {
         val work = f.firstReview()
@@ -275,7 +275,8 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
       } finally f.subsystem.shutdown()
     }
 
-    "fail closed on retained proof, instance, candidate or authority drift and never commit from projection" in {
+    "reject actual receipt-slot, result and authority conflicts without certifying unchanged artifacts or definition diagnostics" in {
+      Given("a retained accepted review at its actual instance/revision slot")
       val f = new Fixture(withAuthority = true)
       try {
         val work = f.firstReview()
@@ -284,59 +285,117 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
         val current = f.stored
         val originalProgram = f.program
         val intent = f.captured.get
-        val forged = Vector(saved.copy(reviewed = saved.reviewed.copy(correlation = CorrelationReference("foreign"))),
-          saved.copy(submitted = saved.submitted.copy(resultReference = ContextReference("forged", "revision"))),
-          saved.copy(submitted = saved.submitted.copy(result = saved.submitted.result.copy(value =
-            saved.submitted.result.value.copy(reviewEvidence = saved.submitted.result.value.reviewEvidence.map(
-              _.copy(provenance = "changed-reviewer")))))))
-        forged.foreach { record =>
+        val forged = Vector(saved.copy(instanceIdentity = InstanceIdentity("foreign")),
+          saved.copy(instanceRevision = InstanceRevision(0L)),
+          saved.copy(submitted = saved.submitted.copy(resultReference = ContextReference("forged", "revision"))))
+        When("projection receives a receipt placed in another slot or correlated to another result")
+        val refused = forged.map { record =>
           f.receiptOverride = Some(record)
-          f.project(work.handle) shouldBe a[Consequence.Failure[?]]
+          f.project(work.handle)
         }
+        Then("the actual selected receipt is refused without any commit")
+        refused.foreach(_ shouldBe a[Consequence.Failure[?]])
         f.receiptOverride = None
-        f.project(work.handle, now.plusSeconds(7200)) shouldBe a[Consequence.Failure[?]]
+        take(f.project(work.handle, now.plusSeconds(7200))) shouldBe take(f.project(work.handle))
+        When("read-only projection sees later artifact bytes")
         f.program = "changed after acceptance".getBytes(StandardCharsets.UTF_8).toVector
-        f.project(work.handle) shouldBe a[Consequence.Failure[?]]
+        val projected = take(f.project(work.handle))
+        Then("projection returns the actual missing-authority Decision without an unchanged-content proof")
+        take(WorkflowDecisionJsonV1.decodeC(projected, GoalPhaseClosureAuthority.inputCodec))
         f.program = originalProgram
-        f.stored = current.copy(causation = CausationReference("changed-instance"))
-        f.project(work.handle) shouldBe a[Consequence.Failure[?]]
+        When("the current execution definition has different diagnostic source locations")
+        val declaredwire = io.circe.parser.parse(resource("/workflow/goal-phase-workflow-abi.json"))
+          .fold(error => fail(error.message), identity)
+        val relocatedwire = declaredwire.hcursor.downField("workflows").downArray.downField("source")
+          .downField("root").downField("line")
+          .withFocus(line => io.circe.Json.fromInt(line.asNumber.flatMap(_.toInt).get + 100))
+          .up.up.downField("definition").downField("line")
+          .withFocus(line => io.circe.Json.fromInt(line.asNumber.flatMap(_.toInt).get + 100)).top.get
+        val relocated = take(bindCandidateDefinitionC(take(CandidateWorkflowAbi.parseC(
+          relocatedwire.noSpaces, sidecar, "diagnostic/relocated-goal-phase.cml"))))
+        f.stored = current.copy(definition = relocated)
+        val diagnostic = take(f.project(work.handle))
+        Then("the same executable target and actual resumed state remain applicable without source or definition-copy equality")
+        diagnostic shouldBe projected
         f.stored = current
+        When("the authority reader returns an out-of-scope grant, then a scoped grant to a read-only projection")
         f.authorization = Some(f.grant(intent).copy(expectedRevision = StateMachineRevision("2")))
-        f.project(work.handle) shouldBe a[Consequence.Failure[?]]
+        val outside = f.project(work.handle)
         f.authorization = Some(f.grant(intent))
-        f.project(work.handle) shouldBe a[Consequence.Failure[?]]
+        val readonly = f.project(work.handle)
+        Then("the first grant is refused by actual scope and the second never permits this projection to commit")
+        outside shouldBe a[Consequence.Failure[?]]
+        readonly shouldBe a[Consequence.Failure[?]]
         f.stored shouldBe current
         f.commits shouldBe empty
       } finally f.subsystem.shutdown()
     }
 
-    "reject receipt drift during authority lookup before either Decision or commit" in {
+    "consume the admitted review without an unchanged receipt-view certificate during authority lookup" in {
       for (granted <- Vector(false, true)) {
+        Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R2; Example: E5; an admitted review and its actual current Workflow state")
         val f = new Fixture(withAuthority = true)
         try {
           val work = f.firstReview()
           f.autoGrant = granted
           f.onAuthority = _ => f.receiptOverride = Some(f.saved.copy(
             submitted = f.saved.submitted.copy(resultReference = ContextReference("mutated", "result"))))
-          f.invoke("submitStepReview", f.reviewWire(f.reviewResult(work, "accept"))) shouldBe a[Consequence.Failure[?]]
-          f.stored.revision shouldBe InstanceRevision(3L)
-          f.commits shouldBe empty
+          When("the authority lookup changes a later receipt view, not the admitted review or current instance")
+          val response = take(f.invoke("submitStepReview", f.reviewWire(f.reviewResult(work, "accept"))))
+          Then("there is no second full-receipt comparison and actual authority still determines whether a commit occurs")
+          if (granted) {
+            take(WorkflowTerminalJsonV1.decodeC(response, GoalPhaseStepCloseServiceOperation.terminalCodec))
+            f.stored.revision shouldBe InstanceRevision(4L)
+            f.stored.lifecycle shouldBe Lifecycle.Completed
+            f.commits.size shouldBe 1
+          } else {
+            take(WorkflowDecisionJsonV1.decodeC(response, GoalPhaseClosureAuthority.inputCodec))
+            f.stored.revision shouldBe InstanceRevision(3L)
+            f.stored.lifecycle shouldBe Lifecycle.Active
+            f.commits shouldBe empty
+          }
         } finally f.subsystem.shutdown()
       }
     }
 
-    "retain exact receipts idempotently and forbid replacing a consumed review proof" in {
+    "consume the actual stored receipt on retry without certifying unchanged input or replacing the row" in {
+      Given("a completed review retained in its instance/revision slot")
       val f = new Fixture(withAuthority = true)
       try {
         val work = f.firstReview()
         take(f.invoke("submitStepReview", f.reviewWire(f.reviewResult(work, "accept"))))
         val saved = f.saved
+        When("a different proposal is offered to the occupied slot")
         take(f.receiptStore.putIfAbsentC(saved)) shouldBe saved
-        f.receiptStore.putIfAbsentC(saved.copy(submitted = saved.submitted.copy(
-          resultReference = ContextReference("replacement", "result")))) shouldBe a[Consequence.Failure[?]]
+        take(f.receiptStore.putIfAbsentC(saved.copy(submitted = saved.submitted.copy(
+          resultReference = ContextReference("replacement", "result"))))) shouldBe saved
+        Then("the actual saved receipt is selected without a proofDigest or full proposed-body comparison")
+        saved.productElementNames.toSet shouldBe Set("issued", "submitted", "instanceIdentity", "instanceRevision")
         f.receiptStore.putIfAbsentC(null) shouldBe a[Consequence.Failure[?]]
-        take(f.receiptStore.loadC(saved.reviewed.identity, saved.reviewed.revision)) shouldBe Some(saved)
-        f.receiptStore.loadC(null, saved.reviewed.revision) shouldBe a[Consequence.Failure[?]]
+        take(f.receiptStore.loadC(saved.instanceIdentity, saved.instanceRevision)) shouldBe Some(saved)
+        f.receiptStore.loadC(null, saved.instanceRevision) shouldBe a[Consequence.Failure[?]]
+        f.commits shouldBe empty
+      } finally f.subsystem.shutdown()
+    }
+
+    "project the selected review with diagnostic changes without hash or repeated receipt reads" in {
+      Given("an accepted review, current Awaiting state and no local commit authority")
+      val f = new Fixture(withAuthority = true)
+      try {
+        val work = f.firstReview()
+        take(f.invoke("submitStepReview", f.reviewWire(f.reviewResult(work, "accept"))))
+        val saved = f.saved
+        val result = saved.submitted.result.value
+        f.receiptOverride = Some(saved.copy(submitted = saved.submitted.copy(result = saved.submitted.result.copy(
+          value = result.copy(rationale = "Updated diagnostic rationale", reviewEvidence = result.reviewEvidence.map(
+            _.copy(summary = "Updated diagnostic summary", provenance = "Another diagnostic provenance")))))))
+        val before = f.stored
+        val loads = f.receiptLoads
+        When("read-only projection consumes that actual scoped receipt")
+        take(WorkflowDecisionJsonV1.decodeC(take(f.project(work.handle)), GoalPhaseClosureAuthority.inputCodec))
+        Then("applicability is evaluated without an unchanged-payload proof or second receipt load")
+        f.receiptLoads shouldBe loads + 1
+        f.stored shouldBe before
         f.commits shouldBe empty
       } finally f.subsystem.shutdown()
     }
@@ -434,7 +493,7 @@ final class GoalPhaseRepairLoopSpec extends AnyWordSpec with Matchers with Given
           val started = take(f.start())
           f.associateClose(started.handle)
           val evidence = StepReviewEvidence("proactive-full-review", f.originalCandidate,
-            "2026-09-27T23:59:00Z", "2026-09-28T01:00:00Z", "full-step", "full candidate reviewed", "fixture-reviewer")
+            "2026-09-27T23:59:00Z", "full-step", "full candidate reviewed", "fixture-reviewer")
           val request = f.request.copy(reviewEvidence = Vector(evidence))
           val terminal = take(WorkflowTerminalJsonV1.decodeC(take(f.invoke("requestStepClose",
             GoalPhaseStepCloseJson.encode(request))), GoalPhaseStepCloseServiceOperation.terminalCodec))

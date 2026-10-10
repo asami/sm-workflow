@@ -28,9 +28,9 @@ final class SplitPhaseMechanicalCandidateAllocationSpec extends AnyWordSpec with
     Some(O.OverheadPolicy(O.OverheadPolicyReference("overhead", "1"), source.source.reference, source.source.authority, 1, 0, 0, 0, 0)))
   private def need(source: Base, records: O.Records = O.Records(None, None, None),
     boundary: Option[B.Validated] = None): W.AllocationRequired = {
-    val input = take(E.loadC(boundary.getOrElse(source.initial), source.records, source.records))
+    val input = take(E.loadC(boundary.getOrElse(source.initial), source.records))
     val data = W.Data(W.DataReference("original", "1"), source.source.reference, source.source.authority, None, records)
-    take(W.advanceC(take(W.selectC(input, data, data)))).asInstanceOf[W.AllocationRequired]
+    take(W.advanceC(take(W.selectC(input, data)))).asInstanceOf[W.AllocationRequired]
   }
 
   "Mechanical allocation" should {
@@ -134,7 +134,7 @@ final class SplitPhaseMechanicalCandidateAllocationSpec extends AnyWordSpec with
         children = source.initial.records.ownership.children.zipWithIndex.map((child, i) =>
           child.copy(repository = B.RepositoryIdentity(if (i < 2) "repo-A" else "repo-B")))))
       When("mechanical allocation continues without choosing one convenient candidate")
-      val outcomes = Vector(grouped, take(B.loadC(source.initial.shape, mixed, mixed))).map { boundary =>
+      val outcomes = Vector(grouped, take(B.loadC(source.initial.shape, mixed))).map { boundary =>
         val selected = need(source, boundary = Some(boundary))
         val outcome = take(W.continueMechanicalAllocatedC(take(policy.allocateMechanicalC(selected, anchor))))
           .asInstanceOf[W.ProjectionRequired]
@@ -178,7 +178,7 @@ final class SplitPhaseMechanicalCandidateAllocationSpec extends AnyWordSpec with
         incomingByChild = phases.map(p => p -> (if (p == phases(1)) Vector(handoff.identity) else Vector.empty)).toMap)
       val boundary = template.records.copy(handoffs = plan)
       val selected = need(source, objectives(source, threshold = 500),
-        Some(take(B.loadC(template.shape, boundary, boundary))))
+        Some(take(B.loadC(template.shape, boundary))))
       When("Workflow continues the whole allocated frontier through objective selection")
       val outcome = take(W.continueMechanicalAllocatedC(take(policy.allocateMechanicalC(selected, anchor))))
         .asInstanceOf[W.HumanDecisionRequired]

@@ -7,7 +7,7 @@ import org.goldenport.cncf.action.{ActionCall, CommandAction}
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore, DataStoreConditionalTransitionFailure}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord, Lifecycle}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{CausationReference, HistoryEntry, HistorySequence, InstanceRecord, Lifecycle, ProgressionReference}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -23,15 +23,13 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseReasoningHumanD
   * Canonical answer/native state and the complete deterministic successor are
   * one managed UoW; no decoded question/result is execution authority.
   * @since Oct. 7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   final class Observed private[SplitPhaseManagedReasoningHumanCompletion] (
     val plan: H.Plan, val completion: WorkflowCompletionRecordJsonV1.Record[A.Answer],
     val resolution: Option[R.Record], val downstream: Option[S.Record],
-    val next: InstanceRecord) {
-    def current: InstanceRecord = plan.source.current
-  }
+    val next: InstanceRecord, val current: InstanceRecord)
   private val _field = "splitPhaseReasoningHumanSuccessorPayload"
   private val _schema = "sm-workflow.reasoning-human-successor.v1"
 
@@ -40,30 +38,30 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
 
   def executeForCallC(submitted: ContinuationResult[A.Answer],
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    verifier: V.Verifier, core: ActionCall.Core, observation: () => Consequence[Unit],
+    evidence: V.EvidencePort, core: ActionCall.Core, observation: () => Consequence[Unit],
     delegate: ActionCall => Unit): Consequence[OperationResponse] = for {
     _ <- SplitPhaseReasoningInvocation.actorC(core, None)
-    command <- completionQueryC(submitted, declaration, catalog, core)
-    plan <- _plan_c(command, declaration, catalog, core)
+    issued <- _issued_c(submitted, declaration, catalog, core)
+    command <- H.commandC(issued)
+    plan <- _plan_c(command, declaration, catalog, core, Some(issued))
     storage <- H.storageC(declaration, catalog, core)
     native <- _native_c(storage)
     retained <- native.loadRetainedC(submitted.continuationId)(using core.executionContext)
     response <- retained match {
-      case Some(actual) => _observe_c(plan, actual.completion, submitted, declaration, core).flatMap(_ack_c).map(OperationResponse.Scalar(_))
+      case Some(actual) => WorkflowProtocolV1.admitDecisionResultC(issued, submitted)
+        .flatMap(_ => _observe_c(plan, actual.completion, submitted, declaration, core)).flatMap(_ack_c).map(OperationResponse.Scalar(_))
       case None => for {
-        _ <- if (SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.next)) Consequence.unit
-          else _invalid("fresh answer does not own the exact native suspension")
-        evidence <- V.admitForCallC(V.Binding(core.component.get.core.instanceId, plan.question, submitted,
-          plan.source.plan.pending.issue.source.checkpoint.originalStart.command.participantIdentity), core, verifier)
         resolution <- submitted.result.value match {
           case A.Answer.ProvideResolution(reference) => R.loadForCallC(reference, declaration, core).map(Some(_))
           case _ => Consequence.success(None)
         }
         calculated <- _calculate_c(plan, submitted, resolution)
+        _ <- V.admitForCallC(V.AnswerContext(core.component.get.core.instanceId, plan.question, submitted,
+          plan.source.source.checkpoint.originalStart.command.participantIdentity), core, evidence).map(_ => ())
         operation <- SplitPhaseDefinitionBinding.providedDefinition.providedOperations.find(o =>
           o.service == H.completionOperation.service && o.name == H.completionOperation.operation)
           .map(Consequence.success).getOrElse(_invalid("Provided answer Operation is absent"))
-        bound <- _fresh_c(plan, submitted, resolution, calculated._1, calculated._2, evidence,
+        bound <- _fresh_c(plan, submitted, resolution, calculated._1, calculated._2,
           operation, declaration, catalog, storage, native, core, observation)
         action <- bound.createOperationRequest(core.action.request).flatMap {
           case value: CommandAction => Consequence.success(value)
@@ -81,6 +79,13 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   def completionQueryC(submitted: ContinuationResult[A.Answer],
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core): Consequence[SplitPhaseAdvanceCommand] = for {
+    question <- _issued_c(submitted, declaration, catalog, core)
+    command <- H.commandC(question)
+  } yield command
+
+  private def _issued_c(submitted: ContinuationResult[A.Answer],
+    declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
+    core: ActionCall.Core): Consequence[WorkflowInteraction[H.Input, Nothing]] = for {
     _ <- if (core.action.request.service.contains(H.completionOperation.service) &&
         core.action.request.operation == H.completionOperation.operation && isReasoning(submitted.continuationId))
       Consequence.unit else _invalid("query does not belong to reasoning Human completion")
@@ -88,9 +93,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     questions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
     question <- questions.loadC(submitted.continuationId)(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("actual issued reasoning Human question is absent")))
-    _ <- WorkflowProtocolV1.admitDecisionResultC(question, submitted).map(_ => ())
-    command <- H.commandC(question)
-  } yield command
+  } yield question
 
   def observeForAdvanceC(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[Observed] = for {
@@ -112,7 +115,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     _ <- if (SplitPhaseDefinitionBinding.sameRecord(observed.current, observed.next) && observed.next.lifecycle == Lifecycle.Completed)
       Consequence.unit else _invalid("stopped terminal lacks its exact completed native state")
     answer = observed.completion.result
-    result = SplitPhaseHumanTerminal.Result(outcome, observed.plan.source.plan.pending.issue.prepared.request.context,
+    result = SplitPhaseHumanTerminal.Result(outcome, observed.plan.source.request.context,
       answer.continuationId, answer.resultReference)
     handle <- WorkflowHandle.fromRecordC(answer.handle.componentIdentity, observed.current)
     terminal <- WorkflowProtocolV1.projectTerminalC(handle, observed.current,
@@ -123,7 +126,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   } yield wire
 
   private def _fresh_c(plan: H.Plan, submitted: ContinuationResult[A.Answer], resolution: Option[R.Record],
-    downstream: Option[S.Record], next: InstanceRecord, evidence: V.Admitted,
+    downstream: Option[S.Record], next: InstanceRecord,
     operation: GeneratedProvidedApiAbi.Operation, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, storage: WorkflowComponentStorage,
     native: WorkflowManagedDecisionCompletion[A.Answer], core: ActionCall.Core,
@@ -145,17 +148,15 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[A.Answer],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
           val readback = for {
-            _ <- if (result == submitted && completed.exists(SplitPhaseDefinitionBinding.sameRecord(_, next)) &&
-                resume != null && resume.result == StateMachineOperationResult(H.closingType, submitted.resultReference))
-              Consequence.unit else _uncertain("committed answer or native postimage differs")
-            _ <- evidence.receiptForCallC(core).map(_ => ())
+            actual <- completed.map(Consequence.success).getOrElse(_uncertain("canonical committed instance is absent"))
+            _ <- if (resume != null && resume.result != null) Consequence.unit
+              else _uncertain("canonical committed closing result is absent")
             _ <- observation()
-            command <- H.commandC(plan.question)
-            actual <- observeForAdvanceC(command, declaration, catalog, core)
-            _ <- if (actual.resolution == resolution && actual.downstream == downstream &&
-                SplitPhaseDefinitionBinding.sameRecord(actual.current, next)) Consequence.unit
-              else _uncertain("committed Human successor readback differs")
-            wire <- _ack_c(actual)
+            // The successor row is staged with the native completion in the
+            // same managed program. Project the owning commit, not a second
+            // load/recalculation and equality proof of the emitted bodies.
+            retained = WorkflowCompletionRecordJsonV1.Record(actual.revision, result, Some(resume.result))
+            wire <- _ack_c(new Observed(plan, retained, resolution, downstream, actual, actual))
           } yield OperationResponse.Scalar(wire)
           readback match {
             case Consequence.Success(value) => Consequence.success(value)
@@ -164,13 +165,14 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
         }
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[A.Answer] {
-        def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = for {
-          _ <- evidence.receiptForCallC(core).map(_ => ())
-          _ <- if (result == submitted && SplitPhaseDefinitionBinding.sameRecord(current, plan.next)) Consequence.unit
-            else _invalid("native answer predecessor or independently admitted result differs")
-          program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
-            ActionExecution.Completed(StateMachineOperationResult(H.closingType, submitted.resultReference))))
-        } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+        def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = {
+          // Native selection and managed completion own the actual issued
+          // result, predecessor, suspension and CAS. This owning call already
+          // admitted independent Human direction; staging is not publication.
+          val program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+            ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference))))
+          Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next)))
+        }
       }
       WorkflowDecisionCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, operation,
         WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
@@ -178,55 +180,99 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   } yield bound
 
   private def _plan_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[H.Plan] = for {
+    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
+    selected: Option[WorkflowInteraction[H.Input, Nothing]] = None): Consequence[H.Plan] = for {
     plan <- H.sourceC(command, declaration, catalog, core)
-    storage <- H.storageC(declaration, catalog, core)
-    questions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
-    issued <- questions.loadC(plan.question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId)(using core.executionContext)
-    _ <- if (issued.contains(plan.question) && plan.source.current.history.take(plan.next.history.size) == plan.next.history)
-      Consequence.unit else _invalid("actual issued question or complete native prefix differs")
-  } yield plan
+    issued <- selected match {
+      case Some(value) => Consequence.success(value)
+      case None => for {
+        storage <- H.storageC(declaration, catalog, core)
+        questions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
+        actual <- questions.loadC(plan.question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId)(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(_invalid("actual issued reasoning Human question is absent")))
+      } yield actual
+    }
+    resolved <- H.selectIssuedC(plan, issued)
+  } yield resolved
 
   private def _calculate_c(plan: H.Plan, submitted: ContinuationResult[A.Answer], resolution: Option[R.Record]):
       Consequence[(Option[S.Record], InstanceRecord)] = for {
-    answered <- SplitPhaseNativeHumanAnswer.prepareQuestionC(plan.question, submitted, plan.next)
     downstream <- (submitted.result.value, resolution) match {
       case (_: A.Answer.ProvideResolution, Some(record)) => R.calculateC(plan, submitted, record).map(Some(_))
       case (A.Answer.Defer | A.Answer.Cancel, None) => Consequence.success(None)
       case _ => _invalid("answer choice and complete separate interpretation differ")
     }
     stopped = submitted.result.value == A.Answer.Defer || submitted.result.value == A.Answer.Cancel
-    entry = answered.history.last.copy(lifecycle = if (stopped) Lifecycle.Completed else Lifecycle.Active,
-      currentProgression = if (stopped) None else answered.currentProgression,
-      causation = org.goldenport.cncf.workflow.WorkflowInstancePersistence.CausationReference(
-        "split-reasoning-human-result:" + submitted.continuationId.value))
-    next <- plan.next.appendC(plan.next.revision, entry)
+    current = plan.source.current
+    entry = HistoryEntry(HistorySequence(current.history.size.toLong + 1L), current.revision.next,
+      if (stopped) Lifecycle.Completed else Lifecycle.Active,
+      if (stopped) None else Some(ProgressionReference("HumanAnswered")), current.correlation,
+      CausationReference("split-reasoning-human-result:" + submitted.continuationId.value),
+      current.derivedCompositeOccurrence, current.committedPredecessor, None)
+    next <- current.appendC(current.revision, entry)
   } yield downstream -> next
 
   private def _observe_c(plan: H.Plan, completion: WorkflowCompletionRecordJsonV1.Record[A.Answer],
     submitted: ContinuationResult[A.Answer], declaration: SplitPhaseManagedStartAssembly.Declaration,
     core: ActionCall.Core): Consequence[Observed] = for {
-    _ <- if (completion.result == submitted && completion.instanceRevision == plan.next.revision.next &&
+    _ <- if (_same_answer(completion.result, submitted) && completion.instanceRevision == plan.next.revision.next &&
         completion.closingResult.contains(StateMachineOperationResult(H.closingType, submitted.resultReference)))
       Consequence.unit else _invalid("retained complete answer or closing native result differs")
     targets <- U.bindTargetsC(core.component.get.subsystem.get.configuration, declaration)
     key <- _key_c(submitted)
     target <- ComponentRecordStorage.bindForCallC(core, targets.storeName, targets.publication, DataStore.StringEntryId(key))
     row <- target.loadC().flatMap(_.map(Consequence.success).getOrElse(_invalid("completed Human answer lacks its atomic successor")))
-    _ <- if (row.fields.map(_.key).toSet == Set("id", _field) && row.getString("id").contains(key)) Consequence.unit
-      else _invalid("physical successor identity or fields differ")
+    _ <- if (row.getString("id").contains(key)) Consequence.unit
+      else _invalid("physical successor identity differs")
     wire <- row.getString(_field).filter(_.startsWith(_schema + ":")).map(Consequence.success).getOrElse(_invalid("successor frame differs"))
     json <- parser.parse(wire.substring(_schema.length + 1)).fold(_ => _invalid("successor JSON differs"), Consequence.success)
-    _ <- if (json.asObject.exists(_.keys.toSet == Set("schema", "answer", "resolution", "downstream")) &&
-        json.hcursor.get[String]("schema").contains(_schema) && json.hcursor.get[Vector[String]]("answer")
+    _ <- if (json.hcursor.get[String]("schema").contains(_schema) && json.hcursor.get[Vector[String]]("answer")
           .contains(Vector(submitted.resultReference.identity, submitted.resultReference.revision))) Consequence.unit
       else _invalid("successor answer assignment differs")
     resolution <- _optional_c(json.hcursor.downField("resolution").focus, R.decodeC)
     downstream <- _optional_c(json.hcursor.downField("downstream").focus, J.decodeC)
-    calculated <- _calculate_c(plan, submitted, resolution)
-    _ <- if (downstream == calculated._1 && plan.source.current.history.take(calculated._2.history.size) == calculated._2.history)
-      Consequence.unit else _invalid("saved successor or adjacent completed native prefix differs")
-  } yield new Observed(plan, completion, resolution, downstream, calculated._2)
+    next <- selectRetainedSuccessorC(plan, completion, resolution, downstream)
+  } yield new Observed(plan, completion, resolution, downstream, next, plan.source.current)
+
+  /** Select the saved atomic successor, not a recomputed planning/postimage
+    * certificate. Decoding and native storage own their structural admission.
+    */
+  def selectRetainedSuccessorC(plan: H.Plan, completion: WorkflowCompletionRecordJsonV1.Record[A.Answer],
+    resolution: Option[R.Record], downstream: Option[S.Record]): Consequence[InstanceRecord] = for {
+    _ <- (completion.result.result.value, resolution, downstream) match {
+      case (_: A.Answer.ProvideResolution, Some(record), Some(snapshot)) => for {
+        _ <- R.admitTargetC(plan, completion.result, record)
+        source = plan.source.request
+        _ <- if (snapshot.selection.proposal.source.reference == source.source &&
+            snapshot.selection.proposal.source.authority == source.authority &&
+            snapshot.selection.planning.source == source.source && snapshot.selection.planning.authority == source.authority &&
+            snapshot.selection.planning.reference == SplitPhaseExplicitPlanningAdvance.DataReference(
+              completion.result.continuationId.value + ":human-planning", completion.result.expectedRevision.value))
+          Consequence.unit else _invalid("saved planning successor belongs to another source authority or assignment")
+        _ <- if (snapshot.objective.exists(_.isInstanceOf[S.ObjectiveView.Selected])) Consequence.unit
+          else _invalid("saved interpretation has no selected planning successor")
+      } yield ()
+      case (A.Answer.Defer | A.Answer.Cancel, None, None) => Consequence.unit
+      case _ => _invalid("saved direction resolution and successor are incompatible")
+    }
+    current = plan.source.current
+    entry <- current.history.find(_.revision == completion.instanceRevision)
+      .map(Consequence.success).getOrElse(_invalid("saved native completed state is absent"))
+    stopped = completion.result.result.value == A.Answer.Defer || completion.result.result.value == A.Answer.Cancel
+    _ <- if (completion.instanceRevision == plan.next.revision.next &&
+        entry.causation.value == "split-reasoning-human-result:" + completion.result.continuationId.value &&
+        entry.lifecycle == (if (stopped) Lifecycle.Completed else Lifecycle.Active) &&
+        entry.currentProgression == (if (stopped) None else Some(ProgressionReference("HumanAnswered"))) &&
+        entry.suspension.isEmpty)
+      Consequence.unit else _invalid("selected native completed state differs from its actual answer")
+    next = current.copy(revision = entry.revision, lifecycle = entry.lifecycle, currentProgression = entry.currentProgression,
+      correlation = entry.correlation, causation = entry.causation, derivedCompositeOccurrence = entry.derivedCompositeOccurrence,
+      committedPredecessor = entry.committedPredecessor, suspension = entry.suspension,
+      history = current.history.takeWhile(_.revision.value <= entry.revision.value))
+  } yield next
+
+  private def _same_answer(left: ContinuationResult[A.Answer], right: ContinuationResult[A.Answer]): Boolean =
+    NativeHumanQuestionSelection.sameAnswerTarget(left, right) && left.result.value == right.result.value
 
   private def _row_c(submitted: ContinuationResult[A.Answer], resolution: Option[R.Record],
     downstream: Option[S.Record], targets: U.Targets): Consequence[U.Row] = for {
@@ -237,7 +283,6 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
       "answer" -> Json.arr(Json.fromString(submitted.resultReference.identity), Json.fromString(submitted.resultReference.revision)),
       "resolution" -> human, "downstream" -> snapshot).noSpaces
     row = U.Row(targets.publication, key, Record.data(_field -> wire))
-    _ <- U.validateRowsC(Vector(row), targets)
   } yield row
   private def _optional_c[T](json: Option[Json], decode: String => Consequence[T]): Consequence[Option[T]] = json match {
     case Some(value) if value.isNull => Consequence.success(None)
@@ -255,7 +300,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     question <- WorkflowDecisionJsonV1.encodeC(observed.plan.question, H.inputCodec)
   } yield Json.obj("schemaVersion" -> Json.fromString(SplitPhaseManagedHumanCompletion.responseSchema),
     "completingRevision" -> Json.fromLong(observed.completion.instanceRevision.value),
-    "currentRevision" -> Json.fromLong(observed.next.revision.value),
+    "currentRevision" -> Json.fromLong(observed.current.revision.value),
     "issuedDecision" -> Json.fromString(question), "completion" -> Json.fromString(completion)).noSpaces
   private def _invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase managed reasoning Human " + reason)
   private def _uncertain[T](reason: String): Consequence[T] = DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

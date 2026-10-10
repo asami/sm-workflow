@@ -13,12 +13,12 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic a
 /** Pure issue projection requires an independently observed native checkpoint.
   * It does not turn the passive candidate frontier into an executable planner.
   * @since   Oct.  4, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseTypedScopeWorkIssue {
   final class Plan private[SplitPhaseTypedScopeWorkIssue] (val source: D.Source,
     val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, val next: InstanceRecord,
-    val work: WorkflowInteraction[S.Request, Nothing], val request: S.Request, val wire: String)
+    val work: WorkflowInteraction[S.Request, Nothing], val request: S.Request)
   /** Pure output only: native completion provenance is admitted by its owner. */
   final class CompletionProjection private[SplitPhaseTypedScopeWorkIssue] (
     val admitted: S.Admitted, val next: InstanceRecord)
@@ -65,8 +65,7 @@ private[smworkflow] object SplitPhaseTypedScopeWorkIssue {
         required.resultType, bundle, required.metadata.completionContract, required.metadata.evidenceContract,
         completionOperation), source.record.originalContext.owner.requirement,
         MinimalPresentation("HandoffScopeRequired", "Return only the assigned original transfer scopes; Workflow retains every candidate and decision.")))
-    wire <- WorkflowWorkOrderJsonV1.encodeC(work, J.requestCodec)
-  } yield new Plan(source, intent, admitted.next, work, request, wire)
+  } yield new Plan(source, intent, admitted.next, work, request)
 
   /** Canonical issued envelope plus the original host result/evidence. */
   def admitC(plan: Plan, submitted: ContinuationResult[S.Judgment]): Consequence[S.Admitted] = for {

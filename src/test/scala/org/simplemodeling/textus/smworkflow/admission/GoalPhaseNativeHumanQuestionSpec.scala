@@ -190,7 +190,20 @@ final class GoalPhaseNativeHumanQuestionSpec extends AnyWordSpec with Matchers w
       }).isSuccess shouldBe false
     }
 
-    "refuse changed generated routes, presentation fields, identity and context" in {
+    "recover selected presentation without a regenerated-body equality certificate" in {
+      Given("a native Decision with valid declared choices and diagnostic presentation changes")
+      val pending = prepared
+      val decision = pending.issued.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseClosureAuthority.Input]]
+      val body = io.circe.parser.parse(decision.presentation.currentSituation).toOption.get
+      val selected = decision.copy(presentation = decision.presentation.copy(
+        currentSituation = body.spaces2, summary = Some("Another diagnostic summary")))
+      When("the stored Decision is recovered without regenerating its complete wire")
+      val recovered = take(GoalPhaseNativeHumanQuestion.recoverC(pending.issued.copy(current = selected)))
+      Then("the actual question, allocated intent and choices are used without a presentation equality proof")
+      recovered shouldBe pending.question
+    }
+
+    "refuse unsupported schema, routes, identity and context" in {
       Given("a fully projected native Decision")
       val pending = prepared
       val decision = pending.issued.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseClosureAuthority.Input]]
@@ -200,7 +213,6 @@ final class GoalPhaseNativeHumanQuestionSpec extends AnyWordSpec with Matchers w
         decision.copy(presentation = decision.presentation.copy(title = "Changed")),
         decision.copy(presentation = decision.presentation.copy(currentSituation = body.mapObject(_.add("approval", Json.True)).noSpaces)),
         decision.copy(presentation = decision.presentation.copy(currentSituation = body.mapObject(_.add("choices", Json.arr())).noSpaces)),
-        decision.copy(presentation = decision.presentation.copy(summary = Some("Another visible question"))),
         decision.copy(request = decision.request.copy(operation = StateMachineOperationIdentity("StepRepairService", "repairStep"))),
         decision.copy(request = decision.request.copy(completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitStepReview"))),
         decision.copy(request = decision.request.copy(continuationId = ContinuationIdentity("human-question-1"))),
@@ -248,7 +260,11 @@ final class GoalPhaseNativeHumanQuestionSpec extends AnyWordSpec with Matchers w
         work(first).loadC(id).isSuccess shouldBe false
         val changed = take(GoalPhaseNativeHumanQuestion.projectC(pending.question.copy(
           choices = choices.updated(0, choices.head.copy(label = "Another visible question")))))
-        issued.putIfAbsentC(changed).isSuccess shouldBe false
+        When("a later proposal changes the visible choice label at the occupied question identity")
+        val selected = take(issued.putIfAbsentC(changed))
+        Then("the saved question is selected without a full-body comparison, replacement or another suspension")
+        selected shouldBe pending.issued
+        take(GoalPhaseNativeHumanQuestion.recoverC(selected)) shouldBe pending.question
         bytes(take(root(first).loadC(initial.identity)).get) shouldBe bytes(pending.next)
         NativeHumanManagedHostObservation.counts(first) shouldBe (1, 0)
       } finally take(first.shutdownC())

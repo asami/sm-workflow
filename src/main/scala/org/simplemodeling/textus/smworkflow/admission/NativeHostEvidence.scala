@@ -23,9 +23,15 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   */
 private[smworkflow] object NativeHostEvidence {
   val prefix = "sm-workflow.host.evidence."
-  val schema = "sm-workflow.native-host-evidence.v1"
+  val schema = "sm-workflow.native-host-evidence.v7"
   val storageField = "nativeHostEvidencePayload"
   private val storagePrefix = schema + ":"
+  private val _legacy_schema = "sm-workflow.native-host-evidence.v1"
+  private val _previous_schema = "sm-workflow.native-host-evidence.v2"
+  private val _authority_schema = "sm-workflow.native-host-evidence.v3"
+  private val _review_schema = "sm-workflow.native-host-evidence.v4"
+  private val _human_schema = "sm-workflow.native-host-evidence.v5"
+  private val _start_schema = "sm-workflow.native-host-evidence.v6"
   private val maximumBytes = 16 * 1024 * 1024
   enum Purpose(val identity: String) {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
@@ -41,36 +47,59 @@ private[smworkflow] object NativeHostEvidence {
   final case class Declaration(storeName: String, collection: DataStore.CollectionId, issuer: String)
   final case class Evidence(schemaVersion: String, purpose: String, lookupIdentity: String,
     reference: String, revision: String, issuer: String, participant: String,
-    binding: Json, occurredAt: String, validUntil: String)
+    binding: Json, occurredAt: String)
   private given Encoder[Evidence] = deriveEncoder
   private given Decoder[Evidence] = deriveDecoder
-  final case class Observed(evidence: Evidence, occurredAt: Instant, validUntil: Instant)
+  final case class Observed(evidence: Evidence, occurredAt: Instant)
 
   def recordIdentity(purpose: Purpose, identity: String): String =
     purpose.identity + ":" + URLEncoder.encode(identity, UTF_8)
-  def encodeStorageC(value: Evidence): Consequence[String] = validateC(value).map(_ => storagePrefix + value.asJson.noSpaces)
+  def encodeStorageC(value: Evidence): Consequence[String] = for {
+    _ <- validateC(value)
+    purpose <- purposeC(value.purpose)
+    scope <- selectedC(purpose, value.binding, legacy = true)
+    wire = storagePrefix + value.copy(binding = scope).asJson.noSpaces
+    _ <- if (wire.getBytes(UTF_8).length <= maximumBytes) Consequence.unit
+      else Consequence.stateConflict("Native host evidence storage encoding is oversized")
+  } yield wire
   def decodeStorageC(raw: String): Consequence[Evidence] = {
     val parsed = for {
-      text <- Option(raw).filter(s => s.startsWith(storagePrefix) && s.getBytes(UTF_8).length <= maximumBytes)
+      text <- Option(raw).filter(s => s.getBytes(UTF_8).length <= maximumBytes)
         .toRight("Native host evidence storage encoding is absent or oversized")
-      json <- io.circe.parser.parse(text.substring(storagePrefix.length)).left.map(_.message)
+      version <- if (text.startsWith(storagePrefix)) Right(schema)
+        else if (text.startsWith(_start_schema + ":")) Right(_start_schema)
+        else if (text.startsWith(_human_schema + ":")) Right(_human_schema)
+        else if (text.startsWith(_review_schema + ":")) Right(_review_schema)
+        else if (text.startsWith(_authority_schema + ":")) Right(_authority_schema)
+        else if (text.startsWith(_previous_schema + ":")) Right(_previous_schema)
+        else if (text.startsWith(_legacy_schema + ":")) Right(_legacy_schema)
+        else Left("Native host evidence storage version is unsupported")
+      stored <- io.circe.parser.parse(text.substring(version.length + 1)).left.map(_.message)
+      fields <- stored.asObject.toRight("Native host evidence payload must be an object")
+      required = Set("schemaVersion", "purpose", "lookupIdentity", "reference", "revision", "issuer", "participant", "binding", "occurredAt")
+      _ <- Either.cond(required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required ++
+        (if (version == _legacy_schema) Set("validUntil") else Set.empty[String])), (), "Native host evidence contains undeclared or missing fields")
+      _ <- Either.cond(fields("schemaVersion").flatMap(_.asString).contains(version), (),
+        "Native host evidence prefix and payload version differ")
+      // Historical expiry is not an admission input. Normalize it only on the
+      // explicitly recognized legacy storage boundary, never on current input.
+      json = Json.fromJsonObject(fields.remove("validUntil").add("schemaVersion", Json.fromString(schema)))
       value <- json.as[Evidence].left.map(_.message)
-      _ <- Either.cond(value.asJson == json, (), "Native host evidence contains undeclared fields")
-    } yield value
+      purpose <- Purpose.values.find(_.identity == value.purpose).toRight("Native host evidence purpose is unsupported")
+      authority <- NativeHostAuthorityScope.select(purpose, value.binding, legacy = version != schema)
+      selected <- NativeHostReviewScope.select(purpose, authority, legacy = version != schema)
+      human <- NativeHostHumanScope.select(purpose, selected, legacy = version != schema)
+      start <- NativeHostSplitStartScope.select(purpose, human, legacy = version != schema)
+      answer <- NativeHostSplitAnswerScope.select(purpose, start, legacy = version != schema)
+    } yield value.copy(binding = answer)
     parsed.fold(Consequence.stateConflict(_), value => validateC(value).map(_ => value))
   }
   private def validateC(value: Evidence): Consequence[Unit] =
     if (value == null || value.schemaVersion != schema || !Purpose.values.exists(_.identity == value.purpose) ||
         !Vector(value.lookupIdentity, value.reference, value.revision, value.issuer, value.participant).forall(exact) ||
-        value.binding == null || value.binding.isNull ||
-        (storagePrefix + value.asJson.noSpaces).getBytes(UTF_8).length > maximumBytes)
+        value.binding == null || value.binding.isNull)
       Consequence.stateConflict("Native host evidence is incomplete")
-    else for {
-      occurred <- instantC(value.occurredAt)
-      until <- instantC(value.validUntil)
-      _ <- if (occurred.isBefore(until)) Consequence.unit
-        else Consequence.stateConflict("Native host evidence validity interval is empty")
-    } yield ()
+    else instantC(value.occurredAt).map(_ => ())
 
   def decodeDeclarationC(host: ResolvedConfiguration): Consequence[Declaration] =
     if (host == null) Consequence.configurationInvalid("Native host evidence read declaration is absent")
@@ -110,7 +139,7 @@ private[smworkflow] object NativeHostEvidence {
             Consequence.stateConflict("Native host evidence record has no typed payload"))
           value <- decodeStorageC(raw)
           current <- decodeDeclarationC(core.component.get.subsystem.get.configuration)
-          admitted <- observeC(value, current, purpose, identity, binding, core.executionContext.clock.instant())
+          admitted <- observeValidatedC(value, current, purpose, identity, binding, core.executionContext.clock.instant())
         } yield Some(admitted)
       }
     } yield observed
@@ -121,13 +150,48 @@ private[smworkflow] object NativeHostEvidence {
   def observeC(value: Evidence, declared: Declaration, purpose: Purpose, identity: String,
     binding: Json, now: Instant): Consequence[Observed] = for {
     _ <- validateC(value)
+    selected <- selectedC(purpose, value.binding, legacy = true)
+    actual <- observeValidatedC(value.copy(binding = selected), declared, purpose, identity, binding, now)
+  } yield actual
+
+  private def observeValidatedC(value: Evidence, declared: Declaration, purpose: Purpose, identity: String,
+    binding: Json, now: Instant): Consequence[Observed] = for {
     occurred <- instantC(value.occurredAt)
-    until <- instantC(value.validUntil)
+    target <- selectedC(purpose, binding, legacy = true)
+    selected = value.binding
+    _ <- if (purpose == Purpose.RepositoryEffect) {
+      if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
+      else Consequence.securityPermissionDenied("Host effect authority belongs to another selected participant")
+    } else if (NativeHostReviewScope.supports(purpose)) {
+      val result = selected.hcursor.downField("attestation").downField("result")
+      if (result.get[String]("worker").contains(value.participant) &&
+          result.downField("reference").get[String]("identity").contains(value.reference) &&
+          result.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Independent review attestation belongs to another actual worker or result reference")
+    } else if (NativeHostHumanScope.supports(purpose)) {
+      if (selected.hcursor.downField("humanAttestation").downField("answer").get[String]("worker").contains(value.participant) &&
+          selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
+          selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
+    } else if (purpose == Purpose.SplitAnswer) {
+      if (selected.hcursor.downField("splitAnswerAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
+          selected.hcursor.downField("splitAnswerAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Split Human attestation belongs to another actual answer reference")
+    } else Consequence.unit
     _ <- if (value.purpose == purpose.identity && value.lookupIdentity == identity &&
-        value.issuer == declared.issuer && value.binding == binding && now != null &&
-        !occurred.isAfter(now) && now.isBefore(until)) Consequence.unit
-      else Consequence.securityPermissionDenied("Independent host evidence is stale or belongs to another issuer, purpose or complete call binding")
-  } yield Observed(value, occurred, until)
+        declared != null && value.issuer == declared.issuer && selected == target && now != null &&
+        !occurred.isAfter(now)) Consequence.unit
+      else Consequence.securityPermissionDenied("Independent host evidence has a future event time or belongs to another issuer, purpose or actual target")
+  } yield Observed(value.copy(binding = selected), occurred)
+
+  private def purposeC(value: String): Consequence[Purpose] = Purpose.values.find(_.identity == value)
+    .map(Consequence.success).getOrElse(Consequence.stateConflict("Native host evidence purpose is unsupported"))
+  private def selectedC(purpose: Purpose, value: Json, legacy: Boolean): Consequence[Json] =
+    NativeHostAuthorityScope.select(purpose, value, legacy).flatMap(NativeHostReviewScope.select(purpose, _, legacy))
+      .flatMap(NativeHostHumanScope.select(purpose, _, legacy))
+      .flatMap(NativeHostSplitStartScope.select(purpose, _, legacy))
+      .flatMap(NativeHostSplitAnswerScope.select(purpose, _, legacy))
+      .fold(Consequence.stateConflict(_), Consequence.success)
 
   private def stringC(host: ResolvedConfiguration, key: String): Consequence[String] =
     GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {

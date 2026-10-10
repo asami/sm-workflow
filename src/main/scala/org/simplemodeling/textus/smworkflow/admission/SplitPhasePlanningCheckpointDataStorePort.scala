@@ -3,9 +3,12 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
+import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
+import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowManagedMechanicalTransition}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
 import org.goldenport.configuration.ResolvedConfiguration
 import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as J, SplitPhasePlanningCheckpointPublication as U,
   SplitPhasePlanningCheckpointObservation as O, SplitPhaseExplicitPartitionSemantic as S,
@@ -14,14 +17,15 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
 /** Metadata-only complete record observation. No executable planning, physical
   * owner, staged program or captured call is retained.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort private (
   val targets: U.Targets, starts: SplitPhaseTypedStartDataStorePort,
-  contexts: SplitPhasePartitionContextDataStorePort, inputs: SplitPhasePlanningInputDataStorePort
+  contexts: SplitPhasePartitionContextDataStorePort, inputs: SplitPhasePlanningInputDataStorePort,
+  declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog
 ) {
-  /** Current-state routing reads the original selection without constructing
-    * a Start or planning selection. This works before a checkpoint exists.
+  /** Current-state routing reads only actual Start/context metadata without
+    * fresh selection or input-body reads. This works before a checkpoint exists.
     */
   def loadOriginalForCommandC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[O.Original] = for {
     context <- contexts.loadForCallC(S.ContextReference(command.context.identity, command.context.revision), core).flatMap {
@@ -32,10 +36,13 @@ private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort privat
       case Some(value) => Consequence.success(value)
       case None => Consequence.stateConflict("SplitPhase current-state original Start is absent")
     }
-    facts <- inputs.loadCurrentForCallC(context.facts, core)
-  } yield O.Original(context, start, facts)
+  } yield O.Original(context, start, context.facts)
 
-  def loadMappingForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[(K.ContextIndex, K.Record)]] = {
+  def loadMappingForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[(K.ContextIndex, K.Record)]] =
+    loadSelectionForCallC(command, core).map(_.map(value => value.index -> value.record))
+
+  def loadSelectionForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core):
+      Consequence[Option[SplitPhasePlanningCheckpointDataStorePort.Selection]] = {
     val instance = InstanceIdentity(command.instanceIdentity)
     val context = S.ContextReference(command.context.identity, command.context.revision)
     for {
@@ -46,10 +53,33 @@ private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort privat
         case Some(raw) => for {
           index <- J.decodeIndexC(instance, context, raw)
           mappingKey <- U.mappingKeyC(index.mapping)
-          mapping <- requiredC(targets.publication, mappingKey, J.storageField, J.decodeC(index.mapping, _), core)
-          _ <- if (index == K.index(mapping)) Consequence.unit
+          raw <- loadC(targets.publication, mappingKey, J.storageField, core).flatMap {
+            case Some(value) => Consequence.success(value)
+            case None => Consequence.stateConflict("SplitPhase selected checkpoint locator is absent")
+          }
+          locator <- J.decodeLocatorC(index.mapping, raw)
+          mechanical <- locator.origin match {
+            case K.Origin.Mechanical(anchor) => for {
+              storage <- WorkflowComponentStorage.bindC(
+                ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin), SmWorkflowComponent.componentId,
+                declaration.configuration, Vector(catalog.definition), declaration.instances, declaration.continuations)
+              native <- storage.bindMechanicalC(K.advanceOperation, J.payloadCodec)
+              retained <- native.loadRetainedC(anchor)(using core.executionContext).flatMap {
+                case Some(value) => Consequence.success(value)
+                case None => Consequence.stateConflict("SplitPhase selected native mechanical receipt is absent")
+              }
+              _ <- if (retained.current.identity == index.instance) Consequence.unit
+                else Consequence.stateConflict("SplitPhase selected checkpoint belongs to another native instance")
+            } yield Some(retained)
+            case _: K.Origin.PartitionCompletion => Consequence.success(Option.empty[WorkflowManagedMechanicalTransition.Retained[K.Record]])
+          }
+          mapping <- mechanical match {
+            case Some(value) => Consequence.success(value.receipt.payload.value)
+            case None => J.decodeC(index.mapping, raw)
+          }
+          _ <- if (index == K.index(mapping) && mapping.origin == locator.origin) Consequence.unit
             else Consequence.stateConflict("SplitPhase checkpoint index selects a crossed complete mapping")
-        } yield Some(index -> mapping)
+        } yield Some(new SplitPhasePlanningCheckpointDataStorePort.Selection(index, mapping, mechanical))
       }
     } yield result
   }
@@ -63,13 +93,17 @@ private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort privat
       case Some(value) => Consequence.success(value)
       case None => Consequence.stateConflict("SplitPhase checkpoint original Start is absent")
     }
-    facts <- inputs.loadCurrentForCallC(mapping.originalContext.facts, core)
-  } yield O.Original(context, start, facts)
+  } yield O.Original(context, start, context.facts)
 
-  def loadDataForCallC(index: K.ContextIndex, mapping: K.Record,
-    original: O.Original, core: ActionCall.Core): Consequence[O.Data] = for {
-    effective <- inputs.loadCurrentForCallC(mapping.snapshot.selection, core)
-    documents <- O.builtDocuments(mapping.snapshot).foldLeft(Consequence.success(Vector.empty[O.Documents])) {
+  /** At selected frontier consumption, resolve only declared generated inputs
+    * for presence and typed readability. A completion acknowledgement does not
+    * consume these rows; no body is compared to a saved output copy.
+    */
+  def requireDocumentsForCallC(mapping: K.Record, core: ActionCall.Core): Consequence[Unit] =
+    _documents_c(mapping, core).map(_ => ())
+
+  private def _documents_c(mapping: K.Record, core: ActionCall.Core): Consequence[Vector[O.Documents]] =
+    O.builtDocuments(mapping.snapshot).foldLeft(Consequence.success(Vector.empty[O.Documents])) {
       (previous, selected) => for {
         accumulated <- previous
         proposal <- requiredC(targets.proposals, selected.proposal.reference.identity, F.storageField,
@@ -80,7 +114,6 @@ private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort privat
           F.decodeHandoffsC(selected.handoffs.reference, _), core)
       } yield accumulated :+ O.Documents(proposal, ownership, handoffs)
     }
-  } yield O.Data(index, mapping, original, effective, documents)
 
   private def requiredC[A](target: DataStore.CollectionId, identity: String, field: String,
     decode: String => Consequence[A], core: ActionCall.Core): Consequence[A] = loadC(target, identity, field, core).flatMap {
@@ -100,11 +133,18 @@ private[smworkflow] final class SplitPhasePlanningCheckpointDataStorePort privat
 }
 
 private[smworkflow] object SplitPhasePlanningCheckpointDataStorePort {
+  /** The loaded receipt is consumed directly, not queried a second time to
+    * compare two observations or certify an independent stored payload copy.
+    */
+  final class Selection private[SplitPhasePlanningCheckpointDataStorePort] (
+    val index: K.ContextIndex, val record: K.Record,
+    val mechanical: Option[WorkflowManagedMechanicalTransition.Retained[K.Record]])
+
   def bindC(host: ResolvedConfiguration, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[SplitPhasePlanningCheckpointDataStorePort] = for {
     targets <- U.bindTargetsC(host, declaration)
     starts <- SplitPhaseTypedStartReadPolicy.bindC(host, declaration, catalog)
     contexts <- SplitPhasePartitionContextReadPolicy.bindC(host, declaration)
     inputs <- SplitPhasePlanningInputReadPolicy.bindC(host, declaration)
-  } yield new SplitPhasePlanningCheckpointDataStorePort(targets, starts, contexts, inputs)
+  } yield new SplitPhasePlanningCheckpointDataStorePort(targets, starts, contexts, inputs, declaration, catalog)
 }

@@ -31,9 +31,9 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
     val source = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
     val records = source.records.copy(estimates = source.records.estimates.copy(items = source.records.estimates.items.updated(1,
       source.records.estimates.items(1).copy(duration = E.Duration.Unresolved("novel-work")))))
-    val input = take(E.loadC(source.initial, records, records))
+    val input = take(E.loadC(source.initial, records))
     val data = W.Data(W.DataReference("planning", "1"), source.source.reference, source.source.authority, None, O.Records(None, None, None))
-    val selection = take(W.selectC(input, data, data))
+    val selection = take(W.selectC(input, data))
     val pending = take(W.advanceC(selection)).asInstanceOf[W.PartitionSemanticRequired]
     take(S.prepareC(S.ContextReference("context", "1"), pending))
   }
@@ -67,7 +67,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
     "generate purpose-typed payload shapes matching the converted application JSON without a schema adapter" in {
       Given("an actual Workflow-computed request and raw semantic result")
       val context = prepared
-      val result = S.Judgment(context.reference, S.Decision.Enriched, "bounded-analysis",
+      val result = S.Judgment(S.Decision.Enriched, "bounded-analysis",
         Vector(S.NovelEstimate(context.request.items.head.identity, 160, 180, "bounded-work", "new-closure")),
         Vector(S.BoundaryJudgment(context.request.boundaries.head.edge.afterItem, EdgeDisposition.Either, "independent-closure")),
         Vector(S.EvidenceReference("source-analysis", "1")))
@@ -85,7 +85,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
       generatedRequest.asJson shouldBe requestJson
       generatedResult.asJson shouldBe resultJson
       generatedRequest.productElementNames.toSet shouldBe Set("context", "source", "items", "boundaries", "reply")
-      generatedResult.productElementNames.toSet shouldBe Set("context", "decision", "rationale", "estimates", "boundaries", "evidence")
+      generatedResult.productElementNames.toSet shouldBe Set("decision", "rationale", "estimates", "boundaries", "evidence")
       generatedRequest.reply.result.identity shouldBe request.reply.result.identity
       generatedRequest.reply.resolutions.estimates.get.identity shouldBe request.reply.resolutions.estimates.get.identity
       generatedRequest.context.identity shouldBe context.reference.identity
@@ -93,7 +93,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
       generatedRequest.items.head.closure.authority.identity shouldBe context.request.items.head.closure.authority.identity
       generatedResult.boundaries.head.productElementNames.toSet shouldBe Set("afterItem", "disposition", "rationale")
       generatedResult.decision shouldBe S.Decision.Enriched.toString
-      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionSemanticResult(null, \"Enriched\", \"rationale\", Vector.empty, Vector.empty, Vector.empty, nextOperation = \"apply\")")
+      assertDoesNotCompile("org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionSemanticResult(\"Enriched\", \"rationale\", Vector.empty, Vector.empty, Vector.empty, nextOperation = \"apply\")")
       assertDoesNotCompile("org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionBoundaryJudgment(null, \"Either\", \"rationale\", authority = null)")
     }
     "retain the converted Judgment policy and every Required correlation in the actual component JAR" in {
@@ -107,7 +107,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
         val model = catalog.producer.models.find(_.model.workflow.exists(_.identity.value == "SplitPhaseWorkflow")).get
         val judgment = model.judgments.find(_.identity.value == "AssessPartitionSemanticInputs").get
         Then("the admitted packaged declaration describes requested data only and matches the compiled current ABI")
-        catalog.workflow.rawJson shouldBe workflowText
+        catalog.workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
         catalog.definition.workflowRevision.value shouldBe "split-phase-selected-application-v12"
         catalog.workflow.workflow shouldBe take(SplitPhaseDefinitionBinding.candidateC).workflow
         judgment.alternatives.map(_.value) shouldBe Vector("Enriched", "DecisionNeeded")

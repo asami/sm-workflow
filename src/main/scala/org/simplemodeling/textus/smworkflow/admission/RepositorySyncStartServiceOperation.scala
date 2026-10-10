@@ -20,7 +20,9 @@ import org.simplemodeling.textus.smworkflow.value.{RepositorySyncStartCommand, R
 private[smworkflow] object RepositorySyncStartServiceOperation {
   val wireSchema = "sm-workflow.repository-sync-start.v1"
 
-  def encodeCommand(command: RepositorySyncStartCommand): String = Json.obj(
+  def encodeCommand(command: RepositorySyncStartCommand): String = commandJson(command).noSpaces
+
+  private[admission] def commandJson(command: RepositorySyncStartCommand): Json = Json.obj(
     "schemaVersion" -> Json.fromString(wireSchema),
     "input" -> Json.obj(
       "repositoryIdentity" -> Json.fromString(command.input.repositoryIdentity),
@@ -34,7 +36,7 @@ private[smworkflow] object RepositorySyncStartServiceOperation {
     "selectionIdentity" -> Json.fromString(command.selectionIdentity),
     "participantIdentity" -> Json.fromString(command.participantIdentity),
     "idempotencyKey" -> Json.fromString(command.idempotencyKey)
-  ).noSpaces
+  )
 
   def decodeCommandC(wire: String): Consequence[RepositorySyncStartCommand] = {
     if (wire == null)
@@ -46,23 +48,29 @@ private[smworkflow] object RepositorySyncStartServiceOperation {
       schema <- _string(root, "schemaVersion")
       _ <- Either.cond(schema == wireSchema, (), "unsupported RepositorySync Start JSON schema")
       inputJson <- root("input").toRight("RepositorySync Start JSON is missing input")
-      fields <- _fields(inputJson, Set("repositoryIdentity", "localBranch", "trackingRemote",
-        "trackingBranch", "remoteEndpointIdentity", "syncMode", "repositoryPolicyVersion"))
-      repository <- _string(fields, "repositoryIdentity")
-      branch <- _string(fields, "localBranch")
-      remote <- _string(fields, "trackingRemote")
-      tracking <- _string(fields, "trackingBranch")
-      endpoint <- _string(fields, "remoteEndpointIdentity")
-      mode <- _string(fields, "syncMode")
-      policy <- _string(fields, "repositoryPolicyVersion")
+      input <- inputJsonEither(inputJson)
       selection <- _string(root, "selectionIdentity")
       participant <- _string(root, "participantIdentity")
       key <- _string(root, "idempotencyKey")
     } yield RepositorySyncStartCommand(
-      RepositorySyncStartInput(repository, branch, remote, tracking, endpoint, mode, policy),
+      input,
       selection, participant, key)
     decoded.fold(Consequence.stateConflict(_), Consequence.success)
   }
+
+  private[admission] def decodeInputC(value: Json): Consequence[RepositorySyncStartInput] =
+    inputJsonEither(value).fold(Consequence.stateConflict(_), Consequence.success)
+  private def inputJsonEither(value: Json): Either[String, RepositorySyncStartInput] = for {
+    fields <- _fields(value, Set("repositoryIdentity", "localBranch", "trackingRemote",
+      "trackingBranch", "remoteEndpointIdentity", "syncMode", "repositoryPolicyVersion"))
+    repository <- _string(fields, "repositoryIdentity")
+    branch <- _string(fields, "localBranch")
+    remote <- _string(fields, "trackingRemote")
+    tracking <- _string(fields, "trackingBranch")
+    endpoint <- _string(fields, "remoteEndpointIdentity")
+    mode <- _string(fields, "syncMode")
+    policy <- _string(fields, "repositoryPolicyVersion")
+  } yield RepositorySyncStartInput(repository, branch, remote, tracking, endpoint, mode, policy)
 
   def bindC(
     selectionPort: ProfileStartAdmission.SelectionPort,

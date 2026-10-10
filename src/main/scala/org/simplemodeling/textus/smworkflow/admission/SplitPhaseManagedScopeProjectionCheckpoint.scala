@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedScopeSem
   * This internal boundary is not default public routing or a typed Terminal.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
   /** Independently observed data, never a fresh-execution capability. */
@@ -34,9 +34,9 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
 
   final class Port private[SplitPhaseManagedScopeProjectionCheckpoint] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    targets: U.Targets, readbackobservation: () => Consequence[Unit]) {
+    readbackobservation: () => Consequence[Unit]) {
 
-    /** Retained first. None is exact native/application absence at the actual
+    /** Retained first. None is actual native receipt absence at the owning
       * completed predecessor, not a fallback from corrupt or missing history.
       */
     def loadForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
@@ -62,12 +62,8 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
         case Some(value) => Consequence.success(value)
         case None => for {
           projection <- scope.prepareProjectionForCallC(command, core)
-          _ <- if (projection.source.source.record == completed.source.record &&
-              projection.source.completion == completed.completion &&
-              SplitPhaseDefinitionBinding.sameRecord(projection.source.source.current, completed.source.current))
-            Consequence.unit else _invalid("owning source differs across fresh preparation")
           captured <- C.captureC(projection)
-          prepared <- P.prepareC(captured, actualtargets, catalog.definition)
+          prepared <- P.prepareC(captured, actualtargets)
           programs <- prepared.rows.foldLeft(Consequence.success(Vector.empty[ExecUowM[Unit]])) { (prior, row) => for {
             accumulated <- prior
             storage <- ComponentRecordStorage.bindForCallC(core, actualtargets.storeName, row.collection,
@@ -79,17 +75,13 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
           native <- _native_c(core)
           // Exactly the admitted local Creates plus one native receipt. No event
           // batch or caller persistence selector is introduced by this boundary.
-          committed <- native.executeC(captured.intent, program)(using core.executionContext) match {
+          _ <- native.executeC(captured.intent, program)(using core.executionContext) match {
             case Consequence.Success(value) => Consequence.success(value)
             case _ => _uncertain("native commit is not established; observe on a later owning call without retry")
           }
           observed <- loadForCallC(command, core) match {
-            case Consequence.Success(Some(value)) if value.record == captured.record &&
-                committed.receipt.payload.value == captured.record &&
-                SplitPhaseDefinitionBinding.sameRecord(committed.receipt.current, captured.record.before) &&
-                SplitPhaseDefinitionBinding.sameRecord(committed.receipt.next, captured.record.next) &&
-                SplitPhaseDefinitionBinding.sameRecord(value.current, captured.record.next) => Consequence.success(value)
-            case _ => _uncertain("complete committed readback differs or is unavailable; do not repeat publication")
+            case Consequence.Success(Some(value)) => Consequence.success(value)
+            case _ => _uncertain("committed successor observation is unavailable; do not repeat publication")
           }
         } yield observed
       }
@@ -99,41 +91,23 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
       core: ActionCall.Core): Consequence[Option[Observed]] = for {
       reference <- C.referenceC(completed.source.record.reference, completed.completion.result.continuationId,
         completed.completion.result.resultReference)
-      key <- C.keyC(reference)
-      storage <- ComponentRecordStorage.bindForCallC(core, actualtargets.storeName, actualtargets.publication,
-        DataStore.StringEntryId(key))
-      raw <- storage.loadC()
       native <- _native_c(core)
       retained <- native.loadRetainedC(M.Reference(reference.identity, reference.revision))(using core.executionContext)
-      result <- (raw, retained) match {
-        case (None, None) if SplitPhaseDefinitionBinding.sameRecord(completed.source.current, completed.next) =>
-          Consequence.success(None)
-        case (Some(application), Some(actual)) => for {
-          wire <- _wire_c(application, J.storageField, key)
-          record <- J.decodeC(reference, wire, catalog.definition)
-          _ <- C.inspectC(record, catalog.definition)
-          _ <- if (record.snapshot.first == completed.source.record && record.scopeWork == completed.plan.work &&
-              record.scopeCompletion == completed.completion &&
-              SplitPhaseDefinitionBinding.sameRecord(record.scopePredecessor, completed.source.predecessor) &&
-              SplitPhaseDefinitionBinding.sameRecord(record.scopeIssued, completed.plan.next) &&
-              SplitPhaseDefinitionBinding.sameRecord(record.before, completed.next) &&
-              actual.receipt.reference == M.Reference(reference.identity, reference.revision) &&
-              actual.receipt.component == SmWorkflowComponent.componentId && actual.receipt.operation == K.advanceOperation &&
-              actual.receipt.payload.typeIdentity == C.payloadType && actual.receipt.payload.value == record &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.receipt.current, record.before) &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.receipt.next, record.next) &&
-              SplitPhaseDefinitionBinding.sameRecord(actual.current, completed.source.current)) Consequence.unit
-            else _invalid("full application/native/independent source agreement differs")
+      result <- retained match {
+        case None => Consequence.success(None)
+        case Some(actual) => for {
+          _ <- if (actual.current.identity == completed.source.current.identity) Consequence.unit
+            else _invalid("native scope successor selects another instance")
+          value = actual.receipt.payload.value
+          record = C.Record(value.reference, value.snapshot, value.scopeCompletion, actual.receipt.current, actual.receipt.next)
           _ <- _documents_c(record, actualtargets, core)
           _ <- readbackobservation()
         } yield Some(new Observed(record, actual.current, completed))
-        case _ => _invalid("successor is one-sided, absent after later progress or lacks its exact completed predecessor")
       }
     } yield result
 
-    /** Both new and retained Built rows are independently decoded and compared
-      * in full. Original Start/facts/first documents are also rejoined by the
-      * genuine completed source before this boundary can reach these reads.
+    /** Resolve declared Built deliverables and require typed readability.
+      * Their saved bodies are not certificates for the retained native result.
       */
     private def _documents_c(record: C.Record, actualtargets: U.Targets, core: ActionCall.Core): Consequence[Unit] = {
       val documents = record.snapshot.frontier match {
@@ -144,13 +118,11 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
       }
       documents.foldLeft(Consequence.unit) { (prior, document) => prior.flatMap { _ => for {
         proposalwire <- _document_c(actualtargets, actualtargets.proposals, document.proposal.reference.identity, core)
-        proposal <- F.decodeProposalC(document.proposal.reference, proposalwire)
+        _ <- F.decodeProposalC(document.proposal.reference, proposalwire)
         ownershipwire <- _document_c(actualtargets, actualtargets.ownerships, document.ownership.reference.identity, core)
-        ownership <- F.decodeOwnershipC(document.ownership.reference, ownershipwire)
+        _ <- F.decodeOwnershipC(document.ownership.reference, ownershipwire)
         handoffwire <- _document_c(actualtargets, actualtargets.handoffs, document.handoffs.reference.identity, core)
-        handoffs <- F.decodeHandoffsC(document.handoffs.reference, handoffwire)
-        _ <- if (proposal == document.proposal && ownership == document.ownership && handoffs == document.handoffs)
-          Consequence.unit else _invalid("complete committed Built document data differs")
+        _ <- F.decodeHandoffsC(document.handoffs.reference, handoffwire)
       } yield () }}
     }
 
@@ -161,25 +133,21 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
         case Some(value) => Consequence.success(value)
         case None => _invalid("committed Built document is absent")
       }
-      wire <- _wire_c(row, F.storageField, identity)
+      wire <- _wire_c(row, F.storageField)
     } yield wire
 
     private def _targets_c(core: ActionCall.Core): Consequence[U.Targets] =
-      U.bindTargetsC(core.component.get.subsystem.get.configuration, declaration).flatMap { actual =>
-        if (actual.storeName == targets.storeName && actual.localCollections == targets.localCollections &&
-            actual.instances == targets.instances && actual.continuations == targets.continuations) Consequence.success(actual)
-        else _invalid("actual owning storage purposes differ from admitted metadata")
-      }
+      U.bindTargetsC(core.component.get.subsystem.get.configuration, declaration)
 
     private def _scope_c(core: ActionCall.Core): Consequence[S.Port] =
       if (core == null || core.component.isEmpty || core.component.get.subsystem.isEmpty)
         Consequence.securityPermissionDenied("Scope publication requires its actual owning advance call")
       else S.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin), declaration, catalog)
 
-    private def _native_c(core: ActionCall.Core): Consequence[WorkflowManagedMechanicalTransition[C.Record]] =
+    private def _native_c(core: ActionCall.Core): Consequence[WorkflowManagedMechanicalTransition[C.SavedResult]] =
       WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
         SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition),
-        declaration.instances, declaration.continuations).flatMap(_.bindMechanicalC(K.advanceOperation, J.payloadCodec(catalog.definition)))
+        declaration.instances, declaration.continuations).flatMap(_.bindMechanicalC(K.advanceOperation, J.payloadCodec))
   }
 
   def bindC(host: ResolvedConfiguration, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -190,18 +158,12 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
   private[admission] def bindWithReadbackObservationC(host: ResolvedConfiguration,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     observation: () => Consequence[Unit]): Consequence[Port] =
-    if (host == null || declaration == null || catalog == null || observation == null)
-      _invalid("admitted host, declaration, catalog or observation is absent")
-    else for {
-      _ <- SplitPhaseManagedPlanningCheckpoint.bindC(host, declaration, catalog)
-      targets <- U.bindTargetsC(host, declaration)
-    } yield new Port(declaration, catalog, targets, observation)
+    if (declaration == null || catalog == null || observation == null)
+      _invalid("declaration, catalog or observation is absent")
+    else Consequence.success(new Port(declaration, catalog, observation))
 
-  private def _wire_c(record: StorageRecord, field: String, identity: String): Consequence[String] =
-    if (record == null || record.fields.map(_.key).toSet != Set("id", field) ||
-        record.fields.size != 2 || !record.getString("id").contains(identity))
-      _invalid("physical stored identity or complete payload fields differ")
-    else record.getString(field).map(Consequence.success).getOrElse(_invalid("complete stored frame is absent"))
+  private def _wire_c(record: StorageRecord, field: String): Consequence[String] =
+    record.getString(field).map(Consequence.success).getOrElse(_invalid("complete stored frame is absent"))
 
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase managed scope publication " + reason)

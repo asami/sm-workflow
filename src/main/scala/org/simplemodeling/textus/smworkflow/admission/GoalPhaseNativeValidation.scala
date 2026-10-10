@@ -31,18 +31,31 @@ private[smworkflow] object GoalPhaseNativeValidation {
         Consequence.unit else F.invalid("native validation host bindings are incomplete")
   }
   final case class Payload(sourceRevision: String, step: String, candidate: O.Snapshot,
-    policy: Policy, selected: Vector[Check], receipts: Vector[V.Receipt], outcome: Option[String])
-  private val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
+    selected: Vector[Check], receipts: Vector[V.Receipt], outcome: Option[String])
+  private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseAdvanceResult"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-validation.v1"),
+    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-validation.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
         .toRight("native Goal validation envelope differs")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains("sm-workflow.goal-phase-native-validation.v1"),
+      schema <- root("schemaVersion").flatMap(_.asString).toRight("native Goal validation schema is missing")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-validation.v1", "sm-workflow.goal-phase-native-validation.v2")(schema),
         (), "native Goal validation schema differs")
-      payload <- root("payload").get.as[Payload].left.map(_.message)
-      _ <- Either.cond(encode(payload) == value, (), "native Goal validation has undeclared fields")
+      fields <- root("payload").get.asObject.toRight("native Goal validation payload is missing")
+      required = Set("sourceRevision", "step", "candidate", "selected", "receipts")
+      legacy = if (schema.endsWith(".v1")) Set("policy") else Set.empty[String]
+      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
+        fields.keys.toSet.subsetOf(required ++ Set("outcome") ++ legacy) &&
+        fields("candidate").flatMap(_.asObject).exists(_.keys.toSet == Set("head", "tree")) &&
+        fields("selected").flatMap(_.asArray).exists(_.forall(item =>
+          item.asObject.exists(_.keys.toSet == Set("identity", "ordinal")))) &&
+        fields("receipts").flatMap(_.asArray).exists(_.forall(item => item.asObject.exists { receipt =>
+          val keys = receipt.keys.toSet
+          val required = Set("identity", "termination", "stdout", "stderr")
+          required.subsetOf(keys) && keys.subsetOf(required + "exitCode")
+        })), (), "native Goal validation has undeclared fields")
+      payload <- Json.fromJsonObject(fields.remove("policy")).as[Payload].left.map(_.message)
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
@@ -91,7 +104,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     }}
     scope = if (whole) "phase:" + controller.plan.phase else controller.plan.steps(controller.cursor).identity
     initial = Payload(candidate.record.revision.value.toString, scope, candidate.payload.candidate.get,
-      policy, selected, Vector.empty, None)
+      selected, Vector.empty, None)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
   } yield new Store(adapter, session, d, core, candidate, controller, initial, acknowledgement)
 
@@ -104,14 +117,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
         result <- store.loadC("check-result-" + index)
         saved <- result match {
           case Some(value) =>
-            if (value.payload.receipts.size == index + 1 &&
-                value.payload.receipts.take(index) == current.payload.receipts &&
-                value.payload.receipts.last.identity == check.identity) Consequence.success(value)
+            // loadC has already resolved the selected identities/order. Only
+            // this slot's completed frontier remains to be checked here.
+            if (value.payload.receipts.size == index + 1) Consequence.success(value)
             else F.invalid("retained check result crosses its actual selected frontier")
           case None => intent match {
-            case Some(value) =>
-              if (value.payload.receipts == current.payload.receipts) Consequence.success(value)
-              else F.invalid("retained check intent crosses its actual selected frontier")
+            case Some(value) => Consequence.success(value) // A selected intent with no result is not replayed.
             case None => for {
               _ <- store.preconditionsC
               prepared <- store.saveC("check-intent-" + index, current.record, current.payload)
@@ -162,7 +173,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case Some(value) =>
         val p = value.receipt.payload.value
         if (p.sourceRevision == initial.sourceRevision && p.step == initial.step && p.candidate == initial.candidate &&
-            p.policy == initial.policy && p.selected == initial.selected && p.receipts.size <= p.selected.size &&
+            p.selected == initial.selected && p.receipts.size <= p.selected.size &&
             p.receipts.map(_.identity) == p.selected.take(p.receipts.size).map(_.identity) &&
             F.prefix(value.receipt.next, candidate.record) && F.prefix(session.current, value.receipt.next))
           Consequence.success(Some(Saved(value.receipt.next, p)))

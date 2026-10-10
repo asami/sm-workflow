@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
   * CNCF owns the common WorkOrder/result envelopes and their correlation.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 10, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
@@ -27,7 +27,7 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
   private given Decoder[R.Decision] = Decoder.decodeString.emap(value =>
     R.Decision.values.find(_.toString == value).toRight("Unknown reasoning decision"))
 
-  final class ClosedCodec[A] private[SplitPhaseExplicitReasoningSemanticJson] (
+  final class Codec[A] private[SplitPhaseExplicitReasoningSemanticJson] (
     val schema: String, val typeIdentity: String, serializable: A => Boolean
   )(using Encoder[A], Decoder[A]) extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encodeC(value: A): Consequence[Json] =
@@ -45,13 +45,11 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
       if (value == null || _payload_bytes(value) > MAXIMUM_PAYLOAD_BYTES)
         Left("Reasoning semantic payload is absent or oversized")
       else for {
-        root <- value.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload"))
-          .toRight("Reasoning semantic envelope fields differ")
-        _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (),
+        version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
+        _ <- Either.cond(version == schema, (),
           "Unsupported reasoning semantic schema")
-        decoded <- root("payload").get.as[A].left.map(_.message)
-        declared <- encodeC(decoded).toOption.toRight("Reasoning semantic data is incomplete")
-        _ <- Either.cond(declared == value, (), "Reasoning semantic nested fields differ")
+        payload <- value.hcursor.get[Json]("payload").left.map(_.message)
+        decoded <- payload.as[A].left.map(_.message)
       } yield decoded
 
     /** One checked application payload is inserted into one CNCF envelope. */
@@ -67,9 +65,9 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
     }
   }
 
-  val requestCodec = new ClosedCodec[R.Request]("sm-workflow.split-phase-reasoning-request.v2",
+  val requestCodec = new Codec[R.Request]("sm-workflow.split-phase-reasoning-request.v2",
     "SplitPhaseReasoningSemanticRequest", _request_data)
-  val resultCodec = new ClosedCodec[R.Judgment]("sm-workflow.split-phase-reasoning-result.v1",
+  val resultCodec = new Codec[R.Judgment]("sm-workflow.split-phase-reasoning-result.v1",
     "SplitPhaseReasoningSemanticResult", _judgment_data)
 
   def encodeWorkOrderC(value: WorkflowInteraction[R.Request, Nothing]): Consequence[String] =
@@ -89,13 +87,14 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
 
   // Serializable shape only: exact unknown coverage, rationale/evidence quality,
   // current facts and selected replacement references belong to R.admitC.
+
   private def _request_data(request: R.Request): Boolean = request != null && _context(request.context) &&
     request.source != null && request.source.identity != null && request.source.revision != null &&
     _authority(request.authority) && request.demand != null && request.demand.identity != null &&
     request.demand.revision != null && request.result != null && request.result.identity != null &&
     request.result.revision != null && request.items != null && request.items.forall(item =>
       item != null && _work(item.identity) && item.reason != null && _item(item.closure))
-  private def _judgment_data(judgment: R.Judgment): Boolean = judgment != null && _context(judgment.context) &&
+  private def _judgment_data(judgment: R.Judgment): Boolean = judgment != null &&
     judgment.decision != null && judgment.rationale != null && judgment.assignments != null &&
     judgment.assignments.forall(assignment => assignment != null && _work(assignment.identity) &&
       assignment.classification != null && assignment.rationale != null) && judgment.evidence != null &&

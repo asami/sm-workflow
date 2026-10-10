@@ -101,7 +101,6 @@ private[smworkflow] object RepositorySyncFastForwardAdmissionExecution {
     if (record == null || record.identity != initial.identity || record.definition == null ||
         record.definition.workflowIdentity != initial.definition.workflowIdentity ||
         record.definition.workflowRevision != initial.definition.workflowRevision ||
-        record.definition.fixtureSha256 != initial.definition.fixtureSha256 ||
         record.correlation != initial.correlation || record.derivedCompositeOccurrence.nonEmpty ||
         record.committedPredecessor.nonEmpty || record.suspension.nonEmpty ||
         record.lifecycle != Lifecycle.Active || record.history == null || record.revision == null ||

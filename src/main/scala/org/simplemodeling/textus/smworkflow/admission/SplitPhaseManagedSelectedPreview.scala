@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   * Reopen observes either step; uncertainty never causes an immediate retry.
   * This writes no Phase document and supplies no APPLY authority.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object SplitPhaseManagedSelectedPreview {
   import SplitPhaseExplicitPartitionRawCodecs.given
@@ -44,12 +44,14 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     observation: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
     source <- F.loadForAdvanceC(command, declaration, catalog, core)
-    _ <- if (source.original.original.start.command.input.invocationMode == "PREVIEW") Consequence.unit
+    result <- advanceObservedC(command, source, declaration, catalog, core, observation)
+  } yield result
+
+  def advanceObservedC(command: SplitPhaseAdvanceCommand, source: F.Observed,
+    declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
+    core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
+    _ <- if (source.invocationMode == "PREVIEW") Consequence.unit
       else Consequence.serviceUnavailable("SplitPhase selected APPLY plan requires its authorized document handler; PREVIEW cannot close it")
-    _ <- R.dispositionC(source.snapshot).flatMap {
-      case R.Disposition.Planned => Consequence.unit
-      case _ => _invalid("the actual whole frontier has no final selected partition")
-    }
     payload <- projectC(source.snapshot, command.context.identity, command.context.revision)
     reference = WorkflowMechanicalTransition.Reference(command.instanceIdentity + ":selected-preview", "1")
     storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
@@ -120,10 +122,9 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
 
   /** Deterministic human projection of the saved selection, not planning. */
   def projectC(snapshot: R.Record, context: String, revision: String): Consequence[Json] = for {
-    _ <- R.dispositionC(snapshot).flatMap {
-      case R.Disposition.Planned => Consequence.unit
-      case _ => _invalid("projection requires the selected whole frontier")
-    }
+    // The document consumer interprets this raw frontier once before rendering.
+    // Neither its material nor this passive preview supplies native/write grants.
+    documents <- SplitPhaseSelectedDocuments.projectC(snapshot)
     selected <- snapshot.objective match {
       case Some(value: R.ObjectiveView.Selected) => Consequence.success(value)
       case _ => _invalid("selected objective is absent")
@@ -150,7 +151,6 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
     // Present complete admitted typed data, not its versioned storage frame.
     ownership = built.ownership.asJson
     handoffs = built.handoffs.asJson
-    documents <- SplitPhaseSelectedDocuments.projectC(snapshot)
   } yield Json.obj("schemaVersion" -> Json.fromString(schema), "mode" -> Json.fromString("PREVIEW"),
     "context" -> referenceJson(context, revision),
     "source" -> referenceJson(built.proposal.source.identity, built.proposal.source.revision),

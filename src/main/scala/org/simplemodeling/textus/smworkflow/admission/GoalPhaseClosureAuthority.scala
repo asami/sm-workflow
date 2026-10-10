@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.time.Instant
 import domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1
 import io.circe.Json
@@ -23,12 +22,12 @@ private[smworkflow] object GoalPhaseClosureAuthority {
   val requirementIdentity = "goal-phase-step-close-authority"
   val reason = "step-close-authority-unavailable"
   final case class Input(reason: String, candidate: StepCloseRequest,
-    candidateRevision: String, requestDigest: String)
+    candidateRevision: String)
   final case class Intent(handle: WorkflowHandle, expectedRevision: StateMachineRevision,
     snapshot: ContextSnapshot, input: Input, idempotencyKey: String)
   final case class Authorization(handle: WorkflowHandle, expectedRevision: StateMachineRevision,
-    contextSnapshot: ContextSnapshot, requestDigest: String,
-    authorityReference: String, participantIdentity: String, grantedAt: Instant, validUntil: Instant)
+    contextSnapshot: ContextSnapshot,
+    authorityReference: String, participantIdentity: String, grantedAt: Instant)
   enum AuthorityStatus {
     case Recorded, Missing
   }
@@ -84,17 +83,18 @@ private[smworkflow] object GoalPhaseClosureAuthority {
       def encode(value: Input): Json = Json.obj(
         "reason" -> Json.fromString(value.reason),
         "candidate" -> GoalPhaseStepCloseJson.payloadCodec.encode(value.candidate),
-        "candidateRevision" -> Json.fromString(value.candidateRevision),
-        "requestDigest" -> Json.fromString(value.requestDigest))
+        "candidateRevision" -> Json.fromString(value.candidateRevision))
       def decode(value: Json): Either[String, Input] = for {
-        fields <- value.asObject.filter(_.keys.toSet == Set("reason", "candidate", "candidateRevision", "requestDigest"))
+        fields <- value.asObject.filter { root =>
+          val required = Set("reason", "candidate", "candidateRevision")
+          root.keys.toSet == required || root.keys.toSet == required + "requestDigest"
+        }
           .toRight("invalid GoalPhase authority Decision input")
         why <- fields("reason").flatMap(_.asString).toRight("missing authority reason")
         candidate <- GoalPhaseStepCloseJson.payloadCodec.decode(fields("candidate").get)
         revision <- fields("candidateRevision").flatMap(_.asString).toRight("missing authority candidate revision")
-        digest <- fields("requestDigest").flatMap(_.asString).toRight("missing authority request digest")
-        input = Input(why, candidate, revision, digest)
-        _ <- Either.cond(_validInput(input), (), "authority Decision input differs from its candidate")
+        input = Input(why, candidate, revision)
+        _ <- admitInputC(input).toOption.toRight("authority Decision input differs from its candidate")
       } yield input
     }
 
@@ -112,8 +112,8 @@ private[smworkflow] object GoalPhaseClosureAuthority {
     else for {
       _ <- ports.validateC
       plan <- GoalPhaseStepClosureBoundary.planPreReviewedC(input, review, asOf, handle, current)
-      response <- _closePlanC(input, review.identity, asOf, handle, plan,
-        instances, configuration, snapshot, commit, ports, true, () => Consequence.unit)
+      response <- _closePlanC(input, review.identity, handle, plan,
+        instances, configuration, snapshot, commit, ports, true)
     } yield response
 
   def closeReviewedOrDecisionC(artifact: CandidateAdmissionProducerAbi.Artifact,
@@ -121,10 +121,9 @@ private[smworkflow] object GoalPhaseClosureAuthority {
     submitted: ContinuationResult[ReviewStepResult], asOf: Instant, current: InstanceRecord,
     instances: WorkflowInstancePersistence, configuration: Configuration,
     snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
-    commit: GoalPhaseStepClosureBoundary.CommitPort, ports: Ports, allowCommit: Boolean,
-    validateRetained: () => Consequence[Unit]): Consequence[String] =
+    commit: GoalPhaseStepClosureBoundary.CommitPort, ports: Ports, allowCommit: Boolean): Consequence[String] =
     if (ports == null || asOf == null || instances == null || configuration == null ||
-        snapshot == null || (allowCommit && commit == null) || validateRetained == null)
+        snapshot == null || (allowCommit && commit == null))
       Consequence.stateConflict("GoalPhase reviewed authority context is incomplete")
     else for {
       _ <- ports.validateC
@@ -137,19 +136,18 @@ private[smworkflow] object GoalPhaseClosureAuthority {
       input = original.copy(reviewEvidence =
         (original.reviewEvidence ++ submitted.result.value.reviewEvidence).distinct)
       _ <- StepCloseRequestAdapter.submissionC(input)
-      response <- _closePlanC(input, work.request.requiredOperation, asOf, issued.handle, plan,
-        instances, configuration, snapshot, commit, ports, allowCommit, validateRetained)
+      response <- _closePlanC(input, work.request.requiredOperation, issued.handle, plan,
+        instances, configuration, snapshot, commit, ports, allowCommit)
     } yield response
 
   /** Native follow-up assesses a retained review without constructing a legacy
     * stop-only request. The caller must finish this read-only guard before any
-    * managed native publication and re-admit its exact current predecessor.
+    * managed native publication. Publication owns its actual state/CAS boundary;
+    * this observation is neither permission nor an unchanged-content witness.
     */
   private[admission] def assessReviewedC(artifact: CandidateAdmissionProducerAbi.Artifact,
     issued: WorkflowInteraction[StepCloseRequest, Nothing], submitted: ContinuationResult[ReviewStepResult],
-    asOf: Instant, current: InstanceRecord, instances: WorkflowInstancePersistence,
-    configuration: Configuration, snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
-    authorization: AuthorizationPort, validateRetained: () => Consequence[Unit]): Consequence[Assessment] =
+    asOf: Instant, current: InstanceRecord, authorization: AuthorizationPort): Consequence[Assessment] =
     for {
       plan <- GoalPhaseStepClosureBoundary.planReviewedC(artifact, issued, submitted, asOf, current)
       work <- issued.current match {
@@ -159,20 +157,15 @@ private[smworkflow] object GoalPhaseClosureAuthority {
       original = work.request.input.get.value
       input = original.copy(reviewEvidence =
         (original.reviewEvidence ++ submitted.result.value.reviewEvidence).distinct)
-      assessed <- assessPlanC(input, asOf, issued.handle, plan, instances, configuration,
-        snapshot, authorization, validateRetained)
+      assessed <- assessPlanC(input, issued.handle, plan, authorization)
     } yield assessed
 
   /** Package-local seam for already admitted plans; never accepts caller wire. */
-  private[admission] def assessPlanC(input: StepCloseRequest, asOf: Instant, handle: WorkflowHandle,
-    plan: GoalPhaseStepClosureBoundary.Plan, instances: WorkflowInstancePersistence,
-    configuration: Configuration, snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
-    authorization: AuthorizationPort, validateRetained: () => Consequence[Unit]): Consequence[Assessment] =
-    _inspectPlanC(input, asOf, handle, plan, instances, configuration, snapshot, authorization,
-      validateRetained, (intent, evaluated) =>
+  private[admission] def assessPlanC(input: StepCloseRequest, handle: WorkflowHandle,
+    plan: GoalPhaseStepClosureBoundary.Plan, authorization: AuthorizationPort): Consequence[Assessment] =
+    _inspectPlanC(input, handle, plan, authorization, (intent, evaluated) =>
         if (evaluated.gaps.isEmpty) Consequence.success(Assessment(intent, AuthorityStatus.Recorded))
         else _routeGapC(evaluated, plan.current).map(_ => Assessment(intent, AuthorityStatus.Missing)))
-      .map(_._1)
 
   private def _routeGapC(evaluated: AdmissionEvaluation[String], current: InstanceRecord): Consequence[Unit] =
     CandidateAdmissionGapRouting.resolveForInstanceC(evaluated,
@@ -182,53 +175,34 @@ private[smworkflow] object GoalPhaseClosureAuthority {
       else Consequence.stateConflict("GoalPhase authority gap routing is ambiguous")
     }
 
-  /** Selection stays between the first reads and their drift checks, preserving
-    * the existing stop-only route's exact lookup order. Neither this guard nor
-    * native assessment writes state or executes commands.
+  /** Consume one actual authority observation for an admitted plan. No saved
+    * result callback, artifact preflight, post-lookup instance/grant reload or
+    * unchanged-content proof. An Assessment does not authorize a later effect.
     */
-  private def _inspectPlanC[A](input: StepCloseRequest, asOf: Instant, handle: WorkflowHandle,
-    plan: GoalPhaseStepClosureBoundary.Plan, instances: WorkflowInstancePersistence,
-    configuration: Configuration, snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
-    authorization: AuthorizationPort, validateRetained: () => Consequence[Unit],
+  private def _inspectPlanC[A](input: StepCloseRequest, handle: WorkflowHandle,
+    plan: GoalPhaseStepClosureBoundary.Plan, authorization: AuthorizationPort,
     select: (Intent, AdmissionEvaluation[String]) => Consequence[A]
-  ): Consequence[(A, GoalPhaseStepClosureBoundary.SnapshotPort)] =
-    if (input == null || asOf == null || handle == null || plan == null || plan.current == null || plan.commitRequest == null ||
-        instances == null || configuration == null || snapshot == null || authorization == null ||
-        validateRetained == null || select == null)
+  ): Consequence[A] =
+    if (input == null || handle == null || plan == null || plan.current == null || plan.commitRequest == null ||
+        authorization == null || select == null)
       Consequence.stateConflict("GoalPhase authority assessment context is incomplete")
     else {
       val current = plan.current
       for {
-        _ <- validateRetained()
-        scoped <- GoalPhaseCallScopedSnapshot.forCurrentC(snapshot, current, input)
-        bytes <- scoped.loadC(input.stepIdentity)
-        _ <- GoalPhaseStepClosureBoundary.admitSnapshotC(plan.commitRequest, bytes)
         intent <- intentC(input, handle, current)
         authority <- authorization.loadC(intent)
-        evaluated <- _evaluateC(intent, asOf, authority)
+        evaluated <- _evaluateC(intent, authority)
         selected <- select(intent, evaluated)
-        loaded <- instances.load(configuration, current.identity)
-        _ <- if (loaded.exists(value => GoalPhaseStepClosureBoundary.sameRecord(current, value))) Consequence.unit
-          else Consequence.stateConflict("GoalPhase authority lookup changed the Workflow instance")
-        latestBytes <- scoped.loadC(input.stepIdentity)
-        _ <- if (latestBytes == bytes) Consequence.unit
-          else Consequence.stateConflict("GoalPhase authority lookup changed the candidate bytes")
-        latestAuthority <- authorization.loadC(intent)
-        _ <- if (latestAuthority == authority) Consequence.unit
-          else Consequence.stateConflict("GoalPhase authority evidence changed during lookup")
-        _ <- validateRetained()
-      } yield (selected, scoped)
+      } yield selected
     }
 
   private def _closePlanC(input: StepCloseRequest, review: StateMachineRequiredOperationIdentity,
-    asOf: Instant, handle: WorkflowHandle, plan: GoalPhaseStepClosureBoundary.Plan,
+    handle: WorkflowHandle, plan: GoalPhaseStepClosureBoundary.Plan,
     instances: WorkflowInstancePersistence, configuration: Configuration,
     snapshot: GoalPhaseStepClosureBoundary.SnapshotPort,
-    commit: GoalPhaseStepClosureBoundary.CommitPort, ports: Ports, allowCommit: Boolean,
-    validateRetained: () => Consequence[Unit]): Consequence[String] = {
+    commit: GoalPhaseStepClosureBoundary.CommitPort, ports: Ports, allowCommit: Boolean): Consequence[String] = {
     for {
-      inspected <- _inspectPlanC(input, asOf, handle, plan, instances, configuration, snapshot,
-        ports.authorizations, validateRetained, (intent, evaluated) =>
+      decision <- _inspectPlanC(input, handle, plan, ports.authorizations, (intent, evaluated) =>
         if (evaluated.gaps.isEmpty) Consequence.success(Option.empty[String])
         else for {
           _ <- _routeGapC(evaluated, plan.current)
@@ -238,13 +212,24 @@ private[smworkflow] object GoalPhaseClosureAuthority {
             WorkflowContinuation.Decision(request, MinimalPresentation("Step closure authority",
               "Exact local commit authority is unavailable; Step remains open"))), inputCodec)
         } yield Some(wire))
-      (decision, scoped) = inspected
       response <- decision match {
         case Some(wire) => Consequence.success(wire)
         case None if !allowCommit =>
           Consequence.stateConflict("GoalPhase read-only retained projection cannot commit or resume authority")
         case None => for {
-          closed <- GoalPhaseStepClosureBoundary.commitPlanC(plan, instances, configuration, scoped, commit)
+          // Actual command ingress, not a certificate after read-only observation.
+          // The fixture command and subsequent append are still separate effects.
+          executing <- instances.load(configuration, plan.current.identity).flatMap {
+            case Some(value) if value.revision == plan.current.revision &&
+                value.lifecycle == Lifecycle.Active && value.suspension.isEmpty &&
+                value.currentProgression.contains(ProgressionReference("step.Awaiting")) => Consequence.success(value)
+            case _ => Consequence.stateConflict("GoalPhase commit target is not at its expected Awaiting revision")
+          }
+          target <- WorkflowHandle.fromRecordC(handle.componentIdentity, executing)
+          _ <- if (target == handle) Consequence.unit
+            else Consequence.stateConflict("GoalPhase commit target has a different executable Workflow reference")
+          scoped <- GoalPhaseCallScopedSnapshot.forCurrentC(snapshot, executing, input)
+          closed <- GoalPhaseStepClosureBoundary.commitPlanC(plan.copy(current = executing), instances, configuration, scoped, commit)
           closedHandle <- WorkflowHandle.fromRecordC(handle.componentIdentity, closed.instance)
           terminal <- projectTerminalC(closedHandle, closed.instance,
             TypedValue("StepCloseResult", closed.receipt.commitIdentity),
@@ -255,7 +240,10 @@ private[smworkflow] object GoalPhaseClosureAuthority {
     } yield response
   }
 
-  /** Pure correlation shared by projection and immutable stop metadata retention. */
+  /** Domain address for the selected completion, not a content certificate.
+    * Previously allocated historical identities remain opaque read references;
+    * this producer neither rehashes old payloads nor invents their lookup mapping.
+    */
   private[admission] def intentC(input: StepCloseRequest, handle: WorkflowHandle,
     current: InstanceRecord): Consequence[Intent] =
     if (handle == null || current == null) Consequence.stateConflict("Closure intent context is missing")
@@ -265,26 +253,24 @@ private[smworkflow] object GoalPhaseClosureAuthority {
       actual <- WorkflowHandle.fromRecordC(handle.componentIdentity, current)
       _ <- if (actual == handle) Consequence.unit else Consequence.stateConflict("Closure intent Handle differs")
       submission <- StepCloseRequestAdapter.submissionC(input)
-      digest = _digest(GoalPhaseStepCloseJson.encode(input))
       revision = submission.candidate.reference.revision
+      address = Vector(handle.componentIdentity.name, handle.workflowIdentity.value,
+        handle.workflowRevision.value, current.identity.value, current.revision.value.toString,
+        input.submissionIdentity, input.stepIdentity)
+        .map(value => s"${value.getBytes(StandardCharsets.UTF_8).length}:$value").mkString
     } yield Intent(handle, StateMachineRevision(current.revision.value.toString),
-      ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision), evidenceRevision = Some(digest)),
-      Input(reason, input, revision, digest),
-      _digest(s"${handle.instanceIdentity.value}:${current.revision.value}:$digest"))
+      ContextSnapshot(handle.workflowRevision.value, modelRevision = Some(revision)),
+      Input(reason, input, revision), "closure:" + address)
 
-  private def _evaluateC(intent: Intent, asOf: Instant,
-    supplied: Option[Authorization]): Consequence[AdmissionEvaluation[String]] =
+  private def _evaluateC(intent: Intent, supplied: Option[Authorization]): Consequence[AdmissionEvaluation[String]] =
     if (supplied == null || supplied.exists(value => value == null || value.handle != intent.handle ||
-        value.expectedRevision != intent.expectedRevision || value.contextSnapshot != intent.snapshot ||
-        value.requestDigest != intent.input.requestDigest || !_name(value.authorityReference) ||
-        !_name(value.participantIdentity) || value.grantedAt == null || value.validUntil == null ||
-        value.grantedAt.isAfter(asOf) || value.validUntil.isBefore(asOf) ||
-        value.validUntil.isBefore(value.grantedAt)))
-      Consequence.stateConflict("GoalPhase commit authority is malformed, stale or outside the exact request")
+        value.expectedRevision != intent.expectedRevision || !sameContextScope(value.contextSnapshot, intent.snapshot) ||
+        !_name(value.authorityReference) || !_name(value.participantIdentity) || value.grantedAt == null))
+      Consequence.stateConflict("GoalPhase commit authority is malformed or outside the current scope")
     else for {
       reference <- StepClosureAdmission.candidateRefC(StepClosureAdmission.StepSnapshot(
         intent.input.candidate.stepIdentity, intent.input.candidate.programDigest, intent.input.candidate.planningDigest))
-      scope = TypedValue("goal-phase-closure-authority-scope-v1", intent.input.requestDigest)
+      scope = TypedValue("goal-phase-closure-authority-scope-v2", intent.input.candidate.submissionIdentity)
       evidence = supplied.toVector.map(value => AdmissionEvidence(value.authorityReference, requirementIdentity,
         reference, TypedValue("goal-phase-closure-authority-v1", value), scope, value.participantIdentity))
       submission <- AdmissionSubmission(intent.input.candidate.submissionIdentity,
@@ -295,7 +281,7 @@ private[smworkflow] object GoalPhaseClosureAuthority {
         Vector(AdmissionRequirement(requirementIdentity, RequirementKind.Authority,
           "goal-phase-closure-authority-v1", scope)), new EvidencePolicy[Authorization, String] {
           def isFresh(evidence: AdmissionEvidence[Authorization, String], target: CandidateRef): Boolean =
-            !evidence.payload.value.grantedAt.isAfter(asOf) && !evidence.payload.value.validUntil.isBefore(asOf)
+            true
           def covers(evidence: AdmissionEvidence[Authorization, String], requirement: AdmissionRequirement[String]): Boolean =
             evidence.scope == requirement.scope
         })
@@ -308,24 +294,36 @@ private[smworkflow] object GoalPhaseClosureAuthority {
     if (request == null || request.context == null || request.requiredOperation == null ||
         semanticCapabilities.contains(request.requiredOperation.capability) ||
         request.runId != StateMachineRunIdentity(current.identity.value) ||
-        request.expectedRevision != intent.expectedRevision || request.context.snapshot != intent.snapshot ||
-        request.input != Some(TypedValue(inputCodec.typeIdentity, intent.input)) ||
+        request.expectedRevision != intent.expectedRevision || !sameContextScope(request.context.snapshot, intent.snapshot) ||
+        !request.input.exists(value => value != null && value.typeIdentity == inputCodec.typeIdentity && sameInputScope(value.value, intent.input)) ||
         request.resultType == null || request.resultType.nonEmpty ||
         request.context.requiredFacts == null || !request.context.requiredFacts.contains(
           ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)) ||
-        request.context.references == null || !request.context.references.contains(
-          ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)) ||
         request.operation == null || request.completionOperation == null ||
         request.operation.service == "GoalPhaseService" || request.completionOperation.service == "GoalPhaseService")
       Consequence.stateConflict("GoalPhase authority Decision host request differs from the frozen intent")
     else Consequence.unit
   }
 
-  private def _validInput(input: Input): Boolean = input != null && input.reason == reason &&
-    StepCloseRequestAdapter.submissionC(input.candidate).toOption.exists(value =>
-      value.candidate.reference.revision == input.candidateRevision) &&
-    input.requestDigest == _digest(GoalPhaseStepCloseJson.encode(input.candidate))
+  private[admission] def sameContextScope(left: ContextSnapshot, right: ContextSnapshot): Boolean =
+    left != null && right != null && left.workflowRevision == right.workflowRevision && left.modelRevision == right.modelRevision
+
+  private[admission] def sameInputScope(left: Input, right: Input): Boolean =
+    left != null && right != null && left.reason == right.reason && left.candidate != null && right.candidate != null &&
+      left.candidate.submissionIdentity == right.candidate.submissionIdentity &&
+      left.candidate.stepIdentity == right.candidate.stepIdentity && left.candidateRevision == right.candidateRevision
+
+  private[admission] def sameIntentScope(left: Intent, right: Intent): Boolean =
+    left != null && right != null && left.handle == right.handle && left.expectedRevision == right.expectedRevision &&
+      left.idempotencyKey == right.idempotencyKey && sameContextScope(left.snapshot, right.snapshot) &&
+      sameInputScope(left.input, right.input)
+
+  private[admission] def admitInputC(input: Input): Consequence[Unit] =
+    if (input == null || input.reason != reason)
+      Consequence.stateConflict("Closure authority input is absent or has an unsupported reason")
+    else StepCloseRequestAdapter.submissionC(input.candidate).flatMap { value =>
+      if (value.candidate.reference.revision == input.candidateRevision) Consequence.unit
+      else Consequence.stateConflict("Closure authority input has a different candidate target")
+    }
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty
-  private def _digest(value: String): String = MessageDigest.getInstance("SHA-256")
-    .digest(value.getBytes(StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
 }

@@ -23,7 +23,7 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
     val boundary = proof(source, candidate, "scope-template", handoffPairs = Vector(0 -> 1))
     SplitPhasePlanningCheckpointFixture.forBoundary(source, boundary).record
   }
-  private def _judgment(request: S.Request) = S.Judgment(request.context, request.checkpoint,
+  private def _judgment(request: S.Request) = S.Judgment(
     S.Decision.Enriched, "transfer-closure-analysis", request.gaps.map(gap => S.Scope(gap.original.identity,
       gap.producingItems.takeRight(1), gap.receivingItems.take(1), "only these items produce and consume the original evidence")),
     Vector(P.EvidenceReference("scope-evidence", "1")))
@@ -64,8 +64,7 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
       actual.judgment shouldBe enriched
       val first = enriched.scopes.head
       val foreign = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("foreign")
-      val invalid = Vector(enriched.copy(context = request.context.copy(revision = "foreign")),
-        enriched.copy(checkpoint = request.checkpoint.copy(revision = "foreign")), enriched.copy(scopes = Vector.empty),
+      val invalid = Vector(enriched.copy(scopes = Vector.empty),
         enriched.copy(scopes = enriched.scopes.updated(0, first.copy(producingItems = Vector.empty))),
         enriched.copy(scopes = enriched.scopes.updated(0, first.copy(receivingItems = Vector(foreign)))),
         enriched.copy(scopes = enriched.scopes.updated(0, first.copy(producingItems = request.gaps.head.producingItems.reverse))),
@@ -76,7 +75,7 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
       take(S.admitC(request, _reference(request), enriched.copy(decision = S.Decision.DecisionNeeded, scopes = Vector.empty)))
         .judgment.scopes shouldBe Vector.empty
     }
-    "use actual generated scope declarations and closed purpose payloads without legacy aliases" in {
+    "use actual generated scope declarations and typed purpose payloads without legacy aliases" in {
       Given("the current CML scope action request result and completion contracts")
       val required = take(SplitPhaseDefinitionBinding.scopeSemanticOperationC)
       val request = take(S.requestC(_checkpoint))
@@ -88,7 +87,7 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
         .as[org.simplemodeling.textus.smworkflow.value.SplitPhaseScopeSemanticRequest].toOption.get
       val generatedresult = resultjson.hcursor.downField("payload").focus.get
         .as[org.simplemodeling.textus.smworkflow.value.SplitPhaseScopeSemanticResult].toOption.get
-      Then("the distinct SPI and exact nested shapes match and unknown routing fields are rejected")
+      Then("the distinct SPI and generated fields match and unknown routing claims remain unused data")
       required.actionIdentity shouldBe "AssessHandoffScopes"
       required.inputType.map(_.value) shouldBe Some(J.requestCodec.typeIdentity)
       required.resultType.map(_.value) shouldBe Some(J.resultCodec.typeIdentity)
@@ -97,8 +96,80 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
       J.requestCodec.decode(requestjson).toOption shouldBe Some(request)
       J.resultCodec.decode(resultjson).toOption shouldBe Some(result)
       val extra = resultjson.hcursor.downField("payload").withFocus(_.mapObject(_.add("nextOperation", Json.fromString("apply")))).top.get
-      J.resultCodec.decode(extra).isLeft shouldBe true
+      J.resultCodec.decode(extra) shouldBe Right(result)
       J.requestCodec.decode(SplitPhaseExplicitPartitionSemanticJson.requestCodec.encode(null)).isLeft shouldBe true
+    }
+
+    "decode declared scope data without rerendering or granting semantic completion" in {
+      Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R9; Example: E22; passive scope data and a semantically incomplete judgment")
+      val request = take(S.requestC(_checkpoint))
+      val judgment = _judgment(request)
+      val incomplete = judgment.copy(scopes = Vector.empty, rationale = "")
+      val requestwire = io.circe.parser.parse(J.requestCodec.encode(request).spaces2).toOption.get
+      val resultwire = io.circe.parser.parse(J.resultCodec.encode(incomplete).spaces2).toOption.get
+
+      When("ordinary declared decoding reads compatible presentation and incomplete semantic data")
+      val decodedrequest = J.requestCodec.decode(requestwire)
+      val decodedresult = J.resultCodec.decode(resultwire)
+      val admission = S.admitC(request, _reference(request), incomplete)
+
+      Then("typed data remains passive and only the actual semantic boundary refuses the incomplete task")
+      decodedrequest shouldBe Right(request)
+      decodedresult shouldBe Right(incomplete)
+      admission.isSuccess shouldBe false
+    }
+
+    "reject missing consumed scope fields and wrong types at the input boundary" in {
+      Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R9; Example: E23; all nested declared Scope request and result objects")
+      val request = take(S.requestC(_checkpoint))
+      val requestwire = J.requestCodec.encode(request)
+      val resultwire = J.resultCodec.encode(_judgment(request))
+      def _mutations_(value: Json): Vector[Json] = value.asObject match {
+        case Some(fields) =>
+          fields.keys.toVector.map(field => value.mapObject(_.remove(field))) ++
+            fields.toVector.flatMap { (field, child) =>
+              _mutations_(child).map(changed => value.mapObject(_.add(field, changed)))
+            }
+        case None => value.asArray.map(_.zipWithIndex.flatMap { (child, index) =>
+          _mutations_(child).map(changed => value.mapArray(_.updated(index, changed)))
+        }.toVector).getOrElse(Vector.empty)
+      }
+      val badrequests = _mutations_(requestwire) :+ requestwire.hcursor.downField("payload").downField("source")
+        .downField("revision").withFocus(_ => Json.fromInt(1)).top.get
+      val badresults = _mutations_(resultwire) ++ Vector(
+        resultwire.hcursor.downField("payload").downField("decision").withFocus(_ => Json.fromString("enriched")).top.get,
+        resultwire.hcursor.downField("schemaVersion").withFocus(_ => Json.fromString("foreign")).top.get,
+        resultwire.hcursor.downField("payload").downField("evidence").withFocus(_ => Json.Null).top.get)
+
+      When("the request and result readers consume each independently malformed nested input")
+      val rejectedrequests = badrequests.map(J.requestCodec.decode)
+      val rejectedresults = badresults.map(J.resultCodec.decode)
+
+      Then("contradictory fields or types fail directly without another serializer or admission pass")
+      rejectedrequests.nonEmpty shouldBe true
+      rejectedresults.nonEmpty shouldBe true
+      rejectedrequests.foreach(_.isLeft shouldBe true)
+      rejectedresults.foreach(_.isLeft shouldBe true)
+    }
+
+    "E12 admit the assigned scope answer without context or checkpoint echoes" in {
+      Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R5; Example: E12; actual requested scope gaps and passive legacy result diagnostics")
+      val request = take(S.requestC(_checkpoint))
+      val judgment = _judgment(request)
+      val wire = J.resultCodec.encode(judgment)
+      val legacy = wire.hcursor.downField("payload").withFocus(_.mapObject(_.add("context", Json.fromString("obsolete"))
+        .add("checkpoint", Json.Null).add("commandGrant", Json.True))).top.get
+
+      When("the typed reader consumes the answer and scope admission applies it to the actual selected request")
+      val decoded = J.resultCodec.decode(legacy).toOption.get
+      val admitted = take(S.admitC(request, _reference(request), decoded))
+
+      Then("legacy control copies are neither required nor compared and only the actual semantic ranges are admitted")
+      wire.hcursor.downField("payload").focus.get.asObject.get.keys.toSet shouldBe
+        Set("decision", "rationale", "scopes", "evidence")
+      decoded shouldBe judgment
+      admitted.request shouldBe request
+      admitted.judgment shouldBe judgment
     }
   }
 

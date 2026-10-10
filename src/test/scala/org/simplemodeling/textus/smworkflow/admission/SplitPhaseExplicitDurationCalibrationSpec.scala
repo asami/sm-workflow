@@ -21,7 +21,7 @@ final class SplitPhaseExplicitDurationCalibrationSpec extends AnyWordSpec with M
   private val item = WorkItem("item", "api", "scala", 2, Some(100))
   private def run(s: Snapshot = snapshot, p: PolicyRecord = policy, i: WorkItem = item) = {
     val request = Request(s, p, i)
-    loadC(request, request).flatMap(calculateC)
+    loadC(request).flatMap(calculateC)
   }
   private def known(result: Consequence[Outcome]): Outcome.Known = result match {
     case Consequence.Success(value: Outcome.Known) => value
@@ -50,19 +50,22 @@ final class SplitPhaseExplicitDurationCalibrationSpec extends AnyWordSpec with M
       perUnit.method shouldBe "median-actual-per-unit"
     }
 
-    "refuse same-reference data drift before calibration" in {
-      Given("a frozen request and separately supplied changed current records")
+    "calculate actual current facts without a saved-copy comparison" in {
+      Given("current requests with changed history, authority annotations, rounding or selected references")
       val request = Request(snapshot, policy, item)
-      val changedRows = snapshot.copy(observations = rows.updated(0, rows.head.copy(actualMinutes = 121)))
+      val changedrows = snapshot.copy(observations = rows.updated(0, rows.head.copy(actualMinutes = 210)))
       val changedAuthority = snapshot.copy(observations = rows.updated(0, rows.head.copy(authorityReference = "other")))
       val changedPolicy = policy.copy(policy = policy.policy.copy(roundingQuantumMinutes = 5))
-      When("references stay equal but complete facts differ")
-      val results = Vector(loadC(request, request.copy(snapshot = changedRows)),
-        loadC(request, request.copy(snapshot = changedAuthority)), loadC(request, request.copy(policy = changedPolicy)),
-        loadC(request, request.copy(snapshot = snapshot.copy(reference = Reference("history", "2")))),
-        loadC(request, request.copy(policy = policy.copy(reference = Reference("policy", "2")))))
-      Then("every stale observation fails rather than excluding drift as an invalid sample")
-      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      When("each current request is admitted and calculated once")
+      val requests = Vector(request.copy(snapshot = changedrows), request.copy(snapshot = changedAuthority),
+        request.copy(policy = changedPolicy),
+        request.copy(snapshot = snapshot.copy(reference = Reference("history", "2"))),
+        request.copy(policy = policy.copy(reference = Reference("policy", "2"))))
+      val results = requests.map(value => known(loadC(value).flatMap(calculateC)))
+      Then("valid current changes are calculated, with their own selected references and numerical policy")
+      results.map(_.estimateMinutes) shouldBe Vector(190, 145, 140, 145, 145)
+      results(3).snapshotReference shouldBe Reference("history", "2")
+      results(4).policyReference shouldBe Reference("policy", "2")
     }
 
     "classify invalid, unrelated, expired and outlier samples deterministically" in {
@@ -114,7 +117,7 @@ final class SplitPhaseExplicitDurationCalibrationSpec extends AnyWordSpec with M
       val largeRows = snapshot.copy(observations = Vector(row("a", Some(1), Int.MaxValue), row("b", Some(1), Int.MaxValue)))
       When("calibration is attempted")
       val results = Vector(run(malformed), run(p = policy.copy(policy = policy.policy.copy(minimumSampleCount = 0))),
-        loadC(null, Request(snapshot, policy, item)), loadC(Request(snapshot, policy, item), null),
+        loadC(null),
         run(largeRows, largePolicy, item.copy(explicitBaselineMinutes = Some(2))))
       Then("every case returns a structured failure")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -123,7 +126,7 @@ final class SplitPhaseExplicitDurationCalibrationSpec extends AnyWordSpec with M
     "construct calculation input only at its typed loading boundary" in {
       Given("immutable storage data and the same independently selected current input")
       val request = Request(snapshot, policy, item)
-      val loaded = loadC(request, request) match {
+      val loaded = loadC(request) match {
         case Consequence.Success(value) => value
         case other => fail(s"Expected constructed input: $other")
       }

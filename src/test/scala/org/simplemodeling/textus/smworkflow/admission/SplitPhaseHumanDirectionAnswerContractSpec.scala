@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanDirectionA
 /** Closed answer interpretation; generated payload compatibility is not consent.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct. 10, 2026
   */
 final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
@@ -54,11 +54,17 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
           }
         }
       }
-      "refuse undeclared choices and resolution fields on non-resolution alternatives" in {
+      "interpret the declared choice and refuse unusable resolution choices" in {
         Given("invalid choice and resolution combinations at the external payload boundary")
         val reference = Json.obj("identity" -> Json.fromString("resolution"), "revision" -> Json.fromString("1"))
-        val payloads = Vector(_envelope("ProvideResolution"), _envelope("Defer", Some(reference)),
-          _envelope("Cancel", Some(reference)), _envelope("ProvideResolution", Some(Json.Null))) ++
+        val unused = Vector(_envelope("Defer", Some(reference)) -> A.Answer.Defer,
+          _envelope("Cancel", Some(reference)) -> A.Answer.Cancel)
+        When("a non-resolution choice carries an unused resolution annotation")
+        val selected = unused.map((json, answer) => A.payloadCodec.decode(json) -> answer)
+        Then("the declared choice is consumed without silently selecting or admitting resolution data")
+        selected.foreach((decoded, answer) => decoded shouldBe Right(answer))
+        Given("missing resolution data or an undeclared choice instead of a usable answer")
+        val payloads = Vector(_envelope("ProvideResolution"), _envelope("ProvideResolution", Some(Json.Null))) ++
           Vector("", "Approve", "cancel", " Defer", "ProvideResolution ").flatMap(choice =>
             Vector(_envelope(choice), _envelope(choice, Some(reference))))
         payloads.foreach { json =>
@@ -68,17 +74,22 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
           decoded.isLeft shouldBe true
         }
       }
-      "refuse additional authority metadata at every nested payload boundary" in {
-        Given("a valid resolution payload and client-owned authority fields")
-        val original = _take(A.encodeC(A.Answer.ProvideResolution(S.ContextReference("resolution", "1"))))
-        val paths = Vector(Vector.empty[String], Vector("payload"), Vector("payload", "choice"), Vector("payload", "resolution"))
-        for (path <- paths; key <- Vector("approval", "actor", "receipt", "issuer", "commandPermission", "unexpected")) {
-          val cursor = path.foldLeft(original.hcursor)((before, field) => before.downField(field).success.get)
-          val extended = cursor.withFocus(_.mapObject(_.add(key, Json.fromBoolean(true)))).top.get
-          When("additional metadata is supplied at this envelope or nested record boundary")
-          val decoded = A.payloadCodec.decode(extended)
-          Then("client-supplied consent or command authority is not accepted as answer data")
-          decoded.isLeft shouldBe true
+      "consume declared answers without promoting unused annotations to authority" in {
+        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R17; Example: E36; every declared answer with client-owned annotations")
+        val answers = Vector[A.Answer](A.Answer.Defer, A.Answer.Cancel,
+          A.Answer.ProvideResolution(S.ContextReference("resolution", "1")))
+        for (answer <- answers) {
+          val original = _take(A.encodeC(answer))
+          val paths = Vector(Vector.empty[String], Vector("payload"), Vector("payload", "choice")) ++
+            (if (answer.isInstanceOf[A.Answer.ProvideResolution]) Vector(Vector("payload", "resolution")) else Vector.empty)
+          for (path <- paths; key <- Vector("approval", "actor", "receipt", "issuer", "commandPermission", "unexpected")) {
+            val cursor = path.foldLeft(original.hcursor)((before, field) => before.downField(field).success.get)
+            val extended = cursor.withFocus(_.mapObject(_.add(key, Json.fromBoolean(true)))).top.get
+            When("additional metadata is supplied at this envelope or nested record boundary")
+            val decoded = A.payloadCodec.decode(extended)
+            Then("only the original declared answer is produced, not a consent receipt or command permission")
+            decoded shouldBe Right(answer)
+          }
         }
       }
       "refuse malformed references, invalid UTF-8 values and oversized complete payloads" in {

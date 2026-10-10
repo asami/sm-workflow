@@ -67,7 +67,7 @@ private[smworkflow] object SplitPhaseRuntimeCatalog {
       descriptor = SplitPhaseWorkflowStateMachineWorkflow2.workflow
       workflow <- CandidateWorkflowAbi.parseSelectedC(workflowJson, producer, "src/main/cozy/sm-workflow.cml",
         descriptor.identity, descriptor.version)
-      _ <- if (workflow.workflow == compiled.workflow) Consequence.unit
+      _ <- if (CandidateWorkflowAbi.compatibleWorkflow(workflow.workflow, compiled.workflow)) Consequence.unit
         else Consequence.configurationInvalid("SplitPhase runtime catalog differs from compiled Workflow")
       binding <- WorkflowInstancePersistence.bindCandidateDefinitionC(workflow)
     } yield new Catalog(workflow, producer, binding)
@@ -76,9 +76,9 @@ private[smworkflow] object SplitPhaseRuntimeCatalog {
     compiled: CandidateAdmissionProducerAbi.Artifact
   ): Consequence[Unit] = {
     val matches = received.models.filter(_.model.workflow.exists(value =>
-      value.identity.value == "SplitPhaseWorkflow"))
-    if (received.schemaVersion == compiled.schemaVersion && received.generator == compiled.generator &&
-        matches == compiled.models) Consequence.unit
+      value.identity.value == "SplitPhaseWorkflow" && value.version.value == "split-phase-selected-application-v12"))
+    if (matches.size == 1 && compiled.models.size == 1 &&
+        CandidateAdmissionProducerAbi.compatiblePolicy(matches.head, compiled.models.head)) Consequence.unit
     else Consequence.configurationInvalid("SplitPhase runtime producer policy differs from compiled definition")
   }
 }

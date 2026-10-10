@@ -11,14 +11,20 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 /**
  * Host data and private construction only, not actual human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartPreparation {
   type Reference = SplitPhaseExplicitStartPreparation.Reference
+  /** Passive routing data, never a fresh Start admission or effect grant. */
+  final case class Routing(reference: Reference, instanceIdentity: InstanceIdentity, command: SplitPhaseStartCommand)
+  final case class Allocation(reference: Reference, instanceIdentity: InstanceIdentity,
+    command: SplitPhaseStartCommand, source: P.SourceReference, proposal: Option[P.ProposalReference])
   final case class Record(reference: Reference, instanceIdentity: InstanceIdentity,
     workflowIdentity: WorkflowDefinitionIdentity, workflowRevision: WorkflowDefinitionRevision,
     configuration: Configuration, command: SplitPhaseStartCommand, selection: ProfileStartAdmission.Selection,
-    source: P.SourceRecord, proposal: Option[P.ProposalRecord])
+    source: P.SourceRecord, proposal: Option[P.ProposalRecord]) {
+    def routing: Routing = Routing(reference, instanceIdentity, command)
+  }
   final class Prepared private[SplitPhaseTypedStartPreparation] (val record: Record,
     val request: WorkflowStartRequest[SplitPhaseStartInput], val initial: InstanceRecord)
   final class PartitionBound private[SplitPhaseTypedStartPreparation] (
@@ -32,14 +38,10 @@ private[smworkflow] object SplitPhaseTypedStartPreparation {
     if (frozen == null || frozen.reference == null || !name(frozen.reference.identity) ||
         !name(frozen.reference.revision) || frozen.instanceIdentity == null || !name(frozen.instanceIdentity.value) ||
         frozen.command == null || frozen.command.input == null || catalog == null || configuration == null ||
-        frozen.configuration != configuration || source == null || proposal == null || selection == null ||
-        frozen.source != source || frozen.proposal != proposal || frozen.selection != selection)
-      Consequence.stateConflict("SplitPhase typed Start requires complete unchanged current records and explicit allocation data")
+        source == null || proposal == null || selection == null)
+      Consequence.stateConflict("SplitPhase typed Start requires current inputs and explicit allocation data")
     else for {
       _ <- configuration.validateC
-      _ <- if (frozen.workflowIdentity == catalog.definition.workflowIdentity &&
-          frozen.workflowRevision == catalog.definition.workflowRevision) Consequence.unit
-        else Consequence.stateConflict("SplitPhase typed Start differs from its admitted compiled Workflow")
       input <- selectedInputC(frozen.command)
       _ <- if (selection.selectedInput != null && selection.selectedInput.contains(TypedValue("SplitPhaseStartInput", input))) Consequence.unit
         else Consequence.stateConflict("SplitPhase typed Start input differs from the complete host-selected input")
@@ -51,7 +53,10 @@ private[smworkflow] object SplitPhaseTypedStartPreparation {
         Lifecycle.NotStarted, None, CorrelationReference(request.invocationReference),
         CausationReference(frozen.reference.identity), None, None, None, Vector.empty)
       _ <- initial.validateC
-    } yield new Prepared(frozen, request, initial)
+      actual = frozen.copy(workflowIdentity = catalog.definition.workflowIdentity,
+        workflowRevision = catalog.definition.workflowRevision, configuration = configuration,
+        selection = selection, source = source, proposal = proposal)
+    } yield new Prepared(actual, request, initial)
 
   /** Private constructed values already establish their own invariants.
     * Check only the new Start/context relationship, not those invariants again.

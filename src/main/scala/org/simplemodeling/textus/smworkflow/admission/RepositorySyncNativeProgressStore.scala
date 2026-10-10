@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.syntax.all.*
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
@@ -20,8 +20,8 @@ import RepositorySyncManagedGitObservation as Git
   * @version Oct.  8, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
-  val schema = "sm-workflow.repository-sync-native-progress.v1"
-  final case class Payload(stage: String, originalCommand: Json, root: String,
+  val schema = "sm-workflow.repository-sync-native-progress.v3"
+  final case class Payload(stage: String, root: String,
     before: Git.Observed, indexTree: Option[String] = None, checkpoint: Option[String] = None,
     after: Option[Git.Observed] = None, method: Option[String] = None, mergeHead: Option[String] = None,
     materialization: Option[String] = None, validation: Option[RepositorySyncNativeMergeValidation.State] = None,
@@ -29,12 +29,11 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   final case class Stage(record: InstanceRecord, payload: Payload)
   private given Encoder[RepositorySyncNativeMergeValidation.Check] = deriveEncoder
   private given Decoder[RepositorySyncNativeMergeValidation.Check] = deriveDecoder
-  private given Encoder[RepositorySyncNativeMergeValidation.Policy] = deriveEncoder
-  private given Decoder[RepositorySyncNativeMergeValidation.Policy] = deriveDecoder
   private given Encoder[RepositorySyncNativeMergeValidation.Receipt] = deriveEncoder
   private given Decoder[RepositorySyncNativeMergeValidation.Receipt] = deriveDecoder
-  private given Encoder[RepositorySyncNativeMergeValidation.State] = deriveEncoder
-  private given Decoder[RepositorySyncNativeMergeValidation.State] = deriveDecoder
+  private given Encoder[RepositorySyncNativeMergeValidation.State] = Encoder.instance(RepositorySyncNativeMergeValidation.stateCodec.encode)
+  private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
+    RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder
   private given Decoder[Payload] = deriveDecoder
   private val stages = Set("Preserving", "IndexCaptured", "CheckpointCreating", "CheckpointCreated",
@@ -47,13 +46,19 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     def decode(value: Json): Either[String, Payload] = for {
       root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
         .toRight("Native repository progress envelope differs")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Native progress schema differs")
+      version <- root("schemaVersion").flatMap(_.asString).toRight("Native progress schema is missing")
+      _ <- Either.cond(Set(schema, "sm-workflow.repository-sync-native-progress.v1", "sm-workflow.repository-sync-native-progress.v2")(version), (), "Native progress schema differs")
       fields <- root("payload").flatMap(_.asObject).filter { fields =>
-        val required = Set("stage", "originalCommand", "root", "before", "indexTree", "checkpoint", "after", "method", "mergeHead")
-        required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required ++ Set("materialization", "validation", "finalTip"))
+        val required = Set("stage", "root", "before", "indexTree", "checkpoint", "after", "method", "mergeHead")
+        val legacy = if (version != schema) Set("originalCommand") else Set.empty[String]
+        required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required ++ Set("materialization", "validation", "finalTip") ++ legacy)
       }.toRight("Native progress payload differs")
-      payload <- Json.fromJsonObject(fields).as[Payload].left.map(_ => "Native progress data is incomplete")
-      _ <- Either.cond(stages(payload.stage) && payload.before != null && payload.originalCommand != null &&
+      normalized <- if (version.endsWith(".v1")) fields("validation").filterNot(_.isNull) match {
+        case Some(value) => RepositorySyncNativeMergeValidation.legacyStateJson(value).map(v => fields.add("validation", v))
+        case None => Right(fields)
+      } else Right(fields)
+      payload <- Json.fromJsonObject(normalized.remove("originalCommand")).as[Payload].left.map(_ => "Native progress data is incomplete")
+      _ <- Either.cond(stages(payload.stage) && payload.before != null &&
         payload.root != null && payload.root.nonEmpty &&
         Vector(payload.indexTree, payload.checkpoint, payload.mergeHead, payload.finalTip).flatten.forall(oid) &&
         (!Set("IndexCaptured", "CheckpointCreating", "CheckpointCreated", "CheckpointInstalling")(payload.stage) || payload.indexTree.nonEmpty) &&
@@ -76,7 +81,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
 
   final class Store private[RepositorySyncNativeProgressStore] (
     val declaration: RepositorySyncManagedFetch.Declaration, val core: ActionCall.Core,
-    val original: RepositorySyncManagedFetch.Payload, val identity: String,
+    val original: RepositorySyncManagedFetch.Payload, val command: org.simplemodeling.textus.smworkflow.value.RepositorySyncStartCommand,
+    val identity: String,
     adapter: WorkflowManagedMechanicalTransition[Payload], storage: WorkflowComponentStorage,
     acknowledgement: String => Consequence[Unit]) {
     def loadC(key: String): Consequence[Option[Stage]] =
@@ -84,7 +90,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case None => Consequence.success(None)
         case Some(value) =>
           val p = value.receipt.payload.value
-          if (p.originalCommand == original.originalCommand && p.root == original.repositoryRoot &&
+          if (p.root == original.repositoryRoot &&
               value.receipt.next.identity.value == identity &&
               value.receipt.next.currentProgression.exists(_.value == "sync." + p.stage))
             Consequence.success(Some(Stage(value.receipt.next, p)))
@@ -108,7 +114,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     } yield Stage(saved.receipt.next, saved.receipt.payload.value)
 
     /** Mechanical preparation accepts Active entries only. Close its actual
-      * saved Converged result through the native instance API, then read back.
+      * saved Converged result through the authoritative native instance API.
       * Reopen observes either the preparation or its one completed successor.
       */
     def closeC(prepared: Stage): Consequence[InstanceRecord] = for {
@@ -129,15 +135,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         else if (SplitPhaseDefinitionBinding.sameRecord(actual, prepared.record))
           instances.appendC(prepared.record.identity, prepared.record.revision, entry)(using core.executionContext)
         else invalid("native current differs from saved convergence or its completed successor")
-      readback <- instances.loadC(prepared.record.identity)(using core.executionContext).flatMap {
-        case Some(value) if SplitPhaseDefinitionBinding.sameRecord(value, next) &&
-            SplitPhaseDefinitionBinding.sameRecord(completed, next) => Consequence.success(value)
-        case _ => uncertain("native completion readback unavailable; observe without Git replay")
-      }
-    } yield readback
+    } yield completed
 
-    def payload(stage: String, before: Git.Observed): Payload = Payload(stage, original.originalCommand,
-      original.repositoryRoot, before)
+    def payload(stage: String, before: Git.Observed): Payload = Payload(stage, original.repositoryRoot, before)
     def scopeC(actual: Git.Observed): Consequence[Unit] = Git.rootC(core).flatMap(root =>
       if (root == original.repositoryRoot && actual.branch == declaration.input.localBranch) Consequence.unit
       else invalid("actual root/branch crosses the original host mapping"))
@@ -150,7 +150,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   def bindC(session: RepositorySyncManagedFetch.Session, declaration: RepositorySyncManagedFetch.Declaration,
     core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[Store] =
     session.storage.bindMechanicalC(RepositorySyncManagedFetch.advanceOperation, codec).map(adapter =>
-      new Store(declaration, core, session.started.receipt.payload.value,
+      new Store(declaration, core, session.started.receipt.payload.value, session.command,
         session.started.receipt.next.identity.value, adapter, session.storage, acknowledgement))
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native progression " + reason)
   def uncertain[A](reason: String): Consequence[A] =

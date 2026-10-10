@@ -37,7 +37,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     closureInstallation: Option[GoalPhaseNativeClosure.Installation] = None,
     phaseValidationPolicy: Option[GoalPhaseNativeValidation.Policy] = None,
     repositoryClosure: Option[GoalPhaseNativeRepositoryClosure.Installation] = None,
-    humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None)
+    humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None,
+    executionProfiles: Option[WorkflowExecutionProfileMapping] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     input: GoalPhaseStartInput, plan: O.Plan)
   trait PlanPort {
@@ -60,8 +61,16 @@ private[smworkflow] object GoalPhaseNativeRun {
         .toRight("native ordered Start envelope differs")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains("sm-workflow.goal-phase-native-start.v1"),
         (), "native ordered Start schema differs")
+      _ <- Either.cond(root("payload").flatMap(_.asObject).exists { fields =>
+        fields.keys.toSet == Set("originalCommand", "root", "branch", "plan", "base") &&
+          fields("plan").exists(GoalPhaseNativeWork.planShape) &&
+          fields("base").exists(GoalPhaseNativeWork.snapshotShape) &&
+          fields("originalCommand").flatMap(_.asObject).exists { command =>
+            command.keys.toSet == Set("schemaVersion", "input", "selectionIdentity", "participantIdentity", "idempotencyKey") &&
+              command("input").flatMap(_.asObject).exists(_.keys.toSet == Set("phaseIdentity", "repositoryIdentity"))
+          }
+      }, (), "native ordered Start contains undeclared or missing fields")
       payload <- root("payload").get.as[Payload].left.map(_.message)
-      _ <- Either.cond(encode(payload) == value, (), "native ordered Start contains undeclared fields")
     } yield payload
   }
 
@@ -170,7 +179,8 @@ private[smworkflow] object GoalPhaseNativeRun {
         !d.target.root.isAbsolute || d.target.root.normalize != d.target.root || d.target.localBranch == null ||
         d.candidatePaths == null || d.candidatePaths.size > 256 || d.candidatePaths.distinct != d.candidatePaths ||
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
-        d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null)
+        d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
+        d.executionProfiles == null || d.executionProfiles.exists(_ == null))
       invalid("native ordered host declaration is incomplete")
     else d.configuration.validateC.flatMap(_ => d.validationPolicy.fold(Consequence.unit)(p =>
       if (p == null) invalid("native ordered validation policy is missing") else p.validateC)).flatMap(_ =>
@@ -207,8 +217,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         ContextSnapshot(record.definition.workflowRevision.value), MinimalPresentation(title, detail))))
   } yield wire
   def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  def prefix(current: InstanceRecord, prior: InstanceRecord) = current.identity == prior.identity &&
-    SplitPhaseDefinitionBinding.sameDefinition(current.definition, prior.definition) && current.history.take(prior.history.size) == prior.history
+  def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase native run: " + reason)
   private def token(value: String) = URLEncoder.encode(value, UTF_8)
   private def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")

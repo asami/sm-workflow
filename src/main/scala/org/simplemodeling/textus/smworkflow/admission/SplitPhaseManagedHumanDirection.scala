@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDire
   * authentication admits the relay, never the missing independent Human answer.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct.  8, 2026
   */
 private[smworkflow] object SplitPhaseManagedHumanDirection {
   final class Port private[SplitPhaseManagedHumanDirection] (
@@ -39,20 +39,14 @@ private[smworkflow] object SplitPhaseManagedHumanDirection {
           decisions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
           retained <- decisions.loadC(actual.question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId)(using core.executionContext)
           question <- retained match {
-            case Some(value) if value == actual.question && SplitPhaseDefinitionBinding.sameRecord(observed.current, actual.next) =>
-              Consequence.success(value)
-            case Some(_) => _invalid("retained question or exact current Human suspension differs")
+            case Some(value) if SplitPhaseDefinitionBinding.sameRecord(observed.current, actual.next) =>
+              H.selectIssuedC(actual, value).map(_.question)
+            case Some(_) => _invalid("current Human suspension differs from the selected issued slot")
             case None if SplitPhaseDefinitionBinding.sameRecord(observed.current, actual.intent.current) =>
               decisions.suspendC(actual.intent, actual.question)(using core.executionContext) match {
-                case Consequence.Success(committed) if SplitPhaseDefinitionBinding.sameRecord(committed.instance, actual.next) => for {
-                  saved <- decisions.loadC(actual.question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId)(using core.executionContext)
-                  current <- published.loadForCallC(command, core)
-                  question <- (saved, current) match {
-                    case (Some(value), Some(now)) if value == actual.question && now.record == observed.record &&
-                        SplitPhaseDefinitionBinding.sameRecord(now.current, actual.next) => Consequence.success(value)
-                    case _ => _uncertain("committed Decision readback differs; observe later without retry")
-                  }
-                } yield question
+                // Canonical managed suspension owns atomic persistence and its
+                // committed readback. Do not reload/certify the same issue here.
+                case Consequence.Success(_) => Consequence.success(actual.question)
                 case _ => _uncertain("Decision commit is not established; observe later without retry")
               }
             case None => _invalid("advanced history lacks its actual published Human question")

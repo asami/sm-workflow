@@ -227,20 +227,11 @@ object GoalPhaseStepClosureBoundary {
            else Consequence.stateConflict("GoalPhase Step Closed append diverged")
     } yield Closed(persisted, receipt)
 
-  /** DefinitionBinding is opaque and may be rehydrated on each load/append.
-    * Compare every public immutable ABI fact and all remaining instance fields.
+  /** Readback checks the actual record state and resolves its definition.
+    * It does not certify unchanged source or producer metadata.
     */
   private[admission] def sameRecord(left: InstanceRecord, right: InstanceRecord): Boolean =
-    left != null && right != null && left.definition != null && right.definition != null &&
-      left.definition.workflowIdentity == right.definition.workflowIdentity &&
-      left.definition.workflowRevision == right.definition.workflowRevision &&
-      left.definition.sourceCorrelation == right.definition.sourceCorrelation &&
-      left.definition.producerAbiIdentity == right.definition.producerAbiIdentity &&
-      left.definition.workflowAbiIdentity == right.definition.workflowAbiIdentity &&
-      left.definition.bootstrapAbiIdentity == right.definition.bootstrapAbiIdentity &&
-      left.definition.producerRevision == right.definition.producerRevision &&
-      left.definition.fixtureSha256 == right.definition.fixtureSha256 &&
-      left.copy(definition = right.definition) == right
+    SplitPhaseDefinitionBinding.sameRecord(left, right)
 
   private def _admitReceiptC(request: CommitRequest, receipt: CommitReceipt): Consequence[Unit] =
     if (receipt == null || receipt.commitIdentity == null ||

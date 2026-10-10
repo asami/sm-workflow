@@ -73,7 +73,7 @@ final class GoalPhaseStepCloseRoutingSpec extends AnyWordSpec with Matchers {
       val reference = take(StepClosureAdmission.candidateRefC(
         StepClosureAdmission.StepSnapshot(request.stepIdentity, request.programDigest, request.planningDigest)))
       val evidence = StepReviewEvidence("review-1", reference.revision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "reviewed", "receipt")
+        "2026-09-25T23:59:00Z", "full-step", "reviewed", "receipt")
       val assessed = take(GoalPhaseStepCloseRouting.assessC(
         request.copy(reviewEvidence = Vector(evidence)), now, active, reviewOperation))
       assessed.admissionSatisfied shouldBe true
@@ -86,7 +86,7 @@ final class GoalPhaseStepCloseRoutingSpec extends AnyWordSpec with Matchers {
       val reviewed = request.copy(reviewEvidence = Vector(StepReviewEvidence(
         "review-1", take(StepClosureAdmission.candidateRefC(StepClosureAdmission.StepSnapshot(
           request.stepIdentity, request.programDigest, request.planningDigest))).revision,
-        "2026-09-25T23:59:00Z", "2026-09-26T01:00:00Z", "full-step", "reviewed", "receipt")))
+        "2026-09-25T23:59:00Z", "full-step", "reviewed", "receipt")))
       GoalPhaseStepCloseRouting.assessC(reviewed, now, active, wrong) shouldBe a[Consequence.Failure[?]]
       val suspended = active.copy(suspension = Some(SuspensionBoundary(
         org.goldenport.cncf.workflow.WorkflowInstancePersistence.ContinuationIdentity("review-1"), active.revision,

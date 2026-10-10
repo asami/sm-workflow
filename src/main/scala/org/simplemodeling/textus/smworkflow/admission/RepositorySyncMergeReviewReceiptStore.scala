@@ -15,8 +15,8 @@ import org.simplemodeling.textus.smworkflow.value.{RepositorySyncMergeReviewRequ
 private[smworkflow] trait RepositorySyncMergeReviewReceiptStore {
   import RepositorySyncMergeReviewReceiptStore.Record
   def loadC(reference: ContextReference): Consequence[Option[Record]]
-  /** Persist before returning. An identical reference/value is idempotent;
-    * replacing a reference with a different record must fail.
+  /** Persist before returning. An occupied reference selects its actual record;
+    * later proposals do not replace it or require complete-body equality.
     */
   def putIfAbsentC(record: Record): Consequence[Record]
 }
@@ -38,8 +38,7 @@ private[smworkflow] object RepositorySyncMergeReviewReceiptStore {
           !_reference(record.submitted.resultReference))
         Consequence.stateConflict("RepositorySync review record is incomplete")
       else records.get(record.reference) match {
-        case Some(saved) if saved == record => Consequence.success(saved)
-        case Some(_) => Consequence.stateConflict("RepositorySync review reference cannot be replaced")
+        case Some(saved) => Consequence.success(saved)
         case None => records.update(record.reference, record); Consequence.success(record)
       }
     }

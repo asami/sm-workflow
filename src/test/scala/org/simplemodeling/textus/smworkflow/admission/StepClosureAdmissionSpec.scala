@@ -19,7 +19,7 @@ final class StepClosureAdmissionSpec extends AnyWordSpec with Matchers with Give
   private val _snapshot = StepSnapshot("step-1", _program, _planning)
 
   private def _review(revision: String): ReviewEvidence =
-    ReviewEvidence(revision, _now.minusSeconds(60), _now.plusSeconds(3600), "reviewed")
+    ReviewEvidence(revision, _now.minusSeconds(60), "reviewed")
 
   "Step-close admission" should {
     "reuse a fresh full-Step review without another semantic gap" in {
@@ -67,21 +67,21 @@ final class StepClosureAdmissionSpec extends AnyWordSpec with Matchers with Give
       planningResult.gaps.head.defects should contain (EvidenceDefect.WrongTarget)
     }
 
-    "re-evaluate the original submission with later evidence and reject expired evidence" in {
+    "reuse applicable later evidence after the former expiry without renewal" in {
       Given("a close submission without review evidence and a later full review")
       val initial = submissionC("close-1", _snapshot).toOption.get
       val review = evidenceC("review-1", initial.candidate.reference,
         _review(initial.candidate.reference.revision), ReviewScope.FullStep, "reviewer-1").toOption.get
 
-      When("the same submission is evaluated before, during, and after the review validity window")
+      When("the same submission is evaluated now and far beyond the former review validity window")
       val missing = evaluateC(initial, _now).toOption.get
       val accepted = evaluateC(initial, _now, Vector(review)).toOption.get
-      val expired = evaluateC(initial, _now.plusSeconds(7200), Vector(review)).toOption.get
+      val later = evaluateC(initial, _now.plusSeconds(86400 * 365), Vector(review)).toOption.get
 
-      Then("only the fresh later evidence admits without a second close request")
+      Then("applicable evidence still admits without a second review or renewal")
       missing.gaps.head.defects should contain (EvidenceDefect.Missing)
       accepted.result shouldBe AdmissionResult.Admitted(initial.candidate.reference, Vector("review-1"))
-      expired.gaps.head.defects should contain (EvidenceDefect.Stale)
+      later.result shouldBe accepted.result
     }
 
     "reject malformed candidate digests and focused scopes before admission" in {

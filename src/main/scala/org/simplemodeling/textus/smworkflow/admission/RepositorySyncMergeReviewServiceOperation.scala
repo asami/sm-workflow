@@ -126,7 +126,10 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
               work.request.requiredOperation == pending.continuation.requiredOperation.identity &&
               work.request.operation == pending.continuation.requiredOperation.operation &&
               work.request.resultType == pending.continuation.requiredOperation.resultType &&
-              work.request.input.contains(pending.input) && work.request.context == pending.continuation.context &&
+              work.request.input.exists(value => value != null && value.typeIdentity == pending.input.typeIdentity &&
+                RepositorySyncMergeDecision.sameCandidateScope(value.value, pending.input.value)) &&
+              work.request.context != null && GoalPhaseClosureAuthority.sameContextScope(
+                work.request.context.snapshot, pending.continuation.context.snapshot) &&
               work.request.completion == pending.continuation.requiredOperation.metadata.completionContract &&
               work.request.evidence == pending.continuation.requiredOperation.metadata.evidenceContract &&
               work.request.completionOperation == StateMachineOperationIdentity("RepositorySyncService", "submitMergeReview") &&
@@ -134,11 +137,9 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
             else Consequence.stateConflict("RepositorySync review WorkOrder differs from retained provenance")
           _ <- RepositorySyncMergeReviewResultAdapter.assessC(prepared.candidate, prepared.seed.submission,
             issued, submitted, ports.asOf())
-          resultWire <- WorkflowResultJsonV1.encodeC(submitted, RepositorySyncMergeReviewResultAdapter.payloadCodec)
-          resultDigest = RepositorySyncMergeValidationAssessment.digest(Vector("repository-sync-retained-review-v1", resultWire))
           next <- current.appendC(InstanceRevision(8L), HistoryEntry(HistorySequence(9L), InstanceRevision(9L),
             Lifecycle.Active, current.currentProgression, current.correlation,
-            CausationReference(s"merge-review-result:${submitted.resultReference.identity}@${submitted.resultReference.revision}:$resultDigest"),
+            CausationReference(s"merge-review-result:${submitted.resultReference.identity}@${submitted.resultReference.revision}"),
             None, None, None))
           program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(
@@ -157,7 +158,9 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
       _ <- _portsC(ports)
       prefix <- B.prefixC(current, 8L)
       selected <- _closing(ports).selectC(submitted, prefix)
-      _ <- if (selected.nextInstance.exists(B._sameRecord(_, current))) Consequence.unit
+      cause = s"merge-review-result:${submitted.resultReference.identity}@${submitted.resultReference.revision}"
+      _ <- if (selected.nextInstance.exists(_sameCurrentState(_, current)) &&
+          (current.causation.value == cause || current.causation.value.startsWith(cause + ":"))) Consequence.unit
         else Consequence.stateConflict("RepositorySync completed review history differs")
       issued <- ports.issued.loadC(submitted.continuationId).flatMap {
         case Some(value) if value != null => Consequence.success(value)
@@ -180,12 +183,14 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
     current: InstanceRecord, ports: Ports): Consequence[RepositorySyncMergeReviewReceiptStore.Record] = for {
     record <- completedReceiptC(submitted, current, ports)
     _ <- ports.instances.load(ports.configuration, current.identity).flatMap {
-      case Some(value) if B._sameRecord(value, current) => Consequence.unit
+      case Some(value) if _sameCurrentState(value, current) => Consequence.unit
       case _ => Consequence.stateConflict("RepositorySync review retention requires durably saved completion")
     }
     saved <- ports.reviews.putIfAbsentC(record)
-    _ <- if (saved == record) Consequence.unit
-      else Consequence.stateConflict("RepositorySync review retention returned another record")
+    _ <- if (saved != null && saved.submitted != null && saved.issued != null && saved.retained != null &&
+        saved.reference == record.reference && saved.submitted.handle == record.submitted.handle &&
+        saved.submitted.continuationId == record.submitted.continuationId && saved.issued.handle == record.issued.handle)
+      Consequence.unit else Consequence.stateConflict("RepositorySync review retention returned another slot")
   } yield saved
 
   /** Host-only read projection/recovery. It is deliberately not a new callable
@@ -201,7 +206,7 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
       case _ => Consequence.configurationInvalid("RepositorySync human Decision projection is not bound")
     }
     saved <- ports.reviews.loadC(reference).flatMap {
-      case Some(value) if value != null && value.submitted != null && value.reference == reference &&
+      case Some(value) if value != null && value.submitted != null && value.retained != null && value.retained.submission != null && value.reference == reference &&
           value.issued != null && value.issued.handle != null => Consequence.success(value)
       case _ => Consequence.stateConflict("RepositorySync Decision has no retained review")
     }
@@ -211,22 +216,22 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
       case _ => Consequence.stateConflict("RepositorySync Decision requires saved revision nine")
     }
     admitted <- completedReceiptC(saved.submitted, current, ports)
-    _ <- if (admitted == saved && saved.submitted.result.value.decision == "decision-needed") Consequence.unit
+    _ <- if (admitted.retained.runId == saved.retained.runId &&
+        admitted.retained.submission.candidate.reference == saved.retained.submission.candidate.reference &&
+        saved.submitted.result.value.decision == "decision-needed") Consequence.unit
       else Consequence.stateConflict("RepositorySync Decision differs from its admitted review")
     wire <- RepositorySyncMergeDecision.projectC(current, saved, port)
-    // Re-check every retained input, not just the instance, after host lookup.
-    rechecked <- completedReceiptC(saved.submitted, current, ports)
-    _ <- if (rechecked == saved) Consequence.unit
-      else Consequence.stateConflict("RepositorySync Decision retained provenance changed")
-    _ <- ports.reviews.loadC(reference).flatMap {
-      case Some(value) if value == saved => Consequence.unit
-      case _ => Consequence.stateConflict("RepositorySync Decision review changed during projection")
-    }
     _ <- ports.instances.load(ports.configuration, current.identity).flatMap {
-      case Some(value) if B._sameRecord(value, current) => Consequence.unit
+      case Some(value) if _sameCurrentState(value, current) => Consequence.unit
       case _ => Consequence.stateConflict("RepositorySync Decision instance changed during projection")
     }
   } yield wire
+
+  /** Current execution reference/state/CAS scope, not a full-history no-change certificate. */
+  private def _sameCurrentState(left: InstanceRecord, right: InstanceRecord): Boolean =
+    left != null && right != null && B._sameDefinition(left.definition, right.definition) &&
+      left.identity == right.identity && left.revision == right.revision && left.lifecycle == right.lifecycle &&
+      left.currentProgression == right.currentProgression && left.correlation == right.correlation && left.suspension == right.suspension
 
   private def _portsC(p: Ports): Consequence[Unit] =
     if (p == null || p.retained == null || p.selections == null || p.mappings == null ||
@@ -276,7 +281,7 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
         case _ => Consequence.stateConflict("RepositorySync review retained provenance is unavailable")
       }
       expected <- B.requestC(seed.submission)
-      _ <- if (input == expected) Consequence.unit
+      _ <- if (RepositorySyncMergeDecision.sameCandidateScope(input, expected)) Consequence.unit
         else Consequence.stateConflict("RepositorySync review request differs from retained validation")
       candidate <- RepositorySyncDefinitionBinding.candidateC
       definition <- WorkflowInstancePersistence.bindCandidateDefinitionC(candidate)
@@ -298,8 +303,8 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
       }
       prefix <- B.validatedPrefixC(current)
       context = ContextBundle("Review the full validated pending merge", Vector.empty, Vector.empty,
-        ContextSnapshot(definition.workflowRevision.value, modelRevision = Some(input.reviewPolicyVersion),
-          evidenceRevision = Some(input.validationDigest)))
+        ContextSnapshot(definition.workflowRevision.value, modelRevision = Some(expected.reviewPolicyVersion),
+          evidenceRevision = Some(expected.validationDigest)))
       provided = StateMachineProvidedApiRequest(definition.workflowIdentity.value, definition.workflowRevision.value,
         seed.runId, StateMachineOperationIdentity("RepositorySyncService", "requestMergeReview"),
         Some(StateMachineOperationInput(StateMachineInputTypeReference("RepositorySyncMergeReviewRequest"),
@@ -308,7 +313,8 @@ private[smworkflow] object RepositorySyncMergeReviewServiceOperation {
       submission = if (forcePending || current.revision == InstanceRevision(8L))
         seed.submission.copy(evidence = Vector.empty) else seed.submission
       planned <- B.planC(command, submission, p.asOf(), prefix, provided, operation,
-        p.selections, p.mappings, p.configuration)
+        p.selections, p.mappings, p.configuration, current.suspension.map(boundary =>
+          org.goldenport.cncf.workflow.ContinuationIdentity(boundary.continuationIdentity.value)))
     } yield Prepared(seed, current, prefix, planned, candidate)
 
   private def _waitC(record: InstanceRecord, snapshot: ContextSnapshot, situation: String): Consequence[OperationResponse] =

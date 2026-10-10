@@ -68,7 +68,7 @@ object GoalPhaseRepairCandidateBoundary {
     }
 
   /** Recover from committed facts without inventing their admission timestamp.
-    * Observation ordering is separate from historical judgment authority.
+    * Observation time is metadata, not historical judgment authority.
     */
   def recoverIntentC(
     artifact: CandidateAdmissionProducerAbi.Artifact,
@@ -85,7 +85,7 @@ object GoalPhaseRepairCandidateBoundary {
 
   /** Reload current bytes without trusting worker-reported digests. The new
     * candidate keeps the same closure submission and all original evidence;
-    * wrong-target, expired and focused evidence remain visible to CAM policy.
+    * wrong-target and focused evidence remain visible to CAM policy.
     * The immutable issued request is never overwritten or publicly resubmitted.
     */
   def prepareCurrentC(
@@ -93,9 +93,8 @@ object GoalPhaseRepairCandidateBoundary {
     snapshotPort: GoalPhaseStepClosureBoundary.SnapshotPort,
     asOf: Instant
   ): Consequence[Prepared] =
-    if (intent == null || snapshotPort == null || asOf == null ||
-        asOf.isBefore(intent.observedAt))
-      Consequence.stateConflict("GoalPhase repaired candidate input or observation time is invalid")
+    if (intent == null || snapshotPort == null || asOf == null)
+      Consequence.stateConflict("GoalPhase repaired candidate input or observation metadata is missing")
     else for {
       scoped <- GoalPhaseCallScopedSnapshot.forScopeC(snapshotPort, intent.issuedReview.handle,
         intent.originalRequest, GoalPhaseCallScopedSnapshot.Purpose.RepairSuccessor)

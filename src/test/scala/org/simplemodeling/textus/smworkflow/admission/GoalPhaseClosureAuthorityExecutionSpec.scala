@@ -65,10 +65,11 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
     val revision = take(StepClosureAdmission.candidateRefC(
       StepClosureAdmission.StepSnapshot(base.stepIdentity, base.programDigest, base.planningDigest))).revision
     val request = base.copy(reviewEvidence = Vector(StepReviewEvidence("full-review", revision,
-      "2026-09-28T23:59:00Z", "2026-09-29T01:00:00Z", "full-step", "reviewed", "fixture-reviewer")))
+      "2026-09-28T23:59:00Z", "full-step", "reviewed", "fixture-reviewer")))
     var stored: Option[InstanceRecord] = None
     var creates = 0
     var appends = 0
+    var snapshotReads = 0
     var commits = Vector.empty[GoalPhaseStepClosureBoundary.CommitRequest]
     var associated: Option[WorkflowHandle] = None
     val instances = new WorkflowInstancePersistence {
@@ -89,7 +90,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
     val snapshot = new GoalPhaseStepClosureBoundary.SnapshotPort {
       def loadC(step: String): Consequence[GoalPhaseStepClosureBoundary.ArtifactSnapshot] =
         if (step != request.stepIdentity) Consequence.stateConflict("unknown snapshot")
-        else Consequence.success(GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning))
+        else { snapshotReads += 1; Consequence.success(GoalPhaseStepClosureBoundary.ArtifactSnapshot(program, planning)) }
     }
     val commit = new GoalPhaseStepClosureBoundary.CommitPort {
       def commitC(value: GoalPhaseStepClosureBoundary.CommitRequest,
@@ -143,7 +144,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
           Some(TypedValue(inputCodec.typeIdentity, intent.input)), None,
           ContextBundle("Resolve exact local commit authority",
             Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-            Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+            Vector.empty, intent.snapshot),
           CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
           StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority"))))
       }
@@ -197,14 +198,13 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
     def close(input: StepCloseRequest = request): Consequence[String] = invoke("requestStepClose", GoalPhaseStepCloseJson.encode(input))
     def grant(): Authorization = {
       val intent = captured.get
-      Authorization(intent.handle, intent.expectedRevision, intent.snapshot, intent.input.requestDigest,
-        "recorded-local-authority", "human", now.minusSeconds(60), now.plusSeconds(3600))
+      Authorization(intent.handle, intent.expectedRevision, intent.snapshot,
+        "recorded-local-authority", "human", now.minusSeconds(60))
     }
-    def assess(validateRetained: () => Consequence[Unit] = () => Consequence.unit): Consequence[Assessment] =
+    def assess(): Consequence[Assessment] =
       for {
         plan <- GoalPhaseStepClosureBoundary.planPreReviewedC(request, review, now, associated.get, stored.get)
-        result <- assessPlanC(request, now, associated.get, plan, instances, configuration,
-          snapshot, authority, validateRetained)
+        result <- assessPlanC(request, associated.get, plan, authority)
       } yield result
   }
 
@@ -215,60 +215,55 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       try {
         val handle = f.start()
         val before = f.stored
-        var retainedChecks = 0
-        val retained = () => { retainedChecks += 1; Consequence.unit }
         When("the shared read-only guard assesses the admitted plan")
-        val missing = take(f.assess(retained))
+        val missing = take(f.assess())
         Then("a typed missing result retains the exact intent and changes no durable state or command")
         missing.status shouldBe AuthorityStatus.Missing
         missing.intent.handle shouldBe handle
         missing.intent.input.candidate shouldBe f.request
-        retainedChecks shouldBe 2
-        f.authorityCalls shouldBe 2
+        f.authorityCalls shouldBe 1
+        f.snapshotReads shouldBe 0
         f.decisionCalls shouldBe 0
         f.stored shouldBe before
         f.commits shouldBe empty
         Given("separately recorded authorization matching that exact intent")
         f.authorization = Some(f.grant())
         When("the same admitted plan is assessed again")
-        val recorded = take(f.assess(retained))
+        val recorded = take(f.assess())
         Then("Recorded is only an observation and does not itself authorize or perform progression")
         recorded.status shouldBe AuthorityStatus.Recorded
         recorded.intent shouldBe missing.intent
-        retainedChecks shouldBe 4
-        f.authorityCalls shouldBe 4
+        f.authorityCalls shouldBe 2
+        f.snapshotReads shouldBe 0
         f.decisionCalls shouldBe 0
         f.stored shouldBe before
         f.commits shouldBe empty
       } finally f.subsystem.shutdown()
     }
 
-    "refuse instance snapshot authority and retained-proof drift before returning an assessment" in {
-      for (drift <- Vector("instance", "snapshot", "authority", "retained")) {
-        Given(s"an admitted plan with a $drift change during its read-only observation")
+    "observe once without certifying that state bytes or a grant remain unchanged" in {
+      for (change <- Vector("instance", "bytes")) {
+        Given(s"Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E8; a read-only plan with a $change variation during authority observation")
         val f = new Fixture()
         try {
           f.start()
-          var retainedChecks = 0
-          val retained = () => {
-            retainedChecks += 1
-            if (drift == "retained" && retainedChecks == 2)
-              Consequence.stateConflict("fixture retained proof changed")
-            else Consequence.unit
-          }
+          take(f.assess())
+          f.authorization = Some(f.grant())
+          f.authorityCalls = 0
           f.onAuthority = () => {
-            if (f.authorityCalls == 1 && drift == "instance")
+            if (change == "instance")
               f.stored = f.stored.map(record => take(record.appendC(record.revision,
                 HistoryEntry(HistorySequence(record.history.size + 1L), record.revision.next,
                   Lifecycle.Active, record.currentProgression, record.correlation, CausationReference("concurrent"),
                   record.derivedCompositeOccurrence, record.committedPredecessor, None))))
-            if (f.authorityCalls == 1 && drift == "snapshot") f.program = Vector(1.toByte)
-            if (f.authorityCalls == 2 && drift == "authority") f.authorization = Some(f.grant())
+            else f.program = Vector(1.toByte)
           }
-          When("the shared guard re-reads all current evidence")
-          val result = f.assess(retained)
-          Then("the conflicting observation cannot become a question or a commit")
-          result shouldBe a[Consequence.Failure[?]]
+          When("read-only assessment consumes the actual authority observation once")
+          val result = take(f.assess())
+          Then("the observation grants no future effect and requires no second state grant or artifact read")
+          result.status shouldBe AuthorityStatus.Recorded
+          f.authorityCalls shouldBe 1
+          f.snapshotReads shouldBe 0
           f.decisionCalls shouldBe 0
           f.commits shouldBe empty
           f.appends shouldBe 1
@@ -276,20 +271,21 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       }
     }
 
-    "refuse stale authority and unadmitted reviewed input instead of reporting a missing grant" in {
-      Given("an admitted fixture plan with an expired separately recorded authorization")
+    "treat grant time as an event fact while refusing unadmitted reviewed input" in {
+      Given("an admitted fixture plan with a grant whose event time is in the future")
       val f = new Fixture()
       try {
         f.start()
         take(f.assess())
-        f.authorization = Some(f.grant().copy(validUntil = now.minusSeconds(1)))
+        f.authorization = Some(f.grant().copy(grantedAt = now.plusSeconds(1)))
         val before = f.stored
-        When("authority assessment receives stale evidence or lacks an issued accepted review")
-        val stale = f.assess()
+        When("authority assessment receives an applicable grant observed before its recorded event time")
+        val observed = take(f.assess())
+        When("reviewed assessment lacks an issued accepted review")
         val unreviewed = assessReviewedC(sidecar, null, null, now, f.stored.get,
-          f.instances, f.configuration, f.snapshot, f.authority, () => Consequence.unit)
-        Then("both refuse without a legacy Decision fallback or state mutation")
-        stale shouldBe a[Consequence.Failure[?]]
+          f.authority)
+        Then("the event time is not a freshness gate but an absent review is refused without mutation")
+        observed.status shouldBe AuthorityStatus.Recorded
         unreviewed shouldBe a[Consequence.Failure[?]]
         f.decisionCalls shouldBe 0
         f.stored shouldBe before
@@ -299,6 +295,39 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
   }
 
   "GoalPhase pre-reviewed closure authority" should {
+    "address closure by actual target and consume scoped metadata without certifying the complete request" in {
+      Given("a current reviewed Step and a later request with different diagnostic review text")
+      val f = new Fixture()
+      try {
+        val handle = f.start()
+        val first = take(intentC(f.request, handle, f.stored.get))
+        val changed = f.request.copy(reviewEvidence = f.request.reviewEvidence.map(
+          _.copy(summary = "Another diagnostic summary", provenance = "Another diagnostic provenance")))
+        When("the producer addresses the same Step and submission without hashing its request body")
+        val later = take(intentC(changed, handle, f.stored.get))
+        Then("the actual domain address is unchanged but no equality of complete payload is required")
+        later.idempotencyKey shouldBe first.idempotencyKey
+        later.idempotencyKey should startWith("closure:")
+        sameIntentScope(first, later) shouldBe true
+        later.input should not be (first.input)
+        first.snapshot.evidenceRevision shouldBe None
+        Given("host Decision metadata and authorization with different diagnostic snapshots")
+        f.transform = value => value.copy(context = value.context.copy(
+          snapshot = value.context.snapshot.copy(workspaceRevision = Some("old-workspace"), evidenceRevision = Some("old-proof")),
+          references = Vector(ContextReference("old-provenance", "diagnostic-only"))),
+          input = value.input.map(input => input.copy(value = input.value.copy(candidate = changed))))
+        When("the stopped closure uses the actual scoped host request")
+        take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec))
+        f.authorization = Some(f.grant().copy(contextSnapshot = first.snapshot.copy(
+          workspaceRevision = Some("another-workspace"), evidenceRevision = Some("unusable-proof")),
+          grantedAt = now.plusSeconds(60)))
+        When("the recorded authority is consumed for that actual target")
+        take(WorkflowTerminalJsonV1.decodeC(take(f.close(changed)), GoalPhaseStepCloseServiceOperation.terminalCodec))
+        Then("diagnostic metadata and clock order are not new proof gates and the actual commit executes once")
+        f.commits.size shouldBe 1
+      } finally f.subsystem.shutdown()
+    }
+
     "retain an exact stop-only Decision without reconstructing approval or advancing the Step" in {
       Given("an unapproved Step and its host-routed canonical Decision")
       val f = new Fixture()
@@ -347,7 +376,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
         val foreign = Vector(intent.copy(idempotencyKey = "foreign"),
           intent.copy(handle = intent.handle.copy(instanceIdentity = InstanceIdentity("foreign"))),
           intent.copy(expectedRevision = StateMachineRevision("999")),
-          intent.copy(snapshot = intent.snapshot.copy(workspaceRevision = Some("foreign"))),
+          intent.copy(snapshot = intent.snapshot.copy(modelRevision = Some("foreign-target"))),
           intent.copy(input = intent.input.copy(reason = "foreign")))
         Then("every incompatible read fails without defaults, grants or state changes")
         malformed.foreach(value => GoalPhaseClosureDecisionRecord.decodeStorageC(intent, value)
@@ -362,8 +391,8 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       } finally f.subsystem.shutdown()
     }
 
-    "round-trip recorded authority scope without refreshing expiry or granting closure" in {
-      Given("a stopped Step and separately recorded exact authorization facts")
+    "read legacy authorization without expiry or request-digest certificates and without renewal" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R1; Example: E1; a stopped Step and separately recorded authorization")
       val f = new Fixture()
       try {
         f.start()
@@ -378,13 +407,30 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
         restored shouldBe authorization
         f.stored.get.history shouldBe history
         f.commits shouldBe empty
-        When("the host loads a faithfully preserved expired record")
-        val expired = authorization.copy(validUntil = now.minusSeconds(1))
+        val separator = wire.indexOf('{')
+        val payload = io.circe.parser.parse(wire.substring(separator)).toOption.get
+        payload.asObject.get.keys.toSet should not contain "validUntil"
+        payload.asObject.get.keys.toSet should not contain "requestDigest"
+        When("the host reads v1 and v2 records with omitted or unusable obsolete certificates")
+        val legacyPrefix = "sm-workflow.goal-phase-closure-authorization-json.v1:"
+        for (version <- Vector("v1", "v2"); expiry <- Vector(None, Some(Json.fromString(now.minusSeconds(120).toString)),
+            Some(Json.fromString("not-a-timestamp")), Some(Json.Null)); obsoleteDigest <- Vector(None,
+            Some(Json.fromString("unusable-old-proof")), Some(Json.True), Some(Json.Null))) {
+          val legacy = payload.mapObject(_.add("schemaVersion",
+            Json.fromString(s"sm-workflow.goal-phase-closure-authorization.$version")))
+          val expired = expiry.fold(legacy)(value => legacy.mapObject(_.add("validUntil", value)))
+          val historical = obsoleteDigest.fold(expired)(value => expired.mapObject(_.add("requestDigest", value)))
+          val raw = s"sm-workflow.goal-phase-closure-authorization-json.$version:" + historical.noSpaces
+          take(GoalPhaseClosureAuthorizationRecord.decodeStorageC(identity, raw)) shouldBe authorization
+        }
+        val expiredLegacy = payload.mapObject(_.add("schemaVersion",
+          Json.fromString("sm-workflow.goal-phase-closure-authorization.v1"))
+          .add("validUntil", Json.fromString(now.minusSeconds(120).toString)))
         f.authorization = Some(take(GoalPhaseClosureAuthorizationRecord.decodeStorageC(identity,
-          take(GoalPhaseClosureAuthorizationRecord.encodeStorageC(identity, expired)))))
-        Then("the existing gate rejects expiry rather than refreshing or approving it")
-        f.close() shouldBe a[Consequence.Failure[?]]
-        f.commits shouldBe empty
+          legacyPrefix + expiredLegacy.noSpaces)))
+        Then("the original applicable grant closes without reapproval; reading alone created no grant")
+        take(WorkflowTerminalJsonV1.decodeC(take(f.close()), GoalPhaseStepCloseServiceOperation.terminalCodec))
+        f.commits.size shouldBe 1
       } finally f.subsystem.shutdown()
     }
 
@@ -413,8 +459,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
           shouldBe a[Consequence.Failure[?]])
         GoalPhaseClosureAuthorizationRecord.decodeStorageC("foreign", wire) shouldBe a[Consequence.Failure[?]]
         Vector(null, authorization.copy(handle = null), authorization.copy(contextSnapshot = null),
-          authorization.copy(authorityReference = " "), authorization.copy(grantedAt = null),
-          authorization.copy(validUntil = now.minusSeconds(120))).foreach(value =>
+          authorization.copy(authorityReference = " "), authorization.copy(grantedAt = null)).foreach(value =>
           GoalPhaseClosureAuthorizationRecord.encodeStorageC(identity, value) shouldBe a[Consequence.Failure[?]])
         f.commits shouldBe empty
       } finally f.subsystem.shutdown()
@@ -431,7 +476,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
           val decision = take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec))
           Then("both lookups receive the same current core and Step remains unchanged")
           decision.handle shouldBe handle
-          f.authorityCores.size shouldBe 2
+          f.authorityCores.size shouldBe 1
           f.decisionCores.size shouldBe 1
           f.authorityCores.foreach(core => (core eq f.decisionCores.head) shouldBe true)
           f.stored.get.history shouldBe history
@@ -444,7 +489,7 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
           When("a new Step-close Operation executes")
           take(WorkflowTerminalJsonV1.decodeC(take(f.close()), GoalPhaseStepCloseServiceOperation.terminalCodec))
           Then("the new call supplies a fresh core and commits exactly once")
-          f.authorityCores.size shouldBe 4
+          f.authorityCores.size shouldBe 2
           (f.authorityCores.last eq previousCore) shouldBe false
           f.decisionCores.size shouldBe 1
           f.commits.size shouldBe 1
@@ -497,35 +542,49 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       }
     }
 
-    "reject incomplete ports, unreviewed requests, stale reviews and changed bytes before authority lookup" in {
+    "reject malformed review input at ingress and obtain artifacts only for an authorized commit" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E9; a started fixture with malformed inputs and no command grant")
       val f = new Fixture
       try {
+        When("incomplete bindings and malformed or unreviewed inputs reach their input boundaries")
         f.closeBinding(null) shouldBe a[Consequence.Failure[?]]
         f.closeBinding(Some(null)) shouldBe a[Consequence.Failure[?]]
         f.closeBinding(Some(Ports(null, f.decisions))) shouldBe a[Consequence.Failure[?]]
         f.closeBinding(Some(Ports(f.authority, null))) shouldBe a[Consequence.Failure[?]]
         f.start()
         f.close(f.base) shouldBe a[Consequence.Failure[?]]
-        f.close(f.request.copy(reviewEvidence = f.request.reviewEvidence.map(_.copy(validUntil = "2026-09-28T23:59:01Z")))) shouldBe a[Consequence.Failure[?]]
-        f.program = "changed".getBytes(StandardCharsets.UTF_8).toVector
-        f.close() shouldBe a[Consequence.Failure[?]]
+        f.close(f.request.copy(reviewEvidence = f.request.reviewEvidence.map(_.copy(reviewedAt = "invalid-event-time")))) shouldBe a[Consequence.Failure[?]]
+        Then("malformed review input is refused before any authority or artifact access")
         f.authorityCalls shouldBe 0
         f.decisionCalls shouldBe 0
         f.appends shouldBe 1
+        f.commits shouldBe empty
+        Given("different artifact bytes with no actual command permission")
+        f.program = "changed".getBytes(StandardCharsets.UTF_8).toVector
+        When("closure observes missing permission without executing a commit")
+        take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec))
+        Then("stop-only observation reads no commit artifacts and creates no commit")
+        f.snapshotReads shouldBe 0
+        f.commits shouldBe empty
+        Given("separately recorded permission for the actual Step target")
+        f.authorization = Some(f.grant())
+        When("the fixture commit boundary consumes its actual artifact input")
+        f.close() shouldBe a[Consequence.Failure[?]]
+        Then("the still-declared fixture artifact contract is checked once at effect ingress")
+        f.snapshotReads shouldBe 1
         f.commits shouldBe empty
       } finally f.subsystem.shutdown()
     }
 
     "reject stale, foreign and malformed host authority rather than converting it into a Decision" in {
       val changes: Vector[Authorization => Authorization] = Vector(
-        value => value.copy(requestDigest = "f" * 64),
+        value => value.copy(contextSnapshot = value.contextSnapshot.copy(modelRevision = Some("foreign-target"))),
         value => value.copy(expectedRevision = StateMachineRevision("9")),
         value => value.copy(contextSnapshot = ContextSnapshot("foreign")),
         value => value.copy(handle = value.handle.copy(instanceIdentity = InstanceIdentity("foreign"))),
         value => value.copy(participantIdentity = ""),
         value => value.copy(authorityReference = ""),
-        value => value.copy(validUntil = now.minusSeconds(1)),
-        value => value.copy(grantedAt = now.plusSeconds(1)))
+        value => value.copy(grantedAt = null))
       for (change <- changes) {
         val f = new Fixture
         try {
@@ -543,10 +602,10 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       val changes: Vector[R => R] = Vector(
         value => value.copy(runId = StateMachineRunIdentity("foreign")),
         value => value.copy(expectedRevision = StateMachineRevision("9")),
-        value => value.copy(input = value.input.map(input => input.copy(value = input.value.copy(requestDigest = "f" * 64)))),
+        value => value.copy(input = value.input.map(input => input.copy(value = input.value.copy(
+          candidate = input.value.candidate.copy(submissionIdentity = "foreign-submission"))))),
         value => value.copy(context = value.context.copy(snapshot = ContextSnapshot("foreign"))),
         value => value.copy(context = value.context.copy(requiredFacts = Vector.empty)),
-        value => value.copy(context = value.context.copy(references = Vector.empty)),
         value => value.copy(requiredOperation = StateMachineRequiredOperationIdentity("review-step-capability")),
         value => value.copy(requiredOperation = StateMachineRequiredOperationIdentity("repair-step-capability")),
         value => value.copy(operation = StateMachineOperationIdentity("GoalPhaseService", "requestStepClose")),
@@ -565,41 +624,133 @@ final class GoalPhaseClosureAuthorityExecutionSpec extends AnyWordSpec with Matc
       }
     }
 
-    "reject instance, snapshot and authorization drift during host lookup without returning a stale Decision" in {
-      for (drift <- Vector("instance", "definition", "snapshot", "authorization")) {
+    "return a passive Decision without a post-observation unchanged-state certificate" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E10; stop-only resolution while another observation advances state")
         val f = new Fixture
         try {
           f.start()
           f.transform = value => {
-            drift match {
-              case "instance" => f.stored = f.stored.map(record => take(record.appendC(record.revision,
+            f.stored = f.stored.map(record => take(record.appendC(record.revision,
                 HistoryEntry(HistorySequence(record.history.size + 1L), record.revision.next, Lifecycle.Active,
                   record.currentProgression, record.correlation, CausationReference("concurrent"),
                   record.derivedCompositeOccurrence, record.committedPredecessor, None))))
-              case "definition" => f.stored = f.stored.map(_.copy(definition = definition(" ")))
-              case "snapshot" => f.program = Vector(1.toByte)
-              case _ => f.authorization = Some(f.grant())
-            }; value
+            value
           }
-          f.close() shouldBe a[Consequence.Failure[?]]
+          When("host resolution changes the currently stored state but executes no transition")
+          take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec))
+          Then("the passive Decision is not a publication or executable permission")
           f.decisionCalls shouldBe 1
           f.commits shouldBe empty
+        } finally f.subsystem.shutdown()
+    }
+
+    "do not certify unchanged bytes metadata or grant objects during read-only observation" in {
+      for (change <- Vector("definition-metadata", "bytes", "applicable-grant")) {
+        Given(s"Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R2; Example: E2; a $change change without an actual state conflict")
+        val f = new Fixture
+        try {
+          f.start()
+          f.transform = value => {
+            change match {
+              case "definition-metadata" => f.stored = f.stored.map(_.copy(definition = definition(" ")))
+              case "bytes" => f.program = Vector(1.toByte)
+              case _ => f.authorization = Some(f.grant())
+            }
+            value
+          }
+          When("the host resolves a stop-only Decision with no command execution")
+          take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec)).current shouldBe
+            a[WorkflowContinuation.Decision[?]]
+          Then("a proof of unchanged contents is not required and no commit is executed")
+          f.commits shouldBe empty
+          f.stored.get.lifecycle shouldBe Lifecycle.Active
         } finally f.subsystem.shutdown()
       }
     }
 
-    "strictly decode full candidate evidence and reject approval, selector and substituted digest fields" in {
+    "accept a currently applicable replacement grant without whole-object equality" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R3; Example: E4; a recorded grant for the current closure scope")
+      val f = new Fixture
+      try {
+        f.start()
+        take(f.assess())
+        f.authorization = Some(f.grant())
+        f.authorityCalls = 0
+        f.onAuthority = () =>
+          f.authorization = f.authorization.map(_.copy(authorityReference = "replacement-authority",
+            grantedAt = now.minusSeconds(10)))
+        When("the command boundary consumes the actual applicable replacement grant once")
+        take(WorkflowTerminalJsonV1.decodeC(take(f.close()), GoalPhaseStepCloseServiceOperation.terminalCodec))
+        Then("the current grant is checked for applicability, not identity to the earlier grant object")
+        f.commits.size shouldBe 1
+        f.authorityCalls shouldBe 1
+        f.snapshotReads shouldBe 1
+        f.stored.get.lifecycle shouldBe Lifecycle.Completed
+      } finally f.subsystem.shutdown()
+    }
+
+    "observe withdrawn command permission at execution ingress rather than reuse an earlier assessment" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E11; recorded authority previously observed for a started Step")
+      val f = new Fixture
+      try {
+        f.start()
+        take(f.assess())
+        f.authorization = Some(f.grant())
+        take(f.assess()).status shouldBe AuthorityStatus.Recorded
+        Given("the actual authority is withdrawn before a later command request")
+        f.authorization = None
+        val before = f.stored
+        When("the command request obtains its own current authority observation")
+        val result = take(WorkflowDecisionJsonV1.decodeC(take(f.close()), inputCodec))
+        Then("the earlier observation cannot grant permission and no artifact read or commit occurs")
+        result.current shouldBe a[WorkflowContinuation.Decision[?]]
+        f.snapshotReads shouldBe 0
+        f.commits shouldBe empty
+        f.stored shouldBe before
+      } finally f.subsystem.shutdown()
+    }
+
+    "reject a competing revision at actual commit ingress without a full-state comparison" in {
+      Given("Spec: docs/spec/goal-phase-closure-applicability.md; Rule: R5; Example: E12; an authorized fixture command with another update before effect ingress")
+      val f = new Fixture
+      try {
+        f.start()
+        take(f.assess())
+        f.authorization = Some(f.grant())
+        f.authorityCalls = 0
+        f.onAuthority = () => f.stored = f.stored.map(record => take(record.appendC(record.revision,
+          HistoryEntry(HistorySequence(record.history.size + 1L), record.revision.next, Lifecycle.Active,
+            record.currentProgression, record.correlation, CausationReference("competing-update"),
+            record.derivedCompositeOccurrence, record.committedPredecessor, None))))
+        When("an authorized command reaches the actual expected-revision boundary")
+        val result = f.close()
+        Then("the competing revision is refused before a command effect without a second grant or copy proof")
+        result shouldBe a[Consequence.Failure[?]]
+        f.authorityCalls shouldBe 1
+        f.snapshotReads shouldBe 0
+        f.commits shouldBe empty
+        f.stored.get.revision shouldBe InstanceRevision(2L)
+      } finally f.subsystem.shutdown()
+    }
+
+    "ignore an obsolete request certificate while rejecting actual approval or target contradictions" in {
+      Given("an admitted candidate and its new closure Input producer")
       val f = new Fixture
       try {
         f.start(); take(f.close())
         val input = f.captured.get.input
         val json = inputCodec.encode(input)
+        When("current input is encoded and legacy inputs carry obsolete requestDigest values")
         inputCodec.decode(json) shouldBe Right(input)
+        json.asObject.get.keys.toSet should not contain "requestDigest"
+        Vector(Json.Null, Json.True, Json.fromString("different-old-proof")).foreach { value =>
+          inputCodec.decode(json.mapObject(_.add("requestDigest", value))) shouldBe Right(input)
+        }
         val bad = Vector(json.mapObject(_.add("approved", Json.True)),
           json.mapObject(_.add("reason", Json.fromString("approved"))),
           json.mapObject(_.add("candidateRevision", Json.fromString("f" * 64))),
-          json.mapObject(_.add("requestDigest", Json.fromString("f" * 64))),
           json.mapObject(_.add("candidate", json.hcursor.downField("candidate").focus.get.mapObject(_.add("state", Json.fromString("Closed"))))))
+        Then("only real shape, authority and candidate-target contradictions are refused")
         bad.foreach(value => inputCodec.decode(value).isLeft shouldBe true)
       } finally f.subsystem.shutdown()
     }

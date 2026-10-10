@@ -26,36 +26,37 @@ final class SplitPhaseExplicitProposalPrecheckSpec extends AnyWordSpec with Matc
     case Consequence.Success(result: DecisionRequired) => result
     case other => fail(s"Expected numbering decision: $other")
   }
-  private def run(value: Records): Consequence[Outcome] = loadC(value, value)
+  private def run(value: Records): Consequence[Outcome] = loadC(value)
 
   "Explicit source/proposal precheck" should {
     "construct readiness from complete source inventory and ordered proposal records" in {
       Given("exact explicit source, inventory, proposal and authority revisions")
       val current = records.copy()
       When("the complete current data is loaded at the construction boundary")
-      val result = ready(loadC(records, current))
+      val result = ready(loadC(current))
       Then("readiness retains typed data rather than a digest or proposal acceptance")
       result.records shouldBe records
       result.records.proposal.reference shouldBe ProposalReference("proposal", "5")
       result.records.inventory.orderedUnfinishedItems shouldBe items
     }
 
-    "reject complete data drift even when explicit references are unchanged" in {
-      Given("a frozen record set and changed current values at the same references")
+    "consume compatible current values without comparing historical record copies" in {
+      Given("current inventory and proposal values at selected references")
       val changed = Vector(
-        records.copy(source = source.copy(authority = AuthorityReference("authority", "3"))),
         records.copy(inventory = inventory.copy(occupiedPhases = inventory.occupiedPhases + PhaseIdentity("79"))),
-        records.copy(inventory = inventory.copy(orderedUnfinishedItems = items.reverse)),
         records.copy(proposal = proposal.copy(children = proposal.children.updated(1, proposal.children(1).copy(expectedMinutes = 200)))),
         records.copy(proposal = proposal.copy(reference = ProposalReference("proposal", "6"))))
-      When("each current record set is loaded against the original selection")
-      val results = changed.map(loadC(records, _))
-      Then("no reference-only match substitutes for complete data")
-      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      When("each current record set reaches its sole construction boundary")
+      val results = changed.map(value => ready(loadC(value)))
+      Then("readiness uses current occupancy, duration and proposal selection")
+      results.map(_.records) shouldBe changed
+      results.head.records.inventory.occupiedPhases should contain (PhaseIdentity("79"))
+      results(1).records.proposal.children(1).expectedMinutes shouldBe 200
+      results(2).records.proposal.reference shouldBe ProposalReference("proposal", "6")
     }
 
     "refuse crossed source phase and authority relationships at construction" in {
-      Given("self-consistent frozen/current data with invalid inter-record relationships")
+      Given("current data with invalid inter-record relationships")
       val invalid = Vector(
         records.copy(inventory = inventory.copy(source = SourceReference("source", "other"))),
         records.copy(inventory = inventory.copy(phase = PhaseIdentity("78"))),

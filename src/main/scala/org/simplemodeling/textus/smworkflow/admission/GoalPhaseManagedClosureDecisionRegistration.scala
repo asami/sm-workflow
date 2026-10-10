@@ -19,7 +19,28 @@ private[smworkflow] object GoalPhaseManagedClosureDecisionRegistration {
   def registerForCallC(reviewIdentity: ContinuationIdentity, intent: GoalPhaseClosureAuthority.Intent,
     decisionWire: String, core: ActionCall.Core, declaration: GoalPhaseManagedStartAssembly.Declaration,
     collection: DataStore.CollectionId): Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]] =
-    if (reviewIdentity == null || intent == null || core == null || core.executionContext == null ||
+    if (reviewIdentity == null) Consequence.stateConflict("Decision registration requires its selected review")
+    else _with_writer_c(intent, core, declaration, collection) { write =>
+      withCurrentIntentC(reviewIdentity, intent, core, declaration) {
+        _retain_c(intent, decisionWire, write)
+      }
+    }
+
+  /** Internal follow-up of the owning closure assessment, not a public input
+    * admission. Consume its selected intent without loading and deriving the
+    * same review/instance/selection again. The actual writer admits its current
+    * call, destination and fixed-key Create capability independently.
+    */
+  private[admission] def retainAssessedForCallC(intent: GoalPhaseClosureAuthority.Intent,
+    decisionWire: String, core: ActionCall.Core, declaration: GoalPhaseManagedStartAssembly.Declaration,
+    collection: DataStore.CollectionId): Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]] =
+    _with_writer_c(intent, core, declaration, collection)(write => _retain_c(intent, decisionWire, write))
+
+  private def _with_writer_c(intent: GoalPhaseClosureAuthority.Intent, core: ActionCall.Core,
+    declaration: GoalPhaseManagedStartAssembly.Declaration, collection: DataStore.CollectionId)
+    (operation: ComponentRecordStorage => Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]]):
+    Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]] =
+    if (intent == null || core == null || core.executionContext == null ||
         declaration == null || declaration.configuration == null || declaration.definition == null ||
         collection == null || !core.component.exists(value =>
           value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty))
@@ -33,27 +54,23 @@ private[smworkflow] object GoalPhaseManagedClosureDecisionRegistration {
         // The opaque fixed-key capability checks captured Create authority before any record access.
         write <- ComponentRecordStorage.bindForCallC(core, declaration.configuration.workflowStore.name,
           collection, DataStore.StringEntryId(intent.idempotencyKey))
-        raw <- GoalPhaseClosureDecisionRecord.encodeStorageC(intent, decisionWire)
-        expected <- GoalPhaseClosureDecisionRecord.decodeStorageC(intent, raw)
-        _ <- if (expected.operation != null && expected.completionOperation != null &&
-            expected.requiredOperation != null && expected.operation.service != "GoalPhaseService" &&
-            expected.completionOperation.service != "GoalPhaseService") Consequence.unit
-          else Consequence.stateConflict("Decision metadata cannot advertise semantic GoalPhase completion")
-        result <- withCurrentIntentC(reviewIdentity, intent, core, declaration) {
-          GoalPhaseClosureDecisionRetention.retainC(intent, decisionWire, new GoalPhaseClosureDecisionRetention.Port {
-            def loadC() = write.loadC()
-            def createC(record: Record) = write.createC(record)
-          })
-        }
+        result <- operation(write)
       } yield result
     }
+
+  private def _retain_c(intent: GoalPhaseClosureAuthority.Intent, decisionwire: String,
+    write: ComponentRecordStorage): Consequence[ContinuationRequest[GoalPhaseClosureAuthority.Input]] =
+    GoalPhaseClosureDecisionRetention.retainC(intent, decisionwire, new GoalPhaseClosureDecisionRetention.Port {
+      def loadC() = write.loadC()
+      def createC(record: Record) = write.createC(record)
+    })
 
   /** Shared current reviewed-candidate guard; callback supplies its own independently admitted write capability. */
   private[admission] def withCurrentIntentC[A](reviewIdentity: ContinuationIdentity, intent: GoalPhaseClosureAuthority.Intent,
     core: ActionCall.Core, declaration: GoalPhaseManagedStartAssembly.Declaration)(operation: => Consequence[A]): Consequence[A] =
     if (intent == null) Consequence.stateConflict("Decision intent is absent")
     else withRetainedIntentC(reviewIdentity, core, declaration) { actual =>
-      if (actual == intent) operation
+      if (GoalPhaseClosureAuthority.sameIntentScope(actual, intent)) operation
       else Consequence.stateConflict("Decision registration intent differs from committed review")
     }
 
@@ -107,9 +124,6 @@ private[smworkflow] object GoalPhaseManagedClosureDecisionRegistration {
         candidate = work.copy(reviewEvidence = (work.reviewEvidence ++ submitted.result.value.reviewEvidence).distinct)
         actual <- GoalPhaseClosureAuthority.intentC(candidate, submitted.handle, current)
         result <- operation(actual)
-        latest <- instances.loadC(current.identity)
-        _ <- if (latest.exists(GoalPhaseStepClosureBoundary.sameRecord(current, _))) Consequence.unit
-          else Consequence.stateConflict("Decision registration Workflow changed; retained metadata cannot be published")
       } yield result
     }
 

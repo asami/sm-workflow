@@ -7,7 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import SplitPhaseDurationCalibration.{Policy, WorkItem}
 import SplitPhaseExplicitDurationCalibration.*
-import SplitPhaseExplicitCalibrationRecordJsonV1.{Record, schema, encodeC, decodeC, loadForCalculationC}
+import SplitPhaseExplicitCalibrationRecordJsonV1.{Record, schema, encodeC, decodeC}
 
 /**
  * @since   Oct.  2, 2026
@@ -22,8 +22,7 @@ final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Mat
   private val request = Request(Snapshot(Reference("history", "1"), rows), policy,
     WorkItem("item", "api", "scala", 2, Some(100)))
   private val record = Record(Reference("calibration", "1"), request)
-  private def reconstructC(stored: Record, current: Request): Consequence[Outcome] =
-    loadForCalculationC(stored, current).flatMap(calculateC)
+  private def _calculate_c(current: Request): Consequence[Outcome] = loadC(current).flatMap(calculateC)
   private def success[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value
     case other => fail(s"Expected success: $other")
@@ -34,8 +33,56 @@ final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Mat
     o.add("payload", change(o("payload").get)))
   private def field(value: Json, key: String)(change: Json => Json): Json = value.mapObject(o =>
     o.add(key, change(o(key).get)))
+  private def _malformed(value: Json, openmap: Boolean = false): Vector[Json] = value.asObject match {
+    case Some(objectvalue) =>
+      val fields = objectvalue.toVector
+      val direct = if (openmap) Vector.empty else
+        Vector(value.mapObject(_.add("undeclared", Json.True))) ++ fields.map { case (key, _) =>
+          value.mapObject(_.remove(key))
+        }
+      direct ++ fields.flatMap { case (key, child) =>
+        _malformed(child, key == "overheadMinutesByRepositoryClass")
+          .filterNot(changed => changed.isNull && Set("plannedMinutes", "explicitBaselineMinutes").contains(key))
+          .map(changed =>
+          value.mapObject(_.add(key, changed)))
+      }
+    case None => value.asArray match {
+      case Some(items) => items.zipWithIndex.flatMap { case (child, index) =>
+        _malformed(child).map(changed => Json.fromValues(items.updated(index, changed)))
+      }.toVector
+      case None if value.isNull => Vector.empty
+      case None if value.isString => Vector(Json.True, Json.Null)
+      case None => Vector(Json.fromString("wrong-type"), Json.Null)
+    }
+  }
 
   "Explicit calibration record" should {
+    "reject malformed nested structures in every independent record and source ingress" in {
+      Given("complete calibration, history and policy wire values including decimals and optional fields")
+      val cases = Vector(
+        (schema, success(encodeC(record)), (wire: String) => decodeC(record.reference, wire).isSuccess),
+        (SplitPhaseCalibrationSourceJsonV1.snapshotSchema,
+          success(SplitPhaseCalibrationSourceJsonV1.encodeSnapshotC(request.snapshot)),
+          (wire: String) => SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(request.snapshot.reference, wire).isSuccess),
+        (SplitPhaseCalibrationSourceJsonV1.policySchema,
+          success(SplitPhaseCalibrationSourceJsonV1.encodePolicyC(policy)),
+          (wire: String) => SplitPhaseCalibrationSourceJsonV1.decodePolicyC(policy.reference, wire).isSuccess))
+      val inputs = cases.map { case (version, wire, read) =>
+        val document = parser.parse(wire.drop(version.length + 1)).toOption.get
+        val mutations = _malformed(document.hcursor.downField("payload").focus.get)
+          .map(changed => version + ":" + payload(document)(_ => changed).noSpaces)
+        (wire, mutations, read)
+      }
+      When("each actual decoder receives valid input and every recursive missing, unknown or wrong-type mutation")
+      val results = inputs.map { case (wire, mutations, read) => (read(wire), mutations.map(read)) }
+      Then("valid data decodes once while every malformed declared structure is refused")
+      results.foreach { case (valid, malformed) =>
+        valid shouldBe true
+        malformed should not be empty
+        malformed.forall(value => !value) shouldBe true
+      }
+    }
+
     "round-trip complete facts, decimal policies and explicit optional absence" in {
       Given("closed records containing planned pairs and per-unit inputs")
       val noBaseline = record.copy(request = request.copy(
@@ -83,19 +130,20 @@ final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Mat
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
-    "recompute only after complete current input including work-item equality" in {
-      Given("a decoded record and independently supplied matching or changed typed input")
+    "calculate independent current data instead of certifying a decoded saved request" in {
+      Given("a decoded historical record and separately supplied current inputs")
       val decoded = success(decodeC(record.reference, success(encodeC(record))))
-      val changed = Vector(request.copy(workItem = request.workItem.copy(normalizedUnits = 3)),
-        request.copy(snapshot = request.snapshot.copy(observations = rows.updated(0, rows.head.copy(actualMinutes = 121)))),
+      val changed = Vector(request.copy(workItem = request.workItem.copy(normalizedUnits = 3, explicitBaselineMinutes = None)),
+        request.copy(snapshot = request.snapshot.copy(observations = rows.updated(0, rows.head.copy(actualMinutes = 210)))),
         request.copy(policy = policy.copy(policy = policy.policy.copy(maximumRatio = BigDecimal(4)))))
-      When("the stored inputs are reconstructed under those current observations")
-      val result = success(reconstructC(decoded, request))
-      val refused = changed.map(reconstructC(decoded, _))
-      Then("exact current data yields the deterministic estimate and same-reference drift fails")
+      When("the current observations are constructed and calculated without the stored-copy argument")
+      val result = success(_calculate_c(request))
+      val updated = changed.map(value => success(_calculate_c(value)).asInstanceOf[Outcome.Known])
+      Then("the old record remains ordinary data while valid current inputs determine each estimate")
+      decoded shouldBe record
       result shouldBe a[Outcome.Known]
       result.asInstanceOf[Outcome.Known].estimateMinutes shouldBe 145
-      refused.foreach(_ shouldBe a[Consequence.Failure[?]])
+      updated.map(_.estimateMinutes) shouldBe Vector(205, 190, 145)
     }
 
     "keep invalid numerical data separate from deterministic admission" in {
@@ -108,8 +156,8 @@ final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Mat
       val decodedPolicy = success(decodeC(invalidPolicy.reference, success(encodeC(invalidPolicy))))
       val decodedSample = success(decodeC(invalidSample.reference, success(encodeC(invalidSample))))
       Then("ordinary reconstruction refuses the policy and explains sample exclusion")
-      reconstructC(decodedPolicy, decodedPolicy.request) shouldBe a[Consequence.Failure[?]]
-      val result = success(reconstructC(decodedSample, decodedSample.request))
+      _calculate_c(decodedPolicy.request) shouldBe a[Consequence.Failure[?]]
+      val result = success(_calculate_c(decodedSample.request))
       result shouldBe a[Outcome.UnresolvedNovel]
       result.exclusions should contain(Exclusion(Reference("a", "1"), "incomplete-or-invalid-evidence"))
     }

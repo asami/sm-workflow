@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.Json
 import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
@@ -39,7 +40,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual managed Git observation/SQLite/CLI/paired native work. Explicit
   * fixture input installation is not normal deployment or independent reviewer proof.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "goalordered", name))
@@ -89,7 +91,9 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
     acknowledgement: String => Consequence[Unit] = _ => Consequence.unit,
     checkMode: String = "", reviewMode: String = "", closureMode: String = "", phaseMode: String = "",
     repositoryMode: String = "", repositoryScenario: String = "", repositoryHuman: Boolean = false,
-    normalBinding: Boolean = false) extends AutoCloseable {
+    normalBinding: Boolean = false, extraCandidatePaths: Vector[String] = Vector.empty,
+    repositoryAuthorityPresentation: Boolean = false,
+    repositoryInstallationSelection: String = "selected-phase-repository") extends AutoCloseable {
     val driver = new Driver
     var planReads = 0
     private val peer = e.root.resolve("peer")
@@ -110,14 +114,17 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         Vector("-C", peer.toString, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
           "commit", "-m", "owned remote semantic change"),
         Vector("-C", peer.toString, "push", "--no-verify", "--", e.target.endpoint, "HEAD:refs/heads/main")))
-    private val paths = if (candidate) e.plan.steps.flatMap(_.ownedPaths).distinct else Vector.empty
+    private val paths = if (candidate) (e.plan.steps.flatMap(_.ownedPaths) ++ extraCandidatePaths).distinct else Vector.empty
     private val validation = if (checkMode.isEmpty) None else Some(GoalPhaseNativeValidation.Policy("owned-checks",
       if (checkMode == "changed-policy") 2 else 1,
-      Vector(GoalPhaseNativeValidation.Check(if (checkMode == "missing") "unselected-check" else "focused", 1)) ++
-        (if (closureMode.nonEmpty) Vector(GoalPhaseNativeValidation.Check("focused-next", 2)) else Vector.empty)))
+      Vector(GoalPhaseNativeValidation.Check(if (checkMode == "missing") "unselected-check" else "focused",
+        if (checkMode == "changed-binding") 16 else 1)) ++
+        (if (closureMode.nonEmpty) Vector(GoalPhaseNativeValidation.Check("focused-next", 2)) else Vector.empty) ++
+        (if (checkMode == "unselected-checks") Vector(GoalPhaseNativeValidation.Check("unused-check", 16)) else Vector.empty)))
     private val phaseValidation = if (phaseMode.isEmpty) None else Some(GoalPhaseNativeValidation.Policy("owned-phase-checks",
       if (phaseMode == "changed-policy") 2 else 1,
-      Vector(GoalPhaseNativeValidation.Check(if (phaseMode == "missing") "focused" else "whole-phase", 3))))
+      Vector(GoalPhaseNativeValidation.Check(if (phaseMode == "missing") "focused" else "whole-phase",
+        if (phaseMode == "changed-binding") 16 else 3))))
     var independentReviewAdmissions = 0
     // Explicit host-owned test ingress, not a production proof of independence.
     private var admittedReviews = Map.empty[ContextReference, (String, String)]
@@ -149,7 +156,9 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
     }
     private val closure = if (closureMode.isEmpty) None else Some(GoalPhaseNativeClosure.Installation(
       GoalPhaseNativeClosure.Policy("owned-step-commits", if (closureMode == "changed-policy") 2 else 1,
-        e.plan.steps.zipWithIndex.map((s, i) => GoalPhaseNativeClosure.StepProgram(s.identity, i + 1))),
+        e.plan.steps.zipWithIndex.map((s, i) => GoalPhaseNativeClosure.StepProgram(s.identity,
+          if (closureMode == "changed-binding") i + 2 else i + 1)) ++
+          (if (closureMode == "unselected-program") Vector(GoalPhaseNativeClosure.StepProgram("unused-Step", 64)) else Vector.empty)),
       new GoalPhaseNativeClosure.AuthorityPort {
         def loadForCallC(core: ActionCall.Core, input: GoalPhaseNativeClosure.Input) =
           Consequence.success(if (closureMode == "deny") None else closureAuthorities.get((input.instance, input.sourceRevision))
@@ -161,25 +170,26 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
     private var repositoryAuthorities = Map.empty[(String, String), GoalPhaseNativeRepositoryClosure.Authorization]
     private var repositorySelection = Option.empty[ProfileStartAdmission.Selection]
     private var childReviewAdmissions = Map.empty[ContextReference, (String, String)]
-    private var humanAdmissions = Map.empty[ContextReference, (WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing],
-      ContinuationResult[RepositorySyncHumanConflict.Answer])]
+    private var humanAdmissions = Map.empty[ContextReference, Json]
     var independentHumanAdmissions = 0
     def registerChildHuman(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing],
       answer: ContinuationResult[RepositorySyncHumanConflict.Answer]): Unit = {
-      humanAdmissions = humanAdmissions.updated(answer.resultReference, question -> answer)
+      val attestation = take(ThreeWorkflowHostEvidencePorts.repositoryHumanBindingC(RepositorySyncHumanConflict.AnswerContext(
+        component.core.instanceId, question, answer, e.command.participantIdentity)))
+      humanAdmissions = humanAdmissions.updated(answer.resultReference, attestation)
     }
     private val childHuman = if (!repositoryHuman) None else Some(RepositorySyncHumanConflict.Installation(
-      new RepositorySyncHumanConflict.Verifier {
-        val issuerIdentity = "owned-independent-human-channel"
-        def verifyForCallC(reference: ContextReference, binding: RepositorySyncHumanConflict.Binding, core: ActionCall.Core) = {
+      new RepositorySyncHumanConflict.EvidencePort {
+        def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) = {
           independentHumanAdmissions += 1
-          Consequence.success(humanAdmissions.get(reference).filter { (question, answer) =>
-            question == binding.question && answer == binding.result && binding.submittingParticipant == e.command.participantIdentity
-          }.map { _ =>
-            val now = core.executionContext.clock.instant()
-            RepositorySyncHumanConflict.Receipt(reference, issuerIdentity, "owned-human", RepositorySyncHumanConflict.purpose,
-              binding, now.minusSeconds(1), now.plusSeconds(300))
-          })
+          val lookup = ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision)
+          val observed = humanAdmissions.get(reference).map { actual =>
+              val now = core.executionContext.clock.instant()
+              NativeHostEvidence.Evidence(NativeHostEvidence.schema, RepositorySyncHumanConflict.purpose, lookup,
+                reference.identity, reference.revision, "owned-independent-human-channel", "owned-human", actual, now.minusSeconds(1).toString)
+          }
+          NativeHostEvidenceFixtureAdmission.admitC(core, "owned-independent-human-channel", NativeHostEvidence.Purpose.RepositoryHuman,
+            lookup, target, observed)
         }
       }))
     def registerChildReview(w: WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]): Unit = {
@@ -205,7 +215,11 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         input.originalBase, input.completed, input.candidate.get, "owned-review-result", key)
       repositoryAuthorities = repositoryAuthorities.updated((input.instanceIdentity, revision),
         GoalPhaseNativeRepositoryClosure.Authorization("owned-repository-authority", 1,
-          if (repositoryMode == "crossed") selected.copy(review = "different-review") else selected))
+          if (repositoryMode == "crossed") selected.copy(review = "different-review")
+          else if (repositoryAuthorityPresentation) selected.copy(plan = selected.plan.copy(
+            steps = selected.plan.steps.map(_.copy(purpose = "Authority presentation of the same target"))),
+            completed = selected.completed.map(_.copy(review = "Authority presentation of the same commit")))
+          else selected))
       repositorySelection = Some(ProfileStartAdmission.Selection("selected-phase-repository", RepositorySyncManagedFetch.startOperation,
         WorkflowDefinitionIdentity("RepositorySyncWorkflow"), WorkflowDefinitionRevision("repository-sync-native-convergence-v10"),
         e.command.participantIdentity, ProfileStartAdmission.SelectionOrigin.ExplicitHuman, key, None,
@@ -214,7 +228,7 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           .fold(_ => F.invalid("owned child command JSON"), Consequence.success)).hcursor.downField("input").focus.get))))
     }
     private val repository = if (repositoryMode.isEmpty) None else Some(GoalPhaseNativeRepositoryClosure.Installation(
-      repositoryDeclaration, "selected-phase-repository", new ProfileStartAdmission.CallScopedSelectionPort {
+      repositoryDeclaration, repositoryInstallationSelection, new ProfileStartAdmission.CallScopedSelectionPort {
         def loadForCallC(id: String, core: ActionCall.Core) = Consequence.success(repositorySelection.filter(_.selectionId == id))
       }, new GoalPhaseNativeRepositoryClosure.AuthorityPort {
         def loadForCallC(core: ActionCall.Core, input: GoalPhaseNativeRepositoryClosure.Input) =
@@ -442,6 +456,95 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
       ExecutionEvidence(Vector(ContextReference("owned-child-conflict", input.conflictRevision)), Some("participant")))
   }
   "GoalPhase native ordered entry and paired work" should {
+    "retain classified native frontiers through normal Start advance completion and physical reopen" in {
+      Given("Spec: docs/spec/goal-phase-work-classification.md; Rule: R5; Example: E6; a classified selected Plan and the existing normal host binder")
+      import GoalPhaseWorkClassification.*
+      val e = episode()
+      val implementation = Classification(Kind.CODING, Complexity.TRIVIAL, Domain.PROGRAMMING, Footprint.SMALL)
+      val repair = implementation.copy(complexity = Complexity.COMPLEX)
+      val independent = Classification(Kind.REVIEW, Complexity.STANDARD, Domain.ENGINEERING, Footprint.SMALL)
+      val selected = e.plan.copy(repairLimit = 1,
+        steps = e.plan.steps.map(_.copy(workClassification = Some(Assignment(implementation, repair, independent)))),
+        phaseReviewClassification = Some(independent.copy(footprint = Footprint.LARGE)))
+      def order(w: WorkflowInteraction[S.Request, Nothing]) =
+        w.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]]
+      def requirement(w: WorkflowInteraction[S.Request, Nothing], kind: String, level: ReasoningLevel, name: String): Unit = {
+        val actual = order(w)
+        actual.request.input.get.value.kind shouldBe kind
+        actual.request.input.get.value.selectedPlan shouldBe selected
+        actual.requirement.reasoning shouldBe level
+        actual.requirement.reasoningClass shouldBe Some(ReasoningClassReference(name))
+        actual.requirement.reviewRequired shouldBe kind.startsWith("Review")
+        // Semantic issue is not an inferred executor/profile observation.
+        actual.requirement.disposition shouldBe None
+      }
+      var issued: WorkflowInteraction[S.Request, Nothing] = null
+      val first = new Host(e, selected = Some(selected), candidate = true, checkMode = "pass",
+        reviewMode = "allow", closureMode = "allow", phaseMode = "pass", normalBinding = true)
+      try {
+        first.prepare()
+        When("public Start and owning advance read the real saved classification and issue implementation")
+        take(first.start()); issued = work(take(first.advance()))
+        Then("the native issued requirement contains CodingProgrammingRoutine without granting placement or skipping checks")
+        requirement(issued, "ImplementStep", ReasoningLevel.Routine, "CodingProgrammingRoutine")
+        first.driver.count("sm-workflow-repository-validation-1") shouldBe 0
+        first.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 0
+        first.driver.count("sm-workflow-git-goal-commit-step-2") shouldBe 0
+      } finally first.close()
+      Given("a physically reopened normal host with no installer or current Plan and the original classified issue")
+      val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass",
+        reviewMode = "allow", closureMode = "allow", phaseMode = "pass", normalBinding = true)
+      try {
+        When("advance reads the retained issue and completion advances only through actual staging and checks")
+        val retained = work(take(later.advance()))
+        retained shouldBe issued
+        Files.writeString(e.target.root.resolve("one.scala"), "object ClassifiedInitial\n")
+        take(later.complete(result(retained)))
+        val review = work(take(later.advance()))
+        Then("the next native requirement is ReviewStandard and actual validation has run once")
+        requirement(review, "ReviewStep", ReasoningLevel.Standard, "ReviewStandard")
+        later.driver.count("sm-workflow-repository-validation-1") shouldBe 1
+        When("independently enrolled fixture review requests the assigned repair")
+        later.registerReview(review); take(later.complete(reviewResult(review, "repair")))
+        val assignedRepair = work(take(later.advance()))
+        Then("repair requests its distinct CodingProgrammingDeep class and retains the selected one-round allowance")
+        requirement(assignedRepair, "RepairStep", ReasoningLevel.Deep, "CodingProgrammingDeep")
+        order(assignedRepair).request.input.get.value.selectedPlan.repairLimit shouldBe 1
+        When("repair completes and fresh checks plus independently enrolled review authorize only Step closure")
+        Files.writeString(e.target.root.resolve("one.scala"), "object ClassifiedRepaired\n")
+        take(later.complete(result(assignedRepair)))
+        val freshReview = work(take(later.advance()))
+        requirement(freshReview, "ReviewStep", ReasoningLevel.Standard, "ReviewStandard")
+        later.registerReview(freshReview)
+        val accepted = take(later.complete(reviewResult(freshReview)))
+        later.registerClosure(freshReview, accepted)
+        val second = work(take(later.advance()))
+        Then("only S1 closes and the same classified Plan supplies S2 implementation")
+        requirement(second, "ImplementStep", ReasoningLevel.Routine, "CodingProgrammingRoutine")
+        order(second).request.input.get.value.stepIdentity shouldBe Some("S2")
+        order(second).request.input.get.value.completed.map(_.step) shouldBe Vector("S1")
+        When("S2 obtains its own actual checks independent fixture review and authorized native commit")
+        Files.writeString(e.target.root.resolve("two.scala"), "object ClassifiedSecond\n")
+        take(later.complete(result(second)))
+        val secondReview = work(take(later.advance()))
+        requirement(secondReview, "ReviewStep", ReasoningLevel.Standard, "ReviewStandard")
+        later.registerReview(secondReview)
+        val secondAccepted = take(later.complete(reviewResult(secondReview)))
+        later.registerClosure(secondReview, secondAccepted)
+        val whole = work(take(later.advance()))
+        Then("whole-Phase review uses its retained ReviewCritical class and remains pending rather than Terminal")
+        requirement(whole, "ReviewPhase", ReasoningLevel.Critical, "ReviewCritical")
+        order(whole).request.input.get.value.completed.map(_.step) shouldBe Vector("S1", "S2")
+        later.driver.count("sm-workflow-repository-validation-1") shouldBe 2
+        later.driver.count("sm-workflow-repository-validation-2") shouldBe 1
+        later.driver.count("sm-workflow-repository-validation-3") shouldBe 1
+        later.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 1
+        later.driver.count("sm-workflow-git-goal-commit-step-2") shouldBe 1
+        later.driver.count("sm-workflow-git-push") shouldBe 0
+        later.planReads shouldBe 0
+      } finally later.close()
+    }
+
     "bind normal persistent inputs and retain the actual selected Plan after physical reopen" in {
       Given("an owned native Git repository with selected input rows installed only during private fixture preparation")
       val e = episode(); val first = new Host(e, normalBinding = true)
@@ -750,7 +853,7 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         } finally later.close()
       }
     }
-    "refuse missing required checks, changed native candidates and crossed host policies without check execution" in {
+    "refuse missing or incompatible selected check bindings and actual changed native candidates without check execution" in {
       Given("a fixed host binding which does not provide the saved Plan's required check")
       val missingEpisode = episode(); val missing = new Host(missingEpisode, candidate = true, checkMode = "missing")
       try {
@@ -779,22 +882,47 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         refused.isSuccess shouldBe false
         changed.driver.count("sm-workflow-repository-validation-1") shouldBe 0
       } finally changed.close()
-      Given("another actual completed validation and a subsequently different host policy revision")
+      Given("another actual completed validation and a subsequently absent or incompatible selected check binding")
       val validatedEpisode = episode(); val original = new Host(validatedEpisode, candidate = true, checkMode = "pass")
       try {
         original.prepare(); take(original.start()); val issued = work(take(original.advance()))
         Files.writeString(validatedEpisode.target.root.resolve("one.scala"), "object PolicyBoundCandidate\n")
         take(original.complete(result(issued))); take(original.advance())
       } finally original.close()
-      Vector("changed-policy", "").foreach { mode =>
+      Vector("changed-binding", "").foreach { mode =>
         val altered = new Host(validatedEpisode, candidate = true, checkMode = mode, missingPlan = true)
         try {
-          When("advance loads that retained outcome with changed or missing host policy")
+          When("advance loads that retained outcome with a missing or incompatibly resolved required check")
           val refused = altered.advance()
-          Then("crossed or missing policy cannot rebind validation, replay checks or manufacture review")
+          Then("an incompatible or missing selected check cannot consume the prior outcome or replay checks")
           refused.isSuccess shouldBe false
           altered.driver.count("sm-workflow-repository-validation-1") shouldBe 0
         } finally altered.close()
+      }
+    }
+    "resume retained candidate and validation without whole host-path or policy declaration certificates" in {
+      Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R2; Example: E3; an actual passed selected check in SQLite")
+      val e = episode()
+      val first = new Host(e, candidate = true, checkMode = "pass")
+      val retained = try {
+        first.prepare(); take(first.start()); val issued = work(take(first.advance()))
+        Files.writeString(e.target.root.resolve("one.scala"), "object ScopedRetainedCandidate\n")
+        take(first.complete(result(issued)))
+        take(first.advance()).print
+      } finally first.close()
+      When("the store reopens with different policy metadata or an extra unselected binding and host path")
+      for (mode <- Vector("changed-policy", "unselected-checks")) {
+        val later = new Host(e, candidate = true, checkMode = mode, missingPlan = true,
+          extraCandidatePaths = Vector("unused.scala"))
+        try {
+          val response = take(later.advance())
+          Then("the saved outcome survives without re-running its check or certifying the whole host declaration")
+          response.print shouldBe retained
+          later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
+          later.driver.count("sm-workflow-repository-validation-16") shouldBe 0
+          later.driver.count("sm-workflow-git-stage-goal-path-1") shouldBe 0
+          later.planReads shouldBe 0
+        } finally later.close()
       }
     }
     "issue an independent review from actual native checks and retain paired work/result across physical host reopen" in {
@@ -842,6 +970,35 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         later.driver.count("sm-workflow-git-commit") shouldBe 0
         later.planReads shouldBe 0
         later.independentReviewAdmissions shouldBe 1
+      } finally later.close()
+    }
+    "complete an original retained review after policy metadata changes without regenerating its meaning or granting closure" in {
+      Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R3; Example: E8; an actual issued independent review in SQLite")
+      val e = episode()
+      val first = new Host(e, candidate = true, checkMode = "pass", reviewMode = "allow")
+      val pending = try {
+        first.prepare(); take(first.start()); val implementation = work(take(first.advance()))
+        Files.writeString(e.target.root.resolve("one.scala"), "object OriginalReviewMeaning\n")
+        take(first.complete(result(implementation)))
+        work(take(first.advance()))
+      } finally first.close()
+      When("the physical host reopens with different review policy metadata and independently admits the original assigned Result")
+      val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "changed-policy")
+      try {
+        val retained = work(take(later.advance()))
+        later.registerReview(retained)
+        val completed = take(WorkflowWaitJsonV1.decodeC(take(later.complete(reviewResult(retained))).print))
+        Then("the original review meaning reaches Closing once, without re-running checks or granting any commit")
+        retained shouldBe pending
+        retained.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value.review.get.diff shouldBe
+          pending.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value.review.get.diff
+        completed.current.asInstanceOf[WorkflowContinuation.Wait].presentation.currentSituation should include("phase.Closing")
+        later.complete(reviewResult(retained)).isSuccess shouldBe false
+        later.independentReviewAdmissions shouldBe 1
+        later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
+        later.driver.count("sm-workflow-git-stage-goal-path-1") shouldBe 0
+        later.driver.count("sm-workflow-git-commit") shouldBe 0
+        later.planReads shouldBe 0
       } finally later.close()
     }
     "admit only an independent disposition and issue assigned repair or retain a bounded decision" in {
@@ -1074,14 +1231,15 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         selfReview.isSuccess shouldBe false
         review
       } finally h.close()
-      Given("a physically reopened host with a different or removed independent review policy")
+      Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R3; Example: E7; a physically reopened host with changed metadata or removed independent review installation")
       Vector("changed-policy", "").foreach { mode =>
         val changed = new Host(e, candidate = true, checkMode = "pass", reviewMode = mode, missingPlan = true)
         try {
           When("advance observes the earlier issued review")
-          val refused = changed.advance()
-          Then("policy changes cannot relabel or hide the actual pending work")
-          refused.isSuccess shouldBe false
+          val observed = changed.advance()
+          Then("metadata alone cannot replace original issued meaning; missing installation still refuses")
+          if (mode == "changed-policy") work(take(observed)) shouldBe pending
+          else observed.isSuccess shouldBe false
           changed.driver.count("sm-workflow-repository-validation-1") shouldBe 0
         } finally changed.close()
       }
@@ -1145,8 +1303,8 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         first.driver.count("sm-workflow-git-goal-commit-step-2") shouldBe 0
         next
       } finally first.close()
-      Given("a physically reopened host without a current Plan reader and the retained S2 issue")
-      val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "allow")
+      Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R5; Example: E12; a physically reopened host with an extra unselected commit binding, no current Plan reader and the retained S2 issue")
+      val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "unselected-program")
       val phaseInspection = try {
         work(take(later.advance())) shouldBe pending
         Files.writeString(e.target.root.resolve("two.scala"), "object SecondStepBeforeRepair\n")
@@ -1329,7 +1487,7 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         } finally h.close()
       }
     }
-    "retain interrupted whole-Phase checks and refuse changed policy or candidate without replay" in {
+    "retain interrupted whole-Phase checks without policy certificates and refuse incompatible checks or actual candidate changes" in {
       for (point <- Vector("prepared", "executed", "recorded")) {
         Given("actual Step closure and an interruption at the selected whole-Phase check boundary")
         val e = episode()
@@ -1354,7 +1512,7 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           later.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 0
         } finally later.close()
       }
-      for (mode <- Vector("changed-policy", "removed-policy", "changed-candidate")) {
+      for (mode <- Vector("changed-policy", "changed-binding", "removed-policy", "changed-candidate")) {
         Given("an actual pending whole-Phase review after separately validated native Step commits")
         val e = episode()
         val first = new Host(e, selected = Some(e.plan.copy(steps = e.plan.steps.take(1))), candidate = true,
@@ -1362,17 +1520,21 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         var pending: WorkflowInteraction[S.Request, Nothing] = null
         try pending = work(take(closeSteps(first, e, 1))) finally first.close()
         val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "deny",
-          phaseMode = if (mode == "removed-policy") "" else if (mode == "changed-policy") mode else "pass")
+          phaseMode = if (mode == "removed-policy") "" else if (Set("changed-policy", "changed-binding")(mode)) mode else "pass")
         try {
-          When("the Phase policy is crossed or the reviewed native candidate is changed")
+          When("the selected binding, policy metadata or actual reviewed native candidate differs")
           if (mode == "changed-candidate") {
             Files.writeString(e.target.root.resolve("one.scala"), "object ChangedAfterPhaseReview\n")
             later.registerReview(pending)
             later.complete(reviewResult(pending)).isSuccess shouldBe false
             later.independentReviewAdmissions shouldBe 0
+          } else if (mode == "changed-policy") {
+            // R2/E4: current binding remains compatible; revision alone is not a restart gate.
+            work(take(later.advance())) shouldBe pending
           } else later.advance().isSuccess shouldBe false
-          Then("no Phase check or Step commit is repeated and no new whole-Phase acceptance is produced")
+          Then("compatible retained work survives; incompatibility refuses, without check replay or new Phase acceptance")
           later.driver.count("sm-workflow-repository-validation-3") shouldBe 0
+          later.driver.count("sm-workflow-repository-validation-16") shouldBe 0
           later.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 0
         } finally later.close()
       }
@@ -1693,7 +1855,7 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
         later.driver.count("sm-workflow-git-push") shouldBe 0
       } finally later.close()
     }
-    "observe committed Human answers after lost acknowledgement without regranting consent or accepting replacement" in {
+    "observe committed Human answers after lost acknowledgement without regranting consent or replacing the saved answer" in {
       for (choice <- Vector("ProvideResolution", "Defer", "Cancel")) {
         Given("the actual independently enrolled child Human " + choice + " answer and a post-commit interruption")
         val e = episode()
@@ -1718,8 +1880,9 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           question = childHumanQuestion(take(first.advance())); answer = childHumanAnswer(question, choice)
           first.registerChildHuman(question, answer)
           When("the actual completion Operation saves the answer but its post-commit response fails")
-          first.completeChildHuman(answer).isSuccess shouldBe false
+          val interruptedcompletion = first.completeChildHuman(answer)
           Then("only one independent consent admission and completion acknowledgement occurred, with no file or Git effect")
+          interruptedcompletion.isSuccess shouldBe false
           first.independentHumanAdmissions shouldBe 1
           completedAcknowledgements shouldBe 1
           first.driver.count("sm-workflow-repository-conflict-files") shouldBe 1
@@ -1733,13 +1896,15 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           repositoryHuman = true, acknowledgement = interrupted)
         try {
           later.registerRepository(phase, accepted)
-          When("the same answer is observed through its declared completion Operation and a different answer is refused")
+          When("the retained answer is observed through its declared completion Operation with original or changed rationale diagnostics")
           val historical = take(later.completeChildHuman(answer)).print
-          take(later.completeChildHuman(answer)).print shouldBe historical
+          val repeated = take(later.completeChildHuman(answer)).print
           val changed = answer.copy(result = answer.result.copy(value = answer.result.value.copy(
             rationale = answer.result.value.rationale + " replacement")))
-          later.completeChildHuman(changed).isSuccess shouldBe false
+          val diagnostic = take(later.completeChildHuman(changed)).print
           Then("historical observation needs no new Human grant or acknowledgement and cannot replace the original answer")
+          repeated shouldBe historical
+          diagnostic shouldBe historical
           later.independentHumanAdmissions shouldBe 0
           completedAcknowledgements shouldBe 1
           val retained = take(WorkflowWaitJsonV1.decodeC(historical))
@@ -1749,6 +1914,17 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           later.driver.count("sm-workflow-repository-conflict-files") shouldBe 0
           later.driver.count("sm-workflow-repository-validation-4") shouldBe 0
           later.driver.count("sm-workflow-git-commit-pending") shouldBe 0
+          later.driver.count("sm-workflow-git-push") shouldBe 0
+          When("the retry instead selects a different semantic Human direction")
+          val otherchoice = if (choice == "Cancel") "Defer" else "Cancel"
+          val replacement = answer.copy(result = answer.result.copy(value = answer.result.value.copy(
+            choice = otherchoice, resolutions = Vector.empty)))
+          val rejected = later.completeChildHuman(replacement)
+          Then("the changed direction is refused without a new consent grant, acknowledgement or repository effect")
+          rejected.isSuccess shouldBe false
+          later.independentHumanAdmissions shouldBe 0
+          completedAcknowledgements shouldBe 1
+          later.driver.count("sm-workflow-repository-conflict-files") shouldBe 0
           later.driver.count("sm-workflow-git-push") shouldBe 0
           When("owning advance resumes only the saved Human direction")
           if (choice == "ProvideResolution") {
@@ -1823,10 +1999,11 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
     }
     "recover recorded child convergence across interrupted Phase acknowledgements without repeating Git effects" in {
       for (point <- Vector("prepared", "executed", "recorded", "completed")) {
-        Given("an actual accepted Phase with interruption at an owning child-closure acknowledgement")
+        Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R6; Example: E14; an actual accepted Phase with different authority presentation and an owning child-closure interruption")
         val e = episode()
         val h = new Host(e, selected = Some(e.plan.copy(steps = e.plan.steps.take(1))), candidate = true,
           checkMode = "pass", reviewMode = "allow", closureMode = "allow", phaseMode = "pass", repositoryMode = "allow",
+          repositoryAuthorityPresentation = true,
           acknowledgement = stage => if (stage == "goal-repository-" + point) F.invalid("owned Phase closure interruption") else Consequence.unit)
         var review: WorkflowInteraction[S.Request, Nothing] = null
         var accepted: Response = null
@@ -1837,17 +2014,23 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           h.advance().isSuccess shouldBe false
           h.driver.count("sm-workflow-git-push") shouldBe (if (point == "prepared") 0 else 1)
         } finally h.close()
-        Given("physical pool reopen with the same actual selected child invocation")
+        Given("physical pool reopen retains the original child selection while the current installation projects another new-invocation selection")
         val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow",
-          closureMode = "deny", phaseMode = "pass", repositoryMode = "allow")
+          closureMode = "deny", phaseMode = "pass", repositoryMode = "allow",
+          repositoryAuthorityPresentation = true, repositoryInstallationSelection = "new-projection-not-the-saved-child")
         try {
           later.registerRepository(review, accepted)
           When("owning advance resumes from canonical parent and child records")
           val first = take(later.advance()).print
           Then("a genuine Goal Terminal is admitted without repeating any already executed push")
-          take(WorkflowTerminalJsonV1.decodeC(first, GoalPhaseNativeRepositoryClosure.resultCodec)).handle.instanceIdentity.value shouldBe e.identity
+          val terminal = take(WorkflowTerminalJsonV1.decodeC(first, GoalPhaseNativeRepositoryClosure.resultCodec))
+          terminal.handle.instanceIdentity.value shouldBe e.identity
+          terminal.current.asInstanceOf[WorkflowContinuation.Terminal[GoalPhaseNativeRepositoryClosure.Result]]
+            .result.value.plan shouldBe e.plan.copy(steps = e.plan.steps.take(1))
           take(later.advance()).print shouldBe first
           later.driver.count("sm-workflow-git-push") shouldBe (if (point == "prepared") 1 else 0)
+          later.driver.count("sm-workflow-repository-validation-4") shouldBe (if (point == "prepared") 1 else 0)
+          later.planReads shouldBe 0
         } finally later.close()
       }
     }
@@ -1866,8 +2049,8 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           Then("the actual command count reflects the interruption boundary")
           h.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe (if (point == "prepared") 0 else 1)
         } finally h.close()
-        Given("a physically reopened host that has no new closure authority")
-        val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "deny")
+        Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R5; Example: E11; a physically reopened host with changed closure policy metadata and no new closure authority")
+        val later = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "changed-policy")
         try {
           When("the owning frontier is observed twice")
           val first = take(later.advance()); val second = take(later.advance())
@@ -1884,6 +2067,16 @@ final class GoalPhaseNativeRunSpec extends AnyWordSpec with Matchers with GivenW
           later.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 0
           later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
         } finally later.close()
+        Given("the current selected commit program actually resolves to another binding")
+        val incompatible = new Host(e, missingPlan = true, candidate = true, checkMode = "pass", reviewMode = "allow", closureMode = "changed-binding")
+        try {
+          When("the saved commit slot is resolved under that incompatible program")
+          val refused = incompatible.advance()
+          Then("real executable incompatibility refuses without replaying commit or checks")
+          refused.isSuccess shouldBe false
+          incompatible.driver.count("sm-workflow-git-goal-commit-step-1") shouldBe 0
+          incompatible.driver.count("sm-workflow-repository-validation-1") shouldBe 0
+        } finally incompatible.close()
       }
     }
   }

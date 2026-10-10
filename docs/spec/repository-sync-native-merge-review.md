@@ -1,5 +1,16 @@
 # Native independent pending-merge review
 
+2026-10-08 Phase5 source correction: CML/application Request now omits validation/
+review policy identity and revision markers; v2 writes actual selected meaning,
+v1 reads discard obsolete markers, and Request/Result reads use declared typed
+structure without a canonical-body certificate. Native validation retains the
+original mode/reason/check plan/receipts, not a policy copy. Current executable
+binding/coverage/state/evidence still matter; metadata stability does not.
+Issued review consumes original meaning/presentation instead of comparing a
+fresh complete WorkOrder. See [the paired applicability spec](repository-sync-native-validation-applicability.md).
+Generation and all changed cases remain UNVERIFIED; the following historical
+passes do not validate these inputs. Generated files have not been hand-patched.
+
 Date: 2026-10-06. Connected v8 implementation validated1004; practical acceptance remains open.
 
 Subsequent v9 [native convergence](repository-sync-native-convergence.md) consumes

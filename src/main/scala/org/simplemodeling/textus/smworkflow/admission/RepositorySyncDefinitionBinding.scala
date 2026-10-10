@@ -73,11 +73,7 @@ private[smworkflow] object RepositorySyncDefinitionBinding {
         workflow.identity != "RepositorySyncWorkflow" ||
         workflow.version != "repository-sync-native-convergence-v10" ||
         provided.identity != workflow.identity || provided.version != workflow.version ||
-        provided.source != domain.statemachine.providedapi.StateMachineProvidedApiAbi.WorkflowSourceCorrelation(
-          domain.statemachine.providedapi.StateMachineProvidedApiAbi.SourceIdentity(workflow.source.root.line),
-          domain.statemachine.providedapi.StateMachineProvidedApiAbi.SourceIdentity(workflow.source.definition.line)) ||
         provided.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        provided.generator != GeneratedProvidedApiAbi.generatorIdentity ||
         workflow.states.map(_.name) != states || producers.size != 1 ||
         workflow.actions.map(action => action.identity -> action.kind) !=
           Vector("ReviewMerge" -> "JUDGMENT", "AdmitMergeReview" -> "ADMISSION",
@@ -110,8 +106,8 @@ private[smworkflow] object RepositorySyncDefinitionBinding {
             s.resultType.map(_.value).contains("RepositorySyncNativeMergeReviewResult")))
         Consequence.stateConflict("RepositorySync generated review Required SPI is incompatible")
       else {
-        // Only structural serialization of generated facts; CNCF readmits both
-        // independent producer projections and checks their full correlation.
+        // Serialize executable declarations for operation/type/policy admission;
+        // diagnostic source correlation is not an unchanged-content certificate.
         val spiJson = workflow.requiredOperations.map { selected =>
           Json.obj("capability" -> Json.fromString(selected.identity.capability),
             "actionIdentity" -> Json.fromString(selected.actionIdentity),

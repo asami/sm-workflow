@@ -13,7 +13,7 @@ import GoalPhaseOrderedProgression as O
   * @version Oct.  8, 2026
   */
 private[smworkflow] object GoalPhaseNativeReview {
-  final case class Context(policyIdentity: String, policyRevision: Int, changedPaths: Vector[String],
+  final case class Context(changedPaths: Vector[String],
     diff: String, checks: Vector[RepositorySyncNativeMergeValidation.Receipt])
   final case class Policy(identity: String, revision: Int) {
     def validateC: Consequence[Unit] = if (identity != null &&
@@ -38,9 +38,7 @@ private[smworkflow] object GoalPhaseNativeReview {
     reference <- input.checksReceipt.map(Consequence.success).getOrElse(F.invalid("review has no actual checks reference"))
     checked <- observed.acceptC(O.ChecksObserved(candidate, input.selectedPlan.steps.head.checks, reference, true))
     _ <- checked.next match {
-      case work: O.Semantic if input.kind == "ReviewStep" && input.stepIdentity == work.key.step &&
-          input.generation == work.key.generation && input.completed == work.completed &&
-          input.purpose == work.purpose => Consequence.unit
+      case work: O.Semantic if input.kind == "ReviewStep" && S.matchesSemanticTarget(input, work) => Consequence.unit
       case _ => F.invalid("review input crosses the controller-assigned Step")
     }
   } yield checked
@@ -62,11 +60,7 @@ private[smworkflow] object GoalPhaseNativeReview {
       case value: O.Semantic if
           ((value.key.kind == O.WorkKind.ReviewStep && input.kind == "ReviewStep") ||
             (value.key.kind == O.WorkKind.ReviewPhase && input.kind == "ReviewPhase")) &&
-          input.selectedPlan == value.selectedPlan && input.originalBase == value.originalBase &&
-          input.stepIdentity == value.key.step && input.generation == value.key.generation &&
-          input.purpose == value.purpose && input.completed == value.completed &&
-          input.candidate == value.candidate && input.checksReceipt == value.checksReceipt &&
-          input.repairDirective == value.repairDirective => Consequence.success(value)
+          S.matchesSemanticTarget(input, value) => Consequence.success(value)
       case _ => F.invalid("review result has no assigned semantic frontier")
     }
     outcome = result.outcome match {

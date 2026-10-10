@@ -30,7 +30,7 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
   private val id = take(EntityId.bridgeFromParts("cncf", "program", BlobRepository.CollectionId, Instant.EPOCH, "program"))
   private val bytes = Vector[Byte](0, -1, 2, 10)
   private val digest = MessageDigest.getInstance("SHA-256").digest(bytes.toArray).map(byte => f"${byte & 0xff}%02x").mkString
-  private val reference = Reference(id, BlobStorageRef("local", "artifacts", "program.bin"), bytes.size, digest)
+  private val reference = Reference(id, BlobStorageRef("local", "artifacts", "program.bin"))
   private val read = BlobReadResult(id, reference.storageRef, ContentType.APPLICATION_OCTET_STREAM, bytes.size,
     digest, Bag.binary(bytes.toArray), BlobAccessUrl.unresolved, Instant.EPOCH)
 
@@ -93,17 +93,51 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       val changedCandidate = scope(r = request.copy(programDigest = "c" * 64))
       take(GoalPhaseArtifactReferenceRecord.keyC(changedCandidate)) shouldBe take(GoalPhaseArtifactReferenceRecord.keyC(original))
 
-      When("another call has a different Workflow, submission, Step, purpose or source candidate")
+      When("another call has a different Workflow, submission, Step or purpose")
       Vector(scope(h = handle.copy(instanceIdentity = InstanceIdentity("other-workflow"))),
         scope(h = handle.copy(workflowRevision = WorkflowDefinitionRevision("revision-2"))),
         scope(r = request.copy(submissionIdentity = "other-submission")),
         scope(r = request.copy(stepIdentity = "other-step")),
-        scope(purpose = GoalPhaseCallScopedSnapshot.Purpose.RepairSuccessor), changedCandidate).foreach { other =>
+        scope(purpose = GoalPhaseCallScopedSnapshot.Purpose.RepairSuccessor)).foreach { other =>
         GoalPhaseArtifactReferenceRecord.decodeStorageC(other, wire, 16) shouldBe a[Consequence.Failure[?]]
       }
       Then("a stored claim cannot retarget scope and content changes do not allocate another catalog address")
+      take(GoalPhaseArtifactReferenceRecord.decodeStorageC(changedCandidate, wire, 16)) shouldBe selected
       GoalPhaseArtifactReferenceRecord.keyC(null) shouldBe a[Consequence.Failure[?]]
       GoalPhaseArtifactReferenceRecord.encodeStorageC(original, null, 16) shouldBe a[Consequence.Failure[?]]
+    }
+
+    "read legacy catalog references without digest size or duplicate scope gates" in {
+      Given("Spec: docs/spec/goal-phase-artifact-reference-applicability.md; Rule: R2; Example: E2; an actual catalog address and selected references")
+      val handle = WorkflowHandle(SmWorkflowComponent.componentId, WorkflowDefinitionIdentity("GoalPhaseWorkflow"),
+        WorkflowDefinitionRevision("revision-1"), InstanceIdentity("legacy-catalog"))
+      val request = StepCloseRequest("submission", "step", "a" * 64, "b" * 64, Vector.empty)
+      val scope = take(GoalPhaseCallScopedSnapshot.scopeC(handle, request, GoalPhaseCallScopedSnapshot.Purpose.Candidate))
+      val selected = References("legacy-selection", 2L, reference, reference)
+      val wire = take(GoalPhaseArtifactReferenceRecord.encodeStorageC(scope, selected, 16))
+      val payload = io.circe.parser.parse(wire.substring(wire.indexOf('{'))).toOption.get
+      payload.asObject.get.keys.toSet should not contain "scope"
+      val original = payload.hcursor.downField("selection").focus.get
+      val member = original.hcursor.downField("program").focus.get
+      member.asObject.get.keys.toSet shouldBe Set("id", "storageRef")
+      When("v1 records carry obsolete malformed mismatched or omitted digest and size claims")
+      for (obsolete <- Vector(io.circe.Json.Null, io.circe.Json.fromString("not-a-proof"), io.circe.Json.True)) {
+        val legacyMember = member.mapObject(_.add("digest", obsolete).add("byteSize", obsolete))
+        val legacy = payload.mapObject(_.add("schemaVersion",
+          io.circe.Json.fromString("sm-workflow.goal-phase-artifact-references.v1"))
+          .add("scope", io.circe.Json.obj("sourceProgramDigest" -> obsolete, "sourceCandidateRevision" -> obsolete))
+          .add("selection", original.mapObject(_.add("program", legacyMember).add("planning", legacyMember))))
+        take(GoalPhaseArtifactReferenceRecord.decodeStorageC(scope,
+          "sm-workflow.goal-phase-artifact-references-json.v1:" + legacy.noSpaces, 16)) shouldBe selected
+      }
+      val omitted = payload.mapObject(_.add("schemaVersion",
+        io.circe.Json.fromString("sm-workflow.goal-phase-artifact-references.v1")))
+      take(GoalPhaseArtifactReferenceRecord.decodeStorageC(scope,
+        "sm-workflow.goal-phase-artifact-references-json.v1:" + omitted.noSpaces, 16)) shouldBe selected
+      Then("reading preserves references without renewing authority or creating an integrity certificate")
+      GoalPhaseArtifactReferenceRecord.decodeStorageC(take(GoalPhaseCallScopedSnapshot.scopeC(handle,
+        request.copy(stepIdentity = "foreign"), GoalPhaseCallScopedSnapshot.Purpose.Candidate)), wire, 16) shouldBe
+        a[Consequence.Failure[?]]
     }
 
     "reject malformed catalog payloads rather than defaulting references, scope or versions" in {
@@ -124,12 +158,12 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       def replaceProgram(value: io.circe.Json) = replaceSelection(selection.mapObject(_.add("program", value)))
       def replaceStorage(value: io.circe.Json) = replaceProgram(program.mapObject(_.add("storageRef", value)))
       When("schemas, required fields, correlation, numeric facts or provider references are incompatible")
-      val malformed = Vector(json.mapObject(_.remove("scope")), json.mapObject(_.add("approval", io.circe.Json.True)),
+      val malformed = Vector(json.mapObject(_.remove("selection")), json.mapObject(_.add("approval", io.circe.Json.True)),
         json.mapObject(_.add("schemaVersion", io.circe.Json.fromString("legacy"))),
         json.mapObject(_.add("catalogKey", io.circe.Json.fromString("foreign"))),
         replaceSelection(selection.mapObject(_.add("revision", io.circe.Json.fromString("0")))),
         replaceSelection(selection.mapObject(_.add("revision", io.circe.Json.fromDoubleOrNull(1.5)))),
-        replaceProgram(program.mapObject(_.add("byteSize", io.circe.Json.fromLong(17L)))),
+        replaceProgram(program.mapObject(_.add("approval", io.circe.Json.True))),
         replaceProgram(program.mapObject(_.add("id", io.circe.Json.fromString("not-an-entity")))),
         replaceStorage(storage.mapObject(_.remove("etag"))),
         replaceStorage(storage.mapObject(_.add("version", io.circe.Json.fromString("")))),
@@ -157,7 +191,7 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       When("a selection field or either member is missing, malformed or unbounded")
       Vector(null, selected.copy(selectionIdentity = null), selected.copy(selectionIdentity = ""),
         selected.copy(selectionIdentity = " selection-one"), selected.copy(selectionRevision = -1L),
-        selected.copy(program = null), selected.copy(planning = reference.copy(byteSize = 17L))).foreach { other =>
+        selected.copy(program = null), selected.copy(planning = reference.copy(storageRef = null))).foreach { other =>
         validateReferencesC(other, 16) shouldBe a[Consequence.Failure[?]]
       }
       Vector(0, -1, Int.MaxValue).foreach(limit =>
@@ -237,22 +271,25 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       reads shouldBe 0
     }
 
-    "require actual bounded bytes as well as exact host-pinned metadata" in {
-      Given("an exact managed reference and binary Blob result")
-      When("the result is checked against the host reference")
+    "read actual bounded bytes without requiring unchanged digest or declared size" in {
+      Given("Spec: docs/spec/goal-phase-artifact-reference-applicability.md; Rule: R1; Example: E1; a selected managed address and binary Blob result")
+      When("the actual selected payload is read under the configured bound")
       val accepted = take(verifyReadC(reference, read, 16))
       Then("the exact bytes are returned without text conversion")
       accepted shouldBe bytes
 
-      When("metadata is substituted, the payload is truncated or grows, or bytes change at equal length")
-      Vector(read.copy(byteSize = 3), read.copy(digest = "b" * 64), read.copy(id = null),
+      When("legacy metadata differs or actual bytes change within the read limit")
+      take(verifyReadC(reference, read.copy(byteSize = 3, digest = "not-a-workflow-proof"), 16)) shouldBe bytes
+      for (actual <- Vector(bytes.dropRight(1), bytes :+ 4.toByte, Vector[Byte](9, 9, 9, 9)))
+        take(verifyReadC(reference, read.copy(payload = Bag.binary(actual.toArray)), 16)) shouldBe actual
+      Then("the workflow does not compute or compare a content fingerprint")
+      When("the result belongs to another address, lacks a payload or exceeds the actual read bound")
+      Vector(read.copy(id = null),
         read.copy(storageRef = reference.storageRef.copy(key = "other.bin")), read.copy(payload = null),
-        read.copy(payload = Bag.binary(bytes.dropRight(1).toArray)),
-        read.copy(payload = Bag.binary((bytes :+ 4.toByte).toArray)),
-        read.copy(payload = Bag.binary(Vector[Byte](9, 9, 9, 9).toArray))).foreach { other =>
+        read.copy(payload = Bag.binary(Array.fill[Byte](17)(0)))).foreach { other =>
         verifyReadC(reference, other, 16) shouldBe a[Consequence.Failure[?]]
       }
-      Then("no metadata digest or size assertion can replace actual byte verification")
+      Then("actual reference and resource constraints still reject explicitly")
       verifyReadC(reference, null, 16) shouldBe a[Consequence.Failure[?]]
       verifyReadC(reference, read, 3) shouldBe a[Consequence.Failure[?]]
       take(verifyReadC(reference, read, 16)) shouldBe bytes
@@ -262,10 +299,6 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       Given("a host reference resolver with no transport-facing path input")
       var resolutions = 0
       val resolver = new ReferencePort {
-        def verifyForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) =
-          Consequence.stateConflict("No admitted storage lease in pure fixture")
-        def verifySelectionForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, selected: References,
-          core: ActionCall.Core) = Consequence.stateConflict("No admitted selection in pure fixture")
         def resolveForCallC(scope: GoalPhaseCallScopedSnapshot.Scope, core: ActionCall.Core) = {
           resolutions += 1
           Consequence.success(References("pure-selection", 0L, reference, reference))
@@ -275,8 +308,7 @@ final class GoalPhaseBlobArtifactSnapshotSpec extends AnyWordSpec with Matchers 
       Vector(null, "", " workflow").foreach(name => bindC(name, resolver, 16) shouldBe a[Consequence.Failure[?]])
       Vector(0, -1, Int.MaxValue).foreach(limit => bindC("workflow", resolver, limit) shouldBe a[Consequence.Failure[?]])
       bindC("workflow", null, 16) shouldBe a[Consequence.Failure[?]]
-      Vector(null, reference.copy(byteSize = -1), reference.copy(byteSize = 17), reference.copy(digest = "bad"),
-        reference.copy(id = null), reference.copy(storageRef = null),
+      Vector(null, reference.copy(id = null), reference.copy(storageRef = null),
         reference.copy(storageRef = reference.storageRef.copy(key = "../outside"))).foreach { other =>
         verifyReadC(other, read, 16) shouldBe a[Consequence.Failure[?]]
       }

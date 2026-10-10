@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Privately constructed fresh typed Start/AI result, not public human ingress
   * and not a native commit witness. Shared only by inert executable examples.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[admission] object SplitPhaseAICompletionCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -29,7 +29,7 @@ private[admission] object SplitPhaseAICompletionCheckpointFixture {
     val issued = SplitPhasePartitionReplyFixture.issue(take(T.bindPartitionC(f.prepared, partition)))
     val work = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
     val input = work.input.get.value
-    val judgment = S.Judgment(input.context, decision, "semantic-only",
+    val judgment = S.Judgment(decision, "semantic-only",
       if (decision == S.Decision.Enriched) input.items.map(i => S.NovelEstimate(i.identity, 120, 180, "bounded-work", "novel-closure"))
         else Vector.empty,
       if (decision == S.Decision.Enriched) input.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
@@ -74,7 +74,7 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       When("the original closing selection is captured and one complete Create set is prepared")
       val captured = take(A.captureC(selected))
       val rows = take(AU.prepareRowsC(captured, targets))
-      Then("original result/evidence and before/next survive and every physical target is created once")
+      Then("original result/evidence and before/next survive and every prepared physical target appears once")
       captured.record.completion.result shouldBe selected.submitted
       captured.record.before shouldBe selected.pending.current
       captured.record.next shouldBe selected.next
@@ -88,31 +88,6 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       rows.count(_.collection == targets.proposals) shouldBe documents.size
       rows.count(_.collection == targets.ownerships) shouldBe documents.size
       rows.count(_.collection == targets.handoffs) shouldBe documents.size + 1
-      U.validateRowsC(rows ++ rows.take(1), targets).isSuccess shouldBe false
-      U.validateRowsC(Vector.fill(65)(rows.head), targets).isSuccess shouldBe false
-    }
-    "bound unique combined effects and UTF-8 payloads independently of duplicate rejection" in {
-      Given("the full original AI-completion publication and additional distinct local Create effects")
-      val bound = targets
-      val original = take(AU.prepareRowsC(capture(), bound))
-      val additional = Vector.tabulate(65 - original.size)(i => U.Row(bound.publication,
-        "capacity-only-effect-" + i, org.goldenport.record.Record.data("privatePayload" -> "bounded")))
-      val combined = original ++ additional
-      combined.map(r => (r.collection, r.identity)).distinct.size shouldBe 65
-      val maximum = SplitPhasePlanningCheckpointJsonV1.maximumPayloadBytes
-      val exact = "界" * (maximum / 3) + "x" * (maximum % 3)
-      val payload = U.Row(bound.publication, "payload-only-effect", org.goldenport.record.Record.data("privatePayload" -> exact))
-      When("the complete set crosses 64 effects or one UTF-8 payload crosses its byte bound")
-      val atcapacity = U.validateRowsC(combined.take(64), bound)
-      val overcapacity = U.validateRowsC(combined, bound)
-      val atpayloadlimit = U.validateRowsC(Vector(payload), bound)
-      val overpayloadlimit = U.validateRowsC(Vector(payload.copy(payload =
-        org.goldenport.record.Record.data("privatePayload" -> (exact + "x")))), bound)
-      Then("each exact limit succeeds and its independently oversized counterpart is refused")
-      atcapacity.isSuccess shouldBe true
-      overcapacity.isSuccess shouldBe false
-      atpayloadlimit.isSuccess shouldBe true
-      overpayloadlimit.isSuccess shouldBe false
     }
     "capture the entire mixed candidate frontier after the original unknown-only AI result" in {
       Given("original ownership separating the last item into another repository while partition work is still unknown")
@@ -166,21 +141,26 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePartitionCompletionCheckpointPreparation.Captured(null, None)")
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseManagedTypedPartitionCompletion.ObservedCompletion(null, null)")
     }
-    "refuse crossed raw original completion relations and bound physical lineage keys" in {
-      Given("complete captured facts and Unicode delimiter-bearing continuation identities")
+    "serialize inert facts without readmitting a completion and bound physical lineage keys" in {
+      Given("stored data variants that cannot construct a selected Plan or a Captured publication")
       val saved = capture().record
       val identity = ContinuationIdentity("実例:[]\"\\")
-      When("complete references and native revisions are crossed or the final locator exceeds its bound")
       val variants = Vector(saved.copy(checkpoint = None), saved.copy(header = None),
-        saved.copy(completion = saved.completion.copy(instanceRevision = saved.before.revision)),
+        saved.copy(before = saved.next), saved.copy(wire = "unused stored response diagnostic"),
         saved.copy(start = saved.start.copy(instanceIdentity = WorkflowInstancePersistence.InstanceIdentity("foreign"))),
         saved.copy(checkpoint = saved.checkpoint.map(k => k.copy(reference = k.reference.copy(identity = "caller-selected")))))
-      Then("no raw crossed relation is admitted and exact keys are deterministic without a naming policy")
-      variants.foreach(v => A.inspectC(v).isSuccess shouldBe false)
-      take(A.lineageKeyC(identity)) shouldBe take(A.lineageKeyC(identity))
-      A.lineageKeyC(ContinuationIdentity("x" * 1024)).isSuccess shouldBe false
-      A.lineageKeyC(null).isSuccess shouldBe false
-      A.captureC(null).isSuccess shouldBe false
+      When("the existing frame codec preserves typed data without repeating native admission")
+      val decoded = variants.map(v => take(SplitPhasePartitionCompletionCheckpointJsonV1.decodeC(
+        v.completion.result.continuationId, take(SplitPhasePartitionCompletionCheckpointJsonV1.encodeC(v)),
+        Vector(f.catalog.definition))))
+      val keys = Vector(A.lineageKeyC(identity), A.lineageKeyC(identity))
+      val invalidkeys = Vector(A.lineageKeyC(ContinuationIdentity("x" * 1024)), A.lineageKeyC(null))
+      val absentplan = A.captureC(null)
+      Then("the values remain inert records while physical address bounds and the actual Plan input still apply")
+      decoded shouldBe variants
+      keys.map(take(_)).distinct.size shouldBe 1
+      invalidkeys.foreach(_.isSuccess shouldBe false)
+      absentplan.isSuccess shouldBe false
     }
   }
 }

@@ -23,7 +23,7 @@ final class StepCloseRequestAdapterSpec extends AnyWordSpec with Matchers {
 
   private def review(revision: String, scope: String = "full-step"): StepReviewEvidence =
     StepReviewEvidence("review-1", revision, "2026-09-25T23:59:00Z",
-      "2026-09-26T01:00:00Z", scope, "full review complete", "review-receipt")
+      scope, "full review complete", "review-receipt")
 
   "CML StepCloseRequest admission adapter" should {
     "admit an existing full review without another close request" in {

@@ -16,16 +16,15 @@ import GoalPhaseNativeRun as F
 /** Additive paired native host assembly. Not a default launcher installation.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def encodeAdvance(identity: String) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-advance.v1"),
     "instanceIdentity" -> Json.fromString(identity)).noSpaces
   def decodeAdvanceC(raw: String): Consequence[String] = io.circe.parser.parse(Option(raw).getOrElse("")).fold(
     _ => F.invalid("advance JSON is invalid"), json =>
-      if (json.asObject.exists(_.keys.toSet == Set("schemaVersion", "instanceIdentity")) &&
-          json.hcursor.get[String]("schemaVersion").contains("sm-workflow.goal-phase-advance.v1"))
-        json.hcursor.get[String]("instanceIdentity").toOption.filter(v => v.nonEmpty && v.trim == v && !v.exists(_.isControl))
+      if (json.hcursor.get[String]("schemaVersion").contains("sm-workflow.goal-phase-advance.v1"))
+        json.hcursor.get[String]("instanceIdentity").toOption
           .map(Consequence.success).getOrElse(F.invalid("advance identity is invalid"))
       else F.invalid("advance cannot select a stage, cursor, command or receipt"))
   def bindC(params: ComponentCreate, d: F.Declaration, selections: ProfileStartAdmission.CallScopedSelectionPort,

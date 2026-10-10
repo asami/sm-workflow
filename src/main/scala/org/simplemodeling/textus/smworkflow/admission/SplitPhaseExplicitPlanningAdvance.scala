@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
   * This pure planning kernel is not a public Operation or execution authority.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
   final case class DataReference(identity: String, revision: String)
@@ -104,13 +104,11 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
   /** Select complete current data once. Nested purpose-specific raw records are
     * admitted by their owning processors only when needed, not redundantly here.
     */
-  def selectC(partition: E.Input, frozen: Data, current: Data): Consequence[Selection] =
+  def selectC(partition: E.Input, current: Data): Consequence[Selection] =
     if (partition == null || current == null || current.reference == null ||
         !name(current.reference.identity) || !name(current.reference.revision) || current.allocations == null ||
         current.objectives == null || current.objectives.cost == null || current.objectives.demands == null || current.objectives.overhead == null)
       Consequence.stateConflict("SplitPhase explicit planning data selection is incomplete")
-    else if (frozen != current)
-      Consequence.stateConflict("SplitPhase explicit planning complete current selection differs")
     else if (current.source != partition.boundary.shape.records.source.reference ||
         current.authority != partition.boundary.shape.records.source.authority)
       Consequence.stateConflict("SplitPhase explicit planning selection crosses source or authority")
@@ -126,7 +124,7 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
       new Trace(unavailable, None, None, None), unavailable))
     case enumerated: E.Enumerated => selection.data.allocations match {
       case None => Consequence.success(new AllocationRequired(selection, new Trace(enumerated, None, None, None), enumerated))
-      case Some(raw) => Q.loadC(enumerated, raw, raw).flatMap(input => _after_allocation_c(selection, input))
+      case Some(raw) => Q.loadC(enumerated, raw).flatMap(input => _after_allocation_c(selection, input))
     }
   }
 
@@ -148,14 +146,11 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
     retained <- E.restoreScopeC(source)
     required <- Q.restoreScopeC(retained)
     raw = source.source.record.snapshot.selection.planning
-    selection <- selectC(retained.enumerated.input, raw, raw)
+    selection <- selectC(retained.enumerated.input, raw)
     scopes = required.candidates.collect { case semantic: Q.SemanticRequired => semantic }.flatMap(_.gaps)
       .map(gap => ScopeWork(gap.original, gap.producingItems, gap.receivingItems)).distinct
     decisions = required.candidates.collect { case decision: Q.DecisionRequired => decision }
     restored = new ProjectionRequired(selection, new Trace(retained.enumerated, Some(required), None, None), scopes, decisions)
-    snapshot <- SplitPhasePlanningSnapshot.projectC(restored)
-    _ <- if (snapshot.record == source.source.record.snapshot) Consequence.unit
-      else Consequence.stateConflict("SplitPhase restored whole scope frontier differs from its actual first checkpoint")
   } yield restored
 
   /** Consume the complete native-bound published frontier. No candidate is
@@ -192,26 +187,22 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
     frontier = retained.frontier
     projected = frontier.projected.get
     selection = frontier.previous.original.selection
-    admission <- A.restoreHumanC(retained)
-    outcome <- admission match {
+    restored <- O.restoreHumanC(retained)
+    outcome <- restored match {
       case unavailable: A.NoAdmissible => Consequence.success[Outcome](new CandidatesUnavailable(selection,
         new Trace(projected.input.enumerated, Some(projected), Some(unavailable), None), unavailable))
       case required: A.EvidenceRequired => Consequence.success[Outcome](new HostEvidenceRequired(selection,
         new Trace(projected.input.enumerated, Some(projected), Some(required), None), required))
-      case ranked: A.DurationRanked => O.restoreHumanC(retained, ranked).map { objective =>
-        val trace = new Trace(projected.input.enumerated, Some(projected), Some(ranked), Some(objective))
-        objective match {
+      case objective: O.Outcome =>
+        val trace = new Trace(projected.input.enumerated, Some(projected), Some(objective.input.duration), Some(objective))
+        Consequence.success[Outcome](objective match {
           case required: O.RecordRequired => new ObjectiveRecordRequired(selection, trace, required.required)
           case required: O.ReasoningDemandRequired => new ReasoningRequired(selection, trace, required.unresolvedItems)
           case required: O.HumanDecisionRequired => new HumanDecisionRequired(selection, trace, required)
           case selected: O.Selected => new Planned(selection, trace, selected,
             projected.candidates.find(_.candidate == selected.candidate).get)
-        }
-      }
+        })
     }
-    passive <- SplitPhasePlanningSnapshot.projectC(outcome)
-    _ <- if (passive.record == observed.record.downstream) Consequence.unit
-      else Consequence.stateConflict("SplitPhase restored Human calculation differs from its complete committed downstream")
   } yield new HumanResolutionRestored(frontier, outcome)
 
   /** Participants classify only requested unknown work. Workflow resumes cost,
@@ -244,20 +235,14 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
     retained <- Q.restoreReasoningC(enumerated)
     projected = retained.projected
     raw = source.snapshot.selection.planning
-    selection <- selectC(enumerated.enumerated.input, raw, raw)
-    admission <- A.restoreReasoningC(retained).flatMap {
-      case ranked: A.DurationRanked => Consequence.success(ranked)
-      case _ => Consequence.stateConflict("SplitPhase retained reasoning lacks its complete duration frontier")
-    }
-    objective <- O.restoreReasoningC(retained, admission).flatMap {
+    selection <- selectC(enumerated.enumerated.input, raw)
+    objective <- O.restoreReasoningC(retained).flatMap {
       case required: O.ReasoningDemandRequired => Consequence.success(required)
       case _ => Consequence.stateConflict("SplitPhase retained reasoning objective changed kind")
     }
+    admission = objective.input.duration
     pending = new ReasoningRequired(selection,
       new Trace(enumerated.enumerated, Some(projected), Some(admission), Some(objective)), objective.unresolvedItems)
-    passive <- SplitPhasePlanningSnapshot.projectC(pending)
-    _ <- if (passive.record == source.snapshot) Consequence.unit
-      else Consequence.stateConflict("SplitPhase restored reasoning differs from the complete native checkpoint")
   } yield new ReasoningRestored(source, pending)
 
   private def _after_allocation_c(selection: Selection, input: Q.Input): Consequence[Outcome] = {
@@ -282,7 +267,7 @@ private[smworkflow] object SplitPhaseExplicitPlanningAdvance {
           new Trace(enumerated, Some(projected), Some(required), None), required))
         case admitted: A.DurationRanked =>
           val raw = selection.data.objectives
-          O.loadC(admitted, raw, raw).flatMap(O.calculateC).map { objective =>
+          O.loadC(admitted, raw).flatMap(O.calculateC).map { objective =>
             val trace = new Trace(enumerated, Some(projected), Some(admitted), Some(objective))
             objective match {
               case required: O.RecordRequired => new ObjectiveRecordRequired(selection, trace, required.required)

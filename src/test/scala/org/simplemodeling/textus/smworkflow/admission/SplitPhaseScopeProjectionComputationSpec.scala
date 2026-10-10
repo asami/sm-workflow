@@ -25,8 +25,8 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
   private def _from_template(source: Base, template: B.Validated): Fixture = {
     val checkpoint = SplitPhasePlanningCheckpointFixture.forBoundary(source, template).record
     val facts = checkpoint.snapshot.selection
-    val partition = take(E.loadC(template, facts.partition, facts.partition))
-    val selection = take(W.selectC(partition, facts.planning, facts.planning))
+    val partition = take(E.loadC(template, facts.partition))
+    val selection = take(W.selectC(partition, facts.planning))
     val need = take(W.advanceC(selection)).asInstanceOf[W.ProjectionRequired]
     Fixture(need, checkpoint, take(S.requestC(checkpoint)))
   }
@@ -37,7 +37,7 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
   }
   private def _reply(request: S.Request, scopes: Vector[S.Scope]): S.Admitted = take(S.admitC(request,
     ContextReference(request.result.identity, request.result.revision),
-    S.Judgment(request.context, request.checkpoint, S.Decision.Enriched, "exact transfer closure analysis",
+    S.Judgment(S.Decision.Enriched, "exact transfer closure analysis",
       scopes, Vector(T.EvidenceReference("scope-evidence", "1")))))
   private def _narrow(request: S.Request): S.Admitted = _reply(request, request.gaps.map(gap =>
     S.Scope(gap.original.identity, gap.producingItems.takeRight(1), gap.receivingItems.take(1), "exact evidence owners")))
@@ -180,7 +180,7 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
         val records = template.records.copy(ownership = template.records.ownership.copy(children =
           template.records.ownership.children.zipWithIndex.map((child, index) => child.copy(repository =
             B.RepositoryIdentity(s"repo-$index")))))
-        val fixture = _from_template(source, take(B.loadC(template.shape, records, records)))
+        val fixture = _from_template(source, take(B.loadC(template.shape, records)))
         When("known transfer scopes are applied without authority to change repository ownership")
         val actual = take(Q.applyScopeC(fixture.need, fixture.checkpoint, _narrow(fixture.request))).asInstanceOf[Q.ScopeApplied]
         val decisions = actual.candidates.collect { case value: Q.ScopeDecision => value }
@@ -197,8 +197,8 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
         val template = proof(source, candidate, "numbering-template", handoffPairs = Vector(0 -> 1))
         val records = template.shape.records.copy(inventory = template.shape.records.inventory.copy(
           occupiedPhases = Set(P.PhaseIdentity("77"), P.PhaseIdentity("77.3"))))
-        val shape = take(P.loadC(records, records)).asInstanceOf[P.ShapeReady]
-        val fixture = _from_template(source, take(B.loadC(shape, template.records, template.records)))
+        val shape = take(P.loadC(records)).asInstanceOf[P.ShapeReady]
+        val fixture = _from_template(source, take(B.loadC(shape, template.records)))
         When("known scopes permit document assembly but do not permit allocating alternative phase suffixes")
         val actual = take(Q.applyScopeC(fixture.need, fixture.checkpoint, _narrow(fixture.request))).asInstanceOf[Q.ScopeApplied]
         val originals = _projection(fixture.need).candidates.collect { case value: Q.DecisionRequired => value }
@@ -216,7 +216,7 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
         val fixture = _fixture()
         val request = fixture.request
         val reply = take(S.admitC(request, ContextReference(request.result.identity, request.result.revision),
-          S.Judgment(request.context, request.checkpoint, S.Decision.DecisionNeeded, "human interpretation required",
+          S.Judgment(S.Decision.DecisionNeeded, "human interpretation required",
             Vector.empty, Vector(T.EvidenceReference("human-direction-evidence", "1")))))
         When("Workflow consumes that actual semantic decision")
         val actual = take(Q.applyScopeC(fixture.need, fixture.checkpoint, reply)).asInstanceOf[Q.ScopeHumanDirectionRequired]
@@ -267,7 +267,7 @@ final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Ma
         val projected = applied.projected.get
         val ranked = take(A.assessC(take(A.loadC(projected.input.enumerated,
           projected.candidates.map(value => Some(value.boundary)))))).asInstanceOf[A.DurationRanked]
-        val selected = take(O.calculateC(take(O.loadC(ranked, costs, costs)))).asInstanceOf[O.Selected]
+        val selected = take(O.calculateC(take(O.loadC(ranked, costs)))).asInstanceOf[O.Selected]
         Then("cost chooses only among the complete duration-admitted frontier and no publication or Terminal is asserted")
         selected.stage shouldBe O.Stage.Cost
         selected.candidate.cutAfterIndices shouldBe Vector(0)

@@ -27,8 +27,8 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
   private val request = StepCloseRequest("submission", "step", "a" * 64, "b" * 64, Vector.empty)
   private val scope = take(GoalPhaseCallScopedSnapshot.scopeC(handle, request, GoalPhaseCallScopedSnapshot.Purpose.Candidate))
   private val id = take(EntityId.bridgeFromParts("cncf", "artifact", BlobRepository.CollectionId, Instant.EPOCH, "artifact"))
-  private val ref = GoalPhaseBlobArtifactSnapshot.Reference(id, BlobStorageRef("local", "artifacts", "artifact.bin"), 2L, "a" * 64)
-  private val pair = GoalPhaseBlobArtifactSnapshot.References("selection", 0L, ref, ref.copy(digest = "b" * 64))
+  private val ref = GoalPhaseBlobArtifactSnapshot.Reference(id, BlobStorageRef("local", "artifacts", "artifact.bin"))
+  private val pair = GoalPhaseBlobArtifactSnapshot.References("selection", 0L, ref, ref)
   private def record(selected: GoalPhaseBlobArtifactSnapshot.References = pair) = Record.data(
     GoalPhaseArtifactReferenceRecord.storageField -> take(GoalPhaseArtifactReferenceRecord.encodeStorageC(scope, selected, 16)))
   private final class Storage extends GoalPhaseArtifactCatalogRetention.Port {
@@ -42,7 +42,8 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
       else afterCreate match {
         case "missing" => Consequence.success(None)
         case "failed" => Consequence.stateConflict("Post-Create observation failed")
-        case "divergent" => Consequence.success(Some(record(pair.copy(selectionRevision = 1L))))
+        case "invalid-scope" => Consequence.success(Some(Record.data(GoalPhaseArtifactReferenceRecord.storageField -> "invalid")))
+        case "changed-view" => Consequence.success(Some(record(pair.copy(selectionRevision = 1L))))
         case "throw-read" => throw new IllegalStateException("Post-Create observation threw")
         case _ => Consequence.success(row)
       }
@@ -87,17 +88,10 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
       val zero = GoalPhaseArtifactRegistrationServiceOperation.decodeCommandC(wire, 0)
       Then("the invalid bound is refused")
       zero shouldBe a[Consequence.Failure[?]]
-      When("the configured bound is smaller than the declared artifact")
+      When("the configured execution read limit is one byte")
       val short = GoalPhaseArtifactRegistrationServiceOperation.decodeCommandC(wire, 1)
-      Then("the oversized declaration is refused")
-      short shouldBe a[Consequence.Failure[?]]
-      Given("a selection whose program digest no longer matches its subject")
-      val wrong = command.copy(selection = pair.copy(program = ref.copy(digest = "c" * 64)))
-      When("the inconsistent command is decoded")
-      val mismatch = GoalPhaseArtifactRegistrationServiceOperation.decodeCommandC(
-        GoalPhaseArtifactRegistrationServiceOperation.encodeCommand(wrong), 16)
-      Then("the digest mismatch is refused")
-      mismatch shouldBe a[Consequence.Failure[?]]
+      Then("the configured limit is accepted; actual bounded payload reading belongs to execution")
+      take(short) shouldBe command
       Given("a selection revision encoded as a string rather than the declared number")
       val malformed = json.mapObject(_.add("selection", json.hcursor.downField("selection").focus.get
         .mapObject(_.add("revision", io.circe.Json.fromString("0"))))).noSpaces
@@ -126,10 +120,10 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
         request, org.simplemodeling.textus.smworkflow.value.GoalPhaseArtifactSelection("selection", 0L,
           org.simplemodeling.textus.smworkflow.value.GoalPhaseArtifactReference(id.print,
             org.simplemodeling.textus.smworkflow.value.GoalPhaseArtifactStorageReference("local", "artifacts",
-              "artifact.bin", None, None), 2L, "a" * 64),
+              "artifact.bin", None, None)),
           org.simplemodeling.textus.smworkflow.value.GoalPhaseArtifactReference(id.print,
             org.simplemodeling.textus.smworkflow.value.GoalPhaseArtifactStorageReference("local", "artifacts",
-              "artifact.bin", None, None), 2L, "b" * 64)))
+              "artifact.bin", None, None))))
       Then("the subject and initial selection revision remain typed data")
       command.subject shouldBe request
       command.selection.revision shouldBe 0L
@@ -149,8 +143,41 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
       storage.creates shouldBe 1
       storage.row.get.fields.map(_.key).toSet shouldBe Set(GoalPhaseArtifactReferenceRecord.storageField)
     }
-    "refuse malformed or different stored selections without replacement" in {
-      Vector(record(pair.copy(selectionRevision = 1L)), Record.data("unknown" -> "value"),
+    "consume actual stored selections without requiring equality to a retry input or readback view" in {
+      Given("Spec: docs/spec/goal-phase-artifact-reference-applicability.md; Rule: R3; Example: E3; a retained scoped selection")
+      val actual = pair.copy(selectionRevision = 3L, program = ref.copy(storageRef = ref.storageRef.copy(key = "current.bin")))
+      val storage = new Storage
+      storage.row = Some(record(actual))
+      var observed = Vector.empty[GoalPhaseBlobArtifactSnapshot.References]
+      When("a retry supplies the earlier pair but the current scoped row is selected")
+      val selected = take(GoalPhaseArtifactCatalogRetention.retainC(scope, pair, 16, storage,
+        value => { observed :+= value; Consequence.unit }))
+      Then("only the actual retained input is read and no Create or replacement occurs")
+      selected shouldBe actual
+      observed shouldBe Vector(actual)
+      storage.creates shouldBe 0
+      val changing = new Storage
+      changing.afterCreate = "changed-view"
+      When("a successful Create is followed by an applicable readback view with another selection revision")
+      take(retain(changing)).selectionRevision shouldBe 1L
+      Then("readback is observed, not compared as a no-change certificate")
+      changing.creates shouldBe 1
+    }
+
+    "stop actual selected-resource failure before Create" in {
+      Given("Spec: docs/spec/goal-phase-artifact-reference-applicability.md; Rule: R3; Example: E4; an empty catalog and an unavailable selected resource")
+      val storage = new Storage
+      When("the actual scoped payload read refuses access or availability")
+      val result = GoalPhaseArtifactCatalogRetention.retainC(scope, pair, 16, storage,
+        _ => Consequence.stateConflict("Actual selected resource unavailable"))
+      Then("no reference row is published and failure is not treated as absence or permission")
+      result shouldBe a[Consequence.Failure[?]]
+      storage.creates shouldBe 0
+      storage.row shouldBe None
+    }
+
+    "refuse malformed stored selections without replacement" in {
+      Vector(Record.data("unknown" -> "value"),
         Record.data(GoalPhaseArtifactReferenceRecord.storageField -> "invalid")).foreach { existing =>
         Given("a catalog row with another selection or malformed payload")
         val storage = new Storage
@@ -174,7 +201,7 @@ final class GoalPhaseArtifactCatalogRetentionSpec extends AnyWordSpec with Match
       storage.creates shouldBe 0
     }
     "retain uncertainty after Create or readback failure and recover the same physical row on retry" in {
-      Vector("missing", "failed", "divergent", "throw-read", "failed-create", "throw-create").foreach { mode =>
+      Vector("missing", "failed", "invalid-scope", "throw-read", "failed-create", "throw-create").foreach { mode =>
         Given("an empty catalog with uncertain Create acknowledgement or post-Create readback")
         val storage = new Storage
         storage.afterCreate = mode

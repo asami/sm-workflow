@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic a
   * transitions borrow the owning call's canonical Subsystem storage.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  7, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopeSemantic {
   final class Source private[SplitPhaseManagedScopeSemantic] (val record: K.Record,
@@ -327,59 +327,54 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       descriptiveAttributes = SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation.specification.content.descriptiveAttributes)
   }
 
-  /** Complete independent checkpoint/native provenance admission, even on
-    * reopen after later history. No private planner constructors are invoked.
+  /** Resolve the selected native computation, even after later history. Native
+    * storage owns mechanical receipt/state admission; do not reconstruct and
+    * compare another copy of its current instance or committed prefix.
     */
   private def _source_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[Source] = for {
     _ <- _actor_c(core, None)
     reads <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
-    original <- reads.loadOriginalForCommandC(command, core)
-    _ <- _actor_c(core, Some(original.start.command.participantIdentity))
-    instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
-      declaration.instances, declaration.continuations)
-    current <- instances.loadForCallC(declaration.configuration, original.start.instanceIdentity, core).flatMap {
-      case Some(value) => value.validateC
-      case None => _invalid("scope native current instance is absent")
-    }
-    _ <- O.verifyStartLineageC(original, current)
-    _ <- O.verifyInvocationC(original)
-    _ <- if (original.start.configuration == declaration.configuration && original.start.instanceIdentity.value == command.instanceIdentity &&
-        original.context.reference.identity == command.context.identity && original.context.reference.revision == command.context.revision &&
-        SplitPhaseDefinitionBinding.sameDefinition(current.definition, catalog.definition)) Consequence.unit
-      else _invalid("scope original query, declaration or native definition differs")
-    mapping <- reads.loadMappingForCallC(command, core).flatMap {
+    selected <- reads.loadSelectionForCallC(command, core).flatMap {
       case Some(value) => Consequence.success(value)
       case None => _invalid("scope immutable checkpoint index is absent")
     }
-    (index, record) = mapping
-    data <- reads.loadDataForCallC(index, record, original, core)
-    predecessor <- _prefix_c(current, record.committedRevision)
-    _ <- record.origin match {
-      case K.Origin.Mechanical(anchor) => for {
-        storage <- _storage_c(core, declaration, catalog)
-        native <- storage.bindMechanicalC(K.advanceOperation, KJ.payloadCodec)
-        actual <- native.loadRetainedC(anchor)(using core.executionContext).flatMap {
+    record = selected.record
+    source <- record.origin match {
+      case _: K.Origin.Mechanical => for {
+        _ <- _actor_c(core, Some(record.originalStart.command.participantIdentity))
+        actual <- selected.mechanical match {
           case Some(value) => Consequence.success(value)
           case None => _invalid("scope original actual mechanical receipt is absent")
         }
-        _ <- O.verifyMechanicalC(data, actual.receipt)
-        _ <- if (SplitPhaseDefinitionBinding.sameRecord(actual.current, current) &&
-            SplitPhaseDefinitionBinding.sameRecord(actual.receipt.next, predecessor)) Consequence.unit
-          else _invalid("scope original mechanical native prefix differs")
-      } yield ()
+        _ <- reads.requireDocumentsForCallC(record, core)
+      } yield new Source(record, actual.receipt.next, actual.current)
       case K.Origin.PartitionCompletion(identity, _) => for {
-        purposes <- SplitPhasePartitionCompletionCheckpointDataStorePort.capturePurposesC(core.component.get.subsystem.get.configuration)
-        actual <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, reads.targets, purposes, core)
+        _ <- reads.requireDocumentsForCallC(record, core)
+        original <- reads.loadOriginalForCommandC(command, core)
+        _ <- _actor_c(core, Some(original.start.command.participantIdentity))
+        instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
+          declaration.instances, declaration.continuations)
+        current <- instances.loadForCallC(declaration.configuration, original.start.instanceIdentity, core).flatMap {
+          case Some(value) => value.validateC
+          case None => _invalid("scope native current instance is absent")
+        }
+        _ <- O.verifyStartLineageC(original, current)
+        _ <- if (original.start.instanceIdentity.value == command.instanceIdentity &&
+            original.context.reference.identity == command.context.identity && original.context.reference.revision == command.context.revision &&
+            SplitPhaseDefinitionBinding.sameDefinition(current.definition, catalog.definition)) Consequence.unit
+          else _invalid("scope original query, declaration or native definition differs")
+        predecessor <- _prefix_c(current, record.committedRevision)
+        actual <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, core)
         _ <- actual match {
           case Some(value) if value.record.checkpoint.contains(record) && value.record.context == original.context &&
-              value.record.start == original.start && SplitPhaseDefinitionBinding.sameRecord(value.current, current) &&
+              SplitPhaseDefinitionBinding.sameRecord(value.current, current) &&
               SplitPhaseDefinitionBinding.sameRecord(value.record.next, predecessor) => Consequence.unit
           case _ => _invalid("scope original actual partition completion or full native prefix differs")
         }
-      } yield ()
+      } yield new Source(record, predecessor, current)
     }
-  } yield new Source(record, predecessor, current)
+  } yield source
 
   private def _observe_completion_c(plan: I.Plan, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core):

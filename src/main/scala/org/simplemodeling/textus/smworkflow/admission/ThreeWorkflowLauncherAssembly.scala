@@ -10,21 +10,21 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowHostParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
   final case class Host(
     goal: GoalPhaseNativeRun.Declaration,
     split: SplitPhaseManagedStartAssembly.Declaration,
     splitCatalog: SplitPhaseRuntimeCatalog.Catalog,
-    splitStartHuman: SplitPhaseTypedStartHumanVerification.Verifier,
-    splitAnswerHuman: SplitPhaseHumanAnswerVerification.Verifier
+    splitStartHuman: SplitPhaseTypedStartHumanVerification.EvidencePort,
+    splitAnswerHuman: SplitPhaseHumanAnswerVerification.EvidencePort
   )
 
   trait HostDecoder {
     /** Trusted assembly only. Receive the single canonical parameter snapshot and
       * this component's unauthenticated composition context, not an incoming actor.
-      * Independent evidence/effect verifiers must be supplied by the owning host.
+      * Evidence admission and effect authority ports belong to the owning host.
       */
     def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
       context: ExecutionContext): Consequence[Host]
@@ -51,7 +51,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   def bindC(creation: ComponentCreate, host: Host)(using context: ExecutionContext): Consequence[Vector[ServiceDefinition]] =
     if (creation == null || host == null || host.goal == null || host.split == null || host.splitCatalog == null ||
         host.splitStartHuman == null || host.splitAnswerHuman == null || context == null || context.clock == null)
-      Consequence.configurationInvalid("Three-workflow assembly requires its owning host and independent Human verifiers")
+      Consequence.configurationInvalid("Three-workflow assembly requires its owning host and independent Human evidence ports")
     else for {
       _ <- GoalPhaseNativeRun.validateC(host.goal)
       _ <- if (host.goal.validationPolicy.nonEmpty && host.goal.reviewInstallation.nonEmpty &&
@@ -68,5 +68,13 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         convergence = Some(repository.convergence), humanConflict = repository.humanConflict)
       split <- SplitPhaseManagedServiceAssembly.bindHostWorkflowC(creation, host.split, host.splitCatalog,
         host.splitStartHuman, host.splitAnswerHuman)
-    } yield Vector(goal, split, sync)
+      goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
+      repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
+    } yield Vector(
+      NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(goal, creation, host.goal, goalCatalog.definition),
+        creation, host.goal, goalCatalog.definition),
+      NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),
+        creation, host.split, host.splitCatalog.definition),
+      NativeWorkflowSessionInput.repository(NativeWorkflowResultInput.repository(sync, creation, repository.declaration, repositoryDefinition),
+        creation, repository.declaration, repositoryDefinition))
 }

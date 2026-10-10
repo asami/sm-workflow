@@ -112,7 +112,6 @@ private[smworkflow] object SplitPhaseStartExecution {
         record.definition == null ||
         record.definition.workflowIdentity != initial.definition.workflowIdentity ||
         record.definition.workflowRevision != initial.definition.workflowRevision ||
-        record.definition.fixtureSha256 != initial.definition.fixtureSha256 ||
         record.correlation != initial.correlation || record.causation != initial.causation ||
         record.derivedCompositeOccurrence.nonEmpty || record.committedPredecessor.nonEmpty ||
         record.suspension.nonEmpty)

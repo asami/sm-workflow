@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.Json
 import java.nio.file.{Files, Path}
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
@@ -80,22 +81,21 @@ final class SplitPhaseManagedWorkflowAssemblySpec extends AnyWordSpec with Match
     (J.Purpose.PartitionPolicy, facts.partition.policy.reference.identity, take(J.encodePartitionPolicyC(facts.partition.policy))),
     (J.Purpose.Planning, facts.planning.reference.identity, take(J.encodePlanningC(facts.planning))))
 
-  private final class Human(mode: String) extends H.Verifier {
-    val issuerIdentity = "private-connected-start-verifier"
+  private final class Human(mode: String) extends H.EvidencePort {
     var calls = 0
-    def verifyForCallC(expected: H.Binding, core: ActionCall.Core): Consequence[Option[H.Receipt]] = {
+    def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json): Consequence[Unit] = {
       calls += 1
-      val receipt = H.Receipt(H.EvidenceReference("private-connected-human", "1"), issuerIdentity,
-        "private-human", H.purpose, expected, now.minusSeconds(1),
-        if (mode == "expired") now else now.plusSeconds(60))
-      Consequence.success(if (mode == "absent") None else Some(receipt))
+      val issued = NativeHostEvidence.Evidence(NativeHostEvidence.schema, H.purpose, lookupIdentity,
+        "private-connected-human", "1", "private-connected-start-source", "private-human", target, now.minusSeconds(86400).toString)
+      val observed = if (mode == "foreign-purpose") issued.copy(purpose = NativeHostEvidence.Purpose.SplitAnswer.identity) else issued
+      NativeHostEvidenceFixtureAdmission.admitC(core, "private-connected-start-source", NativeHostEvidence.Purpose.SplitStart,
+        lookupIdentity, target, if (mode == "absent") None else Some(observed))
     }
   }
   // Installing answer routing does not invent an answer or Start permission.
-  private val answers = new SplitPhaseHumanAnswerVerification.Verifier {
-    val issuerIdentity = "private-no-answer-verifier"
-    def verifyForCallC(reference: SplitPhaseHumanAnswerVerification.EvidenceReference,
-      expected: SplitPhaseHumanAnswerVerification.Binding, core: ActionCall.Core) = Consequence.success(None)
+  private val answers = new SplitPhaseHumanAnswerVerification.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: org.goldenport.cncf.workflow.ContextReference, target: Json) =
+      Consequence.securityPermissionDenied[Unit]("Internal assembly fixture has no Human answer")
   }
   private final class Host(path: Path, human: Human) extends AutoCloseable {
     private val context = ExecutionContext.create()
@@ -241,8 +241,8 @@ final class SplitPhaseManagedWorkflowAssemblySpec extends AnyWordSpec with Match
       } finally reopened.close()
     }
 
-    "reject absent and expired Human evidence without a native Start or advance fallback" in {
-      Vector("absent", "expired").foreach { mode =>
+    "reject absent and wrong-purpose Human evidence without a native Start or advance fallback" in {
+      Vector("absent", "foreign-purpose").foreach { mode =>
         Given(s"a complete selected allocation and authenticated participant, but $mode independent evidence")
         val human = new Human(mode)
         val host = new Host(path(), human)

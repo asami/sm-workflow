@@ -6,10 +6,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 import org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitionSemantic as S
 
-/** Closed passive answers; resolution references are not planning authority.
+/** Closed answer alternatives, not closed JSON annotations; resolution
+  * references and unused fields are not planning or command authority.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
   enum Answer {
@@ -27,21 +28,21 @@ private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
     def encode(value: Answer): Json = encodeC(value).toOption.getOrElse(Json.Null)
     def decode(value: Json): Either[String, Answer] = for {
       json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Human answer is absent or oversized")
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload")).toRight("Human answer fields differ")
+      root <- json.asObject.toRight("Human answer is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Human answer schema differs")
-      body <- root("payload").get.asObject.toRight("Human answer body is absent")
-      choice <- body("choice").flatMap(_.asObject).filter(_.keys.toSet == Set("value"))
+      body <- root("payload").flatMap(_.asObject).toRight("Human answer body is absent")
+      choice <- body("choice").flatMap(_.asObject)
         .flatMap(_("value")).flatMap(_.asString).toRight("Human answer choice differs")
       answer <- choice match {
-        case "ProvideResolution" if body.keys.toSet == Set("choice", "resolution") => for {
-          reference <- body("resolution").flatMap(_.asObject).filter(_.keys.toSet == Set("identity", "revision"))
+        case "ProvideResolution" => for {
+          reference <- body("resolution").flatMap(_.asObject)
             .toRight("Human resolution reference fields differ")
           identity <- reference("identity").flatMap(_.asString).filter(_canonical).toRight("Human resolution identity differs")
           revision <- reference("revision").flatMap(_.asString).filter(_canonical).toRight("Human resolution revision differs")
         } yield Answer.ProvideResolution(S.ContextReference(identity, revision))
-        case "Defer" if body.keys.toSet == Set("choice") => Right(Answer.Defer)
-        case "Cancel" if body.keys.toSet == Set("choice") => Right(Answer.Cancel)
-        case _ => Left("Human answer is not a declared choice with its exact fields")
+        case "Defer" => Right(Answer.Defer)
+        case "Cancel" => Right(Answer.Cancel)
+        case _ => Left("Human answer is not a declared choice")
       }
     } yield answer
   }

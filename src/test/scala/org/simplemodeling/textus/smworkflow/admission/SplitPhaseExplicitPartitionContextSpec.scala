@@ -43,6 +43,10 @@ private[admission] object SplitPhasePartitionContextFixture {
       ReasoningLevel.Deep, true), MinimalPresentation("Partition semantics", "Only unknown work")), facts)
 }
 
+/**
+ * @since   Oct.  2, 2026
+ * @version Oct.  9, 2026
+ */
 final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePartitionContextFixture.*
   private def json(raw: String): Json = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
@@ -66,13 +70,14 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       json(stored).hcursor.downField("payload").keys.get.toSet shouldBe Set("reference", "owner", "facts")
     }
 
-    "reject unchanged-reference drift across complete source boundary estimate and planning data" in {
-      Given("source references whose identity/revision strings remain unchanged")
-      val variants = Vector(
+    "consume current facts and reject contradictory ordered ownership or prerequisites" in {
+      Given("current facts with compatible values or contradictory source relationships")
+      val invalid = Vector(
         facts.copy(proposal = facts.proposal.copy(inventory = facts.proposal.inventory.copy(orderedUnfinishedItems =
           facts.proposal.inventory.orderedUnfinishedItems.reverse))),
         facts.copy(boundary = facts.boundary.copy(boundary = facts.boundary.boundary.copy(items =
-          facts.boundary.boundary.items.updated(0, facts.boundary.boundary.items.head.copy(prerequisiteItems = Vector(P.WorkItemIdentity("item-2"))))))),
+          facts.boundary.boundary.items.updated(0, facts.boundary.boundary.items.head.copy(prerequisiteItems = Vector(P.WorkItemIdentity("item-2"))))))))
+      val compatible = Vector(
         facts.copy(boundary = facts.boundary.copy(handoffs = facts.boundary.handoffs.copy(edges =
           facts.boundary.handoffs.edges.updated(0, facts.boundary.handoffs.edges.head.copy(disposition = EdgeDisposition.CutOnly))))),
         facts.copy(partition = facts.partition.copy(policy = facts.partition.policy.copy(phaseOverheadMinutes = 15))),
@@ -82,8 +87,26 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
           O.OverheadPolicyReference("overhead", "1"), baseData.source.reference, baseData.source.authority, 1, 0, 0, 0, 0)))))
       )
       When("those current records reach the natural preparation boundary")
-      Then("full facts differ even though no management hash or version change signals it")
-      variants.foreach(current => C.prepareC(record, current, instance, configuration, catalog).isSuccess shouldBe false)
+      val refused = invalid.map(current => C.prepareC(record, current, instance, configuration, catalog))
+      val prepared = compatible.map(current => take(C.prepareC(record, current, instance, configuration, catalog)))
+      Then("current values drive preparation and its retained record while actual contradictions fail")
+      refused.foreach(_.isSuccess shouldBe false)
+      prepared.map(_.record.facts) shouldBe compatible
+      prepared.head.request.boundaries shouldBe empty
+      prepared(1).selection.partition.records.policy.phaseOverheadMinutes shouldBe 15
+      prepared(2).selection.partition.records.estimates.items.head.duration shouldBe E.Duration.Known(261)
+      prepared(3).selection.data.objectives.overhead.get.perChildSetupUnits shouldBe 1
+    }
+
+    "use actual valid configuration rather than requiring the saved owner copy to match" in {
+      Given("an actual valid configuration whose retention choice differs from historical context data")
+      val current = configuration.copy(retentionPolicy = RetentionPolicy("other"))
+      When("the canonical current instance and current facts are prepared with that configuration")
+      val prepared = take(C.prepareC(record, facts, instance, current, catalog))
+      Then("the prepared owner carries current configuration without an unchanged-copy certificate")
+      prepared.record.owner.configuration shouldBe current
+      prepared.currentInstance shouldBe instance
+      prepared.request.items.map(_.identity) shouldBe Vector(P.WorkItemIdentity("item-1"))
     }
 
     "refuse foreign owner instance configuration and already-known semantic work without fallback" in {
@@ -97,7 +120,7 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       Then("preparation stops rather than using the old hash SPI or treating known work as AI work")
       invalid.foreach(value => C.prepareC(value, facts, instance, configuration, catalog).isSuccess shouldBe false)
       C.prepareC(record, facts, instance.copy(identity = InstanceIdentity("foreign")), configuration, catalog).isSuccess shouldBe false
-      C.prepareC(record, facts, instance, configuration.copy(retentionPolicy = RetentionPolicy("other")), catalog).isSuccess shouldBe false
+      C.prepareC(record, facts, instance, configuration.copy(retentionPolicy = RetentionPolicy("")), catalog).isSuccess shouldBe false
       val otherInitial = initial.copy(definition = take(GoalPhaseRuntimeCatalog.loadC()).definition, identity = InstanceIdentity("other-profile"))
       val other = take(otherInitial.appendC(initialRevision, instance.history.head.copy(correlation = otherInitial.correlation)))
       val otherOwner = record.owner.copy(handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, other)))
@@ -146,6 +169,64 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       take(J.decodeC(record.reference, J.schema + ":" + original.spaces2)) shouldBe record
       J.encodeC(record.copy(facts = facts.copy(proposal = null))).isSuccess shouldBe false
       J.encodeC(record.copy(owner = record.owner.copy(start = null))).isSuccess shouldBe false
+    }
+
+    "accept declared Set values independent of array ordering and repetition" in {
+      Given("a context whose occupied phases and handoff authorities are Sets, not ordered vectors")
+      val phases = Set(P.PhaseIdentity("PHASE-1"), P.PhaseIdentity("PHASE-2"))
+      val authorities = Set(P.AuthorityReference("authority-a", "1"), P.AuthorityReference("authority-b", "1"))
+      val value = record.copy(facts = facts.copy(
+        proposal = facts.proposal.copy(inventory = facts.proposal.inventory.copy(occupiedPhases = phases)),
+        boundary = facts.boundary.copy(boundary = facts.boundary.boundary.copy(authorizedHandoffAuthorities = authorities))))
+      When("existing v1 data uses another Set presentation with repeated members")
+      val original = json(take(J.encodeC(value)))
+      val reordered = original.hcursor.downField("payload").downField("facts").downField("proposal")
+        .downField("inventory").downField("occupiedPhases").withFocus(v =>
+          Json.fromValues(v.asArray.get.reverse ++ v.asArray.get.take(1))).top.get
+      val repeated = reordered.hcursor.downField("payload").downField("facts").downField("boundary")
+        .downField("boundary").downField("authorizedHandoffAuthorities").withFocus(v =>
+          Json.fromValues(v.asArray.get.reverse ++ v.asArray.get.take(1))).top.get
+      val decoded = take(J.decodeC(value.reference, raw(repeated)))
+      Then("typed Set meaning is retained without demanding the encoder's canonical body")
+      decoded.facts.proposal.inventory.occupiedPhases shouldBe phases
+      decoded.facts.boundary.boundary.authorizedHandoffAuthorities shouldBe authorities
+      decoded shouldBe value
+    }
+
+    "retain declared alternate delivery and execution disposition variants as inert owner data" in {
+      Given("a context with cross-store delivery and explicit delegated execution metadata")
+      val delivery = DeliveryConfiguration.CrossStoreCommittedTransition(WorkflowStoreIdentity("entities"),
+        CommittedEntityTransitionReference("committed"), IdempotencyKey("delivery"), RecoverabilityReference("recovery"))
+      val requirement = record.owner.requirement.copy(disposition = Some(ExecutionDisposition(
+        ExecutionPlacement.Delegated, ExecutionIndependence.Required, "origin")),
+        reasoningClass = Some(ReasoningClassReference("partition")))
+      val value = record.copy(owner = record.owner.copy(configuration = configuration.copy(delivery = delivery),
+        requirement = requirement))
+      When("declared owner data is encoded and decoded at the storage boundary")
+      val decoded = take(J.decodeC(value.reference, take(J.encodeC(value))))
+      Then("the variants survive without creating a current call or admitting an execution")
+      decoded.owner.configuration.delivery shouldBe delivery
+      decoded.owner.requirement shouldBe requirement
+    }
+
+    "reject undeclared nested fields and missing optional declarations before typed construction" in {
+      Given("a v1 context with complete declared owner and independent input fields")
+      val original = json(take(J.encodeC(record)))
+      val variants = Vector(
+        original.hcursor.downField("payload").downField("owner").downField("requirement")
+          .withFocus(_.mapObject(_.remove("disposition"))).top.get,
+        original.hcursor.downField("payload").downField("owner").downField("configuration")
+          .downField("delivery").downField("SameStore")
+          .withFocus(_.mapObject(_.add("witness", Json.True))).top.get,
+        original.hcursor.downField("payload").downField("facts").downField("partition")
+          .downField("estimates").downField("items").downArray.downField("duration")
+          .withFocus(_.mapObject(_.add("unchanged", Json.True))).top.get,
+        original.hcursor.downField("payload").downField("facts").downField("planning")
+          .withFocus(_.mapObject(_.remove("allocations"))).top.get)
+      When("these wire structures are decoded")
+      val results = variants.map(value => J.decodeC(record.reference, raw(value)))
+      Then("unknown fields and omitted declared fields are rejected without a re-encoding proof")
+      results.foreach(_.isSuccess shouldBe false)
     }
 
     "enforce the UTF-8 byte bound and keep semantic numerical validation outside raw decoding" in {

@@ -166,22 +166,25 @@ private[admission] class GoalPhaseApplicationFixture(val viaCli: Boolean = false
     var failReceipt = false
     var wrongReceipt = false
     var receiptOverride: Option[GoalPhaseReviewedClosure.Record] = None
+    var receiptLoads = 0
     var onAuthority: GoalPhaseClosureAuthority.Intent => Unit = _ => ()
     val receiptStore = new GoalPhaseReviewedClosure.InMemory
     val receipts = new GoalPhaseReviewedClosure.ReceiptPort {
       def putIfAbsentC(record: GoalPhaseReviewedClosure.Record): Consequence[GoalPhaseReviewedClosure.Record] =
         if (failReceipt) Consequence.stateConflict("planned accepted review persistence failure")
-        else if (wrongReceipt) Consequence.success(record.copy(reviewed = initial))
+        else if (wrongReceipt) Consequence.success(record.copy(instanceRevision = initial.revision))
         else receiptStore.putIfAbsentC(record)
-      def loadC(id: InstanceIdentity, revision: InstanceRevision): Consequence[Option[GoalPhaseReviewedClosure.Record]] =
+      def loadC(id: InstanceIdentity, revision: InstanceRevision): Consequence[Option[GoalPhaseReviewedClosure.Record]] = {
+        receiptLoads += 1
         receiptOverride match {
           case Some(value) => Consequence.success(Some(value))
           case None => receiptStore.loadC(id, revision)
         }
+      }
     }
     def grant(intent: GoalPhaseClosureAuthority.Intent): GoalPhaseClosureAuthority.Authorization =
       GoalPhaseClosureAuthority.Authorization(intent.handle, intent.expectedRevision, intent.snapshot,
-        intent.input.requestDigest, "recorded-local-authority", "human", now.minusSeconds(60), now.plusSeconds(3600))
+        "recorded-local-authority", "human", now.minusSeconds(60))
     val staticAuthorityPorts = GoalPhaseClosureAuthority.Ports(new GoalPhaseClosureAuthority.AuthorizationPort {
       def loadC(intent: GoalPhaseClosureAuthority.Intent): Consequence[Option[GoalPhaseClosureAuthority.Authorization]] = {
         authorityCalls += 1; captured = Some(intent); onAuthority(intent)
@@ -200,7 +203,7 @@ private[admission] class GoalPhaseApplicationFixture(val viaCli: Boolean = false
           Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
           ContextBundle("Resolve exact local commit authority",
             Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-            Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+            Vector.empty, intent.snapshot),
           CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
           StateMachineOperationIdentity("HumanBoundaryFixture", "recordStepCloseAuthority")))
       }
@@ -261,7 +264,7 @@ private[admission] class GoalPhaseApplicationFixture(val viaCli: Boolean = false
       target: Option[String] = None): ContinuationResult[ReviewStepResult] = {
       val revision = target.getOrElse(candidate(order(interaction).input.get.value))
       val evidence = StepReviewEvidence(s"review-${order(interaction).expectedRevision.value}", revision,
-        "2026-09-27T23:59:00Z", "2026-09-28T01:00:00Z", "full-step", "review receipt", "fixture-reviewer")
+        "2026-09-27T23:59:00Z", "full-step", "review receipt", "fixture-reviewer")
       result(interaction, ReviewStepResult(decision, "review rationale", Vector(evidence)), "ReviewStepResult",
         ContextReference(evidence.evidenceIdentity, revision))
     }

@@ -1,8 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.time.Instant
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
@@ -11,18 +9,19 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value.{ReviewStepResult, StepCloseRequest}
 
-/** Fixture-only retained accepted review. Completion is one-shot; projection
-  * recovery reads the exact retained proof instead of submitting Result again.
+/** Fixture-only retained completed review. Completion is one-shot; projection
+  * consumes the selected receipt and current state, not a no-change proof.
   * It is not a human Result/resume engine or a shared transaction.
   * @since   Sep. 29, 2026
   * @version Oct.  8, 2026
   */
 private[smworkflow] object GoalPhaseReviewedClosure {
   final case class Record(issued: WorkflowInteraction[StepCloseRequest, Nothing],
-    submitted: ContinuationResult[ReviewStepResult], reviewed: InstanceRecord, proofDigest: String)
+    submitted: ContinuationResult[ReviewStepResult], instanceIdentity: InstanceIdentity,
+    instanceRevision: InstanceRevision)
   trait ReceiptPort {
-    /** Persist before returning. Exact retries are idempotent; never replace
-      * a different record for the same instance/revision.
+    /** Persist before returning. An existing slot selects its retained input;
+      * a later proposed body neither replaces it nor requires a no-change proof.
       */
     def putIfAbsentC(record: Record): Consequence[Record]
     def loadC(instance: InstanceIdentity, revision: InstanceRevision): Consequence[Option[Record]]
@@ -31,10 +30,9 @@ private[smworkflow] object GoalPhaseReviewedClosure {
     private val records = mutable.Map.empty[(InstanceIdentity, InstanceRevision), Record]
     def putIfAbsentC(record: Record): Consequence[Record] = synchronized {
       _admitRecordC(record).flatMap { _ =>
-        val key = (record.reviewed.identity, record.reviewed.revision)
+        val key = (record.instanceIdentity, record.instanceRevision)
         records.get(key) match {
-          case Some(saved) if sameRecord(saved, record) => Consequence.success(saved)
-          case Some(_) => Consequence.stateConflict("GoalPhase accepted review receipt cannot be replaced")
+          case Some(saved) => Consequence.success(saved)
           case None => records.update(key, record); Consequence.success(record)
         }
       }
@@ -61,15 +59,10 @@ private[smworkflow] object GoalPhaseReviewedClosure {
       Consequence.stateConflict("GoalPhase reviewed authority context is incomplete")
     else for {
       _ <- ports.validateC
-      plan <- GoalPhaseStepClosureBoundary.planReviewedC(artifact, issued, submitted, asOf, current)
-      scoped <- GoalPhaseCallScopedSnapshot.forIssuedC(snapshot, current, issued)
-      bytes <- scoped.loadC(plan.commitRequest.stepIdentity)
-      _ <- GoalPhaseStepClosureBoundary.admitSnapshotC(plan.commitRequest, bytes)
-      digest <- _proofDigestC(issued, submitted)
-      proposed = Record(issued, submitted, current, digest)
+      _ <- if (current != null) Consequence.unit
+        else Consequence.stateConflict("GoalPhase completed review has no current instance")
+      proposed = Record(issued, submitted, current.identity, current.revision)
       saved <- ports.receipts.putIfAbsentC(proposed)
-      _ <- if (sameRecord(saved, proposed)) Consequence.unit
-        else Consequence.stateConflict("GoalPhase retained accepted review differs from the committed completion")
       response <- _runC(artifact, saved, current, asOf, instances, configuration, snapshot, commit, ports, true)
     } yield response
 
@@ -105,38 +98,24 @@ private[smworkflow] object GoalPhaseReviewedClosure {
     current: InstanceRecord, asOf: Instant, instances: WorkflowInstancePersistence, configuration: Configuration,
     snapshot: GoalPhaseStepClosureBoundary.SnapshotPort, commit: GoalPhaseStepClosureBoundary.CommitPort,
     ports: Ports, allowCommit: Boolean): Consequence[String] =
-    if (!_complete(saved) || !GoalPhaseStepClosureBoundary.sameRecord(saved.reviewed, current))
+    if (!_complete(saved) || current == null || saved.instanceIdentity != current.identity ||
+        saved.instanceRevision != current.revision)
       Consequence.stateConflict("GoalPhase retained accepted review differs from the current instance")
     else _admitRecordC(saved).flatMap { _ =>
       GoalPhaseClosureAuthority.closeReviewedOrDecisionC(artifact, saved.issued, saved.submitted,
-        asOf, current, instances, configuration, snapshot, commit, ports.authority, allowCommit,
-        () => ports.receipts.loadC(current.identity, current.revision).flatMap {
-          case Some(latest) if sameRecord(latest, saved) => Consequence.unit
-          case _ => Consequence.stateConflict("GoalPhase retained accepted review changed during authority lookup")
-        })
+        asOf, current, instances, configuration, snapshot, commit, ports.authority, allowCommit)
     }
 
-  private[admission] def sameRecord(left: Record, right: Record): Boolean =
-    _complete(left) && _complete(right) && left.issued == right.issued &&
-      left.submitted == right.submitted && left.proofDigest == right.proofDigest &&
-      GoalPhaseStepClosureBoundary.sameRecord(left.reviewed, right.reviewed)
   private def _complete(value: Record): Boolean = value != null && value.issued != null &&
-    value.submitted != null && value.reviewed != null && value.proofDigest != null
+    value.submitted != null && value.instanceIdentity != null && value.instanceRevision != null
 
-  /** Integrity check, not a signature or authority grant. The host receipt port
-    * remains the trusted immutable source of the consumed Result proof.
+  /** Actual receipt-slot placement, not a repeated Result admission.
+    * Issued-result correlation, semantic review and current state are assessed
+    * once by the closure plan at use, not serialized or certified by storage.
     */
   private def _admitRecordC(value: Record): Consequence[Unit] =
     if (!_complete(value)) Consequence.stateConflict("GoalPhase accepted review receipt is incomplete")
-    else _proofDigestC(value.issued, value.submitted).flatMap { digest =>
-      if (value.proofDigest == digest) Consequence.unit
-      else Consequence.stateConflict("GoalPhase accepted review proof digest differs from its payload")
-    }
-  private def _proofDigestC(issued: WorkflowInteraction[StepCloseRequest, Nothing],
-    submitted: ContinuationResult[ReviewStepResult]): Consequence[String] = for {
-      workWire <- WorkflowWorkOrderJsonV1.encodeC(issued, GoalPhaseStepCloseJson.payloadCodec)
-      resultWire <- WorkflowResultJsonV1.encodeC(submitted, GoalPhaseReviewCompletionOperation.payloadCodec)
-    } yield MessageDigest.getInstance("SHA-256").digest(
-      s"${workWire.length}:$workWire${resultWire.length}:$resultWire".getBytes(StandardCharsets.UTF_8))
-      .map(byte => f"${byte & 0xff}%02x").mkString
+    else if (value.issued.handle == null || value.issued.handle.instanceIdentity != value.instanceIdentity)
+      Consequence.stateConflict("GoalPhase completed review belongs to another receipt slot")
+    else Consequence.unit
 }

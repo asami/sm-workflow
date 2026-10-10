@@ -140,7 +140,7 @@ private[smworkflow] object GoalPhaseReviewRecoveryServiceOperation {
                   }
                   for {
                     retained <- managed.loadRetainedC(identity).flatMap {
-                      case Some(value) => Consequence.success(value)
+                      case Some(value) if value.completion.result.result.value.decision == "accept" => Consequence.success(value)
                       case _ => Consequence.stateConflict("Recovery has no retained review")
                     }
                     submitted = retained.completion.result
@@ -158,11 +158,11 @@ private[smworkflow] object GoalPhaseReviewRecoveryServiceOperation {
                     response <- if (nativeQuestion.nonEmpty && current.revision != retained.completion.instanceRevision)
                       // Existing adjacent pending question is recovered, not
                       // re-assessed as a fresh revision-three publication.
-                      GoalPhaseManagedNativeHumanQuestion.advanceForCallC(identity,
-                        GoalPhaseNativeHumanAdvanceOperation.choices, core, declaration)
+                      GoalPhaseManagedNativeHumanQuestion.recoverSelectedForCallC(submitted, current,
+                        retained.completion.instanceRevision, core, declaration)
                         .flatMap(GoalPhaseNativeHumanAdvanceOperation.responseC)
-                    else GoalPhaseReviewCompletionOperation.projectAcceptedForCallC(artifact, asOf,
-                      issued.issuedPersistence, instances, declaration.configuration, managed, snapshot, authority,
+                    else GoalPhaseReviewCompletionOperation.projectSelectedForCallC(artifact, asOf,
+                      issued.issuedPersistence, instances, declaration.configuration, snapshot, authority,
                       submitted, current, core, preparation.map(value => GoalPhaseReviewDecisionPreparation.Configuration(
                         declaration, value.template, value.collection)).orElse(automaticPreparation), nativeQuestion)
                   } yield response

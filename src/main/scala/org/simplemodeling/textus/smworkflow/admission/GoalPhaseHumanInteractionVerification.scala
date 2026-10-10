@@ -8,7 +8,8 @@ import org.goldenport.cncf.component.ComponentInstanceId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /**
- * Host-dependency seam only; no built-in verifier, storage grant or public entry.
+ * Separate legacy host-evidence ingress; no storage grant or public authority
+ * entry. The normal ordered Goal Human reader is a different boundary.
  * @since   Oct.  1, 2026
  * @version Oct.  8, 2026
  */
@@ -17,10 +18,17 @@ private[smworkflow] object GoalPhaseHumanInteractionVerification {
   val purpose = "goal-phase-decision-answer"
   final case class Binding(componentInstance: ComponentInstanceId, question: Question,
     answer: Answer, submittingParticipant: String)
+  def sameBindingScope(left: Binding, right: Binding): Boolean =
+    left != null && right != null && left.componentInstance == right.componentInstance &&
+      left.submittingParticipant == right.submittingParticipant && left.answer == right.answer &&
+      sameQuestionScope(left.question, right.question)
   /** Only a host verifier returns this value. There is deliberately no request decoder. */
   final case class Receipt(reference: String, issuer: String, humanParticipant: String,
-    purposeIdentity: String, binding: Binding, occurredAt: Instant, validUntil: Instant)
+    purposeIdentity: String, binding: Binding, occurredAt: Instant)
   trait Verifier {
+    /** Current host-selected issuer, read once when admitting its observation;
+      * not a before/after declaration-immutability witness.
+      */
     def issuerIdentity: String
     /** Resolve independently issued human evidence and admit this exact relay/binding.
       * Returning an authentication claim is not a conforming implementation.
@@ -49,26 +57,22 @@ private[smworkflow] object GoalPhaseHumanInteractionVerification {
       _ <- if (expected.question.intent.handle.componentIdentity == core.component.get.componentId) Consequence.unit
         else Consequence.securityPermissionDenied("Human question belongs to another Component")
       _ <- GoalPhaseParticipantAdmission.admitC(expected.submittingParticipant, core.executionContext)
-      issuer <- try {
-        val value = verifier.issuerIdentity
-        if (canonical(value, 256)) Consequence.success(value)
-        else Consequence.securityPermissionDenied("Human verifier issuer is invalid")
-      } catch { case NonFatal(_) => Consequence.serviceUnavailable("Human verifier issuer unavailable; no answer admitted") }
       observed <- try {
         Option(verifier.verifyForCallC(reference, expected, core)).getOrElse(
           Consequence.serviceUnavailable("Human verifier returned no outcome; no answer admitted"))
       }
         catch { case NonFatal(_) => Consequence.serviceUnavailable("Human verification indeterminate; no answer admitted") }
+      issuer <- try {
+        val value = verifier.issuerIdentity
+        if (canonical(value, 256)) Consequence.success(value)
+        else Consequence.securityPermissionDenied("Human verifier issuer is invalid")
+      } catch { case NonFatal(_) => Consequence.serviceUnavailable("Human verifier issuer unavailable; no answer admitted") }
       receipt <- observed match {
         case Some(value) if value != null && value.reference == reference && value.issuer == issuer &&
-            canonical(value.humanParticipant, 256) && value.purposeIdentity == purpose && value.binding == expected &&
-            value.occurredAt != null && value.validUntil != null && !value.occurredAt.isAfter(asOf) &&
-            !value.validUntil.isBefore(asOf) && !value.validUntil.isBefore(value.occurredAt) => Consequence.success(value)
-        case _ => Consequence.securityPermissionDenied("Human evidence is absent, stale or differs from the exact question/answer")
+            canonical(value.humanParticipant, 256) && value.purposeIdentity == purpose && sameBindingScope(value.binding, expected) &&
+            value.occurredAt != null && !value.occurredAt.isAfter(asOf) => Consequence.success(value)
+        case _ => Consequence.securityPermissionDenied("Human evidence is absent, future-dated or differs from the exact question/answer")
       }
-      _ <- try {
-        if (verifier.issuerIdentity == issuer) Consequence.unit
-        else Consequence.securityPermissionDenied("Human verifier issuer changed during verification")
-      } catch { case NonFatal(_) => Consequence.serviceUnavailable("Human verifier issuer observation unavailable") }
+      _ <- receipt.binding.question.admitAnswerC(receipt.binding.answer)
     } yield new Admitted(receipt, core)
 }

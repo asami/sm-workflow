@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 /** Passive computation data. Neither decoding nor shape inspection admits an
   * executable selection, current state, receipt, grant or human invocation.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[smworkflow] object SplitPhasePlanningSnapshot {
   final case class CandidateKey(cutAfterIndices: Vector[Int])
@@ -93,13 +93,9 @@ private[smworkflow] object SplitPhasePlanningSnapshot {
               d.repositories, d.numbering.map(n => NumberingView(n.reason, n.records)))
           }, need.scopes, need.decisions.map(d => key(d.candidate)))
       }
-      val documents = projection.toVector.flatMap(_.candidates).collect {
-        case b: CandidateProjectionView.BuiltView => b.key -> b
-      }.toMap
       val admission = trace.admission.map { a =>
         val assessments = a.assessments.map { assessment =>
           val k = key(assessment.candidate)
-          require(assessment.boundary.forall(b => matches(b, facts, documents(k))), "boundary proof differs")
           AssessmentView(k, assessment.boundary.map(_ => k), assessment.shortReview.map(s =>
             ShortReviewView(s.rebalanceAttempts, s.mergeAttempts, s.rejection)), assessment.status)
         }
@@ -115,13 +111,24 @@ private[smworkflow] object SplitPhasePlanningSnapshot {
         case v: O.RecordRequired => ObjectiveView.RecordRequired(v.required, v.leaders.map(key), costs(v.costScores))
         case v: O.ReasoningDemandRequired => ObjectiveView.ReasoningDemandRequired(v.unresolvedItems, v.leaders.map(key))
         case v: O.Selected =>
-          require(matches(v.boundary, facts, documents(key(v.candidate))), "selected boundary differs")
           ObjectiveView.Selected(key(v.candidate), v.stage, costs(v.costScores), overheads(v.overheadScores))
         case v: O.HumanDecisionRequired => ObjectiveView.HumanDecisionRequired(v.leaders.map(key), v.authorities,
           costs(v.costScores), overheads(v.overheadScores))
       }
       val record = Record(facts, partition, projection, admission, objective)
-      dispositionC(record).map(d => new Projected(record, d))
+      val disposition = outcome match {
+        case _: W.PartitionSemanticRequired => Disposition.PartitionSemanticRequired
+        case _: W.AllocationRequired => Disposition.AllocationRequired
+        case _: W.PartitionUnavailable => Disposition.PartitionUnavailable
+        case _: W.ProjectionRequired => Disposition.ProjectionRequired
+        case _: W.CandidatesUnavailable => Disposition.CandidatesUnavailable
+        case _: W.HostEvidenceRequired => Disposition.HostEvidenceRequired
+        case _: W.ObjectiveRecordRequired => Disposition.ObjectiveRecordRequired
+        case _: W.ReasoningRequired => Disposition.ReasoningRequired
+        case _: W.HumanDecisionRequired => Disposition.HumanDecisionRequired
+        case _: W.Planned => Disposition.Planned
+      }
+      Consequence.success(new Projected(record, disposition))
     }
   }
 
@@ -305,9 +312,6 @@ private[smworkflow] object SplitPhasePlanningSnapshot {
   }
   private def subset(keys: Vector[CandidateKey], all: Vector[CandidateKey]): Boolean =
     keys != null && keys.nonEmpty && keys.distinct == keys && keys.forall(all.contains)
-  private def matches(b: B.Validated, f: C.Facts, doc: CandidateProjectionView.BuiltView): Boolean =
-    b.shape.records == P.Records(f.proposal.source, f.proposal.inventory, doc.proposal) &&
-      b.records == B.Records(f.boundary.boundary, doc.ownership, doc.handoffs)
   private def key(c: E.Candidate): CandidateKey = CandidateKey(c.cutAfterIndices)
   private def built(b: Q.Built): CandidateProjectionView.BuiltView = CandidateProjectionView.BuiltView(key(b.candidate),
     b.boundary.shape.records.proposal, b.boundary.records.ownership, b.boundary.records.handoffs, b.localHandoffs)

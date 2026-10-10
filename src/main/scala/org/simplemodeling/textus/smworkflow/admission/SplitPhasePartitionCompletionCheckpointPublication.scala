@@ -7,9 +7,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
   SplitPhasePartitionEnrichmentJsonV1 as E}
 
 /**
- * One complete unique Create set. Does not stage or commit any row.
+ * Complete publication data. Does not stage, admit or commit any row.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointPublication {
   def prepareRowsC(captured: A.Captured, targets: U.Targets): Consequence[Vector[U.Row]] =
@@ -23,7 +23,7 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointPublication {
       closing = header :+ U.Row(targets.publication, key, Record.data(J.storageField -> raw))
       rows <- captured.checkpoint match {
         case Some(k) => U.prepareC(k, targets, closing).map(_.rows)
-        case None => U.validateRowsC(closing, targets).map(_ => closing)
+        case None => Consequence.success(closing)
       }
     } yield rows
 }

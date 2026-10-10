@@ -1,8 +1,125 @@
-# Phase 7: Dependency-Aware Multi-Repository Synchronization and Validation
+# Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
 Status: planned
 Planned: 2026-10-04
 Depends on: Phase 1, Phase 5, Phase 6
+
+## Execution plan — 2026-10-07
+
+Continue gradual use of the accepted Phase 6 interface. Reuse Phase 2's
+single-repository sync/effect path and Phase 5's validation/resources, rather
+than build another workflow engine or selector. Use one explicitly configured
+driver workspace for overlay and repository tests; project names remain data.
+These batches preserve every overlay and workspace acceptance item below.
+
+### A. Normal operation to publication, selection and real compilation
+
+1. Bind the shared project/repository/worktree graph and overlay ownership through
+   CNCF Phase 101 resources. Reuse the Phase 5 slice and implement only necessary
+   workspace extensions. Resolve dedicated and explicitly registered worktrees;
+   no proximity discovery or second path/configuration model.
+2. Fix the typed publication/selection input and SBT adapter contract together:
+   unique development version format, cross-module/transitive coordinates,
+   staging completion and the explicit per-build JVM-property argument. Keep
+   existing dependency declarations and build.sbt unchanged on supported,
+   enabled sbt-cozy; document plugin setup separately.
+3. Implement native publish/select/status and their execution adapter alongside
+   SBT publication/resolution. Prove normal sm-workflow invocation -> staged
+   JAR/Ivy publication -> selected set -> actual consumer compilation -> result.
+   Start with one producer/consumer, then extend the same spec to two consumers
+   selecting different versions. Do not leave native operation wiring until
+   after every SBT/Cozy helper is complete.
+
+Existing tracking: P7-DAO-01..04 plus the publication/selection parts of 06/07;
+acceptance A01/A04/A07/A08/A12 is developed with this connection. Test incomplete
+publication and missing/conflicting inputs before allowing a consumer selection.
+This milestone is not acceptance of all six operations or all driver scenarios.
+
+### B. Generation, selection changes and the remaining operations
+
+Connect Cozy generation and generated-output selection records to the same
+published artifacts, then implement native verify/detach/prune and complete
+status. Update/rollback must refresh or restart retained classpaths and regenerate
+affected output; verify generated Scala against the selected runtime API.
+Exercise unchanged ordinary Cozy, a new-generator/old-runtime mismatch, corrected
+selection, rollback/detach and protected active/pinned dependency closures.
+Use the shared two-consumer fixture for these scenarios instead of constructing
+a new installation for every operation.
+
+Tracking: P7-DAO-05..07 completion and A02/A03/A05/A06/A09, plus P7-TS03/04.
+Observe that target shared Ivy artifacts remain untouched across all six
+operations through the actual execution/output paths; do not add hash/copy-based
+integrity certificates or cache-wide scans. Selection verification is resolution
+and compilation evidence, not an unchanged-source proof.
+
+### C. Workspace synchronization on the same resources and validation runtime
+
+Extend existing RepositorySync to the explicit root plus related branches.
+Connect fetch/classification, allowed integration, per-repository outcomes and
+dependency-ordered validation before permitted non-force push/convergence.
+Reuse CNCF-discovered FULL queries: validate changed dependencies before the
+root, omit precautionary FULL for unchanged repositories, and preserve explicit
+conflict/failure outcomes. Overlay publication/selection remains a separate
+explicit operation; Git sync must not silently publish or switch artifacts.
+
+Tracking: existing nine workspace scenarios, P7-TS01/02/04 and P7-DAO-A11.
+Use table-driven Git outcome cases and representative real repository effects.
+Independent test scheduling is allowed by product policy; development SBT still
+uses the external registered runner/serial wrapper. Neither sm-workflow nor a
+test fixture may bypass that harness rule to demonstrate product concurrency.
+
+Batch C depends on the common resource/operation bindings in A, not completion
+of every generation/prune detail in B. Both B and C remain required before
+closure; C can advance once its actual prerequisites are available. Do not
+suspend all workspace progress for unrelated overlay implementation detail.
+
+### D. Integrated acceptance and upstream closure
+
+Complete all six SimpleModeler driver cases, supporting overlay cases, nine
+workspace cases and assigned managed-suite coverage using the assembled paths.
+Required independent review covers the native operations, adapters, consumer
+connections and sync/selection separation together. Reuse applicable producer
+checks; repeat affected generation/compilation/tests after selection changes even
+when Git revisions match. No blanket full test follows an unchanged sync.
+
+Retain the existing order: Phase 7 driver acceptance -> CNCF Phase 101 full
+acceptance/closure -> Phase 7 closure. Identify the remaining upstream closure
+items during batch A and handle relevant gaps with these connections, so they
+are not discovered only at the end. Do not claim full producer closure from the
+Phase 5 minimum slice or weaken this gate through evidence reuse. Preserve
+independent upstream acceptance obligations; batching is not a review exemption.
+Document supported operations/worktree setup and continue use; optional broader
+transports, providers and measurements stay in Phase 8.
+
+## Use during development (2026-10-05)
+
+Follow the revised [incremental-use plan](README.md): Phase 5 supplies the
+runtime foundation without skills; Phase 6 delivers thinking modes and skill
+integration. Gradual use begins after Phase 6 connected acceptance and continues
+through Phase 7. Exercise this phase against real,
+explicitly configured project repositories and dedicated dependency worktrees;
+use the resulting needs to prioritize bounded additions.
+
+Use the accepted Phase 6 skill-facing contract for this integration. Extend it
+explicitly when the synchronization scenario requires it and validate affected
+skill consumers together; do not introduce a parallel invocation/result protocol.
+
+Keep the planned synchronization/validation scenario as this phase's delivery
+boundary. Missing functionality that prevents supported use is addressed early;
+nonblocking additions belong here only when directly related and bounded.
+Record other discoveries and inherited Phase 2 extensions in
+[Phase 8](phase-8.md), retaining their origin, use case, implementation state
+and existing evidence. Do not expand Phase 7 into every possible repository,
+provider or recovery scenario. Its existing CNCF Phase 101 driver/closure
+responsibility remains part of the planned work; the broader Phase 8 backlog
+is not an additional Phase 7 completion gate.
+
+Implement the connected synchronization route and its Executable Specifications
+as a coherent batch, using compile/focused checks during development and
+integrated validation plus independent review at the behavior boundary. Review
+fixes require affected checks and required regressions, not repeated unrelated
+reviews for every internal component. Once the planned scenario is accepted,
+continue use and close the remaining necessary work in Phase 8.
 
 ## Goal
 
@@ -11,6 +128,80 @@ Extend the Phase 1 `RepositorySyncWorkflow` from synchronization of one project 
 For a root project X, synchronization MUST include X itself and the related repositories explicitly participating in X through project-specific branches. When remote changes are incorporated into one of those related repositories, sm-workflow validates the changed dependency first and validates X only after all changed dependencies have passed their full tests.
 
 This is an extension of the existing `RepositorySyncWorkflow`, not a second synchronization workflow. It is also the project-workspace convergence counterpart to `sm-goal-phase`: GoalPhase closes work locally in one admitted repository/worktree; RepositorySync brings the root repository and its dedicated related worktrees into synchronized, validated GitHub convergence.
+
+## Development Artifact Overlay (2026-10-06)
+
+Deliver [Development Artifact Overlay](../spec/development-artifact-overlay.md)
+as native sm-workflow functionality for the same explicitly configured project
+workspace. An owning worktree has a logical development-artifact repository;
+each consumer explicitly selects an immutable set of unique development
+coordinates. Record real producer origin and build dependencies. Do not overwrite
+published coordinates, silently select the latest version, mix foreign overlays
+or fall back to ordinary versions when a selected artifact is unavailable.
+
+sm-workflow owns typed publication/selection/verification state and registered
+Operations. CNCF provides standard Component configuration, persistence and
+logical resource locations. SBT integration handles staged JAR/Ivy publication
+and direct/transitive dependency selection; Cozy handles generator/runtime
+selection, generated-output records and classpath refresh. Skills use the Phase 6
+interface to call these Operations; they do not implement the state machine or
+own a parallel `.codex-workflow` artifact ledger. The original skill-oriented
+layout/command-envelope proposal is superseded by this native product design.
+
+For each build, sm-workflow supplies the selected artifact input explicitly as
+a JVM system-property argument. The same checked-in build.sbt serves ordinary
+and overlay builds without per-selection edits. Put input handling and dependency
+application in reusable common SBT integration, with any one-time plugin bootstrap
+documented separately. Do not require project-specific parsing, persistent shell
+environment selection or source-version rewriting to switch dependencies.
+
+The existing build definition keeps its ordinary policy and dependency-coordinate
+declarations. With a supported sbt-cozy installed and enabled, activate overlay
+handling solely through the explicit selection argument; do not require
+`.settings(cozyDevelopmentArtifactOverlaySettings)` or any other overlay-specific
+build.sbt declaration. No argument retains ordinary behavior; an invalid explicit
+selection fails. Plugin installation/enabling or version updates are separate
+prerequisites, not per-build edits. Verify an existing sbt-cozy-enabled build.sbt
+works without modification and without per-dependency wrappers. Actual resolved
+JAR paths change with the selected unique development coordinates.
+
+Define shared project composition and worktree operation under
+`${project}/.textus/sm-workflow/resources/`: repository/dependency membership,
+development branches, dedicated-versus-existing worktree policy, producer/consumer
+roles and overlay owner. CNCF local configuration supplies machine-specific
+existing-worktree paths. The provider places managed checkouts under `work.d/`
+and development JARs/Ivy metadata under
+`work.d/artifacts/<overlay-id>/repository/`, outside Git. sm-workflow resolves
+these logical resources and passes explicit selection input to sbt-cozy; neither
+component infers membership from directory proximity or selects the newest JAR.
+Concrete definition filenames and helper APIs remain adapter design work.
+
+Provide publish/select/status/verify/detach/prune. Preserve ordinary dependency
+resolution and global caches, and leave SBT/Ivy/Coursier cache exclusion to those
+tools. Do not introduce an SBT-wide or machine-wide mutex. Coordinate only real
+resource conflicts such as the same publication target or selection/prune race.
+The Codex development harness's existing serial wrapper remains an external
+execution constraint and is not part of the product's public workflow contract.
+
+Implement SBT publication/resolution with native sm-workflow operation/execution
+adapters and normal invocation from the first batch, then extend that connected
+path through Cozy selection/regeneration and the remaining operations. Keep the scope to the
+[overlay checklist](phase-7-artifact-overlay-checklist.md), including the six
+SimpleModeler driver cases: two independent consumer versions, unaffected
+ordinary Cozy, generated-code/runtime API mismatch detection, no fallback on
+failure, correct generated output/classpaths after update/rollback, and no
+changes to shared `~/.ivy2/local` target artifacts across all six operations.
+Use actual typed selection/resolution facts and compiler/tests, not management
+hashes, full-content copies or tamper/unchanged-state certificates.
+
+Overlay operations are distinct from Git synchronization and do not implicitly
+publish, select, push or prune merely because a repository was synchronized.
+Phase 7's Git full-test policy below remains unchanged. An explicit dependency
+selection change additionally requires affected regeneration, compilation and
+relevant tests even with unchanged Git revisions; unchanged Git alone does not
+prove an unchanged dependency environment. Publication/set creation alone is not
+consumer compatibility acceptance. Phase 8 may take optional later breadth,
+not the initial overlay delivery or its six required acceptance cases.
 
 ## GoalPhase / RepositorySync responsibility split
 
@@ -101,6 +292,57 @@ A fetch with no incorporated working-branch change is not UPDATED.
 7. If any related repository is UPDATED, the root project requires a full test even when the root repository itself was unchanged, because the effective dependency baseline of the root project changed.
 8. Therefore, when neither the root nor any related repository incorporates remote changes, synchronization completes without a precautionary full test.
 
+## Managed validation across repositories and overlays (2026-10-06)
+
+Consume Phase 5's managed suites and Phase 6's semantic design/FIX connection,
+following [the suite contract](../notes/managed-test-suites-and-verification-cost-guard.md)
+and [decision journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
+The policy above determines **when** a repository needs FULL; CNCF Phase 103
+metadata discovery determines its FULL operation membership. FULL is not an
+unconditional synonym for `sbt test`. Do not introduce a registry, another
+annotation parser or AI-selected execution-time class list.
+
+Query each required project's resolved metadata and record actual operation IDs,
+metadata/ABI revision, Candidate/input context, reason, outcome and duration.
+Missing required coverage is an explicit gap; metadata changes follow ordinary
+Candidate/review/admission through Phase 5/6. Dependency validation precedes root
+validation; failed dependencies do not permit successful-root acceptance.
+
+
+The normal FULL target is <=10 minutes, with explicit justified exceptions and
+separate optional HEAVY. Cost warnings do not change PASSED to FAILED, reject sync
+by themselves, trigger a retry or invoke AI without a human decision. HEAVY is
+not automatically added to RepositorySync. Independent tests remain eligible for
+concurrent execution; SBT's own cache coordination stays outside Workflow policy.
+
+Overlay selection changes can require validation even when source Git revisions
+are unchanged. Capture the actual selection and resolved dependency context in
+the invocation/result alongside the candidate and suite revisions. Perform
+affected regeneration/compilation through the existing typed operations and run
+the metadata-derived purpose/feature query required by the admitted policy.
+Choose that profile before executing the change; do not improvise a broader test
+set after a failure. Compile generated code to detect generator/runtime API
+mismatch. Publication success alone is not compatibility evidence. Revision and
+selection references are contextual facts, not hashes or unchanged-state proofs.
+
+The [managed-suite Phase 7 acceptance](managed-test-suites-phase-checklist.md)
+extends the existing Git/overlay cases: per-project FULL metadata selection and ordering,
+unchanged repositories avoiding precautionary runs, PASS with cost warnings,
+explicit HEAVY policy and overlay-context-aware verification using CNCF metadata
+queries. No additional test-selection engine or integrity ledger is introduced.
+Any resulting TEST_FIX/REVIEW_FIX uses the common Phase 5/6 convergence policy:
+ordinary repair count as a convergence parameter, hygiene/minor ordinary-count
+exclusions with retained convergence effects, bounded AI feedback, and a separate
+absolute hard limit of 10 automatic Fix cycles including hygiene/minor work. Do not create repository-sync/overlay-specific lifetime
+repair totals, reset active loops on a worktree/chat switch or add new measurement
+machinery merely because several repositories participate.
+Issue source identities include repository/provider scope so same-named failures
+remain distinct. Use the shared ledger/reconciliation and evidence-confirmed
+resolution rules, with no per-repository duplicate workflow. Resume reuses
+completed applicable evidence; changed overlay selection/resolved dependencies
+can invalidate it even when source revision matches. Verify both unchanged-context
+reuse and changed-context revalidation while preserving issues and both counts.
+
 ## Dependency ordering
 
 Validation follows the explicit project dependency relation, not repository enumeration order.
@@ -174,6 +416,13 @@ This scenario must be supported through the same public project/workspace model 
 
 ## Practical completion condition
 
+Both the existing multi-repository synchronization scenario below and the
+Development Artifact Overlay checklist must be accepted for Phase 7 completion.
+The Phase 7 [managed-suite integration items](managed-test-suites-phase-checklist.md)
+are also part of those connected scenarios, not a separate generic framework.
+Record actual integrated validation and independent review for each delivered
+behavior; tracking rows are not separate helper-level review gates.
+
 Phase 7 is complete when a real root project using at least two project-specific related repository branches can execute one RepositorySyncWorkflow that:
 
 - synchronizes the complete explicit repository set;
@@ -192,3 +441,20 @@ Phase 7 is complete when a real root project using at least two project-specific
 - Defensive repository backup/rollback/integrity machinery.
 - Replacing Git's own merge/conflict semantics.
 - General provider-selection semantics; generic execution-requirement semantics are established in Phase 6.
+
+
+## Static-analysis consumer coordination
+
+textus-cbd-support on Mac mini uses the same CNCF Phase 103 operation identities,
+metadata revisions and bounded runtime evidence references for architecture
+coverage/delta and declared-versus-observed duration review. Phase 7 must keep
+repository and overlay context attributable in those references. It does not
+implement cbd-support analysis or wait for its UI/KPI completion to validate
+runtime queries. Cross-project planning documents are updated together.
+
+
+Slice validation consumes the shared management-file contract: metadata query
+plus explicit supplemental operation references/typed parameters tied to acceptance
+conditions. Resolve them in the selected repository/overlay context and record
+plan revision, selection origin and actual invocation inputs in evidence. A plan
+supplement neither changes source metadata nor replaces required project FULL.

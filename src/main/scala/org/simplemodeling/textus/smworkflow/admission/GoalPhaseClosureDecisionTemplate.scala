@@ -32,21 +32,15 @@ private[smworkflow] final case class GoalPhaseClosureDecisionTemplate(
           intent.idempotencyKey != null && intent.idempotencyKey.nonEmpty && intent.idempotencyKey.trim == intent.idempotencyKey)
         Consequence.unit else Consequence.stateConflict("Closure question requires its exact retained intent")
       _ <- intent.handle.validateC
-      _ <- StepCloseRequestAdapter.submissionC(intent.input.candidate)
-      _ <- GoalPhaseClosureAuthority.inputCodec.decode(GoalPhaseClosureAuthority.inputCodec.encode(intent.input))
-        .fold(Consequence.stateConflict(_), _ => Consequence.unit)
+      _ <- GoalPhaseClosureAuthority.admitInputC(intent.input)
       request = ContinuationRequest(StateMachineRunIdentity(intent.handle.instanceIdentity.value),
         ContinuationIdentity("goal-phase-authority:" + intent.idempotencyKey), intent.expectedRevision,
         requiredOperation, operation, Some(TypedValue(GoalPhaseClosureAuthority.inputCodec.typeIdentity, intent.input)), None,
         ContextBundle("Resolve exact local commit authority",
           Vector(ContextReference(intent.input.candidate.stepIdentity, intent.input.candidateRevision)),
-          Vector(ContextReference(intent.input.candidate.submissionIdentity, intent.input.requestDigest)), intent.snapshot),
+          Vector.empty, intent.snapshot),
         CompletionContract("human-stop-only", Vector.empty), EvidenceContract("human-evidence", Vector.empty),
         completionOperation)
-      wire <- WorkflowDecisionJsonV1.encodeC(WorkflowInteraction[GoalPhaseClosureAuthority.Input, Nothing](intent.handle,
-        WorkflowContinuation.Decision(request, MinimalPresentation("Step closure authority", "No approval"))),
-        GoalPhaseClosureAuthority.inputCodec)
-      _ <- GoalPhaseClosureDecisionRecord.encodeStorageC(intent, wire)
     } yield request
 
   private def canonical(value: String): Boolean = value != null && value.nonEmpty && value.trim == value

@@ -19,6 +19,7 @@ import org.goldenport.configuration.{Configuration as GenericConfiguration, Conf
 import org.goldenport.protocol.{Argument, Protocol, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -28,7 +29,7 @@ import org.simplemodeling.textus.smworkflow.value.{RepositorySyncBoundaryAssessm
  * @since   Oct.  6, 2026
  * @version Oct.  8, 2026
  */
-final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordSpec with Matchers {
+final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncMergeValidationAssessment as V
   import RepositorySyncMergeReviewAdmission as R
   import ProfileStartAdmission.*
@@ -359,12 +360,13 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       arguments = List(Argument("arg1", S.encodeRequest(value))))
     def result(work: WorkflowInteraction[RepositorySyncMergeReviewRequest, Nothing], decision: String = "accept") = {
       val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncMergeReviewRequest]].request
+      val target = order.input.get.value.candidateRevision
       ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
-        TypedValue("RepositorySyncMergeReviewResult", RepositorySyncMergeReviewResult(input.candidateRevision,
-          now.minusSeconds(1).toString, now.plusSeconds(3600).toString, decision, "Full pending merge reviewed",
-          "a" * 64, if (decision == "repair") Vector(RepositorySyncMergeReviewFinding(
+        TypedValue("RepositorySyncMergeReviewResult", RepositorySyncMergeReviewResult(target,
+          now.minusSeconds(1).toString, decision, "Full pending merge reviewed",
+          if (decision == "repair") Vector(RepositorySyncMergeReviewFinding(
             "finding-1", Vector("src/main.scala"), "Repair the changed source")) else Vector.empty)),
-        ContextReference("merge-review-result-1", input.candidateRevision), Vector.empty, ExecutionEvidence(Vector.empty))
+        ContextReference("merge-review-result-1", target), Vector.empty, ExecutionEvidence(Vector.empty))
     }
     def completion(value: ContinuationResult[RepositorySyncMergeReviewResult]) = Request.of(
       component = SmWorkflowComponent.name, service = "RepositorySyncService", operation = "submitMergeReview",
@@ -896,7 +898,8 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
     "admit the generated candidate binding and its actual Required SPI" in {
       val candidate = take(RepositorySyncDefinitionBinding.candidateC)
       definition.producerAbiIdentity.value shouldBe CandidateAdmissionProducerAbi.acceptedSchemaVersion
-      definition.fixtureSha256.value shouldBe candidate.sha256
+      definition.workflowIdentity.value shouldBe candidate.workflow.identity
+      definition.workflowRevision.value shouldBe candidate.workflow.version
       candidate.workflow.actions.map(_.identity) shouldBe Vector("ReviewMerge", "AdmitMergeReview",
         "ResolveRepositoryMergeConflicts", "AdmitRepositoryConflicts", "ReviewNativePendingMerge", "AdmitNativeMergeReview", "PresentRepositoryConflictDecision")
       candidate.workflow.requiredSpi.map(_.capability) shouldBe
@@ -982,7 +985,7 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       r.f.appends shouldBe 7
     }
 
-    "bind the Provided request to candidate, validation, policy and generated input type" in {
+    "bind the Provided request to actual candidate, policy and generated input type without diagnostic hash equality" in {
       val r = new ReviewFixture
       val p = r.provided
       val context = p.context
@@ -993,10 +996,11 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         p.copy(input = Some(p.input.get.copy(contextReference = ContextReference("review-1", "0" * 64)))),
         p.copy(context = null), p.copy(context = context.copy(summary = "")),
         p.copy(context = context.copy(summary = "   ")),
-        p.copy(context = context.copy(snapshot = context.snapshot.copy(evidenceRevision = Some("0" * 64)))),
         p.copy(context = context.copy(snapshot = context.snapshot.copy(modelRevision = Some("other-policy")))),
         p.copy(context = context.copy(references = null)))
       requests.foreach(request => r.plan(request = request) shouldBe a[Consequence.Failure[?]])
+      take(r.plan(request = p.copy(context = context.copy(snapshot = context.snapshot.copy(
+        evidenceRevision = Some("obsolete-diagnostic-proof")))))).pending.nonEmpty shouldBe true
       r.f.stored shouldBe Some(r.active)
     }
 
@@ -1121,8 +1125,8 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
     "reuse fresh full review evidence without publishing duplicate semantic work" in {
       val r = new ReviewFixture
       val target = r.submission.candidate.reference
-      val review = R.Review(target.revision, now.minusSeconds(1), now.plusSeconds(3600),
-        R.Disposition.Accept, Vector.empty, "full merge reviewed", "8" * 64)
+      val review = R.Review(target.revision, now.minusSeconds(1),
+        R.Disposition.Accept, Vector.empty, "full merge reviewed")
       val evidence = take(R.evidenceC("review-evidence", target, review, R.Scope.FullMerge, "retained-review-receipt"))
       val withEvidence = r.submission.copy(evidence = Vector(evidence))
       val planned = take(r.plan(submitted = withEvidence))
@@ -1135,16 +1139,16 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       r.f.appends shouldBe 7
     }
 
-    "keep stale and focused reviews as gaps and keep nonaccepting dispositions separate from acceptance" in {
+    "reuse old applicable review while keeping focused coverage and nonaccepting judgments separate" in {
       val r = new ReviewFixture
       val target = r.submission.candidate.reference
-      val review = R.Review(target.revision, now.minusSeconds(1), now.plusSeconds(3600),
-        R.Disposition.Accept, Vector.empty, "full merge reviewed", "8" * 64)
+      val review = R.Review(target.revision, now.minusSeconds(1),
+        R.Disposition.Accept, Vector.empty, "full merge reviewed")
       val full = take(R.evidenceC("review-evidence", target, review, R.Scope.FullMerge, "retained-review-receipt"))
-      val stale = full.copy(payload = full.payload.copy(value = review.copy(
-        reviewedAt = now.minusSeconds(3600), validUntil = now.minusSeconds(1))))
+      val old = full.copy(payload = full.payload.copy(value = review.copy(reviewedAt = now.minusSeconds(7200))))
+      take(r.plan(submitted = r.submission.copy(evidence = Vector(old)))).assessed.accepted shouldBe true
       val focused = full.copy(scope = full.scope.copy(value = R.Scope.Focused(Vector("src/main.scala"))))
-      Vector(stale, focused).foreach { evidence =>
+      Vector(focused).foreach { evidence =>
         val planned = take(r.plan(submitted = r.submission.copy(evidence = Vector(evidence))))
         planned.assessed.accepted shouldBe false
         planned.pending.isDefined shouldBe true
@@ -1480,14 +1484,18 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
   "RepositorySync reviewed two-parent commit" should {
     import RepositorySyncMergeCommitBoundary as C
 
-    "retain exact typed review evidence and refuse replacement of its reference" in {
+    "select retained typed review evidence without comparing or replacing the proposed body" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R2; Example: E2; an occupied review-result reference")
       val f = new CommitFixture
       val record = take(f.f.reviews.loadC(f.submitted.resultReference)).get
       record.submitted shouldBe f.submitted
       record.retained shouldBe f.f.retained.get
       take(f.f.reviews.putIfAbsentC(record)) shouldBe record
-      f.f.reviews.putIfAbsentC(record.copy(submitted = f.submitted.copy(result = f.submitted.result.copy(
-        value = f.submitted.result.value.copy(rationale = "Replacement"))))) shouldBe a[Consequence.Failure[?]]
+      When("a later proposal changes only review rationale")
+      val selected = take(f.f.reviews.putIfAbsentC(record.copy(submitted = f.submitted.copy(result = f.submitted.result.copy(
+        value = f.submitted.result.value.copy(rationale = "Replacement"))))))
+      Then("the saved input is selected without replacement or complete-body equality")
+      selected shouldBe record
       f.f.review.f.appends shouldBe 9
       f.writes shouldBe 0
     }
@@ -1572,7 +1580,8 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       f.f.review.f.appends shouldBe 10
     }
 
-    "refuse missing stale and nonaccepting review evidence before any commit" in {
+    "refuse missing or nonaccepting reviews while allowing otherwise applicable old review" in {
+      Given("a recorded full merge review and actual commit fixture with no product TTL")
       Vector("repair", "decision-needed", "reject").foreach { decision =>
         val f = new CommitFixture(decision = decision)
         f.commit() shouldBe a[Consequence.Failure[?]]
@@ -1581,13 +1590,18 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       }
       val f = new CommitFixture
       f.commit(ContextReference("missing", f.submitted.resultReference.revision)) shouldBe a[Consequence.Failure[?]]
-      f.commit(ports = f.f.ports.copy(asOf = () => now.plusSeconds(3601))) shouldBe a[Consequence.Failure[?]]
       f.commit(ports = f.f.ports.copy(reviews = null)) shouldBe a[Consequence.Failure[?]]
       f.writes shouldBe 0
       f.calls shouldBe 0
+      When("otherwise applicable review is consumed after its former expiry")
+      take(f.commit(ports = f.f.ports.copy(asOf = () => now.plusSeconds(7200))))
+      Then("time alone requires no new review and the actual authorized commit executes once")
+      f.writes shouldBe 1
+      f.calls shouldBe 1
     }
 
-    "refuse retained typed Result body substitution even at the same Result reference" in {
+    "consume selected applicable review rationale without a complete-Result hash certificate" in {
+      Given("a saved accepted review with changed diagnostic rationale but the actual target and Result reference")
       val f = new CommitFixture
       val original = take(f.f.reviews.loadC(f.submitted.resultReference)).get
       val forged = original.copy(submitted = original.submitted.copy(result = original.submitted.result.copy(
@@ -1596,9 +1610,13 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         def loadC(reference: ContextReference) = Consequence.success(Some(forged))
         def putIfAbsentC(record: RepositorySyncMergeReviewReceiptStore.Record) = Consequence.success(record)
       }
-      f.commit(ports = f.f.ports.copy(reviews = store)) shouldBe a[Consequence.Failure[?]]
-      f.calls shouldBe 0
-      f.f.review.f.stored shouldBe Some(f.reviewed)
+      When("the commit boundary consumes that selected review")
+      val committed = take(f.commit(ports = f.f.ports.copy(reviews = store)))
+      Then("no complete-Result digest or body equality is required while real commit facts are checked")
+      committed.receipt.request.productElementNames.toSet should not contain "reviewReceiptDigest"
+      committed.receipt.request.idempotencyKey should startWith("repository-sync-two-parent-commit:")
+      f.calls shouldBe 1
+      f.writes shouldBe 1
     }
 
     "refuse candidate command and completed-history drift before committing" in {
@@ -1741,7 +1759,7 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
           request.resultType shouldBe None
           request.input.get.value.candidate shouldBe f.input
           request.input.get.value.reviewResultReference shouldBe submitted.resultReference
-          request.input.get.value.reviewResultDigest shouldBe V.digest(Vector("repository-sync-retained-review-v1", resultWire))
+          request.input.get.value.productElementNames.toSet shouldBe Set("candidate", "reviewResultReference")
           // Rehydrated admitted facts, rather than opaque binding object identity.
           val completed = f.review.f.stored.get
           val rebound = take(RepositorySyncDefinitionBinding.bindC)
@@ -1788,7 +1806,7 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       f.withSubsystem { subsystem =>
         val submitted = f.result(f.issue(subsystem), "decision-needed")
         Vector(submitted.result.value.copy(candidateRevision = "0" * 64),
-          submitted.result.value.copy(validUntil = now.minusSeconds(1).toString),
+          submitted.result.value.copy(reviewedAt = "invalid-event-time"),
           submitted.result.value.copy(decision = "approve-commit")).foreach { value =>
           subsystem.executeOperationResponse(f.completion(submitted.copy(result = submitted.result.copy(value = value)))) shouldBe
             a[Consequence.Failure[?]]
@@ -1825,10 +1843,9 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       val changes: Vector[Q => Q] = Vector(
         q => q.copy(runId = StateMachineRunIdentity("other")),
         q => q.copy(expectedRevision = StateMachineRevision("8")),
-        q => q.copy(input = q.input.map(v => v.copy(value = v.value.copy(reviewResultDigest = "0" * 64)))),
-        q => q.copy(context = q.context.copy(snapshot = q.context.snapshot.copy(evidenceRevision = Some("0" * 64)))),
+        q => q.copy(input = q.input.map(v => v.copy(value = v.value.copy(reviewResultReference = ContextReference("foreign-review", "1"))))),
+        q => q.copy(context = q.context.copy(snapshot = q.context.snapshot.copy(modelRevision = Some("foreign-target")))),
         q => q.copy(context = q.context.copy(requiredFacts = Vector.empty)),
-        q => q.copy(context = q.context.copy(references = Vector.empty)),
         q => q.copy(requiredOperation = semantic.identity), q => q.copy(operation = semantic.operation),
         q => q.copy(completionOperation = semantic.operation),
         q => q.copy(completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitMergeReview")),
@@ -1852,12 +1869,14 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       f.f.review.f.appends shouldBe 9
     }
 
-    "refuse stale retained results candidate history and expired review before host lookup" in {
+    "consume old and diagnostic review metadata while refusing missing actual scope before host lookup" in {
+      Given("a saved decision-needed review and current completed revision")
       val f = new CommitFixture(decision = "decision-needed")
       val port = new MergeDecisionPort
       val ports = f.f.ports.copy(decisions = Some(port))
       S.projectDecisionC(ContextReference("missing", f.submitted.resultReference.revision), ports) shouldBe a[Consequence.Failure[?]]
-      S.projectDecisionC(f.submitted.resultReference, ports.copy(asOf = () => now.plusSeconds(3601))) shouldBe a[Consequence.Failure[?]]
+      When("the saved review is projected after its former expiry")
+      take(S.projectDecisionC(f.submitted.resultReference, ports.copy(asOf = () => now.plusSeconds(7200))))
       val original = take(f.f.reviews.loadC(f.submitted.resultReference)).get
       val forged = original.copy(submitted = original.submitted.copy(result = original.submitted.result.copy(
         value = original.submitted.result.value.copy(rationale = "Substituted review"))))
@@ -1865,7 +1884,10 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         def loadC(ref: ContextReference) = Consequence.success(Some(forged))
         def putIfAbsentC(record: RepositorySyncMergeReviewReceiptStore.Record) = Consequence.success(record)
       }
-      S.projectDecisionC(f.submitted.resultReference, ports.copy(reviews = store)) shouldBe a[Consequence.Failure[?]]
+      When("the selected review changes only diagnostic rationale")
+      take(S.projectDecisionC(f.submitted.resultReference, ports.copy(reviews = store)))
+      Then("neither time nor full-body equality is a restart gate")
+      port.calls shouldBe 2
       val seed = f.f.retained.get
       f.f.retained = Some(seed.copy(command = seed.command.copy(idempotencyKey = "other")))
       S.projectDecisionC(f.submitted.resultReference, ports) shouldBe a[Consequence.Failure[?]]
@@ -1873,12 +1895,13 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       f.f.review.f.stored = Some(f.reviewed.copy(history = f.reviewed.history.updated(1,
         f.reviewed.history(1).copy(causation = CausationReference("other-boundary")))))
       S.projectDecisionC(f.submitted.resultReference, ports) shouldBe a[Consequence.Failure[?]]
-      port.calls shouldBe 0
+      port.calls shouldBe 2
       f.calls shouldBe 0
     }
 
-    "reject instance review-store and retained-provenance races after host projection" in {
+    "check actual current revision but do not recertify selected receipt or retained metadata after projection" in {
       Vector("instance", "review", "retained").foreach { race =>
+        Given(s"Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R2; Example: E3; an admitted Decision projection and a later $race observation")
         val f = new CommitFixture(decision = "decision-needed")
         var replaced = false
         val original = take(f.f.reviews.loadC(f.submitted.resultReference)).get
@@ -1888,15 +1911,19 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         }
         val port = new MergeDecisionPort(q => {
           race match {
-            case "instance" => f.f.review.f.stored = Some(f.reviewed.copy(history = f.reviewed.history.updated(1,
-              f.reviewed.history(1).copy(causation = CausationReference("concurrent-change")))))
+            case "instance" => f.f.review.f.stored = Some(take(f.reviewed.appendC(f.reviewed.revision,
+              f.reviewed.history.last.copy(sequence = HistorySequence(10L), revision = InstanceRevision(10L),
+                causation = CausationReference("concurrent-transition")))))
             case "review" => replaced = true
             case _ => f.f.retained = None
           }
           q
         })
-        S.projectDecisionC(f.submitted.resultReference, f.f.ports.copy(reviews = store, decisions = Some(port))) shouldBe
-          a[Consequence.Failure[?]]
+        When("the host returns a scoped stop-only request")
+        val result = S.projectDecisionC(f.submitted.resultReference, f.f.ports.copy(reviews = store, decisions = Some(port)))
+        Then("a real revision conflict fails, but selected-input metadata needs no subsequent no-change certificate")
+        if (race == "instance") result shouldBe a[Consequence.Failure[?]]
+        else take(WorkflowDecisionJsonV1.decodeC(take(result), D.inputCodec))
         port.calls shouldBe 1
         f.f.review.f.appends shouldBe 9
         f.calls shouldBe 0
@@ -1907,22 +1934,114 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
     "strictly decode the Decision candidate and review reference without approval or selector fields" in {
       val f = new PublicReviewFixture
       val codec = D.inputCodec
-      val input = D.Input(f.input, ContextReference("review-result", f.input.candidateRevision), "a" * 64)
+      val input = D.Input(f.input, ContextReference("review-result", f.input.candidateRevision))
       val json = codec.encode(input)
       codec.decode(json) shouldBe Right(input)
+      json.asObject.get.keys.toSet should not contain "reviewResultDigest"
+      Vector(io.circe.Json.Null, io.circe.Json.True, io.circe.Json.fromString("unusable-proof")).foreach { value =>
+        codec.decode(json.mapObject(_.add("reviewResultDigest", value))) shouldBe Right(input)
+      }
       Vector(json.mapObject(_.add("approve", io.circe.Json.True)),
         json.mapObject(_.add("nextState", io.circe.Json.fromString("Converged"))),
         json.mapObject(_.add("candidate", json.hcursor.downField("candidate").focus.get
           .mapObject(_.add("commit", io.circe.Json.True)))),
         json.mapObject(_.add("reviewResultReference", io.circe.Json.obj(
           "identity" -> io.circe.Json.fromString("review-result"), "revision" -> io.circe.Json.fromString("r1"),
-          "selector" -> io.circe.Json.fromString("commit")))),
-        json.mapObject(_.add("reviewResultDigest", io.circe.Json.fromString("bad")))).foreach(value =>
+          "selector" -> io.circe.Json.fromString("commit"))))).foreach(value =>
           codec.decode(value).isLeft shouldBe true)
     }
   }
 
   "RepositorySync public merge review" should {
+    "resolve selected legacy candidate and continuation addresses without reproducing content-derived keys" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R2; Example: E7; an actually saved legacy candidate and suspension")
+      val f = new PublicReviewFixture
+      val oldSubmission = f.review.submission.copy(candidate = f.review.submission.candidate.copy(
+        reference = f.review.submission.candidate.reference.copy(revision = "0" * 64)))
+      f.retained = f.retained.map(_.copy(submission = oldSubmission))
+      val oldInput = take(RepositorySyncMergeReviewBoundary.requestC(oldSubmission))
+      val oldId = org.goldenport.cncf.workflow.ContinuationIdentity("saved-legacy-merge-review-address")
+      val provided = f.review.provided.copy(input = Some(f.review.provided.input.get.copy(
+        contextReference = ContextReference(oldSubmission.identity, oldInput.candidateRevision))))
+      val pending = take(RepositorySyncMergeReviewBoundary.planC(validationCommand, oldSubmission, now,
+        f.review.active, provided, f.review.operation, f.review.f.selections, f.review.f.mappings,
+        configuration, Some(oldId))).pending.get
+      val suspended = take(RepositorySyncMergeReviewBoundary.suspendedRecordC(pending, f.review.active))
+      val uow = unitOfWork()
+      take(f.runtime.stageSuspensionAfterC(uow, pending.continuation, () => f.review.f.instances.append(
+        configuration, f.review.active.identity, InstanceRevision(7L), suspended.history.last).map(_ => ())))
+      take(uow.commit())
+      take(f.runtime.claimC(oldId))
+      f.withSubsystem { subsystem =>
+        When("the public operation resolves the saved suspension instead of regenerating its old hash")
+        val work = take(WorkflowWorkOrderJsonV1.decodeC(scalar(take(subsystem.executeOperationResponse(
+          f.request(oldInput)))), RepositorySyncMergeReviewBoundary.inputCodec))
+        val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncMergeReviewRequest]].request
+        Then("actual candidate and continuation references survive, without a new suspension or authority")
+        order.continuationId shouldBe oldId
+        order.input.get.value.candidateRevision shouldBe "0" * 64
+        f.review.f.appends shouldBe 8
+        take(subsystem.executeOperationResponse(f.completion(f.result(work))))
+        f.review.f.stored.get.revision shouldBe InstanceRevision(9L)
+        f.review.f.appends shouldBe 9
+      }
+    }
+
+    "read legacy review fields without expiry or evidence-digest admission and complete once" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R1; Example: E4; an issued review and legacy Result payload")
+      val f = new PublicReviewFixture
+      val codec = RepositorySyncMergeReviewResultAdapter.payloadCodec
+      f.withSubsystem { subsystem =>
+        val original = f.result(f.issue(subsystem))
+        val value = original.result.value.copy(reviewedAt = now.plusSeconds(7200).toString)
+        val submitted = original.copy(result = original.result.copy(value = value))
+        val json = codec.encode(value)
+        When("new output is produced and old payloads carry unusable or missing certificates")
+        json.asObject.get.keys.toSet shouldBe Set("candidateRevision", "reviewedAt", "decision", "rationale", "findings")
+        value.productElementNames.toSet should not contain "validUntil"
+        val old = Vector(None, Some(io.circe.Json.Null), Some(io.circe.Json.True),
+          Some(io.circe.Json.fromString("obsolete-proof-or-expiry")))
+        for (expiry <- old; digest <- old) {
+          val withExpiry = expiry.fold(json)(item => json.mapObject(_.add("validUntil", item)))
+          val legacy = digest.fold(withExpiry)(item => withExpiry.mapObject(_.add("evidenceDigest", item)))
+          codec.decode(legacy) shouldBe Right(value)
+        }
+        Given("the complete old Result envelope with those obsolete fields")
+        val wire = io.circe.parser.parse(take(WorkflowResultJsonV1.encodeC(submitted, codec))).toOption.get
+        val legacyWire = wire.mapObject(_.add("result", wire.hcursor.downField("result").focus.get.mapObject(
+          _.add("value", json.mapObject(_.add("validUntil", io.circe.Json.fromString(now.minusSeconds(3600).toString))
+            .add("evidenceDigest", io.circe.Json.True)))))).noSpaces
+        When("the public completion operation consumes the legacy envelope before its recorded review event time")
+        take(subsystem.executeOperationResponse(f.completion(submitted).copy(arguments = List(Argument("arg1", legacyWire)))))
+        Then("no expiry, future-time or digest gate renews authority or repeats completion")
+        f.review.f.stored.get.revision shouldBe InstanceRevision(9L)
+        f.review.f.appends shouldBe 9
+        subsystem.executeOperationResponse(f.completion(submitted)) shouldBe a[Consequence.Failure[?]]
+        Vector(json.mapObject(_.add("approval", io.circe.Json.True)), json.mapObject(_.remove("candidateRevision")))
+          .foreach(item => codec.decode(item).isLeft shouldBe true)
+      }
+    }
+
+    "read a legacy completion hash suffix without recomputation or repeated receipt certification" in {
+      Given("Spec: docs/spec/repository-sync-merge-review-applicability.md; Rule: R2; Example: E5; a selected review and old completion history")
+      val f = new CommitFixture(decision = "decision-needed")
+      val cause = CausationReference(f.reviewed.causation.value + ":unusable-old-content-proof")
+      f.f.review.f.stored = Some(f.reviewed.copy(causation = cause,
+        history = f.reviewed.history.dropRight(1) :+ f.reviewed.history.last.copy(causation = cause)))
+      val port = new MergeDecisionPort(q => q.copy(context = q.context.copy(
+        summary = "Another diagnostic summary", references = Vector.empty,
+        snapshot = q.context.snapshot.copy(workspaceRevision = Some("old-workspace"), evidenceRevision = Some("obsolete-proof")))))
+      When("the saved actual Result reference is projected after former expiry")
+      val wire = take(RepositorySyncMergeReviewServiceOperation.projectDecisionC(f.submitted.resultReference, f.f.ports.copy(
+        decisions = Some(port), asOf = () => now.plusSeconds(7200))))
+      Then("the old suffix and diagnostic metadata require no new proof, while no commit or resume occurs")
+      take(WorkflowDecisionJsonV1.decodeC(wire, RepositorySyncMergeDecision.inputCodec))
+      f.f.review.f.stored.get.causation shouldBe cause
+      f.f.review.f.appends shouldBe 9
+      f.calls shouldBe 0
+      f.writes shouldBe 0
+    }
+
     "bind the declared typed operations and reject incompatible public request shapes" in {
       val f = new PublicReviewFixture
       val operation = take(RepositorySyncMergeReviewServiceOperation.bindRequestC(f.ports))
@@ -1970,21 +2089,34 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       }
     }
 
-    "refuse public payload drift and missing retained provenance before saving or publishing" in {
+    "refuse actual public target conflicts and missing retained references before saving or publishing" in {
       val f = new PublicReviewFixture
       val i = f.input
       f.withSubsystem { subsystem =>
         Vector(i.copy(submissionIdentity = "other"), i.copy(repositoryIdentity = "other"),
-          i.copy(candidateRevision = "0" * 64), i.copy(validationDigest = "0" * 64),
+          i.copy(candidateRevision = "0" * 64),
           i.copy(reviewPolicyVersion = "other"), i.copy(pendingHeadOid = "0" * 40),
-          i.copy(pendingTreeOid = "0" * 40), i.copy(pendingTreeDigest = "0" * 64),
-          i.copy(orderedParents = i.orderedParents.reverse), i.copy(changedPaths = Vector.empty),
-          i.copy(selectedChecks = Vector("other"))).foreach(value =>
+          i.copy(pendingTreeOid = "0" * 40)).foreach(value =>
           subsystem.executeOperationResponse(f.request(value)) shouldBe a[Consequence.Failure[?]])
         f.retained = None
         subsystem.executeOperationResponse(f.request()) shouldBe a[Consequence.Failure[?]]
         f.review.f.stored shouldBe Some(f.review.active)
         f.review.f.appends shouldBe 7
+      }
+    }
+
+    "use retained semantic input without certifying caller copies of diagnostic or derived data" in {
+      Given("the actual target and a caller proposal with different copied validation and derived metadata")
+      val f = new PublicReviewFixture
+      f.withSubsystem { subsystem =>
+        val proposal = f.input.copy(validationDigest = "not-a-proof", pendingTreeDigest = "not-a-proof",
+          selectedChecks = Vector.empty, changedPaths = Vector.empty, orderedParents = f.input.orderedParents.reverse)
+        When("the public review operation resolves that actual retained target")
+        val wire = scalar(take(subsystem.executeOperationResponse(f.request(proposal))))
+        val work = take(WorkflowWorkOrderJsonV1.decodeC(wire, RepositorySyncMergeReviewBoundary.inputCodec))
+        Then("the semantic worker receives authoritative retained checks, paths and parents, not caller copies")
+        work.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncMergeReviewRequest]].request.input.get.value shouldBe f.input
+        f.review.f.appends shouldBe 8
       }
     }
 
@@ -2036,7 +2168,7 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         val valid = pending.continuation
         val foreign = drift match {
           case "run" => valid.copy(runId = StateMachineRunIdentity("foreign-run"))
-          case "context" => valid.copy(context = valid.context.copy(summary = "Foreign review"))
+          case "context" => valid.copy(context = valid.context.copy(snapshot = valid.context.snapshot.copy(modelRevision = Some("foreign-policy"))))
           case _ => valid.copy(requiredOperation = valid.requiredOperation.copy(actionIdentity = "OtherAction"))
         }
         val uow = unitOfWork()
@@ -2057,8 +2189,8 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
       val f = new PublicReviewFixture
       val target = f.review.submission.candidate.reference
       val evidence = take(R.evidenceC("retained-review", target,
-        R.Review(target.revision, now.minusSeconds(1), now.plusSeconds(3600), R.Disposition.Accept,
-          Vector.empty, "Full merge reviewed", "a" * 64), R.Scope.FullMerge, "retained-receipt"))
+        R.Review(target.revision, now.minusSeconds(1), R.Disposition.Accept,
+          Vector.empty, "Full merge reviewed"), R.Scope.FullMerge, "retained-receipt"))
       f.retained = f.retained.map(seed => seed.copy(submission = seed.submission.copy(evidence = Vector(evidence))))
       f.withSubsystem { subsystem =>
         val wait = take(WorkflowWaitJsonV1.decodeC(scalar(take(subsystem.executeOperationResponse(f.request())))))
@@ -2126,8 +2258,7 @@ final class RepositorySyncMergeValidationAdmissionExecutionSpec extends AnyWordS
         val valid = f.result(f.issue(subsystem))
         val v = valid.result.value
         Vector(v.copy(candidateRevision = "0" * 64), v.copy(decision = "commit"), v.copy(decision = "repair"),
-          v.copy(reviewedAt = "invalid"), v.copy(reviewedAt = now.plusSeconds(1).toString),
-          v.copy(validUntil = now.minusSeconds(1).toString), v.copy(rationale = ""), v.copy(evidenceDigest = "bad"),
+          v.copy(reviewedAt = "invalid"), v.copy(rationale = ""),
           v.copy(findings = Vector(RepositorySyncMergeReviewFinding("finding", Vector("src/main.scala"), "not an accept"))),
           v.copy(decision = "repair", findings = Vector(RepositorySyncMergeReviewFinding("finding", Vector("other.scala"), "wrong path"))))
           .foreach(value => subsystem.executeOperationResponse(f.completion(valid.copy(result = valid.result.copy(value = value))))

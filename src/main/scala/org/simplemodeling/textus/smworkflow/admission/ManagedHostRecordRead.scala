@@ -3,7 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
+import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore, Query, QueryDirective}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 /**
  * Internal call-scoped read seam, not a storage grant or physical owner.
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 private[smworkflow] object ManagedHostRecordRead {
   def loadNativeEvidenceC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
@@ -81,6 +81,30 @@ private[smworkflow] object ManagedHostRecordRead {
     identity: String): Consequence[Option[Record]] =
     _loadC(core, storeName, collection, identity, () => SplitPhasePartitionContextReadPolicy.admitC(
       core.component.get.subsystem.get.configuration, storeName, collection))
+
+  /** Discovery stays inside the declared context collection and current call.
+    * It returns stored candidates; the owning consumer selects real ancestry.
+    */
+  def searchSplitPartitionContextsC(core: ActionCall.Core, storeName: String,
+    collection: DataStore.CollectionId): Consequence[Vector[Record]] =
+    SplitPhasePartitionContextReadPolicy.admitC(core.component.get.subsystem.get.configuration,
+      storeName, collection).flatMap(_ => new ContextSearchCall(core, storeName, collection).searchC())
+
+  private final class ContextSearchCall(val core: ActionCall.Core, storename: String,
+    collection: DataStore.CollectionId) extends ProcedureActionCall {
+    def searchC(): Consequence[Vector[Record]] = {
+      given ExecutionContext = executionContext
+      val space = executionContext.dataStoreSpace
+      val prior = space.captureBinding()
+      try for {
+        _ <- bind_component_application_datastore_c(storename)
+        found <- space.search(collection, QueryDirective(Query.Empty))
+      } yield found.records
+      finally space.restoreBinding(prior)
+    }
+    def execute(): Consequence[OperationResponse] =
+      Consequence.stateConflict("Host record discovery is not a transport Operation")
+  }
 
   def loadSplitPlanningInputC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
     identity: String, purpose: SplitPhaseExplicitPlanningInputJsonV1.Purpose): Consequence[Option[Record]] =

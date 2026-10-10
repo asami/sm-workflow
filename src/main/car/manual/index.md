@@ -37,8 +37,9 @@ not assume every operation in the CML is callable.
 ## Workflow and AI responsibilities
 
 Workflow retains the original input, current instance, issued work, typed result
-and execution evidence. It checks exact references, revisions, authenticated
-actor and the owning operation before advancing. It must not turn a passive
+and execution evidence. Its owning consumers enforce actual target/type relations,
+state, authenticated actor, scope and update conflicts where the action needs them,
+not a blanket unchanged-input proof. It must not turn a passive
 stored planning snapshot into executable authority merely by decoding it.
 
 The design assigns calibration, candidate enumeration, packing checks, identity
@@ -60,8 +61,38 @@ separate unfinished work. Existing legacy skills are not replaced.
 Start requires a configured host's independently admitted user selection; JSON
 input does not prove consent. A WorkOrder identifies the semantic request,
 execution requirement, snapshot and completion operation. The client returns
-the result through that assigned completion operation, preserving the common
-envelope. A Decision requires the host's independent human channel.
+the result through that assigned completion operation. Workflow supplies internal
+controls from actual issued state; the client does not reproduce them as proof.
+A Decision requires the host's independent human channel.
+
+### Session input under development
+
+The normal factory has session routes for all three Start/advance families with
+scoped direct Operation validation; full connected acceptance remains open.
+An actual invocation session requires no duplicate field.
+Otherwise supply `sessionIdentity` in a `sm-workflow.session-operation.v1` object.
+Start also supplies `input` as the business command object or its existing encoded
+string. Advance needs no instance/revision/snapshot/context echo. Several actual
+targets need only `instanceIdentity`; Split needs `contextIdentity` only when
+several owned partition contexts exist. Workflow never chooses the newest row.
+
+Reduced `sm-workflow.result-submission.v1` input retains actual `result.value`
+and consumed facts/evidence. Partition, handoff-scope and reasoning semantic
+completion resolve the result destination from the actual saved WorkOrder;
+omit `result.reference` rather than return a comparison copy. Obsolete destination
+echoes on these three reduced paths are ignored. Other completion Operations still
+need the actual result/artifact or independently supplied evidence reference in
+`result.reference`; Workflow does not invent it. Its `sessionIdentity` is optional
+when supplied by the actual host. `requestIdentity` is necessary only when several
+issued generations can explain the answer, including old completed generations;
+a sole pending request alone does not prove an answer is for that generation.
+Supported historical identity-only/full-envelope input remains available.
+
+Association is retained in the native initial instance row, not a separate
+post-Start index. Allocation alone is not successful Start and grants no effect
+authority. Legacy rows without association are not automatically rebound. Repeated
+Start/legacy association behavior and full connected validation remain open.
+These Operation shapes do not claim Phase6 CLI or skill integration.
 
 WAIT and a completion acknowledgement are nonterminal. A semantic completion
 does not by itself prove document application, Git execution or whole-workflow
@@ -107,9 +138,26 @@ host-definition and fifteen provided Operation input/response contracts.
 
 ## Failure and recovery
 
-Missing configuration, unavailable binding, foreign actor, crossed context,
-stale revision or changed full facts must fail closed. A reference that still
-has the same identity does not make changed contents acceptable.
+The three public advance decoders consume their declared schema and actual
+instance/context reference fields. Unused diagnostics and extra stage, cursor,
+argv, receipt or permission-looking fields are ignored, never accepted as
+controls. Missing/wrongly typed required fields or incompatible schemas fail
+conversion. Logical references stay exact without trimming or speculative
+native-key admission; the owning Operation resolves the actual saved Start,
+instance, context and participant before progressing. Formatting or ignored
+diagnostics do not impose a separate application command-codec byte limit;
+actual transport/runtime resource policy and physical storage-key bounds are
+owned by their consuming boundaries, not waived by decoding data.
+
+Each actual input or transition boundary admits the execution definition,
+caller permission, target scope, possible state and update conflict once where
+needed. Missing configuration, unresolved or incompatible executable targets,
+foreign actors, crossed scope, impossible transitions and CAS conflicts must
+fail at that boundary. A stored reference selects data; it is neither authority
+nor proof that the data has remained unchanged. Diagnostic or presentation
+changes do not require whole saved-body, declaration or regenerated-output
+comparisons. Checks already completed at the owning boundary are not repeated
+merely under an authority or state-verification label.
 
 For an already issued scope task, a retained advance observes the original
 issued work rather than allocating another task. Retained completion must be
@@ -120,9 +168,10 @@ Older SplitPhase data, including `split-phase-public-advance-v5` and
 installs paired native reasoning issue/result/successor handlers. The normal
 factory now selects the native three-workflow connection; declaration alone
 still does not grant execution or prove a supported outcome.
-The v10 reasoning request explicitly carries the Workflow-assigned result
-identity/revision. Copy that reference into the common result envelope; do not
-select a destination or replacement planning/demand reference. The application
+The reasoning request carries the Workflow-assigned result identity/revision.
+Normal reduced submission resolves it internally; only a historical full-envelope
+client copies that reference. Neither client selects a destination or replacement
+planning/demand reference. The application
 request uses its closed v2 schema without a v1 fallback.
 
 The separately assembled Human profile introduced in v7 has actual public answer completion,

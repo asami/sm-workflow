@@ -22,20 +22,27 @@ import WorkflowManagedProcessExecution as E
   * @version Oct.  8, 2026
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
-  final case class Payload(sourceRevision: String, step: String, hostPaths: Vector[String],
+  final case class Payload(sourceRevision: String, step: String,
     selectedPaths: Vector[String], stagedPaths: Vector[String], candidate: Option[O.Snapshot],
     changedPaths: Vector[String], diff: Option[String])
-  private val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
+  private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseAdvanceResult"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-candidate.v1"),
+    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
         .toRight("ordered candidate envelope differs")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains("sm-workflow.goal-phase-native-candidate.v1"),
+      schema <- root("schemaVersion").flatMap(_.asString).toRight("ordered candidate schema is missing")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v1", "sm-workflow.goal-phase-native-candidate.v2")(schema),
         (), "ordered candidate schema differs")
-      payload <- root("payload").get.as[Payload].left.map(_.message)
-      _ <- Either.cond(encode(payload) == value, (), "ordered candidate has undeclared fields")
+      fields <- root("payload").get.asObject.toRight("ordered candidate payload is missing")
+      required = Set("sourceRevision", "step", "selectedPaths", "stagedPaths", "changedPaths")
+      legacy = if (schema.endsWith(".v1")) Set("hostPaths") else Set.empty[String]
+      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
+        fields.keys.toSet.subsetOf(required ++ Set("candidate", "diff") ++ legacy) &&
+        fields("candidate").forall(item => item.isNull || item.asObject.exists(_.keys.toSet == Set("head", "tree"))),
+        (), "ordered candidate has undeclared fields")
+      payload <- Json.fromJsonObject(fields.remove("hostPaths")).as[Payload].left.map(_.message)
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
@@ -94,7 +101,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         actual <- store.inspectC
         paths = if (store.whole) Vector.empty else store.d.candidatePaths.filter(p => store.ownedPaths.contains(p) &&
           actual.dirty.exists(x => covers(p, x.path) || x.renamedFrom.exists(covers(p, _))))
-        initial = Payload(store.from.revision.value.toString, store.scopeIdentity, store.d.candidatePaths,
+        initial = Payload(store.from.revision.value.toString, store.scopeIdentity,
           paths, Vector.empty, None, Vector.empty, None)
         saved <- store.saveC("inspection", store.from, initial)
       } yield saved
@@ -107,12 +114,10 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           result <- store.loadC("stage-result-" + index)
           saved <- result match {
             case Some(value) =>
-              if (value.payload == current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path)) Consequence.success(value)
+              if (value.payload.stagedPaths == (current.payload.stagedPaths :+ path)) Consequence.success(value)
               else F.invalid("native staged result differs from the selected path frontier")
             case None => intent match {
-              case Some(value) =>
-                if (value.payload == current.payload) Consequence.success(value)
-                else F.invalid("native staging intent differs from its selected path frontier")
+              case Some(value) => Consequence.success(value) // The selected slot is an unreplayed intent, not a body witness.
               case None => for {
                 _ <- store.inspectC
                 prepared <- store.saveC("stage-intent-" + index, current.record, current.payload)
@@ -172,7 +177,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case None => Consequence.success(None)
       case Some(value) =>
         val p = value.receipt.payload.value
-        if (p.sourceRevision == from.revision.value.toString && p.step == scopeIdentity && p.hostPaths == d.candidatePaths &&
+        if (p.sourceRevision == from.revision.value.toString && p.step == scopeIdentity &&
             p.selectedPaths.distinct == p.selectedPaths && (if (whole) p.selectedPaths.isEmpty else
               p.selectedPaths.forall(x => ownedPaths.contains(x) && d.candidatePaths.contains(x))) &&
             p.stagedPaths == p.selectedPaths.take(p.stagedPaths.size) && p.stagedPaths.size <= p.selectedPaths.size &&

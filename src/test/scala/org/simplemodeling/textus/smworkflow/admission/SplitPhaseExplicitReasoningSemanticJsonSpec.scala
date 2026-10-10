@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -31,7 +31,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
       R.UnknownItem(identity, s"未知の推論-$index", B.Item(identity,
         Vector(B.ClosureCriterion(s"complete-$index")), Vector(P.WorkItemIdentity("item-0")), _authority))
     }), S.ResultReference("reasoning-result", "1"))
-  private val _judgment = R.Judgment(_request.context, R.Decision.Enriched, "Only the requested work was classified",
+  private val _judgment = R.Judgment(R.Decision.Enriched, "Only the requested work was classified",
     _request.items.zip(Vector(R.Classification.ExpensiveReasoning, R.Classification.SettledExecution)).map { (item, classification) =>
       R.Assignment(item.identity, classification, s"根拠 ${item.identity.value}")
     }, Vector(S.EvidenceReference("source-analysis", "1")))
@@ -61,6 +61,11 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
       request.completion.requiredFacts, ExecutionEvidence(request.evidence.requiredEvidence))
   }
   private def _json(text: String): Json = parse(text).fold(error => throw new AssertionError(error), identity)
+  private def _with_unused_fields(value: Json): Json = value.asObject match {
+    case Some(fields) => Json.obj(fields.toVector.map((key, child) => key -> _with_unused_fields(child))*)
+      .mapObject(_.add("unusedCommandGrant", Json.obj("execute" -> Json.True)))
+    case None => value.asArray.map(items => Json.arr(items.map(_with_unused_fields)*)).getOrElse(value)
+  }
   private def _rewrite(value: Json, path: List[String])(change: Json => Json): Json = path match {
     case Nil => change(value)
     case head :: tail => value.asObject match {
@@ -72,8 +77,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
   }
   private def _object_mutations(value: Json): Vector[Json] = value.asObject match {
     case Some(objectvalue) =>
-      Vector(Json.fromJsonObject(objectvalue.add("undeclared", Json.True))) ++
-        objectvalue.keys.toVector.map(key => Json.fromJsonObject(objectvalue.remove(key))) ++
+      objectvalue.keys.toVector.map(key => Json.fromJsonObject(objectvalue.remove(key))) ++
         objectvalue.toVector.flatMap { (key, child) =>
           _object_mutations(child).map(changed => Json.fromJsonObject(objectvalue.add(key, changed)))
         }
@@ -141,36 +145,126 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
         restored(1).toOption.get.assignments shouldBe empty
       }
 
-      "reject undeclared and missing fields at every request and result object depth" in {
+      "reject missing consumed fields at every request and result object depth" in {
         Given("complete reasoning request and result payloads with nested typed references, closure and assignments")
         val request = take(J.requestCodec.encodeC(_request))
         val result = take(J.resultCodec.encodeC(_judgment))
         val requestchanges = _object_mutations(request)
         val resultchanges = _object_mutations(result)
 
-        When("each object loses one declared field or acquires an undeclared field")
+        When("each object loses one consumed typed field")
         val requestresults = requestchanges.map(J.requestCodec.decode)
         val resultresults = resultchanges.map(J.resultCodec.decode)
 
-        Then("no omission or extra nested control can silently pass through this purpose-specific schema")
-        requestchanges.size should be > 40
-        resultchanges.size should be > 25
+        Then("missing typed business data fails without a duplicate nested-field verifier")
+        requestchanges.nonEmpty shouldBe true
+        resultchanges.nonEmpty shouldBe true
         requestresults.foreach(_.isLeft shouldBe true)
         resultresults.foreach(_.isLeft shouldBe true)
       }
 
-      "refuse participant-selected policies, references, stages, winners, actors and commands" in {
-        Given("a valid classification result with extra fields representing Workflow-owned choices")
+      "consume passive reasoning Human input without reconstructing native authority from its opaque strings" in {
+        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R18; Example: E38; typed input with opaque saved presentation strings and inert annotations")
+        val input = SplitPhaseReasoningHumanDirection.Input(S.ContextReference("reasoning-context", "1"),
+          "opaque WorkOrder presentation", "opaque result presentation", "opaque frontier presentation")
+        val wire = SplitPhaseReasoningHumanDirection.inputCodec.encode(input)
+        val missing = _object_mutations(wire)
+        val malformed = missing ++ Vector(_rewrite(wire, List("schemaVersion"))(_ => Json.fromString("foreign")),
+          _rewrite(wire, List("payload", "reasoningResult"))(_ => Json.True))
+
+        When("the passive codec consumes typed data and the actual evidence-target boundary consumes the opaque source")
+        val restored = SplitPhaseReasoningHumanDirection.inputCodec.decode(_with_unused_fields(wire))
+        val refused = malformed.map(SplitPhaseReasoningHumanDirection.inputCodec.decode)
+        val target = NativeHostSplitAnswerScope.reasoningTargetC(input, _frame().handle)
+
+        Then("unused fields survive without premature semantic re-admission while missing typed data and unusable actual targets refuse")
+        restored shouldBe Right(input)
+        missing.nonEmpty shouldBe true
+        refused.foreach(_.isLeft shouldBe true)
+        target.isSuccess shouldBe false
+      }
+
+      "consume both stopped terminal alternatives without treating passive annotations as transitions" in {
+        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R18; Example: E38; Blocked and Cancelled terminal data without a native instance")
+        val values = Vector(SplitPhaseHumanTerminal.Outcome.Blocked, SplitPhaseHumanTerminal.Outcome.Cancelled).map(outcome =>
+          SplitPhaseHumanTerminal.Result(outcome, S.ContextReference("reasoning-context", "1"),
+            ContinuationIdentity("human-slot"), FrameworkReference("human-answer", "1")))
+        val wires = values.map(value => take(SplitPhaseHumanTerminal.encodeC(value)))
+        val malformed = wires.flatMap(_object_mutations) ++ Vector(
+          _rewrite(wires.head, List("payload", "outcome"))(_ => Json.fromString("CONTINUE")),
+          _rewrite(wires.head, List("payload", "answer", "revision"))(_ => Json.fromInt(1)),
+          _rewrite(wires.head, List("schemaVersion"))(_ => Json.fromString("foreign")))
+
+        When("the terminal data reader consumes annotated values and malformed required fields")
+        val restored = wires.map(value => SplitPhaseHumanTerminal.payloadCodec.decode(_with_unused_fields(value)))
+        val refused = malformed.map(SplitPhaseHumanTerminal.payloadCodec.decode)
+
+        Then("the declared stopped meanings remain closed without a native append consent or executable capability")
+        restored shouldBe values.map(Right(_))
+        malformed.nonEmpty shouldBe true
+        refused.foreach(_.isLeft shouldBe true)
+      }
+
+      "decode declared passive Human interpretation data independently of presentation diagnostic and unused fields" in {
+        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R7; Example: E20; an enriched passive interpretation, not Human consent or execution authority")
+        val record = SplitPhaseHumanReasoningResolution.Record(S.ContextReference("human-resolution", "1"),
+          "human-slot", FrameworkReference("reasoning-result", "1"), _judgment)
+        val wire = take(SplitPhaseHumanReasoningResolution.encodeC(record))
+        val schema = SplitPhaseHumanReasoningResolution.schema
+        val json = _json(wire.substring(schema.length + 1))
+        val changed = _rewrite(json, List("interpretation", "payload", "rationale"))(_ => Json.fromString("別の説明だけを保持する"))
+        val reordered = json.mapObject(fields => io.circe.JsonObject.fromIterable(fields.toVector.reverse))
+
+        When("the record reader decodes declared data with reordered fields, whitespace or changed explanation")
+        val original = SplitPhaseHumanReasoningResolution.decodeC(schema + ":" + reordered.spaces2)
+        val diagnostic = SplitPhaseHumanReasoningResolution.decodeC(schema + ":" + changed.noSpaces)
+        val annotated = SplitPhaseHumanReasoningResolution.decodeC(schema + ":" + _with_unused_fields(json).noSpaces)
+
+        Then("the reader retains those actual values without rewriting a record or admitting a Workflow answer")
+        take(original) shouldBe record
+        take(annotated) shouldBe record
+        take(diagnostic) shouldBe record.copy(interpretation = _judgment.copy(rationale = "別の説明だけを保持する"))
+        J.resultCodec.decode(changed.hcursor.downField("interpretation").focus.get) shouldBe
+          Right(_judgment.copy(rationale = "別の説明だけを保持する"))
+      }
+
+      "reject malformed Human interpretation fields and non-enriched record kind through declared decoding" in {
+        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R7; Example: E21; a complete interpretation and raw shape/type/kind/schema counterexamples")
+        val schema = SplitPhaseHumanReasoningResolution.schema
+        val record = SplitPhaseHumanReasoningResolution.Record(S.ContextReference("human-resolution", "1"),
+          "human-slot", FrameworkReference("reasoning-result", "1"), _judgment)
+        val wire = take(SplitPhaseHumanReasoningResolution.encodeC(record))
+        val json = _json(wire.substring(schema.length + 1))
+        val mutations = _object_mutations(json) ++ Vector(
+          _rewrite(json, List("interpretation", "payload", "decision"))(_ => Json.fromString("DecisionNeeded")),
+          _rewrite(json, List("interpretation", "payload", "assignments", "0", "classification"))(_ => Json.fromString("unrecognized")),
+          _rewrite(json, List("reference", "revision"))(_ => Json.fromInt(1)),
+          _rewrite(json, List("decision"))(_ => Json.Null),
+          _rewrite(json, List("interpretation", "payload", "evidence"))(_ => Json.Null),
+          _rewrite(json, List("schemaVersion"))(_ => Json.fromString("unsupported")))
+
+        When("those passive records reach the selected reader without any encoder-based read certificate")
+        val results = mutations.map(value => SplitPhaseHumanReasoningResolution.decodeC(schema + ":" + value.noSpaces))
+
+        Then("every omission wrong type and unsupported kind refuses without semantic execution")
+        mutations.size should be > 30
+        results.foreach(_.isSuccess shouldBe false)
+      }
+
+      "E12 ignore unused context echoes and participant control claims" in {
+        Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R5; Example: E12; a valid classification with obsolete context and extra claimed Workflow choices")
         val wire = take(J.resultCodec.encodeC(_judgment))
-        val fields = Vector("planning", "demands", "costPolicy", "overheadPolicy", "nextOperation", "stage", "winner", "actor", "command")
+        val fields = Vector("context", "contextDigest", "planning", "demands", "costPolicy", "overheadPolicy", "nextOperation", "stage", "winner", "actor", "command")
         val altered = fields.map(field => _rewrite(wire, List("payload"))(value =>
           value.mapObject(_.add(field, Json.obj("identity" -> Json.fromString("participant-selected"))))))
 
         When("those proposed execution or policy controls reach application decoding")
         val results = altered.map(J.resultCodec.decode)
 
-        Then("the participant cannot promote classification data into Workflow ownership")
-        results.foreach(_.isLeft shouldBe true)
+        Then("the participant supplies only classification data, not context selection or Workflow ownership")
+        wire.hcursor.downField("payload").focus.get.asObject.get.keys.toSet shouldBe
+          Set("decision", "rationale", "assignments", "evidence")
+        results.foreach(_ shouldBe Right(_judgment))
       }
 
       "refuse crossed schemas, primitive values, null data and noncanonical enum spellings" in {
@@ -182,7 +276,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
           _rewrite(wire, List("schemaVersion"))(_ => Json.fromString("sm-workflow.split-phase-partition-semantic-result.v1")),
           _rewrite(wire, List("payload", "decision"))(_ => Json.fromString("enriched")),
           _rewrite(wire, List("payload", "assignments", "0", "classification"))(_ => Json.fromString("expensiveReasoning")),
-          _rewrite(wire, List("payload", "context", "revision"))(_ => Json.fromInt(1)),
+          _rewrite(wire, List("payload", "evidence", "0", "revision"))(_ => Json.fromInt(1)),
           _rewrite(wire, List("payload", "evidence"))(_ => Json.Null))
 
         When("wire-level invalid data is decoded without alternate-purpose fallback")
@@ -201,7 +295,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
           _request.copy(authority = null), _request.copy(demand = null), _request.copy(result = null), _request.copy(items = null),
           _request.copy(items = Vector(null)), _request.copy(items = Vector(item.copy(closure = null))),
           _request.copy(items = Vector(item.copy(closure = item.closure.copy(closureCriteria = Vector(null))))))
-        val judgments = Vector(null, _judgment.copy(context = null), _judgment.copy(decision = null),
+        val judgments = Vector(null, _judgment.copy(decision = null),
           _judgment.copy(assignments = null), _judgment.copy(assignments = Vector(null)),
           _judgment.copy(assignments = Vector(_judgment.assignments.head.copy(classification = null))),
           _judgment.copy(evidence = null), _judgment.copy(evidence = Vector(null)))
@@ -256,7 +350,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
         matched.contextReference shouldBe FrameworkReference("reasoning-result", "1")
       }
 
-      "reject foreign request and result types before invoking another application decoder" in {
+      "use the selected result decoder without adding an early type-copy refusal" in {
         Given("reasoning common frames and codecs for a different semantic purpose")
         val order = _frame()
         val requestwire = take(J.encodeWorkOrderC(order))
@@ -274,33 +368,36 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
           def decode(value: Json): Either[String, R.Judgment] = { resultcalls += 1; Left("wrong purpose") }
         }
 
-        When("the common codecs compare the declared application type against the selected purpose")
+        When("the WorkOrder input selector and the independently selected result decoder consume their respective data")
         val requestresult = WorkflowWorkOrderJsonV1.decodeC(requestwire, foreignrequest)
         val resultresult = WorkflowResultJsonV1.decodeC(resultwire, foreignresult)
 
-        Then("both foreign types fail before any payload fallback or semantic reinterpretation")
+        Then("the request selector refuses another purpose and the selected result decoder reports incompatible data without a fallback")
         requestresult shouldBe a[Consequence.Failure[?]]
         resultresult shouldBe a[Consequence.Failure[?]]
         requestcalls shouldBe 0
-        resultcalls shouldBe 0
+        resultcalls shouldBe 1
       }
 
-      "refuse crossed common identity, revision, context, completion and evidence correlations" in {
+      "accept transport diagnostics but refuse crossed common target, revision, model, completion and evidence correlations" in {
         Given("one structural WorkOrder and results that independently change its common binding")
         val order = _frame()
         val original = _result(order)
         val crossed = Vector(original.copy(handle = original.handle.copy(instanceIdentity = InstanceIdentity("other-instance"))),
           original.copy(runId = StateMachineRunIdentity("other-run")), original.copy(continuationId = ContinuationIdentity("other-task")),
           original.copy(expectedRevision = StateMachineRevision("3")),
-          original.copy(contextSnapshot = original.contextSnapshot.copy(workspaceRevision = Some("other-workspace"))),
+          original.copy(contextSnapshot = original.contextSnapshot.copy(modelRevision = Some("other-model"))),
           original.copy(result = original.result.copy(typeIdentity = "SplitPhaseScopeSemanticResult")),
           original.copy(completionFacts = Vector.empty), original.copy(evidence = ExecutionEvidence(Vector.empty)))
 
         When("the independent common structural gate compares each result with the original order")
         val results = crossed.map(value => WorkflowProtocolV1.admitResultC(order, value))
+        val diagnostic = WorkflowProtocolV1.admitResultC(order, original.copy(contextSnapshot = original.contextSnapshot.copy(
+          workspaceRevision = Some("other-workspace"), evidenceRevision = Some("other-evidence"))))
 
         Then("no crossed common result can become matching reasoning data")
         results.foreach(_ shouldBe a[Consequence.Failure[?]])
+        diagnostic.isSuccess shouldBe true
       }
     }
   }

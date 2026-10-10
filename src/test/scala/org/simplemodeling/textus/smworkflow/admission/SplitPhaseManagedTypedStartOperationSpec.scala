@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.Json
 import java.nio.file.{Files, Path}
 import java.time.Instant
 import org.goldenport.Consequence
@@ -29,12 +30,12 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhaseStartCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPreparation as T,
   SplitPhaseTypedStartHumanVerification as H, SplitPhaseTypedStartJsonV1 as TJ,
   SplitPhaseExplicitPlanningInputJsonV1 as J, SplitPhaseExplicitPartitionContext as C,
+  SplitPhaseExplicitPartitionContextJsonV1 as CC,
   SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPartitionSemanticJson as SJ,
   SplitPhaseTypedPartitionCompletion as PC, SplitPhaseExplicitPartitionComputation as E,
   SplitPhaseExplicitBoundaryValidation as B, SplitPhasePartitionEnrichmentPublication as U,
   SplitPhasePartitionEnrichmentJsonV1 as EJ, SplitPhasePartitionCompletionCheckpointPreparation as AC,
   SplitPhasePartitionCompletionCheckpointJsonV1 as AJ, SplitPhasePartitionCompletionCheckpointPublication as AU,
-  SplitPhasePartitionCompletionCheckpointDataStorePort as AD,
   SplitPhasePlanningCheckpointPreparation as CK,
   SplitPhasePlanningCheckpointPublication as CU, SplitPhasePlanningCheckpointJsonV1 as CJ,
   SplitPhasePlanningCheckpointObservation as CO}
@@ -45,7 +46,7 @@ import J.Purpose
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 10, 2026
  */
 final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class ObservedRows(record: U.Record,
@@ -115,7 +116,7 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
     decision: Boolean): ContinuationResult[S.Judgment] = {
     val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
     val input = request.input.get.value
-    val judgment = S.Judgment(input.context, if (decision) S.Decision.DecisionNeeded else S.Decision.Enriched,
+    val judgment = S.Judgment(if (decision) S.Decision.DecisionNeeded else S.Decision.Enriched,
       "private-semantic-analysis", if (decision) Vector.empty else input.items.map(i =>
         S.NovelEstimate(i.identity, 120, 180, "bounded-work", "novel-closure")),
       if (decision) Vector.empty else input.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem,
@@ -135,7 +136,7 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
         ConfigurationValue.StringValue(" 1")))).isSuccess shouldBe false
       take(SplitPhaseManagedTypedStartAssembly.revisionC(host(values))).value shouldBe "1"
       SplitPhaseManagedTypedStartAssembly.bindHostC(null, workflow, catalog, null)(using ExecutionContext.create()).isSuccess shouldBe false
-      H.admitForCallC(null, now, null, null).isSuccess shouldBe false
+      H.admitForCallC(null, null, null).isSuccess shouldBe false
       When("the new enrichment storage metadata is bound without a native resource")
       take(SplitPhasePartitionEnrichmentStorage.bindC(host(values), workflow)).collection shouldBe collection("enrichments")
       Then("all fifteen purposes must remain distinct in the Workflow store")
@@ -167,10 +168,10 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
         collection("contexts"), target(Purpose.Estimates), target(Purpose.Handoffs), collection("enrichments"),
         target(Purpose.Planning), target(Purpose.Proposal), target(Purpose.Ownership))
         .map(c => ComponentRecordStorageDeclaration.CreateGrant(SmWorkflowComponent.componentId, "workflow", c))))
-      val rejected = Vector("absent", "stale", "future", "foreign-binding", "foreign-issuer", "throwing", "null-outcome")
-      val interrupted = for (stage <- Vector("create", "append"); failure <- Vector("missing", "failed", "divergent")) yield s"$stage-$failure"
+      val rejected = Vector("absent", "future", "foreign-binding", "foreign-issuer", "throwing", "null-outcome")
+      val redundantreadbacks = for (stage <- Vector("create", "append"); failure <- Vector("missing", "failed", "divergent")) yield s"$stage-$failure"
       val allocations = (Vector("accepted", "foreign-history", "untrusted", "partition-issue") ++
-        completionIds.sorted ++ _negative_ids.sorted ++ rejected ++ interrupted).map(allocation(_)) :+
+        completionIds.sorted ++ _negative_ids.sorted ++ rejected ++ redundantreadbacks).map(allocation(_)) :+
         allocation("foreign-actor", "foreign")
       var installed = false
       var originalWire = Option.empty[String]
@@ -230,28 +231,30 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
           }
           // This explicit fixture verifies no real human evidence. Native actor
           // authentication and actual storage/dispatch are exercised separately.
-          val verifier = new H.Verifier {
-            val issuerIdentity = "private-start-verifier"
-            def verifyForCallC(binding: H.Binding, core: ActionCall.Core): Consequence[Option[H.Receipt]] = {
+          val evidence = new H.EvidencePort {
+            def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json): Consequence[Unit] = {
               verifierCalls += 1
               lastCall = Some(core)
-              val id = binding.start.reference.identity
-              val receipt = H.Receipt(H.EvidenceReference("private-human-" + id, "1"), issuerIdentity,
-                "private-human", H.purpose, binding, now.minusSeconds(1), now.plusSeconds(60))
-              id match {
-                case "absent" => Consequence.success(None)
-                case "stale" => Consequence.success(Some(receipt.copy(validUntil = now)))
-                case "future" => Consequence.success(Some(receipt.copy(occurredAt = now.plusSeconds(1))))
-                case "foreign-binding" => Consequence.success(Some(receipt.copy(binding = binding.copy(start = binding.start.copy(
-                  instanceIdentity = InstanceIdentity("foreign"))))))
-                case "foreign-issuer" => Consequence.success(Some(receipt.copy(issuer = "foreign")))
+              val id = io.circe.parser.parse(lookupIdentity).toOption.get.asArray.get.head.asString.get
+              val issued = NativeHostEvidence.Evidence(NativeHostEvidence.schema, H.purpose, lookupIdentity,
+                "private-human-" + id, "1", "private-start-source", "private-human", target, now.minusSeconds(86400).toString)
+              val observed = id match {
+                case "absent" => None
+                case "future" => Some(issued.copy(occurredAt = core.executionContext.clock.instant().plusSeconds(1).toString))
+                case "foreign-binding" =>
+                  val crossed = target.mapObject(o => o.add("startAttestation",
+                    o("startAttestation").get.mapObject(_.add("instanceIdentity", Json.fromString("foreign")))))
+                  Some(issued.copy(binding = crossed))
+                case "foreign-issuer" => Some(issued.copy(issuer = "foreign"))
                 case "throwing" => throw new IllegalStateException("Private verifier observation failure")
-                case "null-outcome" => null
-                case _ => Consequence.success(Some(receipt))
+                case "null-outcome" => return null
+                case _ => Some(issued)
               }
+              NativeHostEvidenceFixtureAdmission.admitC(core, "private-start-source", NativeHostEvidence.Purpose.SplitStart,
+                lookupIdentity, target, observed)
             }
           }
-          val nativeHost = SplitPhaseManagedTypedStartAssembly.Host(() => now, verifier)
+          val nativeHost = SplitPhaseManagedTypedStartAssembly.Host(evidence)
           if (mode == "ungranted") {
             SplitPhaseManagedTypedStartAssembly.bindHostC(ComponentCreate(owner, ComponentOrigin.Builtin), workflow, catalog, nativeHost)
               (using ctx).isSuccess shouldBe false
@@ -282,7 +285,7 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
               }
               def installC(): Consequence[Unit] = {
                 val rows = inputRows.map { case (c, id, raw) => (c, id, Record.data(J.storageField -> raw)) } ++ allocations.flatMap { a => Vector(
-                  (collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeC(a)))),
+                  (collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeAllocationC(a)))),
                   (collection("selections"), a.command.selectionIdentity, Record.data(ProfileSelectionJsonV1.storageField ->
                     take(ProfileSelectionJsonV1.encodeStorageC(a.selection))))) }
                 val foreign = allocations.find(_.reference.identity == "foreign-history").get
@@ -313,8 +316,8 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
               given ExecutionContext = resolved
               val start = if (mode == "undeclared") Consequence.success(retainedOperation.get)
                 else SplitPhaseManagedTypedStartAssembly.bindHostC(creation, workflow, catalog, nativeHost).flatMap { _ =>
-                  // Only the test assembly decorates canonical readback; the
-                  // production assembly always supplies its own managed port.
+                  // This test decorates only redundant post-write loads, never
+                  // the native mutation's authoritative result or real CAS.
                   SplitPhaseTypedStartServiceOperation.bindC(inputs, revision, nativeHost, observing)
                 }
               start.flatMap { op =>
@@ -547,9 +550,9 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                     .isSuccess shouldBe false
                   val foreignCommand = a.command.copy(participantIdentity = "foreign")
                   val foreignStart = a.copy(command = foreignCommand, selection = selectionFor(foreignCommand))
-                  fixture(_.writeC(collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeC(foreignStart))), true))
+                  fixture(_.writeC(collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeAllocationC(foreignStart))), true))
                   complete(frame, false).isSuccess shouldBe false
-                  fixture(_.writeC(collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeC(a))), true))
+                  fixture(_.writeC(collection("starts"), a.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeAllocationC(a))), true))
                   fixture(_.writeC(target(Purpose.Source), source.reference.identity, Record.data(J.storageField ->
                     take(J.encodeSourceC(source.copy(authority = source.authority.copy(revision = "2"))))), true))
                   complete(frame, false).isSuccess shouldBe false
@@ -596,28 +599,6 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                   recovered.record.completion.result shouldBe frame
                   recovered.record.wire shouldBe completionResponses(id)
                   verifierCalls shouldBe human
-                  if (mode == "initial" && id.endsWith("service")) {
-                    _purpose_hosts.foreach { (purpose, priorhost) =>
-                      Given(s"a prior binding changing only $purpose while the current native call has complete original data")
-                      val priortargets = take(CU.bindTargetsC(priorhost, workflow))
-                      val currenttargets = take(CU.bindTargetsC(owner.configuration, workflow))
-                      priortargets.storeName shouldBe currenttargets.storeName
-                      priortargets.localCollections shouldBe currenttargets.localCollections
-                      priortargets.instances shouldBe currenttargets.instances
-                      priortargets.continuations shouldBe currenttargets.continuations
-                      val priorpurposes = take(AD.capturePurposesC(priorhost))
-                      When("original completion observation rebinds against the actual current Core")
-                      val crossed = SplitPhaseManagedTypedPartitionCompletion.observeForCallC(
-                        frame.continuationId, workflow, catalog, priortargets, priorpurposes, call.core)
-                      Then("it refuses the purpose change rather than accepting identical data from another declaration")
-                      crossed.isSuccess shouldBe false
-                      val unchanged = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
-                      unchanged.record shouldBe recovered.record
-                      unchanged.current shouldBe current
-                      take(call.loadC(id)).get shouldBe current
-                      verifierCalls shouldBe human
-                    }
-                  }
                   val lineageKey = take(AC.lineageKeyC(frame.continuationId))
                   val lineage = take(call.readRowC(collection("enrichments"), lineageKey)).get
                   take(AJ.decodeC(frame.continuationId, lineage.getString(AJ.storageField).get, Vector(catalog.definition))) shouldBe recovered.record
@@ -652,51 +633,75 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                         val handoffrow = take(call.readRowC(target(Purpose.Handoffs), candidate.handoffs.reference.identity)).get
                         take(J.decodeHandoffsC(candidate.handoffs.reference, handoffrow.getString(J.storageField).get)) shouldBe candidate.handoffs
                       }
+                      Given("a completed native snapshot whose separate effective Planning row is no longer consumed")
                       val divergentplanning = expected.planning.get.copy(authority = expected.planning.get.authority.copy(revision = "foreign"))
                       take(call.writeC(target(Purpose.Planning), expected.record.planning.get.identity,
                         Record.data(J.storageField -> take(J.encodePlanningC(divergentplanning))), true))
-                      completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                      When("retained completion is observed after only that unused row changes")
+                      val planningrecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                      Then("the actual native capture and history remain observable without a current-copy certificate")
+                      planningrecovery.record shouldBe recovered.record
+                      planningrecovery.current shouldBe current
                       take(call.writeC(target(Purpose.Planning), expected.record.planning.get.identity,
                         Record.data(J.storageField -> planning.getString(J.storageField).get), true))
                       val candidate = expected.candidates.head
                       val candidatepayload = take(J.encodeOwnershipC(candidate.ownership))
+                      Given("a native completion whose generated Ownership document is not an acknowledgement input")
+                      When("that separate declared document is unreadable during completion recovery")
                       take(call.writeC(target(Purpose.Ownership), candidate.ownership.reference.identity,
                         Record.data(J.storageField -> "malformed-candidate-payload"), true))
-                      take(call.readRowC(target(Purpose.Ownership), candidate.ownership.reference.identity))
-                        .get.getString(J.storageField) shouldBe Some("malformed-candidate-payload")
-                      completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                      val ownershiprecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                      Then("canonical completion remains observable without another native transition")
+                      ownershiprecovery.record shouldBe recovered.record
+                      ownershiprecovery.current shouldBe current
                       take(call.writeC(target(Purpose.Ownership), candidate.ownership.reference.identity,
                         Record.data(J.storageField -> candidatepayload), true))
                       val estimates = take(call.readRowC(target(Purpose.Estimates), expected.record.estimates.get.identity)).get
                       take(J.decodeEstimatesC(expected.record.estimates.get, estimates.getString(J.storageField).get)) shouldBe expected.estimates.get
                       val handoffs = take(call.readRowC(target(Purpose.Handoffs), expected.record.handoffs.get.identity)).get
                       take(J.decodeHandoffsC(expected.record.handoffs.get, handoffs.getString(J.storageField).get)) shouldBe expected.handoffs.get
-                      // A complete current row must match, not merely its reference.
+                      Given("the native completion retains estimates while the separate effective Estimates row changes")
                       val divergent = expected.estimates.get.copy(items = expected.estimates.get.items.updated(0,
                         expected.estimates.get.items.head.copy(duration = E.Duration.Known(1))))
                       take(call.writeC(target(Purpose.Estimates), expected.record.estimates.get.identity,
                         Record.data(J.storageField -> take(J.encodeEstimatesC(divergent))), true))
-                      completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                      When("retained completion consumes its captured snapshot rather than that unused Estimates row")
+                      val estimaterecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                      Then("the original completion and current history are recovered without recomputation")
+                      estimaterecovery.record shouldBe recovered.record
+                      estimaterecovery.current shouldBe current
                       take(call.writeC(target(Purpose.Estimates), expected.record.estimates.get.identity,
                         Record.data(J.storageField -> estimates.getString(J.storageField).get), true))
+                      Given("the canonical native completion and a separate unused diagnostic header")
+                      When("the header's captured continuation identity changes")
                       take(call.writeC(collection("enrichments"), allocated.result.identity, Record.data(EJ.storageField ->
                         take(EJ.encodeC(expected.record.copy(continuationIdentity = "foreign-continuation")))), true))
-                      completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                      val headerrecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                      Then("header copy equality does not gate the actual retained acknowledgement")
+                      headerrecovery.record shouldBe recovered.record
+                      headerrecovery.current shouldBe current
                       take(call.writeC(collection("enrichments"), allocated.result.identity,
                         Record.data(EJ.storageField -> mapping.get.getString(EJ.storageField).get), true))
+                      Given("the same native completion with a malformed unused diagnostic header")
+                      When("recovery reads its actual completion rather than the separate header")
                       take(call.writeC(collection("enrichments"), allocated.result.identity,
                         Record.data(EJ.storageField -> "malformed-publication"), true))
-                      completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                      val malformedheaderrecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                      Then("the original completion and current history remain observable")
+                      malformedheaderrecovery.record shouldBe recovered.record
+                      malformedheaderrecovery.current shouldBe current
                       take(call.writeC(collection("enrichments"), allocated.result.identity,
                         Record.data(EJ.storageField -> mapping.get.getString(EJ.storageField).get), true))
                   }
-                  When("the actual required lineage payload is malformed and subsequently restored")
+                  Given("the actual required calculation and response lineage")
+                  When("its payload becomes unreadable")
                   take(call.writeC(collection("enrichments"), lineageKey, Record.data(AJ.storageField -> "malformed-lineage"), true))
-                  Then("recovery refuses the partial observation without another transition and later recovers the same capture")
-                  completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                  val brokenlineage = completionBinding.get.recoverForCallC(frame.continuationId, call.core)
+                  Then("recovery cannot return an unreadable response and calculation capture")
+                  brokenlineage.isSuccess shouldBe false
                   take(call.writeC(collection("enrichments"), lineageKey,
                     Record.data(AJ.storageField -> lineage.getString(AJ.storageField).get), true))
-                  Given("all independently stored original facts and effective checkpoint rows")
+                  Given("independent Context, Start, input, mapping, index and generated rows unused by acknowledgement")
                   val extraRows = recovered.record.checkpoint.toVector.flatMap { saved =>
                     Vector((collection("enrichments"), take(CU.mappingKeyC(saved.reference)), CJ.storageField),
                       (collection("enrichments"), take(CU.indexKeyC(current.identity, saved.originalContext.reference)), CJ.indexStorageField)) ++
@@ -705,23 +710,37 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                       (target(Purpose.Ownership), d.ownership.reference.identity, J.storageField),
                       (target(Purpose.Handoffs), d.handoffs.reference.identity, J.storageField)))
                   }
-                  val requiredRows = (inputRows.map((c, identity, _) => (c, identity, J.storageField)) ++ extraRows).distinct
-                  When("each actual payload column is independently damaged and restored")
-                  requiredRows.foreach { (c, identity, field) =>
+                  val observedrows = (inputRows.map((c, identity, _) => (c, identity, J.storageField)) ++ extraRows ++
+                    Vector((collection("contexts"), recovered.record.context.reference.identity, CC.storageField),
+                      (collection("starts"), a.reference.identity, TJ.storageField))).distinct
+                  observedrows.foreach { (c, identity, field) =>
                     val before = take(call.readRowC(c, identity)).get.getString(field).get
+                    When(s"only the payload of $identity is independently damaged")
                     take(call.writeC(c, identity, Record.data(field -> "malformed-independent-required-row"), true))
-                    Then("the complete read fails without recomputation and the restored original capture is recovered exactly")
-                    completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                    val observed = completionBinding.get.recoverForCallC(frame.continuationId, call.core)
+                    Then("an unused independent row does not prevent recovery of the actual native completion and history")
+                    val retained = take(observed).get
+                    retained.record shouldBe recovered.record
+                    retained.current shouldBe current
                     take(call.writeC(c, identity, Record.data(field -> before), true))
-                    take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get.record shouldBe recovered.record
+                    When("the independent row is restored and the same completion is observed")
+                    val restored = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                    Then("restoration permits recovery of exactly the original native capture")
+                    restored.record shouldBe recovered.record
                   }
+                  Given("the original authenticated participant and completed native capture, with changed allocation participant metadata")
                   val foreigncommand = a.command.copy(participantIdentity = "foreign")
                   val foreignstart = a.copy(command = foreigncommand, selection = selectionFor(foreigncommand))
                   take(call.writeC(collection("starts"), a.reference.identity,
-                    Record.data(TJ.storageField -> take(TJ.encodeC(foreignstart))), true))
-                  completionBinding.get.recoverForCallC(frame.continuationId, call.core).isSuccess shouldBe false
+                    Record.data(TJ.storageField -> take(TJ.encodeAllocationC(foreignstart))), true))
+                  When("the original participant observes its actual retained completion")
+                  val participantrecovery = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                  Then("canonical ownership is retained without treating the changed allocation as authority or a copy certificate")
+                  participantrecovery.record shouldBe recovered.record
+                  participantrecovery.record.start.command.participantIdentity shouldBe "participant"
+                  participantrecovery.current shouldBe current
                   take(call.writeC(collection("starts"), a.reference.identity,
-                    Record.data(TJ.storageField -> take(TJ.encodeC(a))), true))
+                    Record.data(TJ.storageField -> take(TJ.encodeAllocationC(a))), true))
                   take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get.current shouldBe current
                   verifierCalls shouldBe human
                   expired = Some(call.core)
@@ -759,6 +778,33 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                       explicit.record shouldBe actual.record
                       explicit.current shouldBe actual.current
                       port.loadMechanicalForCallC(command, call.core).isSuccess shouldBe false
+                      val documents = CO.builtDocuments(actual.record.checkpoint.get.snapshot).flatMap(d => Vector(
+                        (target(Purpose.Proposal), d.proposal.reference.identity),
+                        (target(Purpose.Ownership), d.ownership.reference.identity),
+                        (target(Purpose.Handoffs), d.handoffs.reference.identity)))
+                      documents.foreach { (collection, identity) =>
+                        Given(s"a selected planning frontier declaring the generated document $identity")
+                        val original = take(call.readRowC(collection, identity)).get
+                        When("that actual declared input is unreadable at the planning consumer")
+                        take(call.writeC(collection, identity, Record.data(J.storageField -> "unreadable-declared-input"), true))
+                        val unreadablerouted = port.loadRetainedForCallC(command, call.core)
+                        val unreadableexplicit = port.loadPartitionCompletionForCallC(command, call.core)
+                        val unaffectedacknowledgement = take(completionBinding.get.recoverForCallC(frame.continuationId, call.core)).get
+                        Then("both consuming readers refuse the unavailable input while native acknowledgement is unaffected")
+                        unreadablerouted.isSuccess shouldBe false
+                        unreadableexplicit.isSuccess shouldBe false
+                        unaffectedacknowledgement.record shouldBe actual.record
+                        unaffectedacknowledgement.current shouldBe beforenative
+                        take(call.loadC(id)).get shouldBe beforenative
+                        take(call.readRowC(workflow.continuations, frame.continuationId.value)) shouldBe beforework
+                        verifierCalls shouldBe beforeverifiers
+                        When("the declared input is restored for the same selected frontier")
+                        take(call.writeC(collection, identity, original, true))
+                        val restoredinput = take(port.loadPartitionCompletionForCallC(command, call.core)).get
+                        Then("the same frontier is readable without a new transition or copy comparison")
+                        restoredinput.record shouldBe actual.record
+                        restoredinput.current shouldBe beforenative
+                      }
                     }
                     Given("the actual required completion lineage made unreadable without changing native or issued work")
                     val lineagekey = take(AC.lineageKeyC(frame.continuationId))
@@ -787,14 +833,16 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                         Given(s"the same completed mapping with an earlier advance binding selecting another $purpose")
                         val priorport = take(SplitPhaseManagedPlanningCheckpoint.bindC(priorhost, workflow, catalog))
                         When("that binding observes AI completion through the actual current advance call")
-                        val crossed = priorport.loadPartitionCompletionForCallC(command, call.core)
-                        val routedcrossed = priorport.loadRetainedForCallC(command, call.core)
-                        Then("advance also refuses the changed original purpose without another transition or human verifier")
-                        crossed.isSuccess shouldBe false
-                        routedcrossed.isSuccess shouldBe false
-                        val unchanged = take(port.loadPartitionCompletionForCallC(command, call.core)).get
-                        unchanged.record shouldBe actual.record
-                        unchanged.current shouldBe actual.current
+                        val observed = take(priorport.loadPartitionCompletionForCallC(command, call.core)).get
+                        val routed = take(priorport.loadRetainedForCallC(command, call.core)).get
+                        Then("the actual owning declarations recover the selected completion without a prior-host-copy gate or new effect")
+                        observed.record shouldBe actual.record
+                        observed.current shouldBe actual.current
+                        routed.asInstanceOf[SplitPhaseManagedPlanningCheckpoint.RetainedPartitionCompletion].observed.record shouldBe actual.record
+                        routed.current shouldBe actual.current
+                        take(call.loadC(id)).get shouldBe beforenative
+                        take(call.readRowC(workflow.continuations, frame.continuationId.value)) shouldBe beforework
+                        call.executionContext.dataStoreSpace.captureBinding() shouldBe beforebinding
                         verifierCalls shouldBe beforeverifiers
                       }
                     }
@@ -835,13 +883,16 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
                 val registry = take(SplitPhaseManagedPartitionContextRegistration.bindC(owner.configuration, workflow, catalog))
                 take(registry.registerForCallC(context, call.core)) shouldBe context
                 take(inputs.bindPartitionForCallC(context.reference, call.core)).get.start.record shouldBe accepted
-                val admitted = take(H.admitForCallC(take(inputs.prepareInvocationForCallC(accepted.command, revision, call.core)), now, call.core, verifier))
-                lastAdmission.foreach(_.receiptForCallC(call.core).isSuccess shouldBe false)
+                val admitted = take(H.admitForCallC(take(inputs.prepareInvocationForCallC(accepted.command, revision, call.core)), call.core, evidence))
+                take(admitted.preparedForCallC(call.core)).record shouldBe accepted
+                lastAdmission.foreach { prior =>
+                  prior.preparedForCallC(call.core).isSuccess shouldBe false
+                }
                 lastAdmission = Some(admitted)
                 val forged = take(IngressSecurityResolver.resolve(SubsystemExecutionProfile.ControlledTest, call.executionContext,
                   Map("principal.id" -> "participant", "privilege" -> "user", "cncf.security.authenticated" -> "true"))).executionContext
-                H.admitForCallC(take(inputs.prepareInvocationForCallC(accepted.command, revision, call.core)), now,
-                  call.core.copy(executionContext = forged), verifier).isSuccess shouldBe false
+                H.admitForCallC(take(inputs.prepareInvocationForCallC(accepted.command, revision, call.core)),
+                  call.core.copy(executionContext = forged), evidence).isSuccess shouldBe false
                 Consequence.unit
               }
               allocations.filter(a => rejected.contains(a.reference.identity) || a.reference.identity == "foreign-actor").foreach { a =>
@@ -860,30 +911,47 @@ final class SplitPhaseManagedTypedStartOperationSpec extends AnyWordSpec with Ma
               val foreign = allocations.find(_.reference.identity == "foreign-history").get
               invoke(foreign, false).isSuccess shouldBe false
               fixture(call => { take(call.loadC("foreign-history")).get.history shouldBe Vector.empty; Consequence.unit })
-              if (mode == "initial") interrupted.foreach { id =>
+              if (mode == "initial") redundantreadbacks.foreach { id =>
                 val a = allocations.find(_.reference.identity == id).get
+                Given("a native Start writer with an authoritative committed result and an armed redundant post-write load fault")
                 fault = Some(id)
-                invoke(a, id.endsWith("missing")).isSuccess shouldBe false
+                When("the public Start consumes the actual create and append results")
+                val acknowledged = scalar(take(invoke(a, id.endsWith("missing"))))
+                Then("no redundant post-write load is attempted and the original Start is acknowledged")
+                masked shouldBe Some(id)
+                fault shouldBe None
+                // Clear the deliberately unused fault BEFORE independently
+                // observing the real managed state; do not mask that observation.
+                masked = None
                 fixture { call =>
                   val current = take(call.loadC(id)).get
-                  current.history.size shouldBe (if (id.startsWith("create")) 0 else 1)
+                  current.lifecycle shouldBe Lifecycle.Active
+                  current.history.size shouldBe 1
+                  current.history.head.causation shouldBe CausationReference(id)
                   Consequence.unit
                 }
-              } else interrupted.foreach { id =>
+                When("the same actual Start is invoked again")
+                val repeated = scalar(take(invoke(a, false)))
+                Then("the original acknowledgement and single activated history are retained")
+                repeated shouldBe acknowledged
+                fixture(call => { take(call.loadC(id)).get.history.size shouldBe 1; Consequence.unit })
+              } else redundantreadbacks.foreach { id =>
                 val a = allocations.find(_.reference.identity == id).get
-                scalar(take(invoke(a, true))) shouldBe scalar(take(invoke(a, false)))
+                When("the reopened runtime repeats the original successful Start through CLI and service in that order")
+                val reopenedcli = scalar(take(invoke(a, true)))
+                val reopenedservice = scalar(take(invoke(a, false)))
+                Then("both original acknowledgements agree and the physically reopened native history remains single")
+                reopenedcli shouldBe reopenedservice
                 fixture(call => { take(call.loadC(id)).get.history.size shouldBe 1; Consequence.unit })
               }
-              var escapedPrepared = Option.empty[T.Prepared]
               fixture { call =>
                 val p = take(inputs.prepareInvocationForCallC(accepted.command, revision, call.core))
-                escapedPrepared = Some(p)
-                lastAdmission = Some(take(H.admitForCallC(p, now, call.core, verifier)))
+                lastAdmission = Some(take(H.admitForCallC(p, call.core, evidence)))
                 Consequence.unit
               }
               // Value equality/call identity alone cannot extend the managed
               // lease. The canonical native storage denies this expired call.
-              SplitPhaseTypedStartExecution.startForCallC(escapedPrepared.get, lastAdmission.get, lastCall.get, managed)
+              SplitPhaseTypedStartExecution.startForCallC(lastAdmission.get, lastCall.get, managed)
                 .isSuccess shouldBe false
               }
             }
