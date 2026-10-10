@@ -1,15 +1,40 @@
 # Phase 5: Minimum Runtime Foundation and Unnecessary Check Removal
 
-Status: in progress
+Status: closed on 2026-10-11 by explicit approved-unverified formal release decision
 Planned: 2026-09-30
-Depends on: Phase 1 semantics; required CNCF Phase 80/101 minimum slices and Phase 103 ABI/discovery
+Depends on: Phase 1 semantics and the available Phase 2/CNCF runtime foundation; remaining cross-component connection acceptance belongs to Phase 5.1
 Planned after: Phase 2 first usable runtime slice; before Phase 6 skill integration
+
+Release classification: FORMAL. Additional Phase 5 validation and independent
+review: NOT RUN — USER-APPROVED, not PASS. This final closure text is prepared
+for the local release commit; the actual Git outcome is recorded separately by
+the registered commit runner. It does not claim Phase 5.1 acceptance or Goal
+completion. Work is organized in implementation batches; no separate Step
+commits are declared for this revised stage-release boundary.
+
+Current execution boundary (2026-10-11, latest user revision): preserve the existing mixed Phase 5 /
+5.1 implementation, release the completed Phase 5-stage implementation,
+then stop. Additional major Phase 5.1 redesign requires a separate instruction
+after that release. The non-acceptance checkpoint
+`2291d2fec20cf7335a8bec2af4077c4b2dd0e71a` preserves 372 paths; it supplies no
+validation, review or Phase closure. See the
+[release/stop handoff and actual execution record](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
+The user subsequently approved the unverified state and requested a formal
+commit only, without additional validation or review. Record NOT RUN —
+USER-APPROVED, not PASS; do not substitute a WIP checkpoint. Development has
+already advanced, so checking today's tree does not prove the earlier stage.
+Actual executor,
+resource and metadata producer/consumer connection verification, including the
+assembled end-to-end supported-path assessment, moves to Phase 5.1 explicitly.
+Neither unimplemented connections nor unexecuted cases become PASS by this move.
+The current release checklist below supersedes the earlier connected closure
+requirements; chronological progress entries remain historical evidence.
 
 The 2026-10-09 [Phase 5.1 definition](phase-5.1.md) names the connected
 necessity-first removal and session-resolved Operation correction from the two
-side-conversation handoffs. It supplements this Phase without completing it,
-moving supported-path removal out of its acceptance or resetting Goal/history/
-repair counters. The minimum runtime context/result boundary is corrected there;
+side-conversation handoffs. It supplements this Phase without completing it or
+resetting Goal/history/repair counters. Under the latest user revision it also
+owns connection acceptance. The minimum runtime context/result boundary is corrected there;
 Phase 6 still owns skill semantics and actual skill/CLI integration.
 
 Implementation began 2026-10-08 on the accepted Phase 2 normal host. The first
@@ -403,11 +428,17 @@ frames/policy; no acceptance box closes.
 
 ## Dependency boundary
 
-Semantic reasoning resolution builds on Phase 1; its meaning does not depend on full runtime/transport, failure-model or Service Bus expansion. The actual Phase 5 delivery also consumes the required CNCF Phase 80 execution contract, Phase 101 minimum resource slice and Phase 103 metadata/discovery ABI. The current rollout reuses the bounded practical Phase 2 runtime, without waiting for Phases 3/4 or Phase 2 extensions carried by Phase 8. The Phase 101 full-closure gate remains in Phase 7.
+Semantic reasoning resolution builds on Phase 1; its meaning does not depend on full runtime/transport, failure-model or Service Bus expansion. Phase 5 releases its implemented foundation on the bounded practical Phase 2 runtime. Existing CNCF Phase 80 contracts remain authoritative; remaining Phase 80/101/103 connection work and its acceptance are carried into Phase 5.1, not prerequisites for the Phase 5-stage release. No private substitutes are introduced. The Phase 101 full-closure gate remains in Phase 7.
 
-A minimal Phase 1 + Phase 5 configuration MUST support one-shot/CLI execution through semantic WorkClassification / ReasoningClass -> execution disposition -> CNCF standard Component configuration mapping -> concrete provider profile. Apply that policy to the normal route delivered by Phase 2. Full server/MCP equivalence is not a Phase 5 prerequisite when it remains in Phase 8; any later transport consumes the same policy.
+A minimal Phase 1 + Phase 5 configuration supplies the implemented semantic WorkClassification / ReasoningClass and execution-profile contracts. Phase 5.1 verifies their normal-route connection to actual execution and continuation. Full server/MCP equivalence remains in Phase 8; actual skill/client/CLI integration remains in Phase 6.
 
 ## Execution plan — 2026-10-07
+
+Historical connected plan: the latest 2026-10-11 user instruction moves the
+connection implementation needed for acceptance and the connected verification
+in A/B/C below to Phase 5.1. Already delivered foundation changes and their
+functional/regression verification remain in the Phase 5-stage release.
+Do not require completing this entire historical plan before that release.
 
 Start from the accepted Phase 2 normal entry, durable workflow and real-effect
 adapters. The first driver is one bounded GoalPhase Step/closure through CLI;
@@ -480,9 +511,10 @@ plan/checklists; do not add another status ledger.
 
 Follow the revised [incremental-use plan](README.md). Phase 5 completes the
 minimum execution foundation and unnecessary-check removal. It does not create,
-adapt for integration, connect or deploy sm-* skills. Exercise the actual runtime
-through normal CLI/control operations and Executable Specifications; direct
-runtime validation is not a claim of skill-based daily-development readiness.
+adapt for integration, connect or deploy sm-* skills. Verify the delivered
+foundation through direct Operation/function Executable Specifications and
+required regressions; actual connected runtime acceptance belongs to Phase 5.1.
+Neither kind of validation claims skill-based daily-development readiness.
 Existing skill documents remain historical/reference material, not a requirement
 to ship provisional skills or evidence of working integration.
 
@@ -505,7 +537,7 @@ internal helper; after fixes, recheck affected behavior and required regressions
 
 ## Goal
 
-Complete the minimum runtime foundation that Phase 6 can connect to skills, while decoupling semantic work description from provider/model-specific controls. Workflow planning classifies the work; sm-workflow resolves the logical execution requirement; the execution harness resolves the concrete provider/model/effort at invocation time. Validate this foundation through CLI/control operations without creating skills.
+Release the completed Phase 5-stage runtime foundation while decoupling semantic work description from provider/model-specific controls. Workflow planning classifies work; sm-workflow resolves logical requirements; the execution harness owns concrete provider/model/effort. Validate the implemented contracts directly, without requiring actual executor/producer connections to be complete at this release. Phase 5.1 verifies those connections before Phase 6 skill integration.
 
 Phase 5 delivers the minimum runtime slice. Phase 6 delivers the minimum usable skill-connected system, including abstract thinking modes and their request/result semantics as well as generic execution-protocol work.
 
@@ -518,8 +550,9 @@ separates semantic suite design from deterministic selection/execution. The
 [Phase 5/6/7 checklist](managed-test-suites-phase-checklist.md) assigns delivery
 and acceptance ownership. This adds no Phase 1/2 completion requirement.
 
-Phase 5 owns the following connected runtime slice, validated through CLI/control
-operations and Executable Specifications without creating or connecting skills:
+The following connected runtime design is retained. Its delivered foundation
+and local functional tests belong to Phase 5; actual connection and assembled
+acceptance belong to Phase 5.1, without creating or connecting skills:
 
 - Drive and consume [CNCF Phase 103](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-103.md)
   for versioned Validation/Test Metadata ABI, public annotations and resolved
@@ -999,10 +1032,11 @@ its initial expiry inventory is not a limit on the removal scope.
 
 ## Executable Specification requirements
 
-Exercise real runtime operations through CLI/control entry points and connected
-specifications, without requiring a newly authored or connected skill. Runtime
-execution evidence must remain actual; removing the skill dependency does not
-permit mocked execution to stand in for required provider behavior.
+For the Phase 5-stage release, exercise the delivered public Operations and
+functional contracts directly, plus required generation/compile and affected
+regressions. Record fixture-driven functional evidence as such. Phase 5.1 owns
+actual executor/producer connection specifications and their assembled runtime
+evidence; functional fixtures do not substitute for that later acceptance.
 
 Demonstrate that a Workflow requests semantic reasoning without provider details; distinct semantic classes may resolve to the same profile; mapping changes affect subsequent invocation without Workflow changes; coding resolves across current medium/high/xhigh bands; review resolves across high/xhigh bands; missing mappings fail explicitly; and provider-specific values do not leak back into persisted Workflow semantics.
 
@@ -1016,26 +1050,45 @@ these checks does not bypass required validation or independent review.
 
 ## Practical completion condition
 
-The Phase 5 items in the [managed-suite checklist](managed-test-suites-phase-checklist.md)
-must pass, including a 61-second passing ADMISSION run producing a warning
-without rejection, explicit long-running/FULL exceptions, revision-specific
-receipts, fixed Slice-focused selection, FIX revalidation and operational-error
-separation. Exercise actual provider receipt integration plus deterministic
-duration-policy cases without introducing slow sleeps merely to test thresholds.
-Skill-based suite design/improvement is Phase 6 acceptance, not a Phase 5 gate.
-Also exercise both counters, the absolute 10-cycle default even for hygiene/minor
-work, ordinary-count exclusions with preserved convergence effects, active-loop
-continuation, AI BLOCKED and typed handoff with
-available measurements. This tests runtime behavior with structured inputs;
-actual AI assessment generation belongs to Phase 6. Include structured Issue/Fix
-contract errors, claims versus verified resolution, recurrence, zero-fix partial
-progress, incomplete identity coverage and restart reuse from source cases 40–49.
+Latest user revision, 2026-10-11: Phase 5 releases the completed implementation
+at this stage; connection verification moves to Phase 5.1. This replaces the
+former requirement to finish the whole A/B/C connected delivery before release.
 
-Phase 5 MUST NOT close while the unnecessary control checks described above remain on its supported execution paths. Phase 6 generalization must carry this simplified contract forward without reintroducing those checks.
+- [x] Identify the delivered source/API/saved-format/check-removal scope and its
+      actual limitations in the release notes. Preserve existing Phase 5.1 work
+      in the tree; do not roll it back to manufacture a boundary.
+- [x] User explicitly approved the unverified formal stage release and directed
+      commit only. Additional generation/compile, functional/regression testing
+      and independent review are NOT RUN — USER-APPROVED FOR THIS RELEASE.
+      This checked item records approval, not verification success. Historical
+      test/review results and unresolved work retain their actual dispositions.
+- [x] Carry every remaining connection obligation and its original evidence/IDs
+      into Phase 5.1 as OPEN, including actual executor/current-context placement,
+      resource and metadata producer/consumer use, managed validation/receipt
+      integration and assembled supported-path necessity assessment.
+- [ ] Create the formal Phase 5 release commit, report its revision, accepted
+      scope and open Phase 5.1 work, then stop. The checkpoint is not this release;
+      Phase 5.1 resumes only after a separate user instruction.
 
-Phase 5 MUST NOT close until the CNCF Phase 101 minimum Component resource slice required by sm-workflow has been implemented and verified through the CNCF project, and sm-workflow has consumed that upstream API without hard-coded project resource paths.
-
-Phase 5 is complete when normal CLI/control operations demonstrate the runtime behavior for TRIVIAL inline implementation, delegated PROGRAMMING, bounded matching-profile inline implementation and independent review, with requested requirements and actual execution evidence preserved. Use the configured supported profiles above. Connected Executable Specifications, required validation and independent review must pass for that runtime scope. Skill creation, deployment, abstract-mode task/result semantics and skill-based daily use are Phase 6 acceptance, not Phase 5 gates.
+The [managed-suite checklist](managed-test-suites-phase-checklist.md) retains its
+original P5-TS IDs and scenarios, but connected acceptance now belongs to Phase
+5.1. Existing deterministic/functional cases are verified when they are part of
+the delivered code; this change does not require adding the unfinished connected
+runtime to Phase 5 or mark any unimplemented policy complete. Actual four-way
+executor placement, CNCF Phase 101/103 connection and integrated receipt/guard
+verification are not Phase 5 release gates. Necessary effect/state/CAS/scope/
+authority handling and the adopted unnecessary-check-removal policy remain;
+no removed check is restored. Skills and skill-based daily use remain Phase 6.
+The release classification is FORMAL with a human-approved NOT RUN validation
+disposition, not unofficial/provisional and not a claim of passed runtime tests.
+After its actual commit, no downstream release/resumption gate may reject or
+reopen this approved Phase solely for that disposition. Phase 5.1 connection
+tests remain its own obligations, not retrospective Phase 5 gates.
+The shared commit request/closure/receipt contract now represents that decision
+without successful test/review receipts. The correction's isolated Python
+verification and independent read-only review are recorded in the handoff;
+they are not Phase 5 behavioral validation. Native release execution remains
+separate from this prepared closure text.
 
 ## GoalPhase repository-local closing boundary
 
@@ -1047,9 +1100,9 @@ A dedicated CNCF/Cozy worktree is therefore a valid GoalPhase working repository
 
 Phase 5 establishes the consumer-side rule that sm-workflow MUST use CNCF logical Component resource APIs rather than construct project-local physical paths. Existing CNCF configuration resolution remains authoritative for configuration; sm-workflow consumes the merged Component configuration and does not reproduce current-directory/project/home/system lookup.
 
-CNCF Phase 101 is the upstream implementation phase for non-configuration resources. Its local-provider convention separates version-controlled definitions/resources from non-versioned `work.d/`; sm-workflow consumes only the logical API and MUST NOT manage `.gitignore` or physical subdirectories itself. CNCF Phase 101 and is explicitly driven from sm-workflow Phase 5. During Phase 5 execution, the workflow MUST start/advance CNCF Phase 101 far enough to deliver the minimum logical Component resource API required by sm-workflow, then consume and verify that API before Phase 5 closes. Phase 5 MUST NOT substitute a private sm-workflow filesystem abstraction when the upstream slice is missing.
+CNCF Phase 101 is the upstream implementation phase for non-configuration resources. Its local-provider convention separates version-controlled definitions/resources from non-versioned `work.d/`; sm-workflow consumes only the logical API and MUST NOT manage `.gitignore` or physical subdirectories itself. Existing Phase 5 resource work is preserved. Phase 5.1 drives any missing minimum upstream slice, consumes it and verifies the connection. It is not a prerequisite for the Phase 5-stage release, and a private sm-workflow filesystem abstraction is not an allowed substitute.
 
-This is a cross-project driven-development dependency rather than a requirement that all of CNCF Phase 101 be completed before Phase 5 starts. Phase 5 may begin first, discover/materialize the required CNCF slice, drive Phase 101, resume sm-workflow integration, and close only after the required upstream acceptance evidence is available. Phase 7 later drives the workspace/worktree scenario to broaden and harden the same CNCF API.
+This remains a cross-project driven-development dependency. Required upstream and consumer connection evidence belongs to Phase 5.1 under the revised release boundary; full CNCF Phase 101 closure is not required here. Phase 7 later drives the workspace/worktree scenario to broaden and harden the same CNCF API.
 
 ## Non-goals
 
@@ -1067,10 +1120,12 @@ This is a cross-project driven-development dependency rather than a requirement 
 
 ## CNCF Phase 103 producer dependency and coordinated handoff
 
-Phase 5 drives CNCF Phase 103 far enough to deliver the real public ABI/discovery
-and consumer operation binding, then verifies purpose queries and Slice feature
-selection through sm-workflow CLI/control. This acceptance is required before
-Phase 5 closes; a private registry/parser/mock-only substitute is insufficient.
+Phase 5 preserves the implemented metadata-facing foundation. Phase 5.1 drives
+the remaining real CNCF Phase 103 ABI/discovery and consumer operation binding,
+then verifies purpose queries and Slice feature selection through the normal
+Operation path. That connected acceptance is not required before the Phase
+5-stage release; a private registry/parser/mock-only substitute is insufficient
+for Phase 5.1.
 Existing CNCF Phase 101 resource integration remains a separate dependency.
 
 Deliver shared ABI version, stable operation identities, normalized metadata,

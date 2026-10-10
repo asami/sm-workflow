@@ -1,4 +1,4 @@
-# Managed Test Suites: Phase 5/6/7 delivery and acceptance
+# Managed Test Suites: Phase 5/5.1/6/7 delivery and acceptance
 
 Date: 2026-10-06
 Status: planned; implementation/executable acceptance not performed by this update
@@ -10,9 +10,22 @@ tests/selectors as suite compositions; no duplicated test-code hierarchy is
 required. Concrete contracts and all source-note acceptance scenarios remain
 authoritative. This allocation creates no Phase 1/2 implementation gate.
 
-## Phase 5 — runtime, direct operation and measurement
+## Phase 5 foundation / Phase 5.1 connected acceptance — runtime, direct operation and measurement
 
-Execution mapping (2026-10-07): [Phase 5 batch A](phase-5.md#execution-plan--2026-10-07)
+Latest allocation, 2026-10-11: Phase 5 releases its completed stage implementation
+with its actual limitations recorded. The subsequent explicit user instruction
+approves the unverified state for a FORMAL release commit without further tests
+or review; NOT RUN — USER-APPROVED is not PASS or an unofficial-release marker.
+The actual connection acceptance of P5-TS01–12 below moves
+to Phase 5.1, keeping every original ID, scenario and evidence record. All open
+boxes remain open, not Phase 5 release blockers or a claim of completed features.
+Relevant existing deterministic/functional cases still verify delivered Phase 5
+code. Missing connection implementation is carried as OPEN Phase 5.1 work;
+no fixtures can stand in for that phase's actual execution evidence.
+
+Historical execution mapping (2026-10-07), now carried to
+[Phase 5.1 connection verification](phase-5.1.md#connection-verification-transferred-from-phase-5--2026-10-11):
+[Phase 5 batch A](phase-5.md#execution-plan--2026-10-07)
 supplies the real runtime/resources and simplified contracts. Batch B implements
 P5-TS01/02/03/12 as the selection-to-result path, P5-TS06/07/08/09/10 as its
 FIX/Issue/guard loop, and P5-TS04/05/11 as observations over the same executions.

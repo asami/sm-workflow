@@ -1,10 +1,19 @@
 # Phase 5 Supplementary Checklist: Unnecessary Control Check Removal
 
-Phase status: in progress; initial host/Human expiry seam has focused verification, not integrated acceptance
+Phase status: closed on 2026-10-11 by explicit approved-unverified formal stage-release decision
 Ledger for: [Phase 5](phase-5.md), removal of unnecessary control checks,
 including management hashes, tamper checks and internal expiry.
-The other Phase 5 execution-routing and resource-integration criteria remain
-in its main plan and are not replaced by this supplementary checklist.
+Latest allocation, 2026-10-11: Phase 5 releases the delivered check-removal
+implementation with additional validation/review NOT RUN — USER-APPROVED.
+The formal release decision is not a claim that unexecuted behavior passed.
+Full assembled
+supported-path removal/connection acceptance belongs to [Phase 5.1](phase-5.1.md).
+The rows and historical evidence below are preserved without relabeling open
+work PASS. They are not a demand to complete the former connected runtime scope
+before the Phase 5-stage release. No removed check is restored, and no full
+comparison, verifier or proof ledger is introduced by this allocation.
+
+## Retained implementation history and Phase 5.1 open evidence
 
 Implementation started 2026-10-08. See the
 [entry and implementation journal](../journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).

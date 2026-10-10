@@ -1,9 +1,28 @@
-# Phase 5.1: Session-Resolved Operations and Unnecessary Check Removal
+# Phase 5.1: Runtime Connection Verification, Session-Resolved Operations and Check Removal
 
-Status: connected implementation in progress — scoped Operation validation PASS, full acceptance OPEN
+Status: implementation preserved; additional major redesign on hold pending Phase 5 release and separate user instruction — scoped Operation validation PASS, full acceptance OPEN
 Planned: 2026-10-09
-Depends on: the existing Phase 2 public Operation routes and available Phase 5 runtime foundation
-Delivery order: Phase 5 / Phase 5.1 connected correction -> Phase 6 skill and CLI integration
+Depends on: the existing Phase 2 public Operation routes and the released Phase 5-stage runtime foundation
+Delivery order: non-acceptance checkpoint -> Phase 5-stage acceptance/release/stop -> separately instructed Phase 5.1 connection acceptance/release/Goal end; Phase 6+ is future work
+
+The 2026-10-11 [release/stop handoff](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md)
+supersedes the earlier permission to continue this connected correction before
+Phase 5 closure. Existing work, including unverified changes, is preserved in
+checkpoint `2291d2fec20cf7335a8bec2af4077c4b2dd0e71a`; no rollback, acceptance or
+release is implied. The latest fresh Reasoning Human R19/E40–41 changes remain
+UNVERIFIED. Do not dispatch their next redesign validation automatically.
+Additional Phase 5 release-tree tests/review are NOT RUN by the user's explicit
+approved-unverified release decision. Existing actual results retain their scope.
+The latest user instruction moves actual runtime
+connection verification here; it does not mark that verification complete or
+authorize starting Phase 5.1 before the release/stop boundary.
+
+Latest Phase 5 release authority approves a FORMAL release with tests/review
+NOT RUN — USER-APPROVED, because development has already advanced. Once the
+actual formal commit exists, this disposition is a valid predecessor release,
+not an unofficial checkpoint or a cause for resumption refusal, reapproval or
+retrospective Phase 5 validation. The connection scenarios below still require
+actual evidence for Phase 5.1; they cannot be claimed from the human approval.
 
 ## Basis and relationship to Phase 5
 
@@ -16,12 +35,15 @@ The source observations in those handoffs are historical, not immutable current
 implementation facts. Reconcile current producer and consumer paths before work.
 
 This is a named subphase of the existing Phase 5 direction, not a new repair
-allowance, permission boundary or restart of the development Goal. Work may
-proceed with the available Phase 5 foundation without waiting for unrelated
-Phase 5 work. Conversely, defining Phase 5.1 does not move supported-path removal
-out of Phase 5 acceptance or make Phase 5 complete. Its other unfinished
-execution-routing, resource, managed-validation and integrated acceptance work
-remains required under [Phase 5](phase-5.md).
+allowance, permission boundary or restart of the development Goal. The original
+2026-10-09 sequencing allowed connected work on the available Phase 5 foundation;
+the release/stop boundary above now governs further execution. Defining Phase
+5.1 does not make Phase 5 complete. The latest 2026-10-11 user revision supersedes
+the earlier connected closure allocation: Phase 5 releases its completed stage
+implementation with additional validation/review NOT RUN — USER-APPROVED;
+actual execution-routing, resource, managed-validation and assembled connection
+acceptance move here. Check-removal work and evidence are preserved, not restored
+or relabeled PASS. Phase 5's revised release checklist remains in [Phase 5](phase-5.md).
 
 Phase 5.1 establishes the minimum runtime Operation context/result boundary.
 [Phase 6](phase-6.md) still owns thinking modes, task-specific skill semantics,
@@ -29,6 +51,11 @@ skill creation/installation, host/client and CLI wiring, and actual skill use.
 Do not freeze those later semantics from the current oversized result envelope.
 
 ## Goal
+
+Verify the actual connections of the released Phase 5 runtime foundation and
+finish the minimal connection work needed for those scenarios within admitted
+scope. This is not just a repetition of local profile/codec/policy tests: actual
+executor, consuming Operation, persistence and continuation evidence are required.
 
 Make GoalPhaseWorkflow, SplitPhaseWorkflow and RepositorySyncWorkflow callable
 with session context and only the parameters actually needed for the operation.
@@ -124,6 +151,42 @@ solely for later equality is not the intended contract.
 
 These steps are work ordering, not new tracking IDs, approvals or repair frames.
 
+## Connection verification transferred from Phase 5 — 2026-10-11
+
+The former Phase 5 A/B/C connected plan is carried here with its original source
+scenarios, findings and evidence. No new repair frame, renumbering or counter
+reset is created. Connection work which is not implemented stays OPEN.
+
+- [ ] Normal Workflow requirement -> actual current-context/profile resolution
+      -> actual action execution -> returned result -> native continuation works
+      for TRIVIAL inline, matching-profile inline, delegated programming and
+      independent review. Configuration, generated completion claims and fixture
+      ingress alone are not execution evidence.
+- [ ] The required CNCF Phase 101 minimum logical resource API is verified
+      upstream and consumed by sm-workflow without private physical-path/config
+      substitutes. Broader Phase 101 closure remains in Phase 7.
+- [ ] Real CNCF Phase 103 metadata/discovery and typed operation binding drive
+      purpose/Slice selection and recorded actual executions through the normal
+      public Operation path, without a private registry or annotation parser.
+- [ ] All original P5-TS01–12 scenarios in the
+      [managed-suite checklist](managed-test-suites-phase-checklist.md) pass for
+      connected receipt, duration/cost, FIX/Issue, both counters, convergence and
+      restart behavior. Reuse applicable deterministic cases; do not exercise
+      numeric thresholds with slow sleeps or repeated live AI work.
+- [ ] Integrated supported-path review confirms necessity-first check removal
+      across producers, consumers, persistence and legacy reads together with
+      the actual runtime connections. Retained predicates prevent concrete harm
+      at their consuming boundary, not copied-input change detection.
+- [ ] Required assembled regressions, read-only independent review, actual
+      runtime documentation and the Phase 6 handoff pass; create the formal
+      Phase 5.1 release and end the same Goal without automatically starting
+      Phase 6. Do not claim actual skill integration, which remains Phase 6.
+
+This transfer is planning authority, not a new TextusAI mutation grant. The
+existing profile/result-only authorization remains: any broader semantic-action
+or current-context execution capability needs its own explicit authority before
+implementation. It no longer blocks the preceding Phase 5-stage release.
+
 ## Acceptance checklist
 
 - [ ] All three Workflow families accept session context plus actual required
@@ -152,7 +215,8 @@ These steps are work ordering, not new tracking IDs, approvals or repair frames.
 - [ ] Required affected verification and read-only independent review pass;
       authored, source-reviewed and executed evidence remain distinguishable.
 - [ ] Public docs and Phase 6 handoff describe the minimal contract and remaining
-      transport/skill work. Phase 5's other acceptance items remain accounted for.
+      transport/skill work. The transferred connection items above remain
+      accounted for separately from Phase 5's accepted stage implementation.
 
 ## Non-goals
 
