@@ -143,3 +143,25 @@ select provider
 Routing-policy updates remain versioned and controlled. Runtime observations provide evidence; they do not cause an online self-modifying routing policy.
 
 This makes escalation + corpus capture a core requirement for practical local-first operation rather than merely an experimental convenience.
+
+
+## 2026-10-10 observation: Web access is an execution capability, not model intelligence
+
+A second Ollama/ChatGPT-Codex observation is that the local gpt-oss:20b route does not expose Internet/Web access in the same way as Web-capable hosted ChatGPT/Codex execution.
+
+The architectural conclusion is to separate model reasoning capability from provider/integration tool capability. The relevant question is not simply whether `gpt-oss:20b` can reason about a task, but whether the concrete execution route supplies the tools required by that task.
+
+Examples of provider/integration capabilities include:
+
+- repository/filesystem access;
+- shell/build/test execution;
+- Git;
+- Web/current-information access;
+- MCP/application tools;
+- Skill/IoC/continuation support.
+
+When a WorkOrder is known to require current external documentation or Web research, a local provider without Web capability should not be selected and allowed to fail. Provider Routing should treat `web` as a hard ExecutionRequirement capability and select a compatible provider before execution.
+
+Conversely, Web absence should not disqualify local models from the large class of repository-local work that needs only source, compiler/tests, deterministic workflow feedback, and local tools.
+
+This also refines corpus interpretation: a task that could not proceed because the selected integration lacked Web access is a routing/capability mismatch, not a negative sample of the model's reasoning quality. Evidence should preserve both model identity and provider/integration capability profile so later Model Selector analysis does not learn the wrong lesson.
