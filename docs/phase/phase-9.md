@@ -1,4 +1,4 @@
-# Phase 9: Validation-Feedback Model Switching and Convergence Routing
+# Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
 Status: planned
 Planned: 2026-10-08
@@ -12,6 +12,8 @@ Extend Provider Routing from provider-declared DECLINED escalation into validati
 sm-workflow MUST execute a bounded, cost-aware correction loop. Lightweight compile/targeted-test/diagnostic/repair-history evidence is used first to observe convergence. CAR lint is a heavier architectural/Textus-conformance gate and MUST NOT run on every inner-loop repair merely to check progress. Re-route when lightweight evidence already shows non-convergence, or when a later CAR lint result shows that the candidate is architecturally unsuitable.
 
 The purpose is to expand the practical range of inexpensive/local models without requiring them to have perfect pretrained knowledge of Textus, OFP, or project architecture.
+
+Phase 9 also turns the minimum Acceptance Boundary contract established in Phase 6 into the governing convergence boundary. Validation or Review work outside the Effective Acceptance Boundary is not evidence that the provider is failing to converge. sm-workflow must distinguish genuine inability to satisfy required quality from provider-generated assurance work that should not have been undertaken.
 
 ## Two escalation sources
 
@@ -42,6 +44,8 @@ Semantic WorkOrder
 ~~~
 
 The loop MUST be bounded. Expensive verification follows the existing verification-cost-guard principle and MUST NOT be run merely as a precautionary progress probe.
+
+Before repair or re-routing, classify actionable evidence against the Effective Acceptance Boundary. Boundary-required failures may drive repair/convergence decisions. Out-of-boundary assurance work must instead be stopped, rejected, or surfaced as a nonblocking proposal; it MUST NOT justify another repair cycle or escalation to a stronger provider.
 
 ## Lightweight convergence observations
 
@@ -107,6 +111,18 @@ Initial routing policy MUST be explicit and versioned. Representative policy:
 
 Exact retry counts and severity thresholds belong to policy/configuration, not Workflow semantics.
 
+### Acceptance-bounded routing
+
+The routing decision uses the Phase 6 Effective Acceptance Boundary:
+
+- required quality not satisfied and improving -> bounded same-provider repair;
+- required quality not satisfied and stalled/diverging -> provider re-routing;
+- proposed assurance outside the boundary -> stop/reject that work rather than re-route;
+- Review finding outside the boundary -> nonblocking proposal/follow-up unless a human explicitly changes the accepted boundary;
+- evidence of main-route complexity caused by unnecessary assurance -> prefer removal/simplification, not a stronger provider asked to perfect the same unnecessary mechanism.
+
+Boundary changes are explicit project/Goal/Phase policy changes. A provider, Review result or test failure cannot silently enlarge the boundary.
+
 ## Evidence
 
 Record each attempt as part of one semantic-work execution history:
@@ -138,7 +154,10 @@ Demonstrate at least:
 9. Provider A -> Provider B preserves semantic WorkOrder identity and validation history;
 10. a second local provider can be selected before a stronger hosted provider when policy admits it;
 11. bounded attempts terminate with an explicit unresolved outcome when no admitted provider converges;
-12. no named model/provider is embedded in Workflow transition semantics.
+12. no named model/provider is embedded in Workflow transition semantics;
+13. an out-of-boundary concurrency/recovery assurance finding does not trigger repair or stronger-model escalation;
+14. the same symptom classified as a required Acceptance Boundary failure can drive bounded repair and later re-routing;
+15. unnecessary assurance that increases main-route complexity is removed/simplified while the required acceptance conditions remain satisfied.
 
 ## Completion
 
@@ -147,6 +166,8 @@ Phase 9 is complete when a real development task can execute:
 local provider -> deterministic feedback -> local repair -> non-convergence detection -> different provider/model -> deterministic validation -> normal Review/Admission,
 
 with typed evidence showing why the model switch occurred.
+
+Completion also requires evidence that out-of-boundary assurance work is distinguished from genuine non-convergence and cannot cause an automatic repair/escalation loop.
 
 ## Non-goals
 
