@@ -21,6 +21,16 @@ installation or local-model performance result is required.
 
 Phase 9 also turns the minimum Acceptance Boundary contract established in Phase 6 into the governing convergence boundary. Validation or Review work outside the Effective Acceptance Boundary is not evidence that the provider is failing to converge. sm-workflow must distinguish genuine inability to satisfy required quality from provider-generated assurance work that should not have been undertaken.
 
+## Use-case-first planning and review (2026-10-11)
+
+Acceptance Boundary applies before implementation: planning starts from user-visible Use Cases and end-to-end scenarios, not from a bottom-up inventory of components to perfect. Plan bounded vertical Use Case Slices with observable outcomes, required quality attributes, explicit non-goals and early integration evidence. Components and infrastructure are supporting tasks, not independently expanding completion goals.
+
+Planning Review must check that each proposed Slice reaches an actual user-facing boundary, that component assumptions are validated through early integration, and that acceptance criteria are sufficient but do not introduce speculative assurance. Reject plans that defer all integration until component completion or turn hypothetical abnormal behavior into primary work.
+
+Implementation/Admission Review must verify the integrated Slice against the same Effective Acceptance Boundary. A locally passing component test does not substitute for a connected user scenario. Conversely, an out-of-boundary component guarantee or test does not block closure. Findings are classified as required current-Slice defects, explicit future work, or rejected assurance; AI findings alone cannot expand scope.
+
+Phase 6 remains responsible for minimal boundary propagation; Phase 9 owns the fuller planning/review/convergence interpretation. Reuse existing Goal/Phase planning, WorkOrder, Admission and Review paths. Do not introduce a second planning engine, exhaustive traceability database or additional mandatory review cycles.
+
 ## Two escalation sources
 
 Phase 9 distinguishes:
