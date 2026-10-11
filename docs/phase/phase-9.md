@@ -37,7 +37,13 @@ Development planning and its approval occur separately before sm-workflow execut
 
 A top-down development unit may originate from a Use Case **or** an externally observable contract such as an API/Operation, CLI/MCP command, UI action, event/message or other published interface. A full end-to-end Use Case is not mandatory for a small API change. Each unit must have observable acceptance criteria and connected evidence through the necessary implementation layers. Internal components are supporting tasks, not the default completion unit.
 
-Planning review happens in the separate planning process and checks external-contract coverage, integration assumptions, dependencies, slice size and Effective Acceptance Boundary alignment. Execution-time Review checks delivered behavior against the adopted plan and boundary; a discovered planning gap becomes a proposal for external plan revision rather than automatic scope growth. Reuse existing Workflow operations and avoid new mandatory planning gates.
+Planning review happens in the separate planning process and checks usage-contract coverage, integration assumptions, dependencies, slice size and Effective Acceptance Boundary alignment. Execution-time Review checks delivered behavior against the adopted plan and boundary; a discovered planning gap becomes a proposal for external plan revision rather than automatic scope growth. Reuse existing Workflow operations and avoid new mandatory planning gates.
+
+## Usage Contract interpretation (2026-10-11)
+
+Usage Contract denotes user-observable operation, behavior and result, not merely an external interface signature. A consumer can be human or software. Use Cases, APIs/Operations, CLI/MCP commands, UI actions and events/messages are valid top-down entry points. Each Development Slice implements a bounded part of the adopted Usage Contract with early connected evidence.
+
+Planning and its review remain pre-execution activities. Phase 9 assesses convergence, integration, scope drift and review findings against the adopted Usage Contract and Effective Acceptance Boundary. Component-level completion alone does not establish acceptance; speculative assurance outside the boundary cannot become blocking work.
 
 ## Two escalation sources
 
