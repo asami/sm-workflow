@@ -441,6 +441,9 @@ Phase 7 is complete when a real root project using at least two project-specific
 - Defensive repository backup/rollback/integrity machinery.
 - Replacing Git's own merge/conflict semantics.
 - General provider-selection semantics; generic execution-requirement semantics are established in Phase 6.
+- Defining a new quality/assurance policy for RepositorySync. Phase 7 consumes the Effective Acceptance Boundary established in Phase 6 and MUST NOT enlarge it merely because repository synchronization exposes constructible race, recovery or consistency scenarios.
+
+RepositorySync validation and Review use the same Effective Acceptance Boundary as the owning Goal/Phase. In particular, precautionary full tests, backup/rollback/integrity machinery, duplicate synchronization arbitration or clean recovery from out-of-model operational accidents do not become Phase 7 acceptance requirements unless the boundary explicitly requires them. Phase 9 owns richer boundary-aware convergence/routing behavior.
 
 
 ## Static-analysis consumer coordination
