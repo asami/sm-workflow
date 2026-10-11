@@ -84,6 +84,8 @@ need not wait for Phase 8. Keep those phase scopes bounded. Other missing functi
 here without forcing repeated expansion of the current implementation batch.
 No real-use discoveries are claimed by creating this plan; add them as observed.
 
+Acceptance Boundary behavior introduced in Phase 6 is part of this real-use observation. If practical use shows that a project quality attribute is missing or poorly expressible, record the concrete supported-use impact here. Do not broaden the boundary merely because Review or an implementation provider proposes stronger assurance. Boundary vocabulary/configuration extensions are selected in Phase 8 only from observed need; the richer mechanism that uses the boundary for convergence and provider routing belongs to Phase 9.
+
 The [Development Artifact Overlay](../spec/development-artifact-overlay.md)
 initial delivery and its six SimpleModeler acceptance scenarios belong to
 Phase 7. Record only optional later expansion here; do not defer core publication,
