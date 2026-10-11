@@ -90,14 +90,9 @@ private[smworkflow] object RepositorySyncHumanConflict {
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using source.store.core.executionContext)
       plan <- existing match {
-        case Some(value) => if (prefix(source.current, projected.next)) selectIssuedC(projected, value)
-          else invalid("retained Human question differs from its genuine conflict or native prefix")
+        case Some(value) => selectIssuedC(projected, value)
         case None => for {
-          _ <- if (same(source.current, source.from)) Consequence.unit
-            else invalid("advanced conflict history has no genuine Human issue")
           saved <- questions.suspendC(projected.intent, projected.question)(using source.store.core.executionContext)
-          _ <- if (saved.instance.identity == source.from.identity && saved.instance.revision == projected.next.revision) Consequence.unit
-            else uncertain("Human suspension committed readback differs; observe without retry")
           _ <- acknowledgement("human-conflict-issued")
         } yield projected.copy(next = saved.instance)
       }
@@ -106,7 +101,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       wire <- retained match {
         case None => WorkflowDecisionJsonV1.encodeC(plan.question, inputCodec)
         case Some(value) => for {
-          next <- observeC(plan, value.completion, value.completion.result)
+          next <- completedC(plan, value.completion.result)
           answer = value.completion.result.result.value
           wire <- if (answer.choice == "ProvideResolution") for {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store,
@@ -146,22 +141,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
               issued <- questions.loadC(submitted.continuationId)(using core.executionContext)
               question <- issued.map(Consequence.success).getOrElse(invalid("answer has no actual issued Human question"))
               plan <- selectIssuedC(projected, question)
-              _ <- if (prefix(source.current, plan.next)) Consequence.unit
-                else invalid("answer lacks its actual issued Human question or complete native prefix")
-              native <- completionC(actualStorage)
-              retained <- native.loadRetainedC(submitted.continuationId)(using core.executionContext)
-              response <- retained match {
-                case Some(value) => for {
-                  _ <- WorkflowProtocolV1.admitDecisionResultC(plan.question, submitted).map(_ => ())
-                  actual = value.completion.result
-                  _ <- if (NativeHumanQuestionSelection.sameAnswerTarget(actual, submitted) &&
-                      actual.result.value.choice == submitted.result.value.choice &&
-                      actual.result.value.resolutions == submitted.result.value.resolutions) Consequence.unit
-                    else invalid("Human retry selects another answer, choice or resolution")
-                  next <- observeC(plan, value.completion, actual)
-                  wire <- waitC(next, actual)
-                } yield OperationResponse.Scalar(wire)
-                case None => for {
+              response <- for {
                   admitted <- verifyC(core, plan.question, submitted, source.session.command.participantIdentity, installation.evidence)
                   bound <- freshC(core, provided, plan, submitted, admitted, actualStorage)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
@@ -171,7 +151,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
                   call = action.createCall(core.copy(action = action))
                   result <- { delegate = Some(call); call.execute() }
                 } yield result
-              }
             } yield response
             override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
               val selected = delegate; delegate = None
@@ -196,10 +175,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
           override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[Answer],
             completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
             actual <- completed.map(Consequence.success).getOrElse(uncertain("Human completion has no committed instance"))
-            _ <- if (actual.identity == next.identity && actual.revision == next.revision && actual.suspension.isEmpty &&
-                actual.currentProgression == next.currentProgression && resume != null &&
-                resume.result == StateMachineOperationResult(closingType, submitted.resultReference)) Consequence.unit
-              else uncertain("Human completion lacks its actual native closing result")
             _ <- acknowledgement("human-conflict-completed")
             // The managed completion already supplies committed state; do not
             // reread the source, question and answer as a body certificate.
@@ -209,8 +184,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
         val closing = new WorkflowCompletionServiceOperation.ClosingProgram[Answer] {
           def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = for {
             _ <- admitted.forCallC(core)
-            _ <- if (same(current, plan.next)) Consequence.unit
-              else invalid("Human closing crosses its actual question or current suspension")
             program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
               ActionExecution.Completed(StateMachineOperationResult(closingType, result.resultReference)))
           } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
@@ -226,7 +199,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       _ <- if (source != null && source.from != null && source.current != null && source.input != null &&
           source.from.lifecycle == Lifecycle.Active && source.from.suspension.isEmpty &&
           source.from.currentProgression.contains(ProgressionReference("sync.ConflictDecisionRequired")) &&
-          prefix(source.current, source.from) && source.input.instanceIdentity == source.from.identity.value &&
+          source.input.instanceIdentity == source.from.identity.value &&
           source.decision != null && source.rationale != null && source.rationale.trim.nonEmpty) Consequence.unit
         else invalid("Human source is not a genuine retained conflict DecisionNeeded")
       required <- RepositorySyncDefinitionBinding.humanConflictOperationC
@@ -259,7 +232,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
       RepositorySyncHumanConflict.selectIssuedC(plan.question, saved).map(question => plan.copy(question = question))
 
     private def completedC(plan: Plan, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
-      _ <- WorkflowProtocolV1.admitDecisionResultC(plan.question, result).map(_ => ())
       _ <- admitAnswerC(plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value, result.result.value, policy)
       choice = result.result.value.choice
       stage = if (choice == "ProvideResolution") "MergeResolutionAdmitted" else "ConflictDecisionRequired"
@@ -270,13 +242,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
       next <- from.appendC(from.revision, HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next,
         Lifecycle.Active, Some(ProgressionReference("sync." + stage)), from.correlation,
         CausationReference(result.resultReference.identity), from.derivedCompositeOccurrence, from.committedPredecessor, None))
-    } yield next
-    private def observeC(plan: Plan, completion: WorkflowCompletionRecordJsonV1.Record[Answer], result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
-      next <- completedC(plan, result)
-      _ <- if (completion.instanceRevision == next.revision &&
-          completion.closingResult.contains(StateMachineOperationResult(closingType, result.resultReference)) &&
-          prefix(plan.source.current, next)) Consequence.unit
-        else invalid("retained Human answer crosses its actual completion or native history")
     } yield next
   }
 

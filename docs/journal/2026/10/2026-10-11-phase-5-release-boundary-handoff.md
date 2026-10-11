@@ -9,7 +9,13 @@ Formal release binding: `smwf-phase5-formal-stage-release-20261011@1`.
 Release validation/review: NOT RUN — USER-APPROVED, not PASS.
 The binding identifies the prepared final closure; a commit is actually created
 only when native Git and the runner's persisted closure receipt establish it.
-The actual revision is reported in the owning task, not invented in this text.
+Native Git now records the actual formal release as
+`cf053352161bccc59871395cc8797e492f5e13c6`, parent
+`2291d2fec20cf7335a8bec2af4077c4b2dd0e71a`, with the exact binding above and
+FORMAL / validation and review NOT RUN — USER-APPROVED trailers. This completes
+Phase5's stage release, not Phase5.1. The user's later explicit same-Goal
+Phase5.1 start instruction ended the intermediate release/stop hold. Historical
+preparation and contract corrections below retain their original scope.
 
 ## Latest authority — formal release with approved unverified state
 

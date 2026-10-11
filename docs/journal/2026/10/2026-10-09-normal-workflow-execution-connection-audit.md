@@ -1,5 +1,14 @@
 # Normal Workflow execution connection: causal gap, not provider acceptance
 
+Current disposition — 2026-10-11: the mandatory direct-AI-executor/current-context
+development premise in this historical audit is superseded by the owning user's
+correction. Workflow requests work; the current Codex executes and returns its
+result. Additional TextusAI development is stopped, not a required Phase 5.1
+prerequisite. Original inspection and review evidence below is preserved, not
+rewritten as acceptance or active implementation authority. See the
+[request/return scope correction](2026-10-11-workflow-ai-request-return-scope-correction.md)
+and the current [Phase 5.1 plan](../../../phase/phase-5.1.md).
+
 Date: 2026-10-09, Asia/Tokyo.
 Boundary: implementation follow-through of existing Phase5 batch A. This does
 not add policy, approval, acceptance gates, a Goal or a repair frame. Original

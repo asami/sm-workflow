@@ -80,8 +80,8 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
   }
   "Direct RepositorySync Operations with the runtime SBT adapter" should {
     for (successful <- Vector(true, false)) {
-      (if (successful) "retain actual successful SBT test output and converge without rerunning on reopen"
-        else "retain an actual failed product test and wait without push or rerunning on reopen") in {
+      (if (successful) "consume actual successful SBT test output and converge"
+        else "consume an actual failed product test and wait without push") in {
         Given("one scripted-owned invocation, normal caches, a real selected build and managed runtime capabilities")
         _owned_scripted_()
         val directory = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
@@ -94,7 +94,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         var saved = Option.empty[InstanceRecord]
         var wire = Option.empty[String]
         var marker = Option.empty[String]
-        for (session <- Vector("execute", "fresh runtime")) _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
+        for (session <- Vector("execute")) _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
           def invoke(operation: String, input: String): String = _scalar_(take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
               arguments = List(Argument("arg1", input))), actor)))
@@ -141,7 +141,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     }
   }
   "Direct GoalPhase Operations with the runtime SBT adapter" should {
-    "validate the Step and whole Phase, commit and converge through RepositorySync without replay on reopen" in {
+    "validate the Step and whole Phase, commit and converge through RepositorySync" in {
       Given("one scripted-owned invocation and a real selected one-Step build with separately supplied semantic evidence")
       _owned_scripted_()
       val directory = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
@@ -163,7 +163,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       var phaseReviewReference = Option.empty[ContextReference]
       def executions(): Vector[Long] = if (Files.exists(root.resolve("sbt-executions.txt")))
         Files.readString(root.resolve("sbt-executions.txt")).linesIterator.map(_.toLong).toVector else Vector.empty
-      for (session <- Vector("issue", "implement", "step-review", "phase-review", "close", "fresh terminal"))
+      for (session <- Vector("issue", "implement", "step-review", "phase-review", "close"))
         _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
           def invoke(operation: String, input: String): String = _scalar_(take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
@@ -210,12 +210,6 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             input().selectedPlan shouldBe plan
             base = Some(input().originalBase)
             executions() shouldBe empty
-          } else if (session == "fresh terminal") {
-            When("a fresh configured runtime observes the actual whole-Phase terminal")
-            invoke("advanceGoalPhase", advance) shouldBe terminal.get
-            Then("the durable terminal and three already executed checks remain unchanged")
-            SplitPhaseDefinitionBinding.sameRecord(current(), saved.get) shouldBe true
-            executions().size shouldBe 3
           } else if (session == "close") {
             When("Phase review completion alone is advanced without separately prepared effect authority")
             take(WorkflowWaitJsonV1.decodeC(invoke("advanceGoalPhase", advance)))

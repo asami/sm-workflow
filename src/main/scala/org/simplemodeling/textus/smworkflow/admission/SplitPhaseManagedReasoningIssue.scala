@@ -43,33 +43,12 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
           given ExecutionContext = core.executionContext
           for {
             issued <- native.loadC(identity)
-            current <- _current_c(actual, core)
             result <- issued match {
-              case Some(work) if work == plan.work && SplitPhaseDefinitionBinding.sameRecord(current, plan.next) =>
-                Consequence.success(work)
-              case Some(_) => _invalid("saved work or exact current reasoning suspension differs")
-              case None if SplitPhaseDefinitionBinding.sameRecord(current, actual.publicationPostimage) =>
-                native.suspendC(plan.intent, plan.work) match {
-                  case Consequence.Success(committed) if SplitPhaseDefinitionBinding.sameRecord(committed.instance, plan.next) =>
-                    observation() match {
-                      case Consequence.Success(_) =>
-                        (for {
-                          observed <- native.loadC(identity)
-                          next <- _current_c(actual, core)
-                          work <- observed match {
-                            case Some(work) if work == plan.work && SplitPhaseDefinitionBinding.sameRecord(next, plan.next) =>
-                              Consequence.success(work)
-                            case _ => _invalid("complete committed issue readback differs")
-                          }
-                        } yield work) match {
-                          case Consequence.Success(work) => Consequence.success(work)
-                          case _ => _uncertain("committed readback is unavailable or differs; observe later without retry")
-                        }
-                      case _ => _uncertain("postcommit observation interrupted; observe later without repeating issue")
-                    }
-                  case _ => _uncertain("native issue commit is not established; observe later without retry")
-                }
-              case None => _invalid("later native state lacks its actual published reasoning WorkOrder")
+              case Some(work) => Consequence.success(work)
+              case None => for {
+                _ <- native.suspendC(plan.intent, plan.work)
+                _ <- observation()
+              } yield plan.work
             }
           } yield result
         }
@@ -117,13 +96,6 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
       }
     }
 
-    private def _current_c(source: D.Source, core: ActionCall.Core): Consequence[InstanceRecord] =
-      CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
-        declaration.instances, declaration.continuations)
-        .loadForCallC(declaration.configuration, source.publicationPostimage.identity, core).flatMap {
-          case Some(value) => Consequence.success(value)
-          case None => _invalid("actual canonical instance is absent")
-        }
 
     private def _with_native_c[A](call: ActionCall.Core)(f: WorkflowManagedIssuedWork[R.Request] => Consequence[A]):
         Consequence[A] = {

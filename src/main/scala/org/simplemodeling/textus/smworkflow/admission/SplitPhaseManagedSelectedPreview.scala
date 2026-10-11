@@ -58,61 +58,21 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
       SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition),
       declaration.instances, declaration.continuations)
     native <- storage.bindMechanicalC(K.advanceOperation, J.payloadCodec)
-    prior <- native.loadRetainedC(reference)(using core.executionContext)
-    prepared <- prior match {
-      case Some(value) =>
-        if (value.receipt.component == SmWorkflowComponent.componentId && value.receipt.operation == K.advanceOperation &&
-            value.receipt.payload.typeIdentity == J.payloadCodec.typeIdentity && value.receipt.payload.value == source.snapshot &&
-            SplitPhaseDefinitionBinding.sameRecord(value.receipt.current, source.publicationPostimage) &&
-            SplitPhaseDefinitionBinding.sameRecord(value.current, source.current))
-          Consequence.success(value.receipt.next)
-        else _invalid("actual saved preview receipt differs from current source or native history")
-      case None =>
-        if (!SplitPhaseDefinitionBinding.sameRecord(source.current, source.publicationPostimage))
-          _invalid("later native progress has no actual selected preview receipt")
-        else for {
-          _ <- if (domain.statemachine.SplitPhaseEntryLifecycle.permits("ProposalAssessment", "previewed", "Previewed"))
-            Consequence.unit else _invalid("preview transition is not declared in CML")
-          entry = HistoryEntry(HistorySequence(source.current.history.size.toLong + 1L), source.current.revision.next,
-            Lifecycle.Active, Some(ProgressionReference(preparedProgression)), source.current.correlation,
-            CausationReference("selected-preview-prepared:" + command.instanceIdentity),
-            source.current.derivedCompositeOccurrence, source.current.committedPredecessor, None)
-          intent = WorkflowMechanicalTransition.Intent(declaration.configuration, reference, source.current,
-            source.current.revision, entry, TypedValue(J.payloadCodec.typeIdentity, source.snapshot))
-          empty = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
-          committed <- native.executeC(intent, empty)(using core.executionContext) match {
-            case Consequence.Success(value) => Consequence.success(value.receipt.next)
-            case _ => _uncertain("preview preparation acknowledgement is unavailable; observe later without retry")
-          }
-        } yield committed
-    }
-    next <- prepared.appendC(prepared.revision, HistoryEntry(HistorySequence(prepared.history.size.toLong + 1L),
-      prepared.revision.next, Lifecycle.Completed, None, prepared.correlation,
-      CausationReference(terminalPrefix + command.instanceIdentity),
-      prepared.derivedCompositeOccurrence, prepared.committedPredecessor, None))
+    entry = HistoryEntry(HistorySequence(source.current.history.size.toLong + 1L), source.current.revision.next,
+      Lifecycle.Active, Some(ProgressionReference(preparedProgression)), source.current.correlation,
+      CausationReference("selected-preview-prepared:" + command.instanceIdentity),
+      source.current.derivedCompositeOccurrence, source.current.committedPredecessor, None)
+    intent = WorkflowMechanicalTransition.Intent(declaration.configuration, reference, source.current,
+      source.current.revision, entry, TypedValue(J.payloadCodec.typeIdentity, source.snapshot))
+    empty = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
+    saved <- native.executeC(intent, empty)(using core.executionContext)
+    prepared = saved.receipt.next
     instances <- storage.bindInstancesC()(using core.executionContext)
-    actual <- instances.loadC(prepared.identity)(using core.executionContext).flatMap {
-      case Some(value) => Consequence.success(value)
-      case None => _invalid("actual preview instance is absent")
-    }
-    completed <- if (SplitPhaseDefinitionBinding.sameRecord(actual, next)) Consequence.success(actual)
-      else if (SplitPhaseDefinitionBinding.sameRecord(actual, prepared)) for {
-        saved <- instances.appendC(prepared.identity, prepared.revision, next.history.last)(using core.executionContext) match {
-          case Consequence.Success(value) if SplitPhaseDefinitionBinding.sameRecord(value, next) => Consequence.success(value)
-          case _ => _uncertain("preview final append is not established; observe later without retry")
-        }
-        _ <- observation() match {
-          case Consequence.Success(_) => Consequence.unit
-          case _ => _uncertain("preview final acknowledgement interrupted; observe later without retry")
-        }
-      } yield saved
-      else _invalid("actual current is neither saved preview preparation nor its exact final successor")
-    retained <- native.loadRetainedC(reference)(using core.executionContext).flatMap {
-      case Some(value) if value.receipt.payload.value == source.snapshot &&
-          SplitPhaseDefinitionBinding.sameRecord(value.receipt.next, prepared) &&
-          SplitPhaseDefinitionBinding.sameRecord(value.current, completed) => Consequence.success(value)
-      case _ => _uncertain("complete selected preview readback is unavailable; observe later without retry")
-    }
+    completed <- instances.appendC(prepared.identity, prepared.revision,
+      HistoryEntry(HistorySequence(prepared.history.size.toLong + 1L), prepared.revision.next, Lifecycle.Completed,
+        None, prepared.correlation, CausationReference(terminalPrefix + command.instanceIdentity),
+        prepared.derivedCompositeOccurrence, prepared.committedPredecessor, None))(using core.executionContext)
+    _ <- observation()
     handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, completed)
     terminal <- WorkflowProtocolV1.projectTerminalC(handle, completed, TypedValue(payloadCodec.typeIdentity, payload),
       MinimalPresentation("SplitPhase Previewed", "The saved selected partition is ready for review; no Phase documents were written.",

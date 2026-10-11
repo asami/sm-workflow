@@ -164,7 +164,6 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         prepared <- prior match {
           case Some(value) => Consequence.success(Some(value))
           case None => for {
-            _ <- if (F.same(session.current, from)) Consequence.unit else F.invalid("repository closure has no owning intent")
             authority <- installation.authority.loadForCallC(core, input)
             saved <- authority match {
               case None => Consequence.success(Option.empty[(InstanceRecord, Payload)])
@@ -288,7 +287,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       case Some(value) =>
         val p = value.receipt.payload.value
         if (sameTarget(p.input, input) && id(p.authority) &&
-          p.authorityRevision > 0 && F.prefix(value.receipt.next, from) && F.prefix(session.current, value.receipt.next))
+          p.authorityRevision > 0)
           childTargetC(p.childCommand, p, session.command.participantIdentity, d.repositoryClosure.get.declaration)
             .map(_ => Some(value.receipt.next -> p))
         else F.invalid("retained repository closure crosses its actual Phase/child invocation")
@@ -302,10 +301,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         reference(key), current, current.revision, entry, TypedValue(codec.typeIdentity, payload)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield saved.receipt.next -> saved.receipt.payload.value
-    /** Mechanical storage retains Active entries only. The actual saved result
-      * closes through the canonical instance API, with one successor/readback.
-      * Reopen completes or observes that successor without child effect replay.
-      */
+    /** Close the normal saved business result through the native instance API. */
     private def closeC(saved: (InstanceRecord, Payload)): Consequence[InstanceRecord] = for {
       _ <- if (saved._1.lifecycle == Lifecycle.Active &&
         saved._1.currentProgression.contains(ProgressionReference("phase.Closed")) &&
@@ -313,16 +309,8 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         else F.invalid("whole-Phase completion has no actual saved repository result")
       entry = F.history(saved._1, "phase.Closed", "ordered-phase-completed:" + saved._2.childIdentity)
         .copy(lifecycle = Lifecycle.Completed, currentProgression = None)
-      next <- saved._1.appendC(saved._1.revision, entry)
       instances <- session.storage.bindInstancesC()(using core.executionContext)
-      actual <- instances.loadC(saved._1.identity)(using core.executionContext).flatMap {
-        case Some(value) => Consequence.success(value)
-        case None => F.invalid("actual whole-Phase instance is missing")
-      }
-      completed <- if (F.same(actual, next)) Consequence.success(actual)
-        else if (F.same(actual, saved._1))
-          instances.appendC(saved._1.identity, saved._1.revision, entry)(using core.executionContext)
-        else F.invalid("whole-Phase current differs from saved result or its completed successor")
+      completed <- instances.appendC(saved._1.identity, saved._1.revision, entry)(using core.executionContext)
       _ <- ackC("goal-repository-completed")
     } yield completed
     def terminalC(saved: (InstanceRecord, Payload)): Consequence[String] = for {

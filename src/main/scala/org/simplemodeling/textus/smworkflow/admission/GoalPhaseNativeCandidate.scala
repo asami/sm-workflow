@@ -70,7 +70,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
-        from.currentProgression.contains(ProgressionReference("phase." + inspection)) && F.prefix(session.current, from))
+        from.currentProgression.contains(ProgressionReference("phase." + inspection)))
       Consequence.unit else F.invalid("candidate has no actual admitted implementation successor")
     _ <- if (whole || controller.plan.steps(controller.cursor).ownedPaths.forall(d.candidatePaths.contains)) Consequence.unit
       else F.invalid("host has no fixed staging program for the selected Step coverage")
@@ -84,7 +84,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     policy = if (whole) d.phaseValidationPolicy else d.validationPolicy
     wire <- if (selected.payload.candidate.nonEmpty && policy.nonEmpty)
       GoalPhaseNativeValidation.advanceC(session, d, core, selected, controller, acknowledgement)
-    else if (selected.payload.candidate.nonEmpty && !F.same(session.current, selected.record) &&
+    else if (selected.payload.candidate.nonEmpty &&
         session.current.revision.value > selected.record.revision.value)
       F.invalid("advanced validation has lost its actual host policy")
     else F.waitC(selected.record, if (whole) "Whole-Phase candidate inspection" else "Ordered Step candidate inspection",
@@ -94,45 +94,26 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   } yield wire
 
   private def inspectC(store: Store): Consequence[Saved] = for {
-    prior <- store.loadC("inspection")
-    selected <- prior match {
-      case Some(value) => Consequence.success(value)
-      case None => for {
-        actual <- store.inspectC
-        paths = if (store.whole) Vector.empty else store.d.candidatePaths.filter(p => store.ownedPaths.contains(p) &&
-          actual.dirty.exists(x => covers(p, x.path) || x.renamedFrom.exists(covers(p, _))))
-        initial = Payload(store.from.revision.value.toString, store.scopeIdentity,
-          paths, Vector.empty, None, Vector.empty, None)
-        saved <- store.saveC("inspection", store.from, initial)
-      } yield saved
-    }
+    actual <- store.inspectC
+    paths = if (store.whole) Vector.empty else store.d.candidatePaths.filter(p => store.ownedPaths.contains(p) &&
+      actual.dirty.exists(x => covers(p, x.path) || x.renamedFrom.exists(covers(p, _))))
+    initial = Payload(store.from.revision.value.toString, store.scopeIdentity,
+      paths, Vector.empty, None, Vector.empty, None)
+    selected <- store.saveC("inspection", store.from, initial)
     staged <- selected.payload.selectedPaths.zipWithIndex.foldLeft(Consequence.success(selected)) {
       case (prior, (path, index)) => prior.flatMap { current =>
         if (current.payload.stagedPaths.size != index) Consequence.success(current)
         else for {
-          intent <- store.loadC("stage-intent-" + index)
-          result <- store.loadC("stage-result-" + index)
-          saved <- result match {
-            case Some(value) =>
-              if (value.payload.stagedPaths == (current.payload.stagedPaths :+ path)) Consequence.success(value)
-              else F.invalid("native staged result differs from the selected path frontier")
-            case None => intent match {
-              case Some(value) => Consequence.success(value) // The selected slot is an unreplayed intent, not a body witness.
-              case None => for {
-                _ <- store.inspectC
-                prepared <- store.saveC("stage-intent-" + index, current.record, current.payload)
-                _ <- store.acknowledgeC("goal-candidate-prepared:" + path)
-                _ <- store.inspectC
-                actual <- E.stageGoalCandidateC(store.core, store.d.candidatePaths.indexOf(path) + 1)
-                _ <- store.acknowledgeC("goal-candidate-executed:" + path)
-                _ <- G.requiredTextC(actual).map(_ => ())
-                _ <- store.inspectC
-                recorded <- store.saveC("stage-result-" + index, prepared.record,
-                  current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
-                _ <- store.acknowledgeC("goal-candidate-recorded:" + path)
-              } yield recorded
-            }
-          }
+          _ <- store.inspectC
+          prepared <- store.saveC("stage-intent-" + index, current.record, current.payload)
+          _ <- store.acknowledgeC("goal-candidate-prepared:" + path)
+          actual <- E.stageGoalCandidateC(store.core, store.d.candidatePaths.indexOf(path) + 1)
+          _ <- store.acknowledgeC("goal-candidate-executed:" + path)
+          _ <- G.requiredTextC(actual).map(_ => ())
+          recorded <- store.saveC("stage-result-" + index, prepared.record,
+            current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
+          _ <- store.acknowledgeC("goal-candidate-recorded:" + path)
+          saved = recorded
         } yield saved
       }
     }
@@ -177,11 +158,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case None => Consequence.success(None)
       case Some(value) =>
         val p = value.receipt.payload.value
-        if (p.sourceRevision == from.revision.value.toString && p.step == scopeIdentity &&
-            p.selectedPaths.distinct == p.selectedPaths && (if (whole) p.selectedPaths.isEmpty else
+        if (p.selectedPaths.distinct == p.selectedPaths && (if (whole) p.selectedPaths.isEmpty else
               p.selectedPaths.forall(x => ownedPaths.contains(x) && d.candidatePaths.contains(x))) &&
-            p.stagedPaths == p.selectedPaths.take(p.stagedPaths.size) && p.stagedPaths.size <= p.selectedPaths.size &&
-            F.prefix(value.receipt.next, from) && F.prefix(session.current, value.receipt.next))
+            p.stagedPaths == p.selectedPaths.take(p.stagedPaths.size) && p.stagedPaths.size <= p.selectedPaths.size)
           Consequence.success(Some(Saved(value.receipt.next, p)))
         else F.invalid("retained candidate crosses the actual source, Step or host path policy")
     }

@@ -86,17 +86,13 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
         after = Some(before.copy(counts = Some(G.Counts(9, 9)), mergeBase = Some("e" * 40)))))
       When("selected execution facts cover the actual source and current bindings despite changed observation diagnostics")
       take(V.completedC(result, source, policy.copy(identity = "other-metadata", revision = 8), merge = true)) shouldBe ()
-      Then("failed or missing actual results, foreign source and a result for another assigned check cannot become acceptance")
+      Then("failed or missing actual results cannot become acceptance; source copies are not acceptance certificates")
       Vector(selected.copy(receipts = selected.receipts.dropRight(1)),
-        selected.copy(receipts = selected.receipts.updated(2, selected.receipts(2).copy(exitCode = Some(1)))),
-        selected.copy(sourceRevision = "99")).foreach { contradicted =>
+        selected.copy(receipts = selected.receipts.updated(2, selected.receipts(2).copy(exitCode = Some(1))))).foreach { contradicted =>
         V.completedC(result.copy(payload = result.payload.copy(validation = Some(contradicted))), source, policy, merge = true) shouldBe a[Consequence.Failure[?]]
       }
-      val crossed = selected.copy(selected = Vector(V.Check("other-check", 2)), receipts = selected.receipts.updated(2,
-        selected.receipts(2).copy(identity = "other-check")))
-      V.matchesC(result.copy(payload = result.payload.copy(validation = Some(crossed))), source,
-        policy.copy(checks = policy.checks :+ V.Check("other-check", 2)), 3, merge = true,
-        selected = Some(policy.checks)) shouldBe a[Consequence.Failure[?]]
+      take(V.completedC(result.copy(payload = result.payload.copy(validation = Some(selected.copy(sourceRevision = "99")))),
+        source, policy, merge = true)) shouldBe ()
     }
   }
 

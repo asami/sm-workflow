@@ -80,9 +80,6 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       Consequence.unit else _invalid("saved result is not a genuine DecisionNeeded")
     base = source.next
     original = source.source
-    _ <- if (base.lifecycle == Lifecycle.Active && base.suspension.isEmpty && base.revision.value < Long.MaxValue &&
-        SplitPhaseDefinitionBinding.includesState(source.current, base)) Consequence.unit
-      else _invalid("current instance does not include the selected reasoning completion state")
     work <- J.encodeWorkOrderC(source.work)
     result <- WorkflowResultJsonV1.encodeC(source.completion.result, J.resultCodec)
     frontier <- R.encodeC(original.snapshot)
@@ -135,15 +132,13 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
     identity = plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.continuationId
     retained <- decisions.loadC(identity)(using core.executionContext)
     question <- retained match {
-      case Some(value) if SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.next) =>
+      case Some(value) =>
         selectIssuedC(plan, value).map(_.question)
-      case Some(_) => _invalid("actual question or current pending native state differs")
-      case None if SplitPhaseDefinitionBinding.sameRecord(plan.source.current, plan.intent.current) =>
+      case None =>
         decisions.suspendC(plan.intent, plan.question)(using core.executionContext) match {
           case Consequence.Success(_) => Consequence.success(plan.question)
           case _ => _uncertain("question commit is not established; observe later without reissuing")
         }
-      case None => _invalid("advanced history lacks its saved question")
     }
     wire <- WorkflowDecisionJsonV1.encodeC(question, inputCodec)
   } yield wire

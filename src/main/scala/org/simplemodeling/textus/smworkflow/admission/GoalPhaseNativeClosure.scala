@@ -74,22 +74,17 @@ private[smworkflow] object GoalPhaseNativeClosure {
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State): Consequence[Saved] = for {
     store <- storeC(session, d, core, from, controller, _ => Consequence.unit)
-    intent <- store.loadC("intent").flatMap(_.map(Consequence.success).getOrElse(F.invalid("Step has no actual commit intent")))
     result <- store.loadC("committed").flatMap(_.map(Consequence.success).getOrElse(F.invalid("Step commit result is not recorded")))
-    saved <- store.completedC(intent, result)
+    saved <- store.completedC(result)
   } yield saved
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Option[Saved]] = for {
     store <- storeC(session, d, core, from, controller, acknowledge)
-    prior <- store.loadC("intent")
     result <- store.loadC("committed")
     saved <- result match {
-      case Some(value) => prior.map(p => store.completedC(p, value).map(Some(_)))
-        .getOrElse(F.invalid("Step commit result has no recorded owning intent"))
-      case None if prior.nonEmpty => Consequence.success(None)
+      case Some(value) => store.completedC(value).map(Some(_))
       case None => for {
-        _ <- if (F.same(session.current, from)) Consequence.unit else F.invalid("advanced Step closure has no actual effect intent")
         authority <- store.installation.authority.loadForCallC(core, store.input)
         closed <- authority match {
           case None => Consequence.success(Option.empty[Saved])
@@ -100,7 +95,6 @@ private[smworkflow] object GoalPhaseNativeClosure {
             payload = Payload(store.input, store.ordinal, value.reference, value.revision, None)
             intent <- store.saveC("intent", from, "Closing", payload)
             _ <- store.ackC("goal-step-commit-prepared:" + store.input.step)
-            _ <- store.preconditionsC
             actual <- E.commitGoalStepC(core, store.ordinal)
             _ <- store.ackC("goal-step-commit-executed:" + store.input.step)
             _ <- G.requiredTextC(actual).map(_ => ())
@@ -117,7 +111,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
             _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Closing", event, next.stage.toString))
               Consequence.unit else F.invalid("Step commit successor is absent from CML")
             recorded <- store.saveC("committed", intent, next.stage.toString, payload.copy(commit = Some(nativeCommit)))
-            saved <- store.completedC((intent, payload), (recorded, payload.copy(commit = Some(nativeCommit))))
+            saved <- store.completedC((recorded, payload.copy(commit = Some(nativeCommit))))
             _ <- store.ackC("goal-step-commit-recorded:" + store.input.step)
           } yield Some(saved)
         }
@@ -129,7 +123,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
     _ <- if (controller.stage == O.Stage.Closing && controller.cursor < controller.plan.steps.size &&
         controller.candidate.nonEmpty && controller.checksReceipt.nonEmpty && controller.reviewEvidence.nonEmpty &&
-        from.currentProgression.contains(ProgressionReference("phase.Closing")) && F.prefix(session.current, from))
+        from.currentProgression.contains(ProgressionReference("phase.Closing")))
       Consequence.unit else F.invalid("Step closure has no actual accepted review and native Closing frontier")
     installation <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
     _ <- installation.validateC
@@ -152,10 +146,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
         case None => Consequence.success(None)
         case Some(value) =>
           val p = value.receipt.payload.value
-          if (p.input == input && p.ordinal == ordinal && id(p.authority) &&
-              p.authorityRevision > 0 && F.prefix(value.receipt.next, from) && F.prefix(session.current, value.receipt.next))
-            Consequence.success(Some((value.receipt.next, p)))
-          else F.invalid("retained Step commit crosses native source/plan/candidate or selected commit program")
+          Consequence.success(Some((value.receipt.next, p)))
       }
     def saveC(key: String, current: InstanceRecord, stage: String, payload: Payload): Consequence[InstanceRecord] = for {
       _ <- if (current.currentProgression.contains(ProgressionReference("phase.Closing"))) Consequence.unit
@@ -164,15 +155,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
         F.history(current, "phase." + stage, "ordered-step-closure:" + key), TypedValue(codec.typeIdentity, payload)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield saved.receipt.next
-    def completedC(intent: (InstanceRecord, Payload), result: (InstanceRecord, Payload)): Consequence[Saved] = for {
-      _ <- if (intent._2.commit.isEmpty && intent._1.currentProgression.contains(ProgressionReference("phase.Closing")) &&
-          result._2.commit.nonEmpty &&
-          F.prefix(result._1, intent._1) && result._1.revision == intent._1.revision.next) Consequence.unit
-        else F.invalid("Step commit result differs from its actual prepared intent")
+    def completedC(result: (InstanceRecord, Payload)): Consequence[Saved] = for {
       entered <- controller.acceptC(O.ClosureIntentSaved(input.candidate, intentIdentity))
       next <- entered.acceptC(O.StepCommitObserved(intentIdentity, result._2.commit.get))
-      _ <- if (result._1.currentProgression.contains(ProgressionReference("phase." + next.stage.toString))) Consequence.unit
-        else F.invalid("retained Step commit successor differs from its controller")
     } yield Saved(result._1, result._2, next)
     def preconditionsC: Consequence[Unit] = for {
       actual <- G.observeC(core)

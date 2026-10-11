@@ -285,33 +285,5 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
       Vector(command.input.copy(remoteEndpointIdentity = "another-endpoint"), command.input.copy(syncMode = "another-mode"),
         command.input.copy(localBranch = "another-branch")).foreach(v => Fetch.sameTarget(command.input, v) shouldBe false)
     }
-    "resolve accepted convergence frontiers without copied diagnostics or preceding-history equality" in {
-      Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R6; Example: E15; actual adjacent native instance transitions")
-      val definition = take(RepositorySyncDefinitionBinding.bindC)
-      val initial = InstanceRecord(InstanceIdentity("convergence-reference"), definition, initialRevision, Lifecycle.NotStarted,
-        None, CorrelationReference("owned-correlation"), CausationReference("owned-start"), None, None, None, Vector.empty)
-      def next(record: InstanceRecord, progression: String, cause: String) = take(record.appendC(record.revision,
-        HistoryEntry(HistorySequence(record.history.size + 1L), record.revision.next, Lifecycle.Active,
-          Some(ProgressionReference(progression)), record.correlation, CausationReference(cause), None, None, None)))
-      val first = next(initial, "sync.Integrated", "integrated")
-      val accepted = next(first, "sync.ReviewAccepted", "accepted")
-      val current = next(accepted, "sync.NativePushObserved", "pushed")
-      val loaded = take(current.copy(history = current.history.updated(0,
-        current.history.head.copy(causation = CausationReference("another-earlier-diagnostic")))).validateC)
-      val before = G.Observed("main", "a" * 40, "b" * 40, Vector.empty, Some("c" * 40), Some(G.Counts(1, 1)))
-      val original = N.Payload("ReviewAccepted", "/selected/repository", before,
-        indexTree = Some("d" * 40), mergeHead = Some("c" * 40))
-      val selected = N.Stage(accepted, original)
-      val observed = N.Stage(loaded, original.copy(stage = "NativePushObserved",
-        before = before.copy(counts = Some(G.Counts(7, 8)), mergeBase = Some("e" * 40))))
-      When("the retained result resolves the actual accepted frontier and Git target, not a whole observation/history copy")
-      take(R.matchesC(selected, observed)) shouldBe ()
-      Then("foreign native targets or selected state still refuse")
-      Vector(observed.copy(payload = observed.payload.copy(indexTree = Some("f" * 40))),
-        observed.copy(payload = observed.payload.copy(mergeHead = Some("f" * 40))),
-        observed.copy(payload = observed.payload.copy(before = before.copy(head = "f" * 40))),
-        observed.copy(record = observed.record.copy(identity = InstanceIdentity("foreign-instance"))))
-        .foreach(v => R.matchesC(selected, v) shouldBe a[Consequence.Failure[?]])
-    }
   }
 }

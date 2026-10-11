@@ -10,7 +10,12 @@ at that stage; actual connection verification moves to Phase 5.1. The later
 explicit user decision approves an unverified formal Phase 5 release with
 commit only: additional tests/review are NOT RUN — USER-APPROVED, not PASS.
 Open connection work is carried forward, not declared
-complete. Additional major Phase 5.1 redesign is on hold. Phase 6+ remains
+complete. Phase 5 formally released in
+`cf053352161bccc59871395cc8797e492f5e13c6`; the later explicit user instruction
+resumed Phase 5.1 under the same Goal. Its latest fixed normal-use/check-removal
+functional acceptance is PASS; the user has authorized its formal local release
+without additional tests/review. Native commit/closure success establishes that
+release and the adopted Goal end. Phase 6+ remains
 planned future work outside this Goal's revised ending scope, not completed or
 cancelled. The longer rollout below remains a roadmap, not authority to advance
 automatically beyond either release/stop boundary.
@@ -33,19 +38,20 @@ in Phase 6, using the corrected runtime contract.
 
 | Phase | Delivery boundary | Use and carryover |
 | --- | --- | --- |
-| [2: First usable runtime slice](phase-2.md) | Practical goal-phase, split-phase and repository-sync routes: normal entry, result/decision handling, completion and durable resumption | Deliver all three practical routes; retain original IDs/evidence for nonessential extensions moved to Phase 8 |
+| [2: First usable runtime slice](phase-2.md) | Completed finite direct-Operation slice in `ed1a76b07bb00c88123c50ef907f90604d3ce1bf` | Retain its actual evidence/history; later scope corrections do not reopen Phase 2 |
 | [3: Resolved Failure Model](phase-3.md) | Supply the modeled failure contract to implementation workers | Orthogonal extension, scheduled by real need and its upstream dependencies |
 | [4: Service Bus development events](phase-4.md) | Publish development events and integrate monitoring | Orthogonal extension, not a prerequisite for initial use |
 | [5: Minimum runtime foundation](phase-5.md) | Phase 5-stage implementation and recorded limitations, including delivered execution/resource/metadata-facing contracts and check-removal changes | Formal release commit and stop; unverified state approved by user, no new tests/review and no claim of completed connection verification |
-| [5.1: Connection verification and session-resolved Operations](phase-5.1.md) | Actual executor/resource/metadata/managed-validation connections plus minimal session-context contracts and assembled check-removal acceptance | Carry original open scenarios/IDs, history and counters; actual connected Operation evidence, formal release and Goal end; no skill integration |
+| [5.1: Connection verification and session-resolved Operations](phase-5.1.md) | Fixed normal public Operation request/result progression, safe selected file effects, NEW execution from the beginning, and removal of unnecessary checks | Functional acceptance PASS; formal release without additional validation/review is user-approved, with native closure establishing Goal end. Preserve history/counters; no direct AI executor, skill integration or excluded recovery guarantees |
 | [6: Thinking modes and skill integration](phase-6.md) | Thinking modes and skill contracts, test metadata design/revision, TEST_FIX/REVIEW_FIX and human-selected improvement | Start gradual skill-based real use after connected acceptance |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Continue use; deliver the bounded SimpleModeler overlay acceptance and collect optional later needs in Phase 8 |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 
 ## Scope and implementation policy
 
-Current execution plan: [Phase 5-stage release acceptance](phase-5.md), subject to the
-release/stop boundary above. The following Phase 2 resumption account is retained
+Current execution plan: [Phase 5.1 fixed acceptance and release](phase-5.1.md),
+subject to the revised Goal ending boundary above. Phase 2 and Phase 5 releases
+are complete. The following Phase 2 resumption account is retained
 as history, not the currently executing Phase:
 [Phase 2 remaining connected delivery](phase-2.md).
 Development resumed after the explicit 2026-10-07 plan-adoption instruction.
@@ -63,7 +69,7 @@ The detailed 2026-10-07 execution plans preserve the accepted scope:
 | Phase | Connected implementation order | Completion/handoff |
 | --- | --- | --- |
 | [5](phase-5.md#practical-completion-condition) | Record the delivered Phase 5-stage tree and explicit user-approved unverified disposition; preserve mixed work and actual history | Formal stage release commit only and stop; carry open connections to Phase 5.1 |
-| [5.1](phase-5.1.md#connection-verification-transferred-from-phase-5--2026-10-11) | Former Phase 5 A/B/C connected work plus session-resolved Operation correction | Actual connected acceptance/review, formal release and Goal end; no skills |
+| [5.1](phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11) | Latest fixed normal-use/check-removal boundary supersedes broader historical A/B/C requirements | Bounded connected acceptance/review, formal release and Goal end; no skills or restored over-guarantees |
 | [6](phase-6.md#execution-plan--2026-10-07) | A: mode/skill/client/result contract through a complete GoalPhase task; B: validation planning, FIX and human-selected improvement on the same interface | C: integrated acceptance, usable installation and gradual real use |
 | [7](phase-7.md#execution-plan--2026-10-07) | A: native publish/select/status through actual SBT resolution; B: Cozy generation/selection lifecycle; C: workspace sync using the same resources and validation runtime | D: combined overlay/workspace acceptance, CNCF Phase 101 full closure, then Phase 7 closure |
 

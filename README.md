@@ -1,5 +1,21 @@
 # SmWorkflow
 
+## Current delivery boundary (2026-10-11)
+
+Phase 5 is formally released. Phase 5.1 accepts the normal public Operations of
+GoalPhaseWorkflow, SplitPhaseWorkflow and RepositorySyncWorkflow, safe selected
+file effects, and starting a NEW execution from the beginning after abandonment.
+Workflow issues semantic requests; current Codex returns their results. Actual
+skill/CLI integration remains Phase 6.
+
+Duplicate answers and competing callers are caller misuse. Intermediate exclusion,
+unique winners, complete runtime history, identical replay responses and successful
+intermediate recovery are not guaranteed. No new comparison certificate or replay
+framework replaces the removed checks; existing shared infrastructure is unchanged.
+The [fixed Phase 5.1 conditions](docs/phase/phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11)
+supersede broader historical milestones below. Their prior executions remain
+history, not current acceptance requirements.
+
 Current development documentation: [reference manual](src/main/car/manual/index.md),
 [user guide](src/main/car/manual/user-guide.md), and
 [SplitPhase handoff scope contract](src/main/car/manual/split-phase-scope.md).
@@ -28,10 +44,17 @@ complete suites, with no abort or skipped case; SBT/wrapper exited0 and the
 shared lock was released. Actual1125 local CAR/manual verification succeeded;
 one independent integrated recovery-full-review passed the finite Phase2 scope
 with no Current Boundary Blockers and is recorded in the retained ledgerR7.
-Ordinary scoped closing/commit remains; Phase2 is not yet complete. Do not infer a
-successful unknown effect from a safe indeterminate WAIT or an acknowledgement.
-Phase 2 and the broader Goal remain incomplete; the linked acceptance table is
-the current evidence/ownership boundary.
+Phase 2 subsequently closed in native commit
+`ed1a76b07bb00c88123c50ef907f90604d3ce1bf` on 2026-10-08 with a verified
+closure receipt. Phase 5 formally released in
+`cf053352161bccc59871395cc8797e492f5e13c6` under the user's approved-unverified
+release decision; its additional tests/review are NOT RUN — USER-APPROVED, not
+PASS. Phase 5.1's fixed normal-use/check-removal functional acceptance has passed;
+the user has authorized its formal local release without additional tests/review.
+The final declaration is [Phase 5.1](docs/phase/phase-5.1.md); actual native
+commit/closure receipt establishes release completion and the adopted Goal end.
+Phase6+ remains future work, without automatic execution. Historical
+recovery examples above do not restore guarantees excluded by the current scope.
 
 ## Historical fixture milestones
 

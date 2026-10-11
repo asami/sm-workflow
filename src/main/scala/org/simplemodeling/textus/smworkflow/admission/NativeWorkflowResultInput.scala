@@ -16,11 +16,14 @@ import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Normal result ingress resolves issued control context, not caller echoes.
-  * A request identity is needed only to distinguish actual issued generations.
+  * Normal answers resolve the currently pending request; an explicit identity
+  * may select an associated issued request. Duplicate/delayed-answer handling
+  * is not a sm-workflow guarantee.
   * Existing completion owns result meaning, state, scope, authority and CAS.
-  * Actual executor invocation remains separate work.
+  * The host performs issued semantic work and returns its result; Workflow
+  * does not have to invoke an AI runtime to consume that answer.
   * @since   Oct.  9, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object NativeWorkflowResultInput {
   val schema = "sm-workflow.result-submission.v1"
@@ -185,9 +188,9 @@ private[smworkflow] object NativeWorkflowResultInput {
         binding <- storage.bindInstancesC()(using context)
         instances <- binding.findBySessionC(session, definition.workflowIdentity)(using context)
         contracts <- target.contracts()
-        // Completed generations remain candidates: a delayed answer may refer
-        // to one of them even if a newer request is the sole current pending.
-        identities = instances.flatMap(_.history.flatMap(_.suspension.toVector))
+        // Result ingress resolves currently pending work only. No completed
+        // generation scan, delayed-answer certificate or replay lookup.
+        identities = instances.flatMap(_.suspension.toVector)
           .filter(boundary => contracts.contains(boundary.completion.value))
           .map(_.continuationIdentity.value).distinct
         selected <- NativeWorkflowSessionInput.selectC(identities, submission.identity, identity => identity, "issued request")

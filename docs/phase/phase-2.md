@@ -3,10 +3,12 @@
 Status: completed on 2026-10-08
 
 Completion boundary: the adopted finite direct-Operation slice for SplitPhase,
-RepositorySync and GoalPhase, not the broader immutable Goal. This is the final
-declaration prepared for the scoped local closing commit; actual Phase completion
-is admitted only with its verified native closure receipt. Before that receipt,
-the closing journal remains the authoritative execution-progress record.
+RepositorySync and GoalPhase, not the broader Goal. Actual scoped closing
+succeeded in `ed1a76b07bb00c88123c50ef907f90604d3ce1bf`, with the saved verified
+native closure receipt recorded in
+`.codex-workflow/phases/PHASE-2/phase2-verified-closing-20261008.md`.
+The preparation and earlier blocked states below remain historical evidence,
+not a pending Phase 2 commit or a reason to reopen its accepted slice.
 
 Historical completion handoff (2026-10-07):
 [remaining correction, integrated acceptance and closing](phase-2-completion-handoff-20261007.md).
@@ -33,7 +35,8 @@ Phase5/6/7/8 planning and shared Phase-index projections remain preserved rather
 than silently committed or accepted. CLI/skill wiring, expanded transport and
 cost work remain with their recorded later owners.
 Full consumed-command history is779 through1127, distinct from unchanged original
-repair counter3/3. Ordinary owned-scope commits remain pending.
+repair counter3/3. The ordinary owned-scope commits subsequently succeeded as
+recorded above; the preparation account does not describe current pending work.
 Plan revision: 2026-10-07, requested by the user after stopping development.
 The planning edit alone did not resume execution. The subsequent explicit user
 resume adopts this sequence under the same Goal and retained history; see

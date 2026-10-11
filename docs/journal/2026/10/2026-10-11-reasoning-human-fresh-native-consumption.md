@@ -1,7 +1,7 @@
 # Reasoning Human Fresh Native Consumption
 
-Status: causal boundary frozen before source edits; runtime and independent
-review UNVERIFIED. This implements the already adopted Phase 5 removal policy,
+Status: actual181 E12 8/8 and fresh bounded independent Step review PASS on
+2026-10-11; earlier UNVERIFIED cutoffs remain historical. This implements the already adopted Phase 5 removal policy,
 not a new policy, repair allowance, counter reset or approval request.
 
 ## Current evidence and ownership
@@ -122,3 +122,58 @@ session-result-consumption group, not only new positive examples:
 
 Do not replay actual180 or mutate execution inputs during that new execution.
 The same Goal remains ACTIVE; history/counters/frames remain unchanged.
+
+## Phase 5.1 resumption after formal Phase 5 release
+
+The user separately instructed `同じGoalでPhase 5.1を開始して` on 2026-10-11.
+The actual same Goal returned ACTIVE. Phase 5 formal commit
+`cf053352161bccc59871395cc8797e492f5e13c6` has a native committed/verified closure
+receipt carrying FORMAL and validation/review `not-run-user-approved`; this is
+commit readback, not behavioral PASS. Its release is accepted, not reopened.
+
+R19/E40–41 source and executable examples are still the preserved inputs.
+Fresh181 selects the complete E12 Operation group above as Phase 5.1 validation,
+then fresh read-only independent connected review. It is a new request/attempt/
+permission/result, not a replay of180, retrospective Phase 5 validation, new
+repair frame or change to repair3/3. The existing parent Phase scope and original
+Phase authority lineage are retained because 5.1 is its named connected subphase;
+the command source is this actual separate resumption instruction. Current Git
+subjects select current inputs, not replacement original bases or copy seals.
+All broader acceptance remains OPEN. This paragraph records selection before
+allocation; no SBT start or successful result is implied.
+
+## Actual181 Phase 5.1 execution and independent assessment
+
+Fresh registered cncf_command_runner
+`/root/sbt_receipt_eda879a53ed3471cb456`, configured gpt-6-luna/medium, ran the
+whole selected E12 group once through the shared SBT serial wrapper. Actual
+executor6232 terminated0 and recorded request181/result181/subject173. The parent
+complete-current-request reader returned0/ACCEPTED for the selected fresh
+intake. Raw footer and native summary agree: eight tests succeeded, zero
+failed/canceled/ignored/pending, one suite completed, zero aborted; SBT0,
+wrapper0, shared lock released. Tests2m29s, SBT199s, completed08:21:54JST.
+This is Phase 5.1 evidence, not retrospective validation of the approved formal
+Phase 5 release. Exact original runner and runtime interpretation are retained
+in session-181-runner-original-record.md and session-181-parent-runtime-evidence.md
+under the existing private PHASE-5 record directory.
+
+Fresh independent reviewer `/root/phase51_actual181_readonly_review`, configured
+gpt-6.1-sol/high, runtimeSource configured-default, actualRuntime unobservable,
+returned step-review PASS at actual181-fresh-reasoning-human-native-consumption.
+CurrentCB[], resolvedCB[], newHYG[], newDEV[]; inherited records remain unchanged.
+The complete original final is retained in session-181-independent-review-source-record.md.
+Parent admits only this bounded current Step result; the product/spec/normative
+input hold ended after the actual final review. Original174 FINDINGS, actual179
+compile failure and all prior originals are preserved. Ordinary prior945through180
+plus consumed181 (946 total) is separate from human repair3/3. No counter/frame reset, refund,
+Phase-wide PASS, commit or publication follows.
+
+Exact English journal-ready independent assessment:
+
+Owner repository: sm-workflow. Fresh independent read-only Step review actual181-fresh-reasoning-human-native-consumption: PASS, with no current or resolved Current Boundary Blockers and no new Hygiene or Development Candidate records. All three frozen primary programs were read through EOF, totaling 3,066 lines, together with R19/E40–41, the complete causal journal, current Phase 5.1 resumption and relevant contracts, actual public dispatch, independent Human consent, native Decision completion and managed persistence consumers. Fresh completion consumes actual current native history, admits independent consent once and leaves issued-result, suspension, revision/CAS and atomic publication admission at the native consuming boundary. E40 preserves supported pending causation differences through all three Human directions; E41 reaches actual native suspension refusal for incompatible continuation and context targets and asserts no native completion or application successor publication. Actual181 executed the entire eight-example E12 session-result-consumption group once: eight succeeded, zero failed, one completed suite, zero aborted; SBT and wrapper exited zero and the shared lock was released. CAR evidence contains 0 FAIL, 347 WARN and 114 OK; all warnings remain unwaived. Inherited Hygiene remains nonblocking, open and unadmitted. This result supplies only this bounded Phase 5.1 Step review; it neither retrospectively validates the approved formal Phase 5 release nor accepts all Phase 5.1 obligations, remaining predicates, later Phases or the full Goal. The latest user direction to reconcile Workflow-request/Codex-result-return architecture and stop additional TextusAI development is outside this frozen Step assessment; no direct AI runtime invocation or new TextusAI API is inferred as a prerequisite.
+
+The later scope correction is recorded separately in
+[Workflow AI request/return](2026-10-11-workflow-ai-request-return-scope-correction.md).
+No TextusAI source edit was made in this resumption. This independent PASS does
+not accept the additional external provider scope or turn its historical
+observations into an obligation. Full Phase 5.1 and Goal acceptance remain OPEN.

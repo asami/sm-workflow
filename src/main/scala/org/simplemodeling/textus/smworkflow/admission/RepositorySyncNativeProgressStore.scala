@@ -24,7 +24,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   final case class Payload(stage: String, root: String,
     before: Git.Observed, indexTree: Option[String] = None, checkpoint: Option[String] = None,
     after: Option[Git.Observed] = None, method: Option[String] = None, mergeHead: Option[String] = None,
-    materialization: Option[String] = None, validation: Option[RepositorySyncNativeMergeValidation.State] = None,
+    validation: Option[RepositorySyncNativeMergeValidation.State] = None,
     finalTip: Option[String] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   private given Encoder[RepositorySyncNativeMergeValidation.Check] = deriveEncoder
@@ -57,7 +57,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case Some(value) => RepositorySyncNativeMergeValidation.legacyStateJson(value).map(v => fields.add("validation", v))
         case None => Right(fields)
       } else Right(fields)
-      payload <- Json.fromJsonObject(normalized.remove("originalCommand")).as[Payload].left.map(_ => "Native progress data is incomplete")
+      // Old materialization copies are ignored, never required or compared.
+      payload <- Json.fromJsonObject(normalized.remove("originalCommand").remove("materialization")).as[Payload].left.map(_ => "Native progress data is incomplete")
       _ <- Either.cond(stages(payload.stage) && payload.before != null &&
         payload.root != null && payload.root.nonEmpty &&
         Vector(payload.indexTree, payload.checkpoint, payload.mergeHead, payload.finalTip).flatten.forall(oid) &&
@@ -65,7 +66,6 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         (!Set("CheckpointCreated", "CheckpointInstalling")(payload.stage) || payload.checkpoint.nonEmpty) &&
         (!Set("LocalStatePreserved", "Integrated", "PendingMergePrepared", "MergeConflicted")(payload.stage) || payload.after.nonEmpty) &&
         (payload.stage != "PendingMergePrepared" || (payload.indexTree.nonEmpty && payload.mergeHead.nonEmpty)) &&
-        (payload.stage != "MaterializingConflict" || (payload.materialization.nonEmpty && payload.mergeHead.nonEmpty)) &&
         (!Set("ValidationChecking", "MergeValidated", "ReviewAccepted", "NativeCommitPreparing", "NativeCommitObserved")(payload.stage) || payload.mergeHead.nonEmpty) &&
         (!Set("IntegrationValidationChecking", "IntegrationValidated")(payload.stage) ||
           (payload.mergeHead.isEmpty && payload.method.exists(Set("equal", "local-ahead", "fast-forward")))) &&
@@ -97,9 +97,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
           else invalid("saved stage crosses its original selection or native progression")
       }
 
-    /** A fresh external call is allowed only after this actual conditional
-      * append/Create succeeds; concurrent writers lose before the Git effect.
-      */
+    /** Record normal progression through the existing managed transition API. */
     def saveC(key: String, event: String, from: InstanceRecord, payload: Payload): Consequence[Stage] = for {
       _ <- if (from.currentProgression.exists(p => domain.statemachine.RepositorySyncBoundaryLifecycle.permits(
         p.value.stripPrefix("sync."), event, payload.stage))) Consequence.unit
@@ -115,7 +113,6 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
 
     /** Mechanical preparation accepts Active entries only. Close its actual
       * saved Converged result through the authoritative native instance API.
-      * Reopen observes either the preparation or its one completed successor.
       */
     def closeC(prepared: Stage): Consequence[InstanceRecord] = for {
       _ <- if (prepared.payload.stage == "Converged" &&
@@ -125,16 +122,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         Lifecycle.Completed, None, prepared.record.correlation,
         CausationReference("native-repository-completed:" + identity),
         prepared.record.derivedCompositeOccurrence, prepared.record.committedPredecessor, None)
-      next <- prepared.record.appendC(prepared.record.revision, entry)
       instances <- storage.bindInstancesC()(using core.executionContext)
-      actual <- instances.loadC(prepared.record.identity)(using core.executionContext).flatMap {
-        case Some(value) => Consequence.success(value)
-        case None => invalid("actual convergence instance is missing")
-      }
-      completed <- if (SplitPhaseDefinitionBinding.sameRecord(actual, next)) Consequence.success(actual)
-        else if (SplitPhaseDefinitionBinding.sameRecord(actual, prepared.record))
-          instances.appendC(prepared.record.identity, prepared.record.revision, entry)(using core.executionContext)
-        else invalid("native current differs from saved convergence or its completed successor")
+      completed <- instances.appendC(prepared.record.identity, prepared.record.revision, entry)(using core.executionContext)
     } yield completed
 
     def payload(stage: String, before: Git.Observed): Payload = Payload(stage, original.repositoryRoot, before)

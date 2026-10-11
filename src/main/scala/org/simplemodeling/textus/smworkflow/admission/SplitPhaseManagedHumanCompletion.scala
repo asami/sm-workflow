@@ -95,12 +95,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
         }
         command <- _command_c(issued)
         plan <- _plan_c(command, declaration, catalog, core, Some(issued))
-        native <- _completion_c(storage)
-        retained <- native.loadRetainedC(submitted.continuationId)(using executionContext)
-        response <- retained match {
-          case Some(actual) => WorkflowProtocolV1.admitDecisionResultC(plan.question, submitted)
-            .flatMap(_ => _observe_c(plan, actual.completion, submitted)).map(OperationResponse.Scalar(_))
-          case None => for {
+        response <- for {
             admitted <- N.admitForCallC(plan, submitted, plan.source.current, core, evidence)
             bound <- _fresh_c(core, operation, declaration, catalog, storage, plan, submitted, admitted, observation)
             action <- bound.createOperationRequest(core.action.request).flatMap {
@@ -110,7 +105,6 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
             call = action.createCall(core.copy(action = action))
             response <- { _delegate = Some(call); call.execute() }
           } yield response
-        }
       } yield response
     }
     override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
@@ -139,7 +133,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
       case Some(value) => Consequence.success(value.completion)
       case None => _invalid("answered progression has no canonical retained result")
     }
-    observed <- _admit_observation_c(plan, retained, retained.result)
+    observed = new ObservedAnswer(plan, retained, plan.source.current, plan.source.current)
   } yield observed
 
   private def _fresh_c(core: ActionCall.Core, operation: GeneratedProvidedApiAbi.Operation,
@@ -176,8 +170,6 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[A.Answer] {
         def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = for {
           _ <- admitted.evidence.forCallC(core)
-          _ <- if (_same_answer(result, submitted) && SplitPhaseDefinitionBinding.sameRecord(current, plan.source.current)) Consequence.unit
-            else _invalid("closing result or native predecessor changed after independent admission")
           program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference)))
         } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(admitted.next))
@@ -186,20 +178,6 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
         WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
     }
   } yield bound
-
-  private def _observe_c(plan: H.Plan, retained: WorkflowCompletionRecordJsonV1.Record[A.Answer],
-    submitted: ContinuationResult[A.Answer]): Consequence[String] =
-    _admit_observation_c(plan, retained, submitted).flatMap(_acknowledgement_c)
-
-  private def _admit_observation_c(plan: H.Plan, retained: WorkflowCompletionRecordJsonV1.Record[A.Answer],
-    submitted: ContinuationResult[A.Answer]): Consequence[ObservedAnswer] = for {
-    _ <- if (_same_answer(retained.result, submitted) && retained.instanceRevision == plan.next.revision.next &&
-        retained.closingResult.contains(StateMachineOperationResult(H.closingType, submitted.resultReference))) Consequence.unit
-      else _invalid("retained answer choice, target, completing revision or typed closing result differs")
-    next <- N.prepareC(plan, retained.result, plan.next)
-    _ <- if (SplitPhaseDefinitionBinding.includesState(plan.source.current, next)) Consequence.unit
-      else _invalid("retained answer lacks its selected adjacent native completed state")
-  } yield new ObservedAnswer(plan, retained, next, plan.source.current)
 
   private def _acknowledgement_c(observed: ObservedAnswer): Consequence[String] = {
     val plan = observed.plan
@@ -235,8 +213,6 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
       } yield actual
     }
     resolved <- H.selectIssuedC(plan, issued)
-    _ <- if (SplitPhaseDefinitionBinding.includesState(observed.current, plan.next)) Consequence.unit
-      else _invalid("current instance lacks the selected native suspension state")
   } yield resolved
 
   private def _command_c(question: WorkflowInteraction[H.Input, Nothing]): Consequence[SplitPhaseAdvanceCommand] = question.current match {
@@ -246,8 +222,6 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
         SplitPhasePartitionContextReference(input.context.identity, input.context.revision)))
     case _ => _invalid("issued Decision input is absent")
   }
-  private def _same_answer(left: ContinuationResult[A.Answer], right: ContinuationResult[A.Answer]): Boolean =
-    NativeHumanQuestionSelection.sameAnswerTarget(left, right) && left.result.value == right.result.value
   private def _storage_c(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[WorkflowComponentStorage] =
     if (core == null || !core.component.exists(value => value.componentId == SmWorkflowComponent.componentId && value.subsystem.nonEmpty))

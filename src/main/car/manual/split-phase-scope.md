@@ -11,6 +11,15 @@ availability; see the [Human direction contract](split-phase-human.md).
 See the [reference manual](index.md) and [user guide](user-guide.md) for runtime
 availability and host prerequisites.
 
+Current Phase 5.1 acceptance is normal public Operations, safe selected file
+effects and a NEW execution after abandonment. Its bounded validation and
+independent closure review passed. Duplicate/competing answers, identical replay
+responses and intermediate restoration are not guarantees. Earlier validation
+and source-correction notes below retain their historical scope; their former
+open-removal/acceptance statements do not reopen the current fixed boundary.
+Formal Phase 5.1 release without additional tests/review is user-approved; its
+native commit/closure outcome is recorded separately. Skill/CLI wiring remains Phase 6.
+
 ## Operations
 
 | Operation | Owner and purpose | Result boundary |
@@ -180,7 +189,7 @@ work. After a valid result is committed, the completion returns a WAIT
 acknowledgement for the semantic boundary. Later advance independently observes
 the retained completion. The planning assembly continues an ALL-Built frontier
 through any genuinely required reasoning to the saved selected plan, without
-inventing Human work. The paired Human assembly also issues or recovers a
+inventing Human work. The paired Human assembly also issues a
 Decision when the whole frontier requires Human direction, and can continue
 independently verified ProvideResolution through planning/reasoning. A semantic
 acknowledgement or Decision alone never means document application.
@@ -188,14 +197,16 @@ acknowledgement or Decision alone never means document application.
 For a selected complete plan, the original Start determines PREVIEW or APPLY.
 PREVIEW returns deterministic source sections and child material without writes.
 APPLY saves native ApplyingDocuments intent, invokes only the runtime-fixed
-document capability, saves applied readback and finally appends Completed.
+document capability, records its actual applied result and finally appends Completed.
 The runtime owns executable, target, complete argument vectors, limits, driver
 and grant. Intent/effect/completion are separate durable stages; file updates
 are individually atomic, not a crash-atomic filesystem/DB transaction. An
-uncertain acknowledgement stops that call; later advance observes saved state
-and actual files before applying missing work. Completed observation does not
-repeat the writes or allocate a new selection. Document conflicts currently
-fail explicitly; their semantic/Human resolution handler is not yet installed.
+uncertain acknowledgement stops that call; it does not enable partial-installation
+recovery or application of missing files on a later advance. Abandon an
+unsuccessful execution and start a NEW one; uncertain effects are not cleaned
+up automatically. Normal completed observation does not repeat the writes.
+Document conflicts currently fail explicitly; their semantic/Human resolution
+handler is not yet installed.
 
 ## Compatibility and remaining validation
 
@@ -224,7 +235,7 @@ the earlier planning-only assembly does not supply those Human handlers.
 Its input has the original context and first-checkpoint
 references, the exact scope-publication reference and the complete bounded
 scope frontier. Workflow selects a genuine Human need from the whole frontier;
-ALL-Built remains in deterministic planning. Native issue/recovery borrows the
+ALL-Built remains in deterministic planning. Native issuance borrows the
 existing owning Subsystem storage. A decoded payload, declared choice or
 authenticated relay is neither Human evidence nor application permission.
 
@@ -236,7 +247,7 @@ actual resolution and continues its published frontier through planning and
 reasoning to selected Preview. The normal factory includes these handlers,
 without issuing Human evidence or granting client storage access. The
 [Human contract](split-phase-human.md) describes
-the answer envelope and retained/uncertain recovery boundaries.
+the answer envelope, normal continuation and unsuccessful-execution limits.
 
 Focused Service/CLI and physical SQLite-reopen examples exercise both semantic
 alternatives, crossed result/context rejection and foreign-actor refusal.
@@ -244,10 +255,11 @@ Fresh982 passed1,171/1,171 across138 suites in the three-family regression,
 including five known-work APPLY/reopen cases. Their original Start setup is
 explicitly private. Later direct-Operation scenarios run the normal factory,
 but document-conflict semantic/Human resolution is not an installed capability.
-The completed-owned-work guard now passes first-Apply and partial-child
-regressions and independent bounded review. Integrated regression/Phase review
-remain required: current whole-root1122 failed in distinct GoalPhase producer
-fixtures, not this guard. Selected positive tests do not close that boundary.
+Those results are historical evidence, not a current partial-child recovery
+contract. Component-added intermediate recovery and copy certificates have been
+removed. Current acceptance is normal Operations, safe file writes and a NEW
+execution after abandonment; a broad regression campaign is not required for
+this removal.
 Broader transports and public skills retain their
 separate Phase assignments. Rendered/runtime Help remains unverified; supporting
 tests alone do not establish practical Phase or release acceptance.

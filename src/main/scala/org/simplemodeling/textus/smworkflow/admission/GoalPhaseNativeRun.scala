@@ -131,13 +131,9 @@ private[smworkflow] object GoalPhaseNativeRun {
         initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
           CorrelationReference(request.invocationReference), cause, None, None, None, Vector.empty).validateC
         instances <- storage.bindInstancesC()(using core.executionContext)
-        loaded <- instances.loadC(identity)(using core.executionContext)
-        actual <- loaded.fold(instances.createC(initial)(using core.executionContext))(Consequence.success)
+        _ <- instances.createC(initial)(using core.executionContext)
         entry = history(initial, "phase.Implementation", cause.value)
-        expected <- initial.appendC(initialRevision, entry)
-        active <- if (same(actual, initial)) instances.appendC(identity, initialRevision, entry)(using core.executionContext)
-          else if (same(actual, expected)) Consequence.success(actual)
-          else invalid("unreceipted Start differs from its selected plan/native base")
+        active <- instances.appendC(identity, initialRevision, entry)(using core.executionContext)
         saved <- starts.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(identity.value),
           active, active.revision, history(active, "phase.Implementation", "ordered-goal-plan-saved:" + identity.value),
           TypedValue(codec.typeIdentity, payload)), empty)(using core.executionContext)
@@ -167,7 +163,6 @@ private[smworkflow] object GoalPhaseNativeRun {
       case Some(value) => value.validateC
       case None => invalid("native ordered instance is missing")
     }
-    _ <- if (prefix(current, started.receipt.next)) Consequence.unit else invalid("ordered native history crosses its original Start")
     root <- G.rootC(core)
     branch <- G.branchC(core)
     _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
@@ -217,7 +212,6 @@ private[smworkflow] object GoalPhaseNativeRun {
         ContextSnapshot(record.definition.workflowRevision.value), MinimalPresentation(title, detail))))
   } yield wire
   def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase native run: " + reason)
   private def token(value: String) = URLEncoder.encode(value, UTF_8)
   private def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")

@@ -128,8 +128,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
   private[admission] def completedC(value: N.Stage, source: N.Stage, policy: Policy, merge: Boolean): Consequence[Unit] = for {
     state <- value.payload.validation.map(Consequence.success).getOrElse(N.invalid("retained validation facts are missing"))
-    _ <- matchesC(value, source, policy, state.selected.size + (if (merge) 2 else 1), merge)
-    _ <- if (successful(state.receipts, merge)) Consequence.unit else N.invalid("retained validation did not pass")
+    _ <- if (state.receipts.size == state.selected.size + (if (merge) 2 else 1) && successful(state.receipts, merge))
+      Consequence.unit else N.invalid("required executed checks are missing or did not pass")
   } yield ()
 
   private def selectedC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean): Consequence[N.Stage] = for {
@@ -139,15 +139,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       case Some(value) => for {
         _ <- completedC(value, pending, policy, merge)
       } yield value
-      case None => for {
-        original <- store.loadC("validation-intent-0")
-        selection <- original match {
-          case Some(value) => matchesC(value, pending, policy, 0, merge).flatMap(_ =>
-            value.payload.validation.map(Consequence.success).getOrElse(N.invalid("original validation selection is missing")))
-          case None => Consequence.success(State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, Vector.empty))
-        }
-        checked <- checksC(store, pending, policy, selection, merge)
-      } yield checked
+      case None => checksC(store, pending, policy,
+        State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, Vector.empty), merge)
     }
   } yield selected
 
@@ -158,34 +151,20 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     checks.zipWithIndex.foldLeft(Consequence.success(pending)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.validation.exists(s => s.receipts.size < index || !successful(s.receipts, merge))) Consequence.success(current)
       else for {
-        before <- store.loadC("validation-intent-" + index)
-        recorded <- store.loadC("validation-result-" + index)
-        saved <- recorded match {
-          case Some(value) => for {
-            _ <- matchesC(value, pending, policy, index + 1, merge, Some(selection.selected))
-          } yield value
-          case None => before match {
-            case Some(value) => matchesC(value, pending, policy, index, merge, Some(selection.selected)).map(_ => value)
-            case None => for {
-              _ <- preconditionsC(store, pending)
-              receipts = current.payload.validation.map(_.receipts).getOrElse(Vector.empty)
-              state = selection.copy(receipts = receipts)
-              intent <- store.saveC("validation-intent-" + index, "native-check-prepared", current.record,
-                pending.payload.copy(stage = checking, validation = Some(state)))
-              _ <- store.acknowledgeC("merge-check-prepared:" + check.identity)
-              _ <- preconditionsC(store, pending)
-              result <- if (index < structural) E.executeNativeGitC(store.core,
-                E.NativeGitEffect.CheckPendingIndex(if (index == 0) pending.payload.after.get.head else pending.payload.mergeHead.get))
-                else E.repositoryValidationC(store.core, check.ordinal)
-              _ <- store.acknowledgeC("merge-check-executed:" + check.identity)
-              receipt <- receiptC(check.identity, result)
-              _ <- preconditionsC(store, pending)
-              saved <- store.saveC("validation-result-" + index, "native-check-recorded", intent.record,
-                pending.payload.copy(stage = checking, validation = Some(state.copy(receipts = receipts :+ receipt))))
-              _ <- store.acknowledgeC("merge-check-recorded:" + check.identity)
-            } yield saved
-          }
-        }
+        _ <- preconditionsC(store, pending)
+        receipts = current.payload.validation.map(_.receipts).getOrElse(Vector.empty)
+        state = selection.copy(receipts = receipts)
+        intent <- store.saveC("validation-intent-" + index, "native-check-prepared", current.record,
+          pending.payload.copy(stage = checking, validation = Some(state)))
+        _ <- store.acknowledgeC("merge-check-prepared:" + check.identity)
+        result <- if (index < structural) E.executeNativeGitC(store.core,
+          E.NativeGitEffect.CheckPendingIndex(if (index == 0) pending.payload.after.get.head else pending.payload.mergeHead.get))
+          else E.repositoryValidationC(store.core, check.ordinal)
+        _ <- store.acknowledgeC("merge-check-executed:" + check.identity)
+        receipt <- receiptC(check.identity, result)
+        saved <- store.saveC("validation-result-" + index, "native-check-recorded", intent.record,
+          pending.payload.copy(stage = checking, validation = Some(state.copy(receipts = receipts :+ receipt))))
+        _ <- store.acknowledgeC("merge-check-recorded:" + check.identity)
       } yield saved
     }}.flatMap { current =>
       current.payload.validation match {
@@ -203,18 +182,6 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def applies(state: State, policy: Policy): Boolean =
     state.mode == policy.mode && state.selected.forall(check => policy.checks.exists(_ == check))
 
-  private[admission] def matchesC(stage: N.Stage, source: N.Stage, policy: Policy, count: Int, merge: Boolean,
-    selected: Option[Vector[Check]] = None): Consequence[Unit] =
-    if (stage.payload.validation.exists(s => applies(s, policy) && s.sourceRevision == source.record.revision.value.toString &&
-        selected.forall(expected => expected.map(c => c.identity -> c.ordinal) == s.selected.map(c => c.identity -> c.ordinal)) &&
-        s.receipts.size == count && s.receipts.map(_.identity) ==
-          (Vector("index-local") ++ (if (merge) Vector("index-remote") else Vector.empty) ++ s.selected.map(_.identity)).take(count)) &&
-        stage.payload.indexTree == source.payload.indexTree && stage.payload.mergeHead == source.payload.mergeHead &&
-        stage.payload.before.head == source.payload.before.head && stage.payload.before.tree == source.payload.before.tree &&
-        stage.payload.after.map(v => (v.branch, v.head, v.tree, v.trackingTip)) ==
-          source.payload.after.map(v => (v.branch, v.head, v.tree, v.trackingTip)) &&
-        SplitPhaseDefinitionBinding.includesState(stage.record, source.record))
-      Consequence.unit else N.invalid("retained check crosses its selected executable bindings, source or native candidate")
 
   private[admission] def preconditionsC(store: N.Store, pending: N.Stage): Consequence[Unit] = for {
     native <- G.inspectC(store.core)

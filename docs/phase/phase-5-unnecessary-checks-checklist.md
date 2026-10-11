@@ -1,6 +1,29 @@
-# Phase 5 Supplementary Checklist: Unnecessary Control Check Removal
+# Phase 5.1 Supplementary Checklist: Unnecessary Control Check Removal
 
-Phase status: closed on 2026-10-11 by explicit approved-unverified formal stage-release decision
+Phase status: closed on 2026-10-11 by explicit user-approved formal release decision
+Current owner: [Phase 5.1](phase-5.1.md), using this existing supplementary
+checklist for the connected removal originally assigned to [Phase 5](phase-5.md).
+The historical basename is retained; no new checklist or guarantee is created.
+The user's `追加テストなしで正式releaseして。` accepts formal closure without
+additional release tests/review. Actual194/195 and independent closure PASS
+remain bounded normal-use evidence, not repository-full validation. Actual
+release requires the native commit/closure receipt for
+`smwf-phase51-formal-release-20261011@1`.
+
+Current fixed completion conditions are satisfied: normal three-family public
+Operation request/result progression; safe selected file effects; a NEW execution
+from the beginning after abandonment; and documentation plus bounded validation
+and independent closure. Duplicate/competing answers, identical replay,
+complete-history guarantees and intermediate restoration are excluded, with
+their component-added checks and dedicated tests removed. Shared infrastructure
+is unchanged. Broader rows below are historical planning, not additional current
+gates. Original nine/history/repair3/3/frames remain; Phase6 skills/CLI is future work.
+
+## Historical Phase 5 stage release and allocation
+
+Phase5 closed in native formal release
+`cf053352161bccc59871395cc8797e492f5e13c6` under its separately approved
+NOT RUN disposition. The following account retains that earlier allocation.
 Ledger for: [Phase 5](phase-5.md), removal of unnecessary control checks,
 including management hashes, tamper checks and internal expiry.
 Latest allocation, 2026-10-11: Phase 5 releases the delivered check-removal

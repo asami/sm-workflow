@@ -88,22 +88,12 @@ private[smworkflow] object SplitPhaseHumanTerminal {
       Lifecycle.Completed, None, observed.answered.correlation,
       CausationReference("split-human-terminal:" + answer.continuationId.value),
       observed.answered.derivedCompositeOccurrence, observed.answered.committedPredecessor, None))
-    current <- if (SplitPhaseDefinitionBinding.sameRecord(observed.current, next)) Consequence.success(observed.current)
-      else if (SplitPhaseDefinitionBinding.sameRecord(observed.current, observed.answered)) for {
-        storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
-          SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition),
-          declaration.instances, declaration.continuations)
-        instances <- storage.bindInstancesC()(using core.executionContext)
-        committed <- instances.appendC(next.identity, observed.answered.revision, next.history.last)(using core.executionContext) match {
-          case Consequence.Success(value) if SplitPhaseDefinitionBinding.sameRecord(value, next) => Consequence.success(value)
-          case _ => _uncertain("canonical append acknowledgement is not established; observe later without retry")
-        }
-        _ <- observation() match {
-          case Consequence.Success(_) => Consequence.unit
-          case _ => _uncertain("committed terminal acknowledgement is not established; observe later without retry")
-        }
-      } yield committed
-      else _invalid("current native state is neither the answered predecessor nor its exact terminal successor")
+    storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+      SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition),
+      declaration.instances, declaration.continuations)
+    instances <- storage.bindInstancesC()(using core.executionContext)
+    current <- instances.appendC(next.identity, observed.answered.revision, next.history.last)(using core.executionContext)
+    _ <- observation()
     handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, current)
     terminal <- WorkflowProtocolV1.projectTerminalC(handle, current, TypedValue(payloadCodec.typeIdentity, result),
       MinimalPresentation("SplitPhase " + _outcome(outcome), "The recorded Human direction ended this split run.",

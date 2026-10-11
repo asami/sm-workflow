@@ -605,7 +605,40 @@ charge an unrelated later development loop for old fixes elsewhere in the
 project, or reset an active unresolved loop merely by changing its task/name,
 reclassifying a fix, or reaching the hard limit. Resumption after that stop needs
 an explicit decision; the guard must not automatically renew its allowance.
-This design update does not reset existing historical records or live counters.
+This design update alone does not mutate historical records or live counters.
+
+#### Explicit continuation approval and Step completion — 2026-10-11
+
+Delivery owner: Phase 6 batch B, with connected acceptance in P6-TS05 and the
+Phase 6 completion conditions. Implement missing runtime transitions and normal
+client/skill wiring together. Phase 9 consumes this behavior for provider
+switching; it does not own or delay initial reset delivery.
+
+An explicit user approval to continue the stopped repair work resets both the
+ordinary repair count and the automatic Fix cycle count to zero for that work.
+Record the approval and prior consumption in the existing decision/history
+record. The configured hard limit remains 10; the approved continuation starts
+a new counting window under that limit. Approval covers the continued repair
+work, not just one finding or batch. Do not request approval again for each
+finding merely because the preceding window exhausted its allowance. One
+approval opens one window, not repeated automatic renewals.
+
+Keep cumulative execution history, unresolved issues and measured convergence
+trends across the reset. Evaluate subsequent actual progress normally; the old
+FIX_CYCLE_LIMIT disposition is resolved by approval and must not immediately
+stop the new window using the preceding window's consumed count. Independent
+authority/input gaps are not resolved merely by resetting a counter.
+
+Successful Step completion with its accepted Step commit closes that Step's
+repair loop. The next Step starts both counts at zero automatically, without a
+separate continuation approval. Preserve the completed Step's history; do not
+charge its consumption to the next Step or an independent Phase-close repair
+loop. A checkpoint, WIP commit or repair commit within an unfinished Step does
+not constitute Step completion and does not reset its active counts. A Phase
+close loop already in progress likewise retains its own counts.
+
+These are the reset boundaries. Provider switches, chat/process changes,
+relabeling work, or merely hitting the limit do not reset either count.
 
 - Below the ordinary soft threshold: continue when the guard finds no stop reason.
 - At/above that threshold: CONVERGING or SLOW_CONVERGENCE may continue within the
@@ -615,7 +648,8 @@ This design update does not reset existing historical records or live counters.
 - Hard limit: after the tenth automatic Fix cycle, evaluate its result normally.
   A successful candidate may close. If any further repair is needed, including
   hygiene or a minor bug correction, enter typed handoff with FIX_CYCLE_LIMIT;
-  never dispatch an eleventh Fix automatically under the default policy.
+  never dispatch an eleventh Fix in the same counting window automatically.
+  Explicit user continuation approval opens the new window defined above.
 
 Numeric limits remain versioned policy/configuration values. Ten is the initial
 hard-limit default; the ordinary soft threshold/recent trend window belongs to

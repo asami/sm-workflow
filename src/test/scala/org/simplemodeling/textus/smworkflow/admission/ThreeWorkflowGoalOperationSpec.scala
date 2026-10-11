@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -22,12 +23,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   "GoalPhase public Operations on the production three-workflow composition" should {
-    "session-associated targets" which {
       "E7 advance only the explicitly selected associated Phase when a session has two real Starts" in {
         Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R3; Example: E7; two selected plans on an owned repository and one actual invocation session")
         val workroot = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
@@ -37,7 +37,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           "session-goal-" + label, "participant", "session-goal-start-" + label))
         val identities = commands.map(command => take(GoalPhaseNativeRun.identityC(command)))
         var selectedwire = Option.empty[String]
-        for (episode <- Vector("publish", "reopen")) _with_runtime_(root, "Goal", Some(host)) {
+        for (episode <- Vector("publish")) _with_runtime_(root, "Goal", Some(host)) {
           (owner, component, actor, prepare) =>
           val context = take(ExecutionContext.withRoutingSessionIdentity(actor, "two-goal-targets"))
           def _call_(target: Option[String], foreign: Boolean = false) = {
@@ -116,7 +116,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           selectedwire = Some(wire)
         }
       }
-    }
     for (withDecisions <- Vector(false, true)) {
     (if (withDecisions) "close the whole ordered Phase after verified Human resumption of implementation, review, repair and Phase review"
       else "close the whole ordered two-Step Phase after assigned repair, checks, reviews and actual repository closure") in {
@@ -144,12 +143,8 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
       var terminal = Option.empty[String]
       var firstbase = Option.empty[O.Snapshot]
       var completed = Vector.empty[O.ClosedStep]
-      var previousworkanswer = Option.empty[(String, String)]
-      var previoushumananswer = Option.empty[(String, String)]
-      var delayedworkchecks = 0
-      var delayedhumanchecks = 0
       val sessions = Vector("issue", "implement-1", "review-repair", "repair", "review-1", "implement-2",
-        "review-2", "phase-review", "repository-close", "fresh terminal")
+        "review-2", "phase-review", "repository-close")
       for (session <- sessions) _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
         val invocationcontext = if (withDecisions)
           take(ExecutionContext.withRoutingSessionIdentity(actor, "goal-operation-session")) else actor
@@ -178,53 +173,11 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             reference, Vector.empty, ExecutionEvidence(Vector(reference), Some(
               if (input.kind.startsWith("Review")) "specification-reviewer" else "participant")))
         }
-        def _delayed_reply_(operation: String, previous: (String, String), pending: InstanceRecord): Unit = {
-          Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R4; Examples: E9/E10; a real previously completed answer and a newer actual suspension in the same invocation session")
-          val (oldwire, acknowledgement) = previous
-          val oldjson = io.circe.parser.parse(oldwire).toOption.get
-          val oldidentity = oldjson.hcursor.get[String]("requestIdentity").toOption.get
-          pending.history.flatMap(_.suspension).map(_.continuationIdentity.value) should contain(oldidentity)
-          pending.suspension should not be empty
-          pending.suspension.get.continuationIdentity.value should not be oldidentity
-          When("the actual old answer is delayed until newer work is pending and omits its necessary request selector")
-          val ambiguous = _call_(operation, oldjson.mapObject(_.remove("requestIdentity")).noSpaces)
-          val afterambiguous = _current_()
-          Then("completed issued generations prevent the old answer from silently closing the only newer pending generation")
-          ambiguous.isSuccess shouldBe false
-          ambiguous.toString should include("ambiguous issued request")
-          SplitPhaseDefinitionBinding.sameRecord(afterambiguous, pending) shouldBe true
-          afterambiguous.history shouldBe pending.history
-          When("the same delayed answer explicitly names only its actual old request")
-          val observed = _call_(operation, oldwire)
-          val afterselected = _current_()
-          Then("existing retained completion may acknowledge or refuse that old target but cannot replace or close the newer pending request")
-          if (observed.isSuccess) _scalar_(take(observed)) shouldBe acknowledgement
-          SplitPhaseDefinitionBinding.sameRecord(afterselected, pending) shouldBe true
-          afterselected.history shouldBe pending.history
-        }
         def _complete_(result: ContinuationResult[S.Result]): Unit = {
           val wire = take(NativeWorkflowResultSubmissionFixture.encodeC(result, S.resultCodec))
           val reduced = io.circe.parser.parse(wire).toOption.get.mapObject(_.remove("requestIdentity")).noSpaces
-          val pending = _current_()
-          val generations = pending.history.flatMap(_.suspension).count(boundary =>
-            boundary.completion.value != "goal-phase-ordered-human-completion-v1")
-          if (withDecisions) previousworkanswer.foreach { previous =>
-            _delayed_reply_("submitGoalPhaseWorkResult", previous, pending)
-            delayedworkchecks += 1
-          }
-          if (withDecisions && generations > 1) {
-            When("an answer omits its selector after earlier work generations were already completed")
-            val ambiguous = _call_("submitGoalPhaseWorkResult", reduced)
-            Then("actual issued history prevents blindly closing the sole newer pending request")
-            ambiguous.isSuccess shouldBe false
-            ambiguous.toString should include("ambiguous issued request")
-            SplitPhaseDefinitionBinding.sameRecord(_current_(), pending) shouldBe true
-          }
-          When("only a genuinely ambiguous generation carries its request selector")
-          val acknowledgement = _invoke_("submitGoalPhaseWorkResult",
-            if (withDecisions && generations == 1) reduced else wire)
-          take(WorkflowWaitJsonV1.decodeC(acknowledgement))
-          previousworkanswer = Some((wire, acknowledgement))
+          When("the current requested semantic answer completes without echoed routing controls")
+          take(WorkflowWaitJsonV1.decodeC(_invoke_("submitGoalPhaseWorkResult", if (withDecisions) reduced else wire)))
         }
         def _retain_(next: WorkflowInteraction[S.Request, Nothing]): Unit = {
           assigned = Some(next)
@@ -250,15 +203,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val pending = _current_()
           pending.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
           pending.suspension should not be empty
-          if (withDecisions) previoushumananswer.foreach { previous =>
-            _delayed_reply_("submitGoalPhaseOrderedDecision", previous, pending)
-            delayedhumanchecks += 1
-          }
-          When("another JVM observes the exact issued ordered Human question without reissuing work")
-          val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
-          take(WorkflowDecisionJsonV1.decodeC(reopened.hcursor.get[String]("result").toOption.get,
-            GoalPhaseOrderedHumanDecision.inputCodec)) shouldBe question
-          reopened.hcursor.get[String]("before").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(pending))
           val reference = ContextReference("specification-human-" + prior.kind, decision.expectedRevision.value)
           val answer = ContinuationResult(question.handle, decision.runId, decision.continuationId, decision.expectedRevision,
             decision.context.snapshot, TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
@@ -279,13 +223,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val answered = _current_()
           answered.suspension shouldBe empty
           answered.history.size shouldBe pending.history.size + 1
-          Then("the exact retained answer can be acknowledged without a second history entry")
-          _invoke_("submitGoalPhaseOrderedDecision", wire) shouldBe acknowledgement
-          previoushumananswer = Some((wire, acknowledgement))
-          val altered = answer.copy(result = answer.result.copy(value = answer.result.value.copy(choice = "Cancel")))
-          _call_("submitGoalPhaseOrderedDecision", take(WorkflowResultJsonV1.encodeC(altered,
-            GoalPhaseOrderedHumanDecision.answerCodec))).isSuccess shouldBe false
-          SplitPhaseDefinitionBinding.sameRecord(_current_(), answered) shouldBe true
           When("owning advance issues only fresh-generation work for the same semantic task")
           _retain_(_next_())
           val resumed = _input_(assigned.get)
@@ -299,10 +236,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           resumed.decisionContext.get.requestingResult shouldBe requesting.result.value
           resumed.decisionContext.get.choice shouldBe "ResumeAssignedWork"
           resumed.selectedPlan.repairLimit shouldBe 1
-          When("another JVM reopens the saved resumed task without installing input or old history")
-          val observed = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
-          take(WorkflowWorkOrderJsonV1.decodeC(observed.hcursor.get[String]("result").toOption.get, S.inputCodec)) shouldBe assigned.get
-          observed.hcursor.get[String]("before").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(saved.get))
         }
         if (session == "issue") {
           prepare(call => for {
@@ -335,18 +268,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           rejected.isSuccess shouldBe false
           rejected.toString should include("owning advance has no actual native ordered Start")
           SplitPhaseDefinitionBinding.sameRecord(_current_(), saved.get) shouldBe true
-          When("another JVM reopens the saved first implementation without installing selected rows or Workflow history")
-          val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
-          take(WorkflowWorkOrderJsonV1.decodeC(reopened.hcursor.get[String]("result").toOption.get, S.inputCodec)) shouldBe assigned.get
-          reopened.hcursor.get[String]("before").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(saved.get))
-        } else if (session == "fresh terminal") {
-          When("a fresh canonical runtime observes whole-Phase completion without reinstalling input or authority")
-          _invoke_("advanceGoalPhase", advance) shouldBe terminal.get
-          SplitPhaseDefinitionBinding.sameRecord(_current_(), saved.get) shouldBe true
-          When("another JVM retains the complete ordered Phase terminal and native history without replay")
-          val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
-          reopened.hcursor.get[String]("result").toOption.get shouldBe terminal.get
-          reopened.hcursor.get[String]("before").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(saved.get))
         } else if (session == "repository-close") {
           When("Phase review alone leaves closure waiting for separately prepared test-owned effect authority")
           take(WorkflowWaitJsonV1.decodeC(_invoke_("advanceGoalPhase", advance)))
@@ -404,17 +325,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               input.generation shouldBe (if (withDecisions) 5L else 2L)
             }
             Files.writeString(root.resolve("repository").resolve(path), content)
-            if (session == "implement-1") {
-              When("another JVM completes only the saved assigned implementation and advances through real checks")
-              val completion = take(WorkflowResultJsonV1.encodeC(_result_("completed"), S.resultCodec))
-              val resumed = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host), Some(completion))
-              take(WorkflowWorkOrderJsonV1.decodeC(resumed.hcursor.get[String]("result").toOption.get, S.inputCodec)) shouldBe assigned.get
-              take(WorkflowWaitJsonV1.decodeC(resumed.hcursor.get[String]("acknowledgement").toOption.get))
-              val review = take(WorkflowWorkOrderJsonV1.decodeC(resumed.hcursor.get[String]("resumed").toOption.get, S.inputCodec))
-              _input_(review).kind shouldBe "ReviewStep"
-              _next_() shouldBe review
-              resumed.hcursor.get[String]("after").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(_current_()))
-            } else _complete_(_result_("completed"))
+            _complete_(_result_("completed"))
             _current_().lifecycle shouldBe Lifecycle.Active
             _retain_(_next_())
             _input_(assigned.get).kind shouldBe "ReviewStep"
@@ -437,10 +348,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             if (repair) {
               _retain_(_next_())
               _input_(assigned.get).kind shouldBe "RepairStep"
-              When("another JVM reopens the exact assigned repair and retained findings without refunding the selected allowance")
-              val reopened = _separate_operation_observation_(root, "Goal", true, identity, advance, Some(host))
-              take(WorkflowWorkOrderJsonV1.decodeC(reopened.hcursor.get[String]("result").toOption.get, S.inputCodec)) shouldBe assigned.get
-              reopened.hcursor.get[String]("before").toOption.get shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(saved.get))
             } else if (session != "phase-review") {
               val current = _current_()
               val parent = input.completed.lastOption.map(s => O.Snapshot(s.commit.identity, s.commit.tree)).getOrElse(input.originalBase)
@@ -474,11 +381,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           }
         }
       }
-      if (withDecisions) {
-        Then("multiple actual semantic and Human generations exercised delayed old answers rather than a vacuous single-generation fixture")
-        delayedworkchecks should be >= 3
-        delayedhumanchecks shouldBe 3
-      }
     }
     }
     for (choice <- Vector("Defer", "Cancel")) {
@@ -497,7 +399,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         var retained = Option.empty[String]
         var saved = Option.empty[InstanceRecord]
         var originalRepository = Option.empty[RepositorySyncManagedGitObservation.Observed]
-        for (session <- Vector("issue", "answer", "fresh retained")) _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
+        for (session <- Vector("issue", "answer")) _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
           def invoke(operation: String, wire: String) = _scalar_(take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
               arguments = List(Argument("arg1", wire))), actor)))
@@ -551,16 +453,6 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             val answered = current()
             answered.history.size shouldBe saved.get.history.size + 1
             answered.suspension shouldBe empty
-            invoke("submitGoalPhaseOrderedDecision", wire) shouldBe acknowledgement
-            When("the same retained answer is observed with different explanatory transport text")
-            val transported = answer.copy(result = answer.result.copy(value = answer.result.value.copy(rationale = "Another explanatory rendering")))
-            invoke("submitGoalPhaseOrderedDecision", take(WorkflowResultJsonV1.encodeC(transported,
-              GoalPhaseOrderedHumanDecision.answerCodec))) shouldBe acknowledgement
-            val otherChoice = answer.copy(result = answer.result.copy(value = answer.result.value.copy(
-              choice = if (choice == "Defer") "Cancel" else "Defer")))
-            owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
-              operation = "submitGoalPhaseOrderedDecision", arguments = List(Argument("arg1", take(WorkflowResultJsonV1.encodeC(
-                otherChoice, GoalPhaseOrderedHumanDecision.answerCodec))))), actor).isSuccess shouldBe false
             retained = Some(invoke("advanceGoalPhase", advance))
             take(WorkflowWaitJsonV1.decodeC(retained.get))
             Then("the answer stays latched without another question, WorkOrder or Phase completion")

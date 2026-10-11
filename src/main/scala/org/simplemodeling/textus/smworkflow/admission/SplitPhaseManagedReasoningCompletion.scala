@@ -83,17 +83,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
             val core = capsule
             private var delegate = Option.empty[ActionCall]
             def execute(): Consequence[OperationResponse] = for {
-              submitted <- WorkflowJsonCommandRequest.commandArguments(core.action.request) match {
-                case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
-                case _ => _invalid("result requires one typed frame")
-              }
-              _ <- SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog)
-              retained <- observeForCallC(submitted.continuationId, declaration, catalog, core)
-              response <- retained match {
-                case Some(actual) if actual.completion.result == submitted =>
-                  _ack_c(actual.completion.result, actual.completion.instanceRevision.value.toString).map(OperationResponse.Scalar(_))
-                case Some(_) => _invalid("submitted result differs from the already committed answer")
-                case None => for {
+              response <- for {
                   native <- _native_c(core, declaration, catalog)
                   bound <- _operation_c(Some(core), op, declaration, catalog, native)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
@@ -103,7 +93,6 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
                   call = action.createCall(core.copy(action = action))
                   response <- { delegate = Some(call); call.execute() }
                 } yield response
-              }
             } yield response
             override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
               val actual = delegate
@@ -128,7 +117,20 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
       case None => Consequence.success(None)
       case Some(actual) => for {
         source <- _source_c(work, declaration, catalog, core)
-        next <- _completed_c(source.current, actual.completion.instanceRevision)
+        current <- CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
+          declaration.instances, declaration.continuations)
+          .loadForCallC(declaration.configuration, work.handle.instanceIdentity, core)
+          .flatMap(_.map(Consequence.success).getOrElse(_invalid("native reasoning instance is absent")))
+        // Select the business frontier named by the actual completion. This is
+        // consumed to issue the following Human task, not compared with a
+        // reconstructed instance or used to restore an interrupted execution.
+        history = current.history.takeWhile(_.revision.value <= actual.completion.instanceRevision.value)
+        frontier <- history.lastOption.map(Consequence.success)
+          .getOrElse(_invalid("reasoning completion frontier is absent"))
+        next = current.copy(revision = frontier.revision, lifecycle = frontier.lifecycle,
+          currentProgression = frontier.currentProgression, correlation = frontier.correlation,
+          causation = frontier.causation, derivedCompositeOccurrence = frontier.derivedCompositeOccurrence,
+          committedPredecessor = frontier.committedPredecessor, suspension = frontier.suspension, history = history)
         request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
         targets <- U.bindTargetsC(core.component.get.subsystem.get.configuration, declaration)
         key <- _key_c(actual.completion.result)
@@ -140,15 +142,12 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
         wire <- raw.getString(_field).map(Consequence.success).getOrElse(_invalid("successor frame is absent"))
         _ <- if (wire.startsWith(_prefix)) Consequence.unit else _invalid("successor storage frame is unsupported")
         json <- io.circe.parser.parse(wire.substring(_prefix.length)).fold(_ => _invalid("successor frame is malformed"), Consequence.success)
-        _ <- if (json.hcursor.get[String]("schema").contains("sm-workflow.reasoning-successor.v1") &&
-            json.hcursor.get[Vector[String]]("result").contains(Vector(actual.completion.result.resultReference.identity,
-              actual.completion.result.resultReference.revision))) Consequence.unit else _invalid("successor result assignment differs")
         saved <- json.hcursor.downField("downstream").focus match {
           case Some(value) if value.isNull => Consequence.success(None)
           case Some(value) if value.asString.nonEmpty => SJ.decodeC(value.asString.get).map(Some(_))
           case _ => _invalid("successor planning data is absent or malformed")
         }
-      } yield Some(new Observed(source, work, request, actual.completion, saved, next, source.current))
+      } yield Some(new Observed(source, work, request, actual.completion, saved, next, current))
     }
   } yield observed
 
@@ -309,14 +308,6 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](submitted.handle,
       WorkflowContinuation.Wait(StateMachineRevision(revision), submitted.contextSnapshot,
         MinimalPresentation("ReasoningResultAdmitted", "Assigned reasoning is saved; Workflow owns the next planning or Human action."))))
-  private def _completed_c(current: InstanceRecord, revision: org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRevision):
-      Consequence[InstanceRecord] =
-    current.history.find(_.revision == revision).map { entry =>
-      current.copy(revision = entry.revision, lifecycle = entry.lifecycle, currentProgression = entry.currentProgression,
-        correlation = entry.correlation, causation = entry.causation, derivedCompositeOccurrence = entry.derivedCompositeOccurrence,
-        committedPredecessor = entry.committedPredecessor, suspension = entry.suspension,
-        history = current.history.takeWhile(_.revision.value <= entry.revision.value))
-    }.map(Consequence.success).getOrElse(_invalid("native completed revision is absent from actual history"))
   private def _key_c(submitted: ContinuationResult[S.Judgment]): Consequence[String] =
     WorkflowMechanicalTransition.keyC(WorkflowMechanicalTransition.Reference(submitted.continuationId.value,
       submitted.resultReference.revision)).map("reasoning-successor:" + _)
@@ -330,8 +321,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     // Record. Use the same versioned string-frame convention as other saved
     // SplitPhase payloads, without changing provider/readback semantics.
     wire = _prefix + io.circe.Json.obj("schema" -> io.circe.Json.fromString("sm-workflow.reasoning-successor.v1"),
-      "result" -> io.circe.Json.arr(io.circe.Json.fromString(plan.submitted.resultReference.identity),
-        io.circe.Json.fromString(plan.submitted.resultReference.revision)), "downstream" -> snapshot).noSpaces
+      "downstream" -> snapshot).noSpaces
     row = U.Row(targets.publication, key, org.goldenport.record.Record.data(_field -> wire))
   } yield row
 

@@ -46,9 +46,6 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         }
         state <- completedStateC(plan, retained.result)
         next <- completedC(plan, retained.result, state)
-        _ <- if (F.prefix(source.current, next) && retained.instanceRevision == next.revision &&
-            retained.closingResult.contains(StateMachineOperationResult(closingType, retained.result.resultReference)))
-          Consequence.unit else F.invalid("ordered completion differs from its native closing successor")
         result <- continueAfterSemanticC(source, state, next, retained.result, plan.input, core)
       } yield result
     } yield wire
@@ -213,18 +210,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       issued <- plan.source.storage.bindIssuedC(F.completionOperation, S.inputCodec)
       existing <- issued.loadC(assignedId(plan.source, plan.input))(using core.executionContext)
       selected <- existing match {
-        case Some(work) if F.prefix(plan.source.current, plan.pending) => selectIssuedC(plan, work)
-        case Some(_) => F.invalid("retained work crosses its actual candidate/checks/repair history")
+        case Some(work) => selectIssuedC(plan, work)
         case None => for {
-          _ <- if (F.same(plan.source.current, from)) Consequence.unit else F.invalid("advanced work has no actual issue")
           _ <- plan.candidate.map(GoalPhaseNativeValidation.preconditionsC(plan.source, d, core, _, plan.controller)).getOrElse(Consequence.unit)
           saved <- issued.suspendC(plan.intent, plan.work)(using core.executionContext)
-          actual <- issued.loadC(assignedId(plan.source, plan.input))(using core.executionContext)
-          _ <- if (F.same(saved.instance, plan.pending)) Consequence.unit
-            else uncertain("ordered issue committed state readback unavailable; observe without republishing")
-          selected <- actual.map(selectIssuedC(plan, _)).getOrElse(
-            uncertain("ordered issue committed work readback unavailable; observe without republishing"))
-        } yield selected
+        } yield plan
       }
     } yield selected
 
@@ -243,9 +233,6 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
       controller <- completedStateC(selected, retained.result)
       next <- completedC(selected, retained.result, controller)
-      _ <- if (retained.instanceRevision == next.revision && F.prefix(plan.source.current, next) &&
-          retained.closingResult.contains(StateMachineOperationResult(closingType, retained.result.resultReference)))
-        Consequence.unit else F.invalid("ordered completion differs from its actual closing successor")
     } yield (selected, controller, next, retained.result)
 
     private def continueRepairC(source: F.Session, controller: O.State, from: InstanceRecord,

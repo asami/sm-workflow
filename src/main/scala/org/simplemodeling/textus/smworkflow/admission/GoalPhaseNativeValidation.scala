@@ -113,31 +113,15 @@ private[smworkflow] object GoalPhaseNativeValidation {
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.receipts.size != index || !successful(current.payload.receipts)) Consequence.success(current)
       else for {
-        intent <- store.loadC("check-intent-" + index)
-        result <- store.loadC("check-result-" + index)
-        saved <- result match {
-          case Some(value) =>
-            // loadC has already resolved the selected identities/order. Only
-            // this slot's completed frontier remains to be checked here.
-            if (value.payload.receipts.size == index + 1) Consequence.success(value)
-            else F.invalid("retained check result crosses its actual selected frontier")
-          case None => intent match {
-            case Some(value) => Consequence.success(value) // A selected intent with no result is not replayed.
-            case None => for {
-              _ <- store.preconditionsC
-              prepared <- store.saveC("check-intent-" + index, current.record, current.payload)
-              _ <- store.acknowledgeC("goal-check-prepared:" + check.identity)
-              _ <- store.preconditionsC
-              actual <- E.repositoryValidationC(store.core, check.ordinal)
-              _ <- store.acknowledgeC("goal-check-executed:" + check.identity)
-              receipt <- V.receiptC(check.identity, actual)
-              _ <- store.preconditionsC
-              saved <- store.saveC("check-result-" + index, prepared.record,
-                current.payload.copy(receipts = current.payload.receipts :+ receipt))
-              _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
-            } yield saved
-          }
-        }
+        _ <- store.preconditionsC
+        prepared <- store.saveC("check-intent-" + index, current.record, current.payload)
+        _ <- store.acknowledgeC("goal-check-prepared:" + check.identity)
+        actual <- E.repositoryValidationC(store.core, check.ordinal)
+        _ <- store.acknowledgeC("goal-check-executed:" + check.identity)
+        receipt <- V.receiptC(check.identity, actual)
+        saved <- store.saveC("check-result-" + index, prepared.record,
+          current.payload.copy(receipts = current.payload.receipts :+ receipt))
+        _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
       } yield saved
     }}.flatMap { current =>
       if (current.payload.receipts.size == store.initial.selected.size || !successful(current.payload.receipts)) for {
@@ -172,12 +156,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case None => Consequence.success(None)
       case Some(value) =>
         val p = value.receipt.payload.value
-        if (p.sourceRevision == initial.sourceRevision && p.step == initial.step && p.candidate == initial.candidate &&
-            p.selected == initial.selected && p.receipts.size <= p.selected.size &&
-            p.receipts.map(_.identity) == p.selected.take(p.receipts.size).map(_.identity) &&
-            F.prefix(value.receipt.next, candidate.record) && F.prefix(session.current, value.receipt.next))
-          Consequence.success(Some(Saved(value.receipt.next, p)))
-        else F.invalid("retained native validation crosses its candidate, plan checks or host policy")
+        Consequence.success(Some(Saved(value.receipt.next, p)))
     }
     def saveC(key: String, from: InstanceRecord, payload: Payload): Consequence[Saved] = for {
       _ <- if (from.currentProgression.contains(ProgressionReference("phase." + validationStage))) Consequence.unit

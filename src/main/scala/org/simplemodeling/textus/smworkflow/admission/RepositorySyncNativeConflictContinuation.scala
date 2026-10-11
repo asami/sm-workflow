@@ -50,20 +50,11 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         case Some(work) => for {
           input <- inputC(work)
           selected <- prepareC(source, input)
-          _ <- if (work == selected.work && prefix(source.current, selected.next)) Consequence.unit
-            else invalid("retained issue differs from its selected conflict or native history")
-        } yield selected
+        } yield selected.copy(work = work)
         case None => for {
-          _ <- if (same(source.current, source.conflicted.record)) Consequence.unit
-            else invalid("advanced native history has no actual conflict issue")
           input <- I.captureC(source.store, source.conflicted, policy)
           selected <- prepareC(source, input)
           saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
-          _ <- if (same(saved.instance, selected.next)) Consequence.unit
-            else uncertain("conflict suspension committed readback differs; observe without retry")
-          actual <- native.loadC(continuationId(source.conflicted))(using core.executionContext)
-          _ <- if (actual.contains(selected.work)) Consequence.unit
-            else uncertain("conflict issue committed readback differs; observe without retry")
         } yield selected
       }
       wire <- if (same(source.current, plan.next) || same(source.current, source.conflicted.record))
@@ -75,9 +66,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
             case None => invalid("unsuspended conflict history has no actual committed completion")
           }
           next <- completedC(plan, actual.result, policy)
-          _ <- if (prefix(source.current, next) && actual.instanceRevision == next.revision &&
-              actual.closingResult.contains(StateMachineOperationResult(closingType, actual.result.resultReference))) Consequence.unit
-            else invalid("retained conflict proposal lacks its actual closing result or native prefix")
           wire <- if (actual.result.result.value.decision == "resolved") for {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store, plan.input,
               actual.result.result.value, source.current, next, policy)
@@ -107,8 +95,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         case Some(value) => value.validateC
         case None => invalid("native conflict instance is missing")
       }
-      _ <- if (prefix(current, conflicted.record)) Consequence.unit
-        else invalid("native current conflict history crosses its original committed source")
     } yield Source(session, store, conflicted, current)
 
     /** Reconstruct only the actual paired AI issue/completion. Decoded Human
@@ -123,16 +109,13 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       }
       input <- inputC(work)
       plan <- prepareC(source, input)
-      _ <- if (work == plan.work) Consequence.unit else invalid("Human source crosses its original conflict issue")
       native <- nativeCompletionC(source.session.storage)
       completion <- native.loadRetainedC(continuationId(source.conflicted))(using core.executionContext).flatMap {
         case Some(value) => Consequence.success(value.completion)
         case None => invalid("Human question has no actual preceding semantic completion")
       }
       next <- completedC(plan, completion.result, policy)
-      _ <- if (completion.result.result.value.decision == "decision-needed" && prefix(source.current, next) &&
-          completion.instanceRevision == next.revision && completion.closingResult.contains(
-            StateMachineOperationResult(closingType, completion.result.resultReference))) Consequence.unit
+      _ <- if (completion.result.result.value.decision == "decision-needed") Consequence.unit
         else invalid("Human question cannot replace a resolved proposal or unrelated completion")
     } yield RepositorySyncHumanConflict.Source(source.session, source.store, input, completion.result.resultReference,
       completion.result.result.value.rationale, next, source.current)
@@ -211,8 +194,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
             input <- inputC(work)
             source <- sourceC(work.handle.instanceIdentity.value, call)
             plan <- prepareC(source, input)
-            _ <- if (work == plan.work && same(current, plan.next) && same(source.current, current)) Consequence.unit
-              else invalid("conflict result differs from its actual issue, current suspension or original native source")
             next <- completedC(plan, submitted, policy)
           } yield {
             val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
@@ -251,7 +232,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
     .flatMap(nativeCompletionC).flatMap(actual => port.operationC(Some(core), actual)))
 
   private def completedC(plan: Plan, submitted: ContinuationResult[S.Result], policy: I.Policy): Consequence[InstanceRecord] = for {
-    _ <- WorkflowProtocolV1.admitResultC(plan.work, submitted).map(_ => ())
     _ <- S.admitC(plan.input, submitted.result.value, policy)
     current = plan.next
     stage = if (submitted.result.value.decision == "resolved") "MergeResolutionAdmitted" else "ConflictDecisionRequired"
@@ -282,7 +262,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         else "Human decision remains required. This AI result grants no consent, file change or command authority."))))
   } yield wire
   private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  private def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native conflict continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

@@ -92,11 +92,10 @@ object RepositoryConflictFileProgram {
           val states = request.files.zip(current).map((f, value) =>
             if (value == f.replacement) "applied" else if (f.expected.contains(value)) "ready" else "conflict")
           if (states.contains("conflict")) Result(request.instance, request.revision, "conflict", request.files)
-          else if (states.forall(_ == "applied")) Result(request.instance, request.revision, "applied", request.files)
           else if (action == "observe") Result(request.instance, request.revision,
-            if (states.contains("applied")) "partial" else "ready", request.files)
+            if (states.forall(_ == "applied")) "applied" else "ready", request.files)
           else {
-            request.files.zip(states).foreach { (file, state) => if (state != "applied") {
+            request.files.foreach { file =>
               val path = root.resolve(file.path)
               require(file.expected.contains(read(path, limit)), "overwrite precondition differs")
               val staged = Files.createTempFile(path.getParent, ".sm-workflow-conflict-", ".tmp")
@@ -111,8 +110,7 @@ object RepositoryConflictFileProgram {
                 Files.setPosixFilePermissions(staged, Files.getPosixFilePermissions(path, L.NOFOLLOW_LINKS))
                 Files.move(staged, path, M.ATOMIC_MOVE, M.REPLACE_EXISTING)
               } finally Files.deleteIfExists(staged)
-            }}
-            require(request.files.forall(f => read(root.resolve(f.path), limit) == f.replacement), "application readback differs")
+            }
             Result(request.instance, request.revision, "applied", request.files)
           }
         }

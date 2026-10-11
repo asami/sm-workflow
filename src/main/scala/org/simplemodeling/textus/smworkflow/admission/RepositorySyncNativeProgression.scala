@@ -37,7 +37,6 @@ private[smworkflow] object RepositorySyncNativeProgression {
           policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
           _ <- RepositorySyncNativeMergeValidation.completedC(value, source, policy, merge = false)
           _ <- if (value.payload.stage == "IntegrationValidated" && value.payload.mergeHead.isEmpty &&
-              SplitPhaseDefinitionBinding.includesState(session.started.current, value.record) &&
               session.started.current.suspension.isEmpty) Consequence.unit
             else invalid("retained integration validation crosses its genuine source or current host policy")
         } yield Some(value)
@@ -69,8 +68,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
       else if (integrated.payload.stage == "PendingMergePrepared")
         "Actual uncommitted merge retained; validation and required review must precede merge commit and final convergence."
       else "Actual local integration retained; selected validation and non-force final convergence are not complete. No semantic merge review is needed."
-    wire <- if (conflicts.nonEmpty && (integrated.payload.stage == "MergeConflicted" ||
-        integrated.payload.materialization.nonEmpty))
+    wire <- if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
       conflicts.get.advanceC(store.identity, store.core)
       else if (integrated.payload.stage == "PendingMergePrepared")
         RepositorySyncNativeMergeValidation.waitC(store, integrated, validationPolicy, review)

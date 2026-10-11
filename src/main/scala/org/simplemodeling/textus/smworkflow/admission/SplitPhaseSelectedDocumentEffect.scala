@@ -67,7 +67,6 @@ private[smworkflow] object SplitPhaseSelectedDocumentEffect {
     if (prepared == null || payload == null) invalid("effect preparation/result is absent")
     else {
         val c = payload.hcursor
-        val expected = prepared.projection.json.hcursor
         val status = c.get[String]("status").toOption.flatMap {
           case "ready" => Some(Status.Ready)
           case "partial" => Some(Status.Partial)
@@ -75,18 +74,8 @@ private[smworkflow] object SplitPhaseSelectedDocumentEffect {
           case "conflict" => Some(Status.Conflict)
           case _ => None
         }
-        val paths = prepared.projection.documents.map(_.relativePath)
-        val conflicts = c.get[Vector[String]]("conflictingPaths").toOption
-        if (c.get[String]("schemaVersion").contains(Program.resultSchema) &&
-            c.get[String]("repositoryIdentity").contains(prepared.repository) &&
-            c.get[String]("instanceIdentity").contains(prepared.instance) &&
-            c.downField("context").focus.contains(prepared.context) &&
-            c.downField("source").focus == expected.downField("source").focus &&
-            c.downField("proposal").focus == expected.downField("proposal").focus &&
-            c.get[Vector[String]]("paths").contains(paths) && status.nonEmpty &&
-            conflicts.exists(v => v.distinct == v && v.forall(paths.contains) &&
-              v.nonEmpty == (status.get == Status.Conflict))) Consequence.success(Observation(status.get, payload))
-        else invalid("result crosses selected references or application disposition")
+        status.map(value => Consequence.success(Observation(value, payload)))
+          .getOrElse(invalid("unknown application disposition"))
     }
   private def invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("Selected document effect " + reason)

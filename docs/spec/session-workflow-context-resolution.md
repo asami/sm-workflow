@@ -5,6 +5,13 @@ Status: authored contract with scoped connected runtime evidence (Actual115:
 ten complete consumer suites69/69; semantic echo delta Actual119:15 complete
 suites280/280 and supplemental independent PASS); full R1-R5/E1-E12 acceptance
 remains open.
+Current acceptance follows the owning user's fixed normal-use boundary in
+[Phase 5.1](../phase/phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11).
+E4/E5 failure/competing publication, E9/E10 delayed-answer/replay and E11
+competing completion are historical scenarios, NOT current required coverage.
+Intermediate recovery, a unique winner, complete history and identical replay
+responses are excluded. Shared infrastructure is not modified or exhaustively
+retested; new findings do not automatically expand this acceptance boundary.
 Source correction closure is separately recorded, not whole-contract acceptance.
 This applies the already adopted Phase 5.1
 direction, not a new policy, repair allowance or authorization boundary.
@@ -115,46 +122,34 @@ advance provides no necessary selector, then it reports genuine ambiguity withou
 progressing any target. Providing a selector resolves only an associated target;
 a foreign target does not become authorized because it exists in the same store.
 
-## R4 — Delayed answers must not close newer work
+## R4 — Normal answers resolve current issued work
 
-Resolve issued generations, not merely the sole current pending request. Existing
-native history retains suspension identities and existing issued/completed stores
-retain the actual requests. Consume these facts rather than introduce an answer
-comparison ledger or a new validated marker.
+For an ordinary submission without a request selector, resolve the current pending
+request in the owning session. Completed generations are not additional ambiguity
+candidates. An explicit selector may locate its associated issued request without
+granting permission to another session. Do not introduce an answer comparison
+ledger, replay contract, winner protocol or new validated marker.
 
-If more than one issued generation can explain a submission to the same public
-completion Operation, a request selector is genuinely necessary even when only
-one generation remains pending. This includes an old completed request followed
-by a new pending request. A result without a selector carries no information
-that proves which generation it answers; choosing the pending generation would
-be unsafe. Reuse the existing request identity only where it resolves this
-ambiguity, not as a universal response certificate.
+Delayed answers, double submission and competing callers are misuse for which
+the caller is responsible. Existing native completion/state/CAS behavior may
+still accept or refuse them; sm-workflow neither strengthens that behavior nor
+requires its exhaustive verification. New execution means a fresh invocation
+from the beginning, not resumption or recovery of the abandoned invocation.
 
 E8, applied to each semantic/Human completion family: Given only one applicable
 issued request generation, when its semantic answer is submitted with session
 context and consumed result data, then Workflow supplies handle/run/continuation/
 revision/context internally and the existing completion owns meaning and CAS.
 
-E9: Given an old completed request and newer pending work for the same completion
-Operation, when a delayed answer omits its genuinely necessary request selector,
-then ambiguity prevents closing either target. It must not complete the newer
-request merely because that is the only pending one.
+E9/E10/E11: excluded from current acceptance. Earlier delayed-answer, replay and
+competing-completion definitions and their recorded executions remain historical
+evidence, not mandatory implementation or test work.
 
-E10: Given those two generations, when the delayed answer names the old request,
-then existing retained-completion behavior observes or rejects that old target;
-it does not mutate the newer pending request. A disposed or foreign request has
-no path to another request's completion.
-
-E11: Given resolution of the intended outstanding request and a competing native
-update before completion commits, when completion executes, then existing actual
-state/CAS prevents the wrong update. Caller-echoed expected revision, renewed
-permission, full-copy equality and a front-end verifier are not substitutes.
-
-The new Split partition E11 executable case stages the first real public answer,
-then a different valid answer commits through another normal public Operation
-before the original completion. It asserts actual winner/native-history retention
-and full Preview/reopen. Authored UNVERIFIED: the new observation is test-only,
-not a product gate or evidence that other completion families satisfy E11.
+Fresh-start example: Given an abandoned pending invocation and safe actual files,
+when a caller selects and Starts a NEW invocation, then it begins at its initial
+boundary without requiring an answer or recovery of the old work. Existing
+unrelated file content must not be overwritten. This does not promise cleanup of
+uncertain effects or exact history/replay responses.
 
 ## R5 — Consume actual result data, not redundant control echoes
 

@@ -12,8 +12,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 /** Trusted runtime program, not a component Operation or a selectable shell.
   * Runtime binds root and repository identity in its fixed executable prefix.
   * Only the final literal observe/apply argument is admitted by capability policy.
-  * Each file is atomic; the write set is NOT crash-atomic. Partial installations
-  * remain inspectable and only the same selected plan's missing files are resumed.
+  * Each file is atomic; the write set is NOT crash-atomic. Apply is a fresh
+  * operation, not a partial-installation recovery or replay protocol.
   * @since   Oct.  6, 2026
   * @version Oct.  8, 2026
   */
@@ -81,20 +81,17 @@ object SelectedPhaseDocumentProgram {
         val paths = selected.documents.map(d => root.resolve(d.relativePath))
         val observed = paths.map(read)
         val states = selected.documents.zip(observed).map { (document, text) => classify(snapshot, document, text) }
-        val invalidFinal = states.head == State.Applied && states.tail.exists(_ != State.Applied)
         val conflicts = selected.documents.zip(states).collect {
           case (d, State.Conflict) => d.relativePath
-          case (d, State.Ready) if invalidFinal => d.relativePath
+          case (d, State.Applied) if action == "apply" => d.relativePath
         }
         if (conflicts.nonEmpty) result(instance, context, repository, selected, "conflict", conflicts)
-        else if (states.forall(_ == State.Applied)) result(instance, context, repository, selected, "applied", Vector.empty)
         else if (action == "observe") result(instance, context, repository, selected,
-          if (states.contains(State.Applied)) "partial" else "ready", Vector.empty)
+          if (states.forall(_ == State.Applied)) "applied" else "ready", Vector.empty)
         else {
           // Preflight all files before any write. Child creation never replaces an
           // occupied file. Source is installed last, preserving unrelated sections.
-          selected.documents.zip(paths).zip(observed).zip(states).reverse.foreach { case (((document, path), old), state) =>
-            if (state != State.Applied) {
+          selected.documents.zip(paths).reverse.foreach { case (document, path) =>
               val content = if (document.updateSourceSections) {
                 val current = read(path)
                 require(classify(snapshot, document, current) == State.Ready, "source contract changed")
@@ -118,9 +115,7 @@ object SelectedPhaseDocumentProgram {
                   Files.move(staged, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
                 } else Files.createLink(path, staged)
               } finally Files.deleteIfExists(staged)
-            }
           }
-          require(selected.documents.zip(paths).forall((d, path) => classify(snapshot, d, read(path)) == State.Applied), "incomplete readback")
           result(instance, context, repository, selected, "applied", Vector.empty)
         }
       } finally lock.release()

@@ -43,17 +43,11 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           input <- inputC(work)
           selected <- prepareC(source, input)
           original <- selectIssuedC(selected.work, work)
-          _ <- if (prefix(source.current, selected.next)) Consequence.unit
-            else invalid("retained issue crosses its native frontier")
         } yield selected.copy(work = original)
         case None => for {
-          _ <- if (same(source.current, source.validated.record)) Consequence.unit
-            else invalid("advanced native history has no actual review issue")
           input <- I.captureC(source.store, source.validated, policy)
           selected <- prepareC(source, input)
           saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
-          _ <- if (same(saved.instance, selected.next)) Consequence.unit
-            else uncertain("review suspension committed readback differs; observe without retry")
         } yield selected
       }
       wire <- if (same(source.current, plan.next) || same(source.current, source.validated.record))
@@ -65,9 +59,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
             case None => invalid("unsuspended review history has no actual committed completion")
           }
           next <- completedC(plan, actual.result, policy)
-          _ <- if (prefix(source.current, next) && actual.instanceRevision == next.revision &&
-              actual.closingResult.contains(StateMachineOperationResult(closingType, actual.result.resultReference))) Consequence.unit
-            else invalid("retained review proposal lacks its actual closing result or native prefix")
           wire <- waitC(next, actual.result)
         } yield wire
     } yield wire
@@ -96,10 +87,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
               original <- selectIssuedC(projected.work, work.get)
               plan = projected.copy(work = original)
               next <- completedC(plan, value.completion.result, policy)
-              _ <- if (prefix(source.current, next) && value.completion.instanceRevision == next.revision &&
-                  value.completion.closingResult.contains(StateMachineOperationResult(closingType,
-                    value.completion.result.resultReference))) Consequence.unit
-                else invalid("accepted review lacks its actual committed closing result")
             } yield Some(N.Stage(next, source.validated.payload.copy(stage = "ReviewAccepted")))
             case _ => Consequence.success(None)
           }
@@ -124,8 +111,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         case None => invalid("native review instance is missing")
       }
       _ <- if (pendingChecks) RepositorySyncNativeMergeValidation.preconditionsC(store, validated) else Consequence.unit
-      _ <- if (prefix(current, validated.record)) Consequence.unit
-        else invalid("native current review history crosses its original committed source")
     } yield Source(session, store, validated, current)
 
     private def prepareC(source: Source, input: I.Request): Consequence[Plan] = for {
@@ -206,8 +191,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
             original <- selectIssuedC(projected.work, work)
             plan = projected.copy(work = original)
             _ <- evidence.admitC(call, input, submitted)
-            _ <- if (same(current, plan.next) && same(source.current, current)) Consequence.unit
-              else invalid("review result differs from its actual issue, current suspension or original native source")
             next <- completedC(plan, submitted, policy)
           } yield {
             val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
@@ -242,7 +225,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     .flatMap(nativeCompletionC).flatMap(actual => port.operationC(Some(core), actual)))
 
   private def completedC(plan: Plan, submitted: ContinuationResult[S.Result], policy: I.Policy): Consequence[InstanceRecord] = for {
-    _ <- WorkflowProtocolV1.admitResultC(plan.work, submitted).map(_ => ())
     _ <- S.admitC(plan.input, submitted.result.value, policy)
     current = plan.next
     stage = submitted.result.value.decision match {
@@ -309,7 +291,6 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           "The independent review is saved. Repair, Human decision or authorized final convergence remains incomplete."))))
   } yield wire
   private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  private def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native review continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

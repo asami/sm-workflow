@@ -1066,9 +1066,13 @@ former requirement to finish the whole A/B/C connected delivery before release.
       into Phase 5.1 as OPEN, including actual executor/current-context placement,
       resource and metadata producer/consumer use, managed validation/receipt
       integration and assembled supported-path necessity assessment.
-- [ ] Create the formal Phase 5 release commit, report its revision, accepted
-      scope and open Phase 5.1 work, then stop. The checkpoint is not this release;
-      Phase 5.1 resumes only after a separate user instruction.
+- [x] Formal Phase 5 release commit
+      `cf053352161bccc59871395cc8797e492f5e13c6` was created with binding
+      `smwf-phase5-formal-stage-release-20261011@1`. Its native message records
+      FORMAL and tests/review NOT RUN — USER-APPROVED, not PASS. The checkpoint
+      is not this release. The later explicit same-Goal Phase 5.1 start instruction
+      ended the intermediate release/stop hold; its connection work remains
+      separately governed by Phase 5.1's latest fixed acceptance boundary.
 
 The [managed-suite checklist](managed-test-suites-phase-checklist.md) retains its
 original P5-TS IDs and scenarios, but connected acceptance now belongs to Phase

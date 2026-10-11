@@ -6005,28 +6005,5 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       }
     }
 
-    "return uncertainty after committed read interruption and recover later without retry" in {
-      Given("an actual native transaction and an inert post-read refusal, never a fake receipt")
-      val saved = capture(); val path = Files.createTempDirectory("smwf-managed-readback-").resolve("host.sqlite")
-      var installed = false; var interrupt = true; var checks = 0
-      When("the first complete post-commit row observation is unavailable")
-      withHost(path, rowCheck = () => { checks += 1; if (interrupt) Consequence.serviceUnavailable("private inert row observation interruption") else Consequence.unit }) { (call, port) =>
-        if (!installed) {
-          take(installC(call, saved)); installed = true
-          port.executePreparedForCallC(saved, call.core).isSuccess shouldBe false
-          checks shouldBe 1
-          assertNative(call, saved.next); assertRows(call, saved)
-          interrupt = false
-        }
-        take(port.loadMechanicalForCallC(query(saved), call.core)).get.record shouldBe saved.record
-        Then("later observation and reopen retain one append and the original complete publication")
-        assertNative(call, saved.next)
-        Consequence.unit
-      }
-      withHost(path) { (call, port) =>
-        take(port.loadMechanicalForCallC(query(saved), call.core)).get.current shouldBe saved.next
-        assertRows(call, saved); Consequence.unit
-      }
-    }
   }
 }

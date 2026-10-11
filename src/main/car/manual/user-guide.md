@@ -1,11 +1,14 @@
 # SmWorkflow user guide
 
 This development component provides the GoalPhase, SplitPhase and RepositorySync
-Operation implementations through the normal component factory. Phase 2 verifies
-them with direct Operation calls in Executable Specifications, including actual
-managed effects and durable reopening. Command/CLI wiring used by skills and
-real skill integration belong to Phase 6. The component is not Phase-accepted or
-release-ready while integrated tests, review and closing remain incomplete.
+Operation implementations through the normal component factory. Executable
+Specifications call Operations directly, including normal managed effects.
+Phase 5 is formally released; Phase 5.1 verifies these normal paths. Command/CLI
+wiring and real skill integration belong to Phase 6. Duplicate answers and
+competing submissions are the caller's responsibility. Intermediate recovery,
+identical replay responses and complete runtime-history preservation are not
+promised. Abandon unsuccessful work and start a NEW execution from the beginning;
+this does not clean up or restore uncertain effects of the abandoned execution.
 
 ## Prepare the owning runtime
 
@@ -49,8 +52,7 @@ initializes shared storage and the normal three-service bindings, then:
    because Workflow resolves that assignment internally.
 4. Lets Workflow issue any genuinely unknown reasoning task, returns only that
    assigned result, and advances to the complete read-only Preview.
-5. Reopens a separate runtime/JVM to observe the retained work and final outcome,
-   without reinstalling instances or repeating completion.
+5. Receives the normal terminal Preview without repeating completion.
 
 The successful result is the selected Preview with its source/child projection,
 not merely the Start or completion acknowledgement; the example does not write
@@ -142,29 +144,29 @@ The connected examples use specification-owned repositories, remotes and
 documents. Actual managed Git/SBT/document effects remain necessary even though
 the Operation caller is direct rather than a CLI process.
 
-## Reopen without repeating effects
+## Continue normal work or start a NEW execution
 
 Open a fresh configured runtime and use the same session context, adding a target
 selector only for genuine ambiguity. Historical identity-based clients still use
 their saved Workflow identity and original context. Do not reinstall instances
-or fabricate history. Pending assigned work,
-completed results and Terminal must be observed through the public interface.
-An unchanged duplicate result may return its original saved acknowledgement;
-a changed or crossed result must not create another completion.
+or fabricate history. Normal pending work and completed outcomes are consumed
+through the public interface. Return each requested answer once; duplicate or
+competing submissions are caller misuse, without an identical-response guarantee.
 
-Selected Git/document interruption scenarios continue from observed postimages
-without repeating their effect. An unrecorded product-check result instead
-remains indeterminate Wait without automatic replay. That safe Wait is not a
-successful check, rollback proof or convergence. Preserve uncertainty and use
-supported observation; do not turn authentication or a Human answer into new
-execution authority.
+Intermediate Git/document application is not resumed from postimages, nor is
+an uncertain product-check outcome treated as successful. Abandon unsuccessful
+work and start a NEW execution from the beginning. This does not restore, clean
+up or automatically retry uncertain effects of the abandoned execution. Actual
+file scope, unrelated-file protection and command permission remain at their
+effect owners; Human authentication is not new execution authority.
 
 ## Limits and next ownership
 
-Integrated consumer validation and independent acceptance determine the actual
-Phase 2 delivery, not this guide or isolated green tests. This guide does not
-claim release acceptance, arbitrary uncertain-effect recovery or every possible
-interruption permutation.
+Phase 2 has its completed finite direct-Operation release. Phase 5.1's current
+fixed normal-use/check-removal boundary has passed bounded Operation validation
+and independent closure review. Its formal release without additional tests/review
+is user-approved; native commit/closure outcome is recorded separately. This guide does
+not promise arbitrary uncertain-effect recovery or interruption coverage.
 
 Phase 5 owns semantic runtime mapping/reference observations. Phase 6 owns
 command/CLI skill wiring, installable `sm-*` clients and actual interaction/result

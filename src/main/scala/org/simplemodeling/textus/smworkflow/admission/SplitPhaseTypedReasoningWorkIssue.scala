@@ -45,13 +45,10 @@ private[smworkflow] object SplitPhaseTypedReasoningWorkIssue {
     owner = source.checkpoint.originalContext.owner
     _ <- if (before.lifecycle == Lifecycle.Active && before.suspension.isEmpty &&
         before.identity == owner.handle.instanceIdentity &&
-        source.current.identity == before.identity &&
         before.definition.workflowIdentity == owner.handle.workflowIdentity &&
         before.definition.workflowRevision == owner.handle.workflowRevision &&
-        SplitPhaseDefinitionBinding.sameDefinition(before.definition, source.current.definition) &&
-        source.current.history.take(before.history.size) == before.history &&
         before.revision.value < Long.MaxValue) Consequence.unit
-      else _invalid("actual publication postimage or complete current native prefix differs")
+      else _invalid("reasoning source cannot issue its next native task")
     restored <- W.restoreReasoningC(source)
     result = S.ResultReference(identity.value + ":result", before.revision.next.value.toString)
     prepared <- R.prepareC(source.checkpoint.originalContext.reference, restored.pending, result)

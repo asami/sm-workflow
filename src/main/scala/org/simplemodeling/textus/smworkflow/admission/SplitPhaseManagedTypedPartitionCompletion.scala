@@ -116,16 +116,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
                 private var delegate = Option.empty[ActionCall]
                 def execute(): Consequence[OperationResponse] = for {
                   _ <- mutationActorC(core)
-                  submitted <- WorkflowJsonCommandRequest.commandArguments(core.action.request) match {
-                    case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
-                    case _ => Consequence.stateConflict("SplitPhase completion requires one typed result JSON frame")
-                  }
-                  retained <- observeForCallC(submitted.continuationId, declaration, catalog, core)
-                  response <- retained match {
-                    case Some(actual) if actual.record.completion.result == submitted =>
-                      Consequence.success(OperationResponse.Scalar(actual.record.wire))
-                    case Some(_) => Consequence.stateConflict("SplitPhase result differs from its already committed completion")
-                    case None => for {
+                  response <- for {
                       native <- nativeC(core, declaration, catalog)
                       bound <- operationC(Some(core), provided, op, declaration, catalog, starts, contexts,
                         inputs, issue, instances, Some(native))
@@ -136,7 +127,6 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
                       call = action.createCall(core.copy(action = action))
                       response <- { delegate = Some(call); call.execute() }
                     } yield response
-                  }
                 } yield response
                 override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
                   val actual = delegate

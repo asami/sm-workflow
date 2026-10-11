@@ -12,6 +12,14 @@ See the [reference manual](index.md), [user guide](user-guide.md) and
 semantic task. These are authored sources, not proof of runtime Help, MCP,
 separate-process operation or complete split success.
 
+Current Phase 5.1's fixed normal-use/check-removal boundary has bounded Operation
+validation and independent closure PASS. Earlier source-correction and validation
+notes below are historical, not pending requests for another broad test/review
+cycle. Duplicate/competing answers, identical replay and intermediate restoration
+are not guarantees. Formal release without additional tests/review is user-approved;
+its native commit/closure outcome is recorded separately. Runtime Help/CLI/skills remain
+separate Phase 6 work.
+
 ## Operations and progression
 
 `SplitPhaseService.advanceSplitPhase` observes the original context and current
@@ -95,9 +103,9 @@ There is no new client write Operation, storage grant or AI-skill DB access.
 Reasoning Human completion atomically saves the canonical answer, adjacent
 native state and selected successor. Its Defer/Cancel choices save the stopped
 state in that same completion, unlike the scope route's later terminal append.
-An identical reply observes the saved acknowledgement; a changed one refuses.
-Subsequent advance, including another JVM, observes the saved Preview or
-BLOCKED/CANCELLED Terminal without another AI issue or document effects. The
+Normal subsequent advance consumes the answer and selects Preview or
+BLOCKED/CANCELLED. Duplicate replies and intermediate recovery are not supported
+guarantees. The
 answer acknowledgement is not itself the Preview or Terminal. This direct
 Operation contract does not establish Phase6 CLI/skill integration.
 
@@ -116,27 +124,21 @@ Without valid evidence the completion must not append HumanAnswered or return a
 successful acknowledgement. Verification is scoped to the actual owning call;
 it is not reusable command, storage or execution authority.
 
-## Observation and uncertain recovery
+## Normal continuation and unsuccessful executions
 
-Pending advance returns the same canonical issued Decision rather than issuing
-another. An identical retained submission is an observation of the original
-complete answer and its native history; it requires the original participant,
-but does not ask the verifier for new consent. Changed answers, changed evidence
-references, foreign participants, crossed contexts and corrupt retained facts
-are refused rather than treated as a fresh submission.
+Pending advance returns its issued Decision. Answer once through the assigned
+Operation. Duplicate or competing answers are the caller's responsibility;
+there is no component replay-response or unique-winner protocol.
 
-Defer/Cancel Terminal observation restores the exact committed result without
-repeating the terminal append. These paths do not allocate another task or
-perform document/Git effects. A postcommit readback or acknowledgement failure
-is indeterminate: preserve the error and later use supported observation. It
-does not prove rollback and must not trigger automatic resubmission.
+Defer/Cancel selects the ordinary stopped outcome, without document/Git effects.
+An uncertain acknowledgement is not proof of success or rollback. Abandon an
+unsuccessful execution and start a NEW one from the beginning; this does not
+restore or clean up uncertain intermediate effects.
 
-ProvideResolution processing preserves the original complete native lineage
-and all candidates. Its owning publication and retained reconstruction are
-connected in the paired Human assembly selected by the normal factory. Restoration
-copies saved downstream facts without fresh interpretation, allocation or
-ranking and does not grant a new native transition or Terminal. Do not use a
-passive decoded checkpoint as an execution capability.
+ProvideResolution supplies the business facts for the normal next planning
+action. Consuming stored business results does not require reconstructing or
+certifying complete history. Do not use a passive decoded checkpoint as an
+execution capability.
 
 Retained ProvideResolution requires its declared Built proposal, ownership and
 handoff documents to exist and be typed-readable at their selected addresses,
@@ -193,8 +195,10 @@ establish every Human-derived APPLY branch, independent ingress or default entry
 The normal factory is installed in current direct-Operation examples, including
 scope-to-reasoning and distinct reasoning-Human successors. These use labelled
 test-owned Human evidence, not a deployed production interaction channel.
-Document-conflict semantic/Human completion is not installed. Integrated checks,
-independent acceptance and rendered/packaged manual verification remain open.
+Document-conflict semantic/Human completion is not installed; it is not added to
+the current fixed acceptance. Actual194/195 and independent closure PASS cover
+the adopted normal-use boundary, not all historical interruption permutations.
+Rendered/packaged manual and client integration remain Phase 6 work.
 Phase5/6/8 retain mapping/skill/broader cost and transport work; measured comparative
 AI-cost acceptance is not a Phase2 gate. Supporting tests alone do not supply
-practical PHASE-2 independent acceptance.
+new guarantees beyond the current fixed acceptance.

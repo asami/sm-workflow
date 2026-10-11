@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDirection as H,
   SplitPhaseManagedScopeProjectionCheckpoint as D}
 
-/** Current-call native Decision issue/recovery. Metadata only is retained;
+/** Current-call native Decision issue. Metadata only is retained;
   * authentication admits the relay, never the missing independent Human answer.
   *
   * @since Oct.  4, 2026
@@ -39,17 +39,15 @@ private[smworkflow] object SplitPhaseManagedHumanDirection {
           decisions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
           retained <- decisions.loadC(actual.question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.continuationId)(using core.executionContext)
           question <- retained match {
-            case Some(value) if SplitPhaseDefinitionBinding.sameRecord(observed.current, actual.next) =>
+            case Some(value) =>
               H.selectIssuedC(actual, value).map(_.question)
-            case Some(_) => _invalid("current Human suspension differs from the selected issued slot")
-            case None if SplitPhaseDefinitionBinding.sameRecord(observed.current, actual.intent.current) =>
+            case None =>
               decisions.suspendC(actual.intent, actual.question)(using core.executionContext) match {
                 // Canonical managed suspension owns atomic persistence and its
                 // committed readback. Do not reload/certify the same issue here.
                 case Consequence.Success(_) => Consequence.success(actual.question)
                 case _ => _uncertain("Decision commit is not established; observe later without retry")
               }
-            case None => _invalid("advanced history lacks its actual published Human question")
           }
         } yield Some(question)
       }

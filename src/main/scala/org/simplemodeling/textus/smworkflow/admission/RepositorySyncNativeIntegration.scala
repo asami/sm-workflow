@@ -19,41 +19,27 @@ private[smworkflow] object RepositorySyncNativeIntegration {
     result <- prior.orElse(pending).orElse(conflicted) match {
       case Some(value) => Consequence.success(value)
       case None => for {
-        prepared <- store.loadC("integration-intent").flatMap {
-          case Some(value) => Consequence.success(value -> false)
-          case None => for {
-            actual <- Git.observeC(store.core)
-            _ <- store.scopeC(actual)
-            _ <- if (preserved.payload.after.contains(actual) && actual.dirty.isEmpty &&
-                actual.trackingTip.nonEmpty && actual.counts.nonEmpty && actual.mergeBase.nonEmpty) Consequence.unit
-              else invalid("preserved native state changed before integration")
-            method = actual.counts.get.relation match {
-              case Git.Relation.Equal => "equal"
-              case Git.Relation.LocalAhead => "local-ahead"
-              case Git.Relation.RemoteAhead => "fast-forward"
-              case Git.Relation.Diverged => "merge"
-            }
-            saved <- store.saveC("integration-intent", "integration-started", preserved.record,
-              store.payload("Integrating", actual).copy(method = Some(method)))
-          } yield saved -> true
+        before <- Git.observeC(store.core)
+        _ <- store.scopeC(before)
+        _ <- if (before.dirty.isEmpty && before.trackingTip.nonEmpty &&
+            before.counts.nonEmpty && before.mergeBase.nonEmpty) Consequence.unit
+          else invalid("integration requires a clean repository and actual fetched relation")
+        method = before.counts.get.relation match {
+          case Git.Relation.Equal => "equal"
+          case Git.Relation.LocalAhead => "local-ahead"
+          case Git.Relation.RemoteAhead => "fast-forward"
+          case Git.Relation.Diverged => "merge"
         }
-        (intent, fresh) = prepared
-        current <- Git.inspectC(store.core)
-        _ <- store.scopeC(current.observed)
-        before = intent.payload.before
-        method = intent.payload.method.get
-        complete <- observedC(store, before, method, current)
-        effected <- if (complete || current.mergeHead.nonEmpty || current.observed.dirty.exists(_.unmerged))
-          Consequence.success(current)
-          else if (!fresh) uncertain("retained integration outcome is not established; merge is not replayed")
-          else if (current.observed != before) invalid("native state changed before the fresh integration effect")
+        intent <- store.saveC("integration-intent", "integration-started", preserved.record,
+          store.payload("Integrating", before).copy(method = Some(method)))
+        effected <- if (method == "equal" || method == "local-ahead") Git.inspectC(store.core)
           else {
             val effect = if (method == "fast-forward") Effects.NativeGitEffect.FastForward(before.trackingTip.get)
               else Effects.NativeGitEffect.PendingMerge(before.trackingTip.get)
             Effects.executeNativeGitC(store.core, effect).flatMap { process =>
               process.termination match {
                 case ProcessExecutionTermination.Exited(0) | ProcessExecutionTermination.Exited(1) => Git.inspectC(store.core)
-                case _ => uncertain("integration termination is unknown; observe the native repository later")
+                case _ => uncertain("integration termination is unknown")
               }
             }
           }

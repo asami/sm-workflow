@@ -1,9 +1,94 @@
 # Phase 5.1: Runtime Connection Verification, Session-Resolved Operations and Check Removal
 
-Status: implementation preserved; additional major redesign on hold pending Phase 5 release and separate user instruction — scoped Operation validation PASS, full acceptance OPEN
+Status: closed on 2026-10-11 by explicit user-approved formal release decision
 Planned: 2026-10-09
 Depends on: the existing Phase 2 public Operation routes and the released Phase 5-stage runtime foundation
 Delivery order: non-acceptance checkpoint -> Phase 5-stage acceptance/release/stop -> separately instructed Phase 5.1 connection acceptance/release/Goal end; Phase 6+ is future work
+
+Final release declaration: the owning user instructed
+`追加テストなしで正式releaseして。` after the bounded normal-use/removal
+acceptance and release-route explanation. Formal closure binding:
+`smwf-phase51-formal-release-20261011@1`. Additional release validation/review
+is NOT RUN — USER-APPROVED, not repository-full PASS. Actual194/195 and the
+independent closure PASS keep their original scope and history. This final
+declaration is prepared for the local release commit; actual release and Goal
+closure require its successful native commit/closure receipt. No push or Phase6
+start is authorized, and original nine/history/repair3/3/frames are unchanged.
+
+## Current fixed acceptance boundary — 2026-10-11
+
+The owning user's latest scope instruction supersedes broader requirements in
+the historical records and linked scenario lists. Duplicate answers, concurrent
+submissions and other caller misuse are the caller's responsibility. Exclusive
+intermediate-result handling, a unique winner, complete-history retention,
+identical replay responses and successful intermediate recovery are NOT
+guaranteed and are NOT Phase 5.1 acceptance conditions.
+
+The remaining completion conditions are fixed:
+
+1. Normal GoalPhase, SplitPhase and RepositorySync public Operations issue the
+   requested semantic work, consume its result and advance to the intended
+   wait/terminal outcome. Workflow owns deterministic steps and managed commands;
+   current Codex returns requested results, without direct TextusAI execution.
+2. Selected file effects do not fatally corrupt files or overwrite an unrelated
+   existing file. Retain the actual effect scope and permission boundaries.
+3. A caller can abandon an unsuccessful execution and start again as a NEW
+   execution from the beginning. This is not restoration of intermediate state,
+   cleanup of uncertain effects, automatic retry or reuse of an old answer.
+4. Public documentation and the Phase 6 handoff state these limits and the
+   remaining skill/CLI integration. Perform one bounded normal-use validation
+   and a read-only closure review; reuse applicable existing evidence.
+
+Do not change shared infrastructure or repeat its exhaustive tests in this
+component. Remove only sm-workflow's added over-guarantees and dedicated tests.
+Their removal does not require a broad regression or new verification machinery.
+New guarantees, coverage goals or review observations do not automatically become
+mandatory work. Only a demonstrated failure of the fixed conditions above can
+block this closure; other proposals remain optional and need a user decision.
+
+Actual188 stopped at prepared, before executor submission or SBT, and is retired
+DO-NOT-RESUME after this scope change. It is not a consumed validation. The same
+Goal, original nine, full history, repair counter 3/3 and existing frames remain.
+See [scope and retirement record](../journal/2026/10/2026-10-11-normal-usecase-and-fresh-restart-scope.md).
+
+## Current resumption — 2026-10-11
+
+The owning user explicitly instructed: `同じGoalでPhase 5.1を開始して`.
+The actual same Goal returned ACTIVE. Phase 5 formal release
+`cf053352161bccc59871395cc8797e492f5e13c6` and its saved closure receipt retain
+FORMAL / validation and review NOT RUN — USER-APPROVED. No retrospective Phase
+5 test, reapproval or acceptance downgrade is required. This instruction ends
+the intermediate release/stop hold below; it does not complete Phase 5.1.
+
+The later owning-user correction stops additional TextusAI development and
+supersedes the parent's claim that direct AI-runtime invocation/current-context
+capability development is mandatory. The preceding approval of that additional
+range is retained in history, not treated as an obligation to implement the
+incorrect premise. Workflow requests semantic work; the current Codex performs
+it and returns the requested result. Phase 5.1 checks the public Operation
+request/result contract through executable specifications; actual skill/CLI
+wiring remains Phase 6. See the
+[scope correction and individual existing-change inventory](../journal/2026/10/2026-10-11-workflow-ai-request-return-scope-correction.md).
+
+At resumption, the parent selected the preserved, then-unverified fresh
+Reasoning Human R19/E40–41 change and the whole E12 session-result-consumption
+Operation group through fresh181, not actual180 or another old request. Fresh
+independent review covered the connected three whole primary programs and actual
+consuming paths. This supplies Phase 5.1 evidence for that boundary, not Phase 5
+release validation or full connection acceptance. Product/spec inputs were held
+through execution and review. Do not replay181 as a next pending request.
+Original nine, originals, all history, R5/A7/null, repair upper3 /
+consumed3 and all existing repair frames remain unchanged. Parent implementation,
+registered runner tests, read-only independent review and shared SBT serialization
+remain. Actual181 executed the whole selected E12 group: eight successes, no
+failures, SBT/wrapper0 and shared lock released. Fresh independent read-only
+review actual181-fresh-reasoning-human-native-consumption returned PASS with
+no current blockers or new HYG/DEV. This accepts only that preserved Human
+boundary. Remaining logical resource, metadata, managed-validation and
+three-family Operation acceptance stays OPEN. Direct AI executor development
+is not a gate for it.
+
+## Historical release/stop boundary
 
 The 2026-10-11 [release/stop handoff](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md)
 supersedes the earlier permission to continue this connected correction before
@@ -54,8 +139,10 @@ Do not freeze those later semantics from the current oversized result envelope.
 
 Verify the actual connections of the released Phase 5 runtime foundation and
 finish the minimal connection work needed for those scenarios within admitted
-scope. This is not just a repetition of local profile/codec/policy tests: actual
-executor, consuming Operation, persistence and continuation evidence are required.
+scope. This is not just a repetition of local profile/codec/policy tests:
+the public request/result Operations, managed commands, persistence and native
+continuation require connected executable-specification evidence. Workflow need
+not directly invoke an AI runtime to issue or consume semantic work.
 
 Make GoalPhaseWorkflow, SplitPhaseWorkflow and RepositorySyncWorkflow callable
 with session context and only the parameters actually needed for the operation.
@@ -87,11 +174,10 @@ No new expensive measurement or instrumentation is required for this correction.
    state. Define initial association and resumed lookup through existing runtime
    facilities where available; do not mistake Workflow `instanceIdentity` for
    an already implemented session association.
-5. Add only the minimal target selector where session and actual invocation
-   context cannot uniquely identify the intended request. This includes genuinely
-   ambiguous concurrent work or delayed answers to different work generations.
-   Do not resolve a delayed answer by blindly choosing the newest pending work.
-   Do not impose a new universal response certificate when no ambiguity exists.
+5. Add only the minimal target selector where current session and invocation
+   context cannot identify the intended pending request. Completed generations
+   do not create an ambiguity gate for a normal answer. Delayed or duplicate
+   answers are caller misuse, not a new protection or replay contract.
 6. Internal revisions, claims, transitions and CAS remain internal. Context
    identification does not itself grant authority. Apply necessary current-call
    scope/authority conditions only where their absence causes a concrete wrong
@@ -111,9 +197,12 @@ minimal input.
 - **CNCF:** affected generic result producers/codecs, normalizers, continuation
   adapters, native source/completion persistence and actual consuming boundaries.
   Keep generic concepts generic; do not introduce CNCF dependencies into skills.
-- **textus-ai:** only the already admitted generic profile/actual-result
-  connection where this correction affects it. Do not synthesize actual executor
-  observations from selected configuration or broaden provider scope.
+- **textus-ai:** additional development is stopped by the current user direction.
+  It is not a required dependency of the Workflow-request/Codex-result-return
+  connection. Preserve existing external changes and their individual historical
+  evidence; do not automatically revert, accept or develop them further.
+  Optional provider observations are not current Codex discovery or a universal
+  result-submission certificate.
 - **Supported saved formats:** recover original issued meaning and actual state;
   ignore obsolete diagnostic/proof fields that are no longer consumed. Do not
   require renewal, full re-encoding equality or rewritten proof artifacts.
@@ -143,7 +232,7 @@ solely for later equality is not the intended contract.
    and retained readers in the same connected correction. Replacing hashes with
    full identity/revision comparison or relocating a refusal is not completion.
 4. Update executable specs alongside implementation. Use direct public Operation
-   calls and actual managed persistence for durable recovery. Reuse relevant
+   calls and actual managed persistence for normal execution. Reuse relevant
    runtime evidence at its real scope; replace obsolete rejection expectations.
 5. Validate affected producer/consumer connections and required regressions, then
    independently review the integrated correction. Review an actual connected
@@ -151,72 +240,56 @@ solely for later equality is not the intended contract.
 
 These steps are work ordering, not new tracking IDs, approvals or repair frames.
 
-## Connection verification transferred from Phase 5 — 2026-10-11
+## Fixed closure checklist
 
-The former Phase 5 A/B/C connected plan is carried here with its original source
-scenarios, findings and evidence. No new repair frame, renumbering or counter
-reset is created. Connection work which is not implemented stays OPEN.
+- [x] Normal public GoalPhase, SplitPhase and RepositorySync Operations consume
+  requested results and reach their intended outcomes.
+- [x] Normal file application preserves unrelated existing files.
+- [x] A NEW execution can start from the beginning after an abandoned execution.
+- [x] One bounded normal-use validation and read-only closure review complete;
+  published documentation states the limits and leaves skill/CLI wiring to Phase 6.
 
-- [ ] Normal Workflow requirement -> actual current-context/profile resolution
-      -> actual action execution -> returned result -> native continuation works
-      for TRIVIAL inline, matching-profile inline, delegated programming and
-      independent review. Configuration, generated completion claims and fixture
-      ingress alone are not execution evidence.
-- [ ] The required CNCF Phase 101 minimum logical resource API is verified
-      upstream and consumed by sm-workflow without private physical-path/config
-      substitutes. Broader Phase 101 closure remains in Phase 7.
-- [ ] Real CNCF Phase 103 metadata/discovery and typed operation binding drive
-      purpose/Slice selection and recorded actual executions through the normal
-      public Operation path, without a private registry or annotation parser.
-- [ ] All original P5-TS01–12 scenarios in the
-      [managed-suite checklist](managed-test-suites-phase-checklist.md) pass for
-      connected receipt, duration/cost, FIX/Issue, both counters, convergence and
-      restart behavior. Reuse applicable deterministic cases; do not exercise
-      numeric thresholds with slow sleeps or repeated live AI work.
-- [ ] Integrated supported-path review confirms necessity-first check removal
-      across producers, consumers, persistence and legacy reads together with
-      the actual runtime connections. Retained predicates prevent concrete harm
-      at their consuming boundary, not copied-input change detection.
-- [ ] Required assembled regressions, read-only independent review, actual
-      runtime documentation and the Phase 6 handoff pass; create the formal
-      Phase 5.1 release and end the same Goal without automatically starting
-      Phase 6. Do not claim actual skill integration, which remains Phase 6.
+Closure evidence: actual194 passed36/36 in the three whole normal Operation
+suites and the changed native-validation applicability suite; after the final
+four Goal-only removals, actual195 passed5/5 in the whole Goal Operation suite.
+Unaffected evidence from194 is reused. Independent bounded source closure
+review PASS; no current concrete blocker. These results do not claim competing
+answer/replay/intermediate-recovery guarantees or exhaustive shared coverage.
+Original failures and review findings remain in the
+[closure record](../journal/2026/10/2026-10-11-normal-usecase-and-fresh-restart-scope.md).
+Same Goal, original nine, development history, repair3/3 and frames are unchanged.
+No replacement verifier, new acceptance gate or automatic Phase6 work is added.
 
-This transfer is planning authority, not a new TextusAI mutation grant. The
-existing profile/result-only authorization remains: any broader semantic-action
-or current-context execution capability needs its own explicit authority before
-implementation. It no longer blocks the preceding Phase 5-stage release.
+### Delivered change and release disposition
 
-## Acceptance checklist
+The removal changes only sm-workflow. Goal/Split/Repository consumers no longer
+certify copied answers, complete historical prefixes, unchanged checkpoint
+bodies or intermediate effect state. Producers omit comparison-only copies;
+legacy readers ignore unused copies. Normal pending-request selection does not
+scan completed generations. Dedicated competing-answer, identical-replay and
+intermediate Git/document restoration scenarios have been removed rather than
+retained as acceptance requirements. No replacement verifier or proof ledger
+was introduced, and shared CNCF/provider/transaction code was not changed.
 
-- [ ] All three Workflow families accept session context plus actual required
-      parameters through their public Operations, without an echoed internal
-      revision/snapshot/context envelope.
-- [ ] Explicit session lookup works; implicit context is tested only for a host
-      that actually supplies it. The generic runtime has no Codex-only dependency.
-- [ ] Workflow selects actual current/pending context and absorbs mechanical
-      transitions; the caller returns only requested semantic work/results.
-- [ ] Genuine ambiguity is resolved using only the necessary selector. Delayed,
-      already consumed or disposed work cannot close an unrelated newer request.
-- [ ] Harmless diagnostics, obsolete proof fields and supported legacy formatting
-      do not become completion or resumption gates. Missing redundant echo fields
-      are not a reason for rejection.
-- [ ] Unnecessary copy/unchanged-content checks are removed across producers,
-      adapters, codecs, consumers and supported saved readers, not replaced with
-      one verifier, a new marker or a declaration equality certificate.
-- [ ] Actual incompatible targets/types, missing consumed prerequisites and
-      genuinely invalid transitions/execution relations prevent the wrong effect
-      at their consuming boundary, without repeated proof-only admission.
-- [ ] Managed persisted-state reopen/resumption and actual update-conflict/CAS
-      scenarios preserve the intended request, effects and current state. Narrow
-      in-memory codec tests do not substitute for connected durable recovery.
-- [ ] Actual executor observations, where consumed, remain actual results, not
-      reconstructed selected-profile attestations or claims that AI ran.
-- [ ] Required affected verification and read-only independent review pass;
-      authored, source-reviewed and executed evidence remain distinguishable.
-- [ ] Public docs and Phase 6 handoff describe the minimal contract and remaining
-      transport/skill work. The transferred connection items above remain
-      accounted for separately from Phase 5's accepted stage implementation.
+The runtime still consumes actual requested results and executed business check
+outcomes. File effects retain scoped targets, occupied-file protection and atomic
+replacement; native state/CAS and command permission remain with their existing
+owners. These are normal effect boundaries, not a new recovery or winner protocol.
+Workflow requests semantic work; current Codex returns the requested answer.
+
+Actual194 plus the affected Goal-suite recheck195 provide 36 distinct accepted
+normal examples and independent source closure PASS. No repository-full `test`
+result is claimed for this final removal. The user's final formal-release
+decision accepts the selected source/test/manual state without additional
+validation/review. Actual native release/closure outcome is reported separately;
+its verified receipt closes this Phase and the adopted Goal ending boundary.
+Phase6–9 concurrent planning is preserved, not automatically accepted or executed.
+
+The former resource, metadata, P5-TS01–12, restoration and full-regression
+checklists are historical planning inputs, not additional completion gates.
+Shared infrastructure evidence is reused where applicable; no exhaustive
+component-side reproduction is required. The chronological records below retain
+their original observations and are not rewritten as current guarantees.
 
 ## Non-goals
 
@@ -224,6 +297,9 @@ implementation. It no longer blocks the preceding Phase 5-stage release.
 - Implementing every provider, remote worker or hypothetical session topology.
 - Repeating unchanged full suites for each internal helper or inventing new
   comparison ledgers, proof receipts, TTL gates or validation frameworks.
+- Duplicate/competing answers, intermediate exclusion or recovery, unique
+  winners, complete-history preservation and identical replay responses.
+- Automatically expanding acceptance from new review findings or coverage ideas.
 - Resetting development repair counters, granting new repair frames, replaying
   refused execution requests or weakening actual effect/state/authority handling.
 
@@ -2171,3 +2247,228 @@ upper3 consumed3/all frames and ordinary945through180 unchanged. Remaining Human
 issue/reconstruction/pending-advance/retained/source/snapshot/Preview/Apply checks
 and broader Phase5/5.1/later6–8/executor/resources/cost/transports/package/release/
 full Goal acceptance remain OPEN, not closed by authored code or examples.
+
+### Goal and Repository competing completions — authored, UNVERIFIED
+
+Existing session R4/E11 now has authored Goal implementation-result and
+Repository merge-review competition examples in their normal public Operation
+suites. The spec-only observation delegates the original action and admits a
+separate ordinary runtime's genuine public completion before owning afterCommit;
+it does not insert native history or replace the production driver. Goal's
+decision-needed winner must lead to its original Human question, not the losing
+completed answer. Repository's evidenced winner must survive actual Git closure.
+Reopen and separate-JVM observations cover the retained meaning and history.
+
+The causal boundary and exact remaining coverage are recorded in
+[the competing-completion journal](../journal/2026/10/2026-10-11-goal-repository-competing-completions.md).
+Fresh182/current subject174 will run BOTH COMPLETE affected suites, not only
+new cases, through registered runner/shared serialization. Parent diff-check
+zero is not runtime validation. Actual181's eight E12 successes and bounded
+review PASS are earlier-input evidence only. Additional TextusAI development
+is stopped under the adopted request/return scope correction; these executable
+Operations do not require direct AI invocation or Phase6 skill/CLI transport.
+
+Same ACTIVE Goal/full originals/history/repair3/3/all frames unchanged;
+ordinary consumed946through181 separate. Other E11 families, E4/E5,
+resources/metadata/managed-suite P5-TS01–12 and full Phase5.1 remain OPEN.
+
+At actual182 terminal, both full suites ran17 examples:15 successes/2 failures,
+SBT1/wrapper1/lockreleased. Both new competition cases reached actual winner
+publication and loser refusal, then failed at an unnecessary MUST-acknowledge
+winning replay expectation. Parent corrected only those assertions after
+terminal to existing R4 retained observation-or-refusal, requiring unchanged
+winner/history in both cases. The original failures remain. Later advance and
+separate-JVM assertions are not yet validated. Fresh183/subject175 will run
+the same two complete suites; no product/contract/grant change or old182 replay.
+Ordinary947through182 is separate from unchanged repair3/3 and all frames.
+
+### Actual183 bounded competing-completion acceptance
+
+Fresh183 ran the same TWO COMPLETE Goal/Repository public Operation suites:
+17 successes, no failed/canceled/ignored/pending or aborted suite, compilation
+successful, SBT0/wrapper0/sharedlockreleased. Registered cncf_command_runner
+/root/sbt_receipt_c8a1be45d5c44c64b053, configured gpt-6-luna/medium,
+contract23/registered-custom-role, owned executor19375 to terminaltool0.
+Tests5m28s/SBT370s, completed2026-10-11 08:53:47JST. Parent complete-current-
+request reader ACCEPTED183@1subject175. Original182 remains FAILURE.
+
+Fresh strictly read-only /root/phase51_actual183_readonly_review, configured
+gpt-6.1-sol/high, returned PASS for
+actual183-goal-repository-competing-public-completions, no current/resolved CB
+or new HYG/DEV. Both complete primary programs2018lines and actual consuming
+paths reviewed. It independently confirmed the replay expectation correction,
+genuine public competition, native CAS and actual winning Human/Git/reopen
+meaning. Exact accepted source and journal assessment retained. CAR0FAIL347WARN
+114OK, warnings unwaived; inherited debt open/unadmitted. CBD not configured
+or contacted; runtime Help/CLI/Web/OpenAPI/MCP unverified. Input hold ends.
+
+This accepts only the frozen E11 Step examples, not all families or full Phase.
+Goal Human/review, Repository conflict/Human and other Split families remain
+to be assessed; E4/E5/resources/metadata/managed-suite P5-TS01–12 OPEN. Same
+ACTIVE Goal/original9/full originals/history/repair3/3/all frames unchanged;
+ordinary948through183 separate. TextusAI additional development stopped,
+Workflow-request/currentCodex-result-return remains the architecture; no direct
+AI executor/currentCodex-discovery prerequisite or Phase6 skill/CLI expansion.
+No Phase/Goal completion, staging/commit/push/publication from this closure.
+
+### Actual184 Goal ReviewStep and Human competing-completion acceptance
+
+Parent extends only the existing public Goal Operation specification for three
+remaining R4/E11 examples: independent Step review reached through real public
+implementation/check work, and Human Defer/Cancel against a selected losing
+resumption. Separate normal runtime public winners retain actual native meaning;
+owning CAS refuses losers, fresh advance consumes only winning meaning and
+separate JVM observes durable history. Review/Human evidence is exact separately
+prepared specification data, not consent derived from a session or profile.
+Original noncompeting cases and accepted shared delegating observer remain.
+
+Fresh184/subject176 ran the COMPLETE Goal suite9/9, no other test outcomes or
+aborted suite, compilation successful; SBT0/wrapper0/sharedlockreleased,
+executor5624 terminaltool0. Tests3m40s/SBT249s, completed2026-10-11 09:14:02JST.
+Registered runner /root/sbt_receipt_ee010f5cd5f54ff5bee3, configured
+gpt-6-luna/medium, contract23/registered-custom-role. Parent complete-current-
+request reader actualtool0 ACCEPTED184@1/subject176; no183 replay. Original182
+FAILURE and183 bounded PASS stay historical at their actual input boundaries.
+
+Fresh strictly read-only /root/phase51_actual184_readonly_review, configured
+gpt-6.1-sol/high/configured-default, returns PASS for
+actual184-goal-review-human-competing-public-completions only. Whole904line
+primary and1296line supporting fixture/observer plus owning native CAS/UoW/
+SQLite/actual logs reviewed. CurrentCB[],resolvedCB[],newHYG[],newDEV[];
+inherited debt open/unadmitted, all CAR347WARN unwaived/static only, CBD not
+configured/contacted and runtime Help/CLI/Web/OpenAPI/MCP unverified. Exact
+accepted assessment is in the
+[causal journal](../journal/2026/10/2026-10-11-goal-review-human-competing-completions.md).
+Actual final ends the input hold; no counter/frame/commit/Phase completion.
+
+Same ACTIVE Goal/original9/all originals/fullhistory/R5/A7/null/repair3/3/all
+frames remain; ordinary949through184 separate. Additional TextusAI development
+stopped, Workflow-request/currentCodex-result-return retained. GoalRepair/
+ReviewPhase, RepositoryConflict/Human, otherSplit/E4/E5/resources/metadata/
+managed-suite P5-TS01–12/fullPhase5.1/laterPhases/Goal remain OPEN. Passing these
+three cases does not endorse every remaining predicate or satisfy full E11.
+
+### Actual185 Goal RepairStep and ReviewPhase competing-completion acceptance
+
+Parent adds TWO existing R4/E11 examples to the public Goal Operation table.
+RepairStep follows real implementation, managed checks and independently evidenced
+review requesting repair. ReviewPhase follows actual independently evidenced
+Step acceptance, Wait without effect authority, separate StepClosure authority,
+Workflow-owned commit and actual Phase checks. The selected test plan's one
+repair allowance is business input, not a change to real Goal repair3/3.
+
+At each actual issued frontier, a separate normal unhooked runtime publishes
+decision-needed after the losing action selects its inert closing but before its
+original afterCommit. Owning CAS refuses the loser and retains one adjacent
+winner. Fresh advance requests the exact winning assignment/result/reference's
+Human question; separate JVM retains its actual durable state/history. Existing
+noncompeting and accepted races remain. No product/provider/schema/AI change.
+
+Fresh185/current subject177 ran ONE COMPLETE Goal suite11/11, all other outcomes0,
+one completed suite/zero aborted, successful compilation; tests3m13s/SBT226s,
+completed2026-10-11 09:31:56JST. Registered runner
+/root/sbt_receipt_073a0b7d69384b24b6e3, configured gpt-6-luna/medium,
+contract23/registered-custom-role, one unchanged scoped submission, executor26003
+terminaltool0. Actual SBT0/wrapper0/sharedlockreleased and complete-current-request
+reader actualtool0 ACCEPTED185@1/subject177 observed. No184 replay or new-only filter.
+
+Fresh strictly read-only /root/phase51_actual185_readonly_review, configured
+gpt-6.1-sol/high/configured-default, returns PASS for
+actual185-goal-repair-phase-review-competing-public-completions only. Whole961line
+primary and1296line support plus actual native completion/managed UoW/CAS/SQLite,
+independent review and effect authority reviewed. CurrentCB[],resolvedCB[],
+newHYG[],newDEV[]; inherited Hygiene open/unadmitted. All461 retained CAR entries
+inspected:0FAIL347WARN114OK/static only/unwaived; CBD unconfigured/notcontacted
+and runtime Help/CLI/Web/OpenAPI/MCP unverified. Exact source assessment is in
+the [causal journal](../journal/2026/10/2026-10-11-goal-repair-phase-review-competing-completions.md).
+
+Actual final ends the input hold. Same ACTIVE Goal/original9/all originals/full
+history/R5/A7/null/repair upper3 consumed3/allframes remain. Ordinary950through185
+is separate. Original182 FAILURE and other bounded results retain their scope.
+Additional TextusAI development stopped; Workflow requests/currentCodex returns.
+No counter/frame change, commit, push or Phase completion. RepositoryConflict/
+Human, otherSplit/E4/E5/resources/metadata/managed P5-TS01–12/fullPhase5.1/later
+Phases/Goal remain OPEN. These two examples do not prove every outcome in those
+families, all surviving predicates or the whole E11 contract.
+
+### Actual186 Repository conflict and Human competing-completion acceptance
+
+Parent adds TWO R4/E11 public Operation examples to the existing Repository
+specification. Actual conflicting owned Git branches, managed failed merge and
+public Start/advance produce real assigned conflict work. Semantic completion
+and owning advance produce the real Human question, not fixture history.
+Distinct semantic meanings and distinct Human resolution texts compete after
+losing action selection but before its original afterCommit. Each Human answer
+carries exact separately prepared host test consent; session/profile alone
+grants none. Native CAS refuses the loser and preserves one adjacent winning
+completion/history without file effects. Only owning advance consumes the
+winner: semantic winner requests the exact Human question; Human winner alone
+materializes, checks, requests independent review and converges after its real
+review acceptance. Separate JVM reopening preserves winning state/history/file.
+
+Fresh186/current subject178 ran ONE COMPLETE Repository suite13/13, other
+test outcomes0, suites1/aborted0, successful compilation. Tests3m14s/SBT228s,
+completed2026-10-11 09:51:38JST. Registered cncf_command_runner
+/root/sbt_receipt_763559d3c6b44fce98e1, configured gpt-6-luna/medium,
+contract23/registered-custom-role, original executor28865 terminaltool0.
+Actual SBT0/wrapper0/sharedlockreleased and installed complete-current-request
+reader tool0/chunk76a530 ACCEPTED186@1/subject178. No185 replay/new-only filter.
+
+Fresh strictly read-only /root/phase51_actual186_readonly_review, configured
+gpt-6.1-sol/high/configured-default, returns PASS for
+actual186-repository-conflict-human-competing-public-completions only. Whole
+1509line primary and actual normal result/conflict/Human/evidence/review/
+convergence/native UoW/CAS/SQLite paths reviewed; currentCB[],resolvedCB[],
+newHYG[],newDEV[]. All461 existing static CAR entries read:0FAIL347WARN114OK,
+warnings wholly unwaived; CBD unconfigured/notcontacted and runtime Help/CLI/
+Web/OpenAPI/MCP unverified. Exact original source/accepted assessment retained
+in the [causal journal](../journal/2026/10/2026-10-11-repository-conflict-human-competing-completions.md).
+
+Actual final ends the input hold. Same ACTIVE Goal/original9/all originals/full
+history/R5/A7/null/repair upper3 consumed3/allframes retained; ordinary951through186
+separate. Original182 FAILURE and other accepted scopes unchanged. Additional
+TextusAI development stopped; Workflow requests/currentCodex returns. No commit,
+push, new repair frame/counter or Phase/Goal completion. Other Repository Human
+choices, Split/E4/E5/resources/metadata/managed P5-TS01–12/fullPhase5.1/laterPhases/
+Goal remain OPEN. These examples do not prove all outcomes or full E11.
+
+### Actual187 Repository Human Defer/Cancel competing-completion acceptance
+
+Parent extends the existing public Repository race table with TWO Human
+stopped-choice winners against a selected ProvideResolution loser. Actual
+managed Git conflict and semantic completion issue the Human question; each
+answer has its own exact host test consent. The original delegating observer
+and separate unhooked public runtime exercise native coupled CAS/UoW, not a
+fixture-created winner. Loser refusal preserves one adjacent winner and whole
+state/history/unmerged Git/file. Only owning advance consumes Defer/Cancel as
+exact retained Wait. Repeated advance and separate JVM reopening preserve it
+without materialization, checks, review, merge abort or convergence.
+
+Fresh187/current subject179 ran ONE COMPLETE Repository suite15/15, all other
+outcomes0/suites1/aborted0/compile successful. Tests3m55s/SBT279s/completed
+2026-10-11 10:12:39JST. Registered runner
+/root/sbt_receipt_94286e18cb9047c091aa, configured gpt-6-luna/medium/contract23/
+registered-custom-role; original executor18256 terminaltool0/SBT0/wrapper0/
+sharedlockreleased. Installed complete-current-request reader tool0/chunk6e63d1
+ACCEPTED187@1/subject179. Original first terminal prose186/178 error preserved;
+actual producer/submission/result/reader and corrected report are187/179. No
+input replacement, replay or recovery request follows from that prose typo.
+
+Fresh strictly read-only /root/phase51_actual187_readonly_review, configured
+gpt-6.1-sol/high/default, returns COMPLETE PASS for
+actual187-repository-human-stopped-competing-public-completions only. Whole
+1535line primary, connected native consumers and actual complete evidence read;
+currentCB[],resolvedCB[],newHYG[],newDEV[]. Inherited Hygiene and all existing CAR
+warnings unwaived/unadmitted; retained461static entries0FAIL347WARN114OK, not new
+execution or unchanged-input proof. CBD unconfigured/notcontacted and runtime
+Help/CLI/Web/OpenAPI/MCP unverified. Full original source retained privately and
+exact English assessment in the
+[causal journal](../journal/2026/10/2026-10-11-repository-human-stopped-competing-completions.md).
+
+Actual final ends this input hold. Same ACTIVE Goal/original9/all originals/full
+history/R5/A7/null/repair upper3 consumed3/allframes remain, ordinary952through187
+separate. Original182 FAILURE and bounded prior results unchanged; formal
+approved-unverified Phase5release valid. Additional TextusAI development stopped;
+Workflow requests/currentCodex returns semantic work. No188 request, newframe,
+counter change, staging/commit/push or fullE11/Phase/Goal completion. OtherSplit/
+E4/E5/resources/metadata/managed P5-TS01–12/fullPhase5.1/laterPhases/Goal remain OPEN.

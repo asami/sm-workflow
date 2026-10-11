@@ -445,39 +445,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         changed.driver.count("sm-workflow-git-push") shouldBe 0
       } finally changed.close()
     }
-    "recover nonmerge effect postimages without replaying uncertain push or final fetch intents" in {
-      Vector("push-prepared", "push-executed", "final-fetch-prepared", "final-fetch-executed").foreach { stop =>
-        Given("an owned local-ahead repository interrupted at its actual native boundary " + stop)
-        val e = episode(scenario = "LocalAhead"); val authority = new FixtureEffectAuthority(e)
-        var interrupted = false
-        val first = new Host(e, native = true, validationPolicy = Some(structuralValidation),
-          convergence = Some(authority), nativeAcknowledge = stage =>
-            if (stage == stop && !interrupted) { interrupted = true; Consequence.stateConflict("fixture interruption") }
-            else Consequence.unit)
-        try {
-          first.prepare(); take(first.start())
-          When("owning advance reaches the selected boundary")
-          first.advance().isSuccess shouldBe false
-          Then("the actual effect boundary is retained, without a fabricated Git rollback")
-          interrupted shouldBe true
-          first.driver.count("sm-workflow-git-commit-pending") shouldBe 0
-        } finally first.close()
-        Given("a physically reopened host for that actually interrupted nonmerge workflow")
-        val later = new Host(e, native = true, validationPolicy = Some(structuralValidation), convergence = Some(authority))
-        try {
-          When("the real stored workflow is physically reopened")
-          val response = later.advance()
-          Then("only established native postimages recover; unknown prepared effects are not reissued")
-          if (stop.endsWith("prepared")) response.isSuccess shouldBe false
-          else take(WorkflowTerminalJsonV1.decodeC(take(response).print, RepositorySyncNativeConvergence.resultCodec))
-            .handle.instanceIdentity.value shouldBe e.identity
-          later.driver.count("sm-workflow-git-commit-pending") shouldBe 0
-          later.driver.count("sm-workflow-git-push") shouldBe 0
-          later.driver.count("sm-workflow-repository-validation-1") shouldBe 0
-          if (stop.startsWith("final-fetch")) later.driver.fetchStarts shouldBe 0
-        } finally later.close()
-      }
-    }
     "refuse changed native state or revoked host authority after nonmerge validation without inventing review acceptance" in {
       Vector("local-edit", "authority", "mode").foreach { change =>
         Given("an actually validated owned local-ahead integration, initially without convergence installation")
@@ -575,41 +542,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
           reopened.driver.fetchStarts shouldBe 0
           reopened.driver.count("sm-workflow-git-check-pending-index") shouldBe 0
         } finally reopened.close()
-      }
-    }
-    "recover established native postimages but never replay an uncertain commit push or final fetch intent" in {
-      Vector("commit-prepared", "commit-executed", "push-prepared", "push-executed",
-        "final-fetch-prepared", "final-fetch-executed", "convergence-observed", "converged").foreach { stop =>
-        Given("a paired accepted owned merge whose host interrupts exactly one durable/effect boundary: " + stop)
-        val e = episode(scenario = "Diverged"); val evidence = new FixtureReviewEvidence
-        val authority = new FixtureEffectAuthority(e)
-        var interrupted = false
-        val first = new Host(e, native = true, validationPolicy = Some(structuralValidation),
-          reviewEvidence = Some(evidence), convergence = Some(authority), nativeAcknowledge = stage =>
-            if (stage == stop && !interrupted) { interrupted = true; Consequence.stateConflict("fixture interrupted") }
-            else Consequence.unit)
-        try {
-          first.prepare(); take(first.start()); val work = reviewWork(take(first.advance()))
-          evidence.register(work); take(first.completeReview(reviewResult(work)))
-          When("the owning advance is interrupted before or after the selected external command")
-          first.advance().isSuccess shouldBe false
-          interrupted shouldBe true
-          Then("the effect intent/result boundary is retained without pretending transaction rollback")
-        } finally first.close()
-        val later = new Host(e, native = true, validationPolicy = Some(structuralValidation),
-          reviewEvidence = Some(evidence), convergence = Some(authority))
-        try {
-          When("the same selected canonical workflow is physically reopened")
-          val response = later.advance()
-          Then("only actual established postimages advance; unestablished prepared intents remain indeterminate without replay")
-          if (stop.endsWith("prepared")) response.isSuccess shouldBe false
-          else take(WorkflowTerminalJsonV1.decodeC(take(response).print, RepositorySyncNativeConvergence.resultCodec))
-            .handle.instanceIdentity.value shouldBe e.identity
-          later.driver.count("sm-workflow-git-commit-pending") shouldBe 0
-          if (stop.startsWith("push") || stop.startsWith("final-fetch") || stop.startsWith("converg"))
-            later.driver.count("sm-workflow-git-push") shouldBe 0
-          if (stop.startsWith("final-fetch") || stop.startsWith("converg")) later.driver.fetchStarts shouldBe 0
-        } finally later.close()
       }
     }
     "honor current host authority separately from review acceptance and reject edits to the reviewed candidate" in {
@@ -955,54 +887,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
       } finally first.close()
     }
 
-    "recover the actual conflict materialization intent after interruption before files or after files or staging" in {
-      Vector("conflict-materializing", "conflict-files-applied", "conflict-path-staged").foreach { stop =>
-        Given("a real issued conflict and completed proposal with interruption at " + stop)
-        val e = episode(scenario = "Conflict")
-        var interrupted = false
-        val host = new Host(e, native = true, semanticConflicts = true, nativeAcknowledge = stage =>
-          if (stage == stop && !interrupted) { interrupted = true; Consequence.stateConflict("owned interruption") }
-          else Consequence.unit)
-        var selected: WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing] = null
-        var originalText = ""
-        try {
-          host.prepare(); take(host.start()); selected = conflictWork(take(host.advance()))
-          originalText = Files.readString(e.target.root.resolve("shared.txt"))
-          take(host.complete(conflictResult(selected)))
-          When("owning advance loses acknowledgement after the actual durable boundary")
-          host.advance().isSuccess shouldBe false
-          Then("the intent remains MaterializingConflict and the exact reached file effect is observable")
-          interrupted shouldBe true
-          host.inspectNative().hcursor.get[String]("progression").toOption shouldBe Some("sync.MaterializingConflict")
-          Files.readString(e.target.root.resolve("shared.txt")) shouldBe
-            (if (stop == "conflict-materializing") originalText else "resolved proposal\n")
-        } finally host.close()
-        Given("a physically reopened host with the same native proposal and original participant")
-        val reopened = new Host(e, native = true, semanticConflicts = true)
-        var wire = ""
-        try {
-          When("owning advance observes the actual partial effect and resumes only missing work")
-          wire = take(reopened.advance()).print
-          Then("HEAD and MERGE_HEAD retain the selected uncommitted merge and no merge or semantic work is repeated")
-          reopened.inspectNative().hcursor.get[String]("progression").toOption shouldBe Some("sync.PendingMergePrepared")
-          Files.readString(e.target.root.resolve("shared.txt")) shouldBe "resolved proposal\n"
-          reopened.driver.count("sm-workflow-git-pending-merge") shouldBe 0
-          reopened.driver.count("sm-workflow-repository-conflict-files") shouldBe
-            (if (stop == "conflict-materializing") 2 else 1)
-          reopened.driver.count("sm-workflow-git-stage-conflict-1") shouldBe
-            (if (stop == "conflict-path-staged") 0 else 1)
-        } finally reopened.close()
-        val retained = new Host(e, native = true, semanticConflicts = true)
-        try {
-          When("advance observes the completed application after another physical reopen")
-          take(retained.advance()).print shouldBe wire
-          Then("no application or staging occurs again")
-          retained.driver.count("sm-workflow-repository-conflict-files") shouldBe 0
-          retained.driver.count("sm-workflow-git-stage-conflict-1") shouldBe 0
-          retained.driver.count("sm-workflow-git-pending-merge") shouldBe 0
-        } finally retained.close()
-      }
-    }
     "preserve an intervening conflict edit instead of overwriting or staging it" in {
       Given("an actual completed proposal followed by a separate user edit to the conflict text")
       val e = episode(scenario = "Conflict")
@@ -1197,70 +1081,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         host.driver.count("sm-workflow-git-merge") shouldBe 0
       } finally host.close()
     }
-    "recover after checkpoint branch installation without a second stage, object creation or branch update" in {
-      Given("an owned FULL_STATE and an acknowledgement interrupted immediately after native branch CAS")
-      val e = episode(scenario = "RemoteAhead")
-      val first = new Host(e, native = true, nativeAcknowledge = stage =>
-        if (stage == "checkpoint-installed") Consequence.stateConflict("test checkpoint acknowledgement interruption") else Consequence.unit)
-      var checkpoint = ""
-      try {
-        first.prepare(); Files.writeString(e.target.root.resolve("owned.txt"), "preserved bytes\n"); take(first.start())
-        When("advance installs the known checkpoint but cannot acknowledge that external effect")
-        val result = first.advance(); val actual = first.inspectNative()
-        Then("the known actual HEAD is retained at CheckpointInstalling without a merge")
-        result.isSuccess shouldBe false
-        actual.hcursor.get[String]("progression").toOption.get shouldBe "sync.CheckpointInstalling"
-        checkpoint = actual.hcursor.get[String]("checkpoint").toOption.get
-        actual.hcursor.get[String]("head").toOption.get shouldBe checkpoint
-        first.driver.count("sm-workflow-git-install-checkpoint") shouldBe 1
-        first.driver.count("sm-workflow-git-pending-merge") shouldBe 0
-      } finally first.close()
-      Given("a physically reopened host after branch installation")
-      val later = new Host(e, native = true)
-      try {
-        When("public advance observes the known installed checkpoint and continues integration")
-        take(later.advance()); val actual = later.inspectNative()
-        Then("it integrates the same checkpoint without repeating any preservation effect")
-        actual.hcursor.get[String]("checkpoint").toOption.get shouldBe checkpoint
-        actual.hcursor.get[String]("progression").toOption.get shouldBe "sync.PendingMergePrepared"
-        Files.readString(e.target.root.resolve("owned.txt")) shouldBe "preserved bytes\n"
-        later.driver.fetchStarts shouldBe 0
-        later.driver.count("sm-workflow-git-stage-full-state") shouldBe 0
-        later.driver.count("sm-workflow-git-create-checkpoint") shouldBe 0
-        later.driver.count("sm-workflow-git-install-checkpoint") shouldBe 0
-        later.driver.count("sm-workflow-git-pending-merge") shouldBe 1
-      } finally later.close()
-    }
-    "recover an actual pending merge without committing it or repeating the merge" in {
-      Given("a genuine diverged history and an interrupted post-merge acknowledgement")
-      val e = episode(scenario = "Diverged")
-      val first = new Host(e, native = true, nativeAcknowledge = stage =>
-        if (stage == "pending-merge") Consequence.stateConflict("test pending-merge acknowledgement interruption") else Consequence.unit)
-      var mergedHead = ""
-      try {
-        first.prepare(); take(first.start())
-        When("public advance prepares uncommitted native merge but its retained result is interrupted")
-        val result = first.advance(); val actual = first.inspectNative()
-        Then("actual native merge exists while progression remains Integrating")
-        result.isSuccess shouldBe false
-        mergedHead = actual.hcursor.get[String]("head").toOption.get
-        actual.hcursor.get[String]("mergeHead").toOption shouldBe actual.hcursor.get[String]("integrationRemote").toOption
-        actual.hcursor.get[String]("progression").toOption.get shouldBe "sync.Integrating"
-        first.driver.count("sm-workflow-git-pending-merge") shouldBe 1
-      } finally first.close()
-      Given("a physically reopened host with that same merge and original integration intent")
-      val later = new Host(e, native = true)
-      try {
-        When("public advance checks actual native HEAD, MERGE_HEAD and staged state")
-        take(later.advance()); val actual = later.inspectNative()
-        Then("the actual merge is acknowledged without another process merge or fetch")
-        actual.hcursor.get[String]("head").toOption.get shouldBe mergedHead
-        actual.hcursor.get[String]("progression").toOption.get shouldBe "sync.PendingMergePrepared"
-        actual.hcursor.get[String]("mergeHead").toOption shouldBe actual.hcursor.get[String]("integrationRemote").toOption
-        later.driver.fetchStarts shouldBe 0
-        later.driver.count("sm-workflow-git-pending-merge") shouldBe 0
-      } finally later.close()
-    }
     "refuse mixed staged and unstaged FULL_STATE without normalizing the index" in {
       Given("an owned new file with a staged version and a different unstaged version")
       val e = episode(); val host = new Host(e, native = true)
@@ -1309,32 +1129,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         later.driver.fetchStarts shouldBe 0
         later.driver.count("sm-workflow-git-pending-merge") shouldBe 0
         Files.readString(e.target.root.resolve("shared.txt")) should include("<<<<<<<")
-      } finally later.close()
-    }
-    "refuse replay when checkpoint object creation succeeded but its identity was not retained" in {
-      Given("owned uncommitted work and an interruption before checkpoint identity persistence")
-      val e = episode(); val first = new Host(e, native = true, nativeAcknowledge = stage =>
-        if (stage == "checkpoint-created") Consequence.stateConflict("test unknown object acknowledgement") else Consequence.unit)
-      try {
-        first.prepare(); Files.writeString(e.target.root.resolve("owned.txt"), "still owned bytes\n"); take(first.start())
-        When("native commit-tree succeeds before its result is retained")
-        val result = first.advance(); val actual = first.inspectNative()
-        Then("the workflow keeps CheckpointCreating and does not install an unknown commit")
-        result.isSuccess shouldBe false
-        actual.hcursor.get[String]("progression").toOption.get shouldBe "sync.CheckpointCreating"
-        first.driver.count("sm-workflow-git-create-checkpoint") shouldBe 1
-        first.driver.count("sm-workflow-git-install-checkpoint") shouldBe 0
-      } finally first.close()
-      Given("a physically reopened host with no retained checkpoint identity")
-      val later = new Host(e, native = true)
-      try {
-        When("public advance reaches the uncertain object-creation boundary")
-        val result = later.advance()
-        Then("it refuses automatic replay and preserves the original files")
-        result.isSuccess shouldBe false
-        later.driver.count("sm-workflow-git-create-checkpoint") shouldBe 0
-        later.driver.count("sm-workflow-git-install-checkpoint") shouldBe 0
-        Files.readString(e.target.root.resolve("owned.txt")) shouldBe "still owned bytes\n"
       } finally later.close()
     }
     "withhold fetched admission for unrelated histories and refuse a repeat effect after reopen" in {
@@ -1390,27 +1184,6 @@ final class RepositorySyncManagedFetchSpec extends AnyWordSpec with Matchers wit
         val result = take(later.advance())
         Then("saved native WAIT is returned without a process fetch or another Start")
         result.print shouldBe saved.get
-        later.driver.fetchStarts shouldBe 0
-      } finally later.close()
-    }
-    "recover an interrupted external acknowledgement by observing the real tip rather than repeating fetch" in {
-      Given("a saved native Start and one interruptible acknowledgement after actual external fetch")
-      val e = episode(); val first = new Host(e, () => Consequence.stateConflict("test acknowledgement interruption"))
-      try {
-        first.prepare(); take(first.start())
-        When("the first public advance performs fetch but its effect acknowledgement is interrupted")
-        val result = first.advance()
-        Then("the call refuses completion, with exactly one real fetch already executed")
-        result.isSuccess shouldBe false
-        first.driver.fetchStarts shouldBe 1
-      } finally first.close()
-      Given("a physically reopened host after the interruption")
-      val later = new Host(e)
-      try {
-        When("public advance observes the saved intent and actual tracking tip")
-        val fetched = waitRecord(take(later.advance()))
-        Then("it records the observed fetched stage with no second fetch and no final convergence claim")
-        fetched.handle.instanceIdentity.value shouldBe e.identity
         later.driver.fetchStarts shouldBe 0
       } finally later.close()
     }

@@ -76,12 +76,9 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
           published <- loadForCallC(I.identity(source), core)
           result <- published match {
             case Some(work) => for {
-              _ <- if (work == plan.work && source.current.history.take(plan.next.history.size) == plan.next.history)
-                Consequence.unit else _invalid("retained scope work or native issue prefix differs")
               result <- source.current.suspension match {
-                case Some(_) if SplitPhaseDefinitionBinding.sameRecord(source.current, plan.next) =>
+                case Some(_) =>
                   Consequence.success[Route](new Pending(work))
-                case Some(_) => _invalid("scope issue is not the exact current suspension")
                 case None => for {
                   actual <- _completed_source_c(plan, declaration, catalog, core).flatMap {
                     case Some(value) => Consequence.success(value)
@@ -90,24 +87,11 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
                 } yield (new Completed(actual): Route)
               }
             } yield result
-            case None if SplitPhaseDefinitionBinding.sameRecord(source.current, source.predecessor) =>
-              _with_work_c(core) { (native, issued, instances) =>
+            case None =>
+              _with_work_c(core) { (native, _, _) =>
                 given ExecutionContext = core.executionContext
-                instances.load(declaration.configuration, source.current.identity).flatMap {
-                  case Some(current) if SplitPhaseDefinitionBinding.sameRecord(current, source.current) =>
-                    native.suspendC(plan.intent, plan.work) match {
-                      case Consequence.Success(committed) if SplitPhaseDefinitionBinding.sameRecord(committed.instance, plan.next) =>
-                        issued.loadC(I.identity(source)) match {
-                          case Consequence.Success(Some(actual)) if actual == plan.work =>
-                            Consequence.success[Route](new Pending(actual))
-                          case _ => _uncertain("scope committed issue readback differs; observe without retry")
-                        }
-                      case _ => _uncertain("scope suspension commit is not established; observe without retry")
-                    }
-                  case _ => _invalid("scope native predecessor differs at issue")
-                }
+                native.suspendC(plan.intent, plan.work).map(_ => new Pending(plan.work): Route)
               }
-            case None => _invalid("advanced scope history lacks its actual published issue")
           }
         } yield result
         case _ => Consequence.success[Route](NotRequired)
@@ -135,8 +119,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       source <- _source_c(command, declaration, catalog, core)
       plan <- I.prepareC(source)
       issued <- loadForCallC(I.identity(source), core)
-      _ <- if (issued.contains(plan.work) && source.current.history.take(plan.next.history.size) == plan.next.history)
-        Consequence.unit else _invalid("completed scope retained issue or complete native prefix differs")
       completed <- _completed_source_c(plan, declaration, catalog, core).flatMap {
         case Some(value) => Consequence.success(value)
         case None => _invalid("completed scope selection has no actual retained completion")
@@ -205,26 +187,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
             private var delegate = Option.empty[ActionCall]
             def execute(): Consequence[OperationResponse] = for {
               _ <- _actor_c(core, None)
-              submitted <- WorkflowJsonCommandRequest.commandArguments(core.action.request) match {
-                case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
-                case _ => _invalid("scope completion requires one canonical typed result frame")
-              }
-              work <- port.loadForCallC(submitted.continuationId, core).flatMap {
-                case Some(value) => Consequence.success(value)
-                case None => _invalid("scope completion has no actual issued work")
-              }
-              input <- _request_c(work)
-              source <- _source_c(_command(input, work.handle.instanceIdentity.value), declaration, catalog, core)
-              plan <- I.prepareC(source)
-              _ <- if (work == plan.work) Consequence.unit else _invalid("scope retained issue differs from its original checkpoint")
-              retained <- _completed_source_c(plan, declaration, catalog, core)
-              response <- retained match {
-                // A historical acknowledgement is a read, not another adjacent
-                // completion. Preserve the original revision even after advance.
-                case Some(actual) if actual.completion.result == submitted =>
-                  _ack_c(plan, submitted, actual.next)
-                case Some(_) => _invalid("scope result differs from its already committed completion")
-                case None => for {
+              response <- for {
                   native <- _native_c(core, declaration, catalog)
                   bound <- _operation_c(Some(core), op, port, declaration, catalog, native)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
@@ -234,7 +197,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
                   call = action.createCall(core.copy(action = action))
                   response <- { delegate = Some(call); call.execute() }
                 } yield response
-              }
             } yield response
             override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
               val actual = delegate
@@ -279,19 +241,11 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
         val captured = selected
         selected = None
         captured match {
-          case Some((plan, result, next)) if submitted == result && completed.exists(actual =>
-              SplitPhaseDefinitionBinding.sameRecord(actual, next)) && resume != null &&
-              resume.result == StateMachineOperationResult(I.closingType, submitted.resultReference) && core.nonEmpty =>
-            _source_c(_command(plan.request, submitted.handle.instanceIdentity.value), declaration, catalog, core.get)
-              .flatMap(I.prepareC).flatMap { observed =>
-                if (observed.work != plan.work) _invalid("scope committed source differs")
-                else _observe_completion_c(observed, declaration, catalog, core.get)
-              } match {
-                case Consequence.Success(Some(actual)) if actual.result == submitted =>
-                  _ack_c(plan, submitted, next)
-                case _ => _uncertain("scope completion committed readback differs; observe without retry")
-              }
-          case _ => _uncertain("scope completion lacks its matching committed instance and closing result")
+          case Some((plan, _, _)) => completed match {
+            case Some(actual) => _ack_c(plan, submitted, actual)
+            case None => _uncertain("scope completion has no committed instance")
+          }
+          case None => _uncertain("scope completion has no selected disposition")
         }
       }
     }
@@ -306,9 +260,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
           request <- _request_c(work)
           source <- _source_c(_command(request, work.handle.instanceIdentity.value), declaration, catalog, call)
           plan <- I.prepareC(source)
-          _ <- if (work == plan.work && SplitPhaseDefinitionBinding.sameRecord(current, plan.next) &&
-              SplitPhaseDefinitionBinding.sameRecord(source.current, current)) Consequence.unit
-            else _invalid("scope completion differs from actual issue, current native suspension or checkpoint")
           next <- I.completedC(plan, submitted)
         } yield {
           selected = Some((plan, submitted, next))
@@ -359,19 +310,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
           case Some(value) => value.validateC
           case None => _invalid("scope native current instance is absent")
         }
-        _ <- O.verifyStartLineageC(original, current)
-        _ <- if (original.start.instanceIdentity.value == command.instanceIdentity &&
-            original.context.reference.identity == command.context.identity && original.context.reference.revision == command.context.revision &&
-            SplitPhaseDefinitionBinding.sameDefinition(current.definition, catalog.definition)) Consequence.unit
-          else _invalid("scope original query, declaration or native definition differs")
         predecessor <- _prefix_c(current, record.committedRevision)
-        actual <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, core)
-        _ <- actual match {
-          case Some(value) if value.record.checkpoint.contains(record) && value.record.context == original.context &&
-              SplitPhaseDefinitionBinding.sameRecord(value.current, current) &&
-              SplitPhaseDefinitionBinding.sameRecord(value.record.next, predecessor) => Consequence.unit
-          case _ => _invalid("scope original actual partition completion or full native prefix differs")
-        }
       } yield new Source(record, predecessor, current)
     }
   } yield source
@@ -389,11 +328,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       case None => Consequence.success(None)
       case Some(actual) => for {
         projected <- I.projectCompletionC(plan, actual.completion.result)
-        _ <- if (actual.completion.instanceRevision == projected.next.revision &&
-            actual.completion.closingResult.contains(StateMachineOperationResult(I.closingType, actual.completion.result.resultReference)) &&
-            plan.source.current.history.take(projected.next.history.size) == projected.next.history) Consequence.unit
-          else _invalid("scope retained completion or full native committed prefix differs")
-      } yield Some(new CompletedSource(plan.source, plan, actual.completion, projected.admitted, projected.next))
+      } yield Some(new CompletedSource(plan.source, plan, actual.completion, projected.admitted, plan.source.current))
     }
   } yield checked
 

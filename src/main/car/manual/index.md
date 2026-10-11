@@ -3,10 +3,12 @@
 SmWorkflow is a Textus component for software-development workflows. Workflow
 owns progression and deterministic processing. An AI client performs only the
 semantic task in an issued WorkOrder and returns its typed result to Workflow.
-The component is in development. Its normal factory composes all three
-Workflow Operation implementations; integrated Phase acceptance and release
-remain incomplete. Phase 2 calls Operations directly from Executable
-Specifications. Command/CLI skill wiring belongs to Phase 6.
+The normal factory composes all three Workflow Operation implementations.
+Phase 5 has its formal user-approved release; Phase 5.1 verifies normal direct
+Operation use. Command/CLI skill wiring belongs to Phase 6. Duplicate answers
+and competing submissions are caller misuse. Intermediate recovery, identical
+replay responses and complete runtime-history preservation are not guarantees.
+A failed execution can be abandoned and a NEW execution started from the beginning.
 
 Start with the [user guide](user-guide.md). The
 [SplitPhase scope contract](split-phase-scope.md) describes the separate handoff
@@ -26,9 +28,9 @@ belong to the CNCF launcher; this project does not provide a second workflow CLI
 
 | Workflow | Current binding | Important limit |
 | --- | --- | --- |
-| GoalPhaseWorkflow | Normal factory composes ordered work/result/decision and whole-Phase closure, with managed validation, review, repair and Git effects. | Selected connected scenarios pass, but full regression/review remain open. Host policies, permissions and separately supplied evidence are required; a closed Step is not Phase completion. |
-| SplitPhaseWorkflow | Normal factory binds Start, planning/scope/reasoning/Human completion, selected Preview and runtime-owned Apply. | Selected direct Operation/reopen cases pass. Completed selected work is protected before first Apply and partial-child resume, verified by bounded tests/review. Document interference and uncertain effects must not be treated as successful application; whole-regression/Phase acceptance remain open. |
-| RepositorySyncWorkflow | Normal factory binds selected Start through real managed Git integration/conflict/review/validation and non-force convergence. | Selected connected/recovery scenarios pass on owned repositories/remotes; arbitrary commands, caller-made consent and replay of unknown checks are not supported. |
+| GoalPhaseWorkflow | Normal factory composes ordered work/result/decision and whole-Phase closure, with managed validation, review, repair and Git effects. | Host policies, permissions and separately supplied evidence are required; a closed Step is not Phase completion. |
+| SplitPhaseWorkflow | Normal factory binds Start, planning/scope/reasoning/Human completion, selected Preview and runtime-owned Apply. | File application preserves unrelated existing files. It does not resume a partial installation. |
+| RepositorySyncWorkflow | Normal factory binds selected Start through managed Git integration/conflict/review/validation and non-force convergence. | Owned repository scope and actual command authority are required. Uncertain effects are not an intermediate recovery contract. |
 
 A generated operation declaration alone does not install a handler. CLI and MCP
 clients must use the operations actually published by their configured host,
@@ -67,8 +69,11 @@ A Decision requires the host's independent human channel.
 
 ### Session input under development
 
-The normal factory has session routes for all three Start/advance families with
-scoped direct Operation validation; full connected acceptance remains open.
+The normal factory has session routes for all three Start/advance families.
+Phase 5.1's fixed normal-use boundary has direct Operation validation and
+independent closure PASS; formal release without additional tests/review is
+user-approved and its native commit/closure outcome is recorded separately. This does not
+claim CLI/skill integration or the excluded replay/recovery guarantees.
 An actual invocation session requires no duplicate field.
 Otherwise supply `sessionIdentity` in a `sm-workflow.session-operation.v1` object.
 Start also supplies `input` as the business command object or its existing encoded
@@ -83,15 +88,16 @@ omit `result.reference` rather than return a comparison copy. Obsolete destinati
 echoes on these three reduced paths are ignored. Other completion Operations still
 need the actual result/artifact or independently supplied evidence reference in
 `result.reference`; Workflow does not invent it. Its `sessionIdentity` is optional
-when supplied by the actual host. `requestIdentity` is necessary only when several
-issued generations can explain the answer, including old completed generations;
-a sole pending request alone does not prove an answer is for that generation.
+when supplied by the actual host. `requestIdentity` selects among genuinely
+ambiguous current pending requests. Completed generations are not scanned to
+reject an ordinary answer or to provide delayed-answer/replay guarantees.
 Supported historical identity-only/full-envelope input remains available.
 
 Association is retained in the native initial instance row, not a separate
 post-Start index. Allocation alone is not successful Start and grants no effect
 authority. Legacy rows without association are not automatically rebound. Repeated
-Start/legacy association behavior and full connected validation remain open.
+Start is not an intermediate-allocation recovery protocol; use a NEW execution
+after abandonment.
 These Operation shapes do not claim Phase6 CLI or skill integration.
 
 WAIT and a completion acknowledgement are nonterminal. A semantic completion
@@ -159,9 +165,10 @@ changes do not require whole saved-body, declaration or regenerated-output
 comparisons. Checks already completed at the owning boundary are not repeated
 merely under an authority or state-verification label.
 
-For an already issued scope task, a retained advance observes the original
-issued work rather than allocating another task. Retained completion must be
-checked against canonical native history and its original checkpoint.
+For an already issued scope task, normal advance consumes the issued work and
+its result. It does not require a complete-history or copied-checkpoint
+certificate. Duplicate answers and intermediate recovery remain outside the
+component guarantee.
 Older SplitPhase data, including `split-phase-public-advance-v5` and
 `split-phase-human-terminal-v8` and `split-phase-reasoning-demand-v9`, is not silently rebound to the current
 `split-phase-selected-application-v12` definition. The additive planning assembly
@@ -188,8 +195,9 @@ or Phase acceptance; see the scope contract for supported behavior and limits. S
 [Human direction contract](split-phase-human.md) for these distinctions.
 
 An indeterminate commit/readback is not rejection proof or success proof. Report
-uncertainty and use the host's supported observation/recovery path; do not
-automatically resubmit a completion or launch commands from the AI client.
+uncertainty; abandon unsuccessful work and start a NEW execution if needed.
+This does not restore or clean up uncertain effects. Do not automatically
+resubmit a completion or launch commands from the AI client.
 
 ## Help and transport status
 

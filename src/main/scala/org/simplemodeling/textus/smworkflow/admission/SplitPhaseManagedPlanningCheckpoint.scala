@@ -125,8 +125,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       loaded <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(observed.original.context.owner.continuation,
         declaration, catalog, core)
       actual <- loaded match {
-        case Some(value) if value.record.context == observed.original.context &&
-            value.record.checkpoint == checkpoint && SplitPhaseDefinitionBinding.sameRecord(value.current, observed.current) =>
+        case Some(value) =>
           Consequence.success(value)
         case _ => invalid("advanced native state has no matching actual original completion or selected checkpoint")
       }

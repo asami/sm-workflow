@@ -87,7 +87,7 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
           case _ => true
         })
       }
-      if (needed && SplitPhaseDefinitionBinding.sameRecord(expected.next, issued))
+      if (needed)
         _select_question_c(expected.question, question).map(_ => ())
       else _invalid("stored question is not required by its native scope or issued state")
     }
@@ -113,9 +113,6 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
 
   private def _prepare_c(observed: D.Observed): Consequence[Plan] = for {
     data <- _prepare_data_c(observed.record)
-    base = observed.record.next
-    _ <- if (SplitPhaseDefinitionBinding.includesState(observed.current, base)) Consequence.unit
-      else _invalid("current instance does not include the selected native publication state")
   } yield new Plan(observed, data.intent, data.next, data.question, data.wire)
 
   private def _prepare_data_c(record: C.Record): Consequence[Data] = for {
