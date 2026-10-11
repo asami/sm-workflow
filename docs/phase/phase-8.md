@@ -1,118 +1,126 @@
-# Phase 8: Concrete Local Provider Integration and Routing Validation
+# Phase 8: Runtime Extensions and Practical Closure
 
 Status: planned
-Planned: 2026-10-07
-Depends on: Phase 6
-Related: Phase 7 RepositorySync / Machine Placement experiments
+Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
+Planned after: Phase 7, with carryover recorded from Phase 2 onward
+Depends on: practical Phase 2, Phase 5 and the selected Phase 6/7 delivery
 
 ## Goal
 
-Validate the provider-neutral routing contract from Phase 6 with real local-LLM execution without making sm-workflow depend on a particular proxy, coding-agent harness, or model provider.
+Close the current development rollout by resolving the necessary extensions
+deferred from Phase 2 and missing functionality discovered through real use
+after Phase 6 skill-connected acceptance and during Phase 7. Phase 5 validates
+the foundation without creating skills; Phase 6 defines thinking modes and
+creates/connects the initial skills. Follow the [incremental-use roadmap](README.md).
+Phase 8 is not a prerequisite for gradual use and must not retroactively reopen
+the accepted practical scope of an earlier phase.
 
-The primary path is Codex itself using a supported local/self-hosted model/provider path where practical. OpenCodex and OpenCode are optional experimental adapters/comparators, not architectural dependencies and not Phase 8 completion prerequisites.
+Local LLM integration is an operational goal for manual trials, not a Phase 8
+completion condition. During development, use the
+[local-provider trial notes](phase-8-local-llm-reference.md) as reference
+information. Results from those trials may justify a selected extension only
+when real use shows a concrete need; the trial itself creates no acceptance gate.
 
-## Priority
+## Carryover from Phase 2
 
-1. Establish Codex + local LLM as the first concrete local execution path.
-2. Exercise bounded JUDGMENT, IMPLEMENTATION/TEST_FIX and independent REVIEW.
-3. Exercise typed COMPLETED / DECLINED / BLOCKED outcomes and bounded escalation to a stronger provider.
-4. Capture ExecutionEvidence required for routing KPI and Project x Provider/Machine profiling.
-5. Compare optional OpenCodex/OpenCode paths only after the native/direct Codex path is understood.
+The [2026-10-07 Phase 2 revision](phase-2.md#completion-ownership-and-carryover)
+makes the following ownership effective for planning now, rather than waiting
+for every historical checkbox to pass. Implementation/acceptance status remains
+as recorded; no transfer claims completion.
 
-## Provider independence
+| Original IDs | Remaining work allocated after practical Phase 2 |
+| --- | --- |
+| P2-T01..T05; transport remainder of P2-T06 | Full resident-server/MCP/CLI equivalence, concurrency and transport-specific restart coverage; Phase 2 retains direct public Operations, required decisions and separate-process recovery. Initial skill-facing command/CLI wiring belongs to Phase 6 |
+| P2-R01..R03 | Resident-reference refresh and generic management/Job visibility beyond necessary normal startup |
+| P2-U05/U15/U16 and extended D/provider/event variants | Only breadth not needed by the selected practical scenarios; existing validated primitives remain reusable |
+| P2-C01 | Phase 5 provides already-planned observations and Phase 6 initial-use feedback; broader comparative cost/round-trip evaluation belongs here, with benefit unproven until measured |
+| P2-C02 and bundle notes | Initial skill creation/connection belongs to Phase 6; broader optional distribution/coverage belongs here |
 
-Phase 8 MUST preserve the Phase 6 boundary:
+P2-R04/R05 practical three-route assembly and real-effect requirements remain
+Phase 2. Workspace-wide synchronization/overlay remains Phase 7. No complete
+selected workflow, broken normal entry or required independent decision/review
+is transferred here. Resolve individual extended rows by actual need during
+use, retaining original IDs and existing evidence rather than re-inventorying
+the complete history on each continuation.
 
-~~~text
-WorkClassification
-  -> ExecutionRequirement
-  -> Provider Selection
-  -> concrete adapter/harness
-  -> ExecutionEvidence
-~~~
+The table is an initial ownership map, not an assertion that every feature is
+unimplemented or a final decision to implement every historical idea. Preserve
+the original Phase 2 checklist IDs and evidence in the Phase 2 planning record.
+The user selected practical goal-phase, split-phase and repository-sync routes
+on 2026-10-06. At the scheduled Phase 2 handoff, record each route and the actual
+remaining behavior for each transferred item. Work necessary for any of these
+three routes remains in Phase 2, including connected completion, required
+effects, permissions and recovery; an entire selected workflow cannot be deferred
+while claiming Phase 2 success.
 
-No Codex, OpenCodex, OpenCode, Ollama, LM Studio, model name, machine model, or provider-specific reasoning option becomes Workflow transition semantics.
+| Origin | Extension owned here when not needed for the Phase 2 practical route | Handoff state |
+| --- | --- | --- |
+| P2-D01..D03; P2-U05/U15/U16 | Broader provider, transaction, event and recovery integration beyond the selected route | Separate required practical prerequisites from remaining extensions; retain existing partial validation |
+| P2-G01..G06 | Additional GoalPhase operations/scenarios beyond its selected practical route | Practical start/work/result/resumption behavior stays required in Phase 2; record actual coverage |
+| P2-T01..T06 | Remaining server/MCP/CLI exposure, equivalence, shared-store concurrency and restart coverage | Record installed transports and unimplemented/unvalidated routes separately |
+| P2-R01..R03 | Resident references, refresh and generic management/Job visibility | Carry only the uncompleted integration; do not replace canonical ownership |
+| P2-R04..R05 | Remaining workflow-profile coverage and real external-command adapters | Retain actual implementation/effect evidence; selected real-use adapters cannot be mock-only |
+| P2-C01..C02 and bundle notes | Remaining cost/round-trip measurement and broader skill distribution/coverage beyond the Phase 6 minimum | Public Operation control stays in Phase 2; initial command/CLI wiring and skill creation/connection belong to Phase 6, not this backlog |
 
-OpenCodex MUST NOT become a required runtime dependency. If evaluated, it is a replaceable adapter/proxy experiment. OpenCode is likewise an optional independent harness/provider adapter candidate.
+Completed P2 preparation and upstream primitives remain completed at their actual
+evidence scope. Transferring a row does not mark its unchecked specifications
+passed, reset repair counts, change the original base/PLAN epoch, fabricate old
+state or require unrelated tests to be rerun. No copying of generated artifacts
+or content-integrity ledger is required for this handoff.
 
-## Driver scenarios
+## Needs discovered during use
 
-Use real development work with deterministic validation. Initial scenarios SHOULD include:
+Record an ordinary item here or link an existing journal with:
 
-- bounded compile-diagnostic JUDGMENT;
-- HYGIENE / TRIVIAL_COMPILE_FIX;
-- SIMPLE_LOGIC;
-- selected STANDARD_LOGIC work;
-- TEST_FIX from deterministic compile/test evidence;
-- independent local REVIEW;
-- staged review where selected local PASS results are checked by a stronger independent reviewer;
-- provider DECLINED followed by stronger-provider re-execution;
-- BLOCKED entering typed decision/error handling rather than blind escalation.
+- original ID/phase or discovery context and the concrete user scenario;
+- impact: blocks supported use, bounded enhancement, or optional future work;
+- current implementation state, known limitations and existing test/review links;
+- disposition: addressed in Phase 6/7, selected for Phase 8, unnecessary,
+  superseded, or explicitly assigned to a later plan, with a brief reason.
 
-## Decline / escalation validation
+Initial skill integration gaps are resolved in Phase 6. Use-blocking gaps found
+after its acceptance receive early attention during real use and Phase 7; users
+need not wait for Phase 8. Keep those phase scopes bounded. Other missing functions accumulate
+here without forcing repeated expansion of the current implementation batch.
+No real-use discoveries are claimed by creating this plan; add them as observed.
 
-A local provider is not required to manufacture a completion. Phase 8 must prove that DECLINED is a normal routing outcome, preserves semantic WorkOrder identity/context/evidence, and causes bounded selection of the next admitted capable provider.
+The [Development Artifact Overlay](../spec/development-artifact-overlay.md)
+initial delivery and its six SimpleModeler acceptance scenarios belong to
+Phase 7. Record only optional later expansion here; do not defer core publication,
+selection, native operation integration or consumer verification to Phase 8.
 
-The experiment should distinguish capability/reasoning decline from context/resource/tool-environment limitations where practical.
+## Selection and execution
 
-## Evidence and routing metrics
+1. Review Phase 2 carryover, Phase 5 runtime evidence, Phase 6 connected acceptance
+   and actual use after Phase 6 and during Phase 7. Confirm which
+   functions are still needed and which are unnecessary or superseded.
+2. Freeze a finite set of user-visible scenarios for this closing phase. Record
+   a reason for exclusions; do not silently drop an unresolved supported-use bug.
+3. Implement each connected scenario and its Executable Specifications together.
+   Use focused checks during implementation, then integrated validation and
+   independent review, with affected rechecks after fixes.
+4. Exercise the completed supported workflow in normal use and update usage
+   instructions, supported operations and remaining explicit limitations.
 
-Record at least:
-
-- Project/work identity and semantic work type/classification;
-- abstract ReasoningLevel / ExecutionRequirement;
-- provider/profile and execution-context/machine identity where available;
-- COMPLETED / DECLINED / BLOCKED and typed reason;
-- compile/test/validation result;
-- Review result and stronger-review disagreement when staged/sampled;
-- Fix/retry/escalation path;
-- elapsed time and available usage/cost/resource evidence.
-
-Aggregate enough evidence to derive local completion, validated local completion, decline, escalation, post-local validation failure, and local-vs-strong Review disagreement rates.
-
-Do not collapse the observations into a single opaque heaviness score. Preserve them for ProjectExecutionProfile and later corpus/experiment analysis.
-
-## Machine drivers
-
-MacBook Air M3/24GB and Mac mini/48GB are useful heterogeneous local drivers when available. Phase 8 does not require those exact machines. Machine identity/capability is evidence/policy, not semantics.
-
-The Air-class driver is useful for testing whether bounded Judgment, ROUTINE/SIMPLE work, portions of STANDARD work, and first-stage Review are practical on a smaller local machine. The larger local machine can provide a comparison point before cloud escalation.
-
-Repository-based migration between machines belongs to the coarser Machine Placement / RepositorySync concern. Phase 8 may collect comparable evidence but MUST NOT require fine-grained cross-machine migration for individual Fix/Review operations.
-
-## OpenCodex experiment
-
-After the Codex-direct/local path is characterized, optionally evaluate OpenCodex for:
-
-- easier local/multi-provider switching;
-- compatibility with Codex task/subagent execution;
-- tool-call/streaming/reasoning fidelity;
-- whether it changes decline/completion/validation behavior;
-- operational complexity and failure modes.
-
-Success of this experiment does not make OpenCodex mandatory. Failure does not block Phase 8.
-
-## OpenCode experiment
-
-OpenCode remains an optional alternative coding-agent/provider harness. Evaluate it only through the same logical ExecutionRequirement -> Provider Selection -> ExecutionEvidence contract so results are comparable with Codex-based execution.
+Phase 3/4 remain separately planned extensions. Consume them only when a selected
+real requirement needs them; do not make their full completion an automatic
+Phase 8 gate. Broader CNCF work is driven only to the boundary needed by selected
+scenarios and retains its owning project's responsibilities.
 
 ## Completion
 
-Phase 8 is complete when:
+- [ ] Every inherited/discovered item has an explicit disposition and a link to
+      actual evidence or a reason for exclusion/future placement.
+- [ ] The finite selected scenarios are implemented and their connected
+      Executable Specifications and required regressions pass.
+- [ ] Independent review has no unresolved blockers for the supported scope;
+      known supported-use failures are not relabeled optional to claim closure.
+- [ ] Real-use instructions match the available normal entry routes and outcomes.
+- [ ] Normal closing work for the delivered scope is complete, with history
+      retained and no claim that unimplemented optional features were delivered.
 
-1. at least one real local LLM executes admitted semantic work through the Phase 6 provider-neutral contract;
-2. local execution covers at least bounded Judgment, Implementation/Fix, and independent Review scenarios;
-3. DECLINED -> stronger-provider escalation and BLOCKED -> typed handoff are demonstrated;
-4. deterministic validation proves that COMPLETED is not acceptance authority;
-5. routing evidence/KPIs can be aggregated by Project x Provider/Machine;
-6. no optional OpenCodex/OpenCode dependency is required for the generic Workflow/routing contract;
-7. optional adapter experiments, if performed, are recorded as comparative evidence rather than architecture.
-
-## Non-goals
-
-- Making OpenCodex mandatory.
-- Making OpenCode mandatory.
-- Encoding a named local/cloud model in Workflow semantics.
-- Automatically learning or self-modifying routing policy.
-- Building sophisticated Machine Placement/migration optimization.
-- Claiming all STANDARD work can run locally.
+An item found unnecessary through use may close with that reason. Phase 8 closes
+the agreed rollout, not every imaginable future feature. Preserve Phase 5's
+removal of management hashes, tamper defenses, unchanged-content proofs and
+internal time-only expiry across every extension; do not reintroduce them as
+completion or evidence-reuse requirements.

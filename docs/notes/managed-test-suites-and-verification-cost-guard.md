@@ -7,41 +7,37 @@
 
 ## Purpose
 
-sm-workflow owns deterministic execution, observation, and policy evaluation of project Test Suites used by Workflow validation/admission. AI owns semantic design and maintenance of those suites. Runtime MUST NOT ask AI to rediscover official test selection on every validation.
+sm-workflow queries CNCF-resolved validation metadata to select and execute
+project validation deterministically. Executable Specifications/test operations
+own their declarations. AI designs test architecture and proposes source/model
+changes; ordinary selection does not rediscover test lists through AI.
 
 ~~~text
-AI analyzes project/testing needs
-  -> proposes/revises managed TestSuite
-  -> definition is admitted/registered
-  -> sm-workflow selects suite by declared purpose
-  -> deterministic provider executes it
-  -> receipt/evidence is recorded
-  -> deterministic cost/result policy is evaluated
-  -> warning when observed behavior violates expectation
-  -> Human decides whether improvement is needed
-  -> AI reviews tests/suite
-  -> revised definition is admitted/registered
+Executable Specification/Test Operation + CNCF metadata
+  -> CNCF discovery
+  -> sm-workflow query/select/execute
+  -> runtime evidence/cost/convergence guards
+  -> human-selected improvement -> AI proposal -> normal review/admission
 ~~~
-
-This is a Human-in-the-Loop engineering-improvement loop, not an autonomous test optimizer.
 
 ## Responsibility boundary
 
-### AI
+CNCF owns vocabulary, ABI, merge semantics and normalized discovery.
+sm-workflow owns dynamic execution, evidence and guards. textus-cbd-support owns
+static analysis, KPI and human-review presentation. AI changes test programs or
+annotations/CML properties through normal Candidate/review/admission; runtime
+observations never silently rewrite source metadata.
 
-AI MAY inspect project/build/test structure, propose suite composition, split/merge suites, improve slow tests, and propose expected duration plus rationale for legitimately long-running suites. AI returns a typed TestSuite proposal/revision. AI is not required for ordinary suite selection or execution.
-
-### sm-workflow
-
-sm-workflow MUST keep admitted TestSuite definitions as project development assets; select a suite from Workflow purpose/policy rather than ad-hoc AI choice; execute it through a typed deterministic operation/provider; capture result, duration, execution identity and definition revision; evaluate registered policy; and emit typed warnings without inventing remediation.
-
-### Human
-
-A human decides whether a warning deserves engineering work and may request AI review. A warning MUST NOT silently rewrite a suite, suppress itself, or authorize AI repair.
+Producer plan: [CNCF Phase 103](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-103.md).
+The [CNCF ABI proposal](https://github.com/asami/goldenport-cncf/blob/main/docs/notes/validation-test-metadata-abi-proposal.md)
+is the shared vocabulary source. sm-workflow Phase 5 drives/consumes it, Phase 6
+connects skills and Phase 7 extends use across repositories/overlays. cbd-support
+implementation runs on Mac mini; the coordinated plan is maintained across all
+three projects. Its dashboards/KPI completion does not gate initial runtime use.
 
 ## CNCF Validation/Test Metadata ABI consumer model
 
-The earlier managed-definition-file model is superseded. sm-workflow does not own a separate TestSuite registry as the normal source of truth. Executable specification/test operations carry CNCF Validation/Test Metadata ABI annotations/properties, and sm-workflow resolves suites as deterministic queries over the CNCF-normalized operation metadata.
+The management-file proposal is retained as a Slice validation plan, with responsibility separated from test declarations. CNCF metadata on Executable Specifications/Test Operations owns purpose, feature and execution-requirement declarations. The Slice plan owns acceptance conditions, metadata selection conditions, explicit supplementary operation references and typed execution parameters. Evidence records what was actually selected, executed and observed. The plan does not copy or override metadata as a second source of test declarations.
 
 ~~~text
 Executable Specification/Test Operation
@@ -56,7 +52,8 @@ Executable Specification/Test Operation
 CNCF resolved metadata discovery
         |
         v
-sm-workflow selection + deterministic execution + runtime evidence
+Slice validation plan (acceptance + query + additional references/parameters)
+  -> sm-workflow selection + deterministic execution + runtime evidence
 ~~~
 
 The same operation may participate in several purposes. Purpose membership is explicit and does not imply strict subset nesting.
@@ -78,9 +75,33 @@ FOCUSED is Slice-scoped:
 
 - Slice planning selects one or more feature identities;
 - runtime selects resolved operations containing FOCUSED and matching the admitted Slice feature selection;
-- if a Slice needs a genuinely unique feature boundary, that boundary is represented as admitted Slice/Test Architecture metadata rather than a free-form post-implementation list of test names.
+- the admitted Slice plan supplements that query with explicit Test Operation references and typed parameters where needed; a new reusable feature classification may still be proposed when appropriate.
 
-This replaces the earlier standard-focused-suite registry concept. Stable feature tags themselves provide the reusable focused grouping.
+Stable feature tags provide reusable focused grouping; the management file supplies the Slice-specific combination without duplicating those tags.
+
+### Shared discovery and observation handoff
+
+CNCF Phase 103 discovery supplies scope/completeness (COMPLETE/PARTIAL/UNKNOWN),
+unannotated operations and diagnostics, scoped feature/operation identity and
+metadata/source revisions. Required selection policy cannot silently treat a
+partial inventory as a complete passing validation set. The Component/Slice's
+explicit target feature population is separate from test-observed feature tags;
+missing coverage denominators remain unknown rather than inferred.
+
+For [cbd-support Phase 14](https://github.com/asami/textus-cbd-support/blob/main/docs/phase/phase-14.md),
+expose bounded runtime evidence references alongside operation/artifact/revision,
+metadata/query/overlay inputs, execution environment, measurement scope/unit,
+outcome/timeout/retry/attempt and execution ID/provenance. Query elapsed time,
+queue/build/setup time and operation/test-body time are not interchangeable.
+If an adapter lacks operation-level timing, report that limitation rather than
+allocating suite duration or adding a measurement-only run. Missing observations
+remain Unknown; NotRun requires an explicit known execution disposition.
+
+Static analysis/KPI and comparison of compatible runtime samples belong to
+cbd-support on Mac mini. Its UI/KPI completion is not a runtime prerequisite.
+The common first fixture removes a feature's sole ADMISSION declaration: retain
+the 1 -> 0 metadata delta and runtime coverage-policy outcome without claiming
+unprovided execution evidence.
 
 ### Runtime policy remains sm-workflow-owned
 
@@ -103,7 +124,7 @@ The discovered executable specification/test operation MUST ultimately bind to a
 
 ## Purpose-specific suite construction and time budgets
 
-Purpose defines the validation objective and time budget; it does not require a separate duplicate body of test code. AI SHOULD compose managed suites from existing tests/selectors and may reuse the same test in multiple purposes. The sets are independent and MUST NOT require a strict physical subset relation such as SMOKE subset FOCUSED subset ADMISSION subset FULL subset HEAVY.
+Purpose defines the validation objective and time budget; it does not require a separate duplicate body of test code. AI SHOULD classify existing test operations with purpose/feature metadata and may reuse the same test in multiple purposes. The sets are independent and MUST NOT require a strict physical subset relation such as SMOKE subset FOCUSED subset ADMISSION subset FULL subset HEAVY.
 
 ### SMOKE
 
@@ -111,7 +132,12 @@ SMOKE optimizes for the cheapest useful rejection of an invalid Candidate. It co
 
 ### FOCUSED
 
-FOCUSED validates a bounded changed area. A project MAY register multiple named focused suites such as goal-phase, repository-sync, admission, or execution-routing. Workflow/change classification selects among already admitted logical suite IDs; ordinary execution MUST NOT ask Codex to improvise individual test classes each time.
+FOCUSED validates a bounded changed area. Slice planning selects feature IDs;
+runtime queries FOCUSED operations whose resolved features intersect that set.
+Multiple selected features form a union, supplemented by the admitted plan's
+explicit operation references. Deduplicate identical operation/parameter/context
+invocations; deliberately different parameter cases remain distinct. Runtime
+executes the plan deterministically rather than asking AI for a new test list.
 
 ### ADMISSION
 
@@ -148,100 +174,107 @@ HEAVY     no ordinary upper budget; hours are acceptable
 These are engineering targets, not correctness semantics. ADMISSION/FULL budget breach does not by itself turn a passing test into failure. Explicit exceptions are allowed when justified, but recurring excess should remain visible and reviewable rather than becoming accidental normality.
 
 
-## Fixed project suites and Slice-focused validation
+## Project queries and Slice-focused validation
 
-The purposes do not all have the same ownership/lifetime.
+SMOKE, ADMISSION and FULL are fixed project-level purpose queries, not frozen
+membership lists. HEAVY is a project query invoked only by explicit policy.
+FOCUSED uses the Slice's admitted feature selection. The selected operations
+are resolved from the current Candidate's metadata; changing metadata is a
+reviewable Test Architecture change, not permission to silently shrink coverage.
 
-SMOKE, ADMISSION and FULL are fixed project-level managed suites. HEAVY is also project-level when the project defines it, but it is optional and explicitly invoked. FOCUSED is different: its concrete validation set is resolved for each development Slice.
+Plan the combination before implementation. Normally use FOCUSED plus feature;
+when insufficient, add explicit operation references/typed parameters to the
+Slice plan rather than forcing metadata changes solely to express one Slice.
+Revise source metadata when the test declaration itself needs correction.
+TEST_FIX reruns SMOKE and the same admitted plan. A required unresolved reference
+or uncovered acceptance condition is an explicit gap, never a silently skipped
+operation or empty passing result. No ever-growing global FOCUSED list is needed.
 
-~~~text
-Project Test Suites
-  SMOKE       fixed
-  ADMISSION   fixed
-  FULL        fixed
-  HEAVY       fixed/optional
+### Slice validation plan management file
 
-Slice Validation
-  FOCUSED     resolved per Slice
-~~~
-
-This distinction is normative. sm-workflow MUST NOT model one ever-growing project-global FOCUSED suite and run it for every Slice.
-
-### Standard focused feature suites
-
-Feature tags provide the standard reusable focused grouping. Slice planning selects admitted feature identities; a special Slice may introduce/revise an explicit feature classification as part of its admitted plan rather than create an external suite registry.
-
-### Planning-time rule
-
-Focused validation is an acceptance-design decision, not a post-implementation improvisation:
+The management file is a version-controlled project/Slice planning resource read
+through existing CNCF logical resource APIs. Exact format/path is an implementation
+decision, not a new independent configuration resolver. Its conceptual contents:
 
 ~~~text
-Slice planning
-  -> determine changed semantic/functional area
-  -> existing feature classification sufficient?
-       yes -> select admitted feature identity/identities
-       no  -> propose/admit Slice/Test Architecture feature classification
-  -> admit Slice plan including FocusedValidationProfile
-  -> implementation
+SliceValidationPlan
+  id / revision / sliceRef
+  acceptanceConditions
+  metadataSelection          // normally FOCUSED + selected feature IDs
+  additionalOperations       // stable Test Operation refs + typed parameters
+  executionParameters        // bindings to declared operation input schemas
+  acceptanceCoverageRefs     // which selections/references address each condition
 ~~~
 
-After implementation the normal path is therefore deterministic:
+Store declarations of this Slice's required combination, not copied purpose,
+feature or execution-requirement values. Resolve references through the same
+CNCF operation discovery/typed binding. Supplemental operations need not gain
+FOCUSED membership merely because this plan includes them. Their declared
+execution requirements still apply; the plan cannot weaken them or inject an
+arbitrary executable/argv. Invalid references, parameters or conflicting bindings
+produce ordinary typed input errors. Deliberate parameter variants are explicit
+invocations; overlapping identical query/reference invocations execute once.
 
-~~~text
-IMPLEMENTATION
-  -> fixed project SMOKE
-  -> Slice FocusedValidationProfile
-  -> semantic REVIEW
-  -> fixed project ADMISSION
-  -> Closing
-~~~
+The plan is admitted with the Slice and evolves through normal plan/Candidate
+review. A fixer cannot silently change conditions, drop required coverage or
+substitute a cheaper operation. Explicit supplemental HEAVY work is permitted
+when included in the admitted plan/policy; it is never silently added by runtime.
+SMOKE, required final review and ADMISSION remain separate obligations.
 
-A TEST_FIX changes the Candidate, not the Slice validation design. It returns through project SMOKE and the same admitted Slice feature selection. If failure evidence demonstrates that the focused profile itself is wrong or insufficient, that is a validation-design gap and requires an explicit Slice plan/TestSuite revision rather than silent test expansion by the fixing AI.
+Evidence references the plan ID/revision, query and explicit-reference selection
+origins, actual resolved operations/parameters/context and results. A planned
+operation is not execution evidence. Reuse follows existing applicability rules,
+including relevant plan/parameter changes, without hashes, snapshots or TTLs.
 
-### Promotion of repeated Slice-specific knowledge
+## Metadata admission and revision
 
-Repeatedly similar Slice-specific focused definitions are a signal that a reusable feature suite is missing. Human/AI review may promote the recurring pattern into a standard focused feature suite. This follows the general sm-workflow progression from semantic discovery to admitted reusable deterministic knowledge.
+Source annotations or Cozy-owned CML properties are the declaration authority.
+CNCF interprets supported ABI values and merge rules. sm-workflow validates the
+query's required coverage and typed operation/provider binding using those
+resolved facts, without parsing annotations or reimplementing merge semantics.
+Metadata must not introduce executable/free-form argv.
 
-## Registration and revision
-
-AI-produced TestSuite content is a candidate, not runtime authority. Registration MUST validate schema/id/purpose, validate admitted operation/provider binding, reject arbitrary command injection, create a distinguishable definition revision, and preserve provenance so execution evidence identifies the exact definition revision.
-
-Updating a suite creates a new admitted revision. Existing receipts remain bound to the revision actually used.
-
-Project-owned definitions SHOULD live in the normal version-controlled sm-workflow Component resource area through CNCF Component resource APIs. Runtime receipts/warnings belong in runtime state/work storage. sm-workflow MUST NOT hard-code a physical .textus path. The exact serialization filename is intentionally non-normative; do not introduce a second configuration resolver.
+Metadata/test changes follow normal Candidate/review/admission and retain source
+and ABI revision provenance. Runtime query results are derived execution data,
+not a second authoritative TestSuite registry. They may be referenced by receipts
+without copying full source, logs or defining integrity hashes. Policy/Slice
+configuration and runtime receipts use existing CNCF logical resource APIs;
+source test metadata is not moved into a sm-workflow management file.
 
 ## Execution
 
-Workflow policy requests a logical purpose such as ADMISSION. sm-workflow resolves the current admitted definition and conceptually invokes:
+Workflow policy requests a purpose and, for Slice validation, an admitted plan
+containing query conditions, supplementary references and typed input bindings.
+CNCF discovery supplies resolved metadata and typed operation references.
+Conceptually the existing RunTestSuite operation executes that derived selection:
 
 ~~~text
-RunTestSuite(
-  workflowHandle,
-  candidateRevision,
-  testSuiteId,
-  testSuiteRevision
-) -> TestSuiteExecutionReceipt
-~~~
+RunTestSuite(workflowHandle, candidateRevision, purpose, validationPlanRef,
+             resolvedSelectionRef) -> TestSuiteExecutionReceipt
 
-Minimum receipt:
-
-~~~text
 TestSuiteExecutionReceipt
   executionId
-  testSuiteId
-  testSuiteRevision
   purpose
+  selectedFeatures
+  validationPlanRef / validationPlanRevision
+  selectionOrigins / actualParameterBindings
   candidateRevision
-  startedAt
-  completedAt
-  duration
+  metadataAbiVersion
+  metadataSourceRevision
+  resolvedSelectionRef       // actual operation IDs/references and input context
+  policyRevision
+  startedAt / completedAt / duration
   outcome: PASSED | FAILED | ERROR | TIMEOUT
   providerExecutionEvidence
   resultReference?
 ~~~
 
-Do not duplicate complete test output in every Workflow record. Preserve bounded diagnostics/result references using existing evidence/observability mechanisms. PASSED evidence is fresh only for the candidate/revision and suite revision it validates; existing Candidate-Admission freshness rules remain authoritative.
-
+A logical execution/selection ID is not a source suite-registry ID. Bind evidence
+to actual operations, metadata/test revision and relevant execution inputs,
+including overlay dependencies. Preserve bounded references through existing
+Candidate/Evidence mechanisms. Do not duplicate full output or add hashes,
+whole-file comparison or expiry certificates. Existing Candidate-Admission
+applicability rules decide evidence reuse.
 
 ## Candidate validation pipeline and FIX work
 
@@ -262,9 +295,9 @@ IMPLEMENTATION
 
 ### SMOKE purpose
 
-SMOKE is the cheapest registered TestSuite intended to reject an obviously invalid Candidate before focused validation or AI review. For Scala/sbt projects, the suite SHOULD exploit the fact that running even a small test normally requires test compilation: all test sources are compiled before the selected test executes. Thus a Scala SMOKE suite may combine full test-source compilation with only a very small representative runtime test set. This gives materially broader structural/type coverage than the number of executed tests alone suggests.
+SMOKE is the cheapest purpose-selected validation set intended to reject an obviously invalid Candidate before focused validation or AI review. For Scala/sbt projects, the suite SHOULD exploit the fact that running even a small test normally requires test compilation: all test sources are compiled before the selected test executes. Thus a Scala SMOKE suite may combine full test-source compilation with only a very small representative runtime test set. This gives materially broader structural/type coverage than the number of executed tests alone suggests.
 
-This is a project/provider property, not a generic assumption: other ecosystems may define SMOKE differently. AI designs and registers the project-appropriate SMOKE suite; sm-workflow only executes the admitted definition.
+This is a project/provider property, not a generic assumption: other ecosystems may define SMOKE differently. AI designs the project-appropriate tests and SMOKE metadata; sm-workflow only executes the admitted definition.
 
 The managed TestSuite purposes are SMOKE, FOCUSED, ADMISSION, FULL and HEAVY. DEVELOPMENT may remain an exploratory/harness concern unless a concrete Workflow requirement later justifies a separate managed purpose.
 
@@ -281,7 +314,7 @@ FIX
   relevantPriorEvidence
 ~~~
 
-TEST_FIX is triggered by deterministic TestSuite failure evidence. Its request contains the original requirement, current Candidate, failed suite identity/revision, execution evidence and bounded failure diagnostics. The AI decides whether the cause is implementation code, test code, TestSuite design, or a requirement/design gap. TEST_FIX MUST NOT mean merely making an assertion pass.
+TEST_FIX is triggered by deterministic TestSuite failure evidence. Its request contains the original requirement, current Candidate, failed selection and validation-plan identity/revision, execution evidence and bounded failure diagnostics. The AI decides whether the cause is implementation code, test code, TestSuite design, or a requirement/design gap. TEST_FIX MUST NOT mean merely making an assertion pass.
 
 REVIEW_FIX is triggered by semantic ReviewEvidence/findings. Its request contains the original requirement, current Candidate, ReviewEvidence and required findings. It may address design, responsibility boundaries, overimplementation, missing requirements, naming/structure, or other semantic review findings.
 
@@ -301,25 +334,21 @@ A TestSuite FAILED result requests TEST_FIX rather than an untyped generic repai
 
 ## Admission duration guard
 
-The first operational guard is intentionally simple:
+An ordinary ADMISSION execution over 60 seconds emits a cost warning under
+sm-workflow policy. The default FULL target is 10 minutes. These configurable
+query-level targets are not CNCF ABI constants, test failures, timeouts,
+authorization expiry or permission to skip validation.
 
-> An ADMISSION TestSuite whose completed execution exceeds 60 seconds SHOULD emit a warning unless its admitted definition explicitly declares a justified long-running expectation/policy.
-
-The default 60-second value is sm-workflow application policy and SHOULD be configurable through the existing CNCF Component configuration mechanism. It is not a CNCF generic Workflow constant.
-
-A duration warning is NOT a failed test, Admission rejection, timeout, permission to skip validation, permission for sm-workflow to modify tests, or permission for AI to auto-repair.
-
-For NORMAL suites the policy is conceptually:
-
-~~~text
-threshold = suite.warningThreshold or defaultAdmissionWarningThreshold
-if purpose == ADMISSION and duration > threshold:
-    emit TestSuiteDurationWarning
-~~~
-
-For LONG_RUNNING suites, the definition MUST contain rationale plus expected duration or explicit warning threshold. LONG_RUNNING is not a permanent suppression bit. Execution is still measured and SHOULD warn when it materially exceeds the registered expectation/threshold.
-
-Do not implement adaptive statistical thresholds initially. Historical trend analysis can be added later from accumulated evidence without making ordinary execution nondeterministic.
+Operation expectedDuration and durationClass come from CNCF metadata. Aggregate
+query execution duration is measured separately: do not assume summing operation
+estimates predicts compilation, shared setup or parallel runtime. A LONG_RUNNING
+operation does not suppress the entire ADMISSION/FULL warning. A justified
+query-level exception/threshold and rationale belong to existing sm-workflow
+policy configuration, not a second test-membership file or an invented ABI field.
+Operation-level comparisons use compatible operation evidence when available;
+unavailable granularity stays unknown. Explicit long-running exceptions remain
+observable against their declared expectations. No adaptive statistical optimizer
+or extra run solely to collect duration is required.
 
 ## Warning model
 
@@ -330,8 +359,9 @@ TestSuiteDurationWarning
   warningId
   workflowHandle
   executionId
-  testSuiteId
-  testSuiteRevision
+  resolvedSelectionRef
+  metadataSourceRevision
+  policyRevision
   purpose
   observedDuration
   warningThreshold
@@ -346,7 +376,7 @@ Warnings are durable diagnostic facts. They SHOULD be publishable through Phase 
 
 When a human selects a warning for improvement, create a bounded semantic work request containing the current resolved Validation Metadata identity/revision, relevant receipts, warning facts, bounded test/build context, and the human instruction.
 
-AI may return no change with rationale, a TestSuite revision, a test implementation change, or both. Normal candidate/review/admission applies to code changes. A proposed TestSuite revision separately passes TestSuite registration admission. Subsequent executions provide new evidence; sm-workflow MUST NOT claim improvement until observation supports it.
+AI may return no change with rationale, metadata annotation/property changes, test implementation changes, or both. All changes use normal Candidate/review/admission and CNCF interpretation; there is no TestSuite registry registration step. Subsequent executions provide evidence before sm-workflow claims improvement. Coverage-reducing metadata changes remain explicit Test Architecture decisions.
 
 ~~~text
 observation -> human judgment -> AI semantic improvement -> deterministic re-admission -> observation
@@ -358,9 +388,50 @@ not:
 observation -> autonomous self-modification
 ~~~
 
+### Using indicators for developer-requested replanning (2026-10-07)
+
+Existing cost, convergence and issue-movement outputs also help developers notice
+that a development plan may be inefficient, stalled or expanding. They are
+evidence for reconsidering the plan, not a verdict that the plan is wrong.
+Successful tests or locally converging fixes alone do not establish progress
+toward the current practical acceptance conditions.
+
+Use available observations and bounded AI hints to explain, for example, fixes
+without acceptance progress, new/reopened issues outpacing resolutions, repeated
+validation cost without additional acceptance evidence, or growing unplanned
+dependency work. Relate these observations to existing Slice validation plans,
+issue records and execution evidence where the relationship is known. Missing
+acceptance/dependency information remains unknown; this use does not require new
+metrics, automatic semantic diagnosis, extra tests/scans or a comparison ledger.
+
+The intended usage is:
+
+1. sm-workflow presents the observed indicators, recent trend, evidence references
+   and uncertainty to the developer.
+2. The developer decides whether to ask AI to investigate and reconstruct the
+   development plan, using the existing human-selected semantic-work path.
+3. AI considers the current acceptance conditions, unresolved issues, recent
+   changes and known dependencies. It proposes a rationale and bounded changes
+   to work order, implementation batches or scope allocation, or explains why
+   retaining the plan is appropriate.
+4. The developer adopts the proposal or requests changes. The adopted plan updates
+   the current completion conditions and relevant validation plan consistently;
+   deferred work keeps its identity, actual state and destination. Historical
+   obligations are not silently restored as current completion requirements.
+5. sm-workflow continues under the adopted plan; subsequent observations support
+   any claim that the change improved progress or cost.
+
+Indicators alone do not dispatch AI, rewrite a plan, reduce scope or introduce
+another automatic stop. Existing Fix Convergence Guard decisions, AI BLOCKED and
+the absolute cycle limit still apply. Replanning preserves actual history, issue
+states, counters and applicable evidence; it does not renew an unresolved loop's
+allowance. Phase 5 supplies the existing observations; Phase 6 connects this use
+to developer-requested AI work. No separate replanning engine or additional
+initial-release gate is introduced.
+
 ## Interaction with Codex during implementation
 
-Codex remains free to use narrowly scoped exploratory developer tests when useful, subject to harness policy. Those checks are not automatically official Workflow validation evidence. Official focused/admission/full validation is the registered TestSuite executed by sm-workflow. This prevents repeated just-in-case expansion of official validation scope.
+Codex remains free to use narrowly scoped exploratory developer tests when useful, subject to harness policy. Those checks are not automatically official Workflow validation evidence. Official focused/admission/full validation is the admitted metadata-query/explicit-reference combination executed by sm-workflow. This prevents repeated just-in-case expansion of official validation scope.
 
 
 ## Fix Convergence Guard
@@ -393,6 +464,15 @@ External resources mean resources outside ordinary source/test files whose parti
 
 Each Fix cycle records its vector and delta from the preceding Candidate. The vector is preserved as a vector; the initial implementation MUST NOT collapse it into an opaque scalar convergence score.
 
+Initial collection is deliberately limited to these values and existing
+Candidate/provider/test evidence at reasonable cost. Do not make precise semantic
+failure identity tracking, a new dependency analyzer, extra test executions or
+expensive resource scans prerequisites for convergence assessment. Use failure
+identities/sets when the provider already supplies them. Missing measurements
+remain unknown, not zero or fabricated improvement. Resolve ambiguous meaning
+with the AI assessment/rationale and later contract improvements rather than
+expanding deterministic data collection now.
+
 A single expansion does not imply divergence. sm-workflow evaluates a bounded recent trend so a sequence that expands modestly while locating a problem and then contracts may continue. Sustained expansion, persistent non-improvement, or oscillation is suspicious. The initial policy should use simple deterministic rules over a small recent window rather than statistical/ML anomaly detection.
 
 ### AI semantic change classification
@@ -409,7 +489,7 @@ COMPLEX_LOGIC
 
 Semantics:
 
-- HYGIENE: no logic change; formatting, harmless cleanup, naming/hygiene and equivalent changes.
+- HYGIENE: no logic change; formatting, harmless cleanup, naming/hygiene and equivalent changes. This includes history-comment adjustments and adding/repositioning GWT explanatory comments without changing executable test behavior. A major file split or structural refactoring is not exempt merely because its intended behavior is unchanged.
 - TRIVIAL_COMPILE_FIX: mechanically small compile correction without intended logic change, such as a missing import, spelling/identifier typo, or similarly local compile defect.
 - SIMPLE_LOGIC: localized logic change that normally fits within one function/method or equivalent logical unit.
 - STANDARD_LOGIC: ordinary logic change whose individual logic units remain within one file/module-local implementation boundary.
@@ -432,10 +512,19 @@ FixChangeAssessment
   changeClass
   affectedLogicalUnits
   crossFileLogic: Boolean
+  minorBugFix: Boolean
   rationale
 ~~~
 
 sm-workflow records this separately from deterministic file/resource counts. A semantic class that grows over successive Fix cycles is useful divergence evidence even when physical file count is flat.
+
+`minorBugFix` identifies a small local correction of an already agreed behavior,
+including TRIVIAL_COMPILE_FIX or a bounded SIMPLE_LOGIC bug correction. It does
+not mean every SIMPLE_LOGIC change is exempt: a new feature, requirement/design
+change, broad restructuring or coordinated cross-boundary correction is counted.
+The rationale explains the classification using ordinary code/test evidence;
+do not require a separate proof that all other files are unchanged. A mixed Fix
+containing counted work consumes one cycle, not one count per file or finding.
 
 ### AI convergence self-assessment
 
@@ -449,6 +538,13 @@ AIConvergenceAssessment
 ~~~
 
 Initially PROGRESSING/STALLED/REGRESSING are advisory evidence and MUST NOT override deterministic guard policy. They are retained so later operation can evaluate calibration and usefulness of AI self-assessment.
+
+Use the bounded rationale to return useful hints: what improved, what remains,
+why a temporary expansion was needed, or what decision/change would unblock work.
+Prefer extending this feedback over adding costly deterministic measurements.
+Hints can cite existing evidence but do not authorize new work or override the
+current policy. More detailed structured feedback can be added after operational
+experience; it is not an initial-completion prerequisite.
 
 BLOCKED is a hard-stop signal: the AI explicitly judges that continuing the same Fix loop is not appropriate or safe without an upstream decision/change. sm-workflow MUST stop automatic Fix cycling and enter the typed error/decision handling path. A future contract may refine explicit hard-stop reasons such as requirement gap, design gap or validation-design gap.
 
@@ -469,17 +565,64 @@ STALLED means meaningful improvement is not observable over the configured recen
 
 Examples of useful deterministic signals include consecutive growth of source/resource surface, failed-test count that does not improve, repeated reappearance of the same failure identities, and repeated oscillation between recent failure sets. Avoid sophisticated semantic inference in the guard.
 
+Do not treat a smaller file/line change alone as proof of closure. Evaluate the
+available vector and validation outcomes at this initial level, retain uncertainty
+and AI hints, and avoid imposing additional expensive collection merely to make
+every convergence judgment exact.
+
 ### Cycle limits
 
-Trend evaluation is combined with bounded cycle limits. The policy SHOULD provide a soft limit and a hard limit.
+Keep two separate counts within the current logical Slice/Candidate Fix loop:
 
-- Below soft limit: continue when no divergence/hard-stop is present.
-- At/above soft limit: CONVERGING or SLOW_CONVERGENCE may continue; STALLED should warn/escalate according to policy.
+- **Ordinary repair count**: counts substantive fixes and is a parameter of
+  convergence judgment, alongside recent trends, validation results and bounded
+  AI feedback. Its soft threshold is not an unconditional stop. HYGIENE and
+  minor bug corrections do not increment this count, but their repeated results
+  still affect convergence judgment; they are not invisible to the guard.
+- **Automatic Fix cycle count**: counts every Fix cycle, including HYGIENE and
+  minor bug corrections. The default **hard limit is 10 cycles**. It stops further
+  automatic repair regardless of favorable trends, AI optimism or classification.
+
+One cycle is one dispatched repair batch followed by its applicable validation
+and review. Several findings/files repaired together consume one cycle, not one
+per finding, file, test command or review invocation. Reserve the automatic cycle
+when dispatching the batch, so failure or restart cannot grant a free extra Fix;
+validation/review completes that cycle rather than incrementing it again.
+
+TRIVIAL_COMPILE_FIX is normally minor; SIMPLE_LOGIC is ordinary-count-exempt only
+when the actual correction meets the minor-bug definition above. A mixed batch
+with substantive work increments both counts once. A hygiene/minor-only batch
+increments only the automatic count. Keep every cycle's semantic classification,
+rationale, revision and execution history. No exclusion bypasses the hard limit.
+
+All cycles affect the existing trend policy and applicable validation. Repeated
+unsuccessful minor corrections, oscillation, non-improvement or AI BLOCKED can
+lead to warning/stop/handoff before the hard limit. Do not clear recent failure
+history when an ordinary-count-exempt cycle occurs.
+
+Retain both counts and history across chats, forks or process restarts. Do not
+charge an unrelated later development loop for old fixes elsewhere in the
+project, or reset an active unresolved loop merely by changing its task/name,
+reclassifying a fix, or reaching the hard limit. Resumption after that stop needs
+an explicit decision; the guard must not automatically renew its allowance.
+This design update does not reset existing historical records or live counters.
+
+- Below the ordinary soft threshold: continue when the guard finds no stop reason.
+- At/above that threshold: CONVERGING or SLOW_CONVERGENCE may continue within the
+  hard limit; STALLED should warn/escalate according to policy.
 - DIVERGING: stop without waiting for the hard limit.
 - AI BLOCKED: stop immediately.
-- Hard limit: stop automatic cycling regardless of apparently favorable trend.
+- Hard limit: after the tenth automatic Fix cycle, evaluate its result normally.
+  A successful candidate may close. If any further repair is needed, including
+  hygiene or a minor bug correction, enter typed handoff with FIX_CYCLE_LIMIT;
+  never dispatch an eleventh Fix automatically under the default policy.
 
-The initial numeric limits MUST be configuration/policy values rather than hard-coded domain constants. Their purpose is to prevent infinite cycling, not to claim that a particular number of Fixes is inherently wrong.
+Numeric limits remain versioned policy/configuration values. Ten is the initial
+hard-limit default; the ordinary soft threshold/recent trend window belongs to
+configured policy. Runtime or AI must not raise/reset the limit automatically.
+The hard limit is an exceptional backstop against runaway unattended operation;
+ordinary repair count helps judge convergence rather than declaring a fixed
+number of useful repairs wrong.
 
 ### Error/Decision handoff
 
@@ -498,7 +641,7 @@ Fix cycle
            AI_BLOCKED
 ~~~
 
-The handoff SHOULD present the cycle history, ConvergenceVectors/deltas, semantic change classes, validation outcomes and AI assessments. sm-workflow reports facts and policy outcome; it does not choose a new semantic strategy.
+The handoff SHOULD present the cycle history, ConvergenceVectors/deltas, unresolved/reopened issue identities where available, semantic change classes, validation outcomes and AI assessments. sm-workflow reports facts and policy outcome; it does not choose a new semantic strategy.
 
 ### Convergence examples
 
@@ -521,39 +664,71 @@ cycle   source files   external resources   semantic class
 3       16             5                    COMPLEX_LOGIC
 ~~~
 
-Neither example is judged by one metric alone. The guard evaluates the vector/trend, while the semantic class remains AI-provided evidence and the cycle bound guarantees termination.
-
+Neither example is judged by one metric alone. The guard evaluates the available
+vector/trend, while the semantic class and hints remain AI-provided evidence.
+The explicit hard bound covers every automatic Fix cycle. Ordinary-count
+exclusions never bypass it; all cycles also remain subject to convergence judgment.
 
 ## Finding ledger and Fix reconciliation
 
-A Fix loop MUST track the identity and lifecycle of concrete findings rather than only count rounds or rely on free-form AI summaries. This design is informed by Orca's review/fix implementation, but is expressed in sm-workflow Candidate/Admission terms.
+Track concrete findings across Fix cycles using typed Workflow state. The useful
+Orca behaviors are finding identity, structured Fix reconciliation, bounded
+review narrowing and reuse on resume. They extend existing Candidate/Admission
+and Evidence contracts; they do not introduce a second state store, a
+stage-as-Git-commit protocol or an integrity ledger.
 
-### FixIssue ledger
-
-Test/review findings that participate in a Fix cycle SHOULD be normalized to stable typed issue identities where the producing source can support them:
+### FixIssue identity and lifecycle
 
 ~~~text
 FixIssue
   id: FixIssueId
   source: TEST | REVIEW | CHECK | other admitted source
-  sourceIdentity
-  title/summary
+  sourceIdentity?       // producer/repository and test/check/finding identity
+  summary
   evidenceReference
   status: OPEN | RESOLVED | DECLINED | REOPENED
+  latestDisposition?   // fixer claim, separate from validated status
 ~~~
 
-The ledger is carried across Fix cycles. A later observation of the same logical issue refreshes/reopens the existing identity rather than blindly creating another unrelated entry. Resolved issues leave the open set but remain in history. The implementation MUST avoid contradictory simultaneous open/resolved records for the same issue identity.
+Assign an issue ID when a finding enters the loop and carry it in subsequent
+requests/results. When available, retain the source's stable test/check/review
+identity with its repository/provider scope, so identical names in different
+projects do not collide. Reviewers receive relevant existing IDs and explicitly
+reference them when reporting the same issue again. Runtime checks IDs and
+transitions; it does not infer semantic equivalence through fuzzy text matching,
+line numbers or content hashes.
 
-Test failure identity should use stable test/check identity when available. Review finding identity requires a typed/stable finding identity from the review result; sm-workflow MUST NOT invent semantic identity by fuzzy text matching.
+Missing stable source identity is not a new execution blocker. Retain the finding
+with its assigned local issue ID and evidence; cross-observation correspondence
+may remain unknown. Do not invent a match, fabricate complete coverage, run extra
+scans or require AI to build an identity system before work can continue. Existing
+test/review coverage remains authoritative even when issue mapping is incomplete.
 
-### FixResult reconciliation
+- OPEN: an unresolved finding.
+- DECLINED: the fixer declined the requested correction, with rationale. It is
+  still unresolved; this status is not an accepted waiver or scope change.
+- RESOLVED: applicable fresh Test/Review evidence confirms resolution under the
+  admitted validation policy. A fixer claim alone never enters this state.
+- REOPENED: a previously RESOLVED issue is observed again with the same supported
+  identity. Repeated observations while already unresolved update its evidence;
+  they do not manufacture new issues or repeated reopen transitions.
 
-TEST_FIX/REVIEW_FIX receives an explicit set of open FixIssue identities. The AI result SHOULD account for those identities with a typed disposition, conceptually:
+Keep one current status per issue and retain its history across cycles/restarts.
+OPEN, DECLINED and REOPENED all belong to the unresolved set. A policy-authorized
+waiver/scope change uses the existing explicit decision path; the fixer cannot
+remove a required finding by declining it. Zero unresolved tracked issues alone
+does not establish acceptance when required validation/review remains incomplete.
+
+### FixResult reconciliation and validation
+
+TEST_FIX/REVIEW_FIX receives the explicit unresolved issue IDs assigned to that
+repair batch, alongside the original requirement and bounded evidence. The
+structured response accounts for each requested issue exactly once:
 
 ~~~text
 FixIssueDisposition
   issueId
-  disposition: FIXED | DECLINED | BLOCKED
+  disposition: FIXED | UNRESOLVED | DECLINED | BLOCKED
   rationale?
 
 FixResult
@@ -563,42 +738,108 @@ FixResult
   convergenceAssessment
 ~~~
 
-sm-workflow deterministically reconciles the result against the request before accepting the new Candidate as a Fix result. Unknown issue IDs, duplicate contradictory dispositions, or malformed/unaccounted result entries are rejected or surfaced as degraded evidence according to explicit policy. AI cannot manufacture authority by claiming to have fixed an issue it was not handed.
+UNRESOLVED permits honest partial progress without falsely claiming FIXED or
+declaring BLOCKED. Its bounded rationale can explain remaining work and reference
+existing progress evidence. It creates no authority to expand the task.
 
-A FIXED claim removes the issue from the carried open set provisionally; subsequent Test/Review may re-report the same issue, in which case it becomes REOPENED. A DECLINED issue remains open with the latest rationale. BLOCKED stops the automatic loop and enters typed error/decision handling.
+Runtime reconciles the response against the supplied request IDs. Unknown or
+unrequested IDs, duplicate dispositions, missing requested entries and malformed
+entries are input contradictions: return a typed result-contract error through
+existing failure handling rather than applying an ambiguous ledger update or
+accepting a partial success report. Preserve actual Candidate changes and valid
+prior evidence; a bad report neither erases work nor grants validation success.
+New findings can enter through ordinary test/review evidence intake, separately
+from this response; the fixer cannot declare unsolicited issues FIXED.
 
-The fixer's FIXED claim is not validation evidence. The normal SMOKE/FOCUSED/REVIEW chain determines whether the issue actually stays resolved.
+FIXED is a recorded claim awaiting validation. Keep the issue unresolved until
+applicable fresh evidence confirms it; do not increment resolvedIssues on that
+claim. Use the normal admitted SMOKE/FOCUSED/semantic review chain, with evidence
+identifying the covered issue or the admitted check/scope that establishes its
+resolution. Runtime consumes typed outcomes rather than judging code semantics.
+Multiple issues may share one valid test/review result; do not add a separate test
+or review invocation per issue. Re-reporting an unconfirmed FIXED claim keeps the
+issue unresolved; re-reporting a validated RESOLVED issue makes it REOPENED.
 
-### Ledger metrics in ConvergenceVector
+A finding's absence from a narrowed review or unrelated passing test is not
+resolution. Validation coverage must actually address it. DECLINED/UNRESOLVED
+retain unresolved state, while a valid BLOCKED disposition or AI BLOCKED
+assessment immediately enters the existing error/decision path.
 
-The convergence evidence SHOULD additionally expose deterministic ledger counts:
+### Issue movement as convergence evidence
+
+Add the following counts to ConvergenceVector where supported by the ledger:
 
 ~~~text
-openIssues
-resolvedIssues
-newIssues
-reopenedIssues
+openIssues       // current unresolved set, including DECLINED and REOPENED
+resolvedIssues   // transitions to evidence-confirmed RESOLVED in this cycle
+newIssues        // newly identified issues first recorded in this cycle
+reopenedIssues   // RESOLVED -> REOPENED transitions in this cycle
 ~~~
 
-These augment rather than replace file/resource/test metrics. For example, decreasing file surface with increasing reopened issues is not automatically healthy convergence.
+These are counts of known issue IDs within the current loop, not estimates of all
+defects in the product. Retain bounded coverage/unknown information when sources
+cannot provide reliable correspondence; do not treat missing metrics as zero.
+Unchanged observations do not count again as new/resolved/reopened events.
+An issue resolved and subsequently reopened in one cycle contributes to both
+transition counts and ends in the unresolved set; net improvement is not inferred
+from resolvedIssues alone. Combine issue movement with available validation
+outcomes and existing surface/trend metrics. Smaller edits with recurring issues
+are not automatically convergence.
 
-### Zero-fix stop
+### Zero-fix signal and partial progress
 
-If a Fix request contains one or more open issues but the reconciled result fixes none and does not produce an admitted plan/validation-design revision, sm-workflow SHOULD classify the cycle as STALLED and stop or escalate according to Convergence Guard policy rather than repeatedly issue the same Fix request.
+When requested unresolved issues remain and reconciliation reports zero FIXED
+claims, treat that as strong evidence of possible STALLED behavior. It is not an
+unconditional immediate stop based on that number alone. Likewise, FIXED claims
+without confirmed resolution do not establish progress.
 
-An explicit AI BLOCKED disposition stops immediately. A DECLINED-only result is not progress merely because the Candidate changed cosmetically.
+Evaluate the normal cycle's available validation results, issue movement, recent
+trend and any admitted plan/validation-design revision. Supported partial
+progress, such as fewer failing checks within one still-open issue, may justify
+CONVERGING/SLOW_CONVERGENCE continuation under the existing guard policy. Bounded
+AI hints explain that evidence but optimism alone cannot override the guard.
+Cosmetic Candidate changes or DECLINED-only replies are not themselves progress.
+If no supported progress is observable, classify STALLED and use configured
+warning/decision handling instead of blindly resubmitting the same request.
 
-### Narrowing re-evaluation scope
+Do not require extra diagnostics or test runs solely to establish progress more
+precisely. Preserve uncertainty and apply the existing bounded trend policy.
+AI BLOCKED still stops immediately, and the absolute hard limit of 10 automatic
+Fix cycles includes all partial/hygiene/minor repairs regardless of issue count
+or the ordinary repair count. Neither a new issue ID nor a plan revision resets
+an active unresolved loop's history or allowance.
 
-After a Fix, re-evaluation MAY narrow semantic reviewers/checks to sources relevant to still-open/recently-fixed findings when the admitted review policy supports it. This is an optimization, not an authority shortcut.
+### Bounded intermediate review scope
 
-The required deterministic chain remains SMOKE plus the Slice FocusedValidationProfile after Candidate modification. Final acceptance still requires the configured review/admission scope. Narrowing MUST NOT silently reduce a required final review or ADMISSION TestSuite.
+An admitted review policy may narrow intermediate semantic re-evaluation to
+still-open/recently-fixed findings and the affected change scope. A repair that
+affects another boundary must use the relevant configured review coverage;
+selection cannot depend solely on which reviewer previously reported a finding.
+Retain all unresolved findings even when they are outside that intermediate
+review's scope. Do not treat omission from a review response as resolution.
+
+After Candidate modification, required SMOKE and the same admitted Slice FOCUSED
+remain in force. Required final review and ADMISSION keep their configured
+scope. Narrowing is a cost optimization within policy, never permission to skip
+or silently reduce those obligations or create per-issue review cycles.
 
 ### Fresh evidence reuse on resume
 
-Workflow restart/resume MUST NOT repeat expensive TestSuite/Review work merely because the process restarted when existing evidence is still fresh for the same Candidate revision, TestSuite/review definition revision, and required scope. Existing Candidate-Admission freshness rules decide reuse. A changed Candidate or changed required definition/scope stales the corresponding evidence.
+Restart alone must not rerun completed Test/Review work. Reuse available evidence
+when the existing Candidate-Admission contract establishes that it covers the
+current Candidate, metadata/query policy or review definition revision and required scope, including
+relevant execution inputs such as selected overlay dependencies. Different
+dependency selections may invalidate evidence even when source revision matches.
+Reuse completed applicable steps and execute only remaining/invalidated required
+steps; an unfinished operation is not a successful receipt.
 
-This is the sm-workflow equivalent of stage-resume reuse without introducing a second stage/commit model.
+Restore issue state and both counters with that history. A process/chat restart
+does not change the Candidate, reset the allowance, or reopen resolved issues by
+itself. Committing previously tested work is not by itself an input change;
+Git HEAD is not a substitute for the existing logical Candidate/input binding.
+Use ordinary Git/context and typed execution facts. Do not add TTL expiry,
+content hashes, whole-file copies, unchanged-content certificates or stage
+commits as a prerequisite for reuse.
 
 ## Failure and retry
 
@@ -608,25 +849,21 @@ Retries MUST follow explicit operation/workflow retry policy. A slow suite MUST 
 
 ## Observability
 
-Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; duration; outcome; warning; repetition/reason; and whether later human/AI revision improved observed cost. cbd-support and Control Center may later consume these facts for KPI/trend review.
+Evidence MUST be sufficient to answer: which purpose/metadata revision ran; why it ran; duration; outcome; warning; repetition/reason; and whether later human/AI revision improved observed cost. cbd-support and Control Center may later consume these facts for KPI/trend review.
 
 ## Initial implementation slice
 
-1. Consume CNCF Validation/Test Metadata ABI and resolved operation discovery for SMOKE/FOCUSED/ADMISSION/FULL/HEAVY.
-2. Bind discovered operations to typed deterministic execution.
-3. typed RunTestSuite deterministic operation/provider binding.
-4. TestSuiteExecutionReceipt with measured duration.
-5. ADMISSION default 60-second TestSuiteDurationWarning.
-6. LONG_RUNNING + rationale + expected/threshold semantics.
-7. warning persistence/query/presentation hook.
-8. metadata annotation/property change path through normal Candidate/review/admission.
-9. bounded Human -> AI review request using warning + receipts.
-10. TEST_FIX/REVIEW_FIX typed semantic work requests and revalidation transitions.
-11. Slice focused feature selection with planning-time admission and CNCF metadata query.
-12. Fix Convergence Guard with deterministic ConvergenceVector, AI semantic change classification/self-assessment, trend policy, and bounded cycle limits.
-13. FixIssue ledger and deterministic FixResult reconciliation, including zero-fix stop and reopened/new issue metrics.
-14. bounded re-evaluation narrowing and fresh-evidence reuse on resume.
-15. acceptance scenarios.
+1. Drive CNCF Phase 103 and consume its versioned Validation/Test Metadata ABI and operation discovery.
+2. Query project purposes and execute the Slice validation plan: acceptance conditions, FOCUSED plus feature union, supplemental operation references and typed parameters; report missing required coverage.
+3. Bind discovered operations to typed execution and RunTestSuite receipts with metadata/operation/context references.
+4. Measure duration and evaluate ADMISSION/FULL cost policy, including explicit long-running exceptions.
+5. Persist/query/display bounded warnings and execution evidence through existing CNCF resources.
+6. Connect metadata/test source changes through normal Candidate/review/admission and human-selected improvement.
+7. metadata/test revision N replaced by N+1 -> old receipts remain attributable to N and new execution uses N+1.
+8. validation metadata cannot inject arbitrary commands; execution remains typed/provider-bound.
+9. Deliver FixIssue reconciliation, evidence-confirmed issue movement, review narrowing and resume reuse.
+10. Provide shared metadata/evidence references for cbd-support on Mac mini, without implementing its static analysis/KPI here.
+11. Verify the acceptance scenarios below.
 
 ## Acceptance scenarios
 
@@ -634,7 +871,7 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 2. ADMISSION NORMAL suite 61s -> PASSED plus duration warning; duration alone does not reject Admission.
 3. ADMISSION suite fails in 5s -> FAILED; no conflation with duration warning.
 4. justified LONG_RUNNING admission suite expected 180s, actual 120s -> no default 60s warning.
-5. LONG_RUNNING exceeds registered threshold -> duration warning.
+5. LONG_RUNNING exceeds declared policy threshold -> duration warning.
 6. same suite executes twice -> two receipts; no hidden deduplication or invented retry.
 7. metadata/test revision N replaced by N+1 -> old receipts remain attributable to N and new execution uses N+1.
 8. validation metadata cannot inject arbitrary commands; execution remains typed/provider-bound.
@@ -647,27 +884,49 @@ Evidence MUST be sufficient to answer: which suite/revision ran; why it ran; dur
 15. provider ERROR/TIMEOUT and duration warning do not automatically become TEST_FIX.
 16. FULL completes within 10 minutes -> normal evidence with no FULL-budget warning.
 17. FULL persistently exceeds 10 minutes -> cost warning/review signal without converting PASS to failure.
-18. explicitly justified FULL exception above 10 minutes uses its registered expectation.
-19. multi-hour exhaustive validation is registered as HEAVY and does not inherit ADMISSION/FULL time targets.
+18. explicitly justified FULL exception above 10 minutes uses its declared expectation.
+19. multi-hour exhaustive operations declare HEAVY membership and does not inherit ADMISSION/FULL time targets.
 20. HEAVY is not automatically inserted into the normal implementation validation loop.
 21. Slice selects one feature tag and executes matching FOCUSED operations without post-implementation AI test selection.
 22. Slice selects two feature identities and executes the union of matching admitted FOCUSED operations.
-23. Slice not covered by existing feature classification admits a Test Architecture/feature metadata revision during planning.
-24. TEST_FIX reruns the same admitted Slice feature selection and cannot silently broaden/reduce metadata coverage.
-25. evidence that focused feature classification is insufficient creates an explicit validation-metadata/plan revision rather than ad-hoc test expansion.
+23. Slice not covered by the normal FOCUSED feature query admits supplementary Test Operation references/parameters in its validation plan; metadata changes are needed only when declarations themselves need revision.
+24. TEST_FIX reruns the same admitted Slice validation plan, including supplemental operations and parameters, and cannot silently broaden/reduce required coverage.
+25. insufficient validation causes an explicit plan revision and, where declarations need correction, a metadata revision; no ad-hoc runtime test expansion.
 26. gradually contracting vectors across several Fix cycles are allowed beyond the soft limit when policy classifies SLOW_CONVERGENCE.
 27. sustained expansion of source/external-resource surface reaches DIVERGING and stops before hard limit.
 28. AI BLOCKED stops automatic cycling immediately and enters typed error/decision handling.
-29. favorable convergence still stops at the configured hard cycle limit.
+29. favorable convergence cannot dispatch an eleventh automatic Fix under the default hard limit of 10, regardless of classification; a successful tenth result may complete normally.
 30. three physical files with independent file-local changes may report STANDARD_LOGIC; file count alone does not force COMPLEX_LOGIC.
 31. one coordinated semantic change spanning multiple files reports COMPLEX_LOGIC.
 32. AI semantic class/self-assessment is recorded separately from deterministic ConvergenceVector and cannot override deterministic policy except explicit BLOCKED.
-33. FixResult claiming an unknown/unrequested issue ID is rejected/degraded by deterministic reconciliation.
-34. FIXED issue disappears from open set but reappears as REOPENED when subsequent validation reports the same stable identity.
-35. open issues plus zero FIXED dispositions produces STALLED/escalation rather than an identical automatic Fix loop.
-36. DECLINED issues remain open with latest rationale; BLOCKED enters error/decision handling.
-37. re-evaluation may narrow intermediate semantic reviewer scope but cannot bypass SMOKE/Slice FOCUSED or required final review/ADMISSION scope.
-38. restart reuses fresh matching Test/Review evidence and does not rerun it solely because the process restarted.
+33. history comments, GWT comment insertion/repositioning and other nonstructural HYGIENE revisions remain in history but do not increment the ordinary repair count; each batch still increments the automatic cycle count and affects convergence judgment.
+34. a minor compile/local bug correction increments only the automatic count; an ordinary SIMPLE_LOGIC feature change, major restructuring or mixed substantive/minor batch increments both counts once, regardless of findings/files/test-command count.
+35. excluded corrections do not reset the recent trend; repeated failure/oscillation or AI BLOCKED can stop an excluded-only loop under the existing convergence policy.
+36. existing metrics and bounded AI hints suffice for initial operation; unavailable additional failure/resource detail is unknown and does not trigger expensive scans, extra tests or fabricated zeros.
+37. continuation in another chat/process retains both active-loop counts, including a dispatched interrupted cycle; a distinct later Slice/Fix loop does not inherit unrelated historical consumption.
+38. ten consecutive hygiene/minor-only cycles with favorable AI feedback leave the ordinary count unchanged but stop further automatic repair with FIX_CYCLE_LIMIT; relabeling, chat switches and restart do not renew the allowance.
+39. the ordinary repair count and all-cycle results participate in convergence judgment; crossing the soft threshold alone does not stop converging work below the absolute hard limit.
+40. unknown/unrequested issue IDs, duplicate or missing dispositions and malformed FixResult entries produce a typed contract error without applying ambiguous issue updates or erasing actual Candidate changes.
+41. FIXED alone leaves the issue unresolved and resolvedIssues unchanged; relevant fresh validation resolves it, and a later same-identity failure reopens it without creating a new issue.
+42. DECLINED and UNRESOLVED remain in openIssues; valid BLOCKED stops immediately. Declining an issue is not a waiver.
+43. requested open issues plus zero FIXED claims and no supported progress reaches STALLED handling; cosmetic edits and repeated identical requests do not create progress.
+44. zero FIXED claims with supported partial progress may continue within policy and the absolute hard limit; favorable AI hints alone cannot override the guard.
+45. narrowed intermediate review preserves unexamined issues and does not infer resolution from absence; affected boundaries and configured final review/SMOKE/FOCUSED/ADMISSION coverage remain required.
+46. restart reuses applicable completed Test/Review evidence and runs only remaining/invalidated steps; changed suite/scope or relevant overlay inputs invalidate corresponding evidence even if source revision matches.
+47. missing stable source identity preserves bounded findings with local IDs and unknown correspondence without blocking execution, fuzzy matching, extra scans or fabricated zero metrics; same names from different repositories remain distinct.
+48. ledger metrics count validated transitions once; repeated observations do not inflate new/reopened/resolved counts, and a resolved-then-reopened issue ends unresolved rather than falsely signaling net progress.
+49. restart or a commit of previously tested work alone does not invalidate applicable evidence or reset issue/cycle history; no TTL, hash, copy comparison or stage commit is required for reuse.
+
+50. class/operation defaults and overrides are consumed through CNCF-resolved metadata, including scoped completeness/unannotated-operation diagnostics; partial discovery is not silently accepted as complete, and runtime does not reimplement merge or require a suite membership file.
+51. FOCUSED with two admitted features and supplemental references executes identical operation/parameter/context combinations once; distinct admitted parameter cases remain distinct, and missing required coverage is a gap.
+52. metadata changes that remove ADMISSION/FOCUSED membership remain visible architecture changes and require normal review/admission; a fixer cannot silently trade away coverage.
+53. operation expected duration and measured query duration are distinct; a LONG_RUNNING operation alone does not suppress ADMISSION/FULL query warnings.
+54. common metadata identity/revision plus bounded runtime references, measurement scope/unit and execution context are available to cbd-support; missing operation timing remains Unknown, query time is not allocated to operations, and no static-analysis/KPI service is required to execute a runtime query.
+
+55. the Slice management file records acceptance conditions, metadata query, supplemental operation references and typed parameters without copying or changing test metadata.
+56. an explicitly referenced operation outside the FOCUSED query executes with its declared requirements; it does not acquire a new purpose/feature tag merely through selection.
+57. unresolved references, invalid parameters, conflicting bindings or attempts to weaken execution requirements produce typed input errors; no arbitrary command fallback or silent omission.
+58. receipts retain plan revision, selection origins and actual operation/parameter/results; changing a relevant plan/input triggers applicable revalidation while a plan alone proves no execution.
 
 ## Non-goals
 
