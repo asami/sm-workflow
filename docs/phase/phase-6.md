@@ -201,6 +201,12 @@ following execution-requirement work supports that delivery:
 14. The Effective Acceptance Boundary limits required quality assurance as well as defining required quality. A provider/reviewer MUST NOT promote an out-of-boundary robustness idea, exceptional-path guarantee or new test into a blocking completion condition merely because it appears safer.
 15. Phase 6 implements only boundary definition, configuration, projection and enforcement at the existing request/result/Admission/Review interfaces. Rich convergence interpretation, assurance-overhead classification and boundary-aware provider re-routing belong to Phase 9; do not add a second quality-policy engine here.
 
+## Usage Contract input boundary (2026-10-11)
+
+The development plan is authored and reviewed separately before sm-workflow execution. Its top-down entry is a **Usage Contract**: how a human or software consumer uses the system and the observable behavior/effect expected. It may describe a Use Case, API/Operation, CLI/MCP command, UI action, or event/message; it is more than an interface signature.
+
+Phase 6 consumes the adopted Usage Contract and Project Acceptance Boundary, projecting applicable acceptance conditions into existing WorkOrder, implementation/FIX, Admission and Review. A Development Slice realizes a bounded portion through the necessary implementation layers. Do not create another planning engine, contract registry or configuration mechanism. Providers cannot silently change the adopted Usage Contract or Boundary.
+
 ## Managed-suite design, FIX and improvement skills (2026-10-06)
 
 ### Acceptance Boundary integration — 2026-10-11
