@@ -31,6 +31,14 @@ Implementation/Admission Review must verify the integrated Slice against the sam
 
 Phase 6 remains responsible for minimal boundary propagation; Phase 9 owns the fuller planning/review/convergence interpretation. Reuse existing Goal/Phase planning, WorkOrder, Admission and Review paths. Do not introduce a second planning engine, exhaustive traceability database or additional mandatory review cycles.
 
+## 2026-10-11 clarification: external planning and contract-first slices
+
+Development planning and its approval occur separately before sm-workflow execution. sm-workflow consumes the adopted plan and Project Acceptance Boundary; it does not own a new mandatory plan-authoring or planning-review workflow. Existing PLAN_DESIGNING/PLAN_ADMITTING states are limited to operational decomposition/admission of an already adopted plan, not authorization to invent new user requirements or quality guarantees.
+
+A top-down development unit may originate from a Use Case **or** an externally observable contract such as an API/Operation, CLI/MCP command, UI action, event/message or other published interface. A full end-to-end Use Case is not mandatory for a small API change. Each unit must have observable acceptance criteria and connected evidence through the necessary implementation layers. Internal components are supporting tasks, not the default completion unit.
+
+Planning review happens in the separate planning process and checks external-contract coverage, integration assumptions, dependencies, slice size and Effective Acceptance Boundary alignment. Execution-time Review checks delivered behavior against the adopted plan and boundary; a discovered planning gap becomes a proposal for external plan revision rather than automatic scope growth. Reuse existing Workflow operations and avoid new mandatory planning gates.
+
 ## Two escalation sources
 
 Phase 9 distinguishes:
