@@ -11,6 +11,13 @@ boundary does not predefine thinking modes or task-specific skill semantics;
 those and actual CLI/skill wiring remain Phase 6 work. Integration must not
 reintroduce unnecessary copy/unchanged-content validation.
 
+The owning user's 2026-10-11 normal-use limit also carries into integration:
+duplicate/competing answers are caller responsibility; intermediate exclusion,
+unique winners, complete-history retention, identical replay and intermediate
+recovery are not promised. Use normal Operation calls and a new execution from
+the beginning after abandonment. Do not rebuild removed checks in a skill or
+client, and do not automatically add new guarantees or review findings to scope.
+
 ## Execution plan — 2026-10-07
 
 Reuse the accepted Phase 5 runtime and Phase 2 workflow. The first skill-connected
@@ -54,6 +61,14 @@ change classification, Issue dispositions and convergence hints on the same
 request/result route. Connect the existing human-selected warning/improvement
 path to an actual proposal and adopted revision. Developer-requested replanning
 uses that path; it is not another engine or another mandatory acceptance gate.
+
+Implement the repair-count reset contract in this batch, including the runtime
+decision/guard and Step-close transitions as well as their skill/client
+connection. Explicit user continuation approval resets both active counts;
+accepted Step completion with its commit makes the next Step start at zero.
+Retain history and convergence trends, and remove per-finding reapproval caused
+solely by the previous window's exhausted counts. P6-TS05 tracks this required
+delivery. It is not deferred to Phase 9 or satisfied by skill wording alone.
 
 Use one shared driver with representative test-failure, review-finding,
 validation-design-gap and human-selected improvement branches. Exercise each
@@ -188,6 +203,26 @@ following execution-requirement work supports that delivery:
 
 ## Managed-suite design, FIX and improvement skills (2026-10-06)
 
+### Acceptance Boundary integration — 2026-10-11
+
+Resolve project defaults through CNCF's existing hierarchical configuration.
+Combine them with the explicitly adopted Goal/Phase conditions; an explicit
+Goal/Phase override takes precedence for that scope, including an explicit
+exclusion of a broader project default. Conditions not overridden retain their
+project meaning. Providers and reviewers cannot invent an override. Resolve
+conflicting adopted conditions during planning through an explicit owner
+decision, rather than silently unioning them into stronger requirements.
+This quality-policy boundary does not override actual execution permissions.
+
+Carry the resulting boundary through the selected skill request, implementation,
+TEST_FIX/REVIEW_FIX and normal Review/Admission. Within the existing connected
+driver, demonstrate that a required failure blocks acceptance, an excluded
+assurance proposal does not block or authorize repair, and an explicit
+Goal/Phase override is applied consistently at each consuming interface.
+Include these outcomes in Phase 6 connected acceptance and independent review;
+no separate review cycle or policy engine is required. P6-TS02/03 below in the
+linked checklist track these branches. Phase 9 extends this same contract.
+
 Connect the Phase 5 runtime to AI/skills under
 [Managed Test Suites and Verification Cost Guard](../notes/managed-test-suites-and-verification-cost-guard.md)
 and its [decision journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
@@ -268,6 +303,17 @@ scope preservation using the Phase 5 runtime path.
 
 ## Workflow responsibility boundary
 
+Consume the [explicit continuation and Step-completion reset contract](../notes/managed-test-suites-and-verification-cost-guard.md#explicit-continuation-approval-and-step-completion--2026-10-11).
+User approval to continue stopped repairs resets both active counts once while
+retaining history and convergence trends. Accepted Step completion/commit closes
+that Step's loop; the next Step starts at zero. Checkpoint/WIP/within-Step repair
+commits do not reset an unfinished loop. Connect this behavior through the
+existing decision and Step-close routes, without per-finding reapproval.
+Phase 6 owns implementation and connected acceptance of this contract. Reuse
+existing runtime support where present and implement missing transitions here;
+do not assume the Phase 5 foundation already supplies the reset behavior.
+Phase 9 consumes the accepted contract when adding provider re-routing.
+
 The generic execution contract MUST preserve the software-development responsibility split proven by sm-workflow: GoalPhase may close and locally commit one admitted repository/worktree, while RepositorySync may orchestrate synchronization/convergence across the Project Workspace. ExecutionRequirement generalization MUST NOT merge these application responsibilities into one generic closing operation.
 
 Phase 7's [Development Artifact Overlay](../spec/development-artifact-overlay.md)
@@ -314,8 +360,18 @@ insufficient evidence of this connection.
   review; setup and limitations are documented.
 - Connected Executable Specifications and required checks pass, and independent
   review has no unresolved blockers for this practical scope.
+- The connected driver demonstrates Effective Acceptance Boundary enforcement:
+  required failures block, excluded assurance proposals do not, and explicit
+  adopted Goal/Phase overrides are consistent across request/FIX/Review/Admission.
 - The managed-suite design/FIX/improvement connection above passes its assigned
   acceptance, using the Phase 5 runtime and the same public skill interface.
+- P6-TS05 proves runtime and normal client behavior for exhaustion -> explicit
+  continuation approval -> both counts zero -> multiple subsequent repair
+  batches without per-finding reapproval, retaining history/convergence trends.
+  Accepted Step completion/commit -> next Step counts zero is also verified;
+  a checkpoint/WIP/within-Step repair commit leaves active counts intact.
+  Reset implementation and this connected acceptance are required to close
+  Phase 6, before gradual real use begins.
 - Phase 5's removal of unnecessary checks remains effective on the connected
   route. Record other needs in Phase 8 without delaying use for optional breadth.
 
@@ -344,6 +400,7 @@ The Workflow boundary must remain logical. OpenCode/provider/model/reasoning-var
 Phase 6 therefore closes once generic provider replacement is proven; it must not remain open waiting for OpenCode/Ollama integration.
 
 Concrete local LLM integration is a manual operational trial, recorded as
-[Phase 8 reference information](phase-8-local-llm-reference.md). It is not a
-completion condition for Phase 6 or Phase 8. Only a need observed in real use
+[Phase 8 reference information](phase-8-local-llm-reference.md). It is a
+developer-owned reference activity, not a completion condition for Phase 6, 8
+or 9. Only a need observed in real use
 can bring a bounded provider-related extension into Phase 8's selected work.

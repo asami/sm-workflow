@@ -13,6 +13,12 @@ sm-workflow MUST execute a bounded, cost-aware correction loop. Lightweight comp
 
 The purpose is to expand the practical range of inexpensive/local models without requiring them to have perfect pretrained knowledge of Textus, OFP, or project architecture.
 
+Local LLM deployment and capability checks are developer-owned manual reference
+work, following the [trial notes](phase-8-local-llm-reference.md). They are not
+Phase 9 entry or completion gates. Deliver and verify routing with available
+admitted providers/profiles, including hosted providers; no local adapter,
+installation or local-model performance result is required.
+
 Phase 9 also turns the minimum Acceptance Boundary contract established in Phase 6 into the governing convergence boundary. Validation or Review work outside the Effective Acceptance Boundary is not evidence that the provider is failing to converge. sm-workflow must distinguish genuine inability to satisfy required quality from provider-generated assurance work that should not have been undertaken.
 
 ## Two escalation sources
@@ -72,6 +78,8 @@ Preserve:
 - current candidate state when safe and meaningful;
 - deterministic validation evidence;
 - prior provider attempts and outcomes;
+- ordinary repair count and consumed automatic Fix cycles under the existing
+  Phase 5/6 policy, including the absolute hard limit of 10 automatic Fix cycles;
 - feedback already supplied;
 - reason for re-routing.
 
@@ -111,6 +119,39 @@ Initial routing policy MUST be explicit and versioned. Representative policy:
 
 Exact retry counts and severity thresholds belong to policy/configuration, not Workflow semantics.
 
+Measured convergence is the primary basis for continuing repair, switching
+providers or stopping: use failure/finding movement, supported partial progress,
+recurrence and oscillation. Ordinary repair count is an input to that judgment;
+crossing its soft threshold alone does not stop converging work below the hard
+limit. Stalled or diverging work is handled when observed, without waiting for
+ten cycles. AI self-assessment supports, but does not replace, observed evidence.
+
+The shared limit of 10 automatic Fix cycles is an exceptional final backstop
+against runaway unattended operation, not the normal stopping criterion, a
+target, or permission to keep retrying until ten. It prevents an eleventh
+automatic Fix in the same counting window even if convergence looks favorable; a successful tenth result
+may complete normally. Use the existing
+[convergence and repair policy](../notes/managed-test-suites-and-verification-cost-guard.md).
+
+Provider-specific attempt limits operate within the existing shared repair
+policy; they cannot reset or enlarge it. A switch within the same semantic
+WorkOrder retains both counters and their existing counting rules, including
+ordinary-count exclusions and automatic-cycle consumption for hygiene/minor
+fixes. A newly selected provider receives only the remaining allowance. Reaching
+the shared hard limit with required work still unresolved stops further automatic
+repair with an explicit unresolved outcome; another provider selection does not
+grant a new allowance. Reuse the
+existing guard rather than introducing a second repair counter/ledger.
+
+Explicit user approval to continue stopped repair work resets both active
+counts to zero and opens one new counting window, retaining cumulative history,
+issues and convergence trends. This approval covers subsequent repair batches
+within the window, not a single finding; old exhausted counts cannot trigger
+per-finding reapproval. Accepted Step completion with its Step commit closes
+that loop and the next Step starts at zero. Checkpoint/WIP/repair commits within
+an unfinished Step do not reset it. Apply the reset contract in the linked note;
+provider switching alone never opens a window.
+
 ### Acceptance-bounded routing
 
 The routing decision uses the Phase 6 Effective Acceptance Boundary:
@@ -129,6 +170,7 @@ Record each attempt as part of one semantic-work execution history:
 
 - provider/profile;
 - attempt number;
+- existing ordinary repair count and automatic-cycle consumption/remaining bound;
 - validation findings before/after repair;
 - feedback delivered;
 - convergence classification;
@@ -143,17 +185,17 @@ This evidence is suitable for textus-corpus/textus-experiment replay and later r
 
 Demonstrate at least:
 
-1. local provider converges through compile/targeted-test feedback without running CAR lint on every repair;
+1. an admitted provider converges through compile/targeted-test feedback without running CAR lint on every repair;
 2. lightweight evidence clearly diverges and triggers early re-routing before CAR lint;
-3. compile/test evidence improves across retries and remains on the same provider within the configured bound;
+3. compile/test evidence improves across retries and remains on the same provider within the shared hard bound; crossing the ordinary-count soft threshold alone does not stop converging work;
 4. a candidate reaches CAR lint, receives a repairable finding, repairs it, and converges;
 5. a deep or repeated CAR lint finding triggers re-routing;
 6. repair oscillation triggers re-routing;
 7. provider DECLINED triggers voluntary escalation through the same routing framework;
 8. BLOCKED does not cause blind stronger-model retry;
-9. Provider A -> Provider B preserves semantic WorkOrder identity and validation history;
-10. a second local provider can be selected before a stronger hosted provider when policy admits it;
-11. bounded attempts terminate with an explicit unresolved outcome when no admitted provider converges;
+9. Provider A -> Provider B preserves semantic WorkOrder identity, validation history and both existing repair counters;
+10. policy can select another admitted provider/profile before a stronger profile without assuming local or hosted placement;
+11. bounded attempts terminate with an explicit unresolved outcome when no admitted provider converges; include a switch just before the shared hard limit, prove that only the remaining allowance is available, and that provider-specific limits cannot extend it; a successful tenth result can complete, but an eleventh automatic Fix cannot be dispatched;
 12. no named model/provider is embedded in Workflow transition semantics;
 13. an out-of-boundary concurrency/recovery assurance finding does not trigger repair or stronger-model escalation;
 14. the same symptom classified as a required Acceptance Boundary failure can drive bounded repair and later re-routing;
@@ -161,11 +203,22 @@ Demonstrate at least:
 
 ## Completion
 
+Phase 6 owns implementation and connected acceptance of approval-based and
+Step-completion resets (P6-TS05). Reuse that accepted evidence here and verify
+that provider switching preserves the active window and does not break those
+reset semantics; do not defer their initial delivery until this phase.
+The eleventh-Fix prohibition applies within each window, not across separately
+approved continuations or completed Steps.
+
 Phase 9 is complete when a real development task can execute:
 
-local provider -> deterministic feedback -> local repair -> non-convergence detection -> different provider/model -> deterministic validation -> normal Review/Admission,
+admitted Provider A -> deterministic feedback -> same-provider repair -> non-convergence detection -> admitted Provider B/profile -> deterministic validation -> normal Review/Admission,
 
 with typed evidence showing why the model switch occurred.
+
+Use available supported providers/profiles for this real-task connection and
+deterministic executable scenarios for the bounded policy cases. Local LLM
+trials remain developer-owned reference work and are not required evidence.
 
 Completion also requires evidence that out-of-boundary assurance work is distinguished from genuine non-convergence and cannot cause an automatic repair/escalation loop.
 
@@ -173,6 +226,7 @@ Completion also requires evidence that out-of-boundary assurance work is disting
 
 - autonomous online learning of routing policy;
 - fine-tuning a local model;
+- installing or accepting a local LLM/provider as a Phase completion requirement;
 - requiring the local model to understand OFP theory explicitly;
 - unlimited retries;
 - replacing Review or Admission with lint success;

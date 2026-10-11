@@ -15,8 +15,8 @@ creates/connects the initial skills. Follow the [incremental-use roadmap](README
 Phase 8 is not a prerequisite for gradual use and must not retroactively reopen
 the accepted practical scope of an earlier phase.
 
-Local LLM integration is an operational goal for manual trials, not a Phase 8
-completion condition. During development, use the
+Local LLM integration is reference information for developer-run manual trials,
+not a Phase 8 or Phase 9 completion condition. During development, use the
 [local-provider trial notes](phase-8-local-llm-reference.md) as reference
 information. Results from those trials may justify a selected extension only
 when real use shows a concrete need; the trial itself creates no acceptance gate.
@@ -28,9 +28,18 @@ makes the following ownership effective for planning now, rather than waiting
 for every historical checkbox to pass. Implementation/acceptance status remains
 as recorded; no transfer claims completion.
 
+The owning user's 2026-10-11 Phase 5.1 correction supersedes historical
+intermediate-recovery, replay and competing-submission guarantees in this
+carryover. Those requirements are withdrawn, not a mandatory deferred backlog.
+Normal continuation after a requested answer remains supported; abandoning an
+unsuccessful run means starting a new execution from the beginning, without
+restoring uncertain intermediate effects. Retain historical IDs/results as
+history and record withdrawn items as superseded. Reintroduction would require
+an explicit new scope decision, not merely an old unchecked row.
+
 | Original IDs | Remaining work allocated after practical Phase 2 |
 | --- | --- |
-| P2-T01..T05; transport remainder of P2-T06 | Full resident-server/MCP/CLI equivalence, concurrency and transport-specific restart coverage; Phase 2 retains direct public Operations, required decisions and separate-process recovery. Initial skill-facing command/CLI wiring belongs to Phase 6 |
+| P2-T01..T05; transport remainder of P2-T06 | Remaining resident-server/MCP/CLI exposure and equivalence selected by actual need; historical concurrency/intermediate-recovery guarantees are superseded. Direct public Operations and required decisions remain the foundation, with Phase 5.1's new-execution fresh start. Initial skill-facing command/CLI wiring belongs to Phase 6 |
 | P2-R01..R03 | Resident-reference refresh and generic management/Job visibility beyond necessary normal startup |
 | P2-U05/U15/U16 and extended D/provider/event variants | Only breadth not needed by the selected practical scenarios; existing validated primitives remain reusable |
 | P2-C01 | Phase 5 provides already-planned observations and Phase 6 initial-use feedback; broader comparative cost/round-trip evaluation belongs here, with benefit unproven until measured |
@@ -50,14 +59,15 @@ The user selected practical goal-phase, split-phase and repository-sync routes
 on 2026-10-06. At the scheduled Phase 2 handoff, record each route and the actual
 remaining behavior for each transferred item. Work necessary for any of these
 three routes remains in Phase 2, including connected completion, required
-effects, permissions and recovery; an entire selected workflow cannot be deferred
+effects, permissions and normal continuation under the corrected Phase 5.1
+boundary; an entire selected workflow cannot be deferred
 while claiming Phase 2 success.
 
 | Origin | Extension owned here when not needed for the Phase 2 practical route | Handoff state |
 | --- | --- | --- |
-| P2-D01..D03; P2-U05/U15/U16 | Broader provider, transaction, event and recovery integration beyond the selected route | Separate required practical prerequisites from remaining extensions; retain existing partial validation |
-| P2-G01..G06 | Additional GoalPhase operations/scenarios beyond its selected practical route | Practical start/work/result/resumption behavior stays required in Phase 2; record actual coverage |
-| P2-T01..T06 | Remaining server/MCP/CLI exposure, equivalence, shared-store concurrency and restart coverage | Record installed transports and unimplemented/unvalidated routes separately |
+| P2-D01..D03; P2-U05/U15/U16 | Broader provider, transaction and event integration beyond the selected route | Separate necessary extensions from withdrawn recovery guarantees; retain existing partial validation |
+| P2-G01..G06 | Additional GoalPhase operations/scenarios beyond its selected practical route | Preserve normal start/work/result/continuation coverage; apply Phase 5.1's fresh-start boundary |
+| P2-T01..T06 | Remaining server/MCP/CLI exposure and equivalence selected by actual need | Record installed transports and unimplemented/unvalidated routes separately; withdrawn concurrency/intermediate-recovery guarantees are not pending acceptance |
 | P2-R01..R03 | Resident references, refresh and generic management/Job visibility | Carry only the uncompleted integration; do not replace canonical ownership |
 | P2-R04..R05 | Remaining workflow-profile coverage and real external-command adapters | Retain actual implementation/effect evidence; selected real-use adapters cannot be mock-only |
 | P2-C01..C02 and bundle notes | Remaining cost/round-trip measurement and broader skill distribution/coverage beyond the Phase 6 minimum | Public Operation control stays in Phase 2; initial command/CLI wiring and skill creation/connection belong to Phase 6, not this backlog |

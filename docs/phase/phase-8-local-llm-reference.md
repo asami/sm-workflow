@@ -2,14 +2,16 @@
 
 This document summarizes the [concrete provider experiment proposed for Phase 8](https://github.com/asami/sm-workflow/blob/357dcac/docs/phase/phase-8.md)
 on 2026-10-07. It is operational reference information, not a Phase 8
-completion condition. The authoritative Phase 8 scope and completion criteria
+or Phase 9 completion condition. The developer conducts these checks separately
+from phase acceptance. The authoritative Phase 8 scope and completion criteria
 are in [phase-8.md](phase-8.md).
 
 ## Trial purpose
 
 Manually try a local or self-hosted LLM with Codex where practical. OpenCodex
 and OpenCode may be compared as optional, replaceable adapters. None is a
-required runtime dependency or a prerequisite for closing Phase 8.
+required runtime dependency or a prerequisite for starting or closing Phase 6,
+8 or 9. Phase 9 routing acceptance uses available admitted providers/profiles.
 
 Keep the Phase 6 boundary provider-neutral:
 

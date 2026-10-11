@@ -338,10 +338,14 @@ repair totals, reset active loops on a worktree/chat switch or add new measureme
 machinery merely because several repositories participate.
 Issue source identities include repository/provider scope so same-named failures
 remain distinct. Use the shared ledger/reconciliation and evidence-confirmed
-resolution rules, with no per-repository duplicate workflow. Resume reuses
-completed applicable evidence; changed overlay selection/resolved dependencies
-can invalidate it even when source revision matches. Verify both unchanged-context
-reuse and changed-context revalidation while preserving issues and both counts.
+resolution rules, with no per-repository duplicate workflow. Normal continuation
+after a requested answer retains applicable completed evidence, issues and both
+counts. Changed overlay selection/resolved dependencies require affected
+revalidation even when source revision matches. Verify these cases within the
+normal execution. This does not promise recovery of an interrupted execution or
+uncertain effects. The Phase 5.1 fresh-start boundary carries forward: abandon
+an unsuccessful run and start a new execution from the beginning; do not restore
+removed replay, history-comparison or intermediate-recovery guarantees.
 
 ## Dependency ordering
 

@@ -124,9 +124,16 @@ than re-running its complete state/threshold matrix through live AI.
       trigger evidence and original requirement/current Candidate; both route
       as implementation-like work. Runtime, not the fixing skill, owns validation
       outcomes and next transitions. Exercise both connected correction paths.
+      Carry the Phase 6 Effective Acceptance Boundary through both paths:
+      required failures block acceptance; excluded assurance proposals neither
+      block acceptance nor authorize another repair.
 - [ ] P6-TS03: A fix can identify test/suite/requirement/design gaps instead of
       blindly changing production code. Invalid validation design follows explicit
       plan/metadata revision; TEST_FIX cannot silently broaden the admitted profile.
+      Exercise an explicit adopted Goal/Phase override of a project default in
+      the shared driver and verify consistent request/Review/Admission behavior.
+      Conflicting adopted conditions need an owner decision during planning;
+      providers cannot resolve them by silently enlarging the scope.
 - [ ] P6-TS04: Human selects a recorded warning, AI receives bounded context and
       proposes no change/metadata revision/code change/both; normal admission and
       validation apply. Later observed executions support any improvement claim.
@@ -144,6 +151,18 @@ than re-running its complete state/threshold matrix through live AI.
       guard; BLOCKED triggers handoff. No extra instrumentation is required just
       to enrich a hint, and the skill cannot reset/exempt substantive work by
       changing task names or treating every SIMPLE_LOGIC change as a minor bug.
+      Through the existing decision route, explicit user continuation approval
+      resets both active counts once, retaining history/trends and permitting
+      subsequent batches without per-finding reapproval. Accepted Step closure
+      with its commit starts the next Step at zero; checkpoint/WIP/within-Step
+      repair commits do not reset an unfinished loop. Verify these boundaries
+      in the connected driver under the 2026-10-11 reset clarification.
+      Phase 6 implements missing runtime decision/guard/Step-close transitions
+      and verifies normal client invocation, not just skill instructions.
+      Include exhaustion -> approval -> multiple repair batches and accepted
+      Step commit -> next Step, retaining the unfinished-Step checkpoint case.
+      This is mandatory Phase 6 closure work; Phase 9 consumes its evidence and
+      checks compatibility with provider switching rather than owning delivery.
 
 - [ ] P6-TS06: Connected fixers account for assigned IDs and cannot declare
       unsolicited issues FIXED. Reviewers reuse supported IDs and report relevant
@@ -178,10 +197,13 @@ runtime or additional phase-wide review cycle is introduced by these rows.
       selection/update/rollback paths without per-run test selection by AI.
 
 - [ ] P7-TS04: Scope same-named issue sources to their repository/provider.
-      Resume preserves issues/counts and reuses applicable completed evidence;
+      Normal continuation after a requested answer preserves issues/counts and
+      reuses applicable completed evidence within the same execution;
       changed overlay inputs invalidate corresponding evidence despite unchanged
       source revision. Use the Phase 5/6 policy without resetting the hard limit
       or creating a repository-specific ledger (source cases 46–49).
+      This row does not require interrupted-effect recovery, replay or complete
+      history guarantees. Abandonment follows Phase 5.1's new-execution fresh start.
 
 These extend existing Phase 7 Git/overlay acceptance; no duplicate full-test
 command-selection implementation is permitted. Suite/component storage follows
