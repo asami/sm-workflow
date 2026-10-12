@@ -497,6 +497,22 @@ Semantics:
 
 Physical file count does NOT determine semantic class. If several files are changed but each contains an independent file-local STANDARD_LOGIC correction, the aggregate classification remains STANDARD_LOGIC rather than COMPLEX_LOGIC. COMPLEX_LOGIC requires cross-file semantic coupling for the same logical change.
 
+Responsibility clarification, 2026-10-12: HYGIENE is a change classification, not
+an instruction to delegate every such edit to AI. Runtime owns routine source-
+history comment maintenance and configured deterministic tool fixes. AI reviews
+meaning-dependent Hygiene such as GWT explanations/placement, names, comments,
+documentation and local readability, and edits adopted findings through the
+normal REVIEW_FIX request. History fields are not AI authoring/review chores.
+GWT is one item in the integrated review, not a separate review loop.
+
+Routine runtime maintenance is not an AI Fix batch and does not increment repair
+or automatic Fix-cycle counts. Actual AI Hygiene/minor Fix batches keep the
+existing convergence and absolute-cycle rules. This qualifies history-comment
+examples in the classification/acceptance lists: record their actual changes,
+but do not manufacture an AI repair cycle for deterministic maintenance.
+Nonblocking unadopted findings follow AI document recording, not automatic repair.
+See the [Phase 6 responsibility and delivery contract](../phase/phase-6.md#review-and-maintenance-responsibilities--2026-10-12).
+
 The classes form an ordinal depth for trend evaluation only:
 
 ~~~text

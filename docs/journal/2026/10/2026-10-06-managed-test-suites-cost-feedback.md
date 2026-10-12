@@ -6,6 +6,73 @@ Related: Candidate-Admission Model, deterministic operations/closing, Human-in-t
 
 ## Context
 
+### 2026-10-12 follow-up: role-based delegation and review context
+
+The user clarified that the ordinary interaction is parent chat <-> sm-workflow.
+An upper-tier programming model is the parent operating default; GPT-6.1 Sol
+high is a current example, not a fixed requirement. Expensive Astra is not the
+routine programming default. Concrete model mappings remain environmental.
+Implementation/repair should use the cheapest suitable profile where practical;
+review may use stronger models when needed. Parent and delegated model choices
+are independent, and no command-only subagent is required.
+
+Review delegation also serves context isolation, including with the same model.
+Supply applicable requirements, changes, necessary surrounding code/contracts,
+actual validation and relevant findings rather than the entire conversation or
+implementation deliberation. Permit additional relevant context, preserve final
+review coverage and independence, and do not mistake higher effort for separation.
+Model, effort, context scope and independence are separate selection dimensions.
+
+Phase 6 now records the initial selection/context policy and P6-DG01..03 in its
+existing connected acceptance. Phase 9 consumes it for observed re-routing.
+This is a planning update; no live chat model, provider configuration or runtime
+implementation has been changed.
+
+### 2026-10-12 follow-up: command ownership and live Phase-plan synchronization
+
+The user adopted runtime ownership of the entire command activity: SBT/Git and
+other configured tools, including preparation, process lifecycle, actual result
+collection and cleanup. AI does semantic editing/diagnosis/review, not command
+execution or log forwarding. Existing effect permissions remain unchanged.
+
+Phase documents are the external planning/progress interface. Runtime encodes
+them as its working plan and refreshes the relevant latest documents during work,
+before next dispatch. Stable item IDs retain actual results/history across plan
+edits. Runtime projects structured progress into the latest owned fields; AI
+authors narrative/rationale. In-flight scope/acceptance conflicts yield a specific
+decision, not silent loss of work, blanket retesting or proof of unchanged files.
+This is normal live synchronization, not recovery of abandoned executions.
+
+Phase 6 implements both contracts in its connected driver (P6-EX01..03,
+P6-PS01..04). Phase 5.3 supplies the common loop without new gates; Phases 7/8/9
+consume the same ownership for workspace effects, selected extensions and
+convergence/provider routing. No implementation, tests or release are claimed by
+this planning update; active Goal/base/epoch/counters/history remain untouched.
+
+### 2026-10-12 follow-up: review work versus deterministic maintenance
+
+The user clarified that source-history comment editing belongs entirely to
+sm-workflow; AI workers/reviewers should not have to maintain those fields.
+Given/When/Then requires semantic understanding and belongs to AI review and
+adopted correction, together with other meaning-dependent Hygiene observations
+such as names, comments, documentation/examples and local readability.
+
+Phase 6 now specifies the connected ownership and P6-HR01..04 acceptance:
+runtime applies declared history/formatter rules before candidate validation/
+review; one integrated AI review covers semantic correctness and applicable
+Hygiene; adopted fixes use the common REVIEW_FIX/Submit loop; unadopted
+nonblocking discoveries use AI document recording. Classification, execution
+owner and adoption are separate decisions. Tool failures remain tool outcomes,
+not automatic AI history-edit assignments. Routine mechanical maintenance is
+not an AI Fix cycle; actual AI Hygiene fixes retain convergence/hard-limit rules.
+
+This is a Phase 6 planning update, not an implementation claim or another
+Phase 5.3 requirement. Historical descriptions below retain their context;
+the current [Phase 6 contract](../../../phase/phase-6.md#review-and-maintenance-responsibilities--2026-10-12)
+and design-note responsibility clarification govern this distinction.
+
+### Original context
+
 Job-management development exposed excessive development time from repeated validation. Two causes matter: AI/Skill may choose too broad a regression scope for a small change, and selected tests may themselves contain expensive setup/repeated computation. A Skill rule that blindly executes a fixed focused set after every repair amplifies both.
 
 An initial idea was to leave test selection with Codex while sm-workflow only records duration/retry reasons. That leaves official validation selection nondeterministic: every agent turn can rediscover a different safe set and repeatedly broaden it.
