@@ -16,7 +16,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
 /**
  * Metadata-only row staging/observation; physical rights belong to each call.
  * @since   Oct.  2, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] final class SplitPhasePartitionCompletionCheckpointDataStorePort private (
   val reads: D, catalog: SplitPhaseRuntimeCatalog.Catalog) {
@@ -33,7 +33,7 @@ private[smworkflow] final class SplitPhasePartitionCompletionCheckpointDataStore
   def loadForCallC(identity: org.goldenport.cncf.workflow.ContinuationIdentity, core: ActionCall.Core): Consequence[A.Record] = for {
     key <- A.lineageKeyC(identity)
     raw <- _required_c(key, J.storageField, core)
-    saved <- J.decodeC(identity, raw, Vector(catalog.definition))
+    saved <- J.decodeC(raw, Vector(catalog.definition))
   } yield saved
 
   private def _required_c(key: String, field: String, core: ActionCall.Core): Consequence[String] = for {

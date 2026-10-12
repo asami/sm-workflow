@@ -374,7 +374,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
           _business_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
             service = "SplitPhaseService", operation = operation, properties = properties), actor)))
-        def states(ids: Vector[InstanceIdentity]): Vector[InstanceRecord] = {
+        def _states_(ids: Vector[InstanceIdentity]): Vector[InstanceRecord] = {
           var records = Vector.empty[InstanceRecord]
           prepare(call => ids.foldLeft(Consequence.unit)((prior, identity) =>
             prior.flatMap(_ => call.currentC(identity).map(value => { records = records :+ value; () }))))
@@ -386,7 +386,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         val identities = started.map(value => InstanceIdentity(value.sessionId))
         Then("both executions have their own returned session ID")
         identities.distinct.size shouldBe 2
-        val before = states(identities)
+        val before = _states_(identities)
         When("Advance selects the first execution directly by its returned session ID")
         val first = invoke[V.SplitPhaseAdvanceResult]("advanceSplitPhase",
           NativeWorkflowOperationInputFixture.advance(started.head.sessionId))
@@ -394,7 +394,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         first.kind shouldBe "Request"
         first.sessionId shouldBe started.head.sessionId
         first.partition should not be empty
-        states(identities)(1).revision shouldBe before(1).revision
+        _states_(identities)(1).revision shouldBe before(1).revision
         When("the other execution advances and the first pending request is displayed again")
         val second = invoke[V.SplitPhaseAdvanceResult]("advanceSplitPhase",
           NativeWorkflowOperationInputFixture.advance(started(1).sessionId))
@@ -563,6 +563,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           }
           When("Advance returns only the unresolved handoff scope as a declared business request")
           val scope = invoke[V.SplitPhaseAdvanceResult]("advanceSplitPhase", advance)
+          Then("the request identifies the actual Scope submit route and unresolved transfer")
           scope.kind shouldBe "Request"
           scope.submitOperation shouldBe Some("submitHandoffScopeResult")
           scope.scope.get.gaps.toVector.map(_.original.identity.value) shouldBe Vector("handoff-0")
@@ -576,6 +577,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             Vector(evidence))
           val scopereply = resultFor(scopework, judgment, J.resultCodec.typeIdentity,
             ContextReference(scopeinput.result.identity, scopeinput.result.revision))
+          When("the requested typed scope result is submitted to its actual owning completion")
           val scopeack = invoke[V.SplitPhaseScopeSubmissionResult]("submitHandoffScopeResult",
             take(NativeWorkflowOperationInputFixture.submissionC(scopereply, omitReference = true)))
           Then("Submit truthfully accepts the result without issuing the next work")
@@ -671,16 +673,16 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
                     identity = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("foreign-item")))),
                   "repeated-item" -> interpretation.copy(assignments = interpretation.assignments ++ interpretation.assignments))
                 for ((episode, data) <- invalids) {
-                  val invalidReference = SplitPhaseExplicitPartitionSemantic.ContextReference("reasoning-bad-" + episode, "1")
-                  val record = HR.Record(invalidReference, "unused-decision-diagnostic", result.resultReference, data)
-                  prepare(_.createC(collection("split_humanresolutions"), invalidReference.identity,
+                  val invalidreference = SplitPhaseExplicitPartitionSemantic.ContextReference("reasoning-bad-" + episode, "1")
+                  val record = HR.Record(invalidreference, "unused-decision-diagnostic", result.resultReference, data)
+                  prepare(_.createC(collection("split_humanresolutions"), invalidreference.identity,
                     Record.data(HR.storageField -> take(HR.encodeC(record)))))
-                  val invalidAnswer = resultFor(human, H.Answer.ProvideResolution(invalidReference),
+                  val invalidanswer = resultFor(human, H.Answer.ProvideResolution(invalidreference),
                     H.resultType, ContextReference("reasoning-bad-answer-" + episode, "1"))
-                  prepare(_.humanEvidenceC(human, invalidAnswer))
+                  prepare(_.humanEvidenceC(human, invalidanswer))
                   When("Human selects " + episode + " classification data for the actually requested unknown items")
                   invokeC("submitSplitHumanDirection",
-                    take(NativeWorkflowOperationInputFixture.submissionC(invalidAnswer))).isSuccess shouldBe false
+                    take(NativeWorkflowOperationInputFixture.submissionC(invalidanswer))).isSuccess shouldBe false
                   Then("the owning business boundary refuses it before changing native state or creating a plan")
                   current().revision shouldBe before.revision
                 }
@@ -818,13 +820,13 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             (if (operation.name.startsWith("start")) "input" else "sessionId")
           operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
         }
-        val beforeInvalid = current()
+        val beforeinvalid = current()
         When("Advance receives a malformed consumed sessionId rather than a valid execution ID")
         Vector(42, null).foreach { value =>
           invokeC("advanceSplitPhase", List(Property("sessionId", value, None))).isSuccess shouldBe false
         }
         Then("the input boundary refuses it without changing the execution or writing documents")
-        current().revision shouldBe beforeInvalid.revision
+        current().revision shouldBe beforeinvalid.revision
         Files.exists(root.resolve("docs/phase/phase-77.md")) shouldBe false
 
         When("Advance asks only for the unknown estimate and semantic boundary")

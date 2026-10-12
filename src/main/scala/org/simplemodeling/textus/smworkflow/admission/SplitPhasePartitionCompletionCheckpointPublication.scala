@@ -9,14 +9,14 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
 /**
  * Complete publication data. Does not stage, admit or commit any row.
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointPublication {
   def prepareRowsC(captured: A.Captured, targets: U.Targets): Consequence[Vector[U.Row]] =
     if (captured == null || targets == null) Consequence.stateConflict("SplitPhase AI publication is incomplete")
     else for {
       raw <- J.encodeC(captured.record)
-      key <- A.lineageKeyC(captured.record.completion.result.continuationId)
+      key <- A.lineageKeyC(captured.continuationId)
       header <- captured.record.header.fold(Consequence.success(Vector.empty[U.Row])) { h =>
         E.encodeC(h).map(bytes => Vector(U.Row(targets.publication, h.result.identity, Record.data(E.storageField -> bytes))))
       }

@@ -12,7 +12,7 @@ import NativeHostEvidence.*
 
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 13, 2026
  */
 final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-10-07T00:00:00Z")
@@ -103,17 +103,20 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
       When("the production host adapter builds the passive Start evidence binding")
       val actual = ThreeWorkflowHostEvidencePorts.splitStartBindingC(
         SplitPhaseTypedStartHumanVerification.StartContext(owner, start)).toOption.get
-      Then("actual owner, business input, source authority and allocated instance survive without duplicate storage/selection/proposal copies")
+      Then("actual owner, participant, business input, source authority and proposal survive without execution-reference copies")
       actual.hcursor.get[String]("componentInstance").toOption.get shouldBe owner.canonicalKey
       val selected = actual.hcursor.downField("startAttestation").focus.get
-      selected.asObject.get.keys.toSet shouldBe Set("reference", "instanceIdentity", "participantIdentity", "input", "source", "proposal")
+      selected.asObject.get.keys.toSet shouldBe Set("participantIdentity", "input", "source", "proposal")
       selected.hcursor.downField("input").get[String]("invocationMode").toOption.get shouldBe start.input.invocationMode
       selected.hcursor.downField("proposal").focus.get.asObject.get.keys.toSet shouldBe Set("identity", "revision")
       actual.noSpaces should not include "configuration"
       actual.noSpaces should not include "children"
+      When("only the retained execution reference changes, not the admitted business Start target")
       val changed = start.copy(reference = start.reference.copy(revision = "2"))
-      ThreeWorkflowHostEvidencePorts.splitStartBindingC(
-        SplitPhaseTypedStartHumanVerification.StartContext(owner, changed)).toOption.get should not be actual
+      val rebound = ThreeWorkflowHostEvidencePorts.splitStartBindingC(
+        SplitPhaseTypedStartHumanVerification.StartContext(owner, changed)).toOption.get
+      Then("unused execution-reference metadata does not change the passive business consent binding")
+      rebound shouldBe actual
     }
     "store selected attestation for a large diagnostic review without a full-body comparison or duplicate copy" in {
       Given("Spec: docs/spec/native-host-review-applicability.md; Rule: R3; Example: E6; original review diagnostics larger than a short provider comparison condition")

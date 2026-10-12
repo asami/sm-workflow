@@ -124,7 +124,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     target <- ComponentRecordStorage.bindForCallC(core, targets.storeName, row.collection, DataStore.StringEntryId(row.identity))
     staged <- target.stageCreateC(row.payload)
     frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-    nextFrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
+    nextfrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
       SplitPhaseExecutionFrontier.Value.ReasoningHumanAnswer(submitted.continuationId), core)
     bound <- {
       val codec = new WorkflowCompletionServiceOperation.Codec[A.Answer] {
@@ -142,7 +142,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
           // Native selection and managed completion own the actual issued
           // result, predecessor, suspension and CAS. This owning call already
           // admitted independent Human direction; staging is not publication.
-          val program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          val program = staged.flatMap(_ => nextfrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference))))
           Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next)))
         }

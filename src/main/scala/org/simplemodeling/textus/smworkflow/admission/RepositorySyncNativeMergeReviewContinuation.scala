@@ -71,8 +71,8 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       validated <- store.loadC("merge-validated")
       selected <- validated match {
         case None => Consequence.success(None)
-        case Some(_) => for {
-          source <- sourceC(identity, core)
+        case Some(value) => for {
+          source <- _source_from_loaded_c(session, store, value, core)
           issued <- source.session.storage.bindIssuedC(completionOperation, S.inputCodec)
           work <- issued.loadC(continuationId(source.validated))(using core.executionContext)
           completion <- nativeCompletionC(source.session.storage)
@@ -91,16 +91,23 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     } yield selected
 
     private def sourceC(identity: String, core: ActionCall.Core): Consequence[Source] = for {
+      session <- F.sessionC(identity, declaration, definition, core)
+      store <- N.bindC(session, declaration, core, acknowledgement)
+      validated <- store.loadC("merge-validated").flatMap {
+        case Some(value) => Consequence.success(value)
+        case _ => invalid("semantic review selection has no genuine native review")
+      }
+      source <- _source_from_loaded_c(session, store, validated, core)
+    } yield source
+
+    private def _source_from_loaded_c(session: F.Session, store: N.Store, validated: N.Stage,
+      core: ActionCall.Core): Consequence[Source] = for {
       _ <- if (core != null && core.action != null && core.action.request != null &&
           core.action.request.service.contains(completionOperation.service) &&
           Set(F.advanceOperation.operation, completionOperation.operation)(core.action.request.operation)) Consequence.unit
         else invalid("review continuation requires its actual owning Operation")
-      session <- F.sessionC(identity, declaration, definition, core)
-      store <- N.bindC(session, declaration, core, acknowledgement)
-      validated <- store.loadC("merge-validated").flatMap {
-        case Some(value) if value.payload.stage == "MergeValidated" => Consequence.success(value)
-        case _ => invalid("semantic review selection has no genuine native review")
-      }
+      _ <- if (validated.payload.stage == "MergeValidated") Consequence.unit
+        else invalid("semantic review selection has no genuine native review")
       current = session.started.current
     } yield Source(session, store, validated, current)
 

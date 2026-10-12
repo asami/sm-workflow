@@ -1,6 +1,6 @@
 # Phase 5.3: Common Workflow Operation Loop and Minimal Data Access
 
-Status: active
+Status: completed
 Planned: 2026-10-12
 Owner: sm-workflow Phase 5.3 owning development task.
 Update rule: retain original scope/history; close acceptance only with actual Operation evidence and formal local release.
@@ -285,53 +285,93 @@ not reset any active Goal, base, epoch, counter or review history.
 
 ## Acceptance
 
-- [ ] P53-01: GoalPhase, SplitPhase and RepositorySync have an explicit Operation
+- [x] P53-01: GoalPhase, SplitPhase and RepositorySync have an explicit Operation
   table covering business Start fields, requested results, Human answer types
   and the absence/necessity of Advance inputs.
-- [ ] P53-02: Generated declarations and introspection expose the same business
+- [x] P53-02: Generated declarations and introspection expose the same business
   names/types/fields as the actual binders and consumers; no universal JSON-string
   carrier or renamed opaque wrapper substitutes for them.
-- [ ] P53-03: Each normal workflow progresses from typed Start through requested
+- [x] P53-03: Each normal workflow progresses from typed Start through requested
   result/answer consumption and the relevant next state using existing storage.
   Session-owned control values are not supplied or compared by the caller.
-- [ ] P53-04: Existing JSON/CLI representation maps to the declared business type;
+- [x] P53-04: Existing JSON/CLI representation maps to the declared business type;
   malformed required values fail at consumption. Specs exercise ordinary typed
   Operation use and the actual affected serialization/binding path, not only a
   fixture that unpacks JSON behind a misleading string declaration.
-- [ ] P53-06: Each normal Start accepts an optional proposed ID, assigns one
+- [x] P53-06: Each normal Start accepts an optional proposed ID, assigns one
   when absent and returns the canonical session ID with its actual start result.
   Advance, result submission and Human answer use that ID and business data only.
-- [ ] P53-06: Two independent developments with different session IDs can
+- [x] P53-06: Two independent developments with different session IDs can
   progress through interleaved normal calls in shared runtime/storage without
   asking either caller for another selector or affecting the other's target.
   Cover one chat starting distinct executions with distinct IDs as applicable.
-- [ ] P53-06: Public CML/metadata/binders/callers and current examples contain
+- [x] P53-06: Public CML/metadata/binders/callers and current examples contain
   no selectionIdentity/instanceIdentity/contextIdentity/requestIdentity ambiguity
   selectors; their internal owning relationships remain. No renamed selector,
   candidate-list fallback or first/latest-target choice survives.
-- [ ] P53-06: Integrated source review confirms removal of the old candidate
+- [x] P53-06: Integrated source review confirms removal of the old candidate
   discovery/filter/count/selector pipeline and its dedicated helpers/adapters/
   fixtures, including hidden wrappers and unused compatibility branches.
   Normal calls follow the session's direct execution/current-state references.
-- [ ] P53-05: Connected callers/examples and metadata use only the new contract;
+- [x] P53-05: Connected callers/examples and metadata use only the new contract;
   obsolete generic-string business paths and dedicated fallback tests are removed.
-- [ ] P53-05: Affected validation and independent integrated review pass with
+- [x] P53-05: Affected validation and independent integrated review pass with
   actual evidence. Phase 6 dependencies and handoff describe the delivered types.
-- [ ] P53-07: All three normal families execute Start -> Advance -> Request ->
+- [x] P53-07: All three normal families execute Start -> Advance -> Request ->
   typed Submit -> display-ready result -> Advance through the intended outcome.
   Request, Human question, Wait, Terminal and errors have consistent control
   meaning; Submit does not dispatch the next work or silently call Advance.
-- [ ] P53-07: Work and Human submissions return an actual acceptance outcome
+- [x] P53-07: Work and Human submissions return an actual acceptance outcome
   and useful chat message. No raw-JSON-only acknowledgement, fabricated success,
   additional status fetch or model call is required to display it. Phase 6 owns
   actual chat rendering; the Phase 5.3 spec consumes the same returned content.
-- [ ] P53-08: Integrated source/call-path review confirms removal of unnecessary
+- [x] P53-08: Integrated source/call-path review confirms removal of unnecessary
   scans, repeated loads/decodes and comparison/unused-data reads on the connected
   routes, with obsolete plumbing removed. This is code removal, not caching or
   relocation; required current business and transaction reads remain valid.
 
-Planning only. No implementation, generation, SBT execution, Goal activation,
-commit or release is performed by creation of this Phase.
+## Completion — 2026-10-13
+
+The complete P53-01–08 delivery covers all fifteen normal GoalPhase,
+SplitPhase and RepositorySync Operations. The canonical acceptance checklist
+above is closed by the actual evidence in
+[Phase 5.3 closure](phase-5.3-closure.md), not a reduced subset or generation-only acceptance.
+
+- Accepted implementation Step: `4401aa131c2ad41e9f0a608352079c11e3c08e91`,
+  S53-common-operation-loop / S53-01, 112 paths.
+- Exactly one epoch-1 Phase full review; all five original blockers closed
+  through focused repairs. Latest independent focused03 PASS confirms the
+  final twelve test/probe corrections without new findings.
+- Actual final repository-full02: 95 suites, 616 PASS, zero failed/aborted/
+  canceled/ignored/pending; SBT/wrapper exit0, shared lock released.
+  Earlier full01 (599/616) and focused14 (110/111) remain failures in history.
+- Actual managed scripted evidence: three real SBT-effect scenarios passed.
+  Current CAR input: Cozy56OK269WARN0FAIL/static24OK11WARN0FAIL; warnings
+  retain their existing nonblocking dispositions.
+- Formal LOCAL release closure binding: `smwf-phase53-closure@1`.
+  This completed status is release content, effective with the matching
+  verified native release commit, not merely by editing this working file.
+  Component version remains `0.1.0-SNAPSHOT`; no artifact publication or push.
+
+Cumulative Phase repair3 / Step repair1, all prior records, original base and
+predecessor nine/history/exhausted3-of-3 are preserved. No counter reset or new
+repair frame. Phase5/5.1's explicitly approved-unverified FORMAL releases and
+Phase5.2's formal predecessor meaning remain valid; no retrospective checks.
+
+The two accepted nonblocking Hygiene records are persisted in the
+[canonical Hygiene journal](../journal/2026/10/2026-10-12-phase-5.3-hygiene-follow-up.md).
+There are no accepted Development Candidate items or unpersisted findings.
+Authored packaged-ABI reference maintenance remains Hygiene, not a claim that
+publication/client/CLI readiness was tested.
+
+Concurrent Phase6–9/cost planning and its shared Phase index are preserved
+outside this release; index synchronization is deferred to that planning
+owner. This canonical Phase/checklist and closure remain authoritative.
+Phase6 supplies actual `sm-*` skills/client wiring and use-based adjustment;
+it is not started by this completion.
+
+Historical planning note: creation of this Phase alone performed no
+implementation, generation, SBT execution, Goal activation, commit or release.
 
 ## References
 

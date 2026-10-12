@@ -24,8 +24,11 @@ the execution and pending task; independent executions can share one chat.
 Host selection/permission/effect and actual native transaction owners remain.
 
 Phase5.2 is formally released at8e87c18647a712be909470224ac05aca52f5d799.
-Phase5.3 is active and unaccepted; current generation/compile observations do
-not establish passing tests, Step/Phase acceptance or release.
+Phase5.3's actual final repository-full validation passed95 suites/616 tests,
+with independent full/focused closure. Its formal LOCAL acceptance and exact
+scope are recorded in [Phase5.3 closure](../phase/phase-5.3-closure.md), effective
+with the matching verified release commit. No Phase6 client/CLI wiring or
+packaged-publication readiness is claimed.
 
 ## Historical Phase 5.2 composition — minimal public Operation contract
 

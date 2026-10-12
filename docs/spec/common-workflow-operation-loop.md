@@ -1,7 +1,8 @@
 # Common Workflow Operation loop
 
-Current contract: PHASE-5.3, P53-01–08. Implementation and validation are in
-progress; this document defines the interface, not evidence of acceptance.
+Delivered contract: PHASE-5.3, P53-01–08, all fifteen normal Operations.
+Actual direct Operation validation and independent review are complete; formal
+local release/acceptance is recorded in the [canonical Phase closure](../phase/phase-5.3-closure.md).
 CML and generated Operation metadata are the field/type authority.
 
 ## Business interface

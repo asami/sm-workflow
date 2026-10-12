@@ -26,7 +26,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     selectedPaths: Vector[String], stagedPaths: Vector[String], candidate: Option[O.Snapshot],
     changedPaths: Vector[String], diff: Option[String])
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = "GoalPhaseAdvanceResult"
+    val typeIdentity = "GoalPhaseNativeCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {

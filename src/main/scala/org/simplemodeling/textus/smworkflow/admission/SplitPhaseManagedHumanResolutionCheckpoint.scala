@@ -80,11 +80,11 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
               DataStore.StringEntryId(row.identity))
             program <- storage.stageCreateC(row.payload)
           } yield accumulated :+ program }
-          frontierStore <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-          nextFrontier <- frontierStore.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
+          frontierstore <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+          nextfrontier <- frontierstore.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
             SplitPhaseExecutionFrontier.Value.HumanResolution(captured.record.reference), core)
           program = programs.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
-            (before, next) => before.flatMap(_ => next)).flatMap(_ => nextFrontier)
+            (before, next) => before.flatMap(_ => next)).flatMap(_ => nextfrontier)
           native <- _native_c(core)
           _ <- native.executeC(captured.intent, program)(using core.executionContext) match {
             case Consequence.Success(_) => Consequence.unit

@@ -60,7 +60,7 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
       result <- saved match {
         case Some(value) => Consequence.success(value)
         case None => for {
-          projection <- scope.prepareProjectionForCallC(command, core)
+          projection <- scope.prepareProjectionC(completed)
           captured <- C.captureC(projection)
           prepared <- P.prepareC(captured, actualtargets)
           programs <- prepared.rows.foldLeft(Consequence.success(Vector.empty[ExecUowM[Unit]])) { (prior, row) => for {
@@ -70,10 +70,10 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
             program <- storage.stageCreateC(row.payload)
           } yield accumulated :+ program }
           frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-          nextFrontier <- frontier.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
+          nextfrontier <- frontier.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
             SplitPhaseExecutionFrontier.Value.ScopeProjection(captured.record.reference), core)
           program = programs.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
-            (before, next) => before.flatMap(_ => next)).flatMap(_ => nextFrontier)
+            (before, next) => before.flatMap(_ => next)).flatMap(_ => nextfrontier)
           native <- _native_c(core)
           // Exactly the admitted local Creates plus one native receipt. No event
           // batch or caller persistence selector is introduced by this boundary.

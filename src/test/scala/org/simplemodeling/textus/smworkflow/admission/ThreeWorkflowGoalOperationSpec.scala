@@ -40,7 +40,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         Vector("test"), repairLimit = 0)
       _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
         def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
-          _value_[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
             service = "GoalPhaseService", operation = operation, properties = properties), actor)))
         prepare(call => call.setupC(_setup_commands_(root, "Goal").size).flatMap(_ =>
           call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(host.goal.input),
@@ -120,7 +120,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
             properties = properties), invocationcontext)
         def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
-          _value_[A](take(_call_(operation, properties)))
+          read_value[A](take(_call_(operation, properties)))
         def _current_(): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
           prepare(call => call.goalCurrentC(identity).map(value => { state = Some(value); () }))
@@ -409,7 +409,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         var retained = Option.empty[V.GoalPhaseAdvanceResult]
         var saved = Option.empty[InstanceRecord]
         for (session <- Vector("issue", "answer")) _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
-          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(owner.executeOperationResponseInContext(
+          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
               properties = properties), actor)))
           def loadWork(): WorkflowInteraction[S.Request, Nothing] = {

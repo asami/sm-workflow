@@ -49,7 +49,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     Some(131072), Some(16384), Some(16), Some(131072), Some(1), Some(131072), Some(4194304))
   private val _environment_ = Map("PATH" -> "/usr/bin:/bin", "GIT_TERMINAL_PROMPT" -> "0",
     "GIT_CONFIG_NOSYSTEM" -> "1", "GIT_CONFIG_GLOBAL" -> "/dev/null", "LC_ALL" -> "C")
-  protected def _value_[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
+  protected def read_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
     case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(record))
     case other => fail(s"Expected declared public business value: $other")
   }
@@ -226,7 +226,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       current <- goalCurrentC(identity)
       continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
         .getOrElse(Consequence.stateConflict("Specification Goal has no pending work"))
-      storage <- goalStorageC()
+      storage <- _goal_storage_c()
       reader <- storage.bindIssuedC(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec)
       work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Goal assignment is absent")))
@@ -235,18 +235,18 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       current <- goalCurrentC(identity)
       continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
         .getOrElse(Consequence.stateConflict("Specification Goal has no pending Human question"))
-      storage <- goalStorageC()
+      storage <- _goal_storage_c()
       reader <- storage.bindDecisionC(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec)
       question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Goal question is absent")))
     } yield question
-    private def goalStorageC(): Consequence[WorkflowComponentStorage] = for {
+    private def _goal_storage_c(): Consequence[WorkflowComponentStorage] = for {
       catalog <- GoalPhaseRuntimeCatalog.loadC()
       storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
         SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
     } yield storage
     def goalChildSessionC(identity: InstanceIdentity, sourceRevision: String): Consequence[String] = for {
-      storage <- goalStorageC()
+      storage <- _goal_storage_c()
       reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, GoalPhaseNativeRepositoryClosure.codec)
       closed <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(identity.value +
         ":ordered-repository-closure:" + sourceRevision + ":closed", "1"))(using executionContext).flatMap(
@@ -491,7 +491,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
       val selection = _repository_selection_(input, "two-execution-entry", "host-repository-entry")
       _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
         def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
-          _value_[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
             service = "RepositorySyncService", operation = operation, properties = properties), actor)))
         prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap(_ =>
           _prepare_input_(call, input, selection, root)))
@@ -542,7 +542,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           val invocationcontext = actor
           Given("every normal episode uses the actual host session and minimum public input")
           def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
-            _value_[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
               service = "RepositorySyncService", operation = operation, properties = properties), invocationcontext)))
           if (session == "execute") {
             prepare(call => call.setupC(_setup_commands_(root, scenario).size).flatMap(_ => _prepare_input_(call, startInput, selection, root)))
@@ -627,7 +627,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
               properties = properties), actor)
-          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(_call_(operation, properties)))
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(_call_(operation, properties)))
           def _current_(): InstanceRecord = {
             var state = Option.empty[InstanceRecord]
             prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
@@ -808,7 +808,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
             properties = properties), actor)
-        def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(_call_(operation, properties)))
+        def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(_call_(operation, properties)))
         def _current_(): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))

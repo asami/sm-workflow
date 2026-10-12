@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseNativeClosure {
   final case class StepProgram(step: String, ordinal: Int)
@@ -45,7 +45,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
   final case class Payload(input: Input, ordinal: Int, commit: Option[O.Commit])
   final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = "GoalPhaseAdvanceResult"
+    val typeIdentity = "GoalPhaseNativeStepClosureReceipt"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-step-closure.v3"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {

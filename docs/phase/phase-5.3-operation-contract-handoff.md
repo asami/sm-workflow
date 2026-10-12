@@ -1,9 +1,10 @@
 # Phase 5.3 Operation contract handoff to Phase 6
 
-Created: 2026-10-12. Phase 5.3 is active, not yet accepted or released.
-This is the delivered implementation interface and current verification handoff,
-not authorization to start Phase 6. Canonical acceptance remains in
-[Phase 5.3](phase-5.3.md) and its eventual formal release/closure.
+Created: 2026-10-12. Completed: 2026-10-13.
+This is the delivered interface and verified handoff for the formal LOCAL
+Phase 5.3 release, not authorization to start Phase 6. Canonical acceptance
+remains in [Phase 5.3](phase-5.3.md) and its
+[closure](phase-5.3-closure.md), effective with the matching verified release commit.
 
 ## Interface to consume
 
@@ -70,7 +71,7 @@ consumer. Actual CLI/skill/chat formatting and retention of `started` belong
 to Phase 6. There is no business DTO in primitive-only Scalar and no native
 String response for the caller to decode.
 
-## Evidence and remaining acceptance
+## Acceptance evidence
 
 Phase53 focused06 actually compiled and executed all planned28 suites:
 144 tests passed,0 failed,0 aborted; SBT/wrapper0 and shared lock released.
@@ -89,9 +90,20 @@ the remaining three documentation statements were closed by a separately
 recorded, limited parent M0 amendment. This is not a rewritten reviewer PASS.
 The final affected six suites passed42 tests, with SBT/wrapper0 and lock released;
 the earlier focused/scripted evidence is retained only for its applicable scope.
-Step acceptance commit, sole epoch1 Phase full review, final repository-full
-validation and formal local release remain pending. Do not convert these
-Step/focused/scripted results or this handoff into Phase acceptance.
+The accepted implementation Step is4401aa131c2ad41e9f0a608352079c11e3c08e91.
+Exactly one epoch1 Phase full review reported five bounded findings; all were
+closed through the recorded focused repairs. The latest independent focused03
+PASS accepts the final twelve local test/probe corrections without weakening
+assertions or adding a production contract. Cumulative Phase repair3 and all
+original histories remain; no reset or new repair frame.
+
+Actual final repository-full02 passed95 suites/616 tests, zero failures or
+aborted/canceled/ignored/pending tests, SBT/wrapper0 and shared lock released.
+Actual current CAR input reports56OK269WARN0FAIL with static24OK11WARN0FAIL;
+existing nonblocking Hygiene remains separate. Full01 and focused14 retain
+their actual failures. Formal LOCAL release uses closure binding
+smwf-phase53-closure@1 and commits the canonical checklist/closure/findings.
+No CLI/skill/chat-client, Web/OpenAPI/MCP or packaged-publication success is claimed.
 No upstream capability was added.
 
 ## Phase 6 boundary

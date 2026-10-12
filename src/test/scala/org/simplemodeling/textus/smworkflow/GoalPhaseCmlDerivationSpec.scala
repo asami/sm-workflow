@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * Owned producer JVM only; never starts SBT or mutates application sources.
  * @since   Oct.  6, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 13, 2026
  */
 final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def execute(argv: Vector[String], log: Path): String = {
@@ -40,7 +40,7 @@ final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with Gi
         "cozy.modeler.GoalPhaseCmlDerivationProbe", "src/main/cozy/sm-workflow.cml"), work.resolve("probe.log"))
       Then("the13 configurations are unique and only whole-Phase closure derives PhaseClosed")
       output.linesIterator.exists(_ ==
-        "accepted workflow=GoalPhaseWorkflow version=goal-phase-minimal-operation-v5 combinations=13 phaseClosure=1") shouldBe true
+        "accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v6 combinations=13 phaseClosure=1") shouldBe true
     }
   }
 }

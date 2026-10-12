@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -37,7 +37,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Encoder[Payload] = deriveEncoder
   private given Decoder[Payload] = deriveDecoder
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = "RepositorySyncAdvanceResult"
+    val typeIdentity = "RepositorySyncNativeProgressReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("Native repository progress is missing")

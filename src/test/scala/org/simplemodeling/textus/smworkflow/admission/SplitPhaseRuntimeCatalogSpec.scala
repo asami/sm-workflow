@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -33,7 +33,7 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
         Then("the selected definition is bound without requiring a compiled policy copy")
         catalog.workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
         catalog.definition.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
-        catalog.definition.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
+        catalog.definition.workflowRevision.value shouldBe "split-phase-business-operation-v14"
         catalog.definition.validateC shouldBe a[Consequence.Success[?]]
         catalog.producer.models.map(_.model.workflow.map(_.identity.value)).flatten.toSet shouldBe
           Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow")
@@ -65,7 +65,7 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
       val result = SplitPhaseRuntimeCatalog.parseC(oldWorkflow, oldProducer)
       Then("the missing selected revision is refused without converting historical data")
       oldBinding.workflowRevision.value shouldBe "split-phase-issued-reply-v4"
-      current.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
+      current.workflowRevision.value shouldBe "split-phase-business-operation-v14"
       result shouldBe a[Consequence.Failure[?]]
     }
 
@@ -102,7 +102,7 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
         .withFocus(_ => Json.fromValues(states :+ unused)).top.get.noSpaces
       val producer = take(CandidateAdmissionProducerAbi.parseC(producerText))
       take(CandidateWorkflowAbi.parseSelectedC(changed, producer, "src/main/cozy/sm-workflow.cml",
-        "SplitPhaseWorkflow", "split-phase-minimal-operation-v13"))
+        "SplitPhaseWorkflow", "split-phase-business-operation-v14"))
       When("reference resolution and the common binder consume the valid declaration")
       val result = take(SplitPhaseRuntimeCatalog.parseC(changed, producerText))
       Then("unused state metadata is not a reason to refuse a usable definition")

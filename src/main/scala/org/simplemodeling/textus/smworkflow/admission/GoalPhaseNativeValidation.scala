@@ -33,7 +33,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   final case class Payload(sourceRevision: String, step: String, candidate: O.Snapshot,
     selected: Vector[Check], receipts: Vector[V.Receipt], outcome: Option[String])
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = "GoalPhaseAdvanceResult"
+    val typeIdentity = "GoalPhaseNativeValidationReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-validation.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {

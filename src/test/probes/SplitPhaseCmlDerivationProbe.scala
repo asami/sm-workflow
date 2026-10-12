@@ -8,7 +8,7 @@ import org.goldenport.kaleidox.{Config => KaleidoxConfig, Model}
   * not the Scala3 application ABI's standalone-composite bootstrap.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 object SplitPhaseCmlDerivationProbe {
   def main(args: Array[String]): Unit = {
@@ -20,7 +20,7 @@ object SplitPhaseCmlDerivationProbe {
     val selected = CompositeStateMachineCml.workflowDefinitions(model).filter(_.identity == "SplitPhaseWorkflow")
     require(selected.size == 1, "Expected one actual SplitPhase Workflow")
     val workflow = selected.head
-    require(workflow.version == "split-phase-minimal-operation-v13", workflow.version)
+    require(workflow.version == "split-phase-business-operation-v14", workflow.version)
     val definition = workflow.compositeStateMachine
     val entries = Vector("EntryAssessment", "ProposalAssessment", "SemanticAssessment", "Previewed", "Applied")
     val humans = Vector("Idle", "Awaiting", "Answered", "Deferred", "Cancelled")
@@ -62,6 +62,6 @@ object SplitPhaseCmlDerivationProbe {
       require(states == Vector(expected), s"reasoning $entry/$scopehuman/$human: $states != $expected")
     }
     require(definition.derivations.size == 150, "Expected all150 scope/reasoning Human configurations")
-    println("accepted workflow=SplitPhaseWorkflow version=split-phase-minimal-operation-v13 pairs=150 terminalDominance=true")
+    println("accepted workflow=SplitPhaseWorkflow version=split-phase-business-operation-v14 pairs=150 terminalDominance=true")
   }
 }

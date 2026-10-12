@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
   * Binding retains metadata only; every effect borrows the actual owning Core.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
   def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -105,15 +105,20 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
           case SplitPhaseExecutionFrontier.Value.MechanicalPlanning(reference) =>
             checkpoints.loadMechanicalForReferenceC(command, reference, core).flatMap { actual =>
               _scope_or_frontier_c(SplitPhaseManagedPlanningFrontier.observed(actual.record.snapshot,
-                actual.publicationPostimage, current, start.invocationMode), SplitPhaseRetainedReasoningSource.mechanicalC(actual),
+                actual.publicationPostimage, current, start.invocationMode), actual.record, SplitPhaseRetainedReasoningSource.mechanicalC(actual),
                 command, declaration, catalog, core, humandirection, terminalobservation)
             }
           case SplitPhaseExecutionFrontier.Value.PartitionCompletion(work) =>
             SplitPhaseManagedTypedPartitionCompletion.observeForCallC(work, declaration, catalog, core).flatMap {
               case Some(actual) => actual.record.checkpoint match {
-                case Some(saved) => _scope_or_frontier_c(SplitPhaseManagedPlanningFrontier.observed(saved.snapshot,
-                  actual.record.next, current, start.invocationMode), SplitPhaseRetainedReasoningSource.partitionCompletionC(actual),
-                  command, declaration, catalog, core, humandirection, terminalobservation)
+                case Some(saved) => for {
+                  reads <- SplitPhasePlanningCheckpointDataStorePort.bindC(core.component.get.subsystem.get.configuration,
+                    declaration, catalog)
+                  _ <- reads.requireDocumentsForCallC(saved, core)
+                  wire <- _scope_or_frontier_c(SplitPhaseManagedPlanningFrontier.observed(saved.snapshot,
+                    actual.record.next, current, start.invocationMode), saved, SplitPhaseRetainedReasoningSource.partitionCompletionC(actual),
+                    command, declaration, catalog, core, humandirection, terminalobservation)
+                } yield wire
                 case None => Consequence.serviceUnavailable("Partition DecisionNeeded requires its installed Human handler")
               }
               case None => Consequence.stateConflict("Split partition completion is absent")
@@ -184,7 +189,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       scope <- SplitPhaseDefinitionBinding.scopeSemanticOperationC
       reasoning <- SplitPhaseDefinitionBinding.reasoningSemanticOperationC
       human <- SplitPhaseDefinitionBinding.humanDirectionOperationC
-      reasoningHuman <- SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC
+      reasoninghuman <- SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC
       wire <- boundary.completion.value match {
         case value if value == partition.metadata.completionContract.identity => for {
           reader <- storage.bindIssuedC(C.completionOperation, J.requestCodec)
@@ -210,7 +215,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
             Consequence.stateConflict("Split Human question is absent")))
           wire <- NativeWorkflowOperationOutput.splitScopeHumanC(question)
         } yield wire
-        case value if value == reasoningHuman.metadata.completionContract.identity => for {
+        case value if value == reasoninghuman.metadata.completionContract.identity => for {
           reader <- storage.bindDecisionC(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseReasoningHumanDirection.inputCodec)
           question <- reader.loadC(identity)(using core.executionContext).flatMap(_.map(Consequence.success).getOrElse(
             Consequence.stateConflict("Split reasoning Human question is absent")))
@@ -222,6 +227,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
   }
 
   private def _scope_or_frontier_c(selected: SplitPhaseManagedPlanningFrontier.Observed,
+    checkpoint: K.Record,
     source: => Consequence[SplitPhaseRetainedReasoningSource.Source], command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[V.SplitPhaseAdvanceResult] = for {
@@ -230,8 +236,8 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       case _ => false
     }) for {
       scopes <- SplitPhaseManagedScopeSemantic.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin), declaration, catalog)
-      route <- scopes.routeForCallC(command, core)
-      response <- _scope_response_c(route, command, selected.invocationMode, declaration, catalog, core, humandirection, observation)
+      route <- scopes.routeForCallC(checkpoint, selected.publicationPostimage, selected.current, core)
+      response <- _scope_response_c(route, command, selected.invocationMode, declaration, catalog, core, humandirection, observation).map(Some(_))
     } yield response else Consequence.success(Option.empty[V.SplitPhaseAdvanceResult])
     wire <- scoped.fold(_frontier_c(selected, source, command, declaration, catalog, core, observation))(Consequence.success)
   } yield wire
@@ -281,7 +287,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionContextReference(
         bound.context.record.reference.identity, bound.context.record.reference.revision))
     wire <- _scope_or_frontier_c(SplitPhaseManagedPlanningFrontier.observed(committed.record.snapshot,
-      committed.publicationPostimage, committed.current, bound.start.record.input.invocationMode),
+      committed.publicationPostimage, committed.current, bound.start.record.input.invocationMode), committed.record,
       SplitPhaseRetainedReasoningSource.mechanicalC(committed), command, declaration, catalog, core, humandirection, observation)
   } yield wire
 
@@ -300,12 +306,11 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     */
   private def _scope_response_c(route: SplitPhaseManagedScopeSemantic.Route, command: SplitPhaseAdvanceTarget,
     invocationmode: String, declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[Option[V.SplitPhaseAdvanceResult]] = route match {
-    case SplitPhaseManagedScopeSemantic.NotRequired => Consequence.success(None)
+    core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[V.SplitPhaseAdvanceResult] = route match {
     case pending: SplitPhaseManagedScopeSemantic.Pending =>
-      NativeWorkflowOperationOutput.splitScopeRequestC(pending.work).map(Some(_))
+      NativeWorkflowOperationOutput.splitScopeRequestC(pending.work)
     case _: SplitPhaseManagedScopeSemantic.Completed if humandirection =>
-      _human_c(command, invocationmode, declaration, catalog, core, true, observation).map(Some(_))
+      _human_c(command, invocationmode, declaration, catalog, core, true, observation)
     case completed: SplitPhaseManagedScopeSemantic.Completed =>
       val decision = completed.source.completion.result.result.value.decision
       Consequence.serviceUnavailable("SplitPhase advance admitted " + decision.toString + " handoff scope result awaits its " +

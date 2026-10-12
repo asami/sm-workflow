@@ -43,9 +43,9 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
     intent = WorkflowMechanicalTransition.Intent(declaration.configuration, reference, source.current,
       source.current.revision, entry, TypedValue(J.payloadCodec.typeIdentity, source.snapshot))
     frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-    nextFrontier <- frontier.stageCreateForCallC(source.current.identity, entry.revision,
+    nextfrontier <- frontier.stageCreateForCallC(source.current.identity, entry.revision,
       SplitPhaseExecutionFrontier.Value.SelectedPreview(reference), core)
-    saved <- native.executeC(intent, nextFrontier)(using core.executionContext)
+    saved <- native.executeC(intent, nextfrontier)(using core.executionContext)
     prepared = saved.receipt.next
     instances <- storage.bindInstancesC()(using core.executionContext)
     completed <- instances.appendC(prepared.identity, prepared.revision,

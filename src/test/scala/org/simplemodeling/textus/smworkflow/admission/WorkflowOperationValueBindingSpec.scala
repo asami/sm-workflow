@@ -45,12 +45,12 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
       val repository = V.RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "upstream", "FULL_STATE")
 
       When("the owning Start maps the declared Record to its native business input")
-      val splitInput = _take(NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.SplitPhase, split.toRecord()))
-      val repositoryInput = _take(NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.RepositorySync, repository.toRecord()))
+      val splitinput = _take(NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.SplitPhase, split.toRecord()))
+      val repositoryinput = _take(NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.RepositorySync, repository.toRecord()))
 
       Then("only actual source/proposal and repository choices are carried into the action")
-      splitInput shouldBe NativeWorkflowStartInput.Split("phase-5.3", "PREVIEW", Some("proposal-1"))
-      repositoryInput shouldBe NativeWorkflowStartInput.Repository("sm-workflow", "main", "origin", "main", "upstream", "FULL_STATE")
+      splitinput shouldBe NativeWorkflowStartInput.Split("phase-5.3", "PREVIEW", Some("proposal-1"))
+      repositoryinput shouldBe NativeWorkflowStartInput.Repository("sm-workflow", "main", "origin", "main", "upstream", "FULL_STATE")
     }
 
     "consume outcome, summary and multiple findings as the named work result" in {

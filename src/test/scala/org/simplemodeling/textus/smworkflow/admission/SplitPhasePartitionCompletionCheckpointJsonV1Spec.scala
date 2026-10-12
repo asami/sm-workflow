@@ -1,12 +1,11 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Json, parser}
-import org.goldenport.cncf.workflow.ContinuationIdentity
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionCompletionCheckpointJsonV1 as J,
-  SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPartitionContextJsonV1 as C}
+  SplitPhaseExplicitPartitionSemantic as S, SplitPhasePlanningCheckpointJsonV1 as K}
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhaseAICompletionCheckpointFixture.*
 
@@ -16,40 +15,38 @@ import SplitPhaseAICompletionCheckpointFixture.*
  */
 final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Inert AI-completion lineage frame" should {
-    "read the semantic result and planning successor without loading publication metadata" in {
+    "read participant planning and publication postimage without copied native envelopes" in {
       Given("constructed enriched and DecisionNeeded captures with actual result evidence")
       val values = Vector(capture().record, capture(S.Decision.DecisionNeeded).record)
       When("the stored completion frames are read under the current catalog")
-      values.foreach { value =>
-        val encoded = take(J.encodeC(value))
-        val body = parser.parse(encoded.substring(J.schema.length + 1)).toOption.get.hcursor.downField("payload").focus.get
-        body.asObject.get.keys should not contain ("wire")
-      }
-      val decoded = values.map(v => take(J.decodeC(v.completion.result.continuationId, take(J.encodeC(v)), Vector(f.catalog.definition))))
-      Then("the requested result and downstream planning data remain available to advance")
-      decoded.map(_.completion.result.result.value) shouldBe values.map(_.completion.result.result.value)
+      val decoded = values.map(v => take(J.decodeC(take(J.encodeC(v)), Vector(f.catalog.definition))))
+      Then("the participant and calculated successor remain available without a copied completion or WorkOrder")
+      decoded.map(_.participantIdentity) shouldBe values.map(_.participantIdentity)
       decoded.map(_.checkpoint.map(_.snapshot)) shouldBe values.map(_.checkpoint.map(_.snapshot))
       decoded.map(v => (v.next.identity, v.next.currentProgression)) shouldBe
         values.map(v => (v.next.identity, v.next.currentProgression))
       decoded.map(_.header) shouldBe Vector(None, None)
     }
-    "read formatted envelopes and nested Context frames without an unchanged-body certificate" in {
-      Given("enriched and DecisionNeeded current completion records with inert Context data")
+    "read formatted envelopes and nested planning frames without an unchanged-body certificate" in {
+      Given("enriched and DecisionNeeded current calculation records")
       val values = Vector(capture().record, capture(S.Decision.DecisionNeeded).record)
       val frames = values.map(value => parser.parse(take(J.encodeC(value)).substring(J.schema.length + 1)).toOption.get)
       val formatted = frames.map { frame =>
-        val context = frame.hcursor.downField("payload").get[String]("context").toOption.get
-        val data = parser.parse(context.substring(C.schema.length + 1)).toOption.get
-        frame.hcursor.downField("payload").downField("context")
-          .withFocus(_ => Json.fromString(C.schema + ":" + data.spaces2)).top.get
+        frame.hcursor.downField("payload").get[Option[String]]("checkpoint").toOption.flatten match {
+          case Some(checkpoint) =>
+            val data = parser.parse(checkpoint.substring(K.schema.length + 1)).toOption.get
+            frame.hcursor.downField("payload").downField("checkpoint")
+              .withFocus(_ => Json.fromString(K.schema + ":" + data.spaces2)).top.get
+          case None => frame
+        }
       }
-      When("outer JSON and the nested Context use valid alternative whitespace")
+      When("outer JSON and its optional planning checkpoint use valid alternative whitespace")
       val observed = values.zip(formatted).map { (value, frame) =>
-        take(J.decodeC(value.completion.result.continuationId, J.schema + ":" + frame.spaces2,
+        take(J.decodeC(J.schema + ":" + frame.spaces2,
           Vector(f.catalog.definition)))
       }
-      Then("the semantic result and optional planning survive without re-encoding the whole input")
-      observed.map(_.completion.result.result.value) shouldBe values.map(_.completion.result.result.value)
+      Then("the participant and optional planning survive without re-encoding the whole input")
+      observed.map(_.participantIdentity) shouldBe values.map(_.participantIdentity)
       observed.map(_.checkpoint.map(_.snapshot)) shouldBe values.map(_.checkpoint.map(_.snapshot))
       observed.map(_.checkpoint.isDefined) shouldBe Vector(true, false)
     }
@@ -61,20 +58,18 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
       val variants = Vector(
         frame.mapObject(_.add("presentation", Json.fromString("new diagnostic"))),
         frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("plan", Json.True))).top.get,
-        frame.hcursor.downField("payload").downField("startReference")
-          .withFocus(_.mapObject(_.add("unchanged", Json.True))).top.get,
-        frame.hcursor.downField("payload").downField("contextReference")
-          .withFocus(_.mapObject(_.add("sourceLine", Json.fromInt(7)))).top.get,
+        frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("issued", Json.fromInt(7)))).top.get,
+        frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("completion", Json.fromString("unused malformed native copy")))).top.get,
+        frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("before", Json.True))).top.get,
         frame.hcursor.downField("payload").downField("mappingReference")
           .withFocus(_.mapObject(_.add("generation", Json.fromString("irrelevant")))).top.get,
         frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("header", Json.fromInt(7)))).top.get,
         frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("header", Json.fromString("malformed unused frame")))).top.get,
         frame.hcursor.downField("payload").withFocus(_.mapObject(_.add("header", Json.obj("accepted" -> Json.True)))).top.get)
       When("the existing reader selects declared data without certifying the whole representation")
-      val observed = variants.map(data => take(J.decodeC(value.completion.result.continuationId,
-        J.schema + ":" + data.noSpaces, Vector(f.catalog.definition))))
+      val observed = variants.map(data => take(J.decodeC(J.schema + ":" + data.noSpaces, Vector(f.catalog.definition))))
       Then("advance's result and planning input do not depend on unused metadata types or bodies")
-      observed.map(_.completion.result.result.value) shouldBe Vector.fill(variants.size)(value.completion.result.result.value)
+      observed.map(_.participantIdentity) shouldBe Vector.fill(variants.size)(value.participantIdentity)
       observed.map(_.checkpoint.map(_.snapshot)) shouldBe Vector.fill(variants.size)(value.checkpoint.map(_.snapshot))
       observed.map(_.header) shouldBe Vector.fill(variants.size)(None)
     }
@@ -86,34 +81,29 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
         frame.mapObject(_.add("schemaVersion", Json.fromString("unsupported"))),
         frame.hcursor.downField("payload").downField("mappingReference")
           .withFocus(_.mapObject(_.remove("revision"))).top.get,
-        frame.hcursor.downField("payload").downField("contextReference")
-          .withFocus(_.mapObject(_.add("identity", Json.fromInt(1)))).top.get,
+        frame.hcursor.downField("payload").downField("participantIdentity").withFocus(_ => Json.fromInt(1)).top.get,
         frame.hcursor.downField("payload").downField("checkpoint").withFocus(_ => Json.Null).top.get)
       When("malformed raw declarations reach the current reader")
-      val results = malformed.map(data => J.decodeC(value.completion.result.continuationId,
-        J.schema + ":" + data.noSpaces, Vector(f.catalog.definition)))
+      val results = malformed.map(data => J.decodeC(J.schema + ":" + data.noSpaces, Vector(f.catalog.definition)))
       Then("unsupported mistyped and unpaired consumed data refuse rather than becoming readable records")
       results.foreach(_.isSuccess shouldBe false)
     }
-    "reject crossed continuation missing required data malformed nested frames and whole-frame overflow" in {
+    "reject missing participant malformed publication postimage and whole-frame overflow" in {
       Given("one canonical stored capture and independently malformed envelopes")
       val value = capture().record
       val raw = take(J.encodeC(value))
       val json = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
       val payload = json.hcursor.downField("payload").focus.get
       def _frame_(p: Json) = J.schema + ":" + p.noSpaces
-      val variants = Vector(json.mapObject(_.add("payload", payload.mapObject(_.remove("before")))),
-        json.mapObject(_.add("payload", payload.mapObject(_.add("completion", Json.fromString("malformed"))))))
-      When("each damaged frame and a foreign continuation are observed")
-      val results = variants.map(v => J.decodeC(value.completion.result.continuationId, _frame_(v), Vector(f.catalog.definition)))
-      Then("missing or malformed consumed data a foreign continuation and oversized frames are refused")
+      val variants = Vector(json.mapObject(_.add("payload", payload.mapObject(_.remove("participantIdentity")))),
+        json.mapObject(_.add("payload", payload.mapObject(_.add("next", Json.fromString("malformed"))))))
+      When("each damaged frame is observed at the current codec boundary")
+      val results = variants.map(v => J.decodeC(_frame_(v), Vector(f.catalog.definition)))
+      Then("missing or malformed consumed data and oversized frames are refused")
       results.foreach(_.isSuccess shouldBe false)
-      J.decodeC(ContinuationIdentity("foreign"), raw, Vector(f.catalog.definition)).isSuccess shouldBe false
-      J.decodeC(value.completion.result.continuationId, raw + (" " * J.maximumPayloadBytes), Vector(f.catalog.definition)).isSuccess shouldBe false
-      val oversized = value.completion.result.copy(result = value.completion.result.result.copy(
-        value = value.completion.result.result.value.copy(rationale = " " * J.maximumPayloadBytes)))
-      J.encodeC(value.copy(completion = value.completion.copy(result = oversized))).isSuccess shouldBe false
-      J.decodeC(value.completion.result.continuationId, null, Vector(f.catalog.definition)).isSuccess shouldBe false
+      J.decodeC(raw + (" " * J.maximumPayloadBytes), Vector(f.catalog.definition)).isSuccess shouldBe false
+      J.encodeC(value.copy(participantIdentity = " " * J.maximumPayloadBytes)).isSuccess shouldBe false
+      J.decodeC(null, Vector(f.catalog.definition)).isSuccess shouldBe false
     }
   }
 }

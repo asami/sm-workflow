@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -62,8 +62,15 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
   }
   private def _json(text: String): Json = parse(text).fold(error => throw new AssertionError(error), identity)
   private def _with_unused_fields(value: Json): Json = value.asObject match {
-    case Some(fields) => Json.obj(fields.toVector.map((key, child) => key -> _with_unused_fields(child))*)
-      .mapObject(_.add("unusedCommandGrant", Json.obj("execute" -> Json.True)))
+    case Some(fields) =>
+      val annotated = Json.obj(fields.toVector.map { (key, child) =>
+        // Map keys are consumed child identities, not passive record fields.
+        key -> (if (key == "incomingByChild") child else _with_unused_fields(child))
+      }*)
+      // Circe sum constructors and empty case-object bodies are type syntax,
+      // not business records to which passive annotation fields can be added.
+      if (fields.isEmpty || (fields.size == 1 && fields.keys.head.headOption.exists(_.isUpper))) annotated
+      else annotated.mapObject(_.add("unusedCommandGrant", Json.obj("execute" -> Json.True)))
     case None => value.asArray.map(items => Json.arr(items.map(_with_unused_fields)*)).getOrElse(value)
   }
   private def _rewrite(value: Json, path: List[String])(change: Json => Json): Json = path match {

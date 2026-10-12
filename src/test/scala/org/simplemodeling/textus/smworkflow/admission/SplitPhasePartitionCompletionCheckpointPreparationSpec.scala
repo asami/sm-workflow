@@ -75,13 +75,13 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       val captured = take(A.captureC(selected))
       val rows = take(AU.prepareRowsC(captured, targets))
       Then("the selected result and planning output are available and each declared target is prepared once")
-      captured.record.completion.result shouldBe selected.submitted
-      captured.record.before shouldBe selected.pending.current
+      captured.continuationId shouldBe selected.submitted.continuationId
+      captured.record.participantIdentity shouldBe selected.pending.binding.start.record.participantIdentity
       captured.record.next shouldBe selected.next
       captured.checkpoint.get.mechanicalIntent shouldBe None
       captured.checkpoint.get.record.snapshot.selection.planning shouldBe selected.mechanical.get.selection.data
       rows.map(r => (r.collection, r.identity)).distinct.size shouldBe rows.size
-      rows.count(_.collection == targets.publication) shouldBe 4
+      rows.count(_.collection == targets.publication) shouldBe 3
       val documents = SplitPhasePlanningCheckpointObservation.builtDocuments(captured.record.checkpoint.get.snapshot)
       documents should not be empty
       rows.count(_.collection == targets.proposals) shouldBe documents.size
@@ -105,8 +105,7 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       val frontier = saved.projection.get.asInstanceOf[SplitPhasePlanningSnapshot.ProjectionView.Requirements]
       val rows = take(AU.prepareRowsC(captured, targets))
       val encoded = take(SplitPhasePartitionCompletionCheckpointJsonV1.encodeC(captured.record))
-      val decoded = take(SplitPhasePartitionCompletionCheckpointJsonV1.decodeC(selected.submitted.continuationId,
-        encoded, Vector(f.catalog.definition)))
+      val decoded = take(SplitPhasePartitionCompletionCheckpointJsonV1.decodeC(encoded, Vector(f.catalog.definition)))
       Then("Built documents and every repository Decision survive in their original order with the original AI evidence")
       frontier.candidates.exists(_.isInstanceOf[SplitPhasePlanningSnapshot.CandidateProjectionView.BuiltView]) shouldBe true
       frontier.candidates.exists(_.isInstanceOf[SplitPhasePlanningSnapshot.CandidateProjectionView.DecisionView]) shouldBe true
@@ -122,7 +121,7 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
         actual.candidates.collect { case d: SplitPhaseExplicitCandidateProjection.DecisionRequired => d.repositories }
       rows.count(_.collection == targets.proposals) shouldBe documents.size
       rows.count(_.collection == targets.ownerships) shouldBe documents.size
-      decoded.completion.result shouldBe selected.submitted
+      decoded.participantIdentity shouldBe selected.pending.binding.start.record.participantIdentity
       decoded.checkpoint.get.snapshot.projection shouldBe saved.projection
       decoded.next.identity shouldBe selected.next.identity
       decoded.header shouldBe None
@@ -132,32 +131,29 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       val captured = capture(S.Decision.DecisionNeeded)
       When("the original closing lineage is prepared")
       val rows = take(AU.prepareRowsC(captured, targets))
-      Then("only one lineage row exists and raw data cannot construct execution/observation capabilities")
+      Then("only the addressed lineage row exists, with no invented planning or header publication")
       captured.record.checkpoint shouldBe None
       captured.record.header shouldBe None
       captured.checkpoint shouldBe None
       rows.size shouldBe 1
-      rows.head.identity shouldBe take(A.lineageKeyC(captured.record.completion.result.continuationId))
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePartitionCompletionCheckpointPreparation.Captured(null, None)")
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseManagedTypedPartitionCompletion.ObservedCompletion(null, null)")
+      rows.head.identity shouldBe take(A.lineageKeyC(captured.continuationId))
     }
     "serialize inert facts without readmitting a completion and bound physical lineage keys" in {
       Given("stored data variants that cannot construct a selected Plan or a Captured publication")
       val saved = capture().record
       val identity = ContinuationIdentity("実例:[]\"\\")
       val variants = Vector(saved.copy(checkpoint = None), saved.copy(header = None),
-        saved.copy(before = saved.next),
-        saved.copy(start = saved.start.copy(instanceIdentity = WorkflowInstancePersistence.InstanceIdentity("foreign"))),
+        saved.copy(participantIdentity = "another-participant"),
         saved.copy(checkpoint = saved.checkpoint.map(k => k.copy(reference = k.reference.copy(identity = "caller-selected")))))
       When("the existing frame codec preserves typed data without repeating native admission")
       val decoded = variants.map(v => take(SplitPhasePartitionCompletionCheckpointJsonV1.decodeC(
-        v.completion.result.continuationId, take(SplitPhasePartitionCompletionCheckpointJsonV1.encodeC(v)),
+        take(SplitPhasePartitionCompletionCheckpointJsonV1.encodeC(v)),
         Vector(f.catalog.definition))))
       val keys = Vector(A.lineageKeyC(identity), A.lineageKeyC(identity))
       val invalidkeys = Vector(A.lineageKeyC(ContinuationIdentity("x" * 1024)), A.lineageKeyC(null))
       val absentplan = A.captureC(null)
       Then("consumed result planning and presentation data remain available while physical address bounds still apply")
-      decoded.map(_.completion.result.result.value) shouldBe variants.map(_.completion.result.result.value)
+      decoded.map(_.participantIdentity) shouldBe variants.map(_.participantIdentity)
       decoded.map(_.checkpoint.map(_.snapshot)) shouldBe variants.map(_.checkpoint.map(_.snapshot))
       keys.map(take(_)).distinct.size shouldBe 1
       invalidkeys.foreach(_.isSuccess shouldBe false)

@@ -36,16 +36,16 @@ private[admission] object NativeHostSplitAnswerEvidenceFixture {
   val model = ContextSnapshot(handle.workflowRevision.value, modelRevision = Some("actual-model"))
   // This attestation-only fixture supplies typed consumed source data. Its
   // unused judgment/frontier are deliberately absent, not public/native inputs.
-  private val authority = SplitPhaseExplicitProposalPrecheck.AuthorityReference("authority", "1")
-  private val item = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("unknown-item")
-  private val request = SplitPhaseExplicitReasoningSemantic.Request(context,
-    SplitPhaseExplicitProposalPrecheck.SourceReference("source", "1"), authority,
+  private val _authority = SplitPhaseExplicitProposalPrecheck.AuthorityReference("authority", "1")
+  private val _item = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("unknown-item")
+  private val _request = SplitPhaseExplicitReasoningSemantic.Request(context,
+    SplitPhaseExplicitProposalPrecheck.SourceReference("source", "1"), _authority,
     SplitPhaseExplicitObjectiveSelection.DemandReference("demands", "1"),
-    Vector(SplitPhaseExplicitReasoningSemantic.UnknownItem(item, "Original explanation",
-      SplitPhaseExplicitBoundaryValidation.Item(item,
+    Vector(SplitPhaseExplicitReasoningSemantic.UnknownItem(_item, "Original explanation",
+      SplitPhaseExplicitBoundaryValidation.Item(_item,
         Vector(SplitPhaseExplicitBoundaryValidation.ClosureCriterion("complete unknown work")),
-        Vector.empty, authority))), SplitPhaseExplicitPartitionSemantic.ResultReference("reasoning-result", "1"))
-  val reasoning = Reasoning.Input(ContinuationIdentity("reasoning-slot"), request,
+        Vector.empty, _authority))), SplitPhaseExplicitPartitionSemantic.ResultReference("reasoning-result", "1"))
+  val reasoning = Reasoning.Input(ContinuationIdentity("reasoning-slot"), _request,
     ContextReference("reasoning-result", "1"), null, null)
   private def question[W](input: W, typeIdentity: String) = {
     val request = ContinuationRequest(StateMachineRunIdentity("instance"), ContinuationIdentity("split-human-slot"), StateMachineRevision("5"),

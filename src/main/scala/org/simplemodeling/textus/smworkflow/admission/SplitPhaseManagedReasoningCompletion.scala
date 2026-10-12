@@ -157,9 +157,9 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
           storage <- ComponentRecordStorage.bindForCallC(call, targets.storeName, row.collection, DataStore.StringEntryId(row.identity))
           staged <- storage.stageCreateC(row.payload)
           frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
-          nextFrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
+          nextfrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
             SplitPhaseExecutionFrontier.Value.ReasoningCompletion(submitted.continuationId), call)
-          program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          program = staged.flatMap(_ => nextfrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(plan.closing)))
         } yield {
           selected = Some(plan)
@@ -189,8 +189,8 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     revision <- request.expectedRevision.value.toLongOption.map(value => Consequence.success(
       org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRevision(value - 1L)))
       .getOrElse(_invalid("issued reasoning revision is not numeric"))
-    frontierReader <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-    before <- frontierReader.loadForCallC(work.handle.instanceIdentity, revision, core).flatMap(
+    frontierreader <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+    before <- frontierreader.loadForCallC(work.handle.instanceIdentity, revision, core).flatMap(
       _.map(Consequence.success).getOrElse(_invalid("issued reasoning business source is absent")))
     host = core.component.get.subsystem.get.configuration
     source <- before match {

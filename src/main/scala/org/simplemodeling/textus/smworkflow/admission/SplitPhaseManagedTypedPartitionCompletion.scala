@@ -27,7 +27,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
   */
 private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
   final class ObservedCompletion private[SplitPhaseManagedTypedPartitionCompletion] (
-    val record: A.Record, val current: WorkflowInstancePersistence.InstanceRecord)
+    val record: A.Record, val current: WorkflowInstancePersistence.InstanceRecord,
+    val completion: WorkflowCompletionRecordJsonV1.Record[S.Judgment])
   final class Binding private[SplitPhaseManagedTypedPartitionCompletion] (
     val operation: spec.OperationDefinition, issue: SplitPhaseManagedTypedPartitionIssue.Port,
     declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -66,7 +67,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
       case Some(actual) => for {
         reads <- currentReadsC(core, declaration, catalog)
         saved <- reads.loadForCallC(identity, core)
-        _ <- actorC(core, Some(saved.start.participantIdentity))
+        _ <- actorC(core, Some(saved.participantIdentity))
         instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
           declaration.instances, declaration.continuations)
         current <- instances.loadForCallC(declaration.configuration, work.handle.instanceIdentity, core).flatMap {
@@ -76,8 +77,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
         // Native completion is authoritative. The stored calculation supplies
         // inert data, not a second completion/result certificate. No old input,
         // header or generated-document reread is needed to acknowledge it.
-        observed = saved.copy(completion = actual.completion)
-      } yield Some(new ObservedCompletion(observed, current))
+      } yield Some(new ObservedCompletion(saved, current, actual.completion))
     }
   } yield result
 
@@ -181,9 +181,9 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
           reads <- currentReadsC(call, declaration, catalog)
           staged <- reads.stageForCallC(captured, call)
           frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
-          nextFrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
+          nextfrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
             SplitPhaseExecutionFrontier.Value.PartitionCompletion(submitted.continuationId), call)
-          program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          program = staged.flatMap(_ => nextfrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(plan.closing)))
         } yield {
           selected = Some(plan)

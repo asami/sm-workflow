@@ -78,10 +78,10 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
     core: ActionCall.Core): Consequence[Unit] = for {
     start <- ComponentRecordStorage.bindForCallC(core, declaration.storeName, declaration.collection,
       DataStore.StringEntryId(invocation.prepared.record.reference.identity))
-    startWire <- SplitPhaseTypedStartJsonV1.encodeC(invocation.prepared.record)
-    _ <- start.createC(Record.data(SplitPhaseTypedStartJsonV1.storageField -> startWire))
+    startwire <- SplitPhaseTypedStartJsonV1.encodeC(invocation.prepared.record)
+    _ <- start.createC(Record.data(SplitPhaseTypedStartJsonV1.storageField -> startwire))
     host = core.component.get.subsystem.get.configuration
-    contextDeclaration <- SplitPhasePartitionContextReadPolicy.decodeC(host)
+    contextdeclaration <- SplitPhasePartitionContextReadPolicy.decodeC(host)
     handle <- WorkflowHandle.fromRecordC(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId, current)
     reference = S.ContextReference("split-context:" + current.identity.value, "1")
     template = invocation.template
@@ -89,10 +89,10 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
       invocation.prepared.record.reference, ContinuationIdentity("split-partition:" + current.identity.value),
       SplitPhaseExplicitPartitionContext.completionOperation, template.owner.requirement, template.owner.presentation)
     context = SplitPhaseExplicitPartitionContext.Record(reference, owner, template.facts)
-    contextWire <- SplitPhaseExplicitPartitionContextJsonV1.encodeC(context)
-    storage <- ComponentRecordStorage.bindForCallC(core, contextDeclaration.storeName, contextDeclaration.collection,
+    contextwire <- SplitPhaseExplicitPartitionContextJsonV1.encodeC(context)
+    storage <- ComponentRecordStorage.bindForCallC(core, contextdeclaration.storeName, contextdeclaration.collection,
       DataStore.StringEntryId(reference.identity))
-    _ <- storage.createC(Record.data(SplitPhaseExplicitPartitionContextJsonV1.storageField -> contextWire))
+    _ <- storage.createC(Record.data(SplitPhaseExplicitPartitionContextJsonV1.storageField -> contextwire))
     frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, workflow)
     _ <- frontier.createForCallC(current.identity, current.revision,
       SplitPhaseExecutionFrontier.Value.Initial(reference), core)

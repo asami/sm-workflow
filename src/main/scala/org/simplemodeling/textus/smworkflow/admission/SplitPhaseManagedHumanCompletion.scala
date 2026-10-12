@@ -135,7 +135,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
     instances <- storage.bindInstancesC()(using core.executionContext)
     native <- _completion_c(storage)
     frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-    nextFrontier <- frontier.stageCreateForCallC(admitted.next.identity, admitted.next.revision,
+    nextfrontier <- frontier.stageCreateForCallC(admitted.next.identity, admitted.next.revision,
       SplitPhaseExecutionFrontier.Value.ScopeHumanAnswer(submitted.continuationId), core)
     bound <- {
       val codec = new WorkflowCompletionServiceOperation.Codec[A.Answer] {
@@ -150,7 +150,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[A.Answer] {
         def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = {
-          val program = nextFrontier.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          val program = nextfrontier.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference))))
           Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(admitted.next)))
         }

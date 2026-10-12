@@ -20,7 +20,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def prepared: S.Prepared = {
@@ -42,7 +42,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
       val operation = take(SplitPhaseDefinitionBinding.partitionSemanticOperationC)
       val completion = SplitPhaseDefinitionBinding.providedDefinition.providedOperations.filter(_.name == "submitPartitionSemanticResult")
       Then("request result operation and source identities belong to the actual current declarations")
-      candidate.workflow.version shouldBe "split-phase-minimal-operation-v13"
+      candidate.workflow.version shouldBe "split-phase-business-operation-v14"
       operation.identity.capability shouldBe "assess-partition-semantic-capability"
       operation.actionIdentity shouldBe "AssessPartitionSemanticInputs"
       operation.operation shouldBe StateMachineOperationIdentity("SplitSemanticService", "assessPartitionSemanticInputs")
@@ -102,7 +102,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
         val judgment = model.judgments.find(_.identity.value == "AssessPartitionSemanticInputs").get
         Then("the packaged execution definition resolves the actual partition capability and its requested data")
         catalog.workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
-        catalog.definition.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
+        catalog.definition.workflowRevision.value shouldBe "split-phase-business-operation-v14"
         judgment.alternatives.map(_.value) shouldBe Vector("Enriched", "DecisionNeeded")
         judgment.criteria.map(_.value) shouldBe Vector("exact-ordered-gap-coverage", "known-work-preserved",
           "workflow-owned-existing-authority", "no-participant-execution-selectors")

@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct.  6, 2026
  *  version Oct.  8, 2026
  *  version Oct.  9, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 13, 2026
  */
 final class GoalPhaseCncfConsumerSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -34,7 +34,7 @@ final class GoalPhaseCncfConsumerSpec extends AnyWordSpec with Matchers with Giv
       val binding = take(WorkflowInstancePersistence.bindCandidateDefinitionC(workflow))
       Then("the native ordered workflow is usable without legacy Step-close or Human-close channels")
       binding.workflowIdentity.value shouldBe "GoalPhaseWorkflow"
-      binding.workflowRevision.value shouldBe "goal-phase-minimal-operation-v5"
+      binding.workflowRevision.value shouldBe "goal-phase-business-operation-v6"
       workflow.workflow.requiredSpi.map(_.capability).toSet shouldBe Set(
         "goal-phase-implementation-capability", "goal-phase-repair-capability",
         "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability")

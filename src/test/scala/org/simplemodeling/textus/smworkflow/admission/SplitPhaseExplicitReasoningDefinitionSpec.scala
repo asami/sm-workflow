@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -40,7 +40,7 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
       val judgment = candidate.sidecar.models.head.judgments.find(_.identity.value == "AssessReasoningDemand").get
 
       Then("the actual result type is declared for completion without changing the JSON carrier")
-      candidate.workflow.version shouldBe "split-phase-minimal-operation-v13"
+      candidate.workflow.version shouldBe "split-phase-business-operation-v14"
       operation.identity.capability shouldBe "assess-reasoning-demand-capability"
       operation.actionIdentity shouldBe "AssessReasoningDemand"
       operation.operation shouldBe StateMachineOperationIdentity("SplitSemanticService", "assessReasoningDemand")
@@ -126,7 +126,7 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
 
         Then("the old label remains incompatible data and cannot silently become the new reasoning definition")
         oldbinding.workflowRevision.value shouldBe oldrevision
-        current.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
+        current.workflowRevision.value shouldBe "split-phase-business-operation-v14"
         result shouldBe a[Consequence.Failure[?]]
       }
     }

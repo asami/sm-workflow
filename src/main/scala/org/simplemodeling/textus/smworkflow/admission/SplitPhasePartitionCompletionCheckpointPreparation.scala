@@ -8,8 +8,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedPartitionCompletion as P,
-  SplitPhasePlanningCheckpointPreparation as K, SplitPhaseExplicitPartitionContext as C,
-  SplitPhaseTypedStartPreparation as T, SplitPhaseExplicitPartitionSemantic as S,
+  SplitPhasePlanningCheckpointPreparation as K, SplitPhaseExplicitPartitionSemantic as S,
   SplitPhasePartitionEnrichmentPublication as E}
 
 /** Actual original completion facts. Raw Record is inert; only a selected Plan
@@ -18,11 +17,11 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedPartitionC
   * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointPreparation {
-  final case class Record(context: C.Record, start: T.Record, issued: WorkflowInteraction[S.Request, Nothing],
-    completion: WorkflowCompletionRecordJsonV1.Record[S.Judgment], before: InstanceRecord, next: InstanceRecord,
+  final case class Record(participantIdentity: String, next: InstanceRecord,
     checkpoint: Option[K.Record], header: Option[E.Record])
   final class Captured private[SplitPhasePartitionCompletionCheckpointPreparation] (
-    val record: Record, val checkpoint: Option[K.Captured])
+    val record: Record, val checkpoint: Option[K.Captured],
+    val continuationId: org.goldenport.cncf.workflow.ContinuationIdentity)
 
   def lineageKeyC(identity: org.goldenport.cncf.workflow.ContinuationIdentity): Consequence[String] = _guarded {
     WorkflowMechanicalTransition.keyC(WorkflowMechanicalTransition.Reference(identity.value, "1"))
@@ -47,10 +46,9 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointPreparation {
             admitted.references.estimates, admitted.references.handoffs, planning.map(_.reference)))
         case _: S.DecisionNeeded => None
       }
-      record = Record(plan.pending.binding.context.record, plan.pending.binding.start.record, plan.pending.issued,
-        WorkflowCompletionRecordJsonV1.Record(plan.next.revision, plan.submitted, Some(plan.closing)),
-        plan.pending.current, plan.next, checkpoint.map(_.record), header)
-    } yield new Captured(record, checkpoint)
+      record = Record(plan.pending.binding.start.record.participantIdentity,
+        plan.next, checkpoint.map(_.record), header)
+    } yield new Captured(record, checkpoint, plan.submitted.continuationId)
   }
   private def _invalid[A](why: String): Consequence[A] = Consequence.stateConflict("SplitPhase AI checkpoint " + why)
   private def _guarded[A](body: => Consequence[A]): Consequence[A] = try body catch {

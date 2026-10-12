@@ -93,7 +93,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         def identity: InstanceIdentity = execution.get
         def advance: List[Property] = NativeWorkflowOperationInputFixture.advance(identity.value)
         for (session <- Vector("execute")) _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
-          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(owner.executeOperationResponseInContext(
+          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
               properties = properties), actor)))
           if (session == "execute") {
@@ -160,7 +160,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         Files.readString(root.resolve("sbt-executions.txt")).linesIterator.map(_.toLong).toVector else Vector.empty
       for (session <- Vector("issue", "implement", "step-review", "phase-review", "close"))
         _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
-          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(owner.executeOperationResponseInContext(
+          def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
               properties = properties), actor)))
           def current(): InstanceRecord = {
@@ -224,14 +224,14 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             val outcome = invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
             outcome.kind shouldBe "Terminal"
             val actual = outcome.completion.get
-            var childSession = Option.empty[InstanceIdentity]
+            var childsession = Option.empty[InstanceIdentity]
             prepare(call => call.goalChildSessionC(identity, closure.sourceRevision).map(value => {
-              childSession = Some(InstanceIdentity(value)); ()
+              childsession = Some(InstanceIdentity(value)); ()
             }))
             var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
             var checked = Option.empty[RepositorySyncNativeMergeValidation.State]
             prepare(call => call.observeC().flatMap(value => { observed = Some(value)
-              call.validationC(host.repository.input, childSession.get, root).map(value => { checked = Some(value); () }) }))
+              call.validationC(host.repository.input, childsession.get, root).map(value => { checked = Some(value); () }) }))
             Then("the whole selected Phase retains its actual Step commit, converged repository and third real test receipt")
             actual.selectedPlan.identity shouldBe plan.identity
             actual.selectedPlan.steps.map(_.identity) shouldBe plan.steps.map(_.identity)

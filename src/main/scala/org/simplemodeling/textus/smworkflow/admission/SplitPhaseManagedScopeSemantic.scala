@@ -21,13 +21,13 @@ import org.simplemodeling.textus.smworkflow.value.{SplitPhasePartitionContextRef
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic as S, SplitPhaseScopeSemanticJson as J,
   SplitPhaseTypedScopeWorkIssue as I, SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as KJ, SplitPhasePlanningCheckpointObservation as O,
-  SplitPhasePlanningCheckpointDataStorePort as D, SplitPhasePlanningSnapshot as R}
+  SplitPhasePlanningCheckpointDataStorePort as D}
 
 /** Actual generated scope issue/completion. Only metadata is retained; native
   * transitions borrow the owning call's canonical Subsystem storage.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopeSemantic {
   final class Source private[SplitPhaseManagedScopeSemantic] (val record: K.Record,
@@ -46,7 +46,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     * Only the owning port can produce pending work or completed provenance.
     */
   sealed trait Route
-  case object NotRequired extends Route
   final class Pending private[SplitPhaseManagedScopeSemantic] (
     val work: WorkflowInteraction[S.Request, Nothing]) extends Route
   final class Completed private[SplitPhaseManagedScopeSemantic] (
@@ -54,42 +53,28 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
 
   final class Port private[SplitPhaseManagedScopeSemantic] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog) {
-    /** NotRequired means no scope requirement in this selected root, not a
-      * missing pending publication. Native scope work is never reissued.
+    /** Advance supplies its consumed business checkpoint and native postimage.
+      * Its actual frontier owner handles declared document availability; scope
+      * routing does not reread mapping, documents or the current instance.
       */
-    def routeForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Route] = for {
-      _ <- _actor_c(core, None)
-      reads <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
-      mapping <- reads.loadMappingForCallC(command, core)
-      routed <- mapping match {
-        case Some(saved) if saved.snapshot.projection.exists {
-            case need: R.ProjectionView.Requirements => need.candidates.exists(_.isInstanceOf[R.CandidateProjectionView.SemanticView])
-            case _ => false
-          } => for {
-          source <- _source_c(command, declaration, catalog, core)
-          plan <- I.prepareC(source)
-          published <- loadForCallC(I.identity(source), core)
-          result <- published match {
-            case Some(work) => for {
-              result <- source.current.suspension match {
-                case Some(_) =>
-                  Consequence.success[Route](new Pending(work))
-                case None => for {
-                  actual <- _completed_source_c(plan, declaration, catalog, core).flatMap {
-                    case Some(value) => Consequence.success(value)
-                    case None => _invalid("unsuspended scope issue has no actual retained completion")
-                  }
-                } yield (new Completed(actual): Route)
-              }
-            } yield result
-            case None =>
-              _with_work_c(core) { (native, _, _) =>
-                given ExecutionContext = core.executionContext
-                native.suspendC(plan.intent, plan.work).map(_ => new Pending(plan.work): Route)
-              }
+    def routeForCallC(record: K.Record, predecessor: InstanceRecord, current: InstanceRecord,
+      core: ActionCall.Core): Consequence[Route] = for {
+      _ <- _actor_c(core, Some(record.originalStart.participantIdentity))
+      source = new Source(record, predecessor, current)
+      plan <- I.prepareC(source)
+      published <- loadForCallC(I.identity(source), core)
+      routed <- published match {
+        case Some(work) => source.current.suspension match {
+          case Some(_) => Consequence.success[Route](new Pending(work))
+          case None => _completed_source_c(plan, declaration, catalog, core).flatMap {
+            case Some(value) => Consequence.success[Route](new Completed(value))
+            case None => _invalid("unsuspended scope issue has no actual retained completion")
           }
-        } yield result
-        case _ => Consequence.success[Route](NotRequired)
+        }
+        case None => _with_work_c(core) { (native, _, _) =>
+          given ExecutionContext = core.executionContext
+          native.suspendC(plan.intent, plan.work).map(_ => new Pending(plan.work): Route)
+        }
       }
     } yield routed
 
@@ -100,9 +85,8 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     } yield loaded
 
     /** Internal native preparation; no public routing success or publication. */
-    def prepareProjectionForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core):
+    def prepareProjectionC(completed: CompletedSource):
         Consequence[PreparedProjection] = for {
-      completed <- completedForCallC(command, core)
       original <- SplitPhaseExplicitPlanningAdvance.restoreCompletedScopeC(completed)
       outcome <- SplitPhaseExplicitCandidateProjection.applyScopeC(original, completed.source.record, completed.admitted)
     } yield new PreparedProjection(completed, original, outcome)
@@ -111,7 +95,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       _ <- _actor_c(core, None)
       source <- _source_c(command, declaration, catalog, core)
       plan <- I.prepareC(source)
-      issued <- loadForCallC(I.identity(source), core)
       completed <- _completed_source_c(plan, declaration, catalog, core).flatMap {
         case Some(value) => Consequence.success(value)
         case None => _invalid("completed scope selection has no actual retained completion")
@@ -211,12 +194,12 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
           plan <- I.prepareC(source)
           next <- I.completedC(plan, submitted)
           frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
-          nextFrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
+          nextfrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
             SplitPhaseExecutionFrontier.Value.ScopeCompletion(submitted.continuationId), call)
         } yield {
           selected = Some((plan, submitted, next))
           val result = StateMachineOperationResult(I.closingType, submitted.resultReference)
-          val program = nextFrontier.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          val program = nextfrontier.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(result)))
           WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
         }
@@ -266,11 +249,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       } yield new Source(record, predecessor, current)
     }
   } yield source
-
-  private def _observe_completion_c(plan: I.Plan, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core):
-      Consequence[Option[WorkflowCompletionRecordJsonV1.Record[S.Judgment]]] =
-    _completed_source_c(plan, declaration, catalog, core).map(_.map(_.completion))
 
   private def _completed_source_c(plan: I.Plan, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[Option[CompletedSource]] = for {

@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -63,13 +63,13 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
 
   private val _limits = Vector(
     ("GoalPhaseService", "submitGoalPhaseOrderedDecision", Vector(
-      "Independent host Human evidence", "authentication alone is not consent"
+      "Independent host Human evidence", "authentication or AI output is not consent"
     )),
     ("SplitPhaseService", "advanceSplitPhase", Vector(
-      "ALL-Built must not be", "handlers remain unavailable", "not an execution grant"
+      "authorized document effects", "Unavailable handling is an error"
     )),
     ("RepositorySyncService", "advanceRepositorySync", Vector(
-      "The caller supplies no stage", "not final convergence"
+      "The caller sends no stage/path/argv/receipt/target selector", "no replay/intermediate recovery is promised"
     )),
     ("RepositoryHumanService", "presentRepositoryConflictDecision", Vector(
       "independent Human channel", "infer consent from login identity"

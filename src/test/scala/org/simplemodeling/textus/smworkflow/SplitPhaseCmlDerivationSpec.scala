@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
   * No SBT process or dependency publication is started by this specification.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 13, 2026
   */
 final class SplitPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _execute(argv: Vector[String], log: Path): String = {
@@ -44,7 +44,7 @@ final class SplitPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with G
         "cozy.modeler.SplitPhaseCmlDerivationProbe", "src/main/cozy/sm-workflow.cml"), work.resolve("probe.log"))
       Then("all150 normalized derivations are unique, including retained scope Human states, application intent and stopped/terminal dominance")
       output.linesIterator.exists(_ ==
-        "accepted workflow=SplitPhaseWorkflow version=split-phase-minimal-operation-v13 pairs=150 terminalDominance=true") shouldBe true
+        "accepted workflow=SplitPhaseWorkflow version=split-phase-business-operation-v14 pairs=150 terminalDominance=true") shouldBe true
     }
   }
 }

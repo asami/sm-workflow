@@ -49,10 +49,10 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
     intentTransition = WorkflowMechanicalTransition.Intent(declaration.configuration, intentReference, original.current,
       original.current.revision, intentEntry, TypedValue(J.payloadCodec.typeIdentity, original.snapshot))
     frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
-    intentFrontier <- frontier.stageCreateForCallC(original.current.identity, intentEntry.revision,
+    intentfrontier <- frontier.stageCreateForCallC(original.current.identity, intentEntry.revision,
       SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
-    intentResult <- intentions.executeC(intentTransition, intentFrontier)(using core.executionContext)
-    intent = intentResult.receipt.next
+    intentresult <- intentions.executeC(intentTransition, intentfrontier)(using core.executionContext)
+    intent = intentresult.receipt.next
     source = F.afterTransition(original, intent)
     actualPreparation <- E.prepareC(source, command.context.identity, command.context.revision)
     effected <- E.applyC(actualPreparation, core)
@@ -62,20 +62,20 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
       case _ => uncertain("document application did not return an applied result")
     }
     _ <- observation()
-    publicResult <- NativeWorkflowOperationOutput.splitSelectedC(source.snapshot, actualPreparation.projection, "APPLY", Some("applied"))
+    publicresult <- NativeWorkflowOperationOutput.splitSelectedC(source.snapshot, actualPreparation.projection, "APPLY", Some("applied"))
     effectEntry = history(intent, Lifecycle.Active, Some(appliedProgression),
       "selected-application-effect:" + command.instanceIdentity)
     effectTransition = WorkflowMechanicalTransition.Intent(declaration.configuration, effectReference, intent, intent.revision,
       effectEntry, TypedValue(_effect_status_codec.typeIdentity, effected.status))
-    appliedFrontier <- frontier.stageCreateForCallC(intent.identity, effectEntry.revision,
+    appliedfrontier <- frontier.stageCreateForCallC(intent.identity, effectEntry.revision,
       SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
-    applied <- effects.executeC(effectTransition, appliedFrontier)(using core.executionContext)
+    applied <- effects.executeC(effectTransition, appliedfrontier)(using core.executionContext)
     instances <- storage.bindInstancesC()(using core.executionContext)
     completed <- instances.appendC(applied.receipt.next.identity, applied.receipt.next.revision,
       history(applied.receipt.next, Lifecycle.Completed, None, terminalPrefix + command.instanceIdentity))(using core.executionContext)
     _ <- frontier.createForCallC(completed.identity, completed.revision,
       SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
-  } yield NativeWorkflowOperationOutput.splitSelected(completed.identity.value, publicResult)
+  } yield NativeWorkflowOperationOutput.splitSelected(completed.identity.value, publicresult)
 
   private def history(current: InstanceRecord, lifecycle: Lifecycle, progression: Option[String], cause: String): HistoryEntry =
     HistoryEntry(HistorySequence(current.history.size.toLong + 1L), current.revision.next, lifecycle,
