@@ -117,6 +117,7 @@ also be tested. No skill creation/connection, Service Bus or dashboard is a gate
 
 Execution mapping (2026-10-07): [Phase 6 batch A](phase-6.md#execution-plan--2026-10-07)
 first connects the actual skill/client/result path. Batch B covers P6-TS01..06
+and the 2026-10-12 dependency-boundary P6-CB01..04 and review/maintenance P6-HR01..04
 on that same interface using distinct branches of the shared driver. Batch C
 accepts the integration. Reuse Phase 5 deterministic policy coverage rather
 than re-running its complete state/threshold matrix through live AI.
@@ -178,7 +179,156 @@ than re-running its complete state/threshold matrix through live AI.
       intermediate scope. Final obligations remain; unknown identity mapping
       does not require semantic matching infrastructure.
 
-Source-note coverage: connected cases 9, 11–15, 21–25, 28–37 and 40–47. Reuse Phase 5 runtime
+### Staged quality review: Phase 6 cross-project driver
+
+Requirement: [Phase 6 staged review](phase-6.md#staged-quality-review-across-projects--2026-10-13).
+Producer/provider ledgers are CNCF REA-01..04 (Phase 106), Cozy RMS-01..04
+(Phase 81) and cbd-support SQR-01..04 (Phase 15). All items remain planned.
+
+- [ ] P6-SQ01: Batch A uses actual CML metadata, lint and a scoped independent
+      semantic review through normal invocation and typed results. Covered
+      requirements admit the Step and runtime performs its local commit. Generic
+      ABI contains no STEP/PHASE/FINAL vocabulary; advisory output is not silently
+      converted to Assurance or commitment authority.
+- [ ] P6-SQ02: Batch B demonstrates that two locally acceptable Steps can conflict
+      at an integrated Usage Contract. Phase Review detects the cross-Step gap;
+      Step evidence alone cannot claim integrated PASS. Include the matrix's
+      overchecking/duplicate-state judgment in the appropriate semantic scope,
+      not a mandatory new deterministic lint rule or a per-finding review cycle.
+- [ ] P6-SQ03: A bounded repair triggers affected re-review with stable finding
+      identities and adequate surrounding context. Unrelated applicable evidence
+      remains reusable; unresolved blockers prevent closure, nonblocking recorded
+      findings do not require an empty backlog.
+- [ ] P6-SQ04: Batch C completes Final and release using sufficient Phase Review
+      plus applicable repair/validation evidence. Observe that no new comprehensive
+      semantic review or duplicate full validation is invoked solely for Final.
+      Required deterministic release checks and actual command outcomes remain.
+- [ ] P6-SQ05: Insufficient coverage, incompatible evidence and changed acceptance
+      produce specific gaps/affected work; missing facts cannot become PASS.
+      Commit-only progression/time passage does not force re-review. Reuse relies
+      on actual applicability, without hashes, content copies or TTL. Use bounded
+      branch specs alongside the connected driver, not a broad live-AI matrix.
+
+These are the shared end-to-end cases, not substitutes for owner-specific checks
+and independent review. Producer closure requires only its bounded handoff, not
+the whole sm-workflow Phase 6 closing commit; Phase 6 records the integrated result.
+
+### Parent chat, delegation and review context
+
+Requirement: [Phase 6 operating policy](phase-6.md#parent-chat-delegation-and-review-context--2026-10-12).
+Use the existing batch A client/placement and batch B implementation/review cases;
+batch C accepts the integrated behavior. These are not separate live-model trials.
+
+- [ ] P6-DG01: Ordinary parent chat -> runtime -> semantic work -> Submit/display
+      -> Advance works without a mandatory child for every step. Commands remain
+      runtime-owned. Delegated semantic results use that same completion route.
+- [ ] P6-DG02: Configuration can select a suitable lower-cost implementation/fix
+      profile independently of the upper-tier parent default, and a stronger
+      review profile when required. Changing concrete model/profile names does
+      not change business semantics or bypass validation/independence. Verify
+      selection with configured profiles, not a comprehensive live-model ranking.
+- [ ] P6-DG03: A reviewer receives scoped requirements, changes, necessary code/
+      contracts and actual results without automatic full parent-history inheritance.
+      Relevant missing context can be obtained; final review coverage is preserved.
+      The same model can serve an independent review context; increased reasoning
+      effort alone cannot establish independence. Inspect actual request/context
+      assembly in the existing connected review, without copy/hash proof machinery.
+
+### Command execution and live Phase-plan synchronization
+
+Requirements: Phase 6 [command ownership](phase-6.md#command-execution-ownership--2026-10-12)
+and [plan synchronization](phase-6.md#phase-documents-and-live-plan-synchronization--2026-10-12).
+Batch A implements these in its existing connected driver; batch B reuses them
+for FIX/recording/improvement and batch C accepts the integrated behavior.
+
+- [ ] P6-EX01: A normal skill-connected task reaches an actual SBT validation
+      and a local Git effect through runtime-owned execution. Runtime prepares
+      cwd/argv/environment, waits, captures the real result and progresses; the
+      AI assignment contains no command execution or log-transcription work.
+- [ ] P6-EX02: Exercise command failure -> semantic AI diagnosis/fix -> runtime
+      revalidation, and Git conflict -> AI resolution -> runtime Git progression.
+      Unknown completion is not successful execution or permission to retry.
+      Existing effect permissions remain; missing tools yield an actual problem.
+- [ ] P6-EX03: A representative configured generator/formatter and supported
+      application acceptance command use the same execution owner. Where the
+      command starts a service, runtime handles readiness and owned cleanup.
+      Use real representative effects plus bounded branch specs, not exhaustive
+      coverage of every external tool or an AI-runner fallback.
+- [ ] P6-PS01: Start encodes a real Phase document set, then an edit between work
+      steps adds/reorders work. The next dispatch uses the current plan with
+      stable item IDs, preserving completed results and history without extra
+      caller comparison parameters or per-iteration AI plan reconstruction.
+- [ ] P6-PS02: Remove/change the acceptance of an in-flight item. Its result is
+      retained with its issued context; unresolved acceptance/continuation uses
+      the existing decision route. Duplicate IDs and invalid references fail as
+      input contradictions; a checkbox cannot fabricate test/release success.
+- [ ] P6-PS03: Edit narrative/planning content after internal import and before
+      progress writeback. Runtime updates only owned progress fields in the
+      latest document, preserving those edits. An unresolved overlapping edit
+      is reported without silently overwriting either party's work.
+- [ ] P6-PS04: A normal plan refresh retains Goal/base/epoch, fix/review history
+      and applicable actual evidence. Changed acceptance is evaluated at its
+      affected scope; no blanket retest, hash/copy proof, TTL or permission renewal
+      follows merely from an edit. Demonstrate refresh before dispatch after Wait.
+
+### Review and maintenance responsibilities
+
+Requirement: [Phase 6 responsibility split](phase-6.md#review-and-maintenance-responsibilities--2026-10-12).
+Exercise these within the existing Phase 6 review/FIX driver, not a new campaign.
+
+- [ ] P6-HR01: AI changes an owned source file without maintaining its history
+      fields. Runtime applies the declared rule before applicable validation/
+      review/commit. The resulting fields follow that rule; the AI assignment
+      and review do not request/check source-history edits. Include actual tool
+      execution and preserve prior origin/authorship as required by the rule.
+- [ ] P6-HR02: One integrated AI review covers a meaning-dependent GWT issue
+      and another applicable item such as a misleading name/comment/example.
+      It returns concrete findings and their dispositions without creating a
+      review cycle per category or requiring a blanket audit of unrelated files.
+- [ ] P6-HR03: Adopted GWT and other semantic Hygiene corrections are batched
+      into the ordinary AI REVIEW_FIX request; the worker edits actual files
+      and returns assigned-issue outcomes. Distinguish explanatory-only changes
+      from assertion/behavior changes for validation and convergence accounting.
+      Unadopted nonblocking observations are recorded without blocking release.
+- [ ] P6-HR04: A deterministic maintenance error remains a tool/configuration
+      outcome, not an AI history-edit task. Routine mechanical maintenance does
+      not create an AI Fix cycle; actual AI Hygiene fixes retain the existing
+      convergence/absolute-cycle rules. No hash/copy proof or additional repeated
+      test/review loop is introduced to establish maintenance success.
+
+### Dependency Component Boundary — Phase 6 connected decision handling
+
+Requirement: [Phase 6 dependency boundary](phase-6.md#dependency-component-boundary-and-human-approval--2026-10-12).
+Source: [2026-10-12 journal, commit 13ac53f](https://github.com/asami/sm-workflow/blob/13ac53f/docs/journal/2026/10/2026-10-12-dependency-component-boundary.md).
+All items are planned and unverified. These extend the existing connected driver,
+not the managed-test vocabulary or a separate execution/approval framework.
+
+- [ ] P6-CB01: Planning for Component A identifies that dependency B must be
+      internally modified. The AI returns the reason, proposed scope and affected
+      Usage Contract; runtime retains the proposal and presents a Human Decision
+      before dependency work is adopted/dispatched. Exercise an external library
+      and a same-repository dependency: Component boundaries, not repository or
+      worktree boundaries, determine the decision.
+- [ ] P6-CB02: Implementation/FIX discovers the same need after an initially
+      in-scope plan. It yields before editing B. Review identifies an unapproved
+      cross-Component edit that escaped earlier detection and yields before work
+      acceptance, preserving the actual edits and context for developer judgment.
+      Neither stage silently expands scope or treats a passing test as approval.
+- [ ] P6-CB03: Through the normal client, explicit approval adopts the stated
+      dependency scope, normally as a separate work unit with acceptance criteria
+      and a consumer link. Rejection/defer or a pending answer never authorizes
+      that edit. An AI claim of approval cannot substitute for the developer's
+      answer. A newly proposed change outside the approved scope yields again.
+- [ ] P6-CB04: Normal Usage Contract consumption and diagnostic inspection do
+      not trigger approval. Explicitly approved dependency work proceeds without
+      repeated prompts, even across repositories; unapproved internal changes
+      still yield when classified as hygiene or preserving the public API.
+      Demonstrate one actual skill/client proposal -> runtime Human Decision ->
+      developer answer -> permitted next work, plus deterministic branch specs.
+      No new scope-copy parameters, proof ledger, TTL or filesystem monitor is
+      introduced; document detection limits and complete integrated review.
+
+Source-note coverage for P6-TS01..06: connected cases 9, 11–15, 21–25, 28–37 and 40–47. Reuse Phase 5 runtime
 acceptance rather than duplicating metadata interpretation or test-selection paths in skills.
 Start gradual skill-based use only after the Phase 6 connected scope is accepted.
 

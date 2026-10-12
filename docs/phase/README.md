@@ -2,7 +2,7 @@
 
 Decision: 2026-10-05; replanned at the user stop on 2026-10-07 (Asia/Tokyo)
 
-Current Goal execution boundary, adopted 2026-10-11:
+Phase 5 / 5.1 Goal execution boundary, adopted 2026-10-11:
 [preserve mixed work -> Phase 5 accepted release and stop -> separately instructed Phase 5.1 accepted release and Goal end](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
 Checkpoint `2291d2fec20cf7335a8bec2af4077c4b2dd0e71a` saves existing work without
 acceptance. Latest user revision: Phase 5 releases the completed implementation
@@ -20,13 +20,80 @@ planned future work outside this Goal's revised ending scope, not completed or
 cancelled. The longer rollout below remains a roadmap, not authority to advance
 automatically beyond either release/stop boundary.
 
+Planned follow-up, adopted 2026-10-11: [Phase 5.2](phase-5.2.md) completes the
+minimal public Operation contract and removes residual checks before Phase 6.
+The user requires complete migration: no legacy input interfaces, compatibility
+adapters or fallback routes remain for future skills to adopt. This additional
+plan preserves the preceding release/Goal history and does not start execution.
+
+Successor design, adopted 2026-10-12: [Phase 5.3](phase-5.3.md) replaces the
+uniform JSON-string business carrier with declared Start, work-result and Human
+answer types. Start returns one session ID per execution; Advance and replies use
+that ID without extra target selectors. JSON is a transport representation. Phase 5.2's
+control-copy removal remains; Phase 6 consumes the Phase 5.3 contract.
+
+Phase 5.3's delivery is the common GoalPhase/SplitPhase/RepositorySync loop:
+Start -> Advance -> work Request or Human question -> typed Submit -> display
+the returned chat-oriented result -> Advance again. It removes unnecessary
+information retrieval and supporting code as well as obsolete selectors.
+Phase 6 implements actual client/skill/chat integration with no extra status
+queries or AI acknowledgement step; Wait, Terminal and errors govern continuation.
+The adopted priority is lower AI cost and simpler implementation/debugging over
+fewer transport calls. Advance stays separate from Start/Submit; accepted-result
+display and the following Advance require no additional AI decision step.
+
+Session identity clarification, 2026-10-12: Phase 5.2 hands off the runtime's
+current identity inputs and selector inventory. Phase 5.3 P53-06 replaces the
+many-target session lookup with Start returning one session ID per execution and
+removes public selection/instance/context/request ambiguity selectors. Phase 6
+defines and implements [ID acquisition/allocation, caller retention and propagation](phase-6.md#session-identity-lifecycle--2026-10-12)
+across independent command/REST calls and independent developments in different
+chats (P6-ID01..03). A usable chat ID may be proposed; otherwise Start allocates
+one. Clients retain the returned ID. Distinct executions use distinct IDs.
+This does not expand Phase 5.2 implementation; Phase 5.3 owns the runtime
+identity correction and Phase 6 its actual client integration.
+
+Execution/progress ownership, adopted 2026-10-12: Phase 6 implements the whole
+command lifecycle for SBT/Git and other supported tools in sm-workflow, while AI
+performs semantic edits/judgment. Phase documents remain the external plan and
+progress interface; runtime encodes them and refreshes the latest relevant plan
+before next-work selection, retaining execution facts and updating only owned
+progress fields. No unchanged-content proof or AI command/log relay is required.
+Phase 5.3 hands off its common loop without new acceptance gates. Phase 7 uses
+the same execution/synchronization for workspace and overlay work; Phase 8
+selected extensions and Phase 9 convergence/provider routing preserve it.
+See [Phase 6 command ownership](phase-6.md#command-execution-ownership--2026-10-12)
+and [live synchronization](phase-6.md#phase-documents-and-live-plan-synchronization--2026-10-12),
+with P6-EX01..03 and P6-PS01..04 in the connected checklist. These are planned
+deliveries, not a claim of existing implementation or authority to resume a Goal.
+
+Delegation policy, adopted 2026-10-12: normally progress through parent chat and
+sm-workflow, delegating semantic work for appropriate cost/capability, reasoning,
+independence or context scope. The parent normally uses an upper-tier programming
+profile; bounded implementation/fix favors suitable cheaper profiles, while
+review can use a stronger profile and a separate, focused context as needed.
+No fixed model names, most-expensive default, full-history review inheritance or
+mandatory child per step. Phase 6 implements this
+[operating policy](phase-6.md#parent-chat-delegation-and-review-context--2026-10-12)
+with P6-DG01..03; Phase 9 extends it with validation-observed re-routing.
+
+Staged quality review, adopted 2026-10-13: [Phase 6](phase-6.md#staged-quality-review-across-projects--2026-10-13)
+drives CNCF Phase 106 generic Evidence/Admission integration, Cozy Phase 81
+CML review metadata and cbd-support Phase 15 scoped quality evaluation. Connect
+a real Step first, then integrated Phase Review, affected repair/re-review and
+Final evidence reuse. P6-SQ01..05 and each owner's checklist define the bounded
+dependencies; do not wait for unrelated full roadmaps or create circular Phase
+closure gates. Phase 7 consumes the route; Phase 9 adds convergence/provider
+switching. Initial review/Final behavior belongs to Phase 6, without reopening
+Phase 5.2/5.3 or implying automatic execution of another project's plan.
+
 Revised 2026-10-06: Phase 5 builds and validates the runtime without creating
 skills. Phase 6 defines abstract thinking modes and the skill interface, creates
 and connects the skills, and starts gradual real use after connected acceptance.
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 6 -> Phase 7 -> Phase 8**.
+needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 7 -> Phase 8**.
 Phase numbers do not require Phases 3 and 4 to precede Phase 5.
 
 Revised 2026-10-09: [Phase 5.1](phase-5.1.md) names the connected correction for
@@ -43,14 +110,18 @@ in Phase 6, using the corrected runtime contract.
 | [4: Service Bus development events](phase-4.md) | Publish development events and integrate monitoring | Orthogonal extension, not a prerequisite for initial use |
 | [5: Minimum runtime foundation](phase-5.md) | Phase 5-stage implementation and recorded limitations, including delivered execution/resource/metadata-facing contracts and check-removal changes | Formal release commit and stop; unverified state approved by user, no new tests/review and no claim of completed connection verification |
 | [5.1: Connection verification and session-resolved Operations](phase-5.1.md) | Fixed normal public Operation request/result progression, safe selected file effects, NEW execution from the beginning, and removal of unnecessary checks | Functional acceptance PASS; formal release without additional validation/review is user-approved, with native closure establishing Goal end. Preserve history/counters; no direct AI executor, skill integration or excluded recovery guarantees |
-| [6: Thinking modes and skill integration](phase-6.md) | Thinking modes and skill contracts, test metadata design/revision, TEST_FIX/REVIEW_FIX and human-selected improvement | Start gradual skill-based real use after connected acceptance |
+| [5.2: Minimal interface and complete migration](phase-5.2.md) | Complete session-resolved Start/advance/result inputs, align public definitions and remove residual checks and legacy routes | Followed by Phase 5.3 business-type redesign; preserve preceding closure/history |
+| [5.3: Common Workflow loop and minimal data access](phase-5.3.md) | Align all three families with typed Start/Advance/Submit, one session per execution and chat-oriented submission results | Before Phase 6; delete obsolete selectors, unnecessary reads and their processing without compatibility routes |
+| [6: Thinking modes and skill integration](phase-6.md) | Thinking modes and skill contracts, test metadata design/revision, TEST_FIX/REVIEW_FIX, AI recording of Hygiene/development candidates, human-selected improvement and dependency Component boundary approval | Start gradual skill-based real use after connected acceptance; dependency edits yield to developer judgment in planning/implementation/review, and recording discoveries does not adopt them as required work |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Continue use; deliver the bounded SimpleModeler overlay acceptance and collect optional later needs in Phase 8 |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 
 ## Scope and implementation policy
 
-Current execution plan: [Phase 5.1 fixed acceptance and release](phase-5.1.md),
-subject to the revised Goal ending boundary above. Phase 2 and Phase 5 releases
+Latest planned follow-up: [Phase 5.2 complete migration](phase-5.2.md), followed
+by [Phase 5.3 common Workflow loop and minimal data access](phase-5.3.md).
+[Phase 5.1 fixed acceptance and release](phase-5.1.md) retains the Goal ending
+boundary above; the new plan does not resume it. Phase 2 and Phase 5 releases
 are complete. The following Phase 2 resumption account is retained
 as history, not the currently executing Phase:
 [Phase 2 remaining connected delivery](phase-2.md).
@@ -70,7 +141,9 @@ The detailed 2026-10-07 execution plans preserve the accepted scope:
 | --- | --- | --- |
 | [5](phase-5.md#practical-completion-condition) | Record the delivered Phase 5-stage tree and explicit user-approved unverified disposition; preserve mixed work and actual history | Formal stage release commit only and stop; carry open connections to Phase 5.1 |
 | [5.1](phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11) | Latest fixed normal-use/check-removal boundary supersedes broader historical A/B/C requirements | Bounded connected acceptance/review, formal release and Goal end; no skills or restored over-guarantees |
-| [6](phase-6.md#execution-plan--2026-10-07) | A: mode/skill/client/result contract through a complete GoalPhase task; B: validation planning, FIX and human-selected improvement on the same interface | C: integrated acceptance, usable installation and gradual real use |
+| [5.2](phase-5.2.md#connected-implementation-order) | One minimal public contract through all three normal workflows; migrate connected callers/storage and remove old paths in the same batch | Integrated specs/review; hand session-resolved behavior to Phase 5.3 |
+| [5.3](phase-5.3.md#connected-implementation-order) | Connect the full GoalPhase loop first, then SplitPhase/RepositorySync; align types/responses and delete old selection and unnecessary-read processing in the same delivery | Integrated specs/review; hand the common loop, session and chat-display contract to Phase 6 without compatibility routes |
+| [6](phase-6.md#execution-plan--2026-10-07) | A: mode/skill/client/result contract through a complete GoalPhase task; B: validation planning, FIX, AI document recording of nonblocking findings and human-selected improvement on the same interface | C: integrated acceptance, usable installation and gradual real use |
 | [7](phase-7.md#execution-plan--2026-10-07) | A: native publish/select/status through actual SBT resolution; B: Cozy generation/selection lifecycle; C: workspace sync using the same resources and validation runtime | D: combined overlay/workspace acceptance, CNCF Phase 101 full closure, then Phase 7 closure |
 
 These letters are work ordering, not new tracking IDs or approval/review gates.
@@ -89,6 +162,10 @@ to make a phase appear complete.
 - Phase 5 formally releases the delivered foundation with the user's approved
   NOT RUN disposition, without building provisional skills;
   Phase 5.1 verifies actual executor/resource/metadata/managed-validation connections.
+  Phase 5.2 completes the minimal interface and removes remaining unnecessary
+  checks and compatibility routes. Phase 5.3 restores explicit business types
+  in Operation contracts while keeping JSON at the transport boundary, before
+  skills are developed.
   Phase 6 delivers the skill-connected minimum and starts gradual real use;
   Phase 7 proceeds alongside that use. Do not wait for Phases 7/8 to start use.
 - Abstract thinking modes can change a skill's task, context and expected result,

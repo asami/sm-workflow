@@ -12,6 +12,30 @@ than build another workflow engine or selector. Use one explicitly configured
 driver workspace for overlay and repository tests; project names remain data.
 These batches preserve every overlay and workspace acceptance item below.
 
+### Shared execution and plan ownership — 2026-10-12
+
+Reuse Phase 6's accepted staged-review route (P6-SQ01..05) and CNCF 106 / Cozy 81 /
+cbd-support 15 handoffs. Extend review scope to actual workspace dependencies and
+consumer changes; do not implement another review engine or repeat whole-Phase
+semantic review at Final. Initial four-project connection is a Phase 6 delivery,
+not a new Phase 7 prerequisite to develop from scratch.
+
+Consume Phase 6's runtime-owned command lifecycle and live Phase-plan
+synchronization. SBT/Git, generation, publication/selection effects and consumer
+validation run through sm-workflow execution adapters from preparation to result
+handling/cleanup, not AI command runners. AI handles semantic conflict resolution,
+model/code edits and proposals; actual effects retain their existing permission
+scope. No separate orchestration engine, AI log forwarding or new SBT mutex.
+
+Refresh the relevant Phase documents before selecting the next workspace work,
+retain per-repository/consumer execution facts under stable item IDs, and project
+progress into the latest owned fields without replacing plan prose. Changed
+dependency/acceptance requirements receive affected-scope handling under the
+Phase 6 contract; document changes alone do not invalidate all workspace evidence.
+Exercise this ownership through batches A/C and their integrated acceptance D:
+include a plan edit between workspace steps and preservation of prior results.
+No separate full workspace campaign is added for document synchronization.
+
 ### A. Normal operation to publication, selection and real compilation
 
 1. Bind the shared project/repository/worktree graph and overlay ownership through
@@ -338,10 +362,14 @@ repair totals, reset active loops on a worktree/chat switch or add new measureme
 machinery merely because several repositories participate.
 Issue source identities include repository/provider scope so same-named failures
 remain distinct. Use the shared ledger/reconciliation and evidence-confirmed
-resolution rules, with no per-repository duplicate workflow. Resume reuses
-completed applicable evidence; changed overlay selection/resolved dependencies
-can invalidate it even when source revision matches. Verify both unchanged-context
-reuse and changed-context revalidation while preserving issues and both counts.
+resolution rules, with no per-repository duplicate workflow. Normal continuation
+after a requested answer retains applicable completed evidence, issues and both
+counts. Changed overlay selection/resolved dependencies require affected
+revalidation even when source revision matches. Verify these cases within the
+normal execution. This does not promise recovery of an interrupted execution or
+uncertain effects. The Phase 5.1 fresh-start boundary carries forward: abandon
+an unsuccessful run and start a new execution from the beginning; do not restore
+removed replay, history-comparison or intermediate-recovery guarantees.
 
 ## Dependency ordering
 
@@ -353,14 +381,15 @@ The root project is the final validation node.
 
 ## Operations
 
-Retain the Phase 1 application boundary:
+Consume Phase 5.3's current RepositorySync Start/Advance/Submit contract and
+Phase 6's actual client integration. Extend the business payloads where required
+for workspace scope; do not restore the historical WorkflowInvocationSelection
+caller envelope or introduce a parallel ProjectSync protocol.
 
-- `StartRepositorySync(RepositorySyncStartInput, WorkflowInvocationSelection)`
-- `SubmitRepositorySyncWorkResult(RepositorySyncWorkResult)`
-
-Extend their typed payloads/results as necessary rather than introducing a parallel ProjectSync protocol.
-
-The Workflow should materialize bounded work orders for Git synchronization and full-test execution and receive typed evidence through the existing continuation/completion boundary.
+Git synchronization and full tests are runtime execution work, with actual
+adapter results consumed through the existing continuation/completion boundary.
+Only semantic work such as conflict resolution or review is dispatched to AI;
+its Submit result is displayed before the next Advance as in the common loop.
 
 ## Evidence
 
@@ -441,6 +470,9 @@ Phase 7 is complete when a real root project using at least two project-specific
 - Defensive repository backup/rollback/integrity machinery.
 - Replacing Git's own merge/conflict semantics.
 - General provider-selection semantics; generic execution-requirement semantics are established in Phase 6.
+- Defining a new quality/assurance policy for RepositorySync. Phase 7 consumes the Effective Acceptance Boundary established in Phase 6 and MUST NOT enlarge it merely because repository synchronization exposes constructible race, recovery or consistency scenarios.
+
+RepositorySync validation and Review use the same Effective Acceptance Boundary as the owning Goal/Phase. In particular, precautionary full tests, backup/rollback/integrity machinery, duplicate synchronization arbitration or clean recovery from out-of-model operational accidents do not become Phase 7 acceptance requirements unless the boundary explicitly requires them. Phase 9 owns richer boundary-aware convergence/routing behavior.
 
 
 ## Static-analysis consumer coordination
