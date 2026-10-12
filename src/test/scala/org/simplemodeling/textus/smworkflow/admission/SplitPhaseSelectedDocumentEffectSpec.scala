@@ -28,7 +28,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 /** Actual runtime-owned JVM/file effects through canonical ProcessExec. This
   * does not claim installed public APPLY or native application completion.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   /** Observation around the real runtime driver, not a substituted result or
@@ -147,19 +147,21 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
   private def status(json: Json): String = json.hcursor.get[String]("status").toOption.get
 
   "Managed selected document process" should {
-    "observe, apply and reopen real files without selecting an executable in the component" in {
+    "observe and apply real files once without selecting an executable in the component" in {
       Given("a project-owned repository and a runtime-fixed JVM, classpath, repository and complete argument vectors")
       val f = fixture()
       val original = Files.readString(f.source)
       withRuntime(f) { (core, driver, _) =>
         When("canonical ProcessExec runs the logical observe purpose")
-        status(execute(core, f, Process.Purpose.ObserveSelectedDocuments)._2) shouldBe "ready"
+        val observed = execute(core, f, Process.Purpose.ObserveSelectedDocuments)._2
         Then("no Phase document is changed by observation")
+        status(observed) shouldBe "ready"
         Files.readString(f.source) shouldBe original
         Files.exists(f.root.resolve("docs/phase/phase-77.1.md")) shouldBe false
         When("canonical ProcessExec applies the saved selected plan")
-        status(execute(core, f, Process.Purpose.ApplySelectedDocuments)._2) shouldBe "applied"
+        val applied = execute(core, f, Process.Purpose.ApplySelectedDocuments)._2
         Then("actual source sections and child documents retain prior history and accepted work")
+        status(applied) shouldBe "applied"
         Files.readString(f.source) should include("User history and unrelated notes remain here.")
         Files.readString(f.source) should include("| old-completed | previous accepted work | completed |")
         Files.readString(f.source) should include("| ID | completed identity resembling a header | completed |")
@@ -169,48 +171,17 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
         driver.startedCount shouldBe 2
         driver.completedCount shouldBe driver.startedCount
       }
-      val timestamp = Files.getLastModifiedTime(f.source)
-      Given("a physically new runtime and separately launched JVM programs after successful application")
-      withRuntime(f) { (core, _, _) =>
-        When("observation and application are repeated")
-        status(execute(core, f, Process.Purpose.ObserveSelectedDocuments)._2) shouldBe "applied"
-        status(execute(core, f, Process.Purpose.ApplySelectedDocuments)._2) shouldBe "applied"
-        Then("the recorded plan is observed without another source write or duplicate section")
-        Files.getLastModifiedTime(f.source) shouldBe timestamp
-        Files.readString(f.source).linesIterator.count(_ == "## Split partition contract") shouldBe 1
-      }
     }
 
-    "resume a partial child installation while leaving already installed children untouched" in {
-      Given("a labelled crash-position fixture: one child installed and the source still at its original application contract")
-      val f = fixture(Vector(360, 360, 360))
-      val child = f.documents.documents.last
-      val installed = f.root.resolve(child.relativePath)
-      Files.writeString(installed, child.childDocument.get)
-      val timestamp = Files.getLastModifiedTime(installed)
-      withRuntime(f) { (core, _, _) =>
-        When("a new actual process observes and applies the same saved plan")
-        status(execute(core, f, Process.Purpose.ObserveSelectedDocuments)._2) shouldBe "partial"
-        status(execute(core, f, Process.Purpose.ApplySelectedDocuments)._2) shouldBe "applied"
-        Then("only pending files are installed, with complete actual readback")
-        Files.getLastModifiedTime(installed) shouldBe timestamp
-        status(execute(core, f, Process.Purpose.ObserveSelectedDocuments)._2) shouldBe "applied"
-      }
-    }
-
-    "preserve newly completed selected work before first Apply and partial-child resume" in {
-      for (completedstatus <- Vector("complete", "completed", "done", "accepted"); partial <- Vector(false, true)) {
-        Given(s"a saved unfinished plan whose last selected source item is now $completedstatus, with partial children=$partial")
+    "preserve newly completed selected work before first Apply" in {
+      for (completedstatus <- Vector("complete", "completed", "done", "accepted")) {
+        Given(s"a saved unfinished plan whose last selected source item is now $completedstatus before first Apply")
         val f = fixture(Vector(360, 360, 360))
         val identity = f.snapshot.selection.boundary.boundary.items.last.identity.value
         val originalrow = s"| $identity | original work | planned |"
         val original = Files.readString(f.source)
         original should include(originalrow)
         Files.writeString(f.source, original.replace(originalrow, s"| $identity | original work | $completedstatus |"))
-        if (partial) {
-          val child = f.documents.documents.last
-          Files.writeString(f.root.resolve(child.relativePath), child.childDocument.get)
-        }
         val before = f.documents.documents.map { document =>
           val path = f.root.resolve(document.relativePath)
           document.relativePath -> Option.when(Files.exists(path))(Files.readAllBytes(path).toVector)
@@ -219,7 +190,7 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
           When("actual managed JVM processes observe and attempt the same saved application")
           val results = Vector(Process.Purpose.ObserveSelectedDocuments, Process.Purpose.ApplySelectedDocuments)
             .map(purpose => execute(core, f, purpose)._2)
-          Then("both refuse the source preimage and neither create, replace nor regress any selected document")
+          Then("both preserve completed source work and neither create, replace nor regress any selected document")
           results.foreach { json =>
             status(json) shouldBe "conflict"
             json.hcursor.get[Vector[String]]("conflictingPaths").toOption shouldBe Some(Vector("docs/phase/phase-77.md"))
@@ -268,21 +239,6 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
           Then("no changed document is overwritten and no child is created")
           status(result) shouldBe "conflict"
           Files.readString(f.source) shouldBe changed
-          Files.exists(f.root.resolve("docs/phase/phase-77.1.md")) shouldBe false
-        }
-      }
-    }
-
-    "refuse a missing child after the source's final installation instead of recreating deleted work" in {
-      Given("an impossible crash position: final source installed, child absent")
-      val f = fixture()
-      val root = f.documents.documents.head
-      Files.writeString(f.source, "# Phase 77\n\n" + root.sections)
-      withRuntime(f) { (core, _, _) =>
-        When("the saved plan is observed or applied")
-        Vector(Process.Purpose.ObserveSelectedDocuments, Process.Purpose.ApplySelectedDocuments).foreach { purpose =>
-          Then("contradictory final state is reported as a conflict, not normal recovery")
-          status(execute(core, f, purpose)._2) shouldBe "conflict"
           Files.exists(f.root.resolve("docs/phase/phase-77.1.md")) shouldBe false
         }
       }

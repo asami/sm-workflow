@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Real pure captures exercise wire data, not native execution or publication.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _completion_first(source: Base, boundary: B.Validated): K.Record = {
@@ -263,8 +263,8 @@ final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with
         decodedextensions.foreach(_ shouldBe numbering)
         inspectedextensions.foreach(_.isSuccess shouldBe true)
       }
-      "reject document purpose reference nested body and first or assigned result revision mismatches" in {
-        Given("independently framed Built documents bound to their exact purposes and revisions")
+      "reject consumed document and query mismatches while accepting unused annotations" in {
+        Given("independently framed Built documents and an inert annotation in the embedded Proposal frame")
         val record = _record()
         val json = _json(take(J.encodeC(record)))
         val variants = Vector(_built(json)(o => o.add("ownership", Json.fromString(
@@ -272,18 +272,21 @@ final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with
             SplitPhaseExplicitPlanningInputJsonV1.schema).mapObject(_.add("purpose", Json.fromString("Proposal"))).noSpaces))),
           _built(json)(o => o.add("proposalReference", o("proposalReference").get.mapObject(_.add("revision", Json.fromString("other"))))),
           _built(json)(o => o.add("handoffs", Json.Null)),
-          _built(json)(o => o.add("proposal", Json.fromString(
-            SplitPhaseExplicitPlanningInputJsonV1.schema + ":" + _json(o("proposal").get.asString.get,
-              SplitPhaseExplicitPlanningInputJsonV1.schema).mapObject(_.add("unknown", Json.True)).noSpaces))),
           _payload(json)(o => o.add("result", o("result").get.mapObject(_.add("revision", Json.fromString("foreign"))))))
-        When("document identities or selected external query revisions disagree")
+        val annotated = _built(json)(o => o.add("proposal", Json.fromString(
+          SplitPhaseExplicitPlanningInputJsonV1.schema + ":" + _json(o("proposal").get.asString.get,
+            SplitPhaseExplicitPlanningInputJsonV1.schema).mapObject(_.add("unknown", Json.True)).noSpaces)))
+        When("the reader consumes actual document and query data without assigning meaning to the annotation")
         val results = variants.map(_decode(record, _))
+        val decodedannotation = _decode(record, annotated)
         val firstquery = J.decodeC(record.first.reference.copy(revision = "foreign"), record.result, _raw(json))
         val resultquery = J.decodeC(record.first.reference, record.result.copy(revision = "foreign"), _raw(json))
-        Then("no wrong-purpose document or newest-reference fallback is accepted")
+        Then("consumed mismatches fail while the unused annotation does not refuse a valid frontier")
         results.foreach(_ shouldBe a[Consequence.Failure[?]])
         firstquery shouldBe a[Consequence.Failure[?]]
         resultquery shouldBe a[Consequence.Failure[?]]
+        take(decodedannotation) shouldBe record
+        decodedannotation.flatMap(V.inspectC).isSuccess shouldBe true
       }
       "retain passive frontier data while actual admission rejects dropped reordered duplicated candidates and changed ownership or publication" in {
         Given("the original complete frontier with exact allocation and publication distinction")

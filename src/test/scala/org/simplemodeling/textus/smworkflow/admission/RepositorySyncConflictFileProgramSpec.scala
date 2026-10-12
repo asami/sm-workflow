@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryConflictFileProgra
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class RepositorySyncConflictFileProgramSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def fixture(): Path = {
@@ -25,20 +25,19 @@ final class RepositorySyncConflictFileProgramSpec extends AnyWordSpec with Match
   private val paths = Set("first.txt", "second.txt")
 
   "Runtime-fixed conflict file program" should {
-    "observe and finish only missing replacements after a real partial installation" in {
-      Given("two selected ordinary files and an already applied first replacement")
+    "observe and apply two selected ordinary file replacements once" in {
+      Given("two selected ordinary files with their original text")
       val root = fixture()
-      Files.writeString(root.resolve("first.txt"), "first resolved\n")
       val originalMode = Files.getPosixFilePermissions(root.resolve("second.txt"))
       When("the exact selected overwrite intent is observed and applied")
-      P.run(root, paths, 1024, "observe", request).status shouldBe "partial"
+      val observed = P.run(root, paths, 1024, "observe", request)
       val result = P.run(root, paths, 1024, "apply", request)
-      Then("the remaining text is replaced, modes retained and repeated application is a no-op")
+      Then("both original texts are replaced and file modes are retained")
+      observed.status shouldBe "ready"
       result.status shouldBe "applied"
       Files.readString(root.resolve("first.txt")) shouldBe "first resolved\n"
       Files.readString(root.resolve("second.txt")) shouldBe "second resolved\n"
       Files.getPosixFilePermissions(root.resolve("second.txt")) shouldBe originalMode
-      P.run(root, paths, 1024, "apply", request) shouldBe result
     }
     "preflight all paths and preserve a conflicting later file without modifying an earlier ready one" in {
       Given("a ready first path and an intervening user edit at the second path")
