@@ -12,7 +12,6 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.record.Record as StorageRecord
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanResolutionCheckpointPreparation as C,
   SplitPhaseHumanResolutionCheckpointJsonV1 as J, SplitPhaseHumanResolutionCheckpointPublication as P,
   SplitPhaseManagedHumanCompletion as H, SplitPhaseHumanScopeResolution as R,
@@ -25,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanResolution
   * Public downstream routing/default installation remain separate boundaries.
   *
   * @since Oct.  5, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
   final class Observed private[SplitPhaseManagedHumanResolutionCheckpoint] (
@@ -35,7 +34,7 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     observation: () => Consequence[Unit]) {
 
-    def loadForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    def loadForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       _ <- _admit_c(core)
       saved <- _read_c(command, core)
     } yield saved
@@ -43,7 +42,7 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
     def loadForReasoningCompletionC(core: ActionCall.Core): Consequence[Option[Observed]] =
       SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog).flatMap(_read_c(_, core))
 
-    private def _read_c(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    private def _read_c(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       source <- H.observeAnswerForAdvanceC(command, declaration, catalog, core)
       actualtargets <- _targets_c(core)
       saved <- _load_c(source, actualtargets, core)
@@ -53,7 +52,7 @@ private[smworkflow] object SplitPhaseManagedHumanResolutionCheckpoint {
       * Actual native receipt absence permits preparing a fresh intent; the
       * native transition's current state/CAS owns whether it can commit.
       */
-    def executeForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Observed] = for {
+    def executeForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Observed] = for {
       _ <- _admit_c(core)
       source <- H.observeAnswerForAdvanceC(command, declaration, catalog, core)
       actualtargets <- _targets_c(core)

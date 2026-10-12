@@ -1,9 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Decoder, Encoder, Json, parser}
+import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import domain.statemachine.SplitPhaseHumanDirectionLifecycle
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
@@ -12,14 +11,14 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedScopeProjectionCheckpoint as D,
   SplitPhaseScopeProjectionCheckpointPreparation as C, SplitPhasePlanningCheckpointPreparation as K,
-  SplitPhaseScopeProjectionSnapshot as V, SplitPhaseScopeProjectionSnapshotJsonV1 as J,
+  SplitPhaseScopeProjectionSnapshotJsonV1 as J,
   SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPlanningAdvance as W}
 
 /** Pure native Decision preparation from the owning whole-frontier observation.
   * Decoded input is passive data, never Human consent or an execution permit.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseNativeHumanDirection {
   final case class FrontierPayload(value: String)
@@ -34,36 +33,19 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
   val completionOperation = StateMachineOperationIdentity("SplitPhaseService", "submitSplitHumanDirection")
   val closingType = StateMachineResultTypeReference("SplitPhaseHumanDirectionSubmissionResult")
   val inputSchema = "sm-workflow.split-human-direction-input.v1"
-  val maximumBytes = 1024 * 1024
   val choices = SplitPhaseHumanDirectionAnswerContract.choices
 
   val inputCodec: PayloadCodec[Input] = new PayloadCodec[Input] {
     val typeIdentity = "SplitPhaseHumanDirectionRequest"
-    def encode(value: Input): Json = _json_c(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized SplitPhase Human input"))
+    def encode(value: Input): Json = Json.obj("schemaVersion" -> Json.fromString(inputSchema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, Input] = for {
-      json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Human input is absent or oversized")
+      json <- Option(value).toRight("Human input is absent")
       root <- json.asObject.toRight("Human input is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(inputSchema), (), "Human input schema differs")
       payload <- root("payload").toRight("Human input payload is absent")
       input <- payload.as[Input].left.map(_.message)
-      _ <- frontierC(input).toOption.toRight("Human frontier or purpose references differ")
     } yield input
   }
-
-  /** Full passive snapshot admission; no native provenance is reconstructed. */
-  def frontierC(input: Input): Consequence[V.Record] =
-    if (input == null || input.context == null || input.checkpoint == null || input.scopeCheckpoint == null ||
-        input.frontier == null || input.frontier.value == null || !input.frontier.value.startsWith(J.schema + ":") ||
-        !_bounded(input.frontier.value)) _invalid("complete input is absent or oversized")
-    else for {
-      json <- parser.parse(input.frontier.value.substring(J.schema.length + 1)).fold(_ => _invalid("frontier JSON differs"), Consequence.success)
-      snapshot <- J.payloadCodec.decode(json).fold(_ => _invalid("whole frontier differs"), Consequence.success)
-      reference <- C.referenceC(snapshot.first.reference, SplitPhaseTypedScopeWorkIssue.identity(snapshot.first),
-        ContextReference(snapshot.result.identity, snapshot.result.revision))
-      _ <- if (snapshot.first.originalContext.reference == input.context && snapshot.first.reference == input.checkpoint &&
-          reference == input.scopeCheckpoint) Consequence.unit else _invalid("original context or publication purpose differs")
-    } yield snapshot
 
   /** Workflow selects the whole Human frontier. ALL-Built instead remains in
     * the existing deterministic continuation; it is not made Human work.
@@ -75,41 +57,11 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
       case _: W.PublishedContinued => Consequence.success(None)
     }
 
-  /** Passive stored joins only. This cannot construct Plan or native authority. */
-  def inspectStoredC(scopeCheckpoint: C.Record, question: WorkflowInteraction[Input, Nothing],
-    issued: InstanceRecord): Consequence[Unit] =
-    if (scopeCheckpoint == null || question == null || issued == null) _invalid("stored question is incomplete")
-    else _prepare_data_c(scopeCheckpoint).flatMap { expected =>
-      val needed = scopeCheckpoint.snapshot.frontier match {
-        case V.Frontier.HumanDirectionRequired => true
-        case V.Frontier.Applied(candidates) => candidates.exists(candidate => candidate.output match {
-          case _: V.CandidateOutput.Built => false
-          case _ => true
-        })
-      }
-      if (needed)
-        _select_question_c(expected.question, question).map(_ => ())
-      else _invalid("stored question is not required by its native scope or issued state")
+  /** Consume the actual question selected by the owning storage lookup. */
+  def consumeIssuedC(plan: Plan, question: WorkflowInteraction[Input, Nothing]): Consequence[Plan] =
+    WorkflowDecisionJsonV1.encodeC(question, inputCodec).map { wire =>
+      new Plan(plan.source, plan.intent, plan.next, question, wire)
     }
-
-  /** The native slot and target resolve the actual issue. Saved input and
-    * presentation are consumed unchanged, not certified against regeneration.
-    */
-  def selectIssuedC(plan: Plan, question: WorkflowInteraction[Input, Nothing]): Consequence[Plan] =
-    if (plan == null) _invalid("owning Human plan is absent")
-    else for {
-      selected <- _select_question_c(plan.question, question)
-      wire <- WorkflowDecisionJsonV1.encodeC(selected, inputCodec)
-    } yield new Plan(plan.source, plan.intent, plan.next, selected, wire)
-
-  private def _select_question_c(expected: WorkflowInteraction[Input, Nothing], saved: WorkflowInteraction[Input, Nothing]):
-      Consequence[WorkflowInteraction[Input, Nothing]] = for {
-    selected <- NativeHumanQuestionSelection.selectC(expected, saved)
-    actual = selected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    target = expected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    _ <- if (actual.context == target.context && actual.checkpoint == target.checkpoint && actual.scopeCheckpoint == target.scopeCheckpoint)
-      Consequence.unit else _invalid("issued question selects another original context or native checkpoint")
-  } yield selected
 
   private def _prepare_c(observed: D.Observed): Consequence[Plan] = for {
     data <- _prepare_data_c(observed.record)
@@ -160,18 +112,7 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
       ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available))
     admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
     wire <- WorkflowDecisionJsonV1.encodeC(question, inputCodec)
-    _ <- if (_bounded(wire)) Consequence.unit else _invalid("complete Decision exceeds the UTF-8 bound")
   } yield new Data(intent, admitted.next, question, wire)
 
-  private def _json_c(input: Input): Consequence[Json] = {
-    // The owning producer already constructed this frontier. Encoding is
-    // passive; external decoding, not an encode/decode proof, admits its data.
-    if (input == null || input.context == null || input.checkpoint == null || input.scopeCheckpoint == null ||
-        input.frontier == null || input.frontier.value == null || !input.frontier.value.startsWith(J.schema + ":") ||
-        !_bounded(input.frontier.value)) return _invalid("complete input is absent or oversized")
-    val json = Json.obj("schemaVersion" -> Json.fromString(inputSchema), "payload" -> input.asJson)
-    if (_bounded(json.noSpaces)) Consequence.success(json) else _invalid("complete input exceeds the UTF-8 bound")
-  }
-  private def _bounded(raw: String): Boolean = UTF_8.newEncoder().canEncode(raw) && raw.getBytes(UTF_8).length <= maximumBytes
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase Human direction " + reason)
 }

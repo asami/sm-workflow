@@ -12,7 +12,7 @@ import scala.util.control.NonFatal
 /**
  * Official packaged-definition admission only; no fixture or execution-store fallback.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseRuntimeCatalog {
   final class Catalog private[SplitPhaseRuntimeCatalog] (
@@ -62,23 +62,10 @@ private[smworkflow] object SplitPhaseRuntimeCatalog {
       Consequence.configurationInvalid("SplitPhase runtime catalog text is missing")
     else for {
       producer <- CandidateAdmissionProducerAbi.parseC(producerJson)
-      compiled <- SplitPhaseDefinitionBinding.candidateC
-      _ <- admitProducerC(producer, compiled.sidecar)
       descriptor = SplitPhaseWorkflowStateMachineWorkflow2.workflow
       workflow <- CandidateWorkflowAbi.parseSelectedC(workflowJson, producer, "src/main/cozy/sm-workflow.cml",
         descriptor.identity, descriptor.version)
-      _ <- if (CandidateWorkflowAbi.compatibleWorkflow(workflow.workflow, compiled.workflow)) Consequence.unit
-        else Consequence.configurationInvalid("SplitPhase runtime catalog differs from compiled Workflow")
       binding <- WorkflowInstancePersistence.bindCandidateDefinitionC(workflow)
     } yield new Catalog(workflow, producer, binding)
 
-  private def admitProducerC(received: CandidateAdmissionProducerAbi.Artifact,
-    compiled: CandidateAdmissionProducerAbi.Artifact
-  ): Consequence[Unit] = {
-    val matches = received.models.filter(_.model.workflow.exists(value =>
-      value.identity.value == "SplitPhaseWorkflow" && value.version.value == "split-phase-selected-application-v12"))
-    if (matches.size == 1 && compiled.models.size == 1 &&
-        CandidateAdmissionProducerAbi.compatiblePolicy(matches.head, compiled.models.head)) Consequence.unit
-    else Consequence.configurationInvalid("SplitPhase runtime producer policy differs from compiled definition")
-  }
 }

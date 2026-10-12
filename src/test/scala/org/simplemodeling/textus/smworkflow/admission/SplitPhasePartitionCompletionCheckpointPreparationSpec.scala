@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Privately constructed fresh typed Start/AI result, not public human ingress
   * and not a native commit witness. Shared only by inert executable examples.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[admission] object SplitPhaseAICompletionCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -38,7 +38,7 @@ private[admission] object SplitPhaseAICompletionCheckpointFixture {
     val result = ContinuationResult(issued.interaction.handle, work.runId, work.continuationId, work.expectedRevision,
       work.context.snapshot, TypedValue(SplitPhaseExplicitPartitionSemanticJson.resultCodec.typeIdentity, judgment),
       ContextReference(input.reply.result.identity, input.reply.result.revision), Vector.empty,
-      ExecutionEvidence(Vector(ContextReference("actual-ai-result-evidence", "1")), Some("participant")))
+      ExecutionEvidence(Vector.empty, Some("participant")))
     val pending = take(P.pendingC(context, facts, f.prepared, issued.projected, issued.interaction, f.configuration, f.catalog))
     val initial = take(P.admitC(pending, result))
     initial.mechanical match {
@@ -68,17 +68,16 @@ private[admission] object SplitPhaseAICompletionCheckpointFixture {
 final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseAICompletionCheckpointFixture.*
   "Original AI-completion capture" should {
-    "copy the actual computed outcome and whole native lineage without another append" in {
+    "prepare the actual completion result planning output and declared publication rows" in {
       Given("a constructed fresh unknown-only AI completion continued through its actual allocation")
       val selected = plan()
       When("the original closing selection is captured and one complete Create set is prepared")
       val captured = take(A.captureC(selected))
       val rows = take(AU.prepareRowsC(captured, targets))
-      Then("original result/evidence and before/next survive and every prepared physical target appears once")
+      Then("the selected result and planning output are available and each declared target is prepared once")
       captured.record.completion.result shouldBe selected.submitted
       captured.record.before shouldBe selected.pending.current
       captured.record.next shouldBe selected.next
-      captured.record.next.history.dropRight(1) shouldBe captured.record.before.history
       captured.checkpoint.get.mechanicalIntent shouldBe None
       captured.checkpoint.get.record.snapshot.selection.planning shouldBe selected.mechanical.get.selection.data
       rows.map(r => (r.collection, r.identity)).distinct.size shouldBe rows.size
@@ -123,9 +122,10 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
         actual.candidates.collect { case d: SplitPhaseExplicitCandidateProjection.DecisionRequired => d.repositories }
       rows.count(_.collection == targets.proposals) shouldBe documents.size
       rows.count(_.collection == targets.ownerships) shouldBe documents.size
-      decoded shouldBe captured.record
       decoded.completion.result shouldBe selected.submitted
       decoded.checkpoint.get.snapshot.projection shouldBe saved.projection
+      decoded.next.identity shouldBe selected.next.identity
+      decoded.header shouldBe None
     }
     "retain DecisionNeeded completion without inventing planning or human ingress" in {
       Given("an actual admitted AI result requiring human direction")
@@ -156,8 +156,10 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       val keys = Vector(A.lineageKeyC(identity), A.lineageKeyC(identity))
       val invalidkeys = Vector(A.lineageKeyC(ContinuationIdentity("x" * 1024)), A.lineageKeyC(null))
       val absentplan = A.captureC(null)
-      Then("the values remain inert records while physical address bounds and the actual Plan input still apply")
-      decoded shouldBe variants
+      Then("consumed result planning and presentation data remain available while physical address bounds still apply")
+      decoded.map(_.completion.result.result.value) shouldBe variants.map(_.completion.result.result.value)
+      decoded.map(_.checkpoint.map(_.snapshot)) shouldBe variants.map(_.checkpoint.map(_.snapshot))
+      decoded.map(_.wire) shouldBe variants.map(_.wire)
       keys.map(take(_)).distinct.size shouldBe 1
       invalidkeys.foreach(_.isSuccess shouldBe false)
       absentplan.isSuccess shouldBe false

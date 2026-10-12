@@ -1,5 +1,53 @@
 # RepositorySync owning native Start and fetch
 
+## Current Phase 5.2 C16 Fetch consumption — focused validation45 PASS
+
+Fetch consumes its actual retained observed payload, prepared intent or newly
+created intent. It no longer rechecks a bound receipt's operation, compares saved
+stage/root/frontier copies, proves a history prefix or reconstructs the Start.
+Actual required expected tip and observed relation are consumed where used.
+Root/branch/remote/endpoint scope is checked at the owning Git effect; real
+tip/ancestry outcomes and common mechanical CAS remain at their consuming owners.
+No record-copy verifier, replay permission or intermediate-recovery guarantee is
+introduced. Unsupported or uncertain runs may be abandoned for a NEW invocation.
+
+Existing normal Operation scenarios retain actual Git/file/check outcomes, not
+complete-history or repeated-response equality. Fresh C16 passed6 suites45 tests,
+SBT/wrapper0/lockreleased; [terminal evidence](../../.codex-workflow/phases/PHASE-5.2/normal-consumer-proof-validation-01-terminal.md).
+Earlier passes accept only their earlier inputs. Complete
+public contract migration and connected Step/Phase acceptance remain unfinished.
+
+## Current Phase 5.2 C14 Start contract — focused validation 67 PASS
+
+Normal ingress resolves the actual six-field business input and actual selected
+host record. The action passes them directly to the owning Start consumer; it
+does not reconstruct an old Command, reload/re-admit the selection, re-decode
+its business copy or manufacture a seventh policy-version field. Identity uses
+the actual selection/invocation identities; current principal and installed
+repository/tracking/endpoint/effect scope are consumed at the owning boundary.
+
+Start stores the actual StartContext, creates the native instance and appends
+its initial transition. It does not reuse an old receipt, load/regenerate an
+initial or expected-active record, or demand whole-record equality. Child Goal
+closure derives this identity directly and invokes the installed normal
+Repository Operations. The assembly no longer requires a hardcoded provided-ABI
+copy table or an otherwise unused Start selection reader.
+
+Existing managed DataStoreSpace/pool, native state/CAS/grants and Git effects
+remain. C14 did not change later Fetch predicates; the current C16 section above
+now supersedes those predicates and the historical recovery claims below.
+Old raw Start adapters and their exclusive tests are retired, without fallback.
+Duplicate, replay and intermediate-recovery guarantees are outside scope; use a
+NEW invocation from the initial boundary without destructive file overwrite.
+
+C14 main/Test compiled and the fresh registered serial nine-suite invocation
+passed all67 tests, SBT/wrapper0 and lockreleased.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/current-start-validation-01-terminal.md).
+Complete public contract migration and connected Step/Phase review/release remain
+required. Earlier evidence retains its original scope; C14 is not Phase acceptance.
+
+## Historical fetch observations — nonnormative for Phase 5.2
+
 Date: 2026-10-06 (Asia/Tokyo)
 Status: additive native public fetch/ancestry executable evidence PASS988; normal
 installation, integration and final convergence remain unfinished.

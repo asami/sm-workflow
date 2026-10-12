@@ -3,7 +3,6 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -25,7 +24,7 @@ import RepositorySyncNativeProgressStore as N
   * the owning conflict port, not a caller-provided snapshot or workflow stage.
   * Answers are native atomic completion; only a subsequent advance runs effects.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncHumanConflict {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositoryConflictDecision")
@@ -48,32 +47,20 @@ private[smworkflow] object RepositorySyncHumanConflict {
     rationale: String, from: InstanceRecord, current: InstanceRecord)
   private final case class Plan(source: Source, intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent,
     next: InstanceRecord, question: WorkflowInteraction[Input, Nothing])
-  private final class Admitted(admittedCall: ActionCall.Core) {
-    def forCallC(core: ActionCall.Core): Consequence[Unit] =
-      if (core eq admittedCall) Consequence.unit else invalid("Human admission belongs to another call")
-  }
-  private final class Codec[A](val typeIdentity: String, schema: String, shape: Json => Boolean,
-    normalize: Json => Json = (value: Json) => value)(using Encoder[A], Decoder[A])
+  private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, A] = for {
-      root <- Option(value).filter(_.noSpaces.getBytes(UTF_8).length <= 16 * 1024 * 1024).flatMap(_.asObject)
-        .filter(_.keys.toSet == Set("schemaVersion", "payload")).toRight("Human conflict envelope is incomplete or oversized")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Human conflict schema differs")
-      body = root("payload").get
-      _ <- Either.cond(shape(body), (), "Human conflict has undeclared or missing nested fields")
-      parsed <- normalize(body).as[A].left.map(_.message)
+      json <- Option(value).toRight("Current typed payload is missing")
+      version <- json.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(version == schema, (), "Current typed payload schema differs")
+      parsed <- json.hcursor.get[A]("payload").left.map(_.message)
     } yield parsed
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Input] =
-    new Codec[Input]("RepositorySyncHumanConflictRequest", "sm-workflow.repository-human-conflict-input.v1", value =>
-      S.exact(value, Set("conflict", "requestingResultIdentity", "requestingResultRevision", "rationale")) &&
-        value.hcursor.downField("conflict").focus.exists(S.requestShape),
-      value => value.mapObject(root => root.add("conflict", S.normalizeRequest(root("conflict").get))))
+    new Codec[Input]("RepositorySyncHumanConflictRequest", "sm-workflow.repository-human-conflict-input.v1")
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] =
-    new Codec[Answer]("RepositorySyncHumanConflictAnswer", "sm-workflow.repository-human-conflict-answer.v1", value =>
-      S.exact(value, Set("choice", "resolutions", "rationale")) &&
-        value.hcursor.downField("resolutions").focus.flatMap(_.asArray).exists(_.forall(S.resolutionShape)))
+    new Codec[Answer]("RepositorySyncHumanConflictAnswer", "sm-workflow.repository-human-conflict-answer.v1")
 
   def proposal(answer: Answer): S.Result = S.Result(
     if (answer.choice == "ProvideResolution") "resolved" else "decision-needed", answer.resolutions, answer.rationale)
@@ -90,7 +77,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using source.store.core.executionContext)
       plan <- existing match {
-        case Some(value) => selectIssuedC(projected, value)
+        case Some(value) => Consequence.success(projected.copy(question = value))
         case None => for {
           saved <- questions.suspendC(projected.intent, projected.question)(using source.store.core.executionContext)
           _ <- acknowledgement("human-conflict-issued")
@@ -120,13 +107,13 @@ private[smworkflow] object RepositorySyncHumanConflict {
       _ <- storage.bindDecisionC(completionOperation, inputCodec)
       _ <- completionC(storage)
       provided <- RepositorySyncDefinitionBinding.providedDefinition.providedOperations.find(o =>
-        o.service == completionOperation.service && o.name == completionOperation.operation &&
-          o.inputType.contains(answerCodec.typeIdentity) && o.resultType.contains(closingType.value))
-        .map(Consequence.success).getOrElse(invalid("generated Human Provided Operation differs"))
-    } yield new spec.OperationDefinition {
+        o.service == completionOperation.service && o.name == completionOperation.operation)
+        .map(Consequence.success).getOrElse(invalid("Human completion Operation is absent"))
+    } yield new NativeWorkflowResultInput.Receiver {
       val specification = NativeWorkflowDescriptionMetadata.operation(
         SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation)
-      def createOperationRequest(incoming: ProtocolRequest): Consequence[OperationRequest] = decodeC(incoming).map { submitted =>
+      def createResultOperationRequestC(incoming: ProtocolRequest,
+        result: ContinuationResult[Json]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
         new CommandAction {
           val request = incoming
           override def commandExecutionMode = CommandExecutionMode.Sync
@@ -140,10 +127,10 @@ private[smworkflow] object RepositorySyncHumanConflict {
               questions <- actualStorage.bindDecisionC(completionOperation, inputCodec)
               issued <- questions.loadC(submitted.continuationId)(using core.executionContext)
               question <- issued.map(Consequence.success).getOrElse(invalid("answer has no actual issued Human question"))
-              plan <- selectIssuedC(projected, question)
+              plan = projected.copy(question = question)
               response <- for {
-                  admitted <- verifyC(core, plan.question, submitted, source.session.command.participantIdentity, installation.evidence)
-                  bound <- freshC(core, provided, plan, submitted, admitted, actualStorage)
+                  _ <- verifyC(core, plan.question, submitted, source.session.context.participantIdentity, installation.evidence)
+                  bound <- freshC(core, provided, plan, submitted, actualStorage)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
                     case value: CommandAction => Consequence.success(value)
                     case _ => invalid("canonical Human completion is not a CommandAction")
@@ -162,7 +149,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
     }
 
     private def freshC(core: ActionCall.Core, provided: GeneratedProvidedApiAbi.Operation, plan: Plan,
-      submitted: ContinuationResult[Answer], admitted: Admitted, storage: WorkflowComponentStorage): Consequence[spec.OperationDefinition] = for {
+      submitted: ContinuationResult[Answer], storage: WorkflowComponentStorage): Consequence[spec.OperationDefinition] = for {
       questions <- storage.bindDecisionC(completionOperation, inputCodec)
       instances <- storage.bindInstancesC()(using core.executionContext)
       native <- completionC(storage)
@@ -170,7 +157,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       bound <- {
         val codec = new WorkflowCompletionServiceOperation.Codec[Answer] {
           val resultTypeIdentity = answerCodec.typeIdentity
-          def decodeC(request: ProtocolRequest) = RepositorySyncHumanConflict.decodeC(request)
+          def decodeC(request: ProtocolRequest) = Consequence.success(submitted)
           def encodeC(resume: ContinuationRuntime.Resume) = invalid("Human acknowledgement requires committed readback")
           override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[Answer],
             completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
@@ -182,11 +169,11 @@ private[smworkflow] object RepositorySyncHumanConflict {
           } yield OperationResponse.Scalar(wire)
         }
         val closing = new WorkflowCompletionServiceOperation.ClosingProgram[Answer] {
-          def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = for {
-            _ <- admitted.forCallC(core)
-            program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = {
+            val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
               ActionExecution.Completed(StateMachineOperationResult(closingType, result.resultReference)))
-          } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+            Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next)))
+          }
         }
         WorkflowDecisionCompletionServiceOperation.bindC(RepositorySyncDefinitionBinding.providedDefinition, provided,
           WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
@@ -228,16 +215,10 @@ private[smworkflow] object RepositorySyncHumanConflict {
           "notice" -> Json.fromString("Answer only the issued conflict. Workflow retains command authority; Defer/Cancel do not resolve files.")).noSpaces)))
     } yield Plan(source, intent, next, question)
 
-    private def selectIssuedC(plan: Plan, saved: WorkflowInteraction[Input, Nothing]): Consequence[Plan] =
-      RepositorySyncHumanConflict.selectIssuedC(plan.question, saved).map(question => plan.copy(question = question))
-
     private def completedC(plan: Plan, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
       _ <- admitAnswerC(plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value, result.result.value, policy)
       choice = result.result.value.choice
       stage = if (choice == "ProvideResolution") "MergeResolutionAdmitted" else "ConflictDecisionRequired"
-      event = if (choice == "ProvideResolution") "human-conflict-resolution-admitted" else if (choice == "Defer") "human-conflict-deferred" else "human-conflict-cancelled"
-      _ <- if (domain.statemachine.RepositorySyncBoundaryLifecycle.permits("ConflictDecisionRequired", event, stage)) Consequence.unit
-        else invalid("Human successor is not declared by CML")
       from = plan.next
       next <- from.appendC(from.revision, HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next,
         Lifecycle.Active, Some(ProgressionReference("sync." + stage)), from.correlation,
@@ -245,20 +226,8 @@ private[smworkflow] object RepositorySyncHumanConflict {
     } yield next
   }
 
-  private[admission] def selectIssuedC(expected: WorkflowInteraction[Input, Nothing],
-    saved: WorkflowInteraction[Input, Nothing]): Consequence[WorkflowInteraction[Input, Nothing]] = for {
-    selected <- NativeHumanQuestionSelection.selectC(expected, saved)
-    e = expected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    q = selected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    _ <- if (q.conflict != null && e.conflict != null && q.conflict.instanceIdentity == e.conflict.instanceIdentity &&
-        q.conflict.conflictRevision == e.conflict.conflictRevision && q.conflict.localTip == e.conflict.localTip &&
-        q.conflict.remoteTip == e.conflict.remoteTip && q.requestingResultIdentity == e.requestingResultIdentity &&
-        q.requestingResultRevision == e.requestingResultRevision) Consequence.unit
-      else invalid("Human question selects another native conflict or requesting result")
-  } yield selected
-
   private def verifyC(core: ActionCall.Core, question: WorkflowInteraction[Input, Nothing], result: ContinuationResult[Answer],
-    participant: String, evidence: EvidencePort): Consequence[Admitted] = try {
+    participant: String, evidence: EvidencePort): Consequence[Unit] = try {
     if (core == null || core.executionContext == null || core.executionContext.clock == null || evidence == null ||
         !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty) ||
         !core.action.request.service.contains(completionOperation.service) || core.action.request.operation != completionOperation.operation)
@@ -269,19 +238,12 @@ private[smworkflow] object RepositorySyncHumanConflict {
         question, result, participant))
       _ <- Option(evidence.admitC(core, result.resultReference, target)).getOrElse(
         Consequence.serviceUnavailable("Repository Human host evidence returned no outcome"))
-    } yield new Admitted(core)
+    } yield ()
   } catch { case NonFatal(_) => Consequence.serviceUnavailable("Repository Human evidence observation is indeterminate; no answer admitted") }
   private def completionC(storage: WorkflowComponentStorage): Consequence[WorkflowManagedDecisionCompletion[Answer]] =
     storage.bindDecisionCompletionC(completionOperation, inputCodec, answerCodec, closingType, (_, _) => Consequence.success(Vector.empty))
   private def identity(source: Source): ContinuationIdentity =
     ContinuationIdentity(source.from.identity.value + ":human-conflict:" + source.from.revision.value)
-  private def decodeC(request: ProtocolRequest): Consequence[ContinuationResult[Answer]] =
-    if (request == null || !request.service.contains(completionOperation.service) || request.operation != completionOperation.operation)
-      invalid("answer selects another Operation")
-    else WorkflowJsonCommandRequest.commandArguments(request) match {
-      case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, answerCodec)
-      case _ => invalid("Human completion requires one complete typed result")
-    }
   private def waitC(next: InstanceRecord, result: ContinuationResult[Answer]): Consequence[String] = for {
     handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, next)
     wire <- WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
@@ -292,8 +254,6 @@ private[smworkflow] object RepositorySyncHumanConflict {
           case _ => "Human cancelled this decision path; pending repository state is preserved, not automatically aborted or converged."
         }))))
   } yield wire
-  private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
-  private def prefix(current: InstanceRecord, prior: InstanceRecord) = SplitPhaseDefinitionBinding.includesState(current, prior)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync Human conflict " + reason)
   private def uncertain[A](reason: String): Consequence[A] = org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
 }

@@ -1,47 +1,41 @@
-# Independent Split Human applicability — correction in progress
+# Independent Split Human applicability
 
-Phase 5 adopted-policy implementation correction. All source/examples are
-UNVERIFIED. Implementation removes the separate verifier/receipt revalidation
-layer; acceptance requires the connected executable examples and review.
+Date: 2026-10-11. Phase 5.2 adopted-policy migration; current inputs UNVERIFIED.
 
-## R1 — Consume original meaning, do not certify copied bodies
+## R1 — Select actual question and semantic direction
 
-Human direction selects the actual issued question handle/run/slot/revision,
-Required/completion routes, input/result/model scope and submitting participant.
-Scope selects original context/planning/scope-checkpoint targets. Reasoning
-selects original context, reasoning assignment/result, source/authority/demand
-and ordered unknown-item IDs. Original frontier, closure criteria and completed
-reasoning meaning stay in their owning Workflow records, not the attestation.
-No copied question/frontier/Result transport, display, source-line or generator
-equality is a restart gate. E1/E2 exercise production/legacy projection and
-irrelevant historical copies, including differently formatted transport.
+Scope/Reasoning direction selects owner, question handle/run/slot, Required/
+completion routes, input/result types and submitting participant. Scope selects
+context/planning/scope-checkpoint targets. Reasoning selects context, assignment
+slot/result, source/authority/demand and item IDs. Expected revision/model copies
+are omitted from question and reasoning assignment. Original frontier/closure/
+completed result meanings stay in their native owning records.
+Typed producers emit direct current data. E1/E2 check selected targets and
+unused metadata without a full Decision/Result/legacy adapter.
 
-## R2 — Preserve actual input and permission boundaries once
+## R2 — Separate the real boundary from duplicate prevalidation
 
-Actual choice and resolution reference remain semantic direction. Foreign
-owner/slot/type/model/source/assignment/participant/direction/reference cannot
-replace it. Actual Human ingress and authorized relays are separate from an AI
-claim or ordinary login, but no extra verification layer is justified solely by
-its existing name or historical tests. State/CAS/scope and execution permissions
-retain their own boundaries. E3/E5 cover real substitutions, three choices,
-original result/assignment correlation and typed-producer failures.
+Reader owns actual current issuer/purpose/lookup/reference/target/non-future
+occurrence and managed record-read permissions. Without this boundary a foreign
+direction could reuse independent consent. Native completion owns actual live
+result type/state/CAS and source resolution. Projection does not repeat slot,
+model, handle, assigned-result/context equality, item uniqueness or enum/count
+checks. ProvideResolution consumes the resolution reference; Defer/Cancel do
+not consume unused resolution fields. E3 checks actual scope/direction changes;
+E5 preserves distinct stop choices without duplicate producer correlation tests.
+Existing framework functions are untouched; no new replay/recovery guarantees.
 
-NativeHostEvidence.Reader owns issuer/purpose/actual target/reference/occurrence
-admission using the current host declaration and the actual call clock. The
-host EvidencePort returns that admission, not a second receipt, issuer getter
-or Binding to revalidate. Human consumers retain current principal/Operation/
-call ownership, but do not repeat host evidence fields or read another clock.
-Managed examples supply raw host evidence to this same input admission and
-check one host invocation; they do not manufacture preverified receipts.
-Managed Human question/history/completion/readback duplicate gates remain open.
+## R3 — Current v7 only
 
-## R3 — Storage and old reads do not restore removed witnesses
+Producer/codec/reader use current selected data only. Old v1–v6 readers and
+full-body extraction, exact-key gates and arbitrary wire-size preflights are
+removed. Unknown fields are ignored, never commands or grants. Historical rows
+are neither renewed nor rewritten. Unsupported old in-flight runs restart NEW
+with independently issued current evidence; continued retained use requires
+explicit migration rather than permanent compatibility. E4's legacy matrix is retired.
 
-The working source introduces draft NativeHostEvidence v7 selected Split answer
-storage, recognizing v1–v6 original rows without renewal or copied-body proof.
-Current selected shape must not add commands/grants or copied witnesses. E4
-specifies original target/time preservation, old reading and closed current
-output. This draft, passive examples and specification-owned managed ingress
-do not prove independent Human, physical legacy migration or model execution.
-Paired docs/legacy examples describe v7 output and v1–v6 reading. Current
-generation, registered-runner tests and assembled read-only review remain pending.
+## Remaining acceptance
+
+Current host/normal Operation suites and existing managed SBT scenarios require
+fresh registered-runner evidence. Other bounded internal/storage/CML/ABI migrations,
+connected review and full Phase release remain; history/counter3/3/frames unchanged.

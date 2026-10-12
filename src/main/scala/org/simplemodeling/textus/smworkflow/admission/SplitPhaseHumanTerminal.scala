@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import domain.statemachine.SplitPhaseHumanDirectionLifecycle
 import io.circe.Json
 import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
@@ -12,7 +11,6 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{HistoryEntry, H
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedHumanCompletion as H,
   SplitPhaseHumanDirectionAnswerContract as A, SplitPhaseExplicitPartitionSemantic as S}
 
@@ -20,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedHumanCom
   * result row, event, command, consent or resource owner is introduced.
   *
   * @since Oct.  5, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseHumanTerminal {
   enum Outcome { case Blocked, Cancelled }
@@ -33,7 +31,7 @@ private[smworkflow] object SplitPhaseHumanTerminal {
     def encode(value: Result): Json = encodeC(value).toOption.getOrElse(
       throw new IllegalArgumentException("Invalid SplitPhase Human terminal result"))
     def decode(value: Json): Either[String, Result] = for {
-      json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Terminal payload is absent or oversized")
+      json <- Option(value).toRight("Terminal payload is absent")
       root <- json.asObject.toRight("Terminal envelope differs")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Terminal schema differs")
       body <- root("payload").flatMap(_.asObject)
@@ -62,7 +60,7 @@ private[smworkflow] object SplitPhaseHumanTerminal {
       if (_bounded(json.noSpaces)) Consequence.success(json) else _invalid("payload exceeds its UTF-8 bound")
     }
 
-  def advanceC(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def advanceC(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     observation: () => Consequence[Unit]): Consequence[String] = for {
     observed <- H.observeAnswerForAdvanceC(command, declaration, catalog, core)
@@ -72,17 +70,10 @@ private[smworkflow] object SplitPhaseHumanTerminal {
       case _: A.Answer.ProvideResolution => Consequence.serviceUnavailable(
         "SplitPhase advance verified the retained Human answer; resolution handler remains unavailable")
     }
-    edge = outcome match {
-      case Outcome.Blocked => ("human-deferred", "Deferred")
-      case Outcome.Cancelled => ("human-cancelled", "Cancelled")
-    }
-    _ <- if (SplitPhaseHumanDirectionLifecycle.permits("Answered", edge._1, edge._2)) Consequence.unit
-      else _invalid("successor is not declared by the generated CML")
     answer = observed.completion.result
     decision = observed.plan.question.current.asInstanceOf[WorkflowContinuation.Decision[SplitPhaseNativeHumanDirection.Input]]
     input = decision.request.input.get.value
     result = Result(outcome, input.context, answer.continuationId, answer.resultReference)
-    _ <- encodeC(result).map(_ => ())
     next <- observed.answered.appendC(observed.answered.revision, HistoryEntry(
       HistorySequence(observed.answered.history.size.toLong + 1L), observed.answered.revision.next,
       Lifecycle.Completed, None, observed.answered.correlation,

@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
   final case class Payload(sourceRevision: String, step: String,
@@ -30,19 +30,10 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("ordered candidate envelope differs")
-      schema <- root("schemaVersion").flatMap(_.asString).toRight("ordered candidate schema is missing")
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v1", "sm-workflow.goal-phase-native-candidate.v2")(schema),
-        (), "ordered candidate schema differs")
-      fields <- root("payload").get.asObject.toRight("ordered candidate payload is missing")
-      required = Set("sourceRevision", "step", "selectedPaths", "stagedPaths", "changedPaths")
-      legacy = if (schema.endsWith(".v1")) Set("hostPaths") else Set.empty[String]
-      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
-        fields.keys.toSet.subsetOf(required ++ Set("candidate", "diff") ++ legacy) &&
-        fields("candidate").forall(item => item.isNull || item.asObject.exists(_.keys.toSet == Set("head", "tree"))),
-        (), "ordered candidate has undeclared fields")
-      payload <- Json.fromJsonObject(fields.remove("hostPaths")).as[Payload].left.map(_.message)
+      wire <- Option(value).toRight("ordered candidate is missing")
+      schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-candidate.v2", (), "ordered candidate schema differs")
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)

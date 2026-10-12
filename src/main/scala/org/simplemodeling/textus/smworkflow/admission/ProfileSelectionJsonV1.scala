@@ -11,7 +11,7 @@ import ProfileStartAdmission.{Selection, SelectionOrigin}
 /** Lossless host record format only. Decoding does not establish human authority
   * or admit a Start request; ProfileStartAdmission still evaluates that record.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object ProfileSelectionJsonV1 {
   val schemaVersion = "sm-workflow.profile-selection.v1"
@@ -88,7 +88,8 @@ private[smworkflow] object ProfileSelectionJsonV1 {
       nonblank(input.typeIdentity) && input.value != null && !input.value.isNull)
 
   private def objectFields(value: Json, expected: Set[String]): Either[String, JsonObject] =
-    value.asObject.filter(_.keys.toSet == expected).toRight("Profile selection fields differ from schema")
+    value.asObject.filter(fields => expected.subsetOf(fields.keys.toSet))
+      .toRight("Profile selection required fields are missing")
   private def string(value: JsonObject, name: String): Either[String, String] =
     value(name).flatMap(_.asString).filter(nonblank).toRight(s"Profile selection field is invalid: $name")
   private def nonblank(value: String): Boolean = value != null && value.trim.nonEmpty

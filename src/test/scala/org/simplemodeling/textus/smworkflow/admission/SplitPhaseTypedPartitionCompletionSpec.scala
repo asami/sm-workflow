@@ -31,7 +31,7 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
     ContinuationResult(plan.interaction.handle, work.runId, work.continuationId, work.expectedRevision,
       work.context.snapshot, TypedValue("SplitPhasePartitionSemanticResult", payload),
       ContextReference(work.input.get.value.reply.result.identity, work.input.get.value.reply.result.revision), Vector.empty,
-      ExecutionEvidence(Vector(ContextReference("semantic-evidence", "1")), Some("participant")))
+      ExecutionEvidence(Vector.empty, Some("participant")))
   }
   private def pending(plan: I.Plan) = take(P.pendingC(context, facts, prepared, plan.projected, plan.interaction, configuration, catalog))
 
@@ -60,17 +60,16 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       val baseline = take(P.admitC(pending(issued), result(issued)))
       val need = baseline.mechanical.get.asInstanceOf[W.AllocationRequired]
       val allocated = take(SplitPhaseCandidateAllocationFixture.policy.allocateC(need, allocation.result))
-      When("Workflow continues the exact computed need using the host-assigned allocation")
-      val continued = take(P.continueAllocatedC(baseline, allocated))
+      val equivalent = take(P.admitC(pending(issued), result(issued)))
+      When("Workflow continues a functionally equivalent plan using the host-assigned allocation")
+      val continued = take(P.continueAllocatedC(equivalent, allocated))
       Then("only mechanical planning changes, while canonical completion and adjacent native history remain identical")
       continued.next shouldBe baseline.next
       continued.closing shouldBe baseline.closing
       continued.submitted shouldBe baseline.submitted
       continued.mechanical.get should not be a[W.AllocationRequired]
-      (continued.mechanical.get.trace.partition.asInstanceOf[AnyRef] eq need.enumerated) shouldBe true
+      continued.mechanical.get.trace.partition shouldBe need.enumerated
       continued.mechanical.get.trace.mechanicalStages.count(_ == W.Stage.PartitionEnumeration) shouldBe 1
-      val other = take(P.admitC(pending(issued), result(issued)))
-      P.continueAllocatedC(other, allocated).isSuccess shouldBe false
     }
 
     "admit only issued semantic gaps and resume deterministic enumeration without selecting an AI processor" in {
@@ -132,17 +131,15 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       selected shouldBe Vector(false, false, false)
     }
 
-    "reject crossed frame allocation evidence and unknown coverage before selecting a closing action" in {
+    "reject missing requested semantic coverage before selecting a closing action" in {
       Given("a canonical issue containing its complete host-assigned Reply")
       val issued = issue
       val submitted = result(issued)
-      val variants = Vector(submitted.copy(expectedRevision = StateMachineRevision("9")),
-        submitted.copy(resultReference = ContextReference("worker-chosen-result", "1")),
-        submitted.copy(evidence = ExecutionEvidence(Vector.empty)),
-        submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(estimates = Vector.empty))))
-      When("a worker-selected result or other crossed frame is submitted")
-      Then("no closing Plan is selected and malformed issued replies also refuse")
-      variants.foreach(value => P.admitC(pending(issued), value).isSuccess shouldBe false)
+      val incomplete = submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(estimates = Vector.empty)))
+      When("the answer omits the estimates requested by actual issued semantic work")
+      val completed = P.admitC(pending(issued), incomplete)
+      Then("no closing Plan is selected for the missing semantic content")
+      completed.isSuccess shouldBe false
       val originalwork = issued.interaction.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]]
       val input = originalwork.request.input.get.value
       val crossedreply = input.reply.copy(resolutions = input.reply.resolutions.copy(

@@ -1,202 +1,264 @@
 # Session-resolved public Workflow Operations
 
-Date: 2026-10-10, Asia/Tokyo.
-Status: authored contract with scoped connected runtime evidence (Actual115:
-ten complete consumer suites69/69; semantic echo delta Actual119:15 complete
-suites280/280 and supplemental independent PASS); full R1-R5/E1-E12 acceptance
-remains open.
-Current acceptance follows the owning user's fixed normal-use boundary in
-[Phase 5.1](../phase/phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11).
-E4/E5 failure/competing publication, E9/E10 delayed-answer/replay and E11
-competing completion are historical scenarios, NOT current required coverage.
-Intermediate recovery, a unique winner, complete history and identical replay
-responses are excluded. Shared infrastructure is not modified or exhaustively
-retested; new findings do not automatically expand this acceptance boundary.
-Source correction closure is separately recorded, not whole-contract acceptance.
-This applies the already adopted Phase 5.1
-direction, not a new policy, repair allowance or authorization boundary.
+## Current C18 public contract — 2026-10-12
+
+R1–R5 and the connected normal-use acceptance below remain the session contract.
+This section takes precedence over dated migration cutoffs and all historical
+copy, provenance, replay, winner and intermediate-recovery requirements.
+The current CML revisions are `goal-phase-minimal-operation-v5`,
+`split-phase-minimal-operation-v13` and `repository-sync-minimal-operation-v11`.
+There are fifteen normal Provided Operations: four Goal, six Split and five
+Repository. Their Operation-local JSON string `arg1` is required for Start and
+results, optional for advance. No full Command `INPUT` or Provided `inputType`
+supplies semantic routing; genuine Required SPI types remain independent.
+
+The owning public work/Decision completion binders receive actual business
+codecs, ClosingPrograms, pending-work/question readers and managed current-call
+bindings. CNCF owns its internal completion invocation and unnecessary-check
+removal. sm-workflow does not call private `completeC` or substitute descriptor
+metadata, a continuation engine, a verifier or a validation stamp. Normal
+integration must use the actual corrected CNCF dependency.
+
+Start takes only the listed business input and resolves actual host selection,
+participant and allocation. Tests prepare genuine StartInput and actual
+ProfileStartAdmission.Selection records, not old generated StartCommand DTOs.
+Advance selects the applicable session target and absorbs mechanical work;
+completion consumes the answer and internally supplies stored execution context.
+Required selectors resolve real ambiguity, not saved-copy identity or proof
+that declarations/input/source lines have not changed. Relevant effect scope
+prevents wrong-repository mutation and unrelated-file overwrite. Actual
+Human/review evidence is consumed at its authorizing owner; common state/CAS/
+grants/atomic writes are not duplicated or exhaustively tested here.
+
+Old Goal step/closure-Human, Split novel-semantic and Repository old-stage/review
+routes and their dedicated DTO/ABI fixtures are retired without compatibility.
+Unsupported old in-flight executions are not silently resumed or converted:
+retain their historical data, abandon them and start a new execution. No
+matching-retry-response, unique-winner, complete-history or intermediate-recovery
+promise becomes an acceptance condition. The bounded normal-use, fatal-file-
+destruction prevention and NEW Start requirements remain; command/skill wiring
+is separate Phase 6 work.
+
+C18 is still being implemented and has not been compiled or tested. Older PASS
+results below do not validate this changed contract or accept the Step/Phase.
+
+## Historical C9 actual Human consumers — focused validation 47 PASS
+
+After the Operation selects its actual pending question, Repository and Split
+consumers use that question and the owning source directly. They do not rebuild
+expected questions or require copied native state, routes, target metadata or
+outer evidence-reference echoes. Separate Human interpretation supplies the
+new business scopes/unknown-item judgments once; independent host Human evidence
+is consumed by the existing ingress owner. Current conflict typed fields are
+required without old-format defaults, while inert extra annotations are ignored.
+
+Fresh registered request02 passes47 tests in eight suites, with SBT/wrapper0,
+lock released and parent current-result/consumed-permission admission accepted.
+Request01's compiler failure is retained; the existing reasoning generator was
+moved before a pure for-enumerator assignment without restoring any check.
+The five old alias calls in the selected planning
+fixture are removed, including its redundant postimage/correlation helper;
+real frontier fixture reading uses the existing passive payload codec. Test
+compilation passed through this invocation, not a separate full legacy-fixture run.
+No compatibility helper, new verifier or recovery guarantee is introduced.
+Inputs stayed fixed while live; these documentation updates follow completion.
+[C9 terminal evidence](../../.codex-workflow/phases/PHASE-5.2/human-consumers-validation-02-terminal.md).
+Earlier passing runs remain historical bounded evidence. Complete Phase
+migration and connected review/commits/release remain mandatory.
+
+### C8 focused validation — 57 PASS
+
+Fresh registered request01 completed eight suites,57 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Actual current codec/semantic consumers and the existing normal Goal/Repository/
+Direct Operation programs passed. No product input changed during execution;
+only documentation/evidence was updated after terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/result-consumers-validation-01-terminal.md).
+This supersedes C8's historical authored UNVERIFIED status only for bounded C8
+validation, not connected Step/full Phase acceptance. Remaining migration,
+independent review, owned commits and final release/closure remain mandatory.
+
+Date: 2026-10-11, Asia/Tokyo.
+Current contract: the fixed normal-use boundary in
+[Phase 5.1](../phase/phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11)
+and [Phase 5.2](../phase/phase-5.2.md). HOST-CONTRACT-02 passes the preceding host
+migration's 61 cases, not full Phase acceptance. Subsequent C4 input/metadata/Help
+validation completed156PASS (153 normal, 3 scripted), with SBT/wrapper exit0 and
+shared lock released. Fresh C5 native Goal Start storage validation passes five
+suites, 41 tests, with SBT/wrapper exit0 and shared lock released. Neither result
+establishes full acceptance.
+
+Current C6 request02 passes six focused/normal suites47 tests, including two
+normal whole-Phase executions with actual installed child convergence. Its
+additional legacy native example fails in completion before child Start; the
+overall invocation failed and its permission remains consumed. The earlier
+child-connection-unverified report was overbroad; this does not accept C7 changes.
+Repository Start retains only consumed routing/business facts in managed-fetch.v3;
+progress reads only v3. Goal child closure reads only native-repository-closure.v2,
+without saved command/authority copies or parent repetition of child convergence.
+Existing host permission and actual installed child Operations own their effects.
+Current typed readers ignore unused annotations, not actual consumed type errors.
+Old record readers are removed; NEW selection/invocation and initial Start are
+the supported restart, without overwriting old history/files. This focused delta
+does not complete public/internal/DTO/fixture migration or connected review/release.
+
+Current C7 passes52 tests in seven focused/normal suites: Candidate/Validation v2, Work request v2 and
+current Work result v1 typed decoding remove legacy readers and key/shape
+preflights. Step closure v3 saves only real Input/ordinal/commit, with current-call
+permission owned once by the existing host reader; no copied grant/revision/Input
+comparison. Unused classification hints are inert. The old Goal native fixture
+is retired; its required classification meaning is observed in existing normal
+Goal Operation programs, not a compatibility route or another replay suite.
+Fresh request01's typed success and consumed permission were admitted by the
+parent; SBT/wrapper exit0, lock released. [Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/goal-native-contract-validation-01-terminal.md).
+This is bounded validation, not complete Step/Phase acceptance.
+
+The caller supplies consumed business input or the requested semantic result.
+Workflow resolves current instance, business context and assigned work. It does
+not require the caller to dispatch stages or reproduce stored execution controls.
+Shared infrastructure is not changed or exhaustively retested here.
 
 ## Responsibility and current implementation
 
-The three normal services remain the public functional boundary. The caller
-provides session context and consumed business input or the requested semantic
-answer. Workflow resolves the actual instance, original context and issued work;
-the caller does not dispatch stages or reproduce saved execution controls.
+| Concern | Current normal production connection |
+| --- | --- |
+| Invocation session | NativeWorkflowSessionInput.contextC retains actual host session, or explicit routing identity |
+| Start and associated instance | Owning native Start publishes actual managed state; native storage carries session routing facts |
+| Advance | Managed session lookup selects actual instance; Split resolves associated partition context |
+| Result | NativeWorkflowResultInput loads the current pending applicable work/Decision and supplies its internal control context |
+| Selected effects | Owning ActionCall/Core/UnitOfWork and managed Git/SBT/document boundaries retain scope and authority |
+| JSON carrier and metadata | Start/results require arg1; three advances permit absence or necessary selectors |
 
-The following table preserves the initial source observations before the next
-implementation turn. The journal records subsequent unverified source changes;
-neither observation nor authored implementation is acceptance evidence:
+The Subsystem owns the sole pool/provider. No raw SQLite writer, private runtime,
+latest-selection registry, comparison ledger or validated marker is introduced.
 
-| Concern | Actual facility | Remaining connection |
-| --- | --- | --- |
-| Optional host session | CNCF `SecurityContext.session` / `SessionContext.sessionId` | Normal three-service assembly does not resolve it to an instance |
-| Actual instance and history | `WorkflowInstancePersistenceBinding.loadC` and native suspension/history | Public binding has create/load/append, not session lookup |
-| Scoped query | `DataStoreSpace.search`; canonical `SqlDataStore` is searchable | No declared session association or scoped resolver is installed |
-| Managed local publication | `ComponentRecordStorage.stageCreateC` and mechanical completion `localCreates` | Create-only; not a session index update or arbitrary guard capability |
-| Native Goal / Repository Start | Create initial record, append activation, then mechanical Start receipt | Separate writes precede final receipt; a side write after Start is not atomic Start publication |
-| Native Split Start | `SplitPhaseTypedStartExecution` creates then appends activation | No mechanical Start receipt or joint association publication |
-| Reduced result ingress | `NativeWorkflowResultInput` loads actual issue using `requestIdentity` | Still requires a request identity and result reference; no session association |
+## C8 issued result consumers — bounded validation 57 PASS
 
-`WorkflowMechanicalTransition` requires an **active, unsuspended** source.
-Consequently its existing public API cannot atomically activate a NotStarted
-Split instance and publish a session association. Do not manufacture an active
-source, append a proof-only transition, or claim that its Create-only program
-supports arbitrary guards. Reconcile the real native Start boundary when making
-that connection. The Subsystem continues to own the sole pool and provider.
+Once the owning Operation has resolved the actual issued row, consumers use
+its business input and controller directly. Goal and Repository review no longer
+compare that row with regenerated WorkOrder/route/requirement/input copies.
+Goal ordered Human completion uses its actual saved question. Existing normal
+Goal programs submit no requestIdentity echo when the pending request is unique,
+and carry inert command/grant diagnostics without conferring execution authority.
+Required business values and actual semantic disposition are consumed at their
+owners; independent reviewer/Human ingress stays separate. Fresh C8 eight-suite
+validation passed 57 tests; this bounded result is not acceptance of C9 or the Phase.
+Full remaining migration and connected Step/Phase closure remain mandatory.
 
 ## R1 — Invocation session is context, not permission
 
-An explicit opaque session identifier is usable when the host supplies none.
-When the actual invocation supplies session identity, a duplicate argument is
-unnecessary. Do not assume a Codex chat identity is available to the generic
-runtime. Do not trim, hash or rewrite the logical identity as an admission rule;
-physical addressing is resolved at its real storage boundary.
+Use actual host session context when supplied. Otherwise an explicit opaque
+sessionIdentity is routing context, not actor, consent or process permission.
+Do not infer a Codex chat identity or duplicate the session in every argument.
+Logical identity is not trimmed/hashed as an admission certificate; physical
+addressing remains with its actual storage owner.
 
-E1: Given an actual host session and consumed Start business input, when Start
-executes without an explicit duplicate session field, then subsequent calls in
-that actual context resolve the same association after managed persisted reopen.
+E1/E2: Start business input in an actual or explicit session, then normal calls
+resolve its native association using managed storage. E3: actual effect authority
+is consumed by its owning boundary, not an extra unchanged-copy certificate.
 
-E2: Given a host without session context, when Start and later calls supply the
-same explicit opaque identity, then the same managed association is resolved.
-The two examples do not infer caller consent or process permission from identity.
+## R2 — Start publishes actual routing facts
 
-E3: Given a resolved session but a caller lacking the authority consumed by an
-actual action, when that action is requested, then its owning boundary prevents
-the wrong effect. No additional unchanged-copy certificate is required.
+Start uses genuine business input under input and host selection. It resolves
+participant/allocation internally; selectionIdentity is only for ambiguity.
+Association contains routing facts, not duplicated command/Plan/profile/permission
+or diagnostic snapshots. The existing native state/storage owns publication.
+An incomplete allocation is not a completed Start or usable association.
 
-## R2 — Start publishes real association, not comparison data
+E4/E5 competing publication and intermediate failure/recovery guarantees are
+excluded. Do not add winner, replay, complete-history or recovery machinery or
+tests. An abandoned invocation may instead be left in place and replaced with
+a NEW invocation from the beginning, without destructively overwriting files.
 
-Association retains only actual routing facts needed to locate native state.
-It must not duplicate a whole Start command, plan, selected execution profile,
-permission, declaration, snapshot or diagnostic envelope for later equality.
-Reuse managed native storage and transaction facilities; do not build a second
-session engine, private pool, raw SQLite writer or latest-selection registry.
+## R3 — Advance resolves context and absorbs mechanical progression
 
-The storage connection must distinguish durable initial allocation from usable
-Start publication. If initial allocation precedes activation, an incomplete
-allocation is not a routable completed Start. Failure/reopen must resolve the
-actual outcome rather than repeat an uncertain write or invent a receipt.
-Do not modify a historical instance's correlation to impersonate session identity.
+A single associated target needs no JSON argument. Several legitimate targets
+require only instanceIdentity; several actual Split partition contexts require
+only contextIdentity. Missing actual association/context fails at its consuming
+lookup, not at a copied-input certificate. No latest/first-row fallback.
 
-E4: Given a selected Start and its intended session association, when publication
-fails before its managed transaction commits, then no usable association to an
-unpublished Start is returned; reopening observes the real allocation/outcome.
+Current inputC distinguishes absent optional input from a supplied non-string/
+null arg1 or two actual carriers. The latter cannot silently become input-free
+advance. Unused Request properties, switches and format diagnostics are not
+business input or authority and do not reject a valid carrier.
 
-E5: Given competing publications to the same actual target, when both attempt
-their managed update, then actual uniqueness/CAS determines the winner without
-overwriting another association or resetting history. A session identifier alone
-is not a universal one-instance restriction.
+E6: each normal service advances its session target without instance/revision/
+snapshot echoes and returns the next semantic work, wait or terminal.
+E7: real target ambiguity requires the minimal selector; a foreign target
+does not become associated or authorized merely because it exists.
 
-Normal Split Start now consumes native successful create/append results instead
-of loading them again to compare whole records or DefinitionBinding objects.
-Native append already owns actual state, expected revision, CAS and authoritative
-readback. A later invocation loads actual storage and consumes original allocation
-or first-history correlation/causation to avoid activating/acknowledging another
-Start. Failed/uncertain native mutation remains uncertain until later observation;
-no same-call write replay. This is not a new identity/revision certificate or
-acceptance of remaining source/proposal/selection-copy comparisons. The extra-load
-fault examples demonstrate successful-result consumption, NOT E4 precommit failure
-or E5 competing-Start publication coverage.
+## R4 — Normal answers resolve current pending work
 
-## R3 — Advance resolves context before performing progression
+Without a selector, the owning session resolves the current applicable pending
+request. Completed generations are not extra ambiguity candidates. An explicit
+requestIdentity selects only an applicable pending target; it does not promise
+historical/delayed-answer handling or grant permission to another session.
+Native completion owns actual meaning, state and its existing CAS.
 
-Resolve associations for the selected service through scoped managed storage,
-then load the actual native instance and original business context. A single
-unambiguous target requires no instance echo. Several legitimate targets require
-only the selector needed to distinguish them; do not silently pick the newest,
-first query row or current host selection. Absence is not an in-memory fallback.
+E8: semantic/Human completion receives requested result data and supplies internal
+handle/run/continuation/revision/context from the actual pending assignment.
+Double answers, competing callers and delayed submissions are user misuse.
+E9/E10/E11 are excluded from current acceptance; no identical replay, winner,
+complete history or normal intermediate recovery is promised.
 
-Split's actual selected partition context must also be associated/resolved on the
-server. Do not derive it from caller diagnostic fields or silently select an
-arbitrary context with the same source Phase. Missing actual context remains a
-consuming prerequisite failure, not a request for a saved comparison copy.
+Fresh-start example: a caller abandons pending work and Starts NEW at the initial
+boundary. Actual unrelated files remain intact. This does not promise uncertain
+effect cleanup or exact recovery/history/replay responses.
 
-E6, applied to each of GoalPhase, SplitPhase and RepositorySync: Given one
-associated native target, when public advance receives session context without
-instance/revision/context-snapshot echoes, then Workflow absorbs available
-mechanical work and returns the actual next semantic request, wait or terminal.
-Fresh Core, retained storage and separate-process reopen select the same meaning.
+## R5 — Consume genuine result data, not control echoes
 
-E7, applied to all three: Given multiple legitimate associated targets, when
-advance provides no necessary selector, then it reports genuine ambiguity without
-progressing any target. Providing a selector resolves only an associated target;
-a foreign target does not become authorized because it exists in the same store.
+A result is result.value in the named Operation's semantic payload format.
+Workflow resolves issued controls internally; handle/run/revision/context/model/
+participant/question copies are unnecessary. Real artifacts, evidence or references
+consumed by the action remain business data.
 
-## R4 — Normal answers resolve current issued work
+Partition, scope and reasoning use their actual assigned result destination
+internally. No duplicate result.reference or context/checkpoint echo is required
+or compared; actual semantic evidence is supplied once in its judgment.
+Other completions still consume real result/evidence references where needed.
+Independent Human/review evidence cannot be manufactured from a question, login
+or selected profile. Omitted executionEvidence means no actual executor evidence.
 
-For an ordinary submission without a request selector, resolve the current pending
-request in the owning session. Completed generations are not additional ambiguity
-candidates. An explicit selector may locate its associated issued request without
-granting permission to another session. Do not introduce an answer comparison
-ledger, replay contract, winner protocol or new validated marker.
+E12: minimal results and harmless diagnostics work through normal public
+Operations. Actual malformed consumed carrier/type, absent required artifact or
+wrong business destination is handled at its consuming boundary. No common
+recursive verifier or second complete-envelope input API is added.
 
-Delayed answers, double submission and competing callers are misuse for which
-the caller is responsible. Existing native completion/state/CAS behavior may
-still accept or refuse them; sm-workflow neither strengthens that behavior nor
-requires its exhaustive verification. New execution means a fresh invocation
-from the beginning, not resumption or recovery of the abandoned invocation.
+## Connected executable acceptance
 
-E8, applied to each semantic/Human completion family: Given only one applicable
-issued request generation, when its semantic answer is submitted with session
-context and consumed result data, then Workflow supplies handle/run/continuation/
-revision/context internally and the existing completion owns meaning and CAS.
+Confirm normal three-service Start, requested semantic/Human completion, advance
+and actual outcome through public Operations and managed storage/effects.
+Check destructive file overwrite prevention and NEW invocation restart.
+CLI/skill wiring belongs to Phase 6. No rollback, competing publication/completion,
+delayed generation, identical retry or full-history coverage is required here.
 
-E9/E10/E11: excluded from current acceptance. Earlier delayed-answer, replay and
-competing-completion definitions and their recorded executions remain historical
-evidence, not mandatory implementation or test work.
+C4 connects current input metadata/Help and an existing normal Split episode;
+it does not finish CML INPUT/provided ABI/internal/storage/fixture/legacy-route
+retirement. Protected connected review and the Phase release remain unfinished.
+Original nine, full history, consumed repair3/3 and frames are unchanged.
 
-Fresh-start example: Given an abandoned pending invocation and safe actual files,
-when a caller selects and Starts a NEW invocation, then it begins at its initial
-boundary without requiring an answer or recovery of the old work. Existing
-unrelated file content must not be overwritten. This does not promise cleanup of
-uncertain effects or exact history/replay responses.
+C5 replaces GoalPhase's saved full StartCommand with its consumed participant,
+Git root/branch, selected plan and base. Native Human and paired child closure
+use that participant directly; command reconstruction/full comparison and duplicate
+controller prevalidation are removed. Only the current native-start.v2 schema is
+read. Old v1 executions retain their records/evidence but need NEW host selection/
+invocation and Start from the beginning; no old reader, destructive rewrite or
+intermediate restoration is introduced. Remaining transient commands, CML ABI,
+downstream codecs and other legacy routes are still mandatory removal, not
+compatibility accepted for Phase 6. Fresh C5 validation passes retention and
+classification suites plus normal Goal/Repository/Direct Operation suites:
+41 tests, no failures. It verifies this bounded migration, not the remaining
+legacy retirement or complete Phase. Historical misuse/recovery cases run by
+these suites do not become current acceptance conditions.
 
-## R5 — Consume actual result data, not redundant control echoes
+## Historical evidence — non-normative
 
-The semantic answer and any artifact or result reference that the owning action
-actually consumes remain business data. Where Workflow already assigns a result
-destination, resolve that assignment internally; do not require a duplicate
-reference solely to compare it. The initial reduced adapter required
-`result.reference` for every completion. The current source resolves the three
-Split semantic destinations from the actual loaded, typed issued input:
-partition uses `Request.reply.result`, handoff scope and reasoning use
-`Request.result`. Their reduced submissions need only `result.value`; obsolete
-destination echoes are ignored, not compared or shape-checked. This source/spec
-correction was authored after Actual115, not part of its 69/69 result. Subsequent
-Actual116 passes34/34 across complete Goal/Repository/Direct suites, including
-these three omissions and obsolete malformed echo/harmless diagnostics on a
-retained answer. Actual117 compiles a later test-only parameter/caller naming
-correction, zero tests; focused independent acceptance is pending at this cutoff.
-
-Other completion inputs have no such issued destination. Goal and Repository
-result locators participate in retained result/causation and review or Human
-evidence lookup; Human evidence cannot be invented from a question or participant
-identity. Their actual result/evidence reference remains supplied and decoded
-where the resolved completion needs it. The historical complete-envelope route
-still carries an explicit business destination; existing owning consumers prevent
-crossed writes. No new assignment registry, verifier or validated marker is added.
-Do not fabricate artifact locations or actual executor observations from a
-selected profile.
-
-E12: Given an actual assigned result and compatible saved input containing old
-diagnostics/proof fields, when public completion omits unused control copies or
-adds harmless diagnostics, then neither their absence nor obsolete formatting
-gates completion. Wrong actual type, missing consumed artifact and crossed
-business result destination fail at the action that consumes them.
-
-## Connected executable acceptance — still open
-
-Implement these examples through the normal public Operations and actual managed
-storage for all three services, including normal Start, semantic/Human submission,
-advance and native terminal. Include rollback/uncertain outcome, competing update,
-multiple association and multi-generation delayed-answer cases. Codec-only or
-memory-only tests do not prove association or recovery. CLI and skill transport
-remain Phase 6 work; this boundary is tested by direct Operation calls.
-
-This document is authored specification, not executable evidence. No test request,
-runner execution, independent PASS, acceptance checkbox, commit or release is
-created by writing it. Original nine/history/repair upper3 consumed3/all frames
-and the full active Goal remain unchanged.
+Everything below retains earlier authored cutoffs, execution results and original
+review dispositions. Its OPEN requirements, old envelope/compatibility routes,
+E4/E5/E9–E11 coverage lists and recovery/replay claims do not define the current
+interface or acceptance. Original logs/journals remain unchanged. Historical PASS
+does not validate subsequent edits or complete current Phase 5.2.
 
 ### Subsequent focused assigned-destination evidence
 

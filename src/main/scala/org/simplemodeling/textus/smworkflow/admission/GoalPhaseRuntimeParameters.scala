@@ -43,10 +43,12 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
   val declarations: Vector[ComponentParameterKey[?]] =
     Vector(storeName, storeIdentity, migrationPolicy, retentionPolicy, leasePolicy, instances, continuations)
 
-  def decodeC(parameters: ComponentInitializationParameters, catalog: GoalPhaseRuntimeCatalog.Catalog):
-      Consequence[GoalPhaseManagedStartAssembly.Declaration] =
-    if (parameters == null || catalog == null)
-      Consequence.configurationInvalid("GoalPhase configured persistence or admitted catalog is missing")
+  final case class Persistence(configuration: Configuration, instances: DataStore.CollectionId,
+    continuations: DataStore.CollectionId)
+
+  def decodeC(parameters: ComponentInitializationParameters): Consequence[Persistence] =
+    if (parameters == null)
+      Consequence.configurationInvalid("GoalPhase configured persistence is missing")
     else for {
       name <- requiredC(parameters, storeName)
       identity <- requiredC(parameters, storeIdentity)
@@ -59,8 +61,7 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
         else Consequence.configurationInvalid("GoalPhase persistence collections must be distinct")
       configuration <- Configuration(NamedWorkflowStore(name, identity), migration, retention, lease,
         DeliveryConfiguration.SameStore(identity)).validateC
-      definition <- catalog.definition.validateC
-    } yield GoalPhaseManagedStartAssembly.Declaration(configuration, definition, root, delivery)
+    } yield Persistence(configuration, root, delivery)
 
   private def requiredC[A](parameters: ComponentInitializationParameters, key: ComponentParameterKey[A]): Consequence[A] =
     parameters.resolve(key).flatMap { result =>

@@ -32,7 +32,7 @@ final class GoalPhaseNativeInputReadPolicySpec extends AnyWordSpec with Matchers
   private val plan = GoalPhaseOrderedProgression.Plan("plan", "1", input.phaseIdentity, input.repositoryIdentity,
     Vector(GoalPhaseOrderedProgression.Step("S1", "Implement the selected boundary", Vector("one.scala"), Vector.empty, Vector("focused"))),
     Vector("whole-phase"))
-  private val selected = GoalPhaseNativeRun.SelectedPlan("selection", "participant", input, plan)
+  private val selected = GoalPhaseNativeRun.SelectedPlan("selection", "participant", plan)
 
   "Native GoalPhase selected input composition" should {
     "read explicit same-store separate purposes without granting context-free access" in {
@@ -68,24 +68,34 @@ final class GoalPhaseNativeInputReadPolicySpec extends AnyWordSpec with Matchers
       accepted.toOption.get.plans shouldBe collection("plans")
     }
 
-    "decode the complete selected Plan as data and reject malformed nested contracts" in {
-      Given("one complete selected Plan with ordered ownership, checks and an explicit repair allowance")
+    "decode consumed selected data without a wire certificate and leave Plan meaning to progression" in {
+      Given("selected data with inert annotations, equivalent optional presentation and a crossed dependency")
       val raw = GoalPhaseSelectedPlanJsonV1.encodeC(selected).toOption.get
       val json = io.circe.parser.parse(raw).toOption.get
       val payload = json.hcursor.downField("payload").focus.get
-      val extra = json.mapObject(_.add("payload", payload.mapObject(_.add("command", Json.fromString("sbt")))))
+      val extra = json.mapObject(_.add("diagnostic", Json.True).add("payload",
+        payload.mapObject(_.add("command", Json.fromString("sbt")).add("input", Json.True))))
       val planJson = payload.hcursor.downField("plan").focus.get
+      val optional = json.mapObject(_.add("payload", payload.mapObject(_.add("plan",
+        planJson.mapObject(_.add("phaseReviewClassification", Json.Null).add("note", Json.True))))))
       val incomplete = json.mapObject(_.add("payload", payload.mapObject(_.add("plan", planJson.mapObject(_.remove("repairLimit"))))))
+      val wrongtype = json.mapObject(_.add("payload", payload.mapObject(_.add("plan", Json.True))))
       val crossed = selected.copy(plan = plan.copy(steps = plan.steps.map(_.copy(dependencies = Vector("S2")))))
-      When("semantic JSON presentation and versioned storage are decoded at their own boundary")
+      When("typed data is decoded once and the actual progression consumer interprets its Plan")
       val reformatted = GoalPhaseSelectedPlanJsonV1.decodeC(json.spaces2)
       val stored = GoalPhaseSelectedPlanJsonV1.decodeStorageC(GoalPhaseSelectedPlanJsonV1.encodeStorageC(selected).toOption.get)
-      val refused = Vector(extra.noSpaces, incomplete.noSpaces, "not-json").map(GoalPhaseSelectedPlanJsonV1.decodeC)
-      Then("the entire selected input survives presentation changes but no extra field, default or fabricated dependency enters Start")
+      val annotated = Vector(extra, optional).map(value => GoalPhaseSelectedPlanJsonV1.decodeC(value.noSpaces))
+      val refused = Vector(incomplete.noSpaces, wrongtype.noSpaces, "not-json").map(GoalPhaseSelectedPlanJsonV1.decodeC)
+      val crosseddata = GoalPhaseSelectedPlanJsonV1.decodeC(GoalPhaseSelectedPlanJsonV1.encodeC(crossed).toOption.get)
+      val frontier = GoalPhaseOrderedProgression.startC(crosseddata.toOption.get.plan,
+        GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40))
+      Then("unused fields give no control, required data is decoded, and invalid dependencies cannot issue work")
       reformatted.toOption.get shouldBe selected
       stored.toOption.get shouldBe selected
+      annotated.foreach(_.toOption.get shouldBe selected)
       refused.foreach(_.isSuccess shouldBe false)
-      GoalPhaseSelectedPlanJsonV1.encodeC(crossed).isSuccess shouldBe false
+      crosseddata.toOption.get shouldBe crossed
+      frontier.isSuccess shouldBe false
       GoalPhaseSelectedPlanJsonV1.decodeStorageC(raw).isSuccess shouldBe false
     }
   }

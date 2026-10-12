@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import java.net.URLEncoder
@@ -15,7 +15,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartCommand, GoalPhaseStartInput}
+import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 
@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseNativeRun {
   val startOperation = StateMachineOperationIdentity("GoalPhaseService", "startGoalPhase")
@@ -40,133 +40,95 @@ private[smworkflow] object GoalPhaseNativeRun {
     humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None,
     executionProfiles: Option[WorkflowExecutionProfileMapping] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
-    input: GoalPhaseStartInput, plan: O.Plan)
+    plan: O.Plan)
   trait PlanPort {
     /** Host resolves the genuinely selected complete plan, not an AI request's
       * claim or a latest arbitrary planning file. Only Start selects this plan.
       */
     def loadForCallC(selectionIdentity: String, core: ActionCall.Core): Consequence[Option[SelectedPlan]]
   }
-  final case class Payload(originalCommand: Json, root: String, branch: String, plan: O.Plan, base: O.Snapshot)
+  final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot)
   final case class Session(storage: WorkflowComponentStorage,
-    started: WorkflowManagedMechanicalTransition.Retained[Payload], command: GoalPhaseStartCommand,
+    started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
 
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseStartResult"
-    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v1"),
+    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("native ordered Start envelope differs")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains("sm-workflow.goal-phase-native-start.v1"),
+      wire <- Option(value).toRight("native ordered Start is missing")
+      schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-start.v2",
         (), "native ordered Start schema differs")
-      _ <- Either.cond(root("payload").flatMap(_.asObject).exists { fields =>
-        fields.keys.toSet == Set("originalCommand", "root", "branch", "plan", "base") &&
-          fields("plan").exists(GoalPhaseNativeWork.planShape) &&
-          fields("base").exists(GoalPhaseNativeWork.snapshotShape) &&
-          fields("originalCommand").flatMap(_.asObject).exists { command =>
-            command.keys.toSet == Set("schemaVersion", "input", "selectionIdentity", "participantIdentity", "idempotencyKey") &&
-              command("input").flatMap(_.asObject).exists(_.keys.toSet == Set("phaseIdentity", "repositoryIdentity"))
-          }
-      }, (), "native ordered Start contains undeclared or missing fields")
-      payload <- root("payload").get.as[Payload].left.map(_.message)
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
 
-  def identityC(command: GoalPhaseStartCommand): Consequence[InstanceIdentity] = {
-    if (command == null || command.selectionIdentity == null || command.idempotencyKey == null)
+  def identityC(selectionIdentity: String, invocationIdentity: String): Consequence[InstanceIdentity] = {
+    if (selectionIdentity == null || invocationIdentity == null)
       return invalid("selected invocation is missing")
-    val id = InstanceIdentity("goal-phase:" + token(command.selectionIdentity) + ":" + token(command.idempotencyKey))
+    val id = InstanceIdentity("goal-phase:" + token(selectionIdentity) + ":" + token(invocationIdentity))
     WorkflowMechanicalTransition.keyC(reference(id.value)).map(_ => id)
   }
 
-  def startC(command: GoalPhaseStartCommand, d: Declaration, definition: DefinitionBinding,
-    selections: ProfileStartAdmission.CallScopedSelectionPort, plans: PlanPort, core: ActionCall.Core): Consequence[String] = for {
-    _ <- validateC(d)
+  def startC(input: GoalPhaseStartInput, selected: ProfileStartAdmission.Selection,
+    d: Declaration, definition: DefinitionBinding, plans: PlanPort, core: ActionCall.Core): Consequence[String] = for {
     storage <- bindC(d, definition, core)
-    _ <- if (selections != null && plans != null && command != null && command.input == d.input) Consequence.unit
-      else invalid("Start input or host selection dependencies differ")
-    _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, core.executionContext)
-    selected <- selections.loadForCallC(command.selectionIdentity, core).flatMap {
-      case Some(value) => Consequence.success(value)
-      case None => invalid("actual selected Start is absent")
+    _ <- if (plans != null && input != null && selected != null) Consequence.unit
+      else invalid("Start business input or plan source is missing")
+    _ <- GoalPhaseParticipantAdmission.admitC(selected.participantIdentity, core.executionContext)
+    identity <- identityC(selected.selectionId, selected.idempotencyKey)
+    admitted <- plans.loadForCallC(selected.selectionId, core).flatMap {
+      case Some(value) if value.selectionIdentity == selected.selectionId &&
+          value.participantIdentity == selected.participantIdentity => Consequence.success(value)
+      case _ => invalid("Start has no independently selected complete plan")
     }
-    request <- GoalPhaseStartCommandAdapter.admitC(command, new ProfileStartAdmission.SelectionPort {
-      def loadC(id: String) = Consequence.success(Some(selected).filter(_.selectionId == id))
-    })
-    identity <- identityC(command)
+    _ <- if (admitted.plan.phase == input.phaseIdentity && admitted.plan.repository == input.repositoryIdentity &&
+        input.phaseIdentity == d.input.phaseIdentity && input.repositoryIdentity == d.input.repositoryIdentity)
+      Consequence.unit else invalid("selected plan crosses its requested Phase/repository or host target")
+    root <- G.rootC(core)
+    observed <- G.observeC(core)
+    _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
+      Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
+    base = O.Snapshot(observed.head, observed.tree)
+    payload = Payload(selected.participantIdentity, root, observed.branch, admitted.plan, base)
+    // Ordinary native Git facts and explicit plan references, not source hashes.
+    cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
+      token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
+    initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
+      CorrelationReference(selected.idempotencyKey), cause, None, None, None, Vector.empty).validateC
+    instances <- storage.bindInstancesC()(using core.executionContext)
+    _ <- instances.createC(initial)(using core.executionContext)
+    active <- instances.appendC(identity, initialRevision, history(initial, "phase.Implementation", cause.value))(using core.executionContext)
     starts <- storage.bindMechanicalC(startOperation, codec)
-    prior <- starts.loadRetainedC(reference(identity.value))(using core.executionContext)
-    record <- prior match {
-      case Some(value) => for {
-        original <- GoalPhaseStartServiceOperation.decodeCommandC(value.receipt.payload.value.originalCommand.noSpaces)
-        _ <- if (original == command && value.receipt.payload.value.root == d.target.root.toString &&
-            value.receipt.payload.value.branch == d.target.localBranch &&
-            value.receipt.next.currentProgression.contains(ProgressionReference("phase.Implementation"))) Consequence.unit
-          else invalid("native Start belongs to a different original selection")
-        _ <- O.startC(value.receipt.payload.value.plan, value.receipt.payload.value.base)
-      } yield value.current
-      case None => for {
-        admitted <- plans.loadForCallC(command.selectionIdentity, core).flatMap {
-          case Some(value) if value.selectionIdentity == command.selectionIdentity &&
-              value.participantIdentity == command.participantIdentity && value.input == command.input => Consequence.success(value)
-          case _ => invalid("Start has no independently selected complete plan")
-        }
-        _ <- O.validatePlanC(admitted.plan)
-        _ <- if (admitted.plan.phase == d.input.phaseIdentity && admitted.plan.repository == d.input.repositoryIdentity)
-          Consequence.unit else invalid("selected plan crosses its Phase/repository")
-        root <- G.rootC(core)
-        observed <- G.observeC(core)
-        _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
-          Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
-        base = O.Snapshot(observed.head, observed.tree)
-        _ <- O.startC(admitted.plan, base)
-        json <- io.circe.parser.parse(GoalPhaseStartServiceOperation.encodeCommand(command))
-          .fold(_ => invalid("Start command could not be encoded"), Consequence.success)
-        payload = Payload(json, root, observed.branch, admitted.plan, base)
-        // Ordinary native Git facts and explicit plan references, not source hashes.
-        cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
-          token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
-        initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
-          CorrelationReference(request.invocationReference), cause, None, None, None, Vector.empty).validateC
-        instances <- storage.bindInstancesC()(using core.executionContext)
-        _ <- instances.createC(initial)(using core.executionContext)
-        entry = history(initial, "phase.Implementation", cause.value)
-        active <- instances.appendC(identity, initialRevision, entry)(using core.executionContext)
-        saved <- starts.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(identity.value),
-          active, active.revision, history(active, "phase.Implementation", "ordered-goal-plan-saved:" + identity.value),
-          TypedValue(codec.typeIdentity, payload)), empty)(using core.executionContext)
-      } yield saved.receipt.next
-    }
-    wire <- waitC(record, "Ordered Phase selected", "The complete plan and original native base are saved; Step and Phase closure remain unfinished.")
+    saved <- starts.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(identity.value),
+      active, active.revision, history(active, "phase.Implementation", "ordered-goal-plan-saved:" + identity.value),
+      TypedValue(codec.typeIdentity, payload)), empty)(using core.executionContext)
+    wire <- waitC(saved.receipt.next, "Ordered Phase selected", "The complete plan and original native base are saved; Step and Phase closure remain unfinished.")
   } yield wire
 
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     storage <- bindC(d, definition, core)
     starts <- storage.bindMechanicalC(startOperation, codec)
     started <- starts.loadRetainedC(reference(identity))(using core.executionContext).flatMap {
-      case Some(value) if value.receipt.operation == startOperation &&
-          value.receipt.next.currentProgression.contains(ProgressionReference("phase.Implementation")) => Consequence.success(value)
+      case Some(value) => Consequence.success(value)
       case _ => invalid("owning advance has no actual native ordered Start")
     }
     p = started.receipt.payload.value
-    command <- GoalPhaseStartServiceOperation.decodeCommandC(p.originalCommand.noSpaces)
-    selected <- identityC(command)
-    _ <- if (selected.value == identity && command.input == d.input && p.root == d.target.root.toString &&
+    _ <- if (p.root == d.target.root.toString &&
         p.branch == d.target.localBranch && p.plan.phase == d.input.phaseIdentity && p.plan.repository == d.input.repositoryIdentity)
       Consequence.unit else invalid("retained original plan scope differs from the host")
-    _ <- O.startC(p.plan, p.base)
-    _ <- GoalPhaseParticipantAdmission.admitC(command.participantIdentity, core.executionContext)
+    _ <- GoalPhaseParticipantAdmission.admitC(p.participantIdentity, core.executionContext)
     instances <- storage.bindInstancesC()(using core.executionContext)
     current <- instances.loadC(InstanceIdentity(identity))(using core.executionContext).flatMap {
-      case Some(value) => value.validateC
+      case Some(value) => Consequence.success(value)
       case None => invalid("native ordered instance is missing")
     }
     root <- G.rootC(core)
     branch <- G.branchC(core)
     _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
-  } yield Session(storage, started, command, current)
+  } yield Session(storage, started, p.participantIdentity, current)
 
   def validateC(d: Declaration): Consequence[Unit] =
     if (d == null || d.configuration == null || d.instances == null || d.continuations == null ||
@@ -211,7 +173,6 @@ private[smworkflow] object GoalPhaseNativeRun {
       WorkflowContinuation.Wait(StateMachineRevision(record.revision.value.toString),
         ContextSnapshot(record.definition.workflowRevision.value), MinimalPresentation(title, detail))))
   } yield wire
-  def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase native run: " + reason)
   private def token(value: String) = URLEncoder.encode(value, UTF_8)
   private def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")

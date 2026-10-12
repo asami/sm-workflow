@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 12, 2026
   */
 final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -23,18 +23,17 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
   private def producerText = Files.readString(Path.of("target/cozy/candidate-admission-producer-abi.json"))
 
   "SplitPhase official runtime catalog" should {
-    "admit the actual component JAR without filtering or rewriting its multi-Workflow resources" in {
-      Given("the actual packageBin JAR and independently readable official generated ABI files")
-      val jar = Path.of("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
-      withClue("Run packageBin before catalog artifact acceptance: ")(Files.isRegularFile(jar) shouldBe true)
-      val loader = new URLClassLoader(Array(jar.toUri.toURL), null)
+    "resolve the actual component owner's multi-Workflow resources" in {
+      Given("official resources belonging to the current component runtime owner")
+      val location = SplitPhaseRuntimeCatalog.getClass.getProtectionDomain.getCodeSource.getLocation
+      val loader = new URLClassLoader(Array(location), null)
       try {
-        When("the packaged SplitPhase definition is selected against all compiled policy facts")
+        When("the declared SplitPhase execution reference is resolved")
         val catalog = take(SplitPhaseRuntimeCatalog.loadC(loader))
-        Then("the complete official resource bytes and exact SplitPhase binding are retained")
-        catalog.workflow.workflow shouldBe take(SplitPhaseDefinitionBinding.candidateC).workflow
+        Then("the selected definition is bound without requiring a compiled policy copy")
+        catalog.workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
         catalog.definition.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
-        catalog.definition.workflowRevision.value shouldBe "split-phase-selected-application-v12"
+        catalog.definition.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
         catalog.definition.validateC shouldBe a[Consequence.Success[?]]
         catalog.producer.models.map(_.model.workflow.map(_.identity.value)).flatten.toSet shouldBe
           Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow")
@@ -61,13 +60,12 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
       val candidate = take(CandidateWorkflowAbi.parseSelectedC(oldWorkflow, admitted, "src/main/cozy/sm-workflow.cml",
         "SplitPhaseWorkflow", "split-phase-issued-reply-v4"))
       val oldBinding = take(org.goldenport.cncf.workflow.WorkflowInstancePersistence.bindCandidateDefinitionC(candidate))
-      When("the valid old binding and resources encounter the current compiled catalog")
+      When("the valid historical resources do not provide the selected current execution revision")
       val current = take(SplitPhaseDefinitionBinding.bindC)
       val result = SplitPhaseRuntimeCatalog.parseC(oldWorkflow, oldProducer)
-      Then("v4 remains unchanged incompatible data rather than an implicitly migrated v6 definition")
+      Then("the missing selected revision is refused without converting historical data")
       oldBinding.workflowRevision.value shouldBe "split-phase-issued-reply-v4"
-      current.workflowRevision.value shouldBe "split-phase-selected-application-v12"
-      SplitPhaseDefinitionBinding.sameDefinition(oldBinding, current) shouldBe false
+      current.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
       result shouldBe a[Consequence.Failure[?]]
     }
 
@@ -92,47 +90,39 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
       }
     }
 
-    "reject a structurally admitted state substitution against the compiled SplitPhase Workflow" in {
-      Given("the complete official Workflow ABI with one SplitPhase state renamed")
+    "accept an unused receiver-valid state without a compiled-state copy comparison" in {
+      Given("the official Workflow ABI with an additional unused SplitPhase state")
       val original = parse(workflowText).fold(error => fail(error.toString), identity)
       val workflows = original.hcursor.downField("workflows").focus.flatMap(_.asArray).get
       val index = workflows.indexWhere(_.hcursor.get[String]("identity").toOption.contains("SplitPhaseWorkflow"))
       index should be >= 0
-      val changed = original.hcursor.downField("workflows").downN(index).downField("states").downArray
-        .downField("name").withFocus(_ => Json.fromString("ForeignEntry")).top.get.noSpaces
+      val states = workflows(index).hcursor.downField("states").focus.flatMap(_.asArray).get
+      val unused = states.head.mapObject(_.add("name", Json.fromString("UnusedEntry")))
+      val changed = original.hcursor.downField("workflows").downN(index).downField("states")
+        .withFocus(_ => Json.fromValues(states :+ unused)).top.get.noSpaces
       val producer = take(CandidateAdmissionProducerAbi.parseC(producerText))
       take(CandidateWorkflowAbi.parseSelectedC(changed, producer, "src/main/cozy/sm-workflow.cml",
-        "SplitPhaseWorkflow", "split-phase-selected-application-v12"))
-      When("compiled runtime admission receives the structurally valid foreign state")
-      val result = SplitPhaseRuntimeCatalog.parseC(changed, producerText)
-      Then("the state substitution cannot become an admitted runtime catalog")
-      result shouldBe a[Consequence.Failure[?]]
+        "SplitPhaseWorkflow", "split-phase-minimal-operation-v13"))
+      When("reference resolution and the common binder consume the valid declaration")
+      val result = take(SplitPhaseRuntimeCatalog.parseC(changed, producerText))
+      Then("unused state metadata is not a reason to refuse a usable definition")
+      result.definition.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
     }
 
-    "reject receiver-valid semantic-policy substitutions without weakening deterministic estimate ownership" in {
-      Given("the official producer with individually changed SplitPhase judgment facts")
+    "accept unused receiver-valid judgment metadata without a compiled-policy comparison" in {
+      Given("the official producer with a changed judgment description")
       val original = parse(producerText).fold(error => fail(error.toString), identity)
       val models = original.hcursor.downField("models").focus.flatMap(_.asArray).get
       val index = models.indexWhere(_.hcursor.downField("model").downField("workflow")
         .get[String]("identity").toOption.contains("SplitPhaseWorkflow"))
       index should be >= 0
       val judgment = original.hcursor.downField("models").downN(index).downField("judgments").downArray
-      val fields = Vector("goal", "context", "candidate", "expectedResult", "rationale", "evidence",
-        "evidenceScope", "evidenceFreshness", "evidenceProvenance")
-      val changes = fields.map(field =>
-        judgment.downField(field).downField("value").withFocus(_ => Json.fromString("foreign-policy"))) ++
-        Vector("alternatives", "criteria").map(field =>
-          judgment.downField(field).downArray.downField("value").withFocus(_ => Json.fromString("foreign-policy")))
-      When("each receiver-valid changed policy is compared with the complete compiled producer")
-      val results = changes.map { cursor =>
-        val changed = cursor.top.getOrElse(fail("missing policy mutation path")).noSpaces
-        val producer = take(CandidateAdmissionProducerAbi.parseC(changed))
-        take(CandidateWorkflowAbi.parseSelectedC(workflowText, producer, "src/main/cozy/sm-workflow.cml",
-          "SplitPhaseWorkflow", "split-phase-selected-application-v12"))
-        SplitPhaseRuntimeCatalog.parseC(workflowText, changed)
-      }
-      Then("none can replace unresolved-input-only judgment or compiled evidence policy")
-      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      val changed = judgment.downField("context").downField("value")
+        .withFocus(_ => Json.fromString("updated-description")).top.get.noSpaces
+      When("the selected executable declaration is resolved from this receiver-valid producer")
+      val result = take(SplitPhaseRuntimeCatalog.parseC(workflowText, changed))
+      Then("unused descriptive metadata does not gate execution")
+      result.definition.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
     }
   }
 }

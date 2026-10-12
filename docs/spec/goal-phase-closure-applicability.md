@@ -1,5 +1,30 @@
 # GoalPhase closure authority applicability — Phase 5
 
+## Current Phase 5.2 C15 — legacy closure graph retired
+
+The normal factory uses the current three-workflow host and native GoalPhase
+Operations. The former Step-close routing/admission, closure authority/decision,
+review snapshot/result adapter and full-question Human selection graph is removed,
+not preserved behind compatibility aliases. Its dedicated tests are removed with
+that graph; earlier PASS and failures below retain their original historical scope.
+The descriptions below are non-normative history, not current recovery, expiry,
+legacy-format or complete-copy acceptance requirements.
+
+Current Human question storage owns its consumed string fields directly, without
+the retired canonical/full-wire-size precheck. Actual independent Human evidence,
+managed command permissions and native state/CAS remain with their existing
+consumers. Calling a check authority/state-related does not exempt an unused or
+duplicated proof from retirement. No new verifier or unchanged-content certificate
+replaces the deleted graph. Unsupported old executions restart NEW.
+
+C15 source work is UNVERIFIED until its complete frozen batch and fresh registered
+shared-serial fourteen-suite invocation finish. Remaining current Operation/CML/
+provided-ABI/DTO migration, connected Step review/commit, whole Phase review and
+validated local release remain unfinished. This is neither partial Phase acceptance
+nor a change to original9/history/consumed3-of-3/repair frames.
+
+## Historical Phase 5 observations
+
 Status: connected correction in source; current executable cases UNVERIFIED.
 Earlier registered-runner verification passed44 cases across three suites
 (2026-10-08, applicability25) on earlier inputs, not the changes below. The initial obsolete

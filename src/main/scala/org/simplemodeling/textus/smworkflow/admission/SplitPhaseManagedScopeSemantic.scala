@@ -1,5 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import io.circe.Json
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
@@ -10,11 +11,11 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord, InstanceRevision}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseAdvanceCommand, SplitPhasePartitionContextReference}
+import org.simplemodeling.textus.smworkflow.value.{SplitPhasePartitionContextReference}
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic as S, SplitPhaseScopeSemanticJson as J,
   SplitPhaseTypedScopeWorkIssue as I, SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as KJ, SplitPhasePlanningCheckpointObservation as O,
@@ -24,7 +25,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic a
   * transitions borrow the owning call's canonical Subsystem storage.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopeSemantic {
   final class Source private[SplitPhaseManagedScopeSemantic] (val record: K.Record,
@@ -54,16 +55,8 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     /** NotRequired means no scope requirement in this selected root, not a
       * missing pending publication. Native scope work is never reissued.
       */
-    def routeForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Route] = for {
+    def routeForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Route] = for {
       _ <- _actor_c(core, None)
-      _ <- if (core.action.request.operation == K.advanceOperation.operation &&
-          core.action.request.service.contains(K.advanceOperation.service)) Consequence.unit
-        else _invalid("scope routing requires its actual advance Operation")
-      owning <- WorkflowJsonCommandRequest.commandArguments(core.action.request) match {
-        case List(Argument("arg1", wire: String, _)) => SplitPhaseAdvanceCommandJsonV1.decodeC(wire)
-        case _ => _invalid("scope routing has no owning advance command")
-      }
-      _ <- if (owning == command) Consequence.unit else _invalid("scope routing command differs")
       reads <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
       mapping <- reads.loadMappingForCallC(command, core)
       routed <- mapping match {
@@ -105,17 +98,15 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     } yield loaded
 
     /** Internal native preparation; no public routing success or publication. */
-    def prepareProjectionForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core):
+    def prepareProjectionForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core):
         Consequence[PreparedProjection] = for {
       completed <- completedForCallC(command, core)
       original <- SplitPhaseExplicitPlanningAdvance.restoreCompletedScopeC(completed)
       outcome <- SplitPhaseExplicitCandidateProjection.applyScopeC(original, completed.source.record, completed.admitted)
     } yield new PreparedProjection(completed, original, outcome)
 
-    def completedForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[CompletedSource] = for {
+    def completedForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[CompletedSource] = for {
       _ <- _actor_c(core, None)
-      owning <- _completed_command_c(core, declaration, catalog)
-      _ <- if (owning == command) Consequence.unit else _invalid("completed scope selection command differs")
       source <- _source_c(command, declaration, catalog, core)
       plan <- I.prepareC(source)
       issued <- loadForCallC(I.identity(source), core)
@@ -154,10 +145,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
 
   def bindC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[Port] = for {
-    required <- SplitPhaseDefinitionBinding.scopeSemanticOperationC
-    _ <- if (required.inputType.exists(_.value == J.requestCodec.typeIdentity) &&
-        required.resultType.exists(_.value == J.resultCodec.typeIdentity)) Consequence.unit
-      else _invalid("scope codecs differ from generated required SPI")
     storage <- WorkflowComponentStorage.bindC(params, SmWorkflowComponent.componentId, declaration.configuration,
       Vector(catalog.definition), declaration.instances, declaration.continuations)
     _ <- storage.bindIssuedC(I.completionOperation, J.requestCodec)
@@ -171,43 +158,12 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     native <- storage.bindCompletionC(I.completionOperation, J.requestCodec, J.resultCodec, I.closingType,
       (_, _) => Consequence.success(Vector.empty))
     op <- SplitPhaseDefinitionBinding.providedDefinition.providedOperations.find(operation =>
-      operation.service == I.completionOperation.service && operation.name == I.completionOperation.operation &&
-        operation.inputType.contains(J.resultCodec.typeIdentity) && operation.resultType.contains(I.closingType.value))
+      operation.service == I.completionOperation.service && operation.name == I.completionOperation.operation)
       .map(Consequence.success).getOrElse(_invalid("scope completion differs from its generated ABI"))
     declared <- _operation_c(None, op, port, declaration, catalog, native)
-  } yield new spec.OperationDefinition {
-    val specification = declared.specification
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      declared.createOperationRequest(request).flatMap {
-        case command: CommandAction => Consequence.success(new CommandAction {
-          val request = command.request
-          override def commandExecutionMode = command.commandExecutionMode
-          def createCall(capsule: ActionCall.Core): ActionCall = new ProcedureActionCall {
-            val core = capsule
-            private var delegate = Option.empty[ActionCall]
-            def execute(): Consequence[OperationResponse] = for {
-              _ <- _actor_c(core, None)
-              response <- for {
-                  native <- _native_c(core, declaration, catalog)
-                  bound <- _operation_c(Some(core), op, port, declaration, catalog, native)
-                  action <- bound.createOperationRequest(core.action.request).flatMap {
-                    case value: CommandAction => Consequence.success(value)
-                    case _ => _invalid("scope completion is not a canonical command")
-                  }
-                  call = action.createCall(core.copy(action = action))
-                  response <- { delegate = Some(call); call.execute() }
-                } yield response
-            } yield response
-            override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
-              val actual = delegate
-              delegate = None
-              actual.fold(Consequence.success(response))(_.afterCommitResponseC(response))
-            }
-          }
-        })
-        case _ => _invalid("scope completion declaration is not a command")
-      }
-  }
+  } yield CallScopedOperationBinding.wrapResult(declared, (core, result) =>
+    _native_c(core, declaration, catalog).flatMap(native =>
+      _operation_c(Some(core), op, port, declaration, catalog, native, Some(result))))
 
   private def _ack_c(plan: I.Plan, submitted: ContinuationResult[S.Judgment], next: InstanceRecord):
       Consequence[OperationResponse] =
@@ -218,7 +174,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
 
   private def _operation_c(core: Option[ActionCall.Core], op: GeneratedProvidedApiAbi.Operation, port: Port,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    native: WorkflowManagedCompletion[S.Judgment]): Consequence[spec.OperationDefinition] = {
+    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[Json]] = None): Consequence[spec.OperationDefinition] = {
     val instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
       declaration.instances, declaration.continuations)
     var selected = Option.empty[(I.Plan, ContinuationResult[S.Judgment], InstanceRecord)]
@@ -231,10 +187,8 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     }
     val codec = new WorkflowCompletionServiceOperation.Codec[S.Judgment] {
       val resultTypeIdentity = J.resultCodec.typeIdentity
-      def decodeC(request: Request) = WorkflowJsonCommandRequest.commandArguments(request) match {
-        case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
-        case _ => _invalid("scope completion requires one canonical typed result frame")
-      }
+      def decodeC(request: Request) = result.map(NativeWorkflowResultInput.typedC(_, J.resultCodec))
+        .getOrElse(_invalid("scope completion has no resolved semantic result"))
       def encodeC(resume: ContinuationRuntime.Resume) = _invalid("scope acknowledgement requires actual verified commit")
       override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Judgment],
         completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
@@ -282,7 +236,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     * storage owns mechanical receipt/state admission; do not reconstruct and
     * compare another copy of its current instance or committed prefix.
     */
-  private def _source_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _source_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[Source] = for {
     _ <- _actor_c(core, None)
     reads <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
@@ -293,7 +247,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     record = selected.record
     source <- record.origin match {
       case _: K.Origin.Mechanical => for {
-        _ <- _actor_c(core, Some(record.originalStart.command.participantIdentity))
+        _ <- _actor_c(core, Some(record.originalStart.participantIdentity))
         actual <- selected.mechanical match {
           case Some(value) => Consequence.success(value)
           case None => _invalid("scope original actual mechanical receipt is absent")
@@ -302,8 +256,8 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       } yield new Source(record, actual.receipt.next, actual.current)
       case K.Origin.PartitionCompletion(identity, _) => for {
         _ <- reads.requireDocumentsForCallC(record, core)
-        original <- reads.loadOriginalForCommandC(command, core)
-        _ <- _actor_c(core, Some(original.start.command.participantIdentity))
+        original <- reads.loadOriginalForTargetC(command, core)
+        _ <- _actor_c(core, Some(original.start.participantIdentity))
         instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
           declaration.instances, declaration.continuations)
         current <- instances.loadForCallC(declaration.configuration, original.start.instanceIdentity, core).flatMap {
@@ -348,7 +302,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       Consequence.success(order.request.input.get.value.asInstanceOf[S.Request])
     case _ => _invalid("scope work has no actual typed request")
   }
-  private def _command(request: S.Request, instance: String): SplitPhaseAdvanceCommand = SplitPhaseAdvanceCommand(instance,
+  private def _command(request: S.Request, instance: String): SplitPhaseAdvanceTarget = SplitPhaseAdvanceTarget(instance,
     SplitPhasePartitionContextReference(request.context.identity, request.context.revision))
   private def _storage_c(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[WorkflowComponentStorage] = WorkflowComponentStorage.bindC(
@@ -362,43 +316,6 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       (_, _) => Consequence.success(Vector.empty))
   } yield native
 
-  /** Human completion observes the real issued Decision. It does not substitute
-    * an advance request/Core or accept an independently supplied context query.
-    */
-  private def _completed_command_c(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[SplitPhaseAdvanceCommand] = {
-    val request = core.action.request
-    WorkflowJsonCommandRequest.commandArguments(request) match {
-      case List(Argument("arg1", wire: String, _)) if request.operation == K.advanceOperation.operation =>
-        SplitPhaseAdvanceCommandJsonV1.decodeC(wire)
-      case List(Argument("arg1", _: String, _)) if request.operation == SplitPhaseTypedReasoningWorkIssue.completionOperation.operation =>
-        SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog)
-      case List(Argument("arg1", wire: String, _)) if request.operation == SplitPhaseNativeHumanDirection.completionOperation.operation =>
-        WorkflowResultJsonV1.decodeC(wire, SplitPhaseHumanDirectionAnswerContract.payloadCodec).flatMap { submitted =>
-        if (SplitPhaseManagedReasoningHumanCompletion.isReasoning(submitted.continuationId))
-          SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog)
-        else for {
-          storage <- _storage_c(core, declaration, catalog)
-          decisions <- storage.bindDecisionC(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseNativeHumanDirection.inputCodec)
-          question <- decisions.loadC(submitted.continuationId)(using core.executionContext).flatMap {
-            case Some(value) => Consequence.success(value)
-            case None => _invalid("Human completion has no actual issued Decision")
-          }
-          _ <- WorkflowProtocolV1.admitDecisionResultC(question, submitted).map(_ => ())
-          input <- question.current match {
-            case decision: WorkflowContinuation.Decision[?] if decision.request.input.exists(value =>
-                value.typeIdentity == SplitPhaseNativeHumanDirection.inputCodec.typeIdentity &&
-                value.value.isInstanceOf[SplitPhaseNativeHumanDirection.Input]) =>
-              Consequence.success(decision.request.input.get.value.asInstanceOf[SplitPhaseNativeHumanDirection.Input])
-            case _ => _invalid("Human completion has no complete issued input")
-          }
-          _ <- SplitPhaseNativeHumanDirection.frontierC(input)
-        } yield SplitPhaseAdvanceCommand(question.handle.instanceIdentity.value,
-          SplitPhasePartitionContextReference(input.context.identity, input.context.revision))
-        }
-      case _ => _invalid("completed scope selection requires its actual advance or Human completion command")
-    }
-  }
   private def _actor_c(core: ActionCall.Core, participant: Option[String]): Consequence[Unit] =
     if (core == null || core.action == null || core.action.request == null || core.executionContext == null ||
         core.executionContext.security == null || !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))

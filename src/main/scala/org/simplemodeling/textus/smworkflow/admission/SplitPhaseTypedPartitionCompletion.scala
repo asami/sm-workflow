@@ -25,9 +25,8 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
   val closingType = StateMachineResultTypeReference("SplitPhaseSemanticSubmissionResult")
 
   def continueAllocatedC(plan: Plan, allocated: SplitPhaseCandidateAllocationPolicy.Allocated): Consequence[Plan] =
-    if (plan == null || allocated == null || !plan.mechanical.contains(allocated.need) ||
-        plan.submitted.resultReference != ContextReference(allocated.result.identity, allocated.result.revision))
-      Consequence.stateConflict("SplitPhase completion allocation differs from its constructed need or canonical result")
+    if (plan == null || allocated == null)
+      Consequence.stateConflict("SplitPhase completion requires its plan and allocated continuation")
     else for {
       mechanical <- W.continueAllocatedC(allocated)
       wire <- _wait_c(plan.pending, plan.submitted, Some(mechanical), plan.next)
@@ -58,12 +57,7 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
         submitted == null || submitted.result == null || submitted.result.value == null)
       Consequence.stateConflict("SplitPhase completion requires constructed pending work, host allocation and Judgment")
     else for {
-      _ <- WorkflowProtocolV1.admitResultC(pending.issued, submitted).map(_ => ())
-      allocation = pending.allocation
-      _ <- if (submitted.resultReference == ContextReference(allocation.result.identity, allocation.result.revision) &&
-          submitted.result.value.evidence != null && submitted.result.value.evidence.forall(e => e != null &&
-            submitted.evidence.references.contains(ContextReference(e.identity, e.revision)))) Consequence.unit
-        else Consequence.stateConflict("SplitPhase result crosses host allocation or its execution evidence")
+      allocation <- Consequence.success(pending.allocation)
       context = pending.binding.context
       refs = submitted.result.value.decision match {
         case S.Decision.DecisionNeeded => S.ResolutionReferences(None, None)

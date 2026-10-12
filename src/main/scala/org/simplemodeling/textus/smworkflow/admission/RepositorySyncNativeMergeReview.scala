@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
   final case class Policy(identity: String, revision: Int, maximumPaths: Int = 128, maximumDiffBytes: Int = 65536) {
@@ -55,27 +55,9 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     input = Request(store.identity, source.record.revision.value.toString, source.payload.before.head,
       source.payload.mergeHead.get, source.payload.indexTree.get, paths, localDiff, remoteDiff,
       state.mode, state.reason, state.selected.map(_.identity), state.receipts)
-    _ <- inputC(input, policy)
   } yield input
 
-  def inputC(input: Request, policy: Policy): Consequence[Unit] = for {
-    _ <- policy.validateC
-    _ <- if (input != null && input.instanceIdentity != null && input.instanceIdentity.nonEmpty &&
-        input.validatedRevision != null && input.validatedRevision.matches("[1-9][0-9]*") &&
-        Vector(input.localTip, input.remoteTip, input.indexTree).forall(oid) &&
-        input.changedPaths != null && input.changedPaths.size <= policy.maximumPaths &&
-        input.changedPaths.distinct.sorted == input.changedPaths && input.changedPaths.forall(RepositorySyncNativeConflictInput.relative) &&
-        bounded(input.localDiff, policy.maximumDiffBytes) && bounded(input.remoteDiff, policy.maximumDiffBytes) &&
-        Set("explicit-no-product-tests", "required")(input.validationMode) && bounded(input.validationReason, 16384) &&
-        input.validationReason.trim.nonEmpty && input.selectedChecks != null && input.selectedChecks.size <= 16 &&
-        input.selectedChecks.forall(id) && input.selectedChecks.distinct == input.selectedChecks && input.checks != null &&
-        input.checks.forall(r => r != null && r.termination == "exited" && r.exitCode.nonEmpty &&
-          bounded(r.stdout, 65536) && bounded(r.stderr, 65536)) &&
-        input.checks.map(_.identity) == (Vector("index-local", "index-remote") ++ input.selectedChecks))
-      Consequence.unit else invalid("assigned full-merge review input is incomplete or exceeds actual host coverage")
-  } yield ()
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
-    _ <- inputC(input, policy)
     _ <- if (result != null && bounded(result.rationale, 16384) && result.rationale.trim.nonEmpty && result.findings != null &&
         result.findings.size <= 128 && result.findings.forall(f => f != null && id(f.identity) &&
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
@@ -107,37 +89,21 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   private given Decoder[Finding] = deriveDecoder
   private given Encoder[Result] = deriveEncoder
   private given Decoder[Result] = deriveDecoder
-  private def shape(value: Json, allowed: Set[String]): Boolean = value.asObject.exists(_.keys.forall(allowed))
-  private def requestShape(value: Json): Boolean = shape(value, Set("instanceIdentity", "validatedRevision", "localTip", "remoteTip",
-    "indexTree", "changedPaths", "localDiff", "remoteDiff", "validationMode", "validationReason", "selectedChecks", "checks")) &&
-    value.hcursor.downField("checks").focus.flatMap(_.asArray).exists(_.forall(v =>
-      shape(v, Set("identity", "termination", "exitCode", "stdout", "stderr"))))
-  private def resultShape(value: Json): Boolean = shape(value, Set("decision", "rationale", "findings")) &&
-    value.hcursor.downField("findings").focus.flatMap(_.asArray).exists(_.forall(v => shape(v, Set("identity", "affectedPaths", "rationale"))))
-  private final class Codec[A](val typeIdentity: String, schema: String, allowedShape: Json => Boolean,
-    legacy: Option[String] = None, discarded: Set[String] = Set.empty)(using Encoder[A], Decoder[A])
+  private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, A] = for {
-      root <- Option(value).filter(_.noSpaces.getBytes(UTF_8).length <= 8 * 1024 * 1024).flatMap(_.asObject)
-        .filter(_.keys.toSet == Set("schemaVersion", "payload")).toRight("Native merge review envelope is missing or incompatible")
-      version <- root("schemaVersion").flatMap(_.asString).toRight("Native merge review schema is missing")
-      _ <- Either.cond(version == schema || legacy.contains(version), (), "Native merge review schema differs")
-      fields <- root("payload").get.asObject.toRight("Native merge review payload is missing")
-      selected = if (legacy.contains(version)) Json.fromJsonObject(fields.filter { case (key, _) => !discarded(key) })
-        else Json.fromJsonObject(fields)
-      _ <- Either.cond(allowedShape(selected), (), "Native merge review has undeclared nested fields")
-      parsed <- selected.as[A].left.map(_.message)
+      wire <- Option(value).toRight("Native merge review is missing")
+      version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(version == schema, (), "Native merge review schema differs")
+      parsed <- wire.hcursor.get[A]("payload").left.map(_.message)
     } yield parsed
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Request] =
-    new Codec[Request]("RepositorySyncNativeMergeReviewRequest", "sm-workflow.repository-native-merge-review-request.v2", requestShape,
-      Some("sm-workflow.repository-native-merge-review-request.v1"),
-      Set("validationPolicyIdentity", "validationPolicyRevision", "reviewPolicyIdentity", "reviewPolicyRevision"))
+    new Codec[Request]("RepositorySyncNativeMergeReviewRequest", "sm-workflow.repository-native-merge-review-request.v2")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
-    new Codec[Result]("RepositorySyncNativeMergeReviewResult", "sm-workflow.repository-native-merge-review-result.v1", resultShape)
+    new Codec[Result]("RepositorySyncNativeMergeReviewResult", "sm-workflow.repository-native-merge-review-result.v1")
   private def bounded(value: String, bytes: Int): Boolean = value != null && !value.contains('\u0000') && value.getBytes(UTF_8).length <= bytes
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
-  private def oid(value: String): Boolean = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
   private def invalid[A](reason: String): Consequence[A] = N.invalid("native review " + reason)
 }

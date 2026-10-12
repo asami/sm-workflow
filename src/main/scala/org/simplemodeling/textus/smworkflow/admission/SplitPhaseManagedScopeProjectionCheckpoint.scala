@@ -12,7 +12,6 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.record.Record as StorageRecord
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedScopeSemantic as S,
   SplitPhaseScopeProjectionCheckpointPreparation as C, SplitPhaseScopeProjectionCheckpointJsonV1 as J,
   SplitPhaseScopeProjectionCheckpointPublication as P, SplitPhaseScopeProjectionSnapshot as V,
@@ -24,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedScopeSem
   * This internal boundary is not default public routing or a typed Terminal.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
   /** Independently observed data, never a fresh-execution capability. */
@@ -39,7 +38,7 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
     /** Retained first. None is actual native receipt absence at the owning
       * completed predecessor, not a fallback from corrupt or missing history.
       */
-    def loadForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    def loadForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       scope <- _scope_c(core)
       completed <- scope.completedForCallC(command, core)
       actualtargets <- _targets_c(core)
@@ -49,7 +48,7 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
     /** No passive Captured input. Only the real owning source can prepare a
       * fresh append; retained observation never reconstructs that witness.
       */
-    def executeForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Observed] = for {
+    def executeForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Observed] = for {
       _ <- if (core != null && core.action != null && core.action.request != null &&
           core.action.request.service.contains(K.advanceOperation.service) &&
           core.action.request.operation == K.advanceOperation.operation) Consequence.unit

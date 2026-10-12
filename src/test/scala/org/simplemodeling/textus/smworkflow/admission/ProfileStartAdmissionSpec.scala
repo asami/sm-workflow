@@ -4,20 +4,21 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.StateMachineOperationIdentity
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{WorkflowDefinitionIdentity, WorkflowDefinitionRevision}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
-final class ProfileStartAdmissionSpec extends AnyWordSpec with Matchers {
+final class ProfileStartAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ProfileStartAdmission.*
 
   private val goal = Binding(
     StateMachineOperationIdentity("GoalPhaseService", "startGoalPhase"),
     WorkflowDefinitionIdentity("GoalPhaseWorkflow"),
-    WorkflowDefinitionRevision("goal-phase-ordered-run-v4"),
+    WorkflowDefinitionRevision("goal-phase-minimal-operation-v5"),
     "GoalPhaseStartInput"
   )
   private val split = Binding(
@@ -46,8 +47,11 @@ final class ProfileStartAdmissionSpec extends AnyWordSpec with Matchers {
 
   "Profile Start admission" should {
     "map only a matching host-recorded human invocation into the CNCF StartRequest" in {
+      Given("an actual recorded Human invocation and its optional recommendation")
       recorded = Map("selection-1" -> human.copy(recommendationReference = Some("recommendation-1")))
+      When("the selected profile consumes that invocation")
       val admitted = start().toOption.getOrElse(fail("explicit human selection was rejected"))
+      Then("the resulting Start uses the stored invocation and selected business input")
       admitted.startOperation shouldBe goal.startOperation
       admitted.workflowIdentity shouldBe goal.workflowIdentity
       admitted.workflowRevision shouldBe goal.workflowRevision
@@ -57,28 +61,32 @@ final class ProfileStartAdmissionSpec extends AnyWordSpec with Matchers {
     }
 
     "reject recommendation-only or participant-manufactured selection records" in {
+      Given("no recorded invocation or a selection whose origin is not explicit Human direction")
       recorded = Map.empty
-      start() shouldBe a[Consequence.Failure[?]]
-      start(selectionId = "recommendation-1") shouldBe a[Consequence.Failure[?]]
-      for (origin <- Vector(
+      When("Start admission consumes the requested selection")
+      val missing = Vector(start(), start(selectionId = "recommendation-1"))
+      val nonhuman = Vector(
           SelectionOrigin.Recommendation, SelectionOrigin.Skill,
-          SelectionOrigin.Workflow, SelectionOrigin.TerminalResult)) {
+          SelectionOrigin.Workflow, SelectionOrigin.TerminalResult).map { origin =>
         recorded = Map("selection-1" -> human.copy(origin = origin))
-        start() shouldBe a[Consequence.Failure[?]]
+        start()
       }
+      Then("neither absence nor a nonhuman origin authorizes Start")
+      (missing ++ nonhuman).foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
     "reject a different profile, participant, key, or typed input" in {
+      Given("the recorded Goal invocation and requests for unrelated target, actor or business input")
       recorded = Map("selection-1" -> human)
-      start(binding = split, input = TypedValue("SplitPhaseStartInput", "phase-1")) shouldBe
-        a[Consequence.Failure[?]]
-      start(participant = "participant-2") shouldBe a[Consequence.Failure[?]]
-      start(key = "start-2") shouldBe a[Consequence.Failure[?]]
-      start(input = TypedValue("SplitPhaseStartInput", "phase-1")) shouldBe
-        a[Consequence.Failure[?]]
+      When("the profile consumes those selections")
+      val wrong = Vector(start(binding = split, input = TypedValue("SplitPhaseStartInput", "phase-1")),
+        start(participant = "participant-2"), start(key = "start-2"),
+        start(input = TypedValue("SplitPhaseStartInput", "phase-1")))
       recorded = Map("selection-1" -> human.copy(
-        startOperation = StateMachineOperationIdentity("GoalPhaseService", "requestStepClose")))
-      start() shouldBe a[Consequence.Failure[?]]
+        startOperation = StateMachineOperationIdentity("OtherService", "startOtherWorkflow")))
+      val otherOperation = start()
+      Then("no unrelated selection becomes this Goal Start")
+      (wrong :+ otherOperation).foreach(_ shouldBe a[Consequence.Failure[?]])
     }
   }
 }

@@ -17,12 +17,12 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
 /** Inert mapping/index frames. Neither codec reconstructs executable
   * planning, a current call, native readback or a human invocation.
   * @since   Oct.  2, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
-  val schema = "sm-workflow.split-phase-planning-checkpoint.v1"
+  val schema = "sm-workflow.split-phase-planning-checkpoint.v2"
   val storageField = "splitPhasePlanningCheckpointPayload"
-  val locatorSchema = "sm-workflow.split-phase-planning-checkpoint-locator.v1"
+  val locatorSchema = "sm-workflow.split-phase-planning-checkpoint-locator.v2"
   val indexSchema = "sm-workflow.split-phase-planning-context-index.v1"
   val indexStorageField = "splitPhasePlanningContextIndexPayload"
   val maximumPayloadBytes = 1024 * 1024
@@ -56,36 +56,26 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
     record <- decodeMappingC(reference, json)
   } yield record
 
-  /** A stored mechanical row selects the actual CNCF receipt, not another copy
-    * of its computed payload. Legacy v1 rows project only these used members.
-    */
+  /** A current locator selects the actual CNCF receipt, not a saved computation. */
   def encodeLocatorC(value: K.Locator): Consequence[String] = guarded {
     val payload = value.asJson
     val json = envelope(locatorSchema, payload)
     for {
-      _ <- if (_locator_fields(payload)) Consequence.unit else invalid("locator fields differ")
       _ <- boundedC(locatorSchema, json)
     } yield locatorSchema + ":" + json.noSpaces
   }
   def decodeLocatorC(reference: K.Reference, raw: String): Consequence[K.Locator] = guarded {
-    val version = if (raw != null && raw.startsWith(locatorSchema + ":")) locatorSchema else schema
     for {
-      json <- parseC(version, raw)
-      payload <- payloadC(version, json)
-      selected <- if (version == locatorSchema) Consequence.success(payload)
-        else payload.asObject.flatMap(o => for { r <- o("reference"); origin <- o("origin") }
-          yield Json.obj("reference" -> r, "origin" -> origin))
-          .map(Consequence.success).getOrElse(invalid("legacy locator is absent"))
-      _ <- if (_locator_fields(selected)) Consequence.unit else invalid("locator fields differ")
-      value <- selected.as[K.Locator].fold(_ => invalid("locator type differs"), Consequence.success)
+      json <- parseC(locatorSchema, raw)
+      payload <- payloadC(locatorSchema, json)
+      value <- payload.as[K.Locator].fold(_ => invalid("locator type differs"), Consequence.success)
       _ <- if (value.reference == reference) Consequence.unit else invalid("selected locator differs")
     } yield value
   }
 
   def encodeIndexC(value: K.ContextIndex): Consequence[String] = guarded {
+    val json = envelope(indexSchema, value.asJson)
     for {
-      _ <- K.inspectIndexC(value)
-      json = envelope(indexSchema, value.asJson)
       _ <- boundedC(indexSchema, json)
     } yield indexSchema + ":" + json.noSpaces
   }
@@ -94,9 +84,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
     for {
       json <- parseC(indexSchema, raw)
       payload <- payloadC(indexSchema, json)
-      _ <- if (_index_fields(payload)) Consequence.unit else invalid("index declared fields differ")
       value <- payload.as[K.ContextIndex].fold(_ => invalid("index shape differs"), Consequence.success)
-      _ <- K.inspectIndexC(value)
       _ <- if (value.instance == instance && value.context == context)
         Consequence.unit else invalid("selected index query differs")
     } yield value
@@ -126,28 +114,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
         InstanceRevision(payload.predecessorRevision), InstanceRevision(payload.committedRevision))
     } yield value
   }
-  // Declared raw members are admitted directly, without regenerating a copy.
-  // Embedded frame codecs own their schemas; typed decoding owns field types.
-  private def _fields(value: Json, keys: String*): Boolean =
-    value.asObject.exists(_.keys.toSet == keys.toSet)
-  private def _member(value: Json, key: String)(rule: Json => Boolean): Boolean =
-    value.asObject.flatMap(_(key)).exists(rule)
-  private def _reference_fields(value: Json): Boolean = _fields(value, "identity", "revision")
-  private def _origin_fields(value: Json): Boolean = value.asObject.exists { origin =>
-    origin.keys.toSet match {
-      case keys if keys == Set("Mechanical") => origin("Mechanical").exists(p =>
-        _fields(p, "checkpoint") && _member(p, "checkpoint")(_reference_fields))
-      case keys if keys == Set("PartitionCompletion") => origin("PartitionCompletion").exists(p =>
-        _fields(p, "continuation", "result") && _member(p, "continuation")(_fields(_, "value")) &&
-          _member(p, "result")(_reference_fields))
-      case _ => false
-    }
-  }
-  private def _locator_fields(value: Json): Boolean = _fields(value, "reference", "origin") &&
-    _member(value, "reference")(_reference_fields) && _member(value, "origin")(_origin_fields)
-  private def _index_fields(value: Json): Boolean =
-    _fields(value, "instance", "context", "mapping") && _member(value, "instance")(_fields(_, "value")) &&
-      Vector("context", "mapping").forall(key => _member(value, key)(_reference_fields))
   private def envelope(version: String, payload: Json): Json =
     Json.obj("schemaVersion" -> Json.fromString(version), "payload" -> payload)
   private def payloadC(version: String, json: Json): Consequence[Json] =

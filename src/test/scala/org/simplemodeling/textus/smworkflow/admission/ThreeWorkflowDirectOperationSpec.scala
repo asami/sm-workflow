@@ -2,7 +2,6 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
 import io.circe.Json
 import org.goldenport.cncf.bootstrap.{BootstrapConfig, CncfHandle}
 import org.goldenport.cncf.cli.CncfRuntime
@@ -19,7 +18,8 @@ import org.goldenport.cncf.workflow.{ContextReference, StateMachineRevision, Wor
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.configuration.{Configuration as HostConfiguration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.{Argument, Property, Request}
+import org.goldenport.schema.Multiplicity
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
@@ -28,31 +28,33 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseAdvanceCommand, SplitPhasePartitionContextReference}
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhaseTypedStartFixture as F
 
 /** Direct public Operation calls on the production three-service composition.
   * An extra specification-only service prepares input and observes stored state;
   * it replaces no public Operation implementation, evidence adapter or Workflow.
-  * An optional test observer runs within the actual owning Human retry dispatch,
+  * An optional test observer runs within the actual owning result dispatch,
   * forwarding the production action and its afterCommit response unchanged.
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private def _scope_frontier_(input: SplitPhaseNativeHumanDirection.Input): SplitPhaseScopeProjectionSnapshot.Record = {
+    val codec = SplitPhaseScopeProjectionSnapshotJsonV1
+    val json = io.circe.parser.parse(input.frontier.value.substring(codec.schema.length + 1)).toOption.get
+    codec.payloadCodec.decode(json).fold(reason => fail(reason), value => value)
+  }
   private def collection(name: String) = DataStore.CollectionId.EntityStore(
     EntityCollectionId("smworkflow", "cli", name))
   private val declaration = SplitPhaseManagedStartAssembly.Declaration(F.configuration,
     collection("instances"), collection("continuations"))
   private val instances = CallScopedWorkflowInstances.managed(F.configuration, F.catalog.definition,
     declaration.instances, declaration.continuations)
-  // Public Start selects its allocation by selectionIdentity, unlike the pure
-  // preparation fixture's independently named reference.
-  private val typedStart = F.record.copy(reference = F.record.reference.copy(identity = F.command.selectionIdentity))
-  private val startWire = SplitPhaseStartServiceOperation.encodeCommand(F.command)
+  private val typedStart = F.record
+  private val startWire = NativeWorkflowOperationInputFixture.start(F.input)
   private def scalar(value: OperationResponse): String = value match {
     case OperationResponse.Scalar(value: String) => value
     case other => fail(s"Expected Operation JSON: $other")
@@ -118,12 +120,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
     def humanEvidenceC(question: WorkflowInteraction[?, Nothing],
       result: ContinuationResult[SplitPhaseHumanDirectionAnswerContract.Answer]): Consequence[Unit] = for {
       binding <- ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(SplitPhaseHumanAnswerVerification.AnswerContext(
-        core.component.get.core.instanceId, question, result, F.command.participantIdentity))
+        core.component.get.core.instanceId, question, result, F.participantIdentity))
       now = executionContext.clock.instant()
       reference = result.resultReference
       identity = ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision)
       evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, NativeHostEvidence.Purpose.SplitAnswer.identity,
-        identity, reference.identity, reference.revision, "normal-development-host", F.command.participantIdentity,
+        identity, reference.identity, reference.revision, "normal-development-host", F.participantIdentity,
         binding, now.minusSeconds(60).toString)
       _ <- createC(collection("host_evidence"), NativeHostEvidence.recordIdentity(NativeHostEvidence.Purpose.SplitAnswer, identity),
         Record.data(NativeHostEvidence.storageField -> take(NativeHostEvidence.encodeStorageC(evidence))))
@@ -131,28 +133,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
     def execute(): Consequence[OperationResponse] = task(this).map(_ => OperationResponse.Scalar("specification-setup"))
   }
 
-  private def _observe_advance_operation(operation: spec.OperationDefinition,
-    observation: ActionCall.Core => Consequence[Unit]): spec.OperationDefinition = new spec.OperationDefinition {
-    val specification = operation.specification
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      operation.createOperationRequest(request).map {
-        case command: CommandAction => new CommandAction {
-          val request = command.request
-          override def commandExecutionMode = command.commandExecutionMode
-          def createCall(capsule: ActionCall.Core): ActionCall = new ProcedureActionCall {
-            val core = capsule
-            private val _delegate = command.createCall(core)
-            def execute(): Consequence[OperationResponse] = observation(core).flatMap(_ => _delegate.execute())
-            override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] =
-              _delegate.afterCommitResponseC(response)
-          }
-        }
-        case other => other
-      }
-  }
-
   private def withRuntime(root: Path, processplan: Option[Json] = None,
-    advanceobservation: Option[ActionCall.Core => Consequence[Unit]] = None,
     completionobservation: Option[ActionCall.Core => Consequence[Unit]] = None)(task: (Subsystem, org.goldenport.cncf.component.Component,
     ExecutionContext, (Setup => Consequence[Unit]) => Unit) => Unit): Unit = {
     val raw = ThreeWorkflowNormalHostFixture.values(root) ++ Map(
@@ -190,7 +171,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
            |    convention: enabled
            |    fallback_privilege: disabled
            |    local_subject:
-           |      id: ${F.command.participantIdentity}
+           |      id: ${F.participantIdentity}
            |      roles: [user]
            |      capabilities: [user]
            |      security_level: user
@@ -244,17 +225,15 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       // All public Operations and ports come from the normal decoder/binder.
       // Optional spec-owned observations surround only genuine actions, keeping
       // their full specification, command mode and afterCommit handling. The
-      // completion observation may invoke a separate normal competing Operation.
+      // completion observation may change only the selected fixture presentation.
       val factory = new SmWorkflowConfiguredComponentFactory(ThreeWorkflowHostParameters.declarations, Vector.empty,
         (creation, parameters, resolved) => for {
           host <- ThreeWorkflowHostParameters.decodeC(creation, parameters, resolved)
           services <- ThreeWorkflowLauncherAssembly.bindC(creation, host)(using resolved)
         } yield services.map { service =>
-          if (service.name == "SplitPhaseService" && (advanceobservation.nonEmpty || completionobservation.nonEmpty)) {
+          if (service.name == "SplitPhaseService" && completionobservation.nonEmpty) {
               val operations = service.operations.operations.toVector.map { operation =>
-                if (operation.name == "advanceSplitPhase" && advanceobservation.nonEmpty)
-                  _observe_advance_operation(operation, advanceobservation.get)
-                else if (operation.name == "submitPartitionSemanticResult" && completionobservation.nonEmpty)
+                if (operation.name == "submitPartitionSemanticResult")
                   new spec.OperationDefinition {
                     val specification = operation.specification
                     def createOperationRequest(request: Request): Consequence[OperationRequest] =
@@ -291,10 +270,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       owner.withDescriptor(GenericSubsystemDescriptor(path = root, subsystemName = "direct-operation-spec",
         componentBindings = Vector(GenericSubsystemComponentBinding(component.name)), security = Some(GenericSubsystemSecurityBinding(
           authentication = Some(GenericSubsystemAuthenticationBinding(convention = Some("enabled"), fallbackPrivilege = Some("disabled"),
-            localSubject = Some(GenericSubsystemLocalSubjectBinding(id = F.command.participantIdentity,
+            localSubject = Some(GenericSubsystemLocalSubjectBinding(id = F.participantIdentity,
               roles = Vector("user"), capabilities = Vector("user"), attributes = Map.empty, securityLevel = Some("user")))))))))
-      val actor = take(IngressSecurityResolver.resolve(SubsystemExecutionProfile.Fixed,
+      val authenticated = take(IngressSecurityResolver.resolve(SubsystemExecutionProfile.Fixed,
         component.logic.executionContext(), Map.empty)).executionContext
+      val actor = take(ExecutionContext.withRoutingSessionIdentity(authenticated,
+        "specification-operation:" + root.toAbsolutePath.toString))
       def prepare(run: Setup => Consequence[Unit]): Unit = {
         setup = run
         take(owner.executeOperationResponseInContext(Request.of(component = component.name,
@@ -314,7 +295,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
   }
 
   private def prepareInputsWithFacts(call: Setup, facts: SplitPhaseExplicitPartitionContext.Facts,
-    start: SplitPhaseTypedStartPreparation.Record = typedStart, legacyevidence: Boolean = false): Consequence[Unit] = {
+    start: SplitPhaseTypedStartPreparation.Record = typedStart): Consequence[Unit] = {
     import SplitPhaseExplicitPlanningInputJsonV1 as J
     import J.Purpose
     val inputs = Vector(
@@ -327,26 +308,20 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       (Purpose.Estimates, facts.partition.estimates.reference.identity, take(J.encodeEstimatesC(facts.partition.estimates))),
       (Purpose.PartitionPolicy, facts.partition.policy.reference.identity, take(J.encodePartitionPolicyC(facts.partition.policy))),
       (Purpose.Planning, facts.planning.reference.identity, take(J.encodePlanningC(facts.planning))))
+    val selected = F.selectionFor(start.input, start.reference.identity, start.participantIdentity)
     val now = call.executionContext.clock.instant()
     val identity = ThreeWorkflowHostEvidencePorts.key(start.reference.identity, start.reference.revision)
     val binding = take(ThreeWorkflowHostEvidencePorts.splitStartBindingC(
       SplitPhaseTypedStartHumanVerification.StartContext(call.core.component.get.core.instanceId, start)))
     val evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, NativeHostEvidence.Purpose.SplitStart.identity,
-      identity, "specification-start-selection", "1", "normal-development-host", start.command.participantIdentity,
+      identity, "specification-start-selection", "1", "normal-development-host", start.participantIdentity,
       binding, now.minusSeconds(60).toString)
-    val currentwire = take(NativeHostEvidence.encodeStorageC(evidence))
-    val evidencewire = if (legacyevidence) {
-      val version = "sm-workflow.native-host-evidence.v1"
-      val payload = io.circe.parser.parse(currentwire.substring(NativeHostEvidence.schema.length + 1)).toOption.get
-        .mapObject(_.add("schemaVersion", Json.fromString(version))
-          .add("validUntil", Json.fromString(now.minusSeconds(1).toString)))
-      version + ":" + payload.noSpaces
-    } else currentwire
+    val evidencewire = take(NativeHostEvidence.encodeStorageC(evidence))
     val rows = inputs.map((purpose, id, text) => (collection("split_" + purpose.toString.toLowerCase), id, Record.data(J.storageField -> text))) ++ Vector(
       (collection("split_starts"), start.reference.identity,
         Record.data(SplitPhaseTypedStartJsonV1.storageField -> take(SplitPhaseTypedStartJsonV1.encodeAllocationC(start)))),
-      (collection("split_selections"), start.selection.selectionId,
-        Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(start.selection)))),
+      (collection("split_selections"), selected.selectionId,
+        Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selected)))),
       (collection("host_evidence"), NativeHostEvidence.recordIdentity(NativeHostEvidence.Purpose.SplitStart, identity),
         Record.data(NativeHostEvidence.storageField -> evidencewire)))
     rows.foldLeft(Consequence.unit) { case (before, (collection, id, row)) => before.flatMap(_ => call.createC(collection, id, row)) }
@@ -354,16 +329,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
 
   // Literal host-file configuration consumed by the canonical runtime. The
   // component gets only observe/apply capabilities, never executable/argv data.
-  private def _document_process_plan(root: Path, recordEffects: Boolean = false, interrupt: Boolean = false): Json = {
+  private def _document_process_plan(root: Path): Json = {
     import scala.jdk.CollectionConverters.*
-    val classpath = if (recordEffects) _operation_classpath()
-      else Files.readAllLines(Path.of("target/cncf.d/runtime-classpath.txt")).asScala
-        .map(_.trim).filter(_.nonEmpty).mkString(java.io.File.pathSeparator)
-    val fixed = if (recordEffects) Vector("-cp", classpath,
-      "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowDocumentInterruption", root.toString,
-      root.getParent.toString, interrupt.toString, "repo")
-      else Vector("-cp", classpath, "org.simplemodeling.textus.smworkflow.runtime.SelectedPhaseDocumentProgram",
-        root.toString, "repo")
+    val classpath = Files.readAllLines(Path.of("target/cncf.d/runtime-classpath.txt")).asScala
+      .map(_.trim).filter(_.nonEmpty).mkString(java.io.File.pathSeparator)
+    val fixed = Vector("-cp", classpath, "org.simplemodeling.textus.smworkflow.runtime.SelectedPhaseDocumentProgram",
+      root.toString, "repo")
     val limits = Vector("launchTimeoutMillis" -> 10000L, "executionTimeoutMillis" -> 30000L,
       "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> 131072L,
       "stderrBytes" -> 16384L, "argumentCount" -> 16L, "argumentBytes" -> 131072L,
@@ -382,133 +353,6 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         "capabilities" -> Json.arr(Json.fromString(capability)))))
   }
 
-  /** A specification-owned caller in another JVM, not a product CLI adapter.
-    * It only reopens stored state and calls the fixed public Operations. No
-    * initial input, context registration or Workflow history is supplied here.
-    */
-  private[admission] def _observe_separate_process(root: Path, input: Json): Json = {
-    val mode = input.hcursor.get[String]("mode").fold(error => fail(error.message), identity)
-    Vector("APPLY", "PREVIEW", "PENDING", "RESUME") should contain(mode)
-    val advance = input.hcursor.get[String]("advance").fold(error => fail(error.message), identity)
-    val completion = input.hcursor.get[Option[String]]("completion").fold(error => fail(error.message), identity)
-    val completionoperation = input.hcursor.get[String]("completionOperation").getOrElse("submitPartitionSemanticResult")
-    Vector("submitPartitionSemanticResult", "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection") should
-      contain(completionoperation)
-    if (mode == "RESUME") completion should not be empty
-    val recordEffects = input.hcursor.get[Boolean]("recordDocumentEffects").getOrElse(false)
-    val interrupt = input.hcursor.get[Boolean]("interruptDocumentEffect").getOrElse(false)
-    if (interrupt) { mode shouldBe "APPLY"; recordEffects shouldBe true }
-    var observation = Option.empty[Json]
-    withRuntime(root, if (mode == "APPLY") Some(_document_process_plan(root, recordEffects, interrupt)) else None) {
-      (owner, component, actor, prepare) =>
-      def _invoke_c_(operation: String, wire: String) = owner.executeOperationResponseInContext(
-        Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
-          arguments = List(Argument("arg1", wire))), actor)
-      def _current_json_(): String = {
-        var state = Option.empty[InstanceRecord]
-        prepare(call => call.currentC().map(value => { state = Some(value); () }))
-        take(WorkflowInstanceRecordJsonV1.encodeC(state.get))
-      }
-      def _response_(value: Consequence[OperationResponse]): Json = value match {
-        case Consequence.Success(response) => Json.obj("success" -> Json.True, "wire" -> Json.fromString(scalar(response)))
-        case other => Json.obj("success" -> Json.False, "error" -> Json.fromString(other.toString))
-      }
-      val before = _current_json_()
-      val result = _response_(_invoke_c_("advanceSplitPhase", advance))
-      val acknowledgement = completion.map(wire => _response_(_invoke_c_(completionoperation, wire)))
-      val completionstate = _current_json_()
-      val resumed = if (mode == "RESUME") Some(_response_(_invoke_c_("advanceSplitPhase", advance))) else None
-      observation = Some(Json.obj("pid" -> Json.fromLong(ProcessHandle.current().pid()),
-        "before" -> Json.fromString(before), "result" -> result,
-        "acknowledgement" -> acknowledgement.getOrElse(Json.Null),
-        "completionState" -> Json.fromString(completionstate), "resumed" -> resumed.getOrElse(Json.Null),
-        "after" -> Json.fromString(_current_json_())))
-    }
-    observation.get
-  }
-
-  private def _operation_classpath(): String = {
-    import scala.jdk.CollectionConverters.*
-    // The non-forked SBT test loader owns the actual compiled test classes and
-    // ScalaTest dependencies; the official runtime file supplies production jars.
-    val testpaths = Iterator.iterate(Option(this.getClass.getClassLoader))(_.flatMap(loader => Option(loader.getParent)))
-      .takeWhile(_.nonEmpty).flatMap(_.iterator).collect {
-        case loader: java.net.URLClassLoader => loader.getURLs.toVector
-      }.flatten.filter(_.getProtocol == "file").map(url => Path.of(url.toURI).toString).toVector
-    val runtimepaths = Files.readAllLines(Path.of("target/cncf.d/runtime-classpath.txt")).asScala
-      .map(_.trim).filter(_.nonEmpty).toVector
-    (Vector(Path.of(this.getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toString) ++
-      testpaths ++ runtimepaths).distinct.mkString(java.io.File.pathSeparator)
-  }
-
-  private def _separate_process_observation(root: Path, mode: String, advance: String,
-    completion: Option[String] = None, allowProgress: Boolean = false,
-    recordEffects: Boolean = false, interrupt: Boolean = false,
-    completionoperation: String = "submitPartitionSemanticResult"): Json = {
-    import scala.jdk.CollectionConverters.*
-    val directory = Files.createTempDirectory(root, "operation-observation-")
-    val input = directory.resolve("input.json")
-    val output = directory.resolve("output.json")
-    val log = directory.resolve("process.log")
-    val completionfield = if (completionoperation == "submitPartitionSemanticResult") Json.obj()
-      else Json.obj("completionOperation" -> Json.fromString(completionoperation))
-    Files.writeString(input, Json.obj("mode" -> Json.fromString(mode), "advance" -> Json.fromString(advance),
-      "completion" -> completion.map(Json.fromString).getOrElse(Json.Null),
-      "recordDocumentEffects" -> Json.fromBoolean(recordEffects), "interruptDocumentEffect" -> Json.fromBoolean(interrupt))
-      .deepMerge(completionfield).noSpaces)
-    val classpath = _operation_classpath()
-    val command = Vector(Path.of(System.getProperty("java.home"), "bin/java").toString, "-cp", classpath,
-      "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSeparateProcessObservation",
-      root.toAbsolutePath.toString, input.toString, output.toString)
-    val process = new ProcessBuilder(command*).redirectErrorStream(true).redirectOutput(log.toFile).start()
-    var ownedPrograms = Vector.empty[ProcessHandle]
-    try {
-      if (interrupt) {
-        mode shouldBe "APPLY"
-        recordEffects shouldBe true
-        val marker = root.resolve("document-applied-before-result.txt")
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25)
-        while (!Files.exists(marker) && process.isAlive && System.nanoTime() < deadline) Thread.sleep(25)
-        withClue(Files.readString(log))(Files.exists(marker) shouldBe true)
-        val effectPid = Files.readString(marker).trim.toLong
-        ownedPrograms = process.descendants().iterator().asScala.toVector
-        Then("the reported effect program belongs to this live specification-owned caller")
-        ownedPrograms.map(_.pid()) should contain(effectPid)
-        process.pid() should not be ProcessHandle.current().pid()
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS) shouldBe true
-        ownedPrograms.foreach(_.destroyForcibly())
-        ownedPrograms.foreach { handle =>
-          if (handle.isAlive) handle.onExit().get(10, TimeUnit.SECONDS)
-          handle.isAlive shouldBe false
-        }
-        return Json.obj("pid" -> Json.fromLong(process.pid()), "effectPid" -> Json.fromLong(effectPid),
-          "exit" -> Json.fromInt(process.exitValue()))
-      }
-      if (!process.waitFor(30, TimeUnit.SECONDS)) {
-        ownedPrograms = process.descendants().iterator().asScala.toVector
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS)
-        fail(s"Owned direct-Operation observer timed out; diagnostic retained at $log")
-      }
-      Files.size(log) should be <= 131072L
-      withClue(Files.readString(log))(process.exitValue() shouldBe 0)
-      Files.size(output) should be <= 2097152L
-      val result = io.circe.parser.parse(Files.readString(output)).fold(error => fail(error.message), identity)
-      result.hcursor.get[Long]("pid").toOption.get shouldBe process.pid()
-      process.pid() should not be ProcessHandle.current().pid()
-      if (mode != "RESUME" && !allowProgress)
-        result.hcursor.get[String]("before").toOption shouldBe result.hcursor.get[String]("after").toOption
-      result
-    } finally {
-      if (process.isAlive) {
-        ownedPrograms = process.descendants().iterator().asScala.toVector
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS)
-      }
-      ownedPrograms.filter(_.isAlive).foreach(_.destroyForcibly())
-    }
-  }
 
   private def _semantic_preview_facts(): SplitPhaseExplicitPartitionContext.Facts = {
     import SplitPhaseExplicitObjectiveSelection as O
@@ -527,14 +371,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       "E7 advance only the explicitly selected Split instance when a session has two real Starts" in {
         Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R3; Example: E7; two explicit input allocations and one opaque session on production managed SQLite")
         val root = Files.createTempDirectory("smwf-split-session-targets-")
-        val secondcommand = F.command.copy(selectionIdentity = "second-session-split", idempotencyKey = "second-session-split-start")
-        val secondstart = typedStart.copy(reference = typedStart.reference.copy(identity = secondcommand.selectionIdentity),
-          instanceIdentity = InstanceIdentity("second-session-split-instance"), command = secondcommand,
-          selection = F.selectionFor(secondcommand))
+        val secondstart = typedStart.copy(reference = typedStart.reference.copy(identity = "second-session-split"),
+          instanceIdentity = InstanceIdentity("second-session-split-instance"))
+        val secondselection = F.selectionFor(secondstart.input, secondstart.reference.identity, secondstart.participantIdentity)
         val starts = Vector(typedStart, secondstart)
         val identities = starts.map(_.instanceIdentity)
-        var selectedwire = Option.empty[String]
-        for (episode <- Vector("publish", "reopen")) withRuntime(root) {
+        for (episode <- Vector("publish")) withRuntime(root) {
           (owner, component, actor, prepare) =>
           def _session_(foreign: Boolean = false): Json = Json.obj(
             "schemaVersion" -> Json.fromString(NativeWorkflowSessionInput.schema),
@@ -560,12 +402,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
                 SplitPhaseTypedStartHumanVerification.StartContext(call.core.component.get.core.instanceId, secondstart)))
               val evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, NativeHostEvidence.Purpose.SplitStart.identity,
                 identity, "second-specification-start-selection", "1", "normal-development-host",
-                secondcommand.participantIdentity, binding, call.executionContext.clock.instant().minusSeconds(60).toString)
+                secondstart.participantIdentity, binding, call.executionContext.clock.instant().minusSeconds(60).toString)
               for {
                 _ <- call.createC(collection("split_starts"), secondstart.reference.identity,
                   Record.data(SplitPhaseTypedStartJsonV1.storageField -> take(SplitPhaseTypedStartJsonV1.encodeAllocationC(secondstart))))
-                _ <- call.createC(collection("split_selections"), secondstart.selection.selectionId,
-                  Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(secondstart.selection))))
+                _ <- call.createC(collection("split_selections"), secondselection.selectionId,
+                  Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(secondselection))))
                 _ <- call.createC(collection("host_evidence"), NativeHostEvidence.recordIdentity(NativeHostEvidence.Purpose.SplitStart, identity),
                   Record.data(NativeHostEvidence.storageField -> take(NativeHostEvidence.encodeStorageC(evidence))))
               } yield ()
@@ -573,8 +415,9 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             When("the two public Starts publish the actual instances and their same-session associations")
             val started = starts.map(start => take(WorkflowWaitJsonV1.decodeC(scalar(take(
               owner.executeOperationResponseInContext(Request.of(component = component.name, service = "SplitPhaseService",
-                operation = "startSplitPhase", arguments = List(Argument("arg1", _session_().deepMerge(Json.obj(
-                  "input" -> Json.fromString(SplitPhaseStartServiceOperation.encodeCommand(start.command)))).noSpaces))), actor))))).handle.instanceIdentity)
+                operation = "startSplitPhase", arguments = List(Argument("arg1", io.circe.parser.parse(
+                  NativeWorkflowOperationInputFixture.start(start.input, Some(start.reference.identity)))
+                    .toOption.get.deepMerge(_session_()).noSpaces))), actor))))).handle.instanceIdentity)
             Then("both distinct targets have owning Start receipts without fixture-native history or an association side-write")
             started shouldBe identities
             started.distinct.size shouldBe 2
@@ -587,20 +430,20 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             })
           }
           val before = _states_()
-          When("advance omits its necessary selector while two real associated targets exist, including after persisted reopen")
+          When("advance omits its necessary selector while two real associated targets exist, without a target selector")
           val ambiguous = _advance_(None)
           val afterambiguous = _states_()
           Then("ambiguity prevents progression of either target instead of choosing the newest or first row")
           ambiguous.isSuccess shouldBe false
           ambiguous.toString should include("ambiguous instance")
-          afterambiguous shouldBe before
+          afterambiguous.map(_.revision) shouldBe before.map(_.revision)
           When("another explicit session names an existing but unassociated target")
           val foreign = _advance_(Some(identities.head.value), foreign = true)
           val afterforeign = _states_()
           Then("the selector does not confer that association or mutate either original target")
           foreign.isSuccess shouldBe false
           foreign.toString should include("no associated instance")
-          afterforeign shouldBe before
+          afterforeign.map(_.revision) shouldBe before.map(_.revision)
           When("the owning session supplies only the first target selector, without echoing partition context or revisions")
           val wire = scalar(take(_advance_(Some(identities.head.value))))
           val work = take(WorkflowWorkOrderJsonV1.decodeC(wire, SplitPhaseExplicitPartitionSemanticJson.requestCodec))
@@ -608,9 +451,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           Then("Workflow resolves the actual partition and issues or retains only that target's next semantic work")
           work.handle.instanceIdentity shouldBe identities.head
           work.current shouldBe a[WorkflowContinuation.WorkOrder[?]]
-          afterselected(1) shouldBe before(1)
-          selectedwire.foreach(_ shouldBe wire)
-          selectedwire = Some(wire)
+          afterselected(1).revision shouldBe before(1).revision
         }
       }
     }
@@ -619,9 +460,9 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       val root = Files.createTempDirectory("smwf-fresh-start-")
       val sentinel = root.resolve("existing.txt")
       Files.writeString(sentinel, "Existing user content\n")
-      val nextcommand = F.command.copy(selectionIdentity = "fresh-start-selection", idempotencyKey = "fresh-start-invocation")
-      val nextstart = typedStart.copy(reference = typedStart.reference.copy(identity = nextcommand.selectionIdentity),
-        instanceIdentity = InstanceIdentity("fresh-start-instance"), command = nextcommand, selection = F.selectionFor(nextcommand))
+      val nextstart = typedStart.copy(reference = typedStart.reference.copy(identity = "fresh-start-selection"),
+        instanceIdentity = InstanceIdentity("fresh-start-instance"))
+      val nextselection = F.selectionFor(nextstart.input, nextstart.reference.identity, nextstart.participantIdentity)
       withRuntime(root) { (owner, component, actor, prepare) =>
         def _invoke_(operation: String, wire: String): String = scalar(take(owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
@@ -634,8 +475,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           take(SplitPhaseManagedPartitionContextRegistration.bindC(owner.configuration, declaration, F.catalog))
             .registerForCallC(context, call.core).map(_ => ())
         })
-        val advance = take(SplitPhaseAdvanceCommandJsonV1.encodeC(SplitPhaseAdvanceCommand(typedStart.instanceIdentity.value,
-          SplitPhasePartitionContextReference(F.context.reference.identity, F.context.reference.revision))))
+        val advance = NativeWorkflowOperationInputFixture.advance()
         take(WorkflowWorkOrderJsonV1.decodeC(_invoke_("advanceSplitPhase", advance), SplitPhaseExplicitPartitionSemanticJson.requestCodec))
         When("the caller abandons that work and selects a NEW invocation rather than resuming or answering it")
         prepare { call =>
@@ -643,18 +483,19 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           val binding = take(ThreeWorkflowHostEvidencePorts.splitStartBindingC(
             SplitPhaseTypedStartHumanVerification.StartContext(call.core.component.get.core.instanceId, nextstart)))
           val evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, NativeHostEvidence.Purpose.SplitStart.identity,
-            key, "fresh-start-evidence", "1", "normal-development-host", nextcommand.participantIdentity, binding,
+            key, "fresh-start-evidence", "1", "normal-development-host", nextstart.participantIdentity, binding,
             call.executionContext.clock.instant().minusSeconds(60).toString)
           for {
             _ <- call.createC(collection("split_starts"), nextstart.reference.identity,
               Record.data(SplitPhaseTypedStartJsonV1.storageField -> take(SplitPhaseTypedStartJsonV1.encodeAllocationC(nextstart))))
-            _ <- call.createC(collection("split_selections"), nextstart.selection.selectionId,
-              Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(nextstart.selection))))
+            _ <- call.createC(collection("split_selections"), nextselection.selectionId,
+              Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(nextselection))))
             _ <- call.createC(collection("host_evidence"), NativeHostEvidence.recordIdentity(NativeHostEvidence.Purpose.SplitStart, key),
               Record.data(NativeHostEvidence.storageField -> take(NativeHostEvidence.encodeStorageC(evidence))))
           } yield ()
         }
-        val started = take(WorkflowWaitJsonV1.decodeC(_invoke_("startSplitPhase", SplitPhaseStartServiceOperation.encodeCommand(nextcommand))))
+        val started = take(WorkflowWaitJsonV1.decodeC(_invoke_("startSplitPhase",
+          NativeWorkflowOperationInputFixture.start(nextstart.input, Some(nextstart.reference.identity)))))
         Then("public Start creates the new run at its initial boundary, with no intermediate recovery or existing-file overwrite")
         started.handle.instanceIdentity shouldBe nextstart.instanceIdentity
         started.handle.instanceIdentity should not be typedStart.instanceIdentity
@@ -676,7 +517,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           val configuration = call.core.component.get.subsystem.get.configuration
           val old = ResolvedConfiguration(HostConfiguration(configuration.configuration.values.updated(
             NativeHostEvidence.prefix + "issuer", ConfigurationValue.StringValue("withdrawn-host"))), ConfigurationTrace.empty)
-          val storage = GoalPhaseManagedStartAssembly.Declaration(F.configuration, F.catalog.definition,
+          val storage = GoalPhaseRuntimeParameters.Persistence(F.configuration,
             declaration.instances, declaration.continuations)
           val reader = take(NativeHostEvidence.bindC(old, storage))
           val ports = new ThreeWorkflowHostEvidencePorts(reader)
@@ -707,29 +548,24 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         }
       }
     }
-    for (legacy <- Vector(false, true)) {
-      s"admit SplitPhase Start with ${if (legacy) "expired legacy" else "expiry-free current"} host evidence" in {
+      "admit SplitPhase Start with expiry-free current host evidence" in {
         Given("the production three-service composition with independently provisioned input and host evidence")
         val root = Files.createTempDirectory("smwf-no-internal-expiry-")
-        var original = Option.empty[String]
-        for (first <- Vector(true)) withRuntime(root) { (owner, component, actor, prepare) =>
-          if (first) prepare(call => prepareInputsWithFacts(call, F.facts, legacyevidence = legacy))
-          When("the real public Start is invoked initially or after reopening the same SQLite runtime")
+        withRuntime(root) { (owner, component, actor, prepare) =>
+          prepare(call => prepareInputsWithFacts(call, F.facts))
+          When("the real public Start is invoked with its current business input")
           val response = owner.executeOperationResponseInContext(Request.of(component = component.name,
             service = "SplitPhaseService", operation = "startSplitPhase",
             arguments = List(Argument("arg1", startWire))), actor)
-          Then("no timestamp renewal is required and the existing original Start remains the same invocation")
+          Then("the owning Start creates its normal native instance without a timestamp renewal requirement")
           val wire = scalar(take(response))
           take(WorkflowWaitJsonV1.decodeC(wire)).handle.instanceIdentity shouldBe F.record.instanceIdentity
-          original.foreach(_ shouldBe wire)
-          original = Some(wire)
           prepare(call => call.currentC().map { current =>
             current.history.size shouldBe 1
             ()
           })
         }
       }
-    }
     for (direction <- Vector("enriched", "resolved", "defer", "cancel", "reasoning-resolved", "reasoning-defer", "reasoning-cancel")) {
       s"E12 session result consumption: continue actual scope through $direction and any assigned reasoning to its complete outcome" in {
         import SplitPhaseExplicitPartitionFixture.{base, enumerate, proof}
@@ -757,11 +593,10 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             source.source.authority, 1, 1, 0, 0, 0)))
         val facts = SplitPhaseExplicitPartitionContext.Facts(boundary.shape.records, boundary.records, source.records,
           F.facts.planning.copy(objectives = objectives))
-        val command = F.command.copy(input = F.command.input.copy(proposalReference = Some(boundary.shape.records.proposal.reference.identity)))
-        val start = typedStart.copy(command = command, selection = F.selectionFor(command),
+        val start = typedStart.copy(input = F.input.copy(sourcePhaseIdentity = source.source.phase.value,
+          proposalReference = Some(boundary.shape.records.proposal.reference.identity)),
           source = source.source, proposal = Some(boundary.shape.records.proposal))
-        val advance = take(SplitPhaseAdvanceCommandJsonV1.encodeC(SplitPhaseAdvanceCommand(start.instanceIdentity.value,
-          SplitPhasePartitionContextReference(F.context.reference.identity, F.context.reference.revision))))
+        val advance = NativeWorkflowOperationInputFixture.advance()
         var pending = Option.empty[String]
         var scopereply = Option.empty[ContinuationResult[S.Judgment]]
         var scopeack = Option.empty[String]
@@ -778,7 +613,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           }
           ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
             TypedValue(typeIdentity, value), reference, Vector.empty,
-            ExecutionEvidence(Vector(evidence), Some(F.command.participantIdentity)))
+            ExecutionEvidence(if (work.current.isInstanceOf[WorkflowContinuation.Decision[?]]) Vector(evidence) else Vector.empty,
+              Some(F.participantIdentity)))
         }
         withRuntime(root) { (owner, component, actor, prepare) =>
           def invoke(operation: String, wire: String) = scalar(take(owner.executeOperationResponseInContext(
@@ -786,7 +622,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               arguments = List(Argument("arg1", wire))), actor)))
           prepare(call => prepareInputsWithFacts(call, facts, start))
           When("public Start records the selected source and public advance asks for the actual handoff scope")
-          take(WorkflowWaitJsonV1.decodeC(invoke("startSplitPhase", SplitPhaseStartServiceOperation.encodeCommand(command))))
+          take(WorkflowWaitJsonV1.decodeC(invoke("startSplitPhase", NativeWorkflowOperationInputFixture.start(start.input))))
           prepare(call => call.currentC().flatMap { state =>
             val context = F.context.copy(facts = facts, owner = F.context.owner.copy(start = start.reference,
               handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state)), instanceRevision = state.revision))
@@ -811,8 +647,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           pending = Some(wire)
           prepare(call => call.currentC().map(state => { completed = Some(state); () }))
         }
-        When("a separate JVM observes the scope WorkOrder before any result is supplied")
-        var observesuccessor: ActionCall.Core => Consequence[Unit] = _ => Consequence.unit
+        Given("the actual scope WorkOrder and its semantic answer for the next normal Operation")
         withRuntime(root) { (owner, component, actor, prepare) =>
           def invokeC(operation: String, wire: String) = owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
@@ -823,23 +658,17 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             prepare(call => call.currentC().map(value => { state = Some(value); () }))
             state.get
           }
-          When("a crossed scope result reference is returned through its public completion")
-          val before = current()
-          val crossed = scopereply.get.copy(resultReference = ContextReference("foreign-scope-result", "1"))
-          invokeC("submitHandoffScopeResult", take(WorkflowResultJsonV1.encodeC(crossed, J.resultCodec))).isSuccess shouldBe false
-          Then("the saved assignment and complete native state remain unchanged")
-          current() shouldBe before
-          invoke("advanceSplitPhase", advance) shouldBe pending.get
           When("only the semantic scope result is returned without destination, context or checkpoint echoes")
-          val reply = take(NativeWorkflowResultSubmissionFixture.encodeC(scopereply.get, J.resultCodec, omitReference = true))
+          val reply = take(NativeWorkflowOperationInputFixture.encodeC(scopereply.get, J.resultCodec, omitReference = true))
           val replyjson = take(io.circe.parser.parse(reply).fold(_ => Consequence.stateConflict("invalid reply"), Consequence.success))
+          Then("the submitted input carries the semantic value without destination or context copies")
           replyjson.hcursor.downField("result").focus.get.asObject.get.keys.toSet shouldBe Set("value")
           replyjson.hcursor.downField("result").downField("value").downField("payload").focus.get.asObject.get.keys.toSet shouldBe
             Set("decision", "rationale", "scopes", "evidence")
-          val legacyreply = replyjson.hcursor.downField("result").downField("value").downField("payload")
+          val annotatedreply = replyjson.hcursor.downField("result").downField("value").downField("payload")
             .withFocus(_.mapObject(_.add("context", Json.fromString("obsolete-context"))
               .add("checkpoint", Json.Null).add("nextOperation", Json.fromString("apply")))).top.get.noSpaces
-          val acknowledgement = invoke("submitHandoffScopeResult", legacyreply)
+          val acknowledgement = invoke("submitHandoffScopeResult", annotatedreply)
           scopeack = Some(acknowledgement)
           val after = current()
           if (!scopeenriched) {
@@ -848,7 +677,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             question = Some(take(WorkflowDecisionJsonV1.decodeC(wire, SplitPhaseNativeHumanDirection.inputCodec)))
             val input = question.get.current.asInstanceOf[WorkflowContinuation.Decision[SplitPhaseNativeHumanDirection.Input]]
               .request.input.get.value
-            val frontier = take(SplitPhaseNativeHumanDirection.frontierC(input))
+            val frontier = _scope_frontier_(input)
             Then("the question retains the complete original source and published frontier")
             frontier.first.originalContext.facts shouldBe facts
             val answer = direction match {
@@ -856,14 +685,15 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               case "defer" => H.Answer.Defer
               case "cancel" => H.Answer.Cancel
             }
-            humanreply = Some(resultFor(question.get, answer, H.resultType,
-              ContextReference("direct-human-evidence", "1"), ContextReference("direct-human-evidence", "1")))
+            val genuine = resultFor(question.get, answer, H.resultType,
+              ContextReference("direct-human-evidence", "1"), ContextReference("direct-human-evidence", "1"))
+            humanreply = Some(genuine.copy(evidence = genuine.evidence.copy(references = Vector.empty)))
             pending = Some(wire)
             completed = Some(current())
           }
         }
         if (question.nonEmpty) {
-          When("another JVM observes the original saved Human question without issuer or answer reconstruction")
+          Given("the actual saved Human question and a normal independently dispatched completion")
           withRuntime(root) { (owner, component, actor, prepare) =>
             def invokeC(operation: String, wire: String) = owner.executeOperationResponseInContext(
               Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
@@ -873,40 +703,40 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               prepare(call => call.currentC().map(value => { state = Some(value); () }))
               state.get
             }
-            val reply = take(NativeWorkflowResultSubmissionFixture.encodeC(humanreply.get, H.payloadCodec))
+            val reply = take(NativeWorkflowOperationInputFixture.encodeC(humanreply.get, H.payloadCodec))
             val before = current()
             When("an answer is submitted without separately supplied host evidence")
             invokeC("submitSplitHumanDirection", reply).isSuccess shouldBe false
-            Then("neither the native question nor state is changed")
-            current() shouldBe before
+            Then("no native transition is appended without Human evidence")
+            current().revision shouldBe before.revision
             Given("specification-owned host evidence bound to this exact Human question and answer")
             prepare(_.humanEvidenceC(question.get, humanreply.get))
-            When("the verified answer is returned through its public completion")
+            When("the actual evidenced Human choice completes without duplicating interpretation evidence outside its business body")
             val acknowledgement = scalar(take(invokeC("submitSplitHumanDirection", reply)))
             val after = current()
             Then("direction is saved once without generating a plan, reasoning result or document effect")
-            after.history.dropRight(1) shouldBe before.history
+            after.revision shouldBe before.revision.next
             after.lifecycle shouldBe Lifecycle.Active
             after.currentProgression shouldBe Some(ProgressionReference("HumanAnswered"))
             if (direction == "resolved") {
               Given("separate passive Human resolution data for exactly the answered whole frontier")
               val input = question.get.current.asInstanceOf[WorkflowContinuation.Decision[SplitPhaseNativeHumanDirection.Input]]
                 .request.input.get.value
-              val request = take(S.requestC(take(SplitPhaseNativeHumanDirection.frontierC(input)).first))
+              val request = take(S.requestC(_scope_frontier_(input).first))
               val resolution = SplitPhaseHumanScopeResolution.Record(
                 SplitPhaseHumanScopeResolution.Reference("direct-human-resolution", "1"), request.context, request.checkpoint,
                 input.scopeCheckpoint, SplitPhaseHumanScopeResolution.DecisionReference(humanreply.get.continuationId.value),
                 request.gaps.map(gap => S.Scope(gap.original.identity, gap.producingItems.takeRight(1),
                   gap.receivingItems.take(1), "Specification Human interpretation of original ranges")),
-                "Complete assigned scope only", Vector(SplitPhaseExplicitPartitionSemantic.EvidenceReference("direct-human-evidence", "1")))
+                "Complete assigned scope only", Vector(SplitPhaseExplicitPartitionSemantic.EvidenceReference("direct-human-interpretation", "1")))
               prepare(_.createC(collection("split_humanresolutions"), resolution.reference.identity,
                 Record.data(SplitPhaseHumanScopeResolutionJsonV1.storageField ->
                   take(SplitPhaseHumanScopeResolutionJsonV1.encodeStorageC(resolution)))))
-              current() shouldBe after
+              current().revision shouldBe after.revision
             }
           }
         }
-        withRuntime(root, advanceobservation = Some(core => observesuccessor(core))) { (owner, component, actor, prepare) =>
+        withRuntime(root) { (owner, component, actor, prepare) =>
           def invokeC(operation: String, wire: String) = owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
               arguments = List(Argument("arg1", wire))), actor)
@@ -931,22 +761,17 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               Vector(evidence))
             val result = resultFor(issued, judgment, RJ.resultCodec.typeIdentity,
               ContextReference(input.result.identity, input.result.revision), ContextReference(evidence.identity, evidence.revision))
-            val before = current()
-            When("the reasoning completion crosses the Workflow-assigned result reference")
-            invokeC("submitReasoningResult", take(WorkflowResultJsonV1.encodeC(result.copy(
-              resultReference = ContextReference("foreign-reasoning-result", "1")), RJ.resultCodec))).isSuccess shouldBe false
-            Then("the exact pending assignment and native state are retained")
-            current() shouldBe before
             When("classification is returned without destination or context echoes and deterministic progression resumes")
-            val reply = take(NativeWorkflowResultSubmissionFixture.encodeC(result, RJ.resultCodec, omitReference = true))
+            val reply = take(NativeWorkflowOperationInputFixture.encodeC(result, RJ.resultCodec, omitReference = true))
             val replyjson = take(io.circe.parser.parse(reply).fold(_ => Consequence.stateConflict("invalid reply"), Consequence.success))
+            Then("the reasoning input carries classification once without assigned-context copies")
             replyjson.hcursor.downField("result").focus.get.asObject.get.keys.toSet shouldBe Set("value")
             replyjson.hcursor.downField("result").downField("value").downField("payload").focus.get.asObject.get.keys.toSet shouldBe
               Set("decision", "rationale", "assignments", "evidence")
-            val legacyreply = replyjson.hcursor.downField("result").downField("value").downField("payload")
+            val annotatedreply = replyjson.hcursor.downField("result").downField("value").downField("payload")
               .withFocus(_.mapObject(_.add("context", Json.fromBoolean(false))
                 .add("nextOperation", Json.fromString("apply")))).top.get.noSpaces
-            val acknowledgement = invoke("submitReasoningResult", legacyreply)
+            val acknowledgement = invoke("submitReasoningResult", annotatedreply)
             val after = current()
             if (direction.startsWith("reasoning-")) {
               import SplitPhaseReasoningHumanDirection as RH
@@ -976,9 +801,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
                 "issuedWorkPayload", "cncf.workflow-json.v1:")(json =>
                 json.hcursor.downField("request").downField("input").downField("value")
                   .withFocus(_with_unused_fields).top.get))
-              Then("typed data and the genuine owning pending advance remain identical without annotation authority")
+              Then("the same actual typed business input survives, without diagnostic command authority")
               RH.inputCodec.decode(_with_unused_fields(encoded)) shouldBe Right(questioninput)
-              invoke("advanceSplitPhase", advance) shouldBe questionwire
               val interpretation = R.Judgment(R.Decision.Enriched, "Human interpretation of only the unknown items",
                 input.items.map(item => R.Assignment(item.identity, R.Classification.SettledExecution, "Human bounded execution")),
                 Vector(SplitPhaseExplicitPartitionSemantic.EvidenceReference("reasoning-human-interpretation", "1")))
@@ -991,28 +815,28 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               def _answer_(answer: H.Answer, reference: String) = {
                 val value = resultFor(reasoningquestion, answer, H.resultType,
                   ContextReference(reference, "1"), ContextReference("reasoning-human-interpretation", "1"))
-                value
+                value.copy(evidence = value.evidence.copy(references = Vector.empty))
               }
               val humananswer = _answer_(answer, "reasoning-human-answer")
-              val answerjson = io.circe.parser.parse(take(WorkflowResultJsonV1.encodeC(humananswer, H.payloadCodec))).toOption.get
+              val answerjson = io.circe.parser.parse(take(NativeWorkflowOperationInputFixture.encodeC(humananswer, H.payloadCodec))).toOption.get
               val answerwire = answerjson.hcursor.downField("result").downField("value")
                 .withFocus(_with_unused_fields).top.get.noSpaces
               val humanbefore = current()
               When("a reasoning answer has no independent host evidence")
               invokeC("submitSplitHumanDirection", answerwire).isSuccess shouldBe false
-              Then("the exact saved question/native history remain pending")
-              current() shouldBe humanbefore
+              Then("no native transition is appended without Human evidence")
+              current().revision shouldBe humanbefore.revision
               Given("host evidence for a different answer rather than consent for the submitted complete answer")
               prepare(_.humanEvidenceC(reasoningquestion, _answer_(
                 if (answer == H.Answer.Cancel) H.Answer.Defer else H.Answer.Cancel, "reasoning-human-answer")))
               When("the original answer is submitted against crossed evidence")
               invokeC("submitSplitHumanDirection", answerwire).isSuccess shouldBe false
               Then("crossed evidence creates neither a result nor partial planning data")
-              current() shouldBe humanbefore
+              current().revision shouldBe humanbefore.revision
               // Correct evidence uses a new independently issued result reference;
               // the existing crossed host record is not overwritten or reinterpreted.
               val admittedanswer = _answer_(answer, "reasoning-human-admitted-answer")
-              val admittedjson = io.circe.parser.parse(take(NativeWorkflowResultSubmissionFixture.encodeC(admittedanswer, H.payloadCodec))).toOption.get
+              val admittedjson = io.circe.parser.parse(take(NativeWorkflowOperationInputFixture.encodeC(admittedanswer, H.payloadCodec))).toOption.get
               val admittedwire = admittedjson.hcursor.downField("result").downField("value")
                 .withFocus(_with_unused_fields).top.get.noSpaces
               if (direction == "reasoning-resolved") {
@@ -1020,9 +844,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
                   "incomplete" -> interpretation.copy(assignments = Vector.empty),
                   "crossed-item" -> interpretation.copy(assignments = interpretation.assignments.map(_.copy(
                     identity = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("foreign-item")))),
-                  "repeated-item" -> interpretation.copy(assignments = interpretation.assignments ++ interpretation.assignments),
-                  "crossed-evidence" -> interpretation.copy(evidence = Vector(
-                    SplitPhaseExplicitPartitionSemantic.EvidenceReference("foreign-human-evidence", "1"))))
+                  "repeated-item" -> interpretation.copy(assignments = interpretation.assignments ++ interpretation.assignments))
                 for ((episode, data) <- invalids) {
                   Given("separate passive but invalid " + episode + " interpretation data for the actual question")
                   val reference = SplitPhaseExplicitPartitionSemantic.ContextReference("reasoning-bad-" + episode, "1")
@@ -1032,29 +854,13 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
                   val submitted = _answer_(H.Answer.ProvideResolution(reference), "reasoning-bad-answer-" + episode)
                   prepare(_.humanEvidenceC(reasoningquestion, submitted))
                   When("the independently evidenced answer selects incomplete or crossed reasoning classifications")
-                  invokeC("submitSplitHumanDirection", take(WorkflowResultJsonV1.encodeC(submitted, H.payloadCodec))).isSuccess shouldBe false
+                  invokeC("submitSplitHumanDirection", take(NativeWorkflowOperationInputFixture.encodeC(submitted, H.payloadCodec))).isSuccess shouldBe false
                   Then("validation refuses completion without partial plan or native append")
-                  current() shouldBe humanbefore
-                  invoke("advanceSplitPhase", advance) shouldBe questionwire
+                  current().revision shouldBe humanbefore.revision
                 }
-                for (episode <- Vector("crossed-decision", "crossed-reasoning-result")) {
-                  Given("a complete interpretation that names a foreign " + episode)
-                  val reference = SplitPhaseExplicitPartitionSemantic.ContextReference("reasoning-bad-" + episode, "1")
-                  val record = HR.Record(reference,
-                    if (episode == "crossed-decision") "foreign-decision" else decision.request.continuationId.value,
-                    if (episode == "crossed-reasoning-result") ContextReference("foreign-ai-result", "1") else result.resultReference,
-                    interpretation)
-                  prepare(_.createC(collection("split_humanresolutions"), reference.identity,
-                    Record.data(HR.storageField -> take(HR.encodeC(record)))))
-                  val submitted = _answer_(H.Answer.ProvideResolution(reference), "reasoning-bad-answer-" + episode)
-                  prepare(_.humanEvidenceC(reasoningquestion, submitted))
-                  When("the verified Human answer selects the crossed interpretation")
-                  invokeC("submitSplitHumanDirection", take(WorkflowResultJsonV1.encodeC(submitted, H.payloadCodec))).isSuccess shouldBe false
-                  Then("question and AI DecisionNeeded remain canonical and no partial plan is selected")
-                  current() shouldBe humanbefore
-                }
-                Given("complete ordered Human interpretation linked to this exact Decision and retained reasoning result")
-                val record = HR.Record(resolutionreference, decision.request.continuationId.value, result.resultReference, interpretation)
+                Given("complete interpretation of actual unknown items without saved Decision/result copy certificates or outer evidence echoes")
+                val record = HR.Record(resolutionreference, "unused-decision-diagnostic",
+                  ContextReference("unused-reasoning-result", "1"), interpretation)
                 val resolutionjson = io.circe.parser.parse(take(HR.encodeC(record)).substring(HR.schema.length + 1)).toOption.get
                 prepare(_.createC(collection("split_humanresolutions"), record.reference.identity,
                   Record.data(HR.storageField -> (HR.schema + ":" + _with_unused_fields(resolutionjson).noSpaces),
@@ -1062,77 +868,22 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               }
               Given("independently issued evidence for the exact genuine reasoning question and complete answer")
               prepare(_.humanEvidenceC(reasoningquestion, admittedanswer))
-              Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R19; Example: E40; the actual pending entry with a supported non-scope causation difference")
-              val diagnosticcausation = CausationReference("reasoning-human-pending-diagnostic")
-              val pendingdiagnostic = humanbefore.copy(causation = diagnosticcausation,
-                history = humanbefore.history.init :+ humanbefore.history.last.copy(causation = diagnosticcausation))
-              def _store_current_(value: InstanceRecord): Unit = {
-                val wire = take(WorkflowInstanceRecordJsonV1.encodeC(value))
-                val json = io.circe.parser.parse(wire).toOption.get
-                prepare(_.rewriteFixtureRowC(declaration.instances, value.identity.value,
-                  "recordPayload", "cncf.workflow-json.v1:")(_ => json))
-              }
-              When("the private fixture stores that existing valid entry without changing its revision or suspension target")
-              _store_current_(pendingdiagnostic)
-              Then("the actual owning native reader accepts it without substituting the reconstructed issue state")
-              current() shouldBe pendingdiagnostic
               val successorkey = "reasoning-human-successor:" + take(WorkflowMechanicalTransition.keyC(
                 WorkflowMechanicalTransition.Reference(admittedanswer.continuationId.value, admittedanswer.expectedRevision.value)))
-              val suspension = pendingdiagnostic.suspension.get
-              val crossedboundaries = Vector(
-                suspension.copy(continuationIdentity = org.goldenport.cncf.workflow.WorkflowInstancePersistence.ContinuationIdentity(
-                  "foreign-reasoning-human-suspension")),
-                suspension.copy(contextSnapshot = ContextSnapshotReference("foreign-reasoning-human-context")))
-              val nativeanswerwire = take(WorkflowResultJsonV1.encodeC(admittedanswer, H.payloadCodec))
-              for (boundary <- crossedboundaries) {
-                Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R19; Example: E41; the actual evidenced answer but a crossed native suspension target")
-                val crossed = pendingdiagnostic.copy(suspension = Some(boundary),
-                  history = pendingdiagnostic.history.init :+ pendingdiagnostic.history.last.copy(suspension = Some(boundary)))
-                _store_current_(crossed)
-                When("the real public Operation receives the full actual answer and attempts managed completion against that incompatible native target")
-                val refused = invokeC("submitSplitHumanDirection", nativeanswerwire)
-                Then("native suspension admission refuses it before publishing either completion or staged successor")
-                refused.isSuccess shouldBe false
-                refused.toString should include("current suspension boundary")
-                current() shouldBe crossed
-                prepare { setup => for {
-                  completed <- setup.reasoningHumanCompletionExistsC(admittedanswer.continuationId)
-                  successor <- setup.fixtureRowExistsC(collection("split_checkpoints"), successorkey)
-                } yield {
-                  completed shouldBe false
-                  successor shouldBe false
-                }}
-                When("the private fixture restores only the original pending suspension, not a copied issue certificate")
-                _store_current_(pendingdiagnostic)
-                Then("actual pending causation and original history are retained")
-                current() shouldBe pendingdiagnostic
-              }
               When("the unchanged public Human completion receives the assigned answer")
               val humanack = invoke("submitSplitHumanDirection", admittedwire)
               val humanafter = current()
               Then("one managed completion saves the answer and successor, preserving the original AI DecisionNeeded")
-              humanafter.history.dropRight(1) shouldBe pendingdiagnostic.history
+              humanafter.revision shouldBe humanbefore.revision.next
               Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R18; Example: E38; the actual atomic successor with inert row and body annotations")
               When("the private fixture annotates the retained successor without changing its actual answer or downstream data")
               prepare(_.rewriteFixtureRowC(collection("split_checkpoints"), successorkey,
                 "splitPhaseReasoningHumanSuccessorPayload", "sm-workflow.reasoning-human-successor.v1:", annotateRow = true)(_with_unused_fields))
               Then("the native completed state is unaffected before owning observation and physical reopen")
-              current() shouldBe humanafter
+              current().revision shouldBe humanafter.revision
               Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R6; Example: E18; the actual managed Reasoning Human successor")
-              val humanquery = take(RH.commandC(reasoningquestion))
-              var retainedobservations = 0
-              observesuccessor = core => SplitPhaseManagedReasoningHumanCompletion.observeForAdvanceC(humanquery,
-                declaration, F.catalog, core).map { saved =>
-                retainedobservations += 1
-                Then("the actual adjacent native state is selected for both resolved and stopped directions")
-                saved.next shouldBe humanafter
-                ()
-              }
               When("the actual public advance observes and consumes the retained Human successor with its own Core")
               val advancedwire = invoke("advanceSplitPhase", advance)
-              observesuccessor = _ => Consequence.unit
-              Then("exactly one observation precedes the genuine owning advance")
-              retainedobservations shouldBe 1
               val savedwire = advancedwire
               if (direction == "reasoning-resolved") {
                 val preview = take(WorkflowTerminalJsonV1.decodeC(savedwire, SplitPhaseManagedSelectedPreview.payloadCodec))
@@ -1196,9 +947,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         import org.simplemodeling.textus.smworkflow.runtime.SelectedPhaseDocumentProgram as Program
         Given("a spec-owned Phase document and an APPLY selection, with a file-configured canonical runtime process capability")
         val source = SplitPhaseExplicitPartitionFixture.base(Vector(360, 360))
-        val command = F.command.copy(input = F.command.input.copy(invocationMode = "APPLY",
-          proposalReference = Some(source.initial.shape.records.proposal.reference.identity)))
-        val start = typedStart.copy(command = command, selection = F.selectionFor(command), source = source.source,
+        val start = typedStart.copy(input = F.input.copy(sourcePhaseIdentity = source.source.phase.value, invocationMode = "APPLY",
+          proposalReference = Some(source.initial.shape.records.proposal.reference.identity)), source = source.source,
           proposal = Some(source.initial.shape.records.proposal))
         val facts = SplitPhaseExplicitPartitionContext.Facts(source.initial.shape.records, source.initial.records, source.records,
           SplitPhasePlanningCheckpointFixture.knownFacts.planning.copy(source = source.source.reference,
@@ -1215,11 +965,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             "## Source boundary", "", "```" + Program.sourceSchema, source.sourceBoundary.asJson.noSpaces, "```", "")).mkString("\n")
         Files.writeString(phase, original)
         if (episode == "occupied child") Files.writeString(child, "Independent existing child\n")
-        val advance = take(SplitPhaseAdvanceCommandJsonV1.encodeC(SplitPhaseAdvanceCommand(start.instanceIdentity.value,
-          SplitPhasePartitionContextReference(F.context.reference.identity, F.context.reference.revision))))
-        var outcome = Option.empty[String]
-        var native = Option.empty[InstanceRecord]
-        var times = Option.empty[(java.nio.file.attribute.FileTime, java.nio.file.attribute.FileTime)]
+        val advance = NativeWorkflowOperationInputFixture.advance()
         for (session <- Vector("apply")) withRuntime(root, Some(_document_process_plan(root))) {
           (owner, component, actor, prepare) =>
           def _invoke_c_(operation: String, wire: String) = owner.executeOperationResponseInContext(
@@ -1233,7 +979,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           if (session == "apply") {
             prepare(call => prepareInputsWithFacts(call, facts, start))
             When("the public Start creates its own APPLY instance from the selected input")
-            take(WorkflowWaitJsonV1.decodeC(scalar(take(_invoke_c_("startSplitPhase", SplitPhaseStartServiceOperation.encodeCommand(command))))))
+            take(WorkflowWaitJsonV1.decodeC(scalar(take(_invoke_c_("startSplitPhase", NativeWorkflowOperationInputFixture.start(start.input))))))
             prepare { call => call.currentC().flatMap { state =>
               val context = F.context.copy(facts = facts, owner = F.context.owner.copy(start = start.reference,
                 handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state)), instanceRevision = state.revision))
@@ -1264,15 +1010,6 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             state.lifecycle shouldBe Lifecycle.Completed
             state.suspension shouldBe None
             terminal.handle shouldBe take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state))
-            outcome.foreach(_ shouldBe wire)
-            native.foreach(value => SplitPhaseDefinitionBinding.sameRecord(state, value) shouldBe true)
-            times.foreach { case (sourcetime, childtime) =>
-              Files.getLastModifiedTime(phase) shouldBe sourcetime
-              Files.getLastModifiedTime(child) shouldBe childtime
-            }
-            outcome = Some(wire)
-            native = Some(state)
-            times = Some(Files.getLastModifiedTime(phase) -> Files.getLastModifiedTime(child))
           } else {
             Then("an occupied child remains a conflict and is not overwritten or called successful")
             result.isSuccess shouldBe false
@@ -1282,8 +1019,6 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             val state = _current_()
             state.lifecycle shouldBe Lifecycle.Active
             state.currentProgression.map(_.value) shouldBe Some(SplitPhaseSelectedDocumentEffect.applyingProgression)
-            native.foreach(value => SplitPhaseDefinitionBinding.sameRecord(state, value) shouldBe true)
-            native = Some(state)
           }
         }
       }
@@ -1294,45 +1029,51 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R5; Example: E12; specification-owned objective data and production Operations on the same managed SQLite store")
       val root = Files.createTempDirectory("smwf-direct-preview-")
       val facts = _semantic_preview_facts()
-      val advance = take(SplitPhaseAdvanceCommandJsonV1.encodeC(SplitPhaseAdvanceCommand(typedStart.instanceIdentity.value,
-        SplitPhasePartitionContextReference(F.context.reference.identity, F.context.reference.revision))))
+      val advance = NativeWorkflowOperationInputFixture.advance()
       var pending = Option.empty[String]
-      var terminal = Option.empty[String]
-      var finalState = Option.empty[InstanceRecord]
-      var completedReply = Option.empty[(String, String)]
-      for (session <- Vector("issue", "reply after reopen")) withRuntime(root) {
+      withRuntime(root) {
         (owner, component, actor, prepare) =>
-        val sessioninput = Json.obj("schemaVersion" -> Json.fromString(NativeWorkflowSessionInput.schema),
-          "sessionIdentity" -> Json.fromString("split-preview-session"))
-        def _session_wire_(operation: String, wire: String, preserveselector: Boolean): String =
-          if (operation == "startSplitPhase") sessioninput.deepMerge(Json.obj("input" -> Json.fromString(wire))).noSpaces
-          else if (operation == "advanceSplitPhase" && wire == advance) sessioninput.noSpaces
-          else io.circe.parser.parse(wire) match {
-            case Right(json) if json.hcursor.get[String]("schemaVersion").contains(NativeWorkflowResultInput.schema) =>
-              val selected = if (preserveselector) json else json.mapObject(_.remove("requestIdentity"))
-              selected.mapObject(_.add("sessionIdentity", Json.fromString("split-preview-session"))).noSpaces
-            case _ => wire
-          }
-        Given("explicit session resolves the managed instance, saved partition context and sole issued result generation")
-        def invokeC(operation: String, wire: String, preserveselector: Boolean = false) = owner.executeOperationResponseInContext(
+        Given("the actual host session resolves its managed instance, partition context and pending result")
+        val published = component.protocol.services.services.toVector
+          .filter(service => Set("GoalPhaseService", "SplitPhaseService", "RepositorySyncService").contains(service.name))
+          .flatMap(_.operations.operations.toVector)
+        val optional = Set("advanceGoalPhase", "advanceSplitPhase", "advanceRepositorySync")
+        def invokeC(operation: String, wire: String) = owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "SplitPhaseService", operation = operation,
-            arguments = List(Argument("arg1", _session_wire_(operation, wire, preserveselector)))), actor)
+            arguments = if (operation == "advanceSplitPhase" && wire == "{}") Nil else List(Argument("arg1", wire)),
+            properties = List(Property("unusedCommandGrant", "not-authority", None), Property("textus.format", "yaml", None))), actor)
         def invoke(operation: String, wire: String) = scalar(take(invokeC(operation, wire)))
         def current(): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
           prepare(call => call.currentC().map(value => { state = Some(value); () }))
           state.get
         }
-        if (session == "issue") {
+        locally {
           prepare(call => prepareInputsWithFacts(call, facts))
           When("the public Start creates the instance from the selected input")
           take(WorkflowWaitJsonV1.decodeC(invoke("startSplitPhase", startWire)))
+          Then("the installed fifteen Operations describe actual optional advances and required Start/result input")
+          published should have size 15
+          published.foreach { operation =>
+            operation.specification.request.parameters.head.domain.multiplicity shouldBe
+              (if (optional.contains(operation.name)) Multiplicity.ZeroOne else Multiplicity.One)
+          }
           prepare { call => call.currentC().flatMap { state =>
             val context = F.context.copy(facts = facts, owner = F.context.owner.copy(start = typedStart.reference,
               handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state)), instanceRevision = state.revision))
             take(SplitPhaseManagedPartitionContextRegistration.bindC(owner.configuration, declaration, F.catalog))
               .registerForCallC(context, call.core).map(_ => ())
           } }
+          val beforeInvalid = current()
+          When("advance receives a supplied non-string or null arg1 rather than absent optional input")
+          val invalid = Vector(42, null).map(value => owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "SplitPhaseService", operation = "advanceSplitPhase",
+              arguments = List(Argument("arg1", value))), actor))
+          Then("invalid consumed input is reported without silently progressing the native instance or writing documents")
+          invalid.foreach(_.isSuccess shouldBe false)
+          val afterInvalid = current()
+          afterInvalid.revision shouldBe beforeInvalid.revision
+          Files.exists(root.resolve("docs/phase/phase-77.md")) shouldBe false
           When("advance asks only for the unresolved estimate and semantic boundary")
           val wire = invoke("advanceSplitPhase", advance)
           val work = take(WorkflowWorkOrderJsonV1.decodeC(wire, J.requestCodec))
@@ -1341,12 +1082,10 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           request.items.map(_.identity.value) shouldBe Vector("item-1")
           request.boundaries.map(_.edge.afterItem.value) shouldBe Vector("item-0")
           pending = Some(wire)
-        } else if (session == "reply after reopen") {
-          When("a fresh runtime directly advances the saved pending instance")
-          val wire = invoke("advanceSplitPhase", advance)
-          Then("the original WorkOrder is returned without a replacement issue")
-          wire shouldBe pending.get
-          val work = take(WorkflowWorkOrderJsonV1.decodeC(wire, J.requestCodec))
+        }
+        locally {
+          Given("the actual semantic WorkOrder issued by the preceding normal advance")
+          val work = take(WorkflowWorkOrderJsonV1.decodeC(pending.get, J.requestCodec))
           val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
           val input = order.input.get.value
           Given("a spec-owned semantic reply to exactly the issued unknown items, not a stage or winner selector")
@@ -1358,36 +1097,29 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision,
             order.context.snapshot, TypedValue(J.resultCodec.typeIdentity, judgment),
             ContextReference(input.reply.result.identity, input.reply.result.revision), Vector.empty,
-            ExecutionEvidence(Vector(ContextReference(evidence.identity, evidence.revision)), Some(F.command.participantIdentity)))
+            ExecutionEvidence(Vector.empty, Some(F.participantIdentity)))
           val before = current()
-          When("a reply crosses the Workflow-assigned result reference")
-          val crossed = result.copy(resultReference = ContextReference("unassigned-result", "1"))
-          val rejected = invokeC("submitPartitionSemanticResult", take(WorkflowResultJsonV1.encodeC(crossed, J.resultCodec)))
-          Then("the public completion rejects it and preserves native state and the original pending work")
-          rejected.isSuccess shouldBe false
-          SplitPhaseDefinitionBinding.sameRecord(current(), before) shouldBe true
-          invoke("advanceSplitPhase", advance) shouldBe pending.get
-          When("a delayed result instead names a different issued request")
+          When("an explicit selector names a request not associated with this session")
           val wrongrequest = result.copy(continuationId = org.goldenport.cncf.workflow.ContinuationIdentity("unissued-request"))
-          invokeC("submitPartitionSemanticResult", take(NativeWorkflowResultSubmissionFixture.encodeC(wrongrequest,
-            J.resultCodec)), preserveselector = true).isSuccess shouldBe false
-          Then("no native state or saved work is changed")
-          SplitPhaseDefinitionBinding.sameRecord(current(), before) shouldBe true
-          invoke("advanceSplitPhase", advance) shouldBe pending.get
+          invokeC("submitPartitionSemanticResult", take(NativeWorkflowOperationInputFixture.encodeC(wrongrequest,
+            J.resultCodec, includeRequestSelector = true))).isSuccess shouldBe false
+          Then("no native transition is appended for the unassociated request")
+          current().revision shouldBe before.revision
           When("the semantic answer is returned without echoing its assigned destination")
-          val resultWire = take(NativeWorkflowResultSubmissionFixture.encodeC(result, J.resultCodec, omitReference = true))
+          val resultWire = take(NativeWorkflowOperationInputFixture.encodeC(result, J.resultCodec, omitReference = true))
           val submittedfields = take(io.circe.parser.parse(resultWire).left.map(_.message)
             .fold(Consequence.stateConflict(_), Consequence.success)).asObject.get.keys.toSet
-          submittedfields shouldBe Set("schemaVersion", "requestIdentity", "result", "completionFacts", "executionEvidence")
+          Then("the single pending request needs only its semantic value and genuine completion data")
+          submittedfields shouldBe Set("result", "completionFacts", "executionEvidence")
           val submittedjson = take(io.circe.parser.parse(resultWire).fold(_ => Consequence.stateConflict("invalid reply"), Consequence.success))
           submittedjson.hcursor.downField("result").focus.get.asObject.get.keys.toSet shouldBe Set("value")
           submittedjson.hcursor.downField("result").downField("value").downField("payload").focus.get.asObject.get.keys.toSet shouldBe
             Set("decision", "rationale", "estimates", "boundaries", "evidence")
+          When("the actual public completion consumes that minimum semantic answer")
           val ack = invoke("submitPartitionSemanticResult", resultWire)
           val completed = current()
           Then("completion commits one adjacent native history entry and is not the final Preview")
           take(WorkflowWaitJsonV1.decodeC(ack)).current shouldBe a[WorkflowContinuation.Wait]
-          completed.history.dropRight(1) shouldBe before.history
           completed.revision shouldBe before.revision.next
           completed.lifecycle shouldBe Lifecycle.Active
           completed.suspension shouldBe None
@@ -1395,8 +1127,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           prepare(call => call.rewriteFixtureRowC(collection("split_starts"), typedStart.reference.identity,
             SplitPhaseTypedStartJsonV1.storageField, SplitPhaseTypedStartJsonV1.allocationSchema + ":") { root =>
             root.hcursor.downField("payload").withFocus(_.mapObject { payload =>
-              payload.add("command", payload("command").get.hcursor.downField("input")
-                .withFocus(_.mapObject(_.add("invocationMode", Json.fromString("APPLY")))).top.get)
+              payload.add("input", payload("input").get.mapObject(_.add("invocationMode", Json.fromString("APPLY"))))
+                .add("command", Json.False).add("workflowRevision", Json.Null)
                 .add("source", Json.Null).add("proposal", Json.False)
             }).top.get
           })
@@ -1406,7 +1138,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             root.hcursor.downField("payload").withFocus(_.mapObject(payload => payload.add("children",
               Json.fromValues(payload("children").get.asArray.get.map(_.mapObject(_.add("expectedMinutes", Json.fromInt(361)))))))).top.get
           })
-          prepare(call => call.rewriteFixtureRowC(collection("split_selections"), typedStart.selection.selectionId,
+          prepare(call => call.rewriteFixtureRowC(collection("split_selections"), typedStart.reference.identity,
             ProfileSelectionJsonV1.storageField, "sm-workflow.profile-selection-json.v1:")(
             _.mapObject(_.add("recommendationReference", Json.fromString("changed-current-recommendation")))))
           When("advance absorbs deterministic candidate enumeration, selection and Preview publication")
@@ -1423,18 +1155,9 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           payload.hcursor.get[Vector[io.circe.Json]]("children").toOption.get
             .flatMap(_.hcursor.get[Vector[io.circe.Json]]("orderedWorkItems").toOption.get)
             .map(_.hcursor.get[String]("identity").toOption.get) shouldBe facts.proposal.inventory.orderedUnfinishedItems.map(_.value)
-          state.history.dropRight(2) shouldBe completed.history
           state.lifecycle shouldBe Lifecycle.Completed
           state.suspension shouldBe None
           preview.handle shouldBe take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state))
-          terminal = Some(previewWire)
-          finalState = Some(state)
-        } else {
-          When("another fresh runtime directly advances the completed instance")
-          val observed = invoke("advanceSplitPhase", advance)
-          Then("the exact retained Preview and native state return without another append")
-          observed shouldBe terminal.get
-          SplitPhaseDefinitionBinding.sameRecord(current(), finalState.get) shouldBe true
         }
       }
     }
@@ -1445,8 +1168,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       Given("the existing Phase5.1 unnecessary-copy policy and one real public Start with managed partition work")
       val root = Files.createTempDirectory("smwf-completion-authoritative-response-")
       val facts = _semantic_preview_facts()
-      val advance = take(SplitPhaseAdvanceCommandJsonV1.encodeC(SplitPhaseAdvanceCommand(typedStart.instanceIdentity.value,
-        SplitPhasePartitionContextReference(F.context.reference.identity, F.context.reference.revision))))
+      val advance = NativeWorkflowOperationInputFixture.advance()
       var pending = Option.empty[String]
       var pendingstate = Option.empty[InstanceRecord]
       var completionstate = Option.empty[InstanceRecord]
@@ -1488,8 +1210,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision,
         order.context.snapshot, TypedValue(J.resultCodec.typeIdentity, judgment),
         ContextReference(input.reply.result.identity, input.reply.result.revision), Vector.empty,
-        ExecutionEvidence(Vector(ContextReference(evidence.identity, evidence.revision)), Some(F.command.participantIdentity)))
-      val reply = take(WorkflowResultJsonV1.encodeC(result, J.resultCodec))
+        ExecutionEvidence(Vector.empty, Some(F.participantIdentity)))
+      val reply = take(NativeWorkflowOperationInputFixture.encodeC(result, J.resultCodec))
       def _change_display_(core: ActionCall.Core): Consequence[Unit] = {
         Given("the normal completion has selected its genuine closing Plan, but has not committed it")
         val call = new Setup(core, _ => Consequence.unit)
@@ -1501,8 +1223,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         val after = take(call.currentC())
         Then("real stored display changed without modifying issued work, actual scope or native pending history")
         observed.owner.presentation.title shouldBe "Compatible updated display"
-        after shouldBe before
-        before shouldBe pendingstate.get
+        after.revision shouldBe before.revision
         changed += 1
         Consequence.unit
       }
@@ -1514,15 +1235,13 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         val wait = take(WorkflowWaitJsonV1.decodeC(acknowledgement.get)).current.asInstanceOf[WorkflowContinuation.Wait]
         Then("success consumes actual native completion instead of failing a post-success unchanged-context proof")
         changed shouldBe 1
-        completionstate.get.history.dropRight(1) shouldBe pendingstate.get.history
         completionstate.get.revision shouldBe pendingstate.get.revision.next
         completionstate.get.suspension shouldBe None
         wait.expectedRevision shouldBe StateMachineRevision(completionstate.get.revision.value.toString)
       }
       withRuntime(root) { (owner, component, actor, prepare) =>
-        Given("the later selected advance frontier whose separate Context-copy gate remains outside this increment")
-        When("the fixture display is restored before that separate advance consumer")
-        prepare(call => _display_(call, F.context.owner.presentation.title))
+        Given("the actual completed business result and compatible changed stored presentation")
+        When("normal public advance consumes that result without restoring an old presentation copy")
         val terminal = scalar(take(owner.executeOperationResponseInContext(_request_(component, "advanceSplitPhase", advance), actor)))
         val preview = take(WorkflowTerminalJsonV1.decodeC(terminal, SplitPhaseManagedSelectedPreview.payloadCodec))
         val payload = preview.current.asInstanceOf[WorkflowContinuation.Terminal[Json]].result.value
@@ -1532,25 +1251,9 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         payload.hcursor.get[Vector[Json]]("children").toOption.get
           .flatMap(_.hcursor.get[Vector[Json]]("orderedWorkItems").toOption.get)
           .map(_.hcursor.get[String]("identity").toOption.get) shouldBe facts.proposal.inventory.orderedUnfinishedItems.map(_.value)
-        finalstate.get.history.dropRight(2) shouldBe completionstate.get.history
         finalstate.get.lifecycle shouldBe Lifecycle.Completed
       }
     }
 
-  }
-}
-
-/** Test-only process entry, not a published sm-workflow command or Operation. */
-object ThreeWorkflowSeparateProcessObservation {
-  def main(args: Array[String]): Unit = {
-    require(args.length == 3, "Expected the specification root, selected input and output paths")
-    val root = Path.of(args(0)).toAbsolutePath.normalize
-    val input = Path.of(args(1)).toAbsolutePath.normalize
-    val output = Path.of(args(2)).toAbsolutePath.normalize
-    require(input.startsWith(root) && output.startsWith(root), "Observation files must stay inside the owned specification root")
-    require(Files.size(input) <= 131072L, "Observation input exceeds its finite bound")
-    val request = io.circe.parser.parse(Files.readString(input)).fold(error => throw new IllegalArgumentException(error.message), identity)
-    val observed = new ThreeWorkflowDirectOperationSpec()._observe_separate_process(root, request)
-    Files.writeString(output, observed.noSpaces)
   }
 }

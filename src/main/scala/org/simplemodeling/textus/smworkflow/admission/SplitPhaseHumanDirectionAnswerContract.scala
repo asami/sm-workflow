@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitPartitio
   * references and unused fields are not planning or command authority.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
   enum Answer {
@@ -27,7 +27,7 @@ private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
     val typeIdentity = resultType
     def encode(value: Answer): Json = encodeC(value).toOption.getOrElse(Json.Null)
     def decode(value: Json): Either[String, Answer] = for {
-      json <- Option(value).filter(v => _bounded(v.noSpaces)).toRight("Human answer is absent or oversized")
+      json <- Option(value).toRight("Human answer is absent")
       root <- json.asObject.toRight("Human answer is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Human answer schema differs")
       body <- root("payload").flatMap(_.asObject).toRight("Human answer body is absent")

@@ -9,7 +9,7 @@ import SplitPhaseExplicitDurationCalibration.{Reference, Snapshot, PolicyRecord}
 /**
  * Independent current calibration source projections: data, not executable Input.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 private[smworkflow] object SplitPhaseCalibrationSourceJsonV1 {
   val snapshotSchema = "sm-workflow.split-phase-calibration-snapshot.v1"
@@ -21,9 +21,9 @@ private[smworkflow] object SplitPhaseCalibrationSourceJsonV1 {
   def encodeSnapshotC(value: Snapshot): Consequence[String] = encodeC(snapshotSchema, value, validSnapshot)
   def encodePolicyC(value: PolicyRecord): Consequence[String] = encodeC(policySchema, value, validPolicy)
   def decodeSnapshotC(expected: Reference, raw: String): Consequence[Snapshot] =
-    _decode_c[Snapshot](snapshotSchema, expected, raw, SplitPhaseCalibrationRawShape.snapshot, _.reference)
+    _decode_c[Snapshot](snapshotSchema, expected, raw, _.reference)
   def decodePolicyC(expected: Reference, raw: String): Consequence[PolicyRecord] =
-    _decode_c[PolicyRecord](policySchema, expected, raw, SplitPhaseCalibrationRawShape.policy, _.reference)
+    _decode_c[PolicyRecord](policySchema, expected, raw, _.reference)
 
   private def encodeC[A: Encoder](schema: String, value: A, valid: A => Boolean): Consequence[String] =
     if (!valid(value)) Consequence.stateConflict("SplitPhase calibration source structure is incomplete")
@@ -33,19 +33,19 @@ private[smworkflow] object SplitPhaseCalibrationSourceJsonV1 {
       else Consequence.stateConflict("SplitPhase calibration source exceeds its storage limit")
     }
   private def _decode_c[A: Decoder](schema: String, expected: Reference, raw: String,
-    shape: Json => Boolean, ref: A => Reference): Consequence[A] =
+    ref: A => Reference): Consequence[A] =
     if (!reference(expected) || raw == null || raw.length > limit || !raw.startsWith(schema + ":"))
       Consequence.stateConflict("SplitPhase calibration source reference/encoding is unsupported")
     else for {
       json <- parser.parse(raw.drop(schema.length + 1)).fold(
         _ => Consequence.stateConflict("SplitPhase calibration source JSON is invalid"), Consequence.success)
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload"))
+      root <- json.asObject
         .map(Consequence.success).getOrElse(Consequence.stateConflict("SplitPhase calibration source envelope differs"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit
         else Consequence.stateConflict("SplitPhase calibration source schema differs")
-      _ <- if (shape(root("payload").get)) Consequence.unit
-        else Consequence.stateConflict("SplitPhase calibration source nested structure differs")
-      value <- root("payload").get.as[A].fold(
+      payload <- root("payload").map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("SplitPhase calibration source payload is absent"))
+      value <- payload.as[A].fold(
         _ => Consequence.stateConflict("SplitPhase calibration source data is invalid"), Consequence.success)
       _ <- if (ref(value) == expected) Consequence.unit
         else Consequence.stateConflict("SplitPhase calibration selected source reference/revision differs")

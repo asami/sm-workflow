@@ -1,6 +1,6 @@
 # SplitPhase handoff scope contract
 
-The current SplitPhase definition is `split-phase-selected-application-v12`. Its handoff
+The current SplitPhase definition is `split-phase-minimal-operation-v13`. Its handoff
 scope task is distinct from the partition-estimate/boundary task and older
 novel-work inputs. Its managed continuation is included in the normal
 three-workflow factory. Earlier additive assemblies remain separate fixtures,
@@ -31,26 +31,18 @@ native commit/closure outcome is recorded separately. Skill/CLI wiring remains P
 
 ## Advance input
 
-`SplitPhaseAdvanceCommand` contains only `instanceIdentity` and a context with
-`identity` and `revision`. It contains no next-operation, processing-stage,
-candidate, repository or storage selector.
+With an actual host session and one applicable target, call advance without
+`arg1`. Otherwise its optional JSON supplies only the necessary `sessionIdentity`,
+`instanceIdentity` or `contextIdentity` selector. Workflow resolves the stored
+instance and partition context. The nominal `SplitPhaseAdvanceInput` declaration
+describes those optional selectors; it is not another mandatory argument.
 
-The application's command frame uses the exact prefix
-`sm-workflow.split-phase-advance-command.v1:` followed by a JSON object
-with `schemaVersion` and `payload`. There is no separate command-codec byte
-limit for formatting or ignored diagnostic data. Transport/runtime resource
-policies remain separate; codec acceptance is not a resource grant.
-The decoder consumes the generated instance/context fields and ignores unused
-diagnostics at every object level; it does not compare the whole input with a
-regenerated JSON body. Extra stage, action, storage or command fields do not
-select those controls. Missing or wrongly typed consumed fields and incompatible
-schemas still fail conversion; actual current-call authority, context and native
-state are resolved by the owning Operation. Logical reference strings are not
-trimmed or pre-admitted as physical planning keys by this codec. The actual
-planning-index read/publication owns its escaped-key bound when that key is
-consumed; missing contexts fail at the owning context lookup. This describes a
-codec, not permission to call an unavailable binding. Use the configured
-client's encoder, not a fabricated context or an approximate envelope.
+There is no `SplitPhaseAdvanceCommand`, prefixed command frame, revision/snapshot
+echo or identity-only alternative. Unused diagnostic, stage, action, storage or
+command fields do not select controls or grant authority. Missing/wrongly typed
+consumed input fails its decoder; actual current-call context and native state
+belong to the owning Operation. Transport/storage bounds remain at their actual
+consuming boundaries, not as unchanged-input certificates.
 
 ## Issued scope request
 
@@ -77,11 +69,12 @@ issued request; the answer does not echo or certify them.
 - `DecisionNeeded` supplies no partial scopes. Its rationale and evidence remain
   required; it does not approve a human choice or allow execution.
 
-Evidence references must be nonempty and distinct and also belong to the actual
-execution evidence. Normal reduced submission resolves the host-assigned result
-destination and issued controls from managed state; return `result.value`, not a
-destination comparison copy. Historical full-envelope input must use the assigned
-result reference and actual issued continuation, revision, snapshot and contracts.
+Semantic evidence references are consumed once in the requested result, not
+echoed in outer execution evidence. Independently supplied execution evidence
+retains its distinct meaning. Normal submission resolves the host-assigned result
+destination and issued controls internally; return `result.value`, not a
+destination, continuation, revision or snapshot comparison copy. There is no
+supported historical full-envelope submission alternative.
 Unused legacy context/checkpoint copies and diagnostic fields are ignored, not
 compared or used to select execution. Actual incompatible schemas or consumed
 field types fail decoding; foreign business references, reordered/duplicate
@@ -96,8 +89,8 @@ Decode limits payloads to 1 MiB. CNCF owns the
 outer WorkOrder/result envelopes. The normal component also accepts
 `sm-workflow.result-submission.v1` with the typed semantic payload under
 `result.value`, consumed evidence and session or necessary request selection.
-This is distinct from returning a bare application payload where the host expects
-a submission frame or a historical complete result envelope.
+This is distinct from returning a bare application payload where the owning
+public Operation expects the current minimal submission frame.
 
 ## Effects and retained observation
 
@@ -210,9 +203,9 @@ handler is not yet installed.
 
 ## Compatibility and remaining validation
 
-Existing v5/v6/v7/v8/v9/v10 definitions are incompatible data, not automatically migrated or
-silently rebound. Current v12 generated declarations do not establish their
-storage compatibility.
+Older v5–v12 execution definitions are not automatically migrated or silently
+rebound to the current v13 definition. Abandon unsupported old executions and
+start NEW; generated declarations do not establish storage compatibility.
 
 The reasoning extension declares a distinct `assessReasoningDemand` capability
 and `submitReasoningResult` completion. The additive planning assembly installs
@@ -264,8 +257,9 @@ Broader transports and public skills retain their
 separate Phase assignments. Rendered/runtime Help remains unverified; supporting
 tests alone do not establish practical Phase or release acceptance.
 
-Planning snapshot storage admits the declared wire fields and types, not a
-reconstructed copy or proof that a whole candidate frontier is executable.
+Planning snapshot storage consumes required typed data and ignores unused
+annotations; supported optional absence is not an encoder-image discrepancy.
+It admits neither a reconstructed copy nor proof that a candidate frontier is executable.
 Standalone, native payload and existing full checkpoint readers share this
 contract. A typed passive record can be stored even when candidate relationships
 are unusable; Workflow routing and selected document/preview use must interpret

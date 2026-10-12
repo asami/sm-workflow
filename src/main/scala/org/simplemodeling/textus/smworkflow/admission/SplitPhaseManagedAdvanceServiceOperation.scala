@@ -7,11 +7,10 @@ import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMo
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.workflow.{WorkflowWorkOrderJsonV1, WorkflowMechanicalTransition as M}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.Lifecycle
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPreparation as T,
   SplitPhaseExplicitPartitionContext as C, SplitPhaseExplicitPartitionSemantic as S,
   SplitPhaseExplicitPartitionSemanticJson as J, SplitPhaseExplicitPlanningAdvance as W,
@@ -23,43 +22,40 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
   * Binding retains metadata only; every effect borrows the actual owning Core.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
   def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, humanDirection: Boolean = false,
     terminalObservation: () => Consequence[Unit] = () => Consequence.unit): Consequence[spec.OperationDefinition] = {
-    val operations = SplitPhaseDefinitionBinding.providedDefinition.providedOperations.filter(operation =>
-      operation.service == K.advanceOperation.service && operation.name == K.advanceOperation.operation)
-    if (params == null || declaration == null || catalog == null || terminalObservation == null || operations.size != 1 ||
-        operations.head.inputType != Some("SplitPhaseAdvanceCommand") || operations.head.resultType != Some("SplitPhaseAdvanceResult"))
-      Consequence.configurationInvalid("SplitPhase public advance differs from its generated ABI or host dependencies")
+    if (params == null || declaration == null || catalog == null || terminalObservation == null)
+      Consequence.configurationInvalid("SplitPhase advance requires its configured native host dependencies")
     else D.bindC(params.configuration, declaration, catalog).map(port =>
       new BoundOperation(declaration, catalog, port, humanDirection, terminalObservation))
   }
 
   private final class BoundOperation(declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, checkpoints: D.Port, humandirection: Boolean,
-    terminalobservation: () => Consequence[Unit]) extends spec.OperationDefinition {
+    terminalobservation: () => Consequence[Unit]) extends NativeWorkflowAdvanceInput.Receiver {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       SmWorkflowComponent.SplitPhaseServiceService.AdvanceSplitPhaseOperation)
+    def createAdvanceOperationRequestC(request: Request,
+      input: NativeWorkflowAdvanceInput.Resolved): Consequence[OperationRequest] = input match {
+      case NativeWorkflowAdvanceInput.Split(command) => Consequence.success(
+        BoundAction(request, command, declaration, catalog, checkpoints, humandirection, terminalobservation))
+      case _ => Consequence.stateConflict("SplitPhase advance requires its own selected target")
+    }
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      if (request == null || request.operation != K.advanceOperation.operation || !request.service.contains(K.advanceOperation.service))
-        Consequence.stateConflict("SplitPhase public advance differs from its exact generated Operation")
-      else WorkflowJsonCommandRequest.commandArguments(request) match {
-        case List(Argument("arg1", wire: String, _)) => SplitPhaseAdvanceCommandJsonV1.decodeC(wire).map(command =>
-          BoundAction(request, command, declaration, catalog, checkpoints, humandirection, terminalobservation))
-        case _ => Consequence.stateConflict("SplitPhase public advance requires one complete JSON command")
-      }
+      Consequence.configurationInvalid("SplitPhase advance requires its session-resolved native target")
   }
-  private final case class BoundAction(request: Request, command: SplitPhaseAdvanceCommand,
+  private final case class BoundAction(request: Request, command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     checkpoints: D.Port, humandirection: Boolean, terminalobservation: () => Consequence[Unit]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(core: ActionCall.Core): ActionCall =
       BoundCall(core, command, declaration, catalog, checkpoints, humandirection, terminalobservation)
   }
-  private final case class BoundCall(core: ActionCall.Core, command: SplitPhaseAdvanceCommand,
+  private final case class BoundCall(core: ActionCall.Core, command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     checkpoints: D.Port, humandirection: Boolean, terminalobservation: () => Consequence[Unit]) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
@@ -67,14 +63,14 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       .map(OperationResponse.Scalar(_))
   }
 
-  private def _advance_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _advance_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, checkpoints: D.Port, core: ActionCall.Core,
     humandirection: Boolean, terminalobservation: () => Consequence[Unit]): Consequence[String] = for {
     observed <- checkpoints.loadCurrentForCallC(command, core)
     reasoning <- SplitPhaseDefinitionBinding.reasoningSemanticOperationC
     reasoninghuman <- SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC
     wire <- if (observed.current.suspension.exists(_.completion.value == reasoning.metadata.completionContract.identity))
-      SplitPhaseManagedReasoningCompletion.pendingForAdvanceC(command, observed.current, declaration, catalog, core)
+      SplitPhaseManagedReasoningCompletion.pendingForAdvanceC(observed.current, declaration, catalog, core)
         .flatMap(SplitPhaseExplicitReasoningSemanticJson.encodeWorkOrderC)
     else if (observed.current.currentProgression.exists(p => Set(SplitPhaseSelectedDocumentEffect.applyingProgression,
         SplitPhaseManagedSelectedApply.appliedProgression).contains(p.value)) ||
@@ -118,7 +114,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     else _planning_c(command, declaration, catalog, checkpoints, observed, core, humandirection, terminalobservation)
   } yield wire
 
-  private def _planning_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _planning_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, checkpoints: D.Port, observed: D.ObservedCurrent,
     core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[String] = for {
     scopes <- SplitPhaseManagedScopeSemantic.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
@@ -143,7 +139,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     }
   } yield wire
 
-  private def _fresh_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _fresh_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, checkpoints: D.Port,
     core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[String] = for {
     inputs <- SplitPhaseTypedStartReadPolicy.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
@@ -175,14 +171,14 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       case need: W.AllocationRequired => for {
         allocated <- policy.allocateMechanicalC(need, anchor)
         continued <- W.continueMechanicalAllocatedC(allocated)
-        actual <- K.captureAllocatedC(bound, allocated, continued, reference, anchor)
+        actual <- K.captureMechanicalC(bound, continued, reference, anchor)
       } yield actual
-      case actual => K.captureUnchangedC(bound, actual, reference, anchor)
+      case actual => K.captureMechanicalC(bound, actual, reference, anchor)
     }
     committed <- checkpoints.executePreparedForCallC(captured, core)
     scopes <- SplitPhaseManagedScopeSemantic.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
       declaration, catalog)
-    command = SplitPhaseAdvanceCommand(bound.start.record.instanceIdentity.value,
+    command = SplitPhaseAdvanceTarget(bound.start.record.instanceIdentity.value,
       org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionContextReference(
         bound.context.record.reference.identity, bound.context.record.reference.revision))
     routed <- scopes.routeForCallC(command, core)
@@ -204,7 +200,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     * than being converted into a premature failure inside the scope port.
     * The actual downstream handler is still required before emitting success.
     */
-  private def _scope_response_c(route: SplitPhaseManagedScopeSemantic.Route, command: SplitPhaseAdvanceCommand,
+  private def _scope_response_c(route: SplitPhaseManagedScopeSemantic.Route, command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, humandirection: Boolean, observation: () => Consequence[Unit]): Consequence[Option[String]] = route match {
     case SplitPhaseManagedScopeSemantic.NotRequired => Consequence.success(None)
@@ -219,7 +215,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
         " handler; no intermediate WAIT or Terminal was emitted")
   }
 
-  private def _human_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _human_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core, publish: Boolean,
     observation: () => Consequence[Unit]): Consequence[String] = {
     val params = ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin)
@@ -240,7 +236,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     } yield wire
   }
 
-  private def _answered_human_c(command: SplitPhaseAdvanceCommand,
+  private def _answered_human_c(command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
     answer <- SplitPhaseManagedHumanCompletion.observeAnswerForAdvanceC(command, declaration, catalog, core)
@@ -256,11 +252,11 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     }
   } yield wire
 
-  /** Only the genuine observed lineage, reobserved by the owning issuer,
-    * can publish reasoning. Other frontiers still require their own handlers.
+  /** The selected observed calculation is consumed directly by the issuer.
+    * Other frontiers still require their own handlers.
     */
   private def _frontier_c(snapshot: R.Record, source: => Consequence[SplitPhaseRetainedReasoningSource.Source],
-    command: SplitPhaseAdvanceCommand,
+    command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = R.dispositionC(snapshot).flatMap {
       case R.Disposition.ReasoningRequired => for {
@@ -274,7 +270,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
       case disposition => Consequence.serviceUnavailable("SplitPhase advance retained " + disposition.toString +
         " frontier awaits its installed continuation handler; no intermediate WAIT or Terminal was emitted")
     }
-  private def _selected_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _selected_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] =
     SplitPhaseManagedPlanningFrontier.loadForAdvanceC(command, declaration, catalog, core).flatMap { source =>
       source.invocationMode match {

@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  7, 2026
+ * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -29,60 +29,47 @@ import org.scalatest.wordspec.AnyWordSpec
 final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
-      "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision",
-      "startGoalPhase", "requestStepClose", "submitStepReview", "submitStepRepair",
-      "registerGoalPhaseSubmission", "registerGoalPhaseArtifacts", "recoverGoalPhaseReview",
-      "prepareGoalPhaseReviewDecision", "prepareGoalPhaseHumanDecision", "recordGoalPhaseHumanAnswer",
-      "submitGoalPhaseHumanDecision", "getGoalPhaseHumanDecisionResult", "advanceGoalPhaseHumanDecision"
+      "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision"
     ),
-    SmWorkflowComponent.HumanDecisionServiceService -> Vector("presentGoalPhaseHumanDecision"),
-    SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
-    SmWorkflowComponent.StepRepairServiceService -> Vector("repairStep"),
-    SmWorkflowComponent.StepReviewServiceService -> Vector("reviewStep"),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
-      "startSplitPhase", "assessSplitProposal", "previewSplitPhase", "applySplitPhase",
-      "submitSplitSemanticResult", "submitPartitionSemanticResult", "advanceSplitPhase",
-      "submitHandoffScopeResult", "submitSplitHumanDirection", "submitReasoningResult"
+      "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
+      "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection"
     ),
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
-      "advanceRepositorySync", "admitRepositoryConflicts", "submitRepositorySyncWorkResult",
-      "admitNativeMergeReview", "submitNativeMergeReview", "submitRepositoryConflictDecision",
-      "startRepositorySync", "assessRepositoryBoundary", "admitTrackingFetch", "admitLocalPreservation",
-      "admitTipRelation", "admitFastForward", "admitPush", "admitMerge", "admitMergeValidation",
-      "requestMergeReview", "submitMergeReview", "admitConvergence", "admitMergedConvergence"
+      "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
+      "submitNativeMergeReview", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
+    SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
     SmWorkflowComponent.GoalPhaseImplementationServiceService -> Vector("implementGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseRepairWorkServiceService -> Vector("repairGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseStepReviewServiceService -> Vector("reviewGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseReviewServiceService -> Vector("reviewGoalPhase"),
-    SmWorkflowComponent.MergeReviewServiceService -> Vector("reviewNativePendingMerge", "reviewMerge"),
+    SmWorkflowComponent.MergeReviewServiceService -> Vector("reviewNativePendingMerge"),
     SmWorkflowComponent.SplitSemanticServiceService -> Vector(
-      "assessNovelSplitWork", "assessPartitionSemanticInputs", "assessHandoffScopes", "assessReasoningDemand"
+      "assessPartitionSemanticInputs", "assessHandoffScopes", "assessReasoningDemand"
     ),
     SmWorkflowComponent.SplitSemanticAdmissionServiceService -> Vector(
-      "admitSemanticInputs", "admitPartitionSemanticInputs", "admitHandoffScopes", "admitReasoningDemand"
+      "admitPartitionSemanticInputs", "admitHandoffScopes", "admitReasoningDemand"
     ),
-    SmWorkflowComponent.SplitHumanServiceService -> Vector("presentSplitHumanDirection", "presentReasoningHumanDirection")
+    SmWorkflowComponent.SplitHumanServiceService -> Vector("presentSplitHumanDirection", "presentReasoningHumanDirection"),
+    SmWorkflowComponent.RepositorySyncSemanticAdmissionServiceService -> Vector("admitRepositoryConflicts", "admitNativeMergeReview"),
+    SmWorkflowComponent.GoalPhaseSemanticAdmissionServiceService -> Vector("admitOrderedStepReview")
   )
-
   // The generated Component retains CNCF's canonical host services in addition
   // to the complete CML catalog. They are not invented workflow capabilities.
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
-    ("GoalPhaseService", "submitGoalPhaseHumanDecision", Vector(
-      "Independent host verification", "not by CML declaration alone"
+    ("GoalPhaseService", "submitGoalPhaseOrderedDecision", Vector(
+      "Independent host Human evidence", "authentication alone is not consent"
     )),
     ("SplitPhaseService", "advanceSplitPhase", Vector(
-      "ALL-Built must not be", "handlers remain unavailable", "full split success remain unfinished"
+      "ALL-Built must not be", "handlers remain unavailable", "not an execution grant"
     )),
-    ("RepositorySyncService", "admitConvergence", Vector(
-      "This fixture terminal admission performs no Git command itself", "remain required for real convergence"
-    )),
-    ("StepReviewService", "reviewStep", Vector(
-      "executing Git/SBT from this semantic SPI", "automatically a Step commit or completed Phase"
+    ("RepositorySyncService", "advanceRepositorySync", Vector(
+      "The caller supplies no stage", "not final convergence"
     )),
     ("RepositoryHumanService", "presentRepositoryConflictDecision", Vector(
       "independent Human channel", "infer consent from login identity"
@@ -126,7 +113,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
 
   "SmWorkflow generated Help" should {
     "the declared component catalog" which {
-      "retain all seventeen declared services and sixty-seven operations alongside the canonical host services" in {
+      "retain all sixteen current declared services and thirty-four operations alongside the canonical host services" in {
         Given("the complete public declaration catalog, independently of production handler installation")
         val names = _declarations.map(_._1.name).sorted
 
@@ -142,14 +129,14 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
         help.`type` shouldBe "component"
         help.componentId shouldBe Some(SmWorkflowComponent.componentId.name)
         help.selector.map(_.canonical) shouldBe Some(SmWorkflowComponent.componentId.name)
-        names.size shouldBe 17
-        names.distinct.size shouldBe 17
+        names.size shouldBe 16
+        names.distinct.size shouldBe 16
         declaredServices.map(_.name).sorted shouldBe names
         hostServices.map(_.name).sorted shouldBe _host_service_names.sorted
         help.children shouldBe (names ++ _host_service_names).sorted
-        help.children.size shouldBe 19
+        help.children.size shouldBe 18
         help.details("services") shouldBe help.children
-        operations.size shouldBe 67
+        operations.size shouldBe 34
         declaredServices.foreach { service =>
           service.operations.operations.map(_.name).toVector.sorted shouldBe
             _declarations.find(_._1.name == service.name).get._2.sorted
@@ -238,9 +225,9 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
 
     "CLI YAML text" which {
       Vector(
-        "GoalPhaseService" -> "submitGoalPhaseHumanDecision",
+        "GoalPhaseService" -> "submitGoalPhaseOrderedDecision",
         "SplitPhaseService" -> "advanceSplitPhase",
-        "RepositorySyncService" -> "admitConvergence"
+        "RepositorySyncService" -> "advanceRepositorySync"
       ).foreach { case (service, operation) =>
         s"retain $service.$operation's projected description and canonical identity" in {
           Given(s"the generated $service.$operation Help declaration; YAML syntax validation is separate")

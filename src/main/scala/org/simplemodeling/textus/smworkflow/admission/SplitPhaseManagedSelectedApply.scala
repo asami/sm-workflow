@@ -12,7 +12,6 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{HistoryEntry, H
   ProgressionReference, CausationReference, InstanceRecord}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapshotJsonV1 as J,
   SplitPhaseManagedPlanningFrontier as F, SplitPhasePlanningCheckpointPreparation as K,
   SplitPhaseSelectedDocumentEffect as E}
@@ -21,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   * completion. File safety belongs to the selected document writer. Intermediate
   * recovery and identical replay results are not part of this component contract.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedSelectedApply {
   val schema = "sm-workflow.split-phase-selected-application.v1"
@@ -36,14 +35,14 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
       .toRight("Selected SplitPhase application receipt differs")
   }
 
-  def advanceC(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def advanceC(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     observation: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
     original <- F.loadForAdvanceC(command, declaration, catalog, core)
     result <- advanceObservedC(command, original, declaration, catalog, core, observation)
   } yield result
 
-  def advanceObservedC(command: SplitPhaseAdvanceCommand, original: F.Observed,
+  def advanceObservedC(command: SplitPhaseAdvanceTarget, original: F.Observed,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
     storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),

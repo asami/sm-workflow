@@ -13,7 +13,6 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{HistoryEntry, H
   ProgressionReference, CausationReference, InstanceRecord}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapshot as R,
   SplitPhasePlanningSnapshotJsonV1 as J, SplitPhaseManagedPlanningFrontier as F,
   SplitPhasePlanningCheckpointPreparation as K}
@@ -23,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   * Reopen observes either step; uncertainty never causes an immediate retry.
   * This writes no Phase document and supplies no APPLY authority.
   * @since   Oct.  6, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedSelectedPreview {
   import SplitPhaseExplicitPartitionRawCodecs.given
@@ -39,7 +38,7 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
         .toRight("Selected SplitPhase preview schema differs")
   }
 
-  def advanceC(command: SplitPhaseAdvanceCommand,
+  def advanceC(command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     observation: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
@@ -47,7 +46,7 @@ private[smworkflow] object SplitPhaseManagedSelectedPreview {
     result <- advanceObservedC(command, source, declaration, catalog, core, observation)
   } yield result
 
-  def advanceObservedC(command: SplitPhaseAdvanceCommand, source: F.Observed,
+  def advanceObservedC(command: SplitPhaseAdvanceTarget, source: F.Observed,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
     _ <- if (source.invocationMode == "PREVIEW") Consequence.unit

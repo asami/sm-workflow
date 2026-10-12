@@ -7,7 +7,7 @@ import org.goldenport.cncf.datastore.DataStore
 /** Reads only within the current owning call; never installs/upserts a Plan,
   * retains a context or opens a provider/pool. Start admits the selected scope.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] final class GoalPhaseSelectedPlanDataStorePort(
   storeName: String, collection: DataStore.CollectionId
@@ -17,10 +17,7 @@ private[smworkflow] final class GoalPhaseSelectedPlanDataStorePort(
       case None => Consequence.success(None)
       case Some(record) => record.getString(GoalPhaseSelectedPlanJsonV1.storageField) match {
         case None => Consequence.stateConflict("Selected Plan row has no typed payload")
-        case Some(raw) => GoalPhaseSelectedPlanJsonV1.decodeStorageC(raw).flatMap { selected =>
-          if (selected.selectionIdentity == identity) Consequence.success(Some(selected))
-          else Consequence.stateConflict("Selected Plan row identity differs from lookup")
-        }
+        case Some(raw) => GoalPhaseSelectedPlanJsonV1.decodeStorageC(raw).map(Some(_))
       }
     }
 }

@@ -1,10 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import cats.data.NonEmptyVector
 import java.nio.file.Files
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
-import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.datastore.DataStore
@@ -12,14 +10,11 @@ import org.goldenport.cncf.event.*
 import org.goldenport.cncf.subsystem.SubsystemEventStoreBootstrap
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.configuration.{Configuration as HostConfiguration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
-import org.goldenport.protocol.{Argument, Request}
-import org.goldenport.protocol.spec as spec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseStartCommand, SplitPhaseStartInput}
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionContextJsonV1 as J,
   SplitPhaseExplicitPartitionSemantic as S}
 import SplitPhaseExplicitPartitionFixture.take
@@ -27,7 +22,7 @@ import SplitPhasePartitionContextFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseManagedPartitionContextReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "partitioncontext", name))
@@ -54,7 +49,7 @@ final class SplitPhaseManagedPartitionContextReadSpec extends AnyWordSpec with M
       SplitPhasePartitionContextReadPolicy.admitC(host(values), "workflow", collection("foreign")).isSuccess shouldBe false
     }
 
-    "recover raw complete context through real Service CLI and pool reopen without issue or legacy reads" in {
+    "recover raw complete context through direct managed Operation calls and pool reopen" in {
       Given("a canonical managed host and private fixture data, not a Context registration or consent Operation")
       val path = Files.createTempDirectory("smwf-partition-context-").resolve("host.sqlite")
       val raw = take(J.encodeC(record))
@@ -65,8 +60,6 @@ final class SplitPhaseManagedPartitionContextReadSpec extends AnyWordSpec with M
       val storage = take(EventStorePersistenceDeclaration.createC("events", collection("cursor"), collection("events"), collection("indexes"),
         Vector(EventStorePersistenceDeclaration.WorkflowGrant(SmWorkflowComponent.componentId, "workflow", workflow.instances, workflow.continuations))))
       val catalog = take(SplitPhaseRuntimeCatalog.loadC())
-      val command = SplitPhaseStartCommand(SplitPhaseStartInput("77", "PREVIEW", "authority", None, None, None),
-        "selection", "participant", "start-key")
       var installations = 0
       var retainedReader = Option.empty[SplitPhasePartitionContextDataStorePort]
       var totalReads = 0
@@ -85,8 +78,7 @@ final class SplitPhaseManagedPartitionContextReadSpec extends AnyWordSpec with M
           retainedReader = Some(reader)
           var captured = Vector.empty[ActionCall.Core]
           var reads = 0
-          val probe = new ProfileStartAdmission.CallScopedSelectionPort {
-            def loadForCallC(identity: String, capsule: ActionCall.Core): Consequence[Option[ProfileStartAdmission.Selection]] = {
+          val probe: ActionCall.Core => Consequence[Unit] = capsule => {
               captured :+= capsule
               final class Installer extends ProcedureActionCall {
                 val core = capsule
@@ -117,26 +109,14 @@ final class SplitPhaseManagedPartitionContextReadSpec extends AnyWordSpec with M
                 reader.loadForCallC(record.reference, capsule.copy(component = None)).isSuccess shouldBe false
               }
               capsule.executionContext.dataStoreSpace.captureBinding() shouldBe prior
-              Consequence.success(None) // No human selection, Start or WorkOrder is granted.
-            }
+              Consequence.unit
           }
-          val entry = new SplitPhaseEntryAssessment.Port {
-            def loadSourceC(phase: String, authority: String) = Consequence.stateConflict("No source in this raw-data probe")
-            def loadProposalC(reference: String) = Consequence.stateConflict("No proposal in this raw-data probe")
-          }
-          val factory = new GoalPhaseConfiguredComponentFactory(Vector.empty, Vector.empty, (creation, parameters, resolved) => {
-            given ExecutionContext = resolved
-            SplitPhaseManagedStartAssembly.bindC(creation, workflow, catalog, probe, entry).map(operation =>
-              spec.ServiceDefinition("SplitPhaseService", spec.OperationDefinitionGroup(NonEmptyVector.of(operation))))
-          }).primaryFactory
+          val factory = ManagedCallProbeFixture.factory(probe)
           val built = take(factory.createPrimaryC(ComponentCreate(owner, ComponentOrigin.Builtin)))
           owner.add(built)
-          When(s"ordinary Service and CLI dispatch read context data in $mode mode")
-          val wire = SplitPhaseStartServiceOperation.encodeCommand(command)
-          owner.executeOperationResponse(Request.of(component = built.name, service = "SplitPhaseService", operation = "startSplitPhase",
-            arguments = List(Argument("arg1", wire)))).isSuccess shouldBe false
-          new CncfRuntime().executeCommandResponse(owner, Array(s"${built.name}/SplitPhaseService/startSplitPhase", "--json", wire))
-            .isSuccess shouldBe false
+          When(s"direct managed Operation dispatch reads context data in $mode mode")
+          take(owner.executeOperationResponse(ManagedCallProbeFixture.request(built.name)))
+          take(owner.executeOperationResponse(ManagedCallProbeFixture.request(built.name)))
           Then("only a current declared data read succeeds and it never creates an instance or retains a lease")
           captured.size shouldBe 2
           reads shouldBe (if (mode == "undeclared") 0 else 2)

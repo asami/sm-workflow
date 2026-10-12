@@ -2,14 +2,13 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseStartCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPreparation as T,
   SplitPhaseExplicitPartitionSemantic as S}
 
 /**
  * Current Operation reads only; owns no pool, lease, writer or Start authority.
  * @since   Oct.  2, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admission] (
   declaration: SplitPhaseTypedStartReadPolicy.Declaration,
@@ -19,37 +18,37 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
   selections: ProfileSelectionDataStorePort,
   contexts: SplitPhaseManagedPartitionPreparation.Port
 ) {
-  /** The host explicitly selects the immutable allocation version; the public
-    * command selects one identity, never the newest row or an alternate reader.
-    */
-  def prepareInvocationForCallC(command: SplitPhaseStartCommand,
-    revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision, core: ActionCall.Core): Consequence[T.Prepared] =
-    if (command == null || !name(command.selectionIdentity) || revision == null)
-      Consequence.stateConflict("SplitPhase typed Start invocation requires exact command and host-selected revision")
-    else prepareForCallC(SplitPhaseExplicitStartPreparation.Reference(command.selectionIdentity, revision.value), core).flatMap {
-      case Some(value) if value.record.command == command => Consequence.success(value)
-      case _ => Consequence.stateConflict("SplitPhase typed Start invocation differs from its exact current allocation")
-    }
-
   def prepareForCallC(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Prepared]] =
     _load_allocation_c(reference, core).flatMap {
       case None => Consequence.success(None)
-      case Some(allocation) => for {
-        source <- inputs.loadSourceForCallC(allocation.source, core)
-        proposal <- allocation.proposal match {
-          case None => Consequence.success(None)
-          case Some(value) => inputs.loadProposalForCallC(value, core).map(Some(_))
-        }
-        selection <- selections.loadForCallC(allocation.command.selectionIdentity, core).flatMap {
-          case Some(value) => Consequence.success(value)
-          case None => Consequence.stateConflict("SplitPhase typed Start current selection is absent")
-        }
-        actual = T.Record(allocation.reference, allocation.instanceIdentity,
-        catalog.definition.workflowIdentity, catalog.definition.workflowRevision, workflow.configuration,
-        allocation.command, selection, source, proposal)
-        prepared <- T.prepareC(actual, source, proposal, selection, catalog, workflow.configuration)
-      } yield Some(prepared)
+      case Some(allocation) => _prepare_allocation_c(allocation, core).map(Some(_))
     }
+
+  /** Public business choice resolves its host allocation, not a client copy. */
+  def prepareSelectedInvocationForCallC(input: NativeWorkflowStartInput.Split,
+    selection: ProfileStartAdmission.Selection,
+    revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision, core: ActionCall.Core): Consequence[T.Prepared] =
+    _load_allocation_c(T.Reference(selection.selectionId, revision.value), core).flatMap {
+      case Some(allocation) =>
+        val selected = allocation.input
+        if (input.sourcePhaseIdentity == selected.sourcePhaseIdentity && input.invocationMode == selected.invocationMode &&
+            input.proposalReference == selected.proposalReference)
+          _prepare_allocation_c(allocation, core)
+        else Consequence.stateConflict("SplitPhase selected allocation belongs to another business target")
+      case None => Consequence.stateConflict("SplitPhase selected Start allocation is absent")
+    }
+
+  private def _prepare_allocation_c(allocation: T.Allocation,
+    core: ActionCall.Core): Consequence[T.Prepared] = for {
+    source <- inputs.loadSourceForCallC(allocation.source, core)
+    proposal <- allocation.proposal match {
+      case None => Consequence.success(None)
+      case Some(value) => inputs.loadProposalForCallC(value, core).map(Some(_))
+    }
+    actual = T.Record(allocation.reference, allocation.instanceIdentity, workflow.configuration,
+      allocation.input, allocation.participantIdentity, source, proposal)
+    prepared <- T.prepareC(actual, source, proposal, catalog, workflow.configuration)
+  } yield prepared
 
   /** Original routing consumes no current input bodies or fresh consent. */
   def observeForCallC(reference: T.Reference, core: ActionCall.Core): Consequence[Option[T.Routing]] =

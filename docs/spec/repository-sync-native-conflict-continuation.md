@@ -1,5 +1,25 @@
 # RepositorySync native conflict work and result connection
 
+## Current Phase 5.2 C16 — actual semantic result consumption
+
+Owning advance returns assigned work when its actual completion is absent and
+consumes the semantic result when present. It compares no pending/current record
+copies and extracts the actual typed issued business input without recertifying
+its codec. Prepare no longer proves reconstructed source/tip/conflict-ID/path
+copies equal: actual capture owns native input, semantic admission owns required
+coverage/text policy, and managed materialization owns bounded paths/preimages
+and writes. Common completion owns the actual slot/state/CAS/grants once.
+
+The normal spec retains actual conflict contents, result-only acknowledgement,
+Human evidence, resolved files, independent review and observed convergence. Its
+record/history/repeated-response copy proofs are retired, with no replacement
+verifier or replay/intermediate-recovery guarantee. C16 passed fresh focused
+validation6 suites45 tests, SBT/wrapper0/lockreleased;
+[terminal evidence](../../.codex-workflow/phases/PHASE-5.2/normal-consumer-proof-validation-01-terminal.md). Public contract migration and connected
+acceptance remain open.
+
+## Historical connected-boundary observations — nonnormative for Phase 5.2
+
 Date: 2026-10-06
 Status: connected boundary validated by996/997; practical delivery not accepted
 

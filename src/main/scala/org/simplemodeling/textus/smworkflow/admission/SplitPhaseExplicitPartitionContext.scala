@@ -12,11 +12,11 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 /**
  * Complete storage data, not an issued WorkOrder, grant or human invocation.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseExplicitPartitionContext {
   final case class Owner(handle: WorkflowHandle, instanceRevision: InstanceRevision,
-    configuration: Configuration, start: SplitPhaseExplicitStartPreparation.Reference,
+    configuration: Configuration, start: SplitPhaseTypedStartPreparation.Reference,
     continuation: ContinuationIdentity, completion: StateMachineOperationIdentity,
     requirement: ExecutionRequirement, presentation: MinimalPresentation)
   final case class Facts(proposal: P.Records, boundary: B.Records, partition: E.Records, planning: W.Data)
@@ -44,11 +44,11 @@ private[smworkflow] object SplitPhaseExplicitPartitionContext {
     prepared <- prepareSemanticC(planning, pending)
   } yield prepared
 
-  /** Conversion consumes the outcome of this exact selection without reloading
+  /** Conversion consumes the constructed outcome without reloading
     * inputs or enumerating a second time. */
   def prepareSemanticC(planning: PreparedPlanning, pending: W.PartitionSemanticRequired): Consequence[Prepared] =
-    if (planning == null || pending == null || !(pending.selection eq planning.selection))
-      Consequence.stateConflict("SplitPhase semantic conversion requires its exact constructed planning selection")
+    if (planning == null || pending == null)
+      Consequence.stateConflict("SplitPhase semantic conversion requires planning and pending work")
     else S.prepareC(planning.record.reference, pending).map(semantic =>
       new Prepared(planning.record, planning.selection, semantic, planning.currentInstance))
 

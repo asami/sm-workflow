@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
   final case class Check(identity: String, ordinal: Int)
@@ -43,43 +43,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] val stateCodec = new WorkflowResultJsonV1.PayloadCodec[State] {
     val typeIdentity = "RepositorySyncNativeValidationState"
     def encode(value: State): Json = value.asJson
-    def decode(value: Json): Either[String, State] = for {
-      fields <- value.asObject.filter(_.keys.toSet == Set("mode", "reason", "selected", "sourceRevision", "receipts"))
-        .toRight("native validation facts have undeclared or missing fields")
-      _ <- Either.cond(fields("selected").flatMap(_.asArray).exists(_.forall(v =>
-        v.asObject.exists(_.keys.toSet == Set("identity", "ordinal")))) &&
-        fields("receipts").flatMap(_.asArray).exists(_.forall(v => v.asObject.exists { f =>
-          Set("identity", "termination", "stdout", "stderr").subsetOf(f.keys.toSet) &&
-            f.keys.toSet.subsetOf(Set("identity", "termination", "stdout", "stderr", "exitCode"))
-        })), (), "native validation facts contain undeclared nested fields")
-      state <- Json.fromJsonObject(fields).as[State].left.map(_.message)
-      _ <- Either.cond(state.sourceRevision.matches("[1-9][0-9]*") && state.reason.nonEmpty &&
-        state.reason.length <= 4096 && state.selected.size <= 16 &&
-        state.selected.forall(c => id(c.identity) && !Set("index-local", "index-remote")(c.identity) && c.ordinal > 0 && c.ordinal <= 16) &&
-        state.selected.map(_.identity).distinct.size == state.selected.size &&
-        state.selected.map(_.ordinal).distinct.size == state.selected.size &&
-        ((state.mode == "explicit-no-product-tests" && state.selected.isEmpty) || (state.mode == "required" && state.selected.nonEmpty)) &&
-        state.receipts.size <= 18 && state.receipts.forall(r => id(r.identity) &&
-          r.stdout.getBytes(StandardCharsets.UTF_8).length <= 65536 && r.stderr.getBytes(StandardCharsets.UTF_8).length <= 65536 &&
-          !r.stdout.contains('\u0000') && !r.stderr.contains('\u0000') &&
-          ((r.termination == "exited" && r.exitCode.nonEmpty) || (r.termination == "indeterminate" && r.exitCode.isEmpty))),
-        (), "native validation facts are incomplete or contradictory")
-    } yield state
-  }
-  /** V1 kept the selected execution facts inside a policy copy. Extract only
-    * those facts; its identity/revision never becomes a new witness or authority.
-    */
-  private[admission] def legacyStateJson(value: Json): Either[String, Json] = value.asObject.toRight("legacy validation is missing").flatMap { fields =>
-    if (!fields.contains("policy")) Right(value)
-    else for {
-      _ <- Either.cond(fields.keys.toSet == Set("policy", "sourceRevision", "receipts"), (), "legacy validation has undeclared fields")
-      policy <- fields("policy").flatMap(_.asObject).toRight("legacy selected validation facts are missing")
-      _ <- Either.cond(policy.keys.toSet.subsetOf(Set("identity", "revision", "mode", "reason", "checks")), (), "legacy validation has undeclared policy fields")
-      mode <- policy("mode").toRight("legacy validation mode is missing")
-      reason <- policy("reason").toRight("legacy validation reason is missing")
-      checks <- policy("checks").toRight("legacy selected check bindings are missing")
-    } yield Json.obj("mode" -> mode, "reason" -> reason, "selected" -> checks,
-      "sourceRevision" -> fields("sourceRevision").get, "receipts" -> fields("receipts").get)
+    def decode(value: Json): Either[String, State] =
+      Option(value).toRight("native validation facts are missing").flatMap(_.as[State].left.map(_.message))
   }
 
   def waitC(store: N.Store, pending: N.Stage, policy: Option[Policy],

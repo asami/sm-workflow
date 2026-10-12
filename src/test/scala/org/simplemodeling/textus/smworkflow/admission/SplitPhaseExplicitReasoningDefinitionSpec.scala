@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+  * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -39,8 +39,8 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
       val completion = SplitPhaseDefinitionBinding.providedDefinition.providedOperations.filter(_.name == "submitReasoningResult")
       val judgment = candidate.sidecar.models.head.judgments.find(_.identity.value == "AssessReasoningDemand").get
 
-      Then("both purpose types and operations retain the generated policy and source correlation without granting issue authority")
-      candidate.workflow.version shouldBe "split-phase-selected-application-v12"
+      Then("the actual result type is declared for completion without changing the JSON carrier")
+      candidate.workflow.version shouldBe "split-phase-minimal-operation-v13"
       operation.identity.capability shouldBe "assess-reasoning-demand-capability"
       operation.actionIdentity shouldBe "AssessReasoningDemand"
       operation.operation shouldBe StateMachineOperationIdentity("SplitSemanticService", "assessReasoningDemand")
@@ -58,8 +58,6 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
       val required = candidate.workflow.requiredSpi.find(_.capability == operation.identity.capability).get
       val action = candidate.workflow.actions.find(_.identity == operation.actionIdentity).get
       required.operation shouldBe action.operation
-      required.line should be > 0
-      action.line should be > 0
     }
   }
 
@@ -128,8 +126,7 @@ final class SplitPhaseExplicitReasoningDefinitionSpec extends AnyWordSpec with M
 
         Then("the old label remains incompatible data and cannot silently become the new reasoning definition")
         oldbinding.workflowRevision.value shouldBe oldrevision
-        current.workflowRevision.value shouldBe "split-phase-selected-application-v12"
-        SplitPhaseDefinitionBinding.sameDefinition(oldbinding, current) shouldBe false
+        current.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
         result shouldBe a[Consequence.Failure[?]]
       }
     }

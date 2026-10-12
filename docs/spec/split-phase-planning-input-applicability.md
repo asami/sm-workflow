@@ -3,16 +3,17 @@
 ## Rule R1: independent typed data is not an encoder certificate
 
 Nine independent planning purposes resolve their declared envelope, purpose,
-selected record reference and typed nested data. Producers serialize once after
-declared shape/reference validation; they do not decode their own output and
-compare the whole value. Readers admit declared fields and decode once; they do
-not encode the selected result and compare it with the input JSON.
+selected record reference and typed nested data. Producers serialize once;
+readers use the existing typed decoder once. The duplicate recursive wire-shape
+tables and encoder-side shape admission are removed, not replaced with another
+validator. Neither side compares the complete data with an encoder image.
 
-The existing v1 envelope, prefix, selected-reference addressing, explicit optional
+The existing v1 envelope, prefix, selected-reference addressing, typed optional
 fields and one-MiB UTF-8 transport limit remain. Reference identity/revision
 resolves the requested record; it is not proof that a whole body is unchanged.
-Unknown/missing declared fields, malformed sum variants, types/enums and an
-unresolved selected address still fail at the independent raw ingress. Semantic
+Unused annotations and optional absence supported by the typed decoder are
+accepted. Missing required data, wrong consumed types/enums, unsupported schema/
+purpose and an unresolved selected address fail at their raw consumption. Semantic
 source/authority/coverage/numeric rules belong to the owning planning processors;
 raw decoding grants neither execution authority nor semantic admission.
 
@@ -21,13 +22,20 @@ declared Sets. Different ordering and repeated members read as the same typed
 Set without proving the encoder's representation, rewriting storage or renewing
 authority. Ordered work/child vectors remain ordered data, not Sets.
 
-E2: all nine purposes reject recursively missing/unknown record fields and wrong
-primitive types. Populated optional allocations, objective cost/demand/overhead,
-all demand variants and Long values exercise the full nested planning contract.
-`incomingByChild` is a typed dynamic map, not a record with fixed member names.
+E2: current purpose readers ignore inert root/payload/reference annotations and
+read supported optional absence. Missing required references, wrong consumed
+primitive types and unknown duration/enum alternatives fail typed decoding.
+The old recursive all-position rejection matrix is retired; it is not rebuilt
+as an acceptance certificate. `incomingByChild` remains a typed dynamic map.
+
+The same consumption rule applies to live partition-context discovery and the
+planning-snapshot reader. Snapshot score strings are passive data; the existing
+Workflow consumer interprets their meaning before selected effects. C30's changed
+eight-suite validation is pending. The dated observations below retain their
+original scope and do not accept these changed codec inputs.
 
 Existing numerical-admission and malformed duration/enum/UTF-8 cases remain.
-Current-input Actual50 validated this bounded producer/reader/spec correction:
+Historical Actual50 validated its then-current producer/reader/spec correction:
 164/164 tests in five complete affected planning/managed-checkpoint suites,
 SBT0/wrapper0/lockreleased,2026-10-08 22:21:39JST. Fresh independent read-only
 R16 source assessment is technical PASS, CB[]/DEV[]; a separate original-file

@@ -8,13 +8,13 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPreparation as T,
   SplitPhaseExplicitPartitionContext as C, SplitPhaseExplicitPartitionSemantic as S,
-  SplitPhaseExplicitPlanningAdvance as W, SplitPhaseCandidateAllocationPolicy as H,
+  SplitPhaseExplicitPlanningAdvance as W,
   SplitPhasePlanningSnapshot as R, SplitPhaseTypedPartitionCompletion as P}
 
 /** Passive publication preparation. Captured is neither a committed native
   * receipt nor an authenticated/public Operation invocation.
   * @since   Oct.  2, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
   final case class Reference(identity: String, revision: String)
@@ -33,20 +33,10 @@ private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
 
   val advanceOperation = StateMachineOperationIdentity("SplitPhaseService", "advanceSplitPhase")
 
-  def captureUnchangedC(bound: T.PlanningBound, outcome: W.Outcome, reference: Reference,
+  def captureMechanicalC(bound: T.PlanningBound, outcome: W.Outcome, reference: Reference,
     anchor: M.Reference): Consequence[Captured] = guarded {
-    if (bound == null || outcome == null || !validReference(reference) || !(outcome.selection eq bound.context.selection))
-      invalid("unchanged capture differs from its constructed selection")
-    else mechanicalC(bound, outcome, reference, anchor)
-  }
-
-  def captureAllocatedC(bound: T.PlanningBound, allocated: H.MechanicalAllocated, outcome: W.Outcome,
-    reference: Reference, anchor: M.Reference): Consequence[Captured] = guarded {
-    if (bound == null || allocated == null || outcome == null || !validReference(reference) || allocated.anchor != anchor ||
-        !(allocated.need.selection eq bound.context.selection) || outcome.selection.data != allocated.data ||
-        !(outcome.selection.partition eq bound.context.selection.partition) ||
-        !(outcome.trace.partition.asInstanceOf[AnyRef] eq allocated.need.enumerated))
-      invalid("allocated capture differs from its original need, anchor or complete data")
+    if (bound == null || outcome == null || !validReference(reference))
+      invalid("mechanical capture requires planning data and a publication address")
     else mechanicalC(bound, outcome, reference, anchor)
   }
 

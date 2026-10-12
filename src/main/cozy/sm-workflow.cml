@@ -68,6 +68,40 @@ org.simplemodeling.textus.smworkflow
 
 # VALUE
 
+## GoalPhaseAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionIdentity | string | ? |
+| instanceIdentity | string | ? |
+
+## SplitPhaseAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionIdentity | string | ? |
+| instanceIdentity | string | ? |
+| contextIdentity | string | ? |
+
+## RepositorySyncAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionIdentity | string | ? |
+| instanceIdentity | string | ? |
+
 ## GoalPhaseStartInput
 
 - input-kind :: COMMAND
@@ -79,34 +113,11 @@ org.simplemodeling.textus.smworkflow
 | phaseIdentity      | string | 1            |
 | repositoryIdentity | string | 1            |
 
-## GoalPhaseStartCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                | type                | multiplicity |
-|---------------------+---------------------+--------------|
-| input               | GoalPhaseStartInput | 1            |
-| selectionIdentity   | string              | 1            |
-| participantIdentity | string              | 1            |
-| idempotencyKey      | string              | 1            |
-
 ## GoalPhaseStartResult
 
 ### EXTENDS
 
 OperationResult
-
-## GoalPhaseAdvanceCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+------|--------------|
-| instanceIdentity | string | 1 |
 
 ## GoalPhaseAdvanceResult
 
@@ -300,79 +311,9 @@ OperationResult
 |-----------------------------------+--------+--------------|
 | sourcePhaseIdentity               | string | 1            |
 | invocationMode                    | string | 1            |
-| sourceAuthorityReference          | string | 1            |
-| sourceSnapshotReference           | string | ?         |
-| originGoalPhaseTerminalResultReference | string | ? |
 | proposalReference                 | string | ?         |
 
-## SplitPhaseStartCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                | type                 | multiplicity |
-|---------------------+----------------------+--------------|
-| input               | SplitPhaseStartInput | 1            |
-| selectionIdentity   | string               | 1            |
-| participantIdentity | string               | 1            |
-| idempotencyKey      | string               | 1            |
-
 ## SplitPhaseStartResult
-
-### EXTENDS
-
-OperationResult
-
-## SplitPhaseProposalAssessmentCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                   | multiplicity |
-|------------------+------------------------+--------------|
-| startCommand     | SplitPhaseStartCommand | 1            |
-| expectedRevision | string                 | 1            |
-| idempotencyKey   | string                 | 1            |
-
-## SplitPhaseProposalAssessmentResult
-
-### EXTENDS
-
-OperationResult
-
-## SplitPhasePreviewCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                   | multiplicity |
-|------------------+------------------------+--------------|
-| startCommand     | SplitPhaseStartCommand | 1            |
-| expectedRevision | string                 | 1            |
-| idempotencyKey   | string                 | 1            |
-
-## SplitPhasePreviewResult
-
-### EXTENDS
-
-OperationResult
-
-## SplitPhaseApplyCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                   | multiplicity |
-|------------------+------------------------+--------------|
-| startCommand     | SplitPhaseStartCommand | 1            |
-| expectedRevision | string                 | 1            |
-| idempotencyKey   | string                 | 1            |
-
-## SplitPhaseApplyResult
 
 ### EXTENDS
 
@@ -392,36 +333,12 @@ OperationResult
 | trackingBranch         | string | 1            |
 | remoteEndpointIdentity | string | 1            |
 | syncMode               | string | 1            |
-| repositoryPolicyVersion | string | 1           |
-
-## RepositorySyncStartCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                | type                     | multiplicity |
-|---------------------+--------------------------+--------------|
-| input               | RepositorySyncStartInput | 1            |
-| selectionIdentity   | string                   | 1            |
-| participantIdentity | string                   | 1            |
-| idempotencyKey      | string                   | 1            |
 
 ## RepositorySyncStartResult
 
 ### EXTENDS
 
 OperationResult
-
-## RepositorySyncAdvanceCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type   | multiplicity |
-|------------------+--------+--------------|
-| instanceIdentity | string | 1            |
 
 ## RepositorySyncAdvanceResult
 
@@ -603,351 +520,15 @@ OperationResult
 | tip | string | 1 |
 | tree | string | 1 |
 
-## RepositorySyncBoundaryAssessmentCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                       | multiplicity |
-|------------------+----------------------------+--------------|
-| startCommand     | RepositorySyncStartCommand | 1            |
-| expectedRevision | string                     | 1            |
-| idempotencyKey   | string                     | 1            |
-
-## RepositorySyncBoundaryAssessmentResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncFetchAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                    | multiplicity |
-|------------------+-----------------------------------------+--------------|
-| boundaryCommand  | RepositorySyncBoundaryAssessmentCommand | 1            |
-| expectedRevision | string                                  | 1            |
-| idempotencyKey   | string                                  | 1            |
-
-## RepositorySyncFetchAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncPreservationAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                | multiplicity |
-|------------------+-------------------------------------+--------------|
-| fetchCommand     | RepositorySyncFetchAdmissionCommand | 1            |
-| expectedRevision | string                              | 1            |
-| idempotencyKey   | string                              | 1            |
-
-## RepositorySyncPreservationAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncRelationAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                | type                                       | multiplicity |
-|---------------------+--------------------------------------------+--------------|
-| preservationCommand | RepositorySyncPreservationAdmissionCommand | 1            |
-| expectedRevision    | string                                     | 1            |
-| idempotencyKey      | string                                     | 1            |
-
-## RepositorySyncRelationAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncFastForwardAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                   | multiplicity |
-|------------------+----------------------------------------+--------------|
-| relationCommand  | RepositorySyncRelationAdmissionCommand | 1            |
-| expectedRevision | string                                 | 1            |
-| idempotencyKey   | string                                 | 1            |
-
-## RepositorySyncFastForwardAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncPushAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                   | multiplicity |
-|------------------+----------------------------------------+--------------|
-| relationCommand  | RepositorySyncRelationAdmissionCommand | 1            |
-| expectedRevision | string                                 | 1            |
-| idempotencyKey   | string                                 | 1            |
-
-## RepositorySyncPushAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncMergeAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                   | multiplicity |
-|------------------+----------------------------------------+--------------|
-| relationCommand  | RepositorySyncRelationAdmissionCommand | 1            |
-| expectedRevision | string                                 | 1            |
-| idempotencyKey   | string                                 | 1            |
-
-## RepositorySyncMergeAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncMergeValidationAdmissionCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name             | type                                | multiplicity |
-|------------------+-------------------------------------+--------------|
-| mergeCommand     | RepositorySyncMergeAdmissionCommand | 1            |
-| expectedRevision | string                              | 1            |
-| idempotencyKey   | string                              | 1            |
-
-## RepositorySyncMergeValidationAdmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncConvergenceCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                      | type                                   | multiplicity |
-|---------------------------+----------------------------------------+--------------|
-| relationCommand           | RepositorySyncRelationAdmissionCommand | 1            |
-| fastForwardIdempotencyKey | string                                 | ?            |
-| pushIdempotencyKey        | string                                 | ?            |
-| expectedRevision          | string                                 | 1            |
-| idempotencyKey            | string                                 | 1            |
-
-## RepositorySyncMergedConvergenceCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                   | type   | multiplicity |
-|------------------------+--------+--------------|
-| reviewResultIdentity   | string | 1            |
-| reviewResultRevision   | string | 1            |
-| pushIdempotencyKey     | string | 1            |
-| expectedRevision       | string | 1            |
-| idempotencyKey         | string | 1            |
-
-## RepositorySyncConvergenceResult
-
-### EXTENDS
-
-OperationResult
-
-### ATTRIBUTE
-
-| name                   | type   | multiplicity |
-|------------------------+--------+--------------|
-| outcome                | string | 1            |
-| repositoryIdentity     | string | 1            |
-| localBranch            | string | 1            |
-| trackingRemote         | string | 1            |
-| trackingBranch         | string | 1            |
-| remoteEndpointIdentity | string | 1            |
-| tipOid                 | string | 1            |
-| treeOid                | string | 1            |
-| treeDigest             | string | 1            |
-| evidenceDigest         | string | 1            |
-
-## StepCloseRequest
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name               | type               | multiplicity |
-|--------------------+--------------------+--------------|
-| submissionIdentity | string             | 1            |
-| stepIdentity       | string             | 1            |
-| programDigest      | string             | 1            |
-| planningDigest     | string             | 1            |
-| reviewEvidence     | StepReviewEvidence | *            |
-
-## StepReviewEvidence
-
-### ATTRIBUTE
-
-| name             | type   | multiplicity |
-|------------------+--------+--------------|
-| evidenceIdentity | string | 1            |
-| reviewedRevision | string | 1            |
-| reviewedAt       | string | 1            |
-| scope            | string | 1            |
-| summary          | string | 1            |
-| provenance       | string | 1            |
-
-## StepCloseResult
-
-### EXTENDS
-
-OperationResult
-
-## ReviewStepResult
-
-- input-kind :: COMMAND
-
-### EXTENDS
-
-OperationResult
-
-### ATTRIBUTE
-
-| name           | type               | multiplicity |
-|----------------+--------------------+--------------|
-| decision       | string             | 1            |
-| rationale      | string             | 1            |
-| reviewEvidence | StepReviewEvidence | *            |
-
-## StepReviewSubmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepairStepResult
-
-- input-kind :: COMMAND
-
-### EXTENDS
-
-OperationResult
-
-### ATTRIBUTE
-
-| name             | type   | multiplicity |
-|------------------+--------+--------------|
-| outcome          | string | 1            |
-| summary          | string | 1            |
-| evidenceIdentity | string | 1            |
-
-## StepRepairSubmissionResult
-
-### EXTENDS
-
-OperationResult
-
-## RepositorySyncMergeReviewRequest
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name              | type   | multiplicity |
-|-------------------+--------+--------------|
-| submissionIdentity | string | 1            |
-| repositoryIdentity | string | 1            |
-| candidateRevision | string | 1            |
-| validationDigest  | string | 1            |
-| reviewPolicyVersion | string | 1          |
-| pendingHeadOid    | string | 1            |
-| pendingTreeOid    | string | 1            |
-| pendingTreeDigest | string | 1            |
-| orderedParents    | string | *            |
-| changedPaths      | string | *            |
-| selectedChecks    | string | *            |
-
-## RepositorySyncMergeReviewFinding
-
-### ATTRIBUTE
-
-| name          | type   | multiplicity |
-|---------------+--------+--------------|
-| identity      | string | 1            |
-| affectedPaths | string | *            |
-| rationale     | string | 1            |
-
-## RepositorySyncMergeReviewResult
-
-- input-kind :: COMMAND
-
-### EXTENDS
-
-OperationResult
-
-### ATTRIBUTE
-
-| name              | type                             | multiplicity |
-|-------------------+----------------------------------+--------------|
-| candidateRevision | string                           | 1            |
-| reviewedAt        | string                           | 1            |
-| decision          | string                           | 1            |
-| rationale         | string                           | 1            |
-| findings          | RepositorySyncMergeReviewFinding | *            |
-
-## RepositorySyncMergeReviewSubmissionResult
-
-### EXTENDS
-
-OperationResult
-
 # WORKFLOW
 
 ## GoalPhaseWorkflow
 
-version = goal-phase-ordered-run-v4
+version = goal-phase-minimal-operation-v5
 
 ### COMPOSITE-STATEMACHINE
 
 #### CONSTITUENT
-
-##### step
-
-state-machine = StepCloseLifecycle
-subject = step
-subject-type = StepCloseRequest
-
-##### human
-
-state-machine = GoalPhaseHumanDecisionLifecycle
-subject = humanQuestion
-subject-type = GoalPhaseClosureAuthorityInput
 
 ##### phase
 
@@ -964,12 +545,6 @@ subject-type = GoalPhaseOrderedDecisionRequest
 #### STATE
 
 ##### Pending
-
-##### HumanPending
-
-##### HumanAnswered
-
-##### Closed
 
 ##### OrderedImplementation
 
@@ -1000,440 +575,73 @@ subject-type = GoalPhaseOrderedDecisionRequest
 ##### pending
 
 state = Pending
-when = step.Awaiting, human.Idle, phase.Idle, orderedDecision.Retained
-
-##### human-pending
-
-state = HumanPending
-when = step.Awaiting, human.Awaiting, phase.Idle, orderedDecision.Retained
-
-##### human-answered
-
-state = HumanAnswered
-when = step.Awaiting, human.Answered, phase.Idle, orderedDecision.Retained
-
-##### closed
-
-state = Closed
-when = step.Closed, human.Idle, phase.Idle, orderedDecision.Retained
-
-##### closed-human-pending
-
-state = Closed
-when = step.Closed, human.Awaiting, phase.Idle, orderedDecision.Retained
-
-##### closed-human-answered
-
-state = Closed
-when = step.Closed, human.Answered, phase.Idle, orderedDecision.Retained
+when = phase.Idle, orderedDecision.Retained
 
 ##### ordered-implementation
 
 state = OrderedImplementation
-when = step.Awaiting, human.Idle, phase.Implementation, orderedDecision.Retained
+when = phase.Implementation, orderedDecision.Retained
 
 ##### ordered-inspection
 
 state = OrderedInspectCandidate
-when = step.Awaiting, human.Idle, phase.InspectCandidate, orderedDecision.Retained
+when = phase.InspectCandidate, orderedDecision.Retained
 
 ##### ordered-validation
 
 state = OrderedValidation
-when = step.Awaiting, human.Idle, phase.Validation, orderedDecision.Retained
+when = phase.Validation, orderedDecision.Retained
 
 ##### ordered-review
 
 state = OrderedReview
-when = step.Awaiting, human.Idle, phase.Review, orderedDecision.Retained
+when = phase.Review, orderedDecision.Retained
 
 ##### ordered-repair
 
 state = OrderedRepair
-when = step.Awaiting, human.Idle, phase.Repair, orderedDecision.Retained
+when = phase.Repair, orderedDecision.Retained
 
 ##### ordered-closing
 
 state = OrderedClosing
-when = step.Awaiting, human.Idle, phase.Closing, orderedDecision.Retained
+when = phase.Closing, orderedDecision.Retained
 
 ##### phase-inspection
 
 state = PhaseInspection
-when = step.Awaiting, human.Idle, phase.PhaseInspection, orderedDecision.Retained
+when = phase.PhaseInspection, orderedDecision.Retained
 
 ##### phase-validation
 
 state = PhaseValidation
-when = step.Awaiting, human.Idle, phase.PhaseValidation, orderedDecision.Retained
+when = phase.PhaseValidation, orderedDecision.Retained
 
 ##### phase-review
 
 state = PhaseReview
-when = step.Awaiting, human.Idle, phase.PhaseReview, orderedDecision.Retained
+when = phase.PhaseReview, orderedDecision.Retained
 
 ##### phase-closing
 
 state = PhaseClosing
-when = step.Awaiting, human.Idle, phase.PhaseClosing, orderedDecision.Retained
+when = phase.PhaseClosing, orderedDecision.Retained
 
 ##### phase-decision
 
 state = PhaseDecision
-when = step.Awaiting, human.Idle, phase.Decision, orderedDecision.Retained
+when = phase.Decision, orderedDecision.Retained
 
 ##### phase-closed
 
 state = PhaseClosed
-when = step.Awaiting, human.Idle, phase.Closed, orderedDecision.Retained
-
-##### mixed-implementation-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Implementation, orderedDecision.Retained
-
-##### mixed-implementation-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Implementation, orderedDecision.Retained
-
-##### mixed-implementation-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Implementation, orderedDecision.Retained
-
-##### mixed-implementation-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Implementation, orderedDecision.Retained
-
-##### mixed-implementation-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Implementation, orderedDecision.Retained
-
-##### mixed-inspectcandidate-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.InspectCandidate, orderedDecision.Retained
-
-##### mixed-inspectcandidate-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.InspectCandidate, orderedDecision.Retained
-
-##### mixed-inspectcandidate-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.InspectCandidate, orderedDecision.Retained
-
-##### mixed-inspectcandidate-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.InspectCandidate, orderedDecision.Retained
-
-##### mixed-inspectcandidate-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.InspectCandidate, orderedDecision.Retained
-
-##### mixed-validation-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Validation, orderedDecision.Retained
-
-##### mixed-validation-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Validation, orderedDecision.Retained
-
-##### mixed-validation-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Validation, orderedDecision.Retained
-
-##### mixed-validation-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Validation, orderedDecision.Retained
-
-##### mixed-validation-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Validation, orderedDecision.Retained
-
-##### mixed-review-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Review, orderedDecision.Retained
-
-##### mixed-review-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Review, orderedDecision.Retained
-
-##### mixed-review-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Review, orderedDecision.Retained
-
-##### mixed-review-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Review, orderedDecision.Retained
-
-##### mixed-review-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Review, orderedDecision.Retained
-
-##### mixed-repair-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Repair, orderedDecision.Retained
-
-##### mixed-repair-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Repair, orderedDecision.Retained
-
-##### mixed-repair-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Repair, orderedDecision.Retained
-
-##### mixed-repair-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Repair, orderedDecision.Retained
-
-##### mixed-repair-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Repair, orderedDecision.Retained
-
-##### mixed-closing-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Closing, orderedDecision.Retained
-
-##### mixed-closing-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Closing, orderedDecision.Retained
-
-##### mixed-closing-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Closing, orderedDecision.Retained
-
-##### mixed-closing-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Closing, orderedDecision.Retained
-
-##### mixed-closing-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Closing, orderedDecision.Retained
-
-##### mixed-phaseinspection-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.PhaseInspection, orderedDecision.Retained
-
-##### mixed-phaseinspection-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.PhaseInspection, orderedDecision.Retained
-
-##### mixed-phaseinspection-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.PhaseInspection, orderedDecision.Retained
-
-##### mixed-phaseinspection-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.PhaseInspection, orderedDecision.Retained
-
-##### mixed-phaseinspection-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.PhaseInspection, orderedDecision.Retained
-
-##### mixed-phasevalidation-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.PhaseValidation, orderedDecision.Retained
-
-##### mixed-phasevalidation-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.PhaseValidation, orderedDecision.Retained
-
-##### mixed-phasevalidation-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.PhaseValidation, orderedDecision.Retained
-
-##### mixed-phasevalidation-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.PhaseValidation, orderedDecision.Retained
-
-##### mixed-phasevalidation-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.PhaseValidation, orderedDecision.Retained
-
-##### mixed-phasereview-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.PhaseReview, orderedDecision.Retained
-
-##### mixed-phasereview-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.PhaseReview, orderedDecision.Retained
-
-##### mixed-phasereview-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.PhaseReview, orderedDecision.Retained
-
-##### mixed-phasereview-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.PhaseReview, orderedDecision.Retained
-
-##### mixed-phasereview-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.PhaseReview, orderedDecision.Retained
-
-##### mixed-phaseclosing-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.PhaseClosing, orderedDecision.Retained
-
-##### mixed-phaseclosing-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.PhaseClosing, orderedDecision.Retained
-
-##### mixed-phaseclosing-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.PhaseClosing, orderedDecision.Retained
-
-##### mixed-phaseclosing-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.PhaseClosing, orderedDecision.Retained
-
-##### mixed-phaseclosing-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.PhaseClosing, orderedDecision.Retained
-
-##### mixed-decision-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Decision, orderedDecision.Retained
-
-##### mixed-decision-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Decision, orderedDecision.Retained
-
-##### mixed-decision-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Decision, orderedDecision.Retained
-
-##### mixed-decision-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Decision, orderedDecision.Retained
-
-##### mixed-decision-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Decision, orderedDecision.Retained
-
-##### mixed-closed-awaiting-awaiting
-
-state = PhaseDecision
-when = step.Awaiting, human.Awaiting, phase.Closed, orderedDecision.Retained
-
-##### mixed-closed-awaiting-answered
-
-state = PhaseDecision
-when = step.Awaiting, human.Answered, phase.Closed, orderedDecision.Retained
-
-##### mixed-closed-closed-idle
-
-state = PhaseDecision
-when = step.Closed, human.Idle, phase.Closed, orderedDecision.Retained
-
-##### mixed-closed-closed-awaiting
-
-state = PhaseDecision
-when = step.Closed, human.Awaiting, phase.Closed, orderedDecision.Retained
-
-##### mixed-closed-closed-answered
-
-state = PhaseDecision
-when = step.Closed, human.Answered, phase.Closed, orderedDecision.Retained
-
+when = phase.Closed, orderedDecision.Retained
 
 #### INITIAL
 
-step.Awaiting, human.Idle, phase.Idle, orderedDecision.Retained
+phase.Idle, orderedDecision.Retained
 
 #### ACTION
-
-##### ReviewStep
-
-kind = JUDGMENT
-operation = reviewStep
-input = step.subject
-goal = step-closure-review
-context = step-artifact-snapshot
-candidate = current-step-closure
-alternative = accept
-alternative = repair
-criteria = full-step-coverage
-criteria = current-artifact-revision
-expected-result = review-disposition
-rationale = review-rationale
-evidence = review-evidence
-evidence-scope = full-step
-evidence-freshness = current
-evidence-provenance = review-receipt
-
-##### AdmitStepClose
-
-kind = ADMISSION
-operation = requestStepClose
-input = step.subject
-candidate-action = ReviewStep
-effect = LOCAL
-transaction = REQUIRED
-idempotency = NOT_REQUIRED
-
-##### RepairStep
-
-kind = OPERATION
-operation = repairStep
-input = step.subject
-
-##### PresentHumanDecision
-
-kind = OPERATION
-operation = presentGoalPhaseHumanDecision
-input = human.subject
 
 ##### ImplementOrderedStep
 
@@ -1449,9 +657,33 @@ input = phase.subject
 
 ##### ReviewOrderedStep
 
-kind = OPERATION
+kind = JUDGMENT
 operation = reviewGoalPhaseStep
 input = phase.subject
+goal = ordered-step-review
+context = assigned-native-step-candidate-and-checks
+candidate = assigned-ordered-step
+alternative = accept
+alternative = repair
+alternative = decision-needed
+criteria = full-assigned-step-coverage
+criteria = independent-reviewer-evidence
+expected-result = ordered-step-review-disposition
+rationale = review-rationale
+evidence = actual-native-review-evidence
+evidence-scope = assigned-ordered-step
+evidence-freshness = assigned-task
+evidence-provenance = independently-admitted-reviewer
+
+##### AdmitOrderedStepReview
+
+kind = ADMISSION
+operation = admitOrderedStepReview
+input = phase.subject
+candidate-action = ReviewOrderedStep
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
 
 ##### ReviewWholePhase
 
@@ -1466,18 +698,6 @@ operation = presentOrderedGoalDecision
 input = orderedDecision.subject
 
 ### REQUIRED-OPERATION
-
-#### review-step-capability
-
-action = ReviewStep
-
-#### repair-step-capability
-
-action = RepairStep
-
-#### human-decision-capability
-
-action = PresentHumanDecision
 
 #### goal-phase-implementation-capability
 
@@ -1501,26 +721,6 @@ action = PresentOrderedGoalDecision
 
 ### OPERATION
 
-#### startGoalPhase
-
-operation = GoalPhaseService.startGoalPhase
-
-#### requestStepClose
-
-operation = GoalPhaseService.requestStepClose
-
-#### submitStepReview
-
-operation = GoalPhaseService.submitStepReview
-
-#### submitStepRepair
-
-operation = GoalPhaseService.submitStepRepair
-
-#### submitGoalPhaseHumanDecision
-
-operation = GoalPhaseService.submitGoalPhaseHumanDecision
-
 #### advanceGoalPhase
 
 operation = GoalPhaseService.advanceGoalPhase
@@ -1532,6 +732,10 @@ operation = GoalPhaseService.submitGoalPhaseWorkResult
 #### submitGoalPhaseOrderedDecision
 
 operation = GoalPhaseService.submitGoalPhaseOrderedDecision
+
+#### startGoalPhase
+
+operation = GoalPhaseService.startGoalPhase
 
 # STATE-MACHINE
 
@@ -1706,44 +910,11 @@ on = human-semantic-cancelled
 
 #### Retained
 
-## GoalPhaseHumanDecisionLifecycle
-
-### STATE
-
-#### Idle
-
-##### TRANSITION
-
-to = Awaiting
-on = human-question-issued
-
-#### Awaiting
-
-##### TRANSITION
-
-to = Answered
-on = human-answer-recorded
-
-#### Answered
-
-## StepCloseLifecycle
-
-### STATE
-
-#### Awaiting
-
-##### TRANSITION
-
-to = Closed
-on = admitted
-
-#### Closed
-
 # WORKFLOW
 
 ## SplitPhaseWorkflow
 
-version = split-phase-selected-application-v12
+version = split-phase-minimal-operation-v13
 
 ### COMPOSITE-STATEMACHINE
 
@@ -1754,12 +925,6 @@ version = split-phase-selected-application-v12
 state-machine = SplitPhaseEntryLifecycle
 subject = entry
 subject-type = SplitPhaseStartInput
-
-##### semantic
-
-state-machine = SplitPhaseSemanticContext
-subject = pendingSplit
-subject-type = SplitPhaseSemanticRequest
 
 ##### partition
 
@@ -1818,789 +983,759 @@ subject-type = SplitPhaseReasoningHumanDirectionRequest
 ##### entry-pending
 
 state = EntryPending
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### proposal-pending
 
 state = ProposalPending
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### semantic-pending
 
 state = SemanticPending
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### previewed
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### applied
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### applying-documents
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 ##### applying-documents-human-pending
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### applying-documents-human-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### applying-documents-human-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### applying-documents-human-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### human-pending
 
 state = HumanPending
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### entry-human-pending
 
 state = HumanPending
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### proposal-human-pending
 
 state = HumanPending
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### human-answered
 
 state = HumanAnswered
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### entry-human-answered
 
 state = HumanAnswered
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### proposal-human-answered
 
 state = HumanAnswered
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### previewed-human-pending
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### previewed-human-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### applied-human-pending
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Idle
 
 ##### applied-human-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Idle
 
 ##### entry-human-deferred
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### proposal-human-deferred
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### semantic-human-deferred
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### previewed-human-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### applied-human-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Idle
 
 ##### entry-human-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### proposal-human-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### semantic-human-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### previewed-human-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### applied-human-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Idle
 
 ##### reasoning-human-entryassessment-awaiting
 
 state = HumanPending
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-entryassessment-answered
 
 state = HumanAnswered
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-entryassessment-deferred
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-entryassessment-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-proposalassessment-awaiting
 
 state = HumanPending
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-proposalassessment-answered
 
 state = HumanAnswered
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-proposalassessment-deferred
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-proposalassessment-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-semanticassessment-awaiting
 
 state = HumanPending
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-semanticassessment-answered
 
 state = HumanAnswered
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-semanticassessment-deferred
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-semanticassessment-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-previewed-awaiting
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-previewed-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-previewed-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-previewed-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-applied-awaiting
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-applied-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-applied-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-applied-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-applyingdocuments-awaiting
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Awaiting
 
 ##### reasoning-human-applyingdocuments-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Answered
 
 ##### reasoning-human-applyingdocuments-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Deferred
 
 ##### reasoning-human-applyingdocuments-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Cancelled
 
 ##### reasoning-human-entryassessment-after-awaiting-awaiting
 
 state = HumanPending
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-entryassessment-after-awaiting-answered
 
 state = HumanAnswered
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-entryassessment-after-awaiting-deferred
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-entryassessment-after-awaiting-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-entryassessment-after-answered-awaiting
 
 state = HumanPending
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-entryassessment-after-answered-answered
 
 state = HumanAnswered
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-entryassessment-after-answered-deferred
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-entryassessment-after-answered-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-entryassessment-after-deferred-awaiting
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-entryassessment-after-deferred-answered
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-entryassessment-after-deferred-deferred
 
 state = HumanDeferred
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-entryassessment-after-deferred-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-entryassessment-after-cancelled-awaiting
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-entryassessment-after-cancelled-answered
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-entryassessment-after-cancelled-deferred
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-entryassessment-after-cancelled-cancelled
 
 state = HumanCancelled
-when = entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 ##### reasoning-human-proposalassessment-after-awaiting-awaiting
 
 state = HumanPending
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-proposalassessment-after-awaiting-answered
 
 state = HumanAnswered
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-proposalassessment-after-awaiting-deferred
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-proposalassessment-after-awaiting-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-proposalassessment-after-answered-awaiting
 
 state = HumanPending
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-proposalassessment-after-answered-answered
 
 state = HumanAnswered
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-proposalassessment-after-answered-deferred
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-proposalassessment-after-answered-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-proposalassessment-after-deferred-awaiting
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-proposalassessment-after-deferred-answered
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-proposalassessment-after-deferred-deferred
 
 state = HumanDeferred
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-proposalassessment-after-deferred-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-proposalassessment-after-cancelled-awaiting
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-proposalassessment-after-cancelled-answered
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-proposalassessment-after-cancelled-deferred
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-proposalassessment-after-cancelled-cancelled
 
 state = HumanCancelled
-when = entry.ProposalAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.ProposalAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 ##### reasoning-human-semanticassessment-after-awaiting-awaiting
 
 state = HumanPending
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-semanticassessment-after-awaiting-answered
 
 state = HumanAnswered
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-semanticassessment-after-awaiting-deferred
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-semanticassessment-after-awaiting-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-semanticassessment-after-answered-awaiting
 
 state = HumanPending
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-semanticassessment-after-answered-answered
 
 state = HumanAnswered
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-semanticassessment-after-answered-deferred
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-semanticassessment-after-answered-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-semanticassessment-after-deferred-awaiting
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-semanticassessment-after-deferred-answered
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-semanticassessment-after-deferred-deferred
 
 state = HumanDeferred
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-semanticassessment-after-deferred-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-semanticassessment-after-cancelled-awaiting
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-semanticassessment-after-cancelled-answered
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-semanticassessment-after-cancelled-deferred
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-semanticassessment-after-cancelled-cancelled
 
 state = HumanCancelled
-when = entry.SemanticAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.SemanticAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 ##### reasoning-human-previewed-after-awaiting-awaiting
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-previewed-after-awaiting-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-previewed-after-awaiting-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-previewed-after-awaiting-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-previewed-after-answered-awaiting
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-previewed-after-answered-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-previewed-after-answered-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-previewed-after-answered-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-previewed-after-deferred-awaiting
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-previewed-after-deferred-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-previewed-after-deferred-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-previewed-after-deferred-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-previewed-after-cancelled-awaiting
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-previewed-after-cancelled-answered
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-previewed-after-cancelled-deferred
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-previewed-after-cancelled-cancelled
 
 state = Previewed
-when = entry.Previewed, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.Previewed, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 ##### reasoning-human-applied-after-awaiting-awaiting
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-applied-after-awaiting-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-applied-after-awaiting-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-applied-after-awaiting-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-applied-after-answered-awaiting
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-applied-after-answered-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-applied-after-answered-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-applied-after-answered-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-applied-after-deferred-awaiting
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-applied-after-deferred-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-applied-after-deferred-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-applied-after-deferred-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-applied-after-cancelled-awaiting
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-applied-after-cancelled-answered
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-applied-after-cancelled-deferred
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-applied-after-cancelled-cancelled
 
 state = Applied
-when = entry.Applied, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.Applied, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 ##### reasoning-human-applyingdocuments-after-awaiting-awaiting
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Awaiting
 
 ##### reasoning-human-applyingdocuments-after-awaiting-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Answered
 
 ##### reasoning-human-applyingdocuments-after-awaiting-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Deferred
 
 ##### reasoning-human-applyingdocuments-after-awaiting-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Awaiting, reasoningHuman.Cancelled
 
 ##### reasoning-human-applyingdocuments-after-answered-awaiting
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Awaiting
 
 ##### reasoning-human-applyingdocuments-after-answered-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Answered
 
 ##### reasoning-human-applyingdocuments-after-answered-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Deferred
 
 ##### reasoning-human-applyingdocuments-after-answered-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Answered, reasoningHuman.Cancelled
 
 ##### reasoning-human-applyingdocuments-after-deferred-awaiting
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Awaiting
 
 ##### reasoning-human-applyingdocuments-after-deferred-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Answered
 
 ##### reasoning-human-applyingdocuments-after-deferred-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Deferred
 
 ##### reasoning-human-applyingdocuments-after-deferred-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Deferred, reasoningHuman.Cancelled
 
 ##### reasoning-human-applyingdocuments-after-cancelled-awaiting
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Awaiting
 
 ##### reasoning-human-applyingdocuments-after-cancelled-answered
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Answered
 
 ##### reasoning-human-applyingdocuments-after-cancelled-deferred
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Deferred
 
 ##### reasoning-human-applyingdocuments-after-cancelled-cancelled
 
 state = ApplyingDocuments
-when = entry.ApplyingDocuments, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
+when = entry.ApplyingDocuments, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Cancelled, reasoningHuman.Cancelled
 
 
 #### INITIAL
 
-entry.EntryAssessment, semantic.Awaiting, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
+entry.EntryAssessment, partition.Awaiting, scope.Awaiting, reasoning.Awaiting, human.Idle, reasoningHuman.Idle
 
 #### ACTION
-
-##### AssessNovelSplitWork
-
-kind = JUDGMENT
-operation = assessNovelSplitWork
-input = semantic.subject
-goal = supplement-unresolved-split-inputs
-context = frozen-split-source-and-policy
-candidate = current-split-proposal
-alternative = enriched
-alternative = decision-needed
-criteria = unresolved-inputs-only
-criteria = known-estimates-preserved
-criteria = existing-authority-only
-expected-result = split-semantic-inputs
-rationale = split-assessment-rationale
-evidence = split-assessment-evidence
-evidence-scope = frozen-unresolved-inputs
-evidence-freshness = exact-context
-evidence-provenance = semantic-result-receipt
-
-##### AdmitSplitSemanticInputs
-
-kind = ADMISSION
-operation = admitSemanticInputs
-input = semantic.subject
-candidate-action = AssessNovelSplitWork
-effect = LOCAL
-transaction = REQUIRED
-idempotency = NOT_REQUIRED
 
 ##### AssessPartitionSemanticInputs
 
@@ -2710,10 +1845,6 @@ input = reasoningHuman.subject
 
 ### REQUIRED-OPERATION
 
-#### assess-novel-split-capability
-
-action = AssessNovelSplitWork
-
 #### assess-partition-semantic-capability
 
 action = AssessPartitionSemanticInputs
@@ -2740,41 +1871,25 @@ action = PresentReasoningHumanDirection
 
 operation = SplitPhaseService.startSplitPhase
 
-#### assessSplitProposal
-
-operation = SplitPhaseService.assessSplitProposal
-
-#### previewSplitPhase
-
-operation = SplitPhaseService.previewSplitPhase
-
-#### applySplitPhase
-
-operation = SplitPhaseService.applySplitPhase
-
-#### submitSplitSemanticResult
-
-operation = SplitPhaseService.submitSplitSemanticResult
-
 #### submitPartitionSemanticResult
 
 operation = SplitPhaseService.submitPartitionSemanticResult
-
-#### submitHandoffScopeResult
-
-operation = SplitPhaseService.submitHandoffScopeResult
 
 #### advanceSplitPhase
 
 operation = SplitPhaseService.advanceSplitPhase
 
-#### submitSplitHumanDirection
+#### submitHandoffScopeResult
 
-operation = SplitPhaseService.submitSplitHumanDirection
+operation = SplitPhaseService.submitHandoffScopeResult
 
 #### submitReasoningResult
 
 operation = SplitPhaseService.submitReasoningResult
+
+#### submitSplitHumanDirection
+
+operation = SplitPhaseService.submitSplitHumanDirection
 
 # STATE-MACHINE
 
@@ -2875,12 +1990,6 @@ on = documents-applied
 
 # STATE-MACHINE
 
-## SplitPhaseSemanticContext
-
-### STATE
-
-#### Awaiting
-
 ## SplitPhasePartitionSemanticContext
 
 ### STATE
@@ -2897,7 +2006,7 @@ on = documents-applied
 
 ## RepositorySyncWorkflow
 
-version = repository-sync-native-convergence-v10
+version = repository-sync-minimal-operation-v11
 
 ### COMPOSITE-STATEMACHINE
 
@@ -2908,12 +2017,6 @@ version = repository-sync-native-convergence-v10
 state-machine = RepositorySyncBoundaryLifecycle
 subject = sync
 subject-type = RepositorySyncStartInput
-
-##### review
-
-state-machine = RepositorySyncMergeReviewContext
-subject = pendingMerge
-subject-type = RepositorySyncMergeReviewRequest
 
 ##### conflict
 
@@ -2936,8 +2039,6 @@ subject-type = RepositorySyncHumanConflictRequest
 #### STATE
 
 ##### BoundaryPending
-
-##### BoundaryCaptured
 
 ##### Fetching
 
@@ -2975,14 +2076,6 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### ConflictDecisionRequired
 
-##### RelationClassified
-
-##### FastForwardAdmitted
-
-##### PushAdmitted
-
-##### MergeAdmitted
-
 ##### MergeValidated
 
 ##### ReviewAccepted
@@ -3010,214 +2103,158 @@ subject-type = RepositorySyncHumanConflictRequest
 ##### boundary-pending
 
 state = BoundaryPending
-when = sync.BoundaryAssessment, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
-
-##### boundary-captured
-
-state = BoundaryCaptured
-when = sync.BoundaryCaptured, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### fetch-admitted
 
 state = FetchAdmitted
-when = sync.FetchAdmitted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.FetchAdmitted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### fetching
 
 state = Fetching
-when = sync.Fetching, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Fetching, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### local-state-preserved
 
 state = LocalStatePreserved
-when = sync.LocalStatePreserved, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.LocalStatePreserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### preserving
 
 state = Preserving
-when = sync.Preserving, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Preserving, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### index-captured
 
 state = IndexCaptured
-when = sync.IndexCaptured, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IndexCaptured, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### checkpoint-creating
 
 state = CheckpointCreating
-when = sync.CheckpointCreating, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointCreating, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### checkpoint-created
 
 state = CheckpointCreated
-when = sync.CheckpointCreated, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointCreated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### checkpoint-installing
 
 state = CheckpointInstalling
-when = sync.CheckpointInstalling, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointInstalling, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### integrating
 
 state = Integrating
-when = sync.Integrating, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Integrating, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### integrated
 
 state = Integrated
-when = sync.Integrated, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Integrated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### integration-validation-checking
 
 state = IntegrationValidationChecking
-when = sync.IntegrationValidationChecking, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### integration-validated
 
 state = IntegrationValidated
-when = sync.IntegrationValidated, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### merge-conflicted
 
 state = MergeConflicted
-when = sync.MergeConflicted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeConflicted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### merge-resolution-admitted
 
 state = MergeResolutionAdmitted
-when = sync.MergeResolutionAdmitted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeResolutionAdmitted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### materializing-conflict
 
 state = MaterializingConflict
-when = sync.MaterializingConflict, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MaterializingConflict, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### validation-checking
 
 state = ValidationChecking
-when = sync.ValidationChecking, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ValidationChecking, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### conflict-decision-required
 
 state = ConflictDecisionRequired
-when = sync.ConflictDecisionRequired, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ConflictDecisionRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### pending-merge-prepared
 
 state = PendingMergePrepared
-when = sync.PendingMergePrepared, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
-
-##### relation-classified
-
-state = RelationClassified
-when = sync.RelationClassified, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
-
-##### fast-forward-admitted
-
-state = FastForwardAdmitted
-when = sync.FastForwardAdmitted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
-
-##### push-admitted
-
-state = PushAdmitted
-when = sync.PushAdmitted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
-
-##### merge-admitted
-
-state = MergeAdmitted
-when = sync.MergeAdmitted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.PendingMergePrepared, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### merge-validated
 
 state = MergeValidated
-when = sync.MergeValidated, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### review-accepted
 
 state = ReviewAccepted
-when = sync.ReviewAccepted, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### review-repair-required
 
 state = ReviewRepairRequired
-when = sync.ReviewRepairRequired, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### review-decision-required
 
 state = ReviewDecisionRequired
-when = sync.ReviewDecisionRequired, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewDecisionRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### review-rejected
 
 state = ReviewRejected
-when = sync.ReviewRejected, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewRejected, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### native-commit-preparing
 
 state = NativeCommitPreparing
-when = sync.NativeCommitPreparing, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### native-commit-observed
 
 state = NativeCommitObserved
-when = sync.NativeCommitObserved, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### native-push-preparing
 
 state = NativePushPreparing
-when = sync.NativePushPreparing, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### native-push-observed
 
 state = NativePushObserved
-when = sync.NativePushObserved, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### native-final-fetching
 
 state = NativeFinalFetching
-when = sync.NativeFinalFetching, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 ##### converged
 
 state = Converged
-when = sync.Converged, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Converged, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 #### INITIAL
 
-sync.BoundaryAssessment, review.Retained, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, humanConflict.Retained
 
 #### ACTION
-
-##### ReviewMerge
-
-kind = JUDGMENT
-operation = reviewMerge
-input = review.subject
-goal = pending-merge-review
-context = validated-pending-merge-snapshot
-candidate = validated-pending-merge
-alternative = accept
-alternative = repair
-alternative = decision-needed
-alternative = reject
-criteria = full-pending-merge-coverage
-criteria = current-validation-and-review-policy
-expected-result = review-disposition
-rationale = review-rationale
-evidence = merge-review-evidence
-evidence-scope = full-merge
-evidence-freshness = current
-evidence-provenance = review-receipt
-
-##### AdmitMergeReview
-
-kind = ADMISSION
-operation = requestMergeReview
-input = review.subject
-candidate-action = ReviewMerge
-effect = LOCAL
-transaction = REQUIRED
-idempotency = NOT_REQUIRED
 
 ##### ResolveRepositoryMergeConflicts
 
@@ -3289,10 +2326,6 @@ input = humanConflict.subject
 
 ### REQUIRED-OPERATION
 
-#### review-merge-capability
-
-action = ReviewMerge
-
 #### resolve-repository-conflict-capability
 
 action = ResolveRepositoryMergeConflicts
@@ -3315,17 +2348,9 @@ operation = RepositorySyncService.startRepositorySync
 
 operation = RepositorySyncService.advanceRepositorySync
 
-#### admitRepositoryConflicts
-
-operation = RepositorySyncService.admitRepositoryConflicts
-
 #### submitRepositorySyncWorkResult
 
 operation = RepositorySyncService.submitRepositorySyncWorkResult
-
-#### admitNativeMergeReview
-
-operation = RepositorySyncService.admitNativeMergeReview
 
 #### submitNativeMergeReview
 
@@ -3335,61 +2360,7 @@ operation = RepositorySyncService.submitNativeMergeReview
 
 operation = RepositorySyncService.submitRepositoryConflictDecision
 
-#### assessRepositoryBoundary
-
-operation = RepositorySyncService.assessRepositoryBoundary
-
-#### admitTrackingFetch
-
-operation = RepositorySyncService.admitTrackingFetch
-
-#### admitLocalPreservation
-
-operation = RepositorySyncService.admitLocalPreservation
-
-#### admitTipRelation
-
-operation = RepositorySyncService.admitTipRelation
-
-#### admitFastForward
-
-operation = RepositorySyncService.admitFastForward
-
-#### admitPush
-
-operation = RepositorySyncService.admitPush
-
-#### admitMerge
-
-operation = RepositorySyncService.admitMerge
-
-#### admitMergeValidation
-
-operation = RepositorySyncService.admitMergeValidation
-
-#### requestMergeReview
-
-operation = RepositorySyncService.requestMergeReview
-
-#### submitMergeReview
-
-operation = RepositorySyncService.submitMergeReview
-
-#### admitConvergence
-
-operation = RepositorySyncService.admitConvergence
-
-#### admitMergedConvergence
-
-operation = RepositorySyncService.admitMergedConvergence
-
 # STATE-MACHINE
-
-## RepositorySyncMergeReviewContext
-
-### STATE
-
-#### Retained
 
 ## RepositorySyncNativeConflictContext
 
@@ -3417,11 +2388,6 @@ operation = RepositorySyncService.admitMergedConvergence
 
 ##### TRANSITION
 
-to = BoundaryCaptured
-on = boundary-captured
-
-##### TRANSITION
-
 to = Fetching
 on = fetch-started
 
@@ -3431,13 +2397,6 @@ on = fetch-started
 
 to = FetchAdmitted
 on = fetch-observed
-
-#### BoundaryCaptured
-
-##### TRANSITION
-
-to = FetchAdmitted
-on = fetch-admitted
 
 #### FetchAdmitted
 
@@ -3492,11 +2451,6 @@ on = local-state-preserved
 
 to = Integrating
 on = integration-started
-
-##### TRANSITION
-
-to = RelationClassified
-on = relation-classified
 
 #### Integrating
 
@@ -3618,57 +2572,9 @@ on = human-conflict-deferred
 to = ConflictDecisionRequired
 on = human-conflict-cancelled
 
-#### RelationClassified
-
-##### TRANSITION
-
-to = FastForwardAdmitted
-on = fast-forward-admitted
-
-##### TRANSITION
-
-to = PushAdmitted
-on = push-admitted
-
-##### TRANSITION
-
-to = MergeAdmitted
-on = merge-admitted
-
-##### TRANSITION
-
-to = Converged
-on = convergence-admitted
-
-#### FastForwardAdmitted
-
-##### TRANSITION
-
-to = Converged
-on = convergence-admitted
-
 #### Converged
 
-#### PushAdmitted
-
-##### TRANSITION
-
-to = Converged
-on = convergence-admitted
-
-#### MergeAdmitted
-
-##### TRANSITION
-
-to = MergeValidated
-on = merge-validation-admitted
-
 #### MergeValidated
-
-##### TRANSITION
-
-to = PushAdmitted
-on = reviewed-merge-push-admitted
 
 ##### TRANSITION
 
@@ -3744,7 +2650,7 @@ on = native-convergence-observed
 
 ### DESCRIPTION
 
-Own the selected Phase's native entry, Step review/repair completion, registered submissions/artifacts and Human follow-up. Semantic work is issued with its exact candidate, execution requirement and assigned completion route; Workflow owns progression and admission. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult and submitGoalPhaseOrderedDecision, with configured managed Step/Phase validation, review, closure and repository effects. Other review/registration/recovery/Human declarations below belong to explicit legacy or optional assemblies, not that four-Operation published table. Independent evidence and bounded runtime grants remain necessary. Accepted review or a recorded Human choice alone does not establish committed Step, Phase completion, release or integrated acceptance.
+Own the selected Phase's entry, assigned semantic/Human completion and mechanical progression. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult and submitGoalPhaseOrderedDecision. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
 
 ### OPERATION
 
@@ -3752,7 +2658,7 @@ Own the selected Phase's native entry, Step review/repair completion, registered
 
 ##### DESCRIPTION
 
-Advance the actual retained ordered Phase instance. The command selects only its identity, never a Step, transition, argv or receipt. Workflow selects semantic work and mechanical checks/effects. Step closure is not whole-Phase completion. The normal factory installs the paired native host implementation. This declaration is not an execution grant; the saved plan and configured checks/effects govern whole-Phase progression.
+Advance the actual ordered Phase associated with the invocation session. Normally no JSON argument is needed; supply only an instanceIdentity selector when the session has several targets, or sessionIdentity when the host has no session. Workflow resolves saved input and selects the next semantic work or mechanical checks/effects. The caller supplies no Step, transition, argv or receipt. Step closure is not whole-Phase completion. This declaration is not an execution grant; configured checks/effects retain their owning scope and authority.
 
 ##### TYPE
 
@@ -3762,7 +2668,13 @@ COMMAND
 
 ###### TYPE
 
-GoalPhaseAdvanceCommand
+GoalPhaseAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | ? |
 
 ##### OUTPUT
 
@@ -3774,10 +2686,7 @@ GoalPhaseAdvanceResult
 
 ##### DESCRIPTION
 
-Return only the meaning of the actual assigned work inside its continuation
-result envelope. Workflow admits the actual actor, issue, result and independent
-review evidence where required, retains completion and derives its successor.
-No semantic result selects a cursor, native command or closure permission.
+Return the assigned semantic value under result.value and its genuinely consumed result reference or execution evidence. Session context resolves the pending work; requestIdentity is needed only to distinguish applicable targets. Do not echo handle, run, revision, context snapshot or the issued envelope. The owning completion consumes actual result meaning and independent review evidence where required. No semantic result selects a cursor, command or closure permission.
 
 ##### TYPE
 
@@ -3789,6 +2698,12 @@ COMMAND
 
 GoalPhaseWorkResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -3799,13 +2714,7 @@ GoalPhaseWorkSubmissionResult
 
 ##### DESCRIPTION
 
-Return only the answer to the actual ordered GoalPhase Decision in its common
-CNCF result envelope. Independent host evidence must bind the whole issued
-question, answer, participant and result. ResumeAssignedWork requests the same
-semantic work again without amending the selected Plan or refunding its repair
-count. Defer and Cancel retain direction without automatically issuing work or
-running commands. Completion records one adjacent answer; only advance selects
-any following WorkOrder. This is distinct from the legacy closure-Human route.
+Return the ordered GoalPhase answer under result.value with its actual evidence reference. Workflow resolves the pending Decision from session context, without a copied question, handle or context snapshot. Independent host Human evidence attests the selected question, participant and answer; authentication alone is not consent. ResumeAssignedWork requests assigned semantic work again without amending the Plan or refunding repair allowance. Defer and Cancel retain direction without issuing work or commands. Only owning advance selects following work.
 
 ##### TYPE
 
@@ -3817,6 +2726,12 @@ COMMAND
 
 GoalPhaseOrderedDecisionAnswer
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -3827,12 +2742,7 @@ GoalPhaseOrderedDecisionSubmissionResult
 
 ##### DESCRIPTION
 
-Start or observe the explicitly selected Phase/repository from GoalPhaseStartCommand.
-The configured host independently admits the selection and participant before
-using canonical native instance storage. JSON names and configuration are not
-consent or command authority. An entry acknowledgement is not Step review,
-document application, Git commit or Phase completion. Foreign selection, changed
-original facts and incompatible retained bindings are rejected rather than rebound.
+Start the selected Phase/repository with JSON input containing business Phase and repository references. Use actual invocation session context, or sessionIdentity when the host has none. Supply selectionIdentity only for genuinely ambiguous host selection; do not copy participant, execution controls or generated command fields. The host owns selection and actual authority. An entry acknowledgement is not Step review, document application, Git commit or Phase completion.
 
 ##### TYPE
 
@@ -3842,7 +2752,13 @@ COMMAND
 
 ###### TYPE
 
-GoalPhaseStartCommand
+GoalPhaseStartInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
 
 ##### OUTPUT
 
@@ -3850,453 +2766,13 @@ GoalPhaseStartCommand
 
 GoalPhaseStartResult
 
-#### requestStepClose
-
-##### DESCRIPTION
-
-Request review of the exact registered StepCloseRequest candidate and its program, planning and evidence facts. Workflow loads the admitted submission, current artifact snapshot and existing authority before issuing required Step review or handling an already retained boundary. Caller-supplied review evidence does not replace actual independent admission. This explicit legacy review binding is outside the normal ordered service's four published Operations and does not itself install a Git adapter. Successful review does not by itself close the Step or Phase or grant command permission.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-StepCloseRequest
-
-##### OUTPUT
-
-###### TYPE
-
-StepCloseResult
-
-#### submitStepReview
-
-##### DESCRIPTION
-
-Complete the exact issued Step review with ReviewStepResult inside the common CNCF result envelope. Preserve the original continuation, candidate snapshot, actor, result reference and execution evidence. Workflow admits the decision and retains canonical completion before selecting repair, Human or closure follow-up. Changed candidate/evidence or a crossed task is rejected. A semantic acceptance or completion acknowledgement is not successful Git commit or Phase completion. This explicit legacy completion is not the normal ordered service's submitGoalPhaseWorkResult and does not itself install a commit adapter.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-ReviewStepResult
-
-##### OUTPUT
-
-###### TYPE
-
-StepReviewSubmissionResult
-
-#### submitStepRepair
-
-##### DESCRIPTION
-
-Complete an issued bounded Step repair with RepairStepResult and its assigned
-common CNCF completion envelope. Workflow checks the original task, candidate,
-artifact/evidence and consumed repair budget and can publish the required fresh
-re-review. A repair report alone is not review acceptance, replenished budget,
-Git authority or Step completion. Unavailable repair assembly or changed/crossed
-inputs must not be replaced with an invented successful result or a new repair
-frame. AI workers return only the requested semantic work.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepairStepResult
-
-##### OUTPUT
-
-###### TYPE
-
-StepRepairSubmissionResult
-
-#### registerGoalPhaseSubmission
-
-##### DESCRIPTION
-
-Register the submission association from GoalPhaseSubmissionRegistrationCommand
-against its actual admitted Start selection and participant. The managed operation
-returns GoalPhaseSubmissionRegistrationResult with a bound receipt; it does not
-perform a Workflow transition or grant Human/command authority. Exact retained
-registration is an observation, not a new selection. Conflicting association,
-foreign actor or collection aliases are refused. Registration is not a substitute
-for Start, review, artifact admission or successful commit.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseSubmissionRegistrationCommand
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseSubmissionRegistrationResult
-
-#### registerGoalPhaseArtifacts
-
-##### DESCRIPTION
-
-Register the selected program/planning Blob references for an already registered
-StepCloseRequest using GoalPhaseArtifactRegistrationCommand. Workflow checks the
-actual owning submission, selected content facts and configured size/storage
-limits before returning GoalPhaseArtifactRegistrationResult. The caller supplies
-no destination collection, replacement handle or execution authority. This is
-artifact-reference installation, not an upload command, automatic refresh,
-review acceptance, native completion or permission to write repository files.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseArtifactRegistrationCommand
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseArtifactRegistrationResult
-
-#### recoverGoalPhaseReview
-
-##### DESCRIPTION
-
-Observe or recover the deterministic follow-up of an already completed review named by GoalPhaseReviewRecoveryCommand. The owning operation re-admits the saved review/candidate, selection and authority rather than completing or rerunning the semantic task. Configured native-Human policy may publish a missing genuine question or observe its exact successor. Missing or changed retained facts fail admission. This explicit legacy recovery binding is outside the normal ordered service's published table. It does not infer rollback from a failed acknowledgement, renew consent or itself install a Git adapter.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseReviewRecoveryCommand
-
-##### OUTPUT
-
-###### TYPE
-
-StepReviewSubmissionResult
-
-#### prepareGoalPhaseReviewDecision
-
-##### DESCRIPTION
-
-Prepare the retained closure-decision intent for the completed review named in
-GoalPhaseReviewDecisionPreparationCommand. This optional host path requires its
-declared presentation and destination, original candidate facts and authority;
-transport cannot supply a replacement intent or permission. Preparation retains
-data for the configured Human boundary, not an answer or a command execution.
-The default native-Human follow-up does not automatically install this optional
-preparation operation. It is distinct from native Decision advance/completion.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseReviewDecisionPreparationCommand
-
-##### OUTPUT
-
-###### TYPE
-
-StepReviewSubmissionResult
-
-#### prepareGoalPhaseHumanDecision
-
-##### DESCRIPTION
-
-Prepare the optional host Human question for the retained review identity in
-GoalPhaseHumanDecisionPreparationCommand. The host-owned presentation and declared
-choices preserve the original closure intent; the response is
-GoalPhaseHumanDecisionQuestionResult, not Human consent or a successful closure.
-This retained transport path needs its explicit host binding and is not the
-default native-Human completion flow. It cannot authorize Git, dispatch semantic
-work or select another target from request JSON.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseHumanDecisionPreparationCommand
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanDecisionQuestionResult
-
-#### recordGoalPhaseHumanAnswer
-
-##### DESCRIPTION
-
-Record the optional transport-path answer described by GoalPhaseHumanAnswerCommand
-for its exact retained review/question. The configured independent host verifier
-checks the interaction reference and actual Human evidence before producing
-GoalPhaseHumanAnswerResult. An authenticated relay or stored request is not
-consent. The answer records keep-open or request-separate-authorization; it does
-not itself supply that authorization, run a command or close the Phase. This
-operation is not interchangeable with native submitGoalPhaseHumanDecision.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseHumanAnswerCommand
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanAnswerResult
-
-#### submitGoalPhaseHumanDecision
-
-##### DESCRIPTION
-
-Complete the exact native GoalPhase Human Decision with GoalPhaseHumanDecisionAnswer
-inside the common CNCF Decision-result envelope. Independent host verification
-of the complete issued question/result is required; login identity is not Human
-consent. Workflow retains the admitted answer and native completion, not arbitrary
-request permissions. An acknowledgement does not establish bounded external
-command authority or Git success. This completion is installed only when the
-host supplies its native Human verifier, not by CML declaration alone.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseHumanDecisionAnswer
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanAnswerResult
-
-#### getGoalPhaseHumanDecisionResult
-
-##### DESCRIPTION
-
-Query the retained native Human completion named by GoalPhaseHumanCompletionQuery.
-The owning operation authorizes the original selection's participant and projects
-the actual issued question, saved answer and current native history as
-GoalPhaseHumanCompletionObservation. It does not append history, issue another
-question, renew consent or reconstruct a missing original verification receipt.
-Foreign participants, nonnative question identities and missing/crossed facts
-are rejected. Observation is not command execution or Phase closure.
-
-##### TYPE
-
-QUERY
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseHumanCompletionQuery
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanCompletionObservation
-
-#### advanceGoalPhaseHumanDecision
-
-##### DESCRIPTION
-
-Advance or observe native Human follow-up from the completed review identity in GoalPhaseNativeHumanAdvanceCommand. Workflow selects its declared choices and mechanical transition from retained review, candidate and authority; transport supplies no replacement intent, result, target or permission. The response is GoalPhaseHumanDecisionQuestionResult for that genuine question, not an answer or Git commit. Keep-open and request-authorization do not themselves authorize external execution. This legacy closure-Human binding is outside the normal ordered service's published table and does not itself grant command capability.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseNativeHumanAdvanceCommand
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanDecisionQuestionResult
-
-# SERVICE
-
-## HumanDecisionService
-
-### DESCRIPTION
-
-Required independent Human channel for GoalPhase closure direction. It is
-distinct from AI review/repair and from SplitPhase Human tasks. The configured
-host presents the owning closure question and verifies the actual answer;
-participant authentication, a semantic DecisionNeeded result or configuration
-cannot substitute for consent. A choice requesting separate authorization is
-not itself command authority or successful closure.
-
-### OPERATION
-
-#### presentGoalPhaseHumanDecision
-
-##### DESCRIPTION
-
-Present the issued GoalPhaseClosureAuthorityInput for the original candidate and
-closure reason, and obtain GoalPhaseHumanDecisionAnswer through the host Human
-channel. Preserve the exact question and return the complete result through its
-assigned Decision completion route. Do not invent consent, replace candidate
-facts or equate a keep-open/request-authorization answer with Git execution.
-The Required SPI declaration does not install a verifier or grant external
-command permission to an AI skill.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-GoalPhaseClosureAuthorityInput
-
-##### OUTPUT
-
-###### TYPE
-
-GoalPhaseHumanDecisionAnswer
-
-# SERVICE
-
-## StepRepairService
-
-### DESCRIPTION
-
-Required semantic repair SPI for a Workflow-issued bounded Step candidate.
-Workflow selects the frozen scope, budget, execution requirement and subsequent
-re-review; the worker implements only the assigned repair and returns its result.
-This declaration is not an independent stage selector, a new repair frame or
-Git/commit authority. Completed repair remains subject to actual validation and
-independent review before the owning Step can be accepted.
-
-### OPERATION
-
-#### repairStep
-
-##### DESCRIPTION
-
-Perform only the repair requested for the issued StepCloseRequest and return
-RepairStepResult with the declared outcome, summary and evidence identity through
-the WorkOrder's completion route. Preserve the original candidate and frozen
-scope; do not reset the repair counter, create another frame or silently expand
-the work. Workflow owns result admission, validation routing and fresh re-review.
-A worker report alone is not successful tests, accepted review or committed Step.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-StepCloseRequest
-
-##### OUTPUT
-
-###### TYPE
-
-RepairStepResult
-
-# SERVICE
-
-## StepReviewService
-
-### DESCRIPTION
-
-Required independent semantic review SPI for the exact Workflow-issued Step
-candidate and its admitted program/planning evidence. The reviewer evaluates
-the assigned boundary without edits or command effects and returns the declared
-result. Workflow owns evidence admission, repair selection, Human follow-up and
-closure. Review independence and the original scope cannot be replaced by a
-passing subset or the implementing parent's self-review.
-
-### OPERATION
-
-#### reviewStep
-
-##### DESCRIPTION
-
-Review the exact StepCloseRequest in its issued WorkOrder and return ReviewStepResult
-with decision, rationale and review evidence through the assigned completion
-route. Inspect the complete required candidate scope without repairing it or
-executing Git/SBT from this semantic SPI. Retain unknown or missing evidence as
-such rather than manufacturing acceptance. Workflow validates the original
-candidate/revision and decides subsequent processing; an accept result is not
-automatically a Step commit or completed Phase.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-StepCloseRequest
-
-##### OUTPUT
-
-###### TYPE
-
-ReviewStepResult
-
 # SERVICE
 
 ## SplitPhaseService
 
 ### DESCRIPTION
 
-Own SplitPhase entry, semantic completion, progression and document-operation contracts. Start uses independently admitted host selection; completion preserves the original issued task, actor, context, revision and result evidence. The normal factory includes paired planning/Human handlers with configured native host ports. Owning advance absorbs deterministic frontier work and continues verified scope/reasoning Human resolution to selected Preview or authorized document Apply. The host must supply independent answer evidence and bounded effect grants. Integrated acceptance and unsupported document-conflict semantic recovery remain open. A completion acknowledgement is not successful application.
+Own SplitPhase entry, assigned semantic/Human completion, deterministic planning and document effects. Session context resolves native instance, planning context and pending work; callers return requested results without duplicated control fields. Workflow owns calibration, packing and progression to Preview or authorized managed Apply. Independent Human evidence and actual document scope remain with their owning host boundaries. Document-conflict handlers are unavailable, not a successful wait or terminal. A completion acknowledgement is not successful application.
 
 ### OPERATION
 
@@ -4304,7 +2780,7 @@ Own SplitPhase entry, semantic completion, progression and document-operation co
 
 ##### DESCRIPTION
 
-Start an explicitly selected source Phase from SplitPhaseStartCommand. The host checks selection, participant, source authority and invocation mode before creating or observing the native instance. A successful entry returns the owning Start result/WAIT, not completed partitioning or changed documents. Missing or foreign selection, crossed source facts and incompatible retained definitions are rejected. The normal factory installs this managed entry, not merely by declaring the operation in CML.
+Start the selected source Phase with JSON input containing sourcePhaseIdentity, invocationMode and optional proposalReference. Actual session context and host selection resolve participant and allocation; use sessionIdentity or selectionIdentity only when needed. Do not send the generated Start command or copied control fields. A successful entry returns the owning Start observation, not completed partitioning or changed documents. The host owns source authority and managed execution scope.
 
 ##### TYPE
 
@@ -4314,7 +2790,13 @@ COMMAND
 
 ###### TYPE
 
-SplitPhaseStartCommand
+SplitPhaseStartInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
 
 ##### OUTPUT
 
@@ -4322,118 +2804,11 @@ SplitPhaseStartCommand
 
 SplitPhaseStartResult
 
-#### assessSplitProposal
-
-##### DESCRIPTION
-
-Assess the original admitted source/proposal using SplitPhaseProposalAssessmentCommand, its expected native revision and idempotency key. The owning host reads the proposal and existing authority; semantic gaps or identity decisions require their configured handlers rather than caller-chosen transitions. The assessment does not itself apply a split. Changed source, foreign actor or stale revision fails admission. This dedicated proposal-assessment contract is not one of the normal factory's provided Operations; owning advance reaches current planning and downstream work. Declaration alone does not install this legacy entry.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhaseProposalAssessmentCommand
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhaseProposalAssessmentResult
-
-#### previewSplitPhase
-
-##### DESCRIPTION
-
-Produce the preview contract for SplitPhasePreviewCommand using the original Start command, expected revision and host-owned admitted proposal/catalog. The dedicated adapter can return a typed SplitPhasePreviewResult without applying documents. It must not treat an unverified proposal or a passive planning record as executable authority. This dedicated fixture Preview contract is not a normal-factory provided Operation. Current v12 owning advance produces selected Preview or authorized Apply through the native planning/Human connection; declaring this legacy Operation does not install another downstream handler.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhasePreviewCommand
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhasePreviewResult
-
-#### applySplitPhase
-
-##### DESCRIPTION
-
-Apply the dedicated admitted document-plan contract for SplitPhaseApplyCommand
-only through a host binding with an explicit repository root, original Start
-facts, expected revision and checked proposal/catalog. A valid adapter result
-is typed SplitPhaseApplyResult, not permission for a skill to write documents
-or run Git. Retained effects, failed admission and uncertain writes require
-the owning apply/recovery rules. Existing adapter fixtures do not establish
-complete current v7 planning-to-apply or default production installation.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhaseApplyCommand
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhaseApplyResult
-
-#### submitSplitSemanticResult
-
-##### DESCRIPTION
-
-Complete the separately issued novel-work semantic task with SplitPhaseSemanticResult
-inside its common CNCF result envelope. Preserve the original task/continuation,
-snapshot, actor, result reference and evidence. Workflow admits only the requested
-unknown inputs and retains known estimates and authority; the result cannot
-select commands or the next state. This is distinct from partition and handoff
-scope completion. Its declaration and legacy/fixture flows do not establish
-the complete current public split path. An acknowledgement is not applied documents.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhaseSemanticResult
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhaseSemanticSubmissionResult
-
 #### submitPartitionSemanticResult
 
 ##### DESCRIPTION
 
-Complete an issued partition semantic task using SplitPhasePartitionSemanticResult
-and the exact common CNCF completion envelope. Enriched supplies only the ordered
-unknown estimates and semantic boundary judgments requested by Workflow;
-DecisionNeeded is semantic data, not Human consent. Workflow validates coverage,
-evidence, original actor/context and native suspension before canonical completion.
-It owns calibration, enumeration, packing and ranking. The returned acknowledgement
-does not prove downstream planning or document application; use the assigned
-completion route rather than a client-selected admission operation.
+Return partition judgment under result.value for the session's pending task. Enriched supplies only requested unknown estimates, semantic boundary judgments and their actual evidence; DecisionNeeded is semantic data, not Human consent. Workflow resolves the assigned destination internally, without result-reference, context or envelope echoes. Workflow owns calibration, enumeration, packing and ranking. Completion acknowledges this task, not downstream document application; the caller does not select an admission stage or command.
 
 ##### TYPE
 
@@ -4445,6 +2820,12 @@ COMMAND
 
 SplitPhasePartitionSemanticResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -4455,7 +2836,7 @@ SplitPhaseSemanticSubmissionResult
 
 ##### DESCRIPTION
 
-Observe the selected native instance and original context from SplitPhaseAdvanceCommand; there is no caller-selected stage or candidate. Workflow absorbs available mechanical work and returns the genuine next semantic task, retained observation or actual failure. The normal paired Human connection issues genuine scope/reasoning Decisions and continues independently verified ProvideResolution or records Defer/Cancel. ALL-Built must not be converted into a Human task. The saved Start mode determines complete Preview or authorized managed Apply. Document-conflict semantic/Human handlers remain unavailable; unavailable capability is not a successful WAIT or Terminal. Integrated regression/review and proof of full split success remain unfinished.
+Advance the native instance and partition context resolved from the invocation session. Normally no JSON argument is needed; supply only necessary sessionIdentity, instanceIdentity or contextIdentity selectors. There is no caller-selected stage, candidate or command. Workflow absorbs mechanical work and returns the next semantic task, wait or terminal. The saved Start mode determines Preview or authorized managed Apply. Genuine scope/reasoning Decisions consume independently attested ProvideResolution or record Defer/Cancel. ALL-Built must not be converted into a Human task. Document-conflict semantic/Human handlers remain unavailable; unavailable capability is not a successful WAIT or Terminal. This declaration is not an execution grant.
 
 ##### TYPE
 
@@ -4465,7 +2846,13 @@ COMMAND
 
 ###### TYPE
 
-SplitPhaseAdvanceCommand
+SplitPhaseAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | ? |
 
 ##### OUTPUT
 
@@ -4477,13 +2864,7 @@ SplitPhaseAdvanceResult
 
 ##### DESCRIPTION
 
-Complete the exact issued handoff task with SplitPhaseScopeSemanticResult in
-the common CNCF result envelope. Enriched supplies nonempty ordered subsets of
-the original producing/receiving ranges for exactly the issued gaps; DecisionNeeded
-supplies no partial scopes. Evidence must match the actual execution, actor,
-checkpoint and native suspension. Canonical completion acknowledges this semantic
-boundary only. It preserves the entire candidate frontier, ownership, closure
-and transfer authority; it does not select downstream operations or apply documents.
+Return the handoff judgment under result.value for the session's pending task. Enriched supplies ordered producing/receiving subsets for the issued gaps; DecisionNeeded supplies no partial scopes. Supply actual semantic evidence once. Workflow resolves checkpoint and assigned destination internally, without control or reference echoes. Completion acknowledges this semantic boundary; it does not select downstream operations, transfer authority or apply documents.
 
 ##### TYPE
 
@@ -4495,6 +2876,12 @@ COMMAND
 
 SplitPhaseScopeSemanticResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -4505,7 +2892,7 @@ SplitPhaseScopeSubmissionResult
 
 ##### DESCRIPTION
 
-Complete the exact issued reasoning classification task using SplitPhaseReasoningSemanticResult in the common CNCF result envelope. Return only the ordered unknown-item classifications, rationale and evidence, or DecisionNeeded without partial assignments. The common result reference must equal the result identity/revision assigned in the request for either alternative; the participant cannot select another destination. Workflow owns admission, replacement data references and objective-only continuation over the original frontier. The normal v12 paired composition installs native reasoning completion and retained successor observation. A completion acknowledgement is not Preview, Apply or integrated acceptance, nor permission to select a stage or command.
+Return only requested unknown-item classifications, rationale and actual evidence under result.value, or DecisionNeeded without partial assignments. Workflow resolves the session's pending reasoning task and its assigned result destination internally; no result-reference, checkpoint, context or envelope echo is needed. Workflow owns resulting data and objective-only continuation over the original frontier. A completion acknowledgement is not Preview, Apply or permission to select a stage or command.
 
 ##### TYPE
 
@@ -4517,6 +2904,12 @@ COMMAND
 
 SplitPhaseReasoningSemanticResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -4527,7 +2920,7 @@ SplitPhaseReasoningSubmissionResult
 
 ##### DESCRIPTION
 
-Complete the exact issued Human Decision with the common CNCF result envelope containing SplitPhaseHumanDirectionAnswer. The paired host assembly requires an independent verifier bound to the complete question/result and current owning call; an authenticated relay alone is not consent. ProvideResolution names separate interpretation data, while Defer and Cancel carry no resolution. The normal paired composition supports separately verified scope and reasoning answers. Scope completion saves HumanAnswered; later advance observes resolution data and continues planning/reasoning, or appends Defer/Cancel termination. Reasoning completion atomically saves its answer and selected successor or stopped state; later advance observes the saved Preview or Terminal. An answer acknowledgement is not that outcome or document application. Document-conflict semantic/Human resolution is not installed. Identical retained answers are observations, not new consent; changed answers or uncertain commits must not be auto-replayed.
+Return the pending Human answer under result.value with its actual result/evidence reference. Workflow resolves the Decision from session context; do not copy the whole question or control envelope. Independent host Human evidence attests the selected question and answer; an authenticated relay alone is not consent. ProvideResolution names separate interpretation data, while Defer and Cancel carry no resolution. Owning advance continues scope/reasoning or observes the stopped outcome. An answer acknowledgement is not document application. Document-conflict semantic/Human resolution is not installed. Duplicate-answer, replay and intermediate-recovery guarantees are outside this interface.
 
 ##### TYPE
 
@@ -4538,6 +2931,12 @@ COMMAND
 ###### TYPE
 
 SplitPhaseHumanDirectionAnswer
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
 
 ##### OUTPUT
 
@@ -4585,298 +2984,13 @@ RepositorySyncHumanConflictRequest
 
 RepositorySyncHumanConflictAnswer
 
-# VALUE
-
-## GoalPhaseHumanDecisionPreparationCommand
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| reviewContinuationIdentity | string | 1 |
-
-## GoalPhaseClosureAuthorityInput
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| reason | string | 1 |
-| candidate | StepCloseRequest | 1 |
-| candidateRevision | string | 1 |
-
-## GoalPhaseHumanAnswerCommand
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| reviewContinuationIdentity | string | 1 |
-| questionIdentity | string | 1 |
-| choiceIdentity | string | 1 |
-| interactionReference | string | 1 |
-
-## GoalPhaseHumanDecisionChoice
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| identity | string | 1 |
-| label | string | 1 |
-
-## GoalPhaseHumanDecisionAnswer
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| choiceIdentity | string | 1 |
-
-## GoalPhaseHumanDecisionQuestion
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| questionSchema | string | 1 |
-| intentIdentity | string | 1 |
-| question | string | 1 |
-| choices | GoalPhaseHumanDecisionChoice | + |
-
-## GoalPhaseHumanDecisionQuestionResult
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| question | GoalPhaseHumanDecisionQuestion | 1 |
-
-## GoalPhaseHumanDecisionReceipt
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| question | string | 1 |
-| answer | string | 1 |
-| componentLabel | string | 1 |
-| submittingParticipant | string | 1 |
-| reference | string | 1 |
-| issuer | string | 1 |
-| humanParticipant | string | 1 |
-| purpose | string | 1 |
-| occurredAt | string | 1 |
-
-## GoalPhaseHumanAnswerResult
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| receipt | GoalPhaseHumanDecisionReceipt | 1 |
-
-## GoalPhaseNativeHumanAdvanceCommand
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| reviewContinuationIdentity | string | 1 |
-
-## GoalPhaseHumanCompletionQuery
-
-### METADATA
-
-- input-kind :: QUERY
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| questionIdentity | string | 1 |
-
-## GoalPhaseHumanCompletionObservation
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| questionIdentity | string | 1 |
-| choiceIdentity | string | 1 |
-| humanEvidenceReference | string | 1 |
-| completingRevision | long | 1 |
-| currentRevision | long | 1 |
-| issuedDecision | string | 1 |
-| completion | string | 1 |
-
-## GoalPhaseReviewDecisionPreparationCommand
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| continuationIdentity | string | 1 |
-
-## GoalPhaseReviewRecoveryCommand
-
-### METADATA
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| continuationIdentity | string | 1 |
-
-## GoalPhaseArtifactStorageReference
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| store | string | 1 |
-| container | string | 1 |
-| key | string | 1 |
-| version | string | ? |
-| etag | string | ? |
-
-## GoalPhaseArtifactReference
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| id | string | 1 |
-| storageRef | GoalPhaseArtifactStorageReference | 1 |
-
-## GoalPhaseArtifactSelection
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| identity | string | 1 |
-| revision | long | 1 |
-| program | GoalPhaseArtifactReference | 1 |
-| planning | GoalPhaseArtifactReference | 1 |
-
-## GoalPhaseArtifactRegistrationCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| subject | StepCloseRequest | 1 |
-| selection | GoalPhaseArtifactSelection | 1 |
-
-## GoalPhaseArtifactRegistrationReceipt
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| typeIdentity | string | 1 |
-| componentIdentity | string | 1 |
-| workflowIdentity | string | 1 |
-| workflowRevision | string | 1 |
-| instanceIdentity | string | 1 |
-| submissionIdentity | string | 1 |
-| stepIdentity | string | 1 |
-| sourceCandidateRevision | string | 1 |
-| selection | GoalPhaseArtifactSelection | 1 |
-
-## GoalPhaseArtifactRegistrationResult
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| schemaVersion | string | 1 |
-| receipt | GoalPhaseArtifactRegistrationReceipt | 1 |
-
-# VALUE
-
-## GoalPhaseSubmissionRegistrationCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name                | type                  | multiplicity |
-|---------------------+-----------------------+--------------|
-| registrationIdentity | string               | 1            |
-| submissionIdentity  | string                | 1            |
-| idempotencyIdentity | string                | 1            |
-| start               | GoalPhaseStartCommand | 1            |
-
-## GoalPhaseSubmissionRegistrationReceipt
-
-### ATTRIBUTE
-
-| name                 | type   | multiplicity |
-|----------------------+--------+--------------|
-| typeIdentity         | string | 1            |
-| registrationIdentity | string | 1            |
-| submissionIdentity   | string | 1            |
-| idempotencyIdentity  | string | 1            |
-| componentIdentity    | string | 1            |
-| workflowIdentity     | string | 1            |
-| workflowRevision     | string | 1            |
-| instanceIdentity     | string | 1            |
-| selectionIdentity    | string | 1            |
-| participantIdentity  | string | 1            |
-
-## GoalPhaseSubmissionRegistrationResult
-
-### ATTRIBUTE
-
-| name          | type                                   | multiplicity |
-|---------------+----------------------------------------+--------------|
-| schemaVersion | string                                 | 1            |
-| receipt       | GoalPhaseSubmissionRegistrationReceipt | 1            |
-
 # SERVICE
 
 ## RepositorySyncService
 
 ### DESCRIPTION
 
-Own repository convergence through the normal factory's five published Operations: selected Start, advance and assigned conflict/review/Human completion. Workflow owns safe fetch/preservation/relation/integration/validation/commit/push and final observation through configured fixed managed Git/check capabilities, delegating only requested semantic conflict/review work or Human decisions. The remaining deterministic admission declarations describe explicit fixture bindings, not additional normal public stages; receipt admission is not execution. Host grants, original selection and independent evidence remain necessary, and integrated acceptance remains open. Do not run Git from a skill, assume a declaration is callable or infer convergence from a WAIT/accepted review without actual complete final repository evidence.
+Own repository convergence through five normal Operations: Start, advance and assigned conflict/review/Human completion. Session context resolves selected native state and pending work. Workflow owns fetch, preservation, integration, validation, commit, push and final observation through configured fixed managed Git/check capabilities, delegating only requested semantic results or Human answers. Other declarations are not additional normal public stages. Host scope, effect authority and independent evidence remain with their consuming boundaries. A WAIT or accepted review without the actual final repository outcome is not convergence.
 
 ### OPERATION
 
@@ -4884,7 +2998,7 @@ Own repository convergence through the normal factory's five published Operation
 
 ##### DESCRIPTION
 
-Start the RepositorySync contract from RepositorySyncStartCommand using the host's admitted repository selection, participant and tracking mapping. The response is RepositorySyncStartResult for that native entry, not a fetch, push or synchronized repository. Foreign selection/mapping and changed retained input are refused. The normal factory installs this native entry; Start itself does not modify a remote or grant command permission. Owning advance performs separately authorized managed effects under the saved selection.
+Start RepositorySync with JSON input containing repositoryIdentity, localBranch, trackingRemote, trackingBranch, remoteEndpointIdentity and syncMode. Invocation session context and host selection resolve participant and allocation; use sessionIdentity or selectionIdentity only when needed, not generated command/control copies. The entry response is not a fetch, push or synchronized repository. Start grants no command or remote authority. Owning advance performs managed effects within actual configured selection and permissions.
 
 ##### TYPE
 
@@ -4894,7 +3008,13 @@ COMMAND
 
 ###### TYPE
 
-RepositorySyncStartCommand
+RepositorySyncStartInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
 
 ##### OUTPUT
 
@@ -4906,7 +3026,7 @@ RepositorySyncStartResult
 
 ##### DESCRIPTION
 
-Advance the saved RepositorySync instance. The managed host implementation reads the original selection, persists native fetch intent, runs only the fixed runtime Git purposes and records actual observed tracking state. A later call reobserves uncertain effects before any progression; it does not repeat an unproven fetch. The client supplies the instance identity only, not a stage, repository path, Git argument or receipt. The normal factory installs complete native progression, including integration/conflict, validation, independent review and convergence, not only the fetch entry. A fetched WAIT is not merge, push or final convergence; known postimages are observed without replay and unknown checks remain uncertain. Configured effects/evidence and integrated validation remain required.
+Advance the RepositorySync instance associated with the invocation session. Normally no JSON argument is needed; supply only a necessary instanceIdentity selector or sessionIdentity when the host has no session. Workflow absorbs fixed managed Git/check progression and returns the next conflict/review/Human work, wait or final convergence. The caller supplies no stage, repository path, argv or receipt. Actual configured scope, effect authority and independent evidence stay with their owning boundaries. A fetched WAIT or accepted review is not final convergence; this interface promises no intermediate recovery or replay guarantee.
 
 ##### TYPE
 
@@ -4916,7 +3036,13 @@ COMMAND
 
 ###### TYPE
 
-RepositorySyncAdvanceCommand
+RepositorySyncAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | ? |
 
 ##### OUTPUT
 
@@ -4924,39 +3050,11 @@ RepositorySyncAdvanceCommand
 
 RepositorySyncAdvanceResult
 
-#### admitRepositoryConflicts
-
-##### DESCRIPTION
-
-Declared candidate admission for only selected native text conflicts. Owning
-advance issues its required semantic action; this declaration is not a public
-client-selected stage or a permission to write files or invoke Git.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncConflictRequest
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncConflictSubmissionResult
-
 #### submitRepositorySyncWorkResult
 
 ##### DESCRIPTION
 
-Return only the result assigned by the actual native conflict WorkOrder using
-the common ContinuationResult envelope. Workflow admits ordered conflict-ID
-coverage and saves the matching completion and successor in canonical storage.
-No command, stage, authority, validation or commit/push claim is permitted.
-A retained resolution proposal is not an applied resolution or convergence.
+Return the assigned conflict judgment under result.value with its genuinely consumed result reference/evidence. Session context resolves the pending WorkOrder; no handle, run, revision, context or issued-envelope echo is required. The owning completion consumes conflict coverage and meaning. A resolution proposal grants no command, file-write, commit or push authority and is not convergence.
 
 ##### TYPE
 
@@ -4968,43 +3066,23 @@ COMMAND
 
 RepositorySyncConflictResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
 
 RepositorySyncConflictSubmissionResult
 
-#### admitNativeMergeReview
-
-##### DESCRIPTION
-
-Declared admission for the independently reviewed full native pending merge.
-Owning advance selects and issues the action. Clients do not select a stage.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncNativeMergeReviewRequest
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncNativeMergeReviewSubmissionResult
-
 #### submitNativeMergeReview
 
 ##### DESCRIPTION
 
-Return the assigned semantic native merge review through the actual WorkOrder
-completion route. Workflow verifies independently admitted reviewer evidence and
-atomically saves the completion and native successor. No command authority,
-repair, commit, push or convergence is inferred from review acceptance.
+Return the assigned merge-review judgment under result.value and its actual result/evidence reference. Workflow resolves pending work from session context; independent host evidence attests the selected review and actual reviewer. No copied WorkOrder or control envelope is required. Review acceptance alone grants no repair, command, commit, push or convergence authority.
 
 ##### TYPE
 
@@ -5016,6 +3094,12 @@ COMMAND
 
 RepositorySyncNativeMergeReviewResult
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
@@ -5026,14 +3110,7 @@ RepositorySyncNativeMergeReviewSubmissionResult
 
 ##### DESCRIPTION
 
-Return only the answer to the genuine issued RepositorySync conflict Decision.
-An independent host verifier must admit the complete question and result, the
-actual Human participant and current completion call. ProvideResolution covers
-only the original ordered conflict IDs and bounded text policy; Defer and Cancel
-carry no file proposal. Atomic answer persistence grants no command or remote
-authority. The next owning advance chooses materialization, validation, required
-independent review and separately authorized convergence. Without a paired Human
-installation the previous nonterminal WAIT remains unchanged.
+Return the pending conflict Decision answer under result.value and its actual result/evidence reference. Session context resolves the selected question without a complete question or control-envelope echo. Independent host Human evidence attests that selected question and answer; authentication alone is not consent. ProvideResolution supplies actual conflict text within the bounded policy; Defer and Cancel carry no file proposal. Owning advance chooses materialization, validation, review and authorized convergence. The answer grants no file, command or remote authority. An unavailable Human handler is not successful completion.
 
 ##### TYPE
 
@@ -5045,335 +3122,17 @@ COMMAND
 
 RepositorySyncHumanConflictAnswer
 
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| arg1 | string | 1 |
+
 ##### OUTPUT
 
 ###### TYPE
 
 RepositorySyncHumanConflictSubmissionResult
-
-#### assessRepositoryBoundary
-
-##### DESCRIPTION
-
-Assess the admitted repository boundary and intended dirty scope from
-RepositorySyncBoundaryAssessmentCommand with its original Start and expected
-revision. The host reads actual repository/policy evidence; the caller must not
-silently include unrelated work or supply another tracking endpoint. The result
-records boundary admission, not Git execution or successful convergence. Current
-fixture/native evidence is not an installed production scan/command adapter.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncBoundaryAssessmentCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncBoundaryAssessmentResult
-
-#### admitTrackingFetch
-
-##### DESCRIPTION
-
-Admit a matching host-retained tracking fetch receipt after the original captured
-boundary using RepositorySyncFetchAdmissionCommand. Workflow checks complete
-repository, dirty-scope and native predecessor facts before recording
-RepositorySyncFetchAdmissionResult. This existing fixture admission performs no
-network or Git fetch itself. Missing/crossed receipts or stale history are refused;
-neither a request key nor WAIT proves that a remote fetch actually ran.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncFetchAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncFetchAdmissionResult
-
-#### admitLocalPreservation
-
-##### DESCRIPTION
-
-Admit the original local-state preservation/checkpoint evidence from
-RepositorySyncPreservationAdmissionCommand after the matching fetch boundary.
-The host must preserve explicitly intended work and supply the complete matching
-receipt before Workflow records RepositorySyncPreservationAdmissionResult.
-The current fixture does not itself create a real checkpoint commit, stage
-unrelated edits or authorize destructive cleanup. Missing or crossed preservation
-facts block later relation/merge/push admission.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncPreservationAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncPreservationAdmissionResult
-
-#### admitTipRelation
-
-##### DESCRIPTION
-
-Classify and admit the local/tracking tip relation from
-RepositorySyncRelationAdmissionCommand against the original captured boundary,
-fetch and preservation evidence. RepositorySyncRelationAdmissionResult retains
-that deterministic relation and native predecessor; the caller does not select
-the desired convergence route by declaring a stage. This fixture admission is
-not a Git mutation. Changed tips or conflicting predecessor evidence require
-new owning observation, not guessed fast-forward, push or merge permission.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncRelationAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncRelationAdmissionResult
-
-#### admitFastForward
-
-##### DESCRIPTION
-
-Admit a matching host-retained fast-forward receipt for the originally classified
-remote-ahead relation using RepositorySyncFastForwardAdmissionCommand. Validate
-the repository, complete predecessor evidence, expected revision and resulting
-state before recording RepositorySyncFastForwardAdmissionResult. The current
-fixture admission does not execute Git or permit a force update. It is not final
-convergence; the owning operation must still verify complete final state.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncFastForwardAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncFastForwardAdmissionResult
-
-#### admitPush
-
-##### DESCRIPTION
-
-Admit the host-retained non-force push receipt for the eligible original relation
-using RepositorySyncPushAdmissionCommand. The owning admission checks repository,
-tracking endpoint, predecessor evidence and resulting state before returning
-RepositorySyncPushAdmissionResult. The existing fixture performs no remote write
-itself. A receipt reference is not push authorization, and force push or a new
-endpoint is not implied. Later convergence verification remains required.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncPushAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncPushAdmissionResult
-
-#### admitMerge
-
-##### DESCRIPTION
-
-Admit the original pending merge facts and host receipt from
-RepositorySyncMergeAdmissionCommand for an eligible divergent relation.
-RepositorySyncMergeAdmissionResult is not accepted merge review or successful
-commit. The intended Workflow owns mechanically safe merging; unresolved semantic
-conflicts need AI work or Human intervention rather than invented resolution.
-Current fixture admission does not supply a real merge executor, reset user work
-or grant an AI client authority to select another route.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergeAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncMergeAdmissionResult
-
-#### admitMergeValidation
-
-##### DESCRIPTION
-
-Admit matching host-retained validation evidence for the original pending merge
-with RepositorySyncMergeValidationAdmissionCommand. Check the candidate, required
-checks and complete native predecessor before returning
-RepositorySyncMergeValidationAdmissionResult. A stored check name or caller claim
-is not executed tests. The fixture does not run Git/SBT; real managed execution
-and a complete independent merge review remain required before commit or push.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergeValidationAdmissionCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncMergeValidationAdmissionResult
-
-#### requestMergeReview
-
-##### DESCRIPTION
-
-Issue or observe full semantic review for the validated original pending merge
-named by RepositorySyncMergeReviewRequest. The host reconstructs the retained
-candidate, parents, tree, validation and policy evidence before issuing the exact
-WorkOrder. The request cannot select a Git write or replace that provenance.
-RepositorySyncMergeReviewSubmissionResult at issue is not review acceptance or
-convergence. This explicit fixture binding is not default production installation.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewRequest
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewSubmissionResult
-
-#### submitMergeReview
-
-##### DESCRIPTION
-
-Complete the exact issued full merge review with RepositorySyncMergeReviewResult inside its common CNCF result envelope. Workflow validates original candidate, policy, evidence and native suspension and retains the complete result. Accept still awaits deterministic commit and final verification; repair/rejection or decision-needed must not become successful push. Completion acknowledgement is not convergence, and uncertain postcompletion retention is not proof of rollback or authorization to replay the review. This legacy fixture completion is not the normal native submitNativeMergeReview and does not itself install a Git executor.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewResult
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewSubmissionResult
-
-#### admitConvergence
-
-##### DESCRIPTION
-
-Verify final retained repository evidence for the admitted equal, fast-forward
-or local-ahead push route described by RepositorySyncConvergenceCommand. The
-owning admission checks complete predecessor history and final repository/tracking
-state before returning a typed RepositorySyncConvergenceResult Terminal.
-This fixture terminal admission performs no Git command itself. Earlier WAITs,
-receipts or unchanged reference names do not establish synchronized tips/tree;
-actual production execution and observations remain required for real convergence.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncConvergenceCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncConvergenceResult
-
-#### admitMergedConvergence
-
-##### DESCRIPTION
-
-Admit final merged convergence from RepositorySyncMergedConvergenceCommand's
-exact host-retained review result and committed predecessor. The fixture path
-requires matching accepted full review, commit inspection, eligible push receipt
-and final convergence evidence before typed RepositorySyncConvergenceResult.
-Transport cannot supply replacement authority, choose another candidate or skip
-review. This explicit binding does not establish a real managed commit/push
-executor, remote authorization or default production convergence profile.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergedConvergenceCommand
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncConvergenceResult
 
 # SERVICE
 
@@ -5652,123 +3411,7 @@ RepositorySyncNativeMergeReviewRequest
 
 RepositorySyncNativeMergeReviewResult
 
-#### reviewMerge
-
-##### DESCRIPTION
-
-Review the exact RepositorySyncMergeReviewRequest in the issued WorkOrder and
-return RepositorySyncMergeReviewResult with decision, rationale, findings and
-evidence through its assigned completion route. Do not repair the merge during
-independent review, reroute the Workflow, run Git/SBT or treat a passing subset
-as complete candidate acceptance. Workflow checks the retained candidate and
-execution evidence before any eligible mechanical follow-up; semantic accept
-does not itself execute a commit/push or return convergence Terminal.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewRequest
-
-##### OUTPUT
-
-###### TYPE
-
-RepositorySyncMergeReviewResult
-
 # VALUE
-
-## SplitPhaseNovelWorkItem
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| identity | string | 1 |
-| workClassKey | string | 1 |
-| repositoryClass | string | 1 |
-| normalizedUnits | int | 1 |
-| explicitBaselineMinutes | int | ? |
-
-## SplitPhaseSemanticEdge
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| afterItem | string | 1 |
-| disposition | string | 1 |
-| authorityReference | string | 1 |
-
-## SplitPhaseKnownEstimate
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| workItemIdentity | string | 1 |
-| minutes | int | 1 |
-| method | string | 1 |
-
-## SplitPhaseSemanticRequest
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| sourceSnapshotDigest | string | 1 |
-| proposalDigest | string | 1 |
-| contextDigest | string | 1 |
-| sourceAuthorityReference | string | 1 |
-| unresolvedWorkItems | SplitPhaseNovelWorkItem | * |
-| unresolvedEdges | SplitPhaseSemanticEdge | * |
-| knownEstimates | SplitPhaseKnownEstimate | * |
-
-## SplitPhaseNovelEstimate
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| workItemIdentity | string | 1 |
-| minimumMinutes | int | 1 |
-| maximumMinutes | int | 1 |
-| assumptions | string | 1 |
-| noveltyBasis | string | 1 |
-
-## SplitPhaseBoundaryAssessment
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| afterItem | string | 1 |
-| disposition | string | 1 |
-| authorityReference | string | 1 |
-| rationale | string | 1 |
-
-## SplitPhaseSemanticResult
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| sourceSnapshotDigest | string | 1 |
-| proposalDigest | string | 1 |
-| contextDigest | string | 1 |
-| decision | string | 1 |
-| rationale | string | 1 |
-| novelEstimates | SplitPhaseNovelEstimate | * |
-| boundaries | SplitPhaseBoundaryAssessment | * |
-| evidenceReferences | string | * |
 
 ## SplitPhaseSemanticSubmissionResult
 
@@ -5979,34 +3622,6 @@ enumeration, validation, packing, ranking and progression remain Workflow-owned.
 
 ### OPERATION
 
-#### assessNovelSplitWork
-
-##### DESCRIPTION
-
-Supplement only the unresolved work in an issued SplitPhaseSemanticRequest and
-return SplitPhaseSemanticResult with rationale and evidence, or the declared
-decision-needed alternative. Preserve known estimates, frozen source/policy
-and existing authority. This older novel-work judgment is not interchangeable
-with the explicit partition or handoff-scope contracts. The AI must not calculate
-the mechanical split, apply documents, select transitions or invoke commands.
-Return the result through the completion route in the actual issued WorkOrder.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhaseSemanticRequest
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhaseSemanticResult
-
 #### assessPartitionSemanticInputs
 
 ##### DESCRIPTION
@@ -6108,34 +3723,6 @@ with Workflow. AI participants use their assigned completion route, not this
 service to choose the next processing step.
 
 ### OPERATION
-
-#### admitSemanticInputs
-
-##### DESCRIPTION
-
-Declare the local transactional admission associated with AssessNovelSplitWork
-and its SplitPhaseSemanticRequest. The owning Workflow checks the candidate
-semantic result against frozen unresolved work, known estimates and authority
-before admitting SplitPhaseSemanticSubmissionResult. The declared request type
-is the Judgment context, not a replacement for the public completion envelope.
-This declaration does not install an independently callable handler or authorize
-an AI skill to dispatch a stage or execute effects.
-
-##### TYPE
-
-COMMAND
-
-##### INPUT
-
-###### TYPE
-
-SplitPhaseSemanticRequest
-
-##### OUTPUT
-
-###### TYPE
-
-SplitPhaseSemanticSubmissionResult
 
 #### admitPartitionSemanticInputs
 
@@ -6379,17 +3966,6 @@ OperationResult
 
 OperationResult
 
-## SplitPhaseAdvanceCommand
-
-- input-kind :: COMMAND
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| instanceIdentity | string | 1 |
-| context | SplitPhasePartitionContextReference | 1 |
-
 ## SplitPhaseAdvanceResult
 
 ### EXTENDS
@@ -6530,3 +4106,93 @@ SplitPhaseReasoningHumanDirectionRequest
 ###### TYPE
 
 SplitPhaseHumanDirectionAnswer
+
+# SERVICE
+
+## RepositorySyncSemanticAdmissionService
+
+### DESCRIPTION
+
+Internal declarations for the native conflict and independent merge-review admissions already owned by advance/completion. They are not public client stages or additional execution grants.
+
+### OPERATION
+
+#### admitRepositoryConflicts
+
+##### DESCRIPTION
+
+Declared candidate admission for only selected native text conflicts. Owning
+advance issues its required semantic action; this declaration is not a public
+client-selected stage or a permission to write files or invoke Git.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncConflictRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncConflictSubmissionResult
+
+#### admitNativeMergeReview
+
+##### DESCRIPTION
+
+Declared admission for the independently reviewed full native pending merge.
+Owning advance selects and issues the action. Clients do not select a stage.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeReviewRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeReviewSubmissionResult
+
+
+# SERVICE
+
+## GoalPhaseSemanticAdmissionService
+
+### DESCRIPTION
+
+Internal declaration of the native ordered Step review-result admission already owned by submit/advance. It does not install another public handler or a verifier.
+
+### OPERATION
+
+#### admitOrderedStepReview
+
+##### DESCRIPTION
+
+Consume the assigned ordered Step review result in the existing native progression. Review semantics do not grant command or commit authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseWorkSubmissionResult

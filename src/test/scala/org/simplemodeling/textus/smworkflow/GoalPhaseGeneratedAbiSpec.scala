@@ -3,109 +3,76 @@ package org.simplemodeling.textus.smworkflow
 import domain.statemachine.candidateadmission.GoalPhaseWorkflowCandidateAdmissionProducer1
 import domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1
 import domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1
+import org.goldenport.protocol.{Property, Request}
+import org.goldenport.protocol.spec.OperationDefinition
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  "GoalPhase generated Workflow ABI" should {
-    "declare a separate human pending and answered path without turning an answer into Step closure" in {
-      Given("the expected pending, answerable and closed state contract of the generated Workflow")
-      val expected = Vector("Pending", "HumanPending", "HumanAnswered", "Closed",
-        "OrderedImplementation", "OrderedInspectCandidate", "OrderedValidation", "OrderedReview", "OrderedRepair", "OrderedClosing",
-        "PhaseInspection", "PhaseValidation", "PhaseReview", "PhaseClosing", "PhaseDecision", "PhaseClosed")
-      When("the generated Workflow state declaration is read")
-      val workflow = GoalPhaseWorkflowStateMachineWorkflow1.workflow
-      Then("the human path remains separate from Step closure")
-      workflow.states.map(_.name) shouldBe expected
-      When("the human-decision Required SPI is selected")
-      val required = workflow.requiredOperations.find(_.identity.capability == "human-decision-capability").get
-      Then("its action, operation and typed input and result describe the human decision")
-      required.actionIdentity shouldBe "PresentHumanDecision"
-      required.operation.canonicalValue shouldBe "HumanDecisionService.presentGoalPhaseHumanDecision"
-      required.inputType.map(_.value) shouldBe Some("GoalPhaseClosureAuthorityInput")
-      required.resultType.map(_.value) shouldBe Some("GoalPhaseHumanDecisionAnswer")
-      When("the generated human answer completion operation is selected")
-      val completion = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
-        .find(_.name == "submitGoalPhaseHumanDecision").get
-      Then("completion accepts a typed answer and returns the human answer result, not Step closure")
-      completion.inputType shouldBe Some("GoalPhaseHumanDecisionAnswer")
-      completion.resultType shouldBe Some("GoalPhaseHumanAnswerResult")
+  private val operations: Vector[OperationDefinition] = Vector(
+    SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation)
+  private def request(operation: OperationDefinition, input: Option[String]): Request =
+    Request.of(component = SmWorkflowComponent.componentId.name, service = "GoalPhaseService",
+      operation = operation.specification.name, arguments = Nil, switches = Nil,
+      properties = input.toList.map(value => Property("arg1", value, None)))
+
+  "GoalPhase generated public Operations" should {
+    "accept one JSON carrier and permit input-free advance" in {
+      Given("the four generated normal Operations and a JSON input")
+      val supplied = operations.map(operation => operation -> request(operation, Some("{}")))
+      val absent = operations.map(operation => operation -> request(operation, None))
+      When("their generated request readers construct the actual command actions")
+      val presentResults = supplied.map((operation, input) => operation.createOperationRequest(input))
+      val absentResults = absent.map((operation, input) => operation.createOperationRequest(input))
+      Then("Start and answers need JSON, while advance may resolve its input from the session")
+      presentResults.foreach(_.isSuccess shouldBe true)
+      absentResults.map(_.isSuccess) shouldBe Vector(false, true, false, false)
+      val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
+      provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
+      And("business types and existing optional advance selectors retain the single JSON parameter")
+      provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
+        "startGoalPhase" -> Some("GoalPhaseStartInput"),
+        "advanceGoalPhase" -> Some("GoalPhaseAdvanceInput"),
+        "submitGoalPhaseWorkResult" -> Some("GoalPhaseWorkResult"),
+        "submitGoalPhaseOrderedDecision" -> Some("GoalPhaseOrderedDecisionAnswer"))
     }
 
-    "bind the review capability and both public operations to typed services" in {
-      Given("the generated ordered GoalPhase Workflow with its declared semantic and Human capabilities")
-      When("the generated Workflow ABI is read")
+    "resolve the five real semantic and Human capabilities in the ordered definition" in {
+      Given("the generated ordered Workflow and its actual native definition consumer")
+      When("the definition and Required operations are resolved")
       val workflow = GoalPhaseWorkflowStateMachineWorkflow1.workflow
-      Then("its identity, actions and Required SPI preserve the typed service contract")
-      workflow.schemaVersion shouldBe "cozy.cml.statemachine-workflow-abi.v1"
-      workflow.identity shouldBe "GoalPhaseWorkflow"
-      workflow.version shouldBe "goal-phase-ordered-run-v4"
-      workflow.actions.map(a => a.identity -> a.kind) shouldBe Vector(
-        "ReviewStep" -> "JUDGMENT",
-        "AdmitStepClose" -> "ADMISSION",
-        "RepairStep" -> "OPERATION",
-        "PresentHumanDecision" -> "OPERATION",
-        "ImplementOrderedStep" -> "OPERATION", "RepairOrderedStep" -> "OPERATION",
-        "ReviewOrderedStep" -> "OPERATION", "ReviewWholePhase" -> "OPERATION",
-        "PresentOrderedGoalDecision" -> "OPERATION"
-      )
-      workflow.actions.map(a => a.operation.service -> a.operation.name) shouldBe Vector(
-        "StepReviewService" -> "reviewStep",
-        "GoalPhaseService" -> "requestStepClose",
-        "StepRepairService" -> "repairStep",
-        "HumanDecisionService" -> "presentGoalPhaseHumanDecision",
-        "GoalPhaseImplementationService" -> "implementGoalPhaseStep", "GoalPhaseRepairWorkService" -> "repairGoalPhaseStep",
-        "GoalPhaseStepReviewService" -> "reviewGoalPhaseStep", "GoalPhaseReviewService" -> "reviewGoalPhase",
-        "GoalPhaseOrderedHumanService" -> "presentOrderedGoalDecision"
-      )
-      workflow.requiredOperations.map(_.operation.canonicalValue) shouldBe Vector(
-        "StepReviewService.reviewStep", "StepRepairService.repairStep",
-        "HumanDecisionService.presentGoalPhaseHumanDecision", "GoalPhaseImplementationService.implementGoalPhaseStep",
-        "GoalPhaseRepairWorkService.repairGoalPhaseStep", "GoalPhaseStepReviewService.reviewGoalPhaseStep", "GoalPhaseReviewService.reviewGoalPhase",
-        "GoalPhaseOrderedHumanService.presentOrderedGoalDecision"
-      )
-
-      When("the corresponding generated Provided API is read")
-      val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow
-      Then("each public Operation retains its declared service, operation name and typed input")
-      provided.providedOperations.map(o => o.service -> o.name) shouldBe Vector(
-        "GoalPhaseService" -> "startGoalPhase",
-        "GoalPhaseService" -> "requestStepClose",
-        "GoalPhaseService" -> "submitStepReview",
-        "GoalPhaseService" -> "submitStepRepair",
-        "GoalPhaseService" -> "submitGoalPhaseHumanDecision",
-        "GoalPhaseService" -> "advanceGoalPhase", "GoalPhaseService" -> "submitGoalPhaseWorkResult",
-        "GoalPhaseService" -> "submitGoalPhaseOrderedDecision"
-      )
-      provided.providedOperations.map(_.inputType) shouldBe Vector(
-        Some("GoalPhaseStartCommand"), Some("StepCloseRequest"), Some("ReviewStepResult"), Some("RepairStepResult"),
-        Some("GoalPhaseHumanDecisionAnswer"), Some("GoalPhaseAdvanceCommand"), Some("GoalPhaseWorkResult"),
-        Some("GoalPhaseOrderedDecisionAnswer")
-      )
+      val capabilities = workflow.requiredOperations.map(_.identity.capability).toSet
+      val native = admission.GoalPhaseRuntimeCatalog.loadC()
+      Then("the native catalog is usable and only the current assignment capabilities remain")
+      native.isSuccess shouldBe true
+      workflow.version shouldBe "goal-phase-minimal-operation-v5"
+      workflow.states.map(_.name) shouldBe Vector("Pending", "OrderedImplementation", "OrderedInspectCandidate",
+        "OrderedValidation", "OrderedReview", "OrderedRepair", "OrderedClosing", "PhaseInspection",
+        "PhaseValidation", "PhaseReview", "PhaseClosing", "PhaseDecision", "PhaseClosed")
+      capabilities shouldBe Set("goal-phase-implementation-capability", "goal-phase-repair-capability",
+        "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability")
     }
   }
 
-  "GoalPhase generated Candidate-Admission ABI" should {
-    "correlate the review and admission actions without placing close behind the required SPI" in {
-      Given("the generated GoalPhase Candidate-Admission declaration with separate review and close actions")
-      When("the generated producer ABI is read")
+  "GoalPhase generated Candidate-Admission producer" should {
+    "bind the actual ordered review to its internal result admission" in {
+      Given("the producer for the assigned ordered Step review")
+      When("its semantic review and deterministic admission are selected")
       val producer = GoalPhaseWorkflowCandidateAdmissionProducer1.producer
-      Then("review remains a Required SPI while admission remains on the owning GoalPhase service")
-      producer.schemaVersion shouldBe "cozy.cml.candidate-admission-producer-abi.v1"
-      producer.judgments.map(_.actionIdentity) shouldBe Vector("ReviewStep")
-      producer.admissions.map(_.actionIdentity) shouldBe Vector("AdmitStepClose")
-      producer.judgmentAdmissions.map(x => x.judgmentActionIdentity -> x.admissionActionIdentity) shouldBe Vector(
-        "ReviewStep" -> "AdmitStepClose"
-      )
-      producer.requiredSpi.map(_.operation.service) shouldBe Vector("StepReviewService", "StepRepairService", "HumanDecisionService",
-        "GoalPhaseImplementationService", "GoalPhaseRepairWorkService", "GoalPhaseStepReviewService", "GoalPhaseReviewService",
-        "GoalPhaseOrderedHumanService")
-      producer.admissions.map(_.operation.service) shouldBe Vector("GoalPhaseService")
+      Then("the existing review result admission is represented without a public close endpoint")
+      producer.judgments.map(_.actionIdentity) shouldBe Vector("ReviewOrderedStep")
+      producer.admissions.map(_.actionIdentity) shouldBe Vector("AdmitOrderedStepReview")
+      producer.judgmentAdmissions.map(value => value.judgmentActionIdentity -> value.admissionActionIdentity) shouldBe
+        Vector("ReviewOrderedStep" -> "AdmitOrderedStepReview")
+      producer.admissions.map(_.operation.service) shouldBe Vector("GoalPhaseSemanticAdmissionService")
     }
   }
 }

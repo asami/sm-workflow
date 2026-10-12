@@ -8,7 +8,7 @@ import org.goldenport.kaleidox.{Config => KaleidoxConfig, Model}
   * not the Scala3 application ABI's standalone-composite bootstrap.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 12, 2026
   */
 object SplitPhaseCmlDerivationProbe {
   def main(args: Array[String]): Unit = {
@@ -20,19 +20,19 @@ object SplitPhaseCmlDerivationProbe {
     val selected = CompositeStateMachineCml.workflowDefinitions(model).filter(_.identity == "SplitPhaseWorkflow")
     require(selected.size == 1, "Expected one actual SplitPhase Workflow")
     val workflow = selected.head
-    require(workflow.version == "split-phase-selected-application-v12", workflow.version)
+    require(workflow.version == "split-phase-minimal-operation-v13", workflow.version)
     val definition = workflow.compositeStateMachine
     val entries = Vector("EntryAssessment", "ProposalAssessment", "SemanticAssessment", "Previewed", "Applied")
     val humans = Vector("Idle", "Awaiting", "Answered", "Deferred", "Cancelled")
     // When every reachable entry/Human configuration is projected from normalized derivations.
     val actual = for (entry <- entries; human <- humans) yield {
-      val configuration = Map("entry" -> entry, "semantic" -> "Awaiting", "partition" -> "Awaiting",
+      val configuration = Map("entry" -> entry, "partition" -> "Awaiting",
         "scope" -> "Awaiting", "reasoning" -> "Awaiting", "human" -> human, "reasoningHuman" -> "Idle")
       val states = definition.derivations.filter(_.configuration.bindings.map(b => b.role -> b.state).toMap == configuration).map(_.state)
       (entry, human, states)
     }
     val applying = humans.map { human =>
-      val configuration = Map("entry" -> "ApplyingDocuments", "semantic" -> "Awaiting", "partition" -> "Awaiting",
+      val configuration = Map("entry" -> "ApplyingDocuments", "partition" -> "Awaiting",
         "scope" -> "Awaiting", "reasoning" -> "Awaiting", "human" -> human, "reasoningHuman" -> "Idle")
       definition.derivations.filter(_.configuration.bindings.map(b => b.role -> b.state).toMap == configuration).map(_.state)
     }
@@ -51,7 +51,7 @@ object SplitPhaseCmlDerivationProbe {
     }
     // When reasoning Human advances, include retained states of the preceding scope channel.
     for (entry <- entries :+ "ApplyingDocuments"; scopehuman <- humans; human <- humans.tail) {
-      val configuration = Map("entry" -> entry, "semantic" -> "Awaiting", "partition" -> "Awaiting",
+      val configuration = Map("entry" -> entry, "partition" -> "Awaiting",
         "scope" -> "Awaiting", "reasoning" -> "Awaiting", "human" -> scopehuman, "reasoningHuman" -> human)
       val states = definition.derivations.filter(_.configuration.bindings.map(b => b.role -> b.state).toMap == configuration).map(_.state)
       val expected = if (Set("Previewed", "Applied", "ApplyingDocuments").contains(entry)) entry
@@ -62,6 +62,6 @@ object SplitPhaseCmlDerivationProbe {
       require(states == Vector(expected), s"reasoning $entry/$scopehuman/$human: $states != $expected")
     }
     require(definition.derivations.size == 150, "Expected all150 scope/reasoning Human configurations")
-    println("accepted workflow=SplitPhaseWorkflow version=split-phase-selected-application-v12 pairs=150 terminalDominance=true")
+    println("accepted workflow=SplitPhaseWorkflow version=split-phase-minimal-operation-v13 pairs=150 terminalDominance=true")
   }
 }

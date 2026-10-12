@@ -1,8 +1,63 @@
 # SplitPhase checkpoint frame applicability
 
 Planning mappings, Context indices and partition-completion frames are inert
-stored data. Their v1 schemas remain supported. Reading a frame does not construct
-an executable Plan, current managed call, permission or native publication receipt.
+stored data. Reading a frame does not construct an executable Plan, current
+managed call, permission or native publication receipt.
+
+## Current Phase 5.2 C12/C13 contract — focused validation passed
+
+This section takes precedence over the dated v1 compatibility, raw Start,
+replay/reopen and copy-comparison descriptions below. Their past results remain
+historical evidence, not current supported formats or acceptance requirements.
+
+Current writers/readers use mapping.v2 and locator.v2 only. Mechanical publication
+writes locator.v2 selecting the actual native retained receipt; partition completion
+writes mapping.v2 containing its consumed planning snapshot. The owning reader
+dispatches explicitly by the current storage format, not by trying one decoder
+and falling back on failure. A completion locator alone has no required snapshot;
+no synthetic mechanical receipt or historical mapping projection fills that gap.
+The Context index remains v1. Typed readers decode the fields they
+actually consume and ignore unused annotations; there is no recursive exact-key
+scan, self-roundtrip or full-copy comparison. Required types, selected lookup
+addresses and the existing UTF-8 capacity remain reader responsibilities.
+
+The owning read pairs the selected snapshot with the actual requested instance
+and Context before consuming its generated document targets. Without that pairing,
+another run's or Context's documents could be consumed; later native state/CAS and
+semantic admission do not supply this application query association. The reader
+does not compare the full index with a regenerated index or compare copied origins.
+It no longer binds an unused planning-input port as a reader prerequisite.
+
+Nested Split Start is the current record.v2 representation: actual Start and
+instance references, configuration, three-field business input, participant and
+consumed source/proposal data. The allocation.v2 representation contains the
+minimal input, participant and source/proposal targets, not full bodies. Routing
+reads only Start reference, instance and participant. No saved command, selection,
+definition mirror, old-record projection or allocation fallback is supported.
+The normal host selects the current input and authenticated participant separately
+from saved data; actual independent Human consent is consumed once at Start.
+
+Planning/partition binding selects the actual Start reference and owning instance.
+It does not certify complete configuration, initial history, source bodies or a
+previous selection. Actual planning/result consumers and common managed storage
+own their genuine semantic input, state, scope, permissions and conditional
+updates; this section does not declare every remaining predicate necessary.
+
+Start creates and activates a newly allocated instance. Exact replay, competing
+answers, retained-response equality and intermediate recovery are not guarantees.
+Unsupported old in-flight formats are not resumed through compatibility adapters;
+the supported restart boundary is a new execution. The four exclusive legacy
+ManagedTypedStartOperation/WorkflowAssembly/TypedStartRead/TypedPlanningRead specs
+are retired. Normal Operation specs and the shared current fixture remain.
+
+C12 compiled main/Test and passed59 of61 tests in its fresh nine-suite invocation;
+the two normal completion-to-Preview failures exposed the omitted current mapping
+reader. C13 corrected that owning reader without weakening the normal assertions.
+Its fresh registered shared-serial invocation of the same nine suites passed all61
+tests; the parent admitted the actual current request/result, consumed permission
+and released lock. These are focused results, not Step/Phase acceptance.
+Same Goal, original nine, full history, consumed3/3 and all repair frames remain
+unchanged.
 
 ## Raw boundary
 

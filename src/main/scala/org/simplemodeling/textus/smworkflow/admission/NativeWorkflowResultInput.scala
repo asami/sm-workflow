@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -27,6 +27,36 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   */
 private[smworkflow] object NativeWorkflowResultInput {
   val schema = "sm-workflow.result-submission.v1"
+  trait Receiver extends spec.OperationDefinition {
+    final def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      _invalid("completion requires its resolved result input")
+    def createResultOperationRequestC(request: Request,
+      result: ContinuationResult[Json]): Consequence[OperationRequest]
+  }
+
+  /** Ordinary execution data for completion queries, not an admission seal. */
+  private trait ResolvedAction extends CommandAction {
+    def resolvedResult: ContinuationResult[Json]
+  }
+
+  def resolvedC(core: ActionCall.Core): Consequence[ContinuationResult[Json]] = core.action match {
+    case action: ResolvedAction => Consequence.success(action.resolvedResult)
+    case _ => _invalid("completion query has no resolved result input")
+  }
+
+  def typedC[A](result: ContinuationResult[Json], codec: WorkflowResultJsonV1.PayloadCodec[A]):
+      Consequence[ContinuationResult[A]] = codec.decode(result.result.value).fold(_invalid(_), value =>
+    Consequence.success(ContinuationResult(result.handle, result.runId, result.continuationId,
+      result.expectedRevision, result.contextSnapshot, TypedValue(result.result.typeIdentity, value),
+      result.resultReference, result.completionFacts, result.evidence)))
+
+  private def _resolved_action(command: CommandAction, result: ContinuationResult[Json]): CommandAction =
+    new ResolvedAction {
+      val request = command.request
+      val resolvedResult = result
+      override def commandExecutionMode = command.commandExecutionMode
+      def createCall(core: ActionCall.Core): ActionCall = command.createCall(core)
+    }
   private final case class Submission(identity: Option[String], session: Option[String], value: Json,
     reference: Option[Json], facts: Json, evidence: Json)
   private final case class Assigned(handle: WorkflowHandle, request: ContinuationRequest[?])
@@ -117,14 +147,14 @@ private[smworkflow] object NativeWorkflowResultInput {
     target: Target) extends spec.OperationDefinition {
     val specification = original.specification
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      WorkflowJsonCommandRequest.commandArguments(request) match {
-        case List(Argument("arg1", raw: String, _)) => io.circe.parser.parse(raw) match {
-          case Right(json) if json.hcursor.get[String]("schemaVersion").contains(schema) =>
+      WorkflowJsonCommandRequest.inputC(request).flatMap {
+        case Some(raw) => io.circe.parser.parse(raw) match {
+          case Right(json) =>
             _submission_c(json).map(value => BoundAction(request, value, original, creation, configuration,
               instances, continuations, definition, target))
-          case _ => original.createOperationRequest(request) // Historical complete-envelope input.
+          case Left(_) => _invalid("result input must be JSON")
         }
-        case _ => original.createOperationRequest(request)
+        case _ => _invalid("result requires one JSON input")
       }
   }
 
@@ -151,21 +181,20 @@ private[smworkflow] object NativeWorkflowResultInput {
       private var _delegate: Option[ActionCall] = None
       def execute(): Consequence[OperationResponse] =
         for {
-          context <- if (submission.session.nonEmpty || submission.identity.isEmpty ||
-              executionContext.security.session.flatMap(_.sessionId).nonEmpty)
-            NativeWorkflowSessionInput.contextC(executionContext, submission.session)
-          else Consequence.success(executionContext) // Supported old identity-only input.
+          context <- NativeWorkflowSessionInput.contextC(executionContext, submission.session)
           storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, configuration,
             Vector(definition), instances, continuations)
           identity <- _identity_c(storage, definition, target, submission, context)
           assigned <- target.load(storage, identity, context)
-          wire <- _expand_c(assigned, submission)
-          adapted = BoundAction.this.request.copy(arguments = List(Argument("arg1", wire)),
-            properties = BoundAction.this.request.properties.filter(_.name == "textus.format"))
-          operation <- original.createOperationRequest(adapted)
+          submitted <- _result_c(assigned, submission)
+          operation <- original match {
+            case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)
+            case _ => _invalid("completion has no resolved result receiver")
+          }
           result <- operation match {
             case command: CommandAction =>
-              val call = command.createCall(core.copy(action = command, executionContext = context))
+              val action = _resolved_action(command, submitted)
+              val call = action.createCall(core.copy(action = action, executionContext = context))
               _delegate = Some(call)
               call.execute()
             case _ => _invalid("result completion is not a command Operation")
@@ -182,8 +211,7 @@ private[smworkflow] object NativeWorkflowResultInput {
   private def _identity_c(storage: WorkflowComponentStorage, definition: DefinitionBinding, target: Target,
     submission: Submission, context: ExecutionContext): Consequence[ContinuationIdentity] =
     context.security.session.flatMap(_.sessionId) match {
-      case None => submission.identity.map(value => Consequence.success(ContinuationIdentity(value)))
-        .getOrElse(_invalid("result has no session or selected issued request"))
+      case None => _invalid("result requires its actual workflow session")
       case Some(session) => for {
         binding <- storage.bindInstancesC()(using context)
         instances <- binding.findBySessionC(session, definition.workflowIdentity)(using context)
@@ -197,24 +225,42 @@ private[smworkflow] object NativeWorkflowResultInput {
       } yield ContinuationIdentity(selected)
     }
 
-  private def _expand_c(assigned: Assigned, submission: Submission): Consequence[String] = {
+  private def _result_c(assigned: Assigned, submission: Submission): Consequence[ContinuationResult[Json]] = {
     val request = assigned.request
     request.resultType.map(_.value).map { resulttype =>
-      val codec = new WorkflowResultJsonV1.PayloadCodec[Json] {
-        val typeIdentity = resulttype
-        def encode(value: Json) = value
-        def decode(value: Json) = Right(value)
-      }
-      _result_reference_c(request, submission).flatMap { reference =>
-        val result = ContinuationResult(assigned.handle, request.runId, request.continuationId,
+      for {
+        reference <- _result_reference_c(request, submission)
+        facts <- _references(submission.facts).fold(_invalid(_), Consequence.success)
+        evidence <- _evidence(submission.evidence).fold(_invalid(_), Consequence.success)
+      } yield ContinuationResult(assigned.handle, request.runId, request.continuationId,
           request.expectedRevision, request.context.snapshot, TypedValue(resulttype, submission.value),
-          reference, Vector.empty, ExecutionEvidence(Vector.empty))
-        WorkflowResultJsonV1.encodeC(result, codec).flatMap(wire => io.circe.parser.parse(wire)
-          .fold(_ => _invalid("issued result projection is invalid"), json => Consequence.success(json.deepMerge(Json.obj(
-            "completionFacts" -> submission.facts, "executionEvidence" -> submission.evidence)).noSpaces)))
-      }
+          reference, facts, evidence)
     }.getOrElse(_invalid("issued result has no declared result type"))
   }
+
+  private def _references(json: Json): Either[String, Vector[ContextReference]] =
+    json.asArray.toRight("result references must be an array").flatMap(_.foldLeft[
+      Either[String, Vector[ContextReference]]](Right(Vector.empty)) { (prior, value) => for {
+      accumulated <- prior
+      identity <- value.hcursor.get[String]("identity").left.map(_.message)
+      revision <- value.hcursor.get[String]("revision").left.map(_.message)
+    } yield accumulated :+ ContextReference(identity, revision) })
+
+  private def _evidence(json: Json): Either[String, ExecutionEvidence] = for {
+    references <- _references(json.hcursor.downField("references").focus.getOrElse(Json.arr()))
+    worker <- json.hcursor.get[Option[String]]("workerIdentity").left.map(_.message)
+    execution <- json.hcursor.downField("execution").focus.filterNot(_.isNull) match {
+      case None => Right(None)
+      case Some(value) => for {
+        placement <- value.hcursor.get[String]("placement").left.map(_.message)
+        selected <- ExecutionPlacement.values.find(_.value == placement).toRight("unsupported execution placement")
+        origin <- value.hcursor.get[String]("originContextIdentity").left.map(_.message)
+        executor <- value.hcursor.get[String]("executorContextIdentity").left.map(_.message)
+        profile <- value.hcursor.get[String]("profileIdentity").left.map(_.message)
+      } yield Some(ExecutionObservation(selected, origin, executor, profile))
+    }
+  } yield ExecutionEvidence(references, worker,
+    json.hcursor.downField("modelIdentity").focus.flatMap(_.asString), execution = execution)
 
   /** The actual stored assignment owns these three result destinations. An old
     * echoed reference is unused input, not a selector or an equality certificate.

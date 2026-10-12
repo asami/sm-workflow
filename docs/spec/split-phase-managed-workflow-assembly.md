@@ -1,6 +1,70 @@
 # SplitPhase managed public service assembly
 
-## Current validation —1042 PASS
+## Current contract — Phase 5.2 C15 (2026-10-12)
+
+The default factory has only the normal ThreeWorkflowHostParameters path. Split
+typed Start allocation and current planning/context/calibration use the existing
+logical persistence pair and owning Subsystem pool. SplitPhaseManagedStartAssembly
+supplies the persistence declaration/binding, not an alternative old Start service.
+The old entry/source/proposal/semantic-baseline readers, raw Start transport and
+Preview/Apply fixture graph are removed without aliases or compatibility readers.
+
+Actual producer declarations and their executable reference are resolved by the
+common parser and native binder. Complete compiled producer/Workflow copies and
+hardcoded ABI tuple tables are not compared. Context registration encodes once,
+creates through managed storage and returns that prepared record: it does not
+preload/reuse an occupied record, reread to prove equality or reconstruct an
+uncertain intermediate write. Common transactions, managed grants and native CAS
+are unchanged; no copied proof is retained merely under those names.
+
+Managed purpose-read/preparation specs use a private test-only no-input Operation
+to obtain their actual incoming call. This is neither a production API nor a grant,
+installer or replay verifier. Current three-workflow Operation programs and explicit
+calibration/partition computation specs are retained. Dedicated old graph specs are
+removed, not counted as current passing coverage.
+
+This frozen C15 batch remains UNVERIFIED until all its paths are complete and its
+fresh registered shared-serial fourteen-suite invocation finishes. Current CML/
+ABI/DTO migration and connected Step/Phase review/release remain unfinished. No
+CLI integration, replay/winner/history or intermediate-recovery guarantee is added;
+unsupported old runs restart NEW. Original history/counters/repair frames remain.
+
+## Historical contract — Phase 5.2 C12 (2026-10-11)
+
+This section supersedes the assembly, stored-data and validation requirements
+in the historical account below. The current normal three-service factory
+provides the Split Operations through its session-resolved receiver. Start
+consumes only sourcePhaseIdentity, invocationMode and optional proposalReference;
+the host resolves its actual selection/allocation independently. It does not
+accept a full Start command or a saved selection/definition envelope.
+
+Current typed Start allocation/record and planning mapping/locator frames are
+v2-only. Writers retain actual business input/participant and consumed targets
+or data, not command/selection/Workflow-definition copies. No full-record
+allocation fallback, old mapping projection or legacy migration reader remains.
+Unsupported old executions restart NEW; stored historical evidence is not
+rewritten or used as current acceptance.
+
+Independent host Human consent remains at the actual Start owner. The prepared
+value is consumed directly by native create/append for a new allocated instance,
+without a Core reference stamp or original-history replay certificate. Later
+planning/result consumers use actual participant and mode. Common pool, managed
+permissions, native state and CAS remain at their existing owners.
+
+The normal ThreeWorkflowDirectOperationSpec and retained current Split
+preparation/binding/mapping/consent specs exercise this contract. The four
+exclusive old custom-service/CLI/reopen suites are scheduled for retirement in
+this same frozen C12 batch; their old PASS is historical only. No CLI connection,
+intermediate recovery, replay-response agreement or winner/history guarantee
+is an added Phase 5.2 acceptance requirement.
+
+This authored batch is UNVERIFIED until the whole batch is complete and its
+fresh registered shared-serial nine-suite invocation finishes. Connected
+public CML/ABI/internal/legacy migration, Step review/commit, full Phase review
+and final validated local release/closure remain unfinished. No partial
+success closes the Phase or changes original9/history/repair3-of-3/frames.
+
+## Historical validation —1042 PASS
 
 Fresh1042 passed1280/1280 tests in148 completed all-three/common-guard suites,
 zero failures/aborts/canceled/ignored/pending; normal production/Test compilation

@@ -17,19 +17,13 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value
     case other => fail(s"runtime parameters failed: $other")
   }
-  private def resource(path: String): String = {
-    val source = scala.io.Source.fromInputStream(getClass.getResourceAsStream(path), "UTF-8")
-    try source.mkString finally source.close()
-  }
-  private val catalog = take(GoalPhaseRuntimeCatalog.parseC(
-    resource("/workflow/goal-phase-workflow-abi.json"), resource("/workflow/goal-phase-candidate-admission-producer-abi.json")))
   private val root = EntityCollectionId("test", "configuredgoal", "instances")
   private val delivery = EntityCollectionId("test", "configuredgoal", "continuations")
   private val valid = Map(
@@ -42,19 +36,19 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
     GoalPhaseRuntimeParameters.continuations.name -> delivery.print
   ).view.mapValues(ConfigurationValue.StringValue.apply).toMap
 
-  private def decode(values: Map[String, ConfigurationValue]): Consequence[GoalPhaseManagedStartAssembly.Declaration] = {
+  private def decode(values: Map[String, ConfigurationValue]): Consequence[GoalPhaseRuntimeParameters.Persistence] = {
     val subsystem = RuntimeBindingAdmissionFixture.admit(Subsystem(name = "runtime-parameters", version = None,
       configuration = ResolvedConfiguration(Configuration(values), ConfigurationTrace.empty),
       aliasResolver = AliasResolver.empty, runMode = RunMode.Command))
     val id = SmWorkflowComponent.componentId
     val descriptor = ComponentDescriptor(name = Some(id.name), componentName = Some(id.name),
       version = Some("0.1.0"), schemaVersion = Some(3), componentId = Some(id))
-    var decoded: Option[GoalPhaseManagedStartAssembly.Declaration] = None
-    val factory = new GoalPhaseConfiguredComponentFactory(GoalPhaseRuntimeParameters.declarations, Vector.empty,
-      (_, parameters, _) => GoalPhaseRuntimeParameters.decodeC(parameters, catalog).map { declaration =>
+    var decoded: Option[GoalPhaseRuntimeParameters.Persistence] = None
+    val factory = new SmWorkflowConfiguredComponentFactory(GoalPhaseRuntimeParameters.declarations, Vector.empty,
+      (_, parameters, _) => (GoalPhaseRuntimeParameters.decodeC(parameters).map { declaration =>
         decoded = Some(declaration)
-        SmWorkflowComponent.StepReviewServiceService
-      })
+        SmWorkflowComponent.GoalPhaseStepReviewServiceService
+      }).map(service => Vector(service)))
     factory.primaryFactory.createPrimaryC(ComponentCreate(subsystem, ComponentOrigin.Builtin, Vector(descriptor)))
       .flatMap(_ => decoded match {
         case Some(value) => Consequence.success(value)
@@ -67,7 +61,7 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
       Given("complete canonical logical settings and no physical datastore configuration")
       When("canonical resolution feeds the post-resolution factory binder")
       val result = take(decode(valid))
-      Then("the declaration retains the configured versions and admitted ABI with same-store delivery")
+      Then("logical configuration retains its actual policies and same-store destinations without a catalog prerequisite")
       result.configuration.workflowStore shouldBe NamedWorkflowStore("workflow", WorkflowStoreIdentity("configured-goal-store"))
       result.configuration.migrationPolicy shouldBe MigrationPolicy("migration-v2")
       result.configuration.retentionPolicy shouldBe RetentionPolicy("retention-v3")
@@ -75,7 +69,6 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
       result.configuration.delivery shouldBe DeliveryConfiguration.SameStore(WorkflowStoreIdentity("configured-goal-store"))
       result.instances shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(root)
       result.continuations shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(delivery)
-      GoalPhaseRuntimeCatalog.admitBindingC(catalog, result, catalog.producer) shouldBe a[Consequence.Success[?]]
     }
 
     "reject every missing required setting instead of choosing defaults" in {
@@ -114,12 +107,11 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
-    "reject missing snapshots or catalogs without reconstructing authority" in {
-      Given("null or undeclared snapshots and a missing admitted catalog")
+    "reject missing parameter snapshots without reconstructing authority" in {
+      Given("null or undeclared logical parameter snapshots")
       When("logical persistence declaration decoding is requested")
-      val results = Vector(GoalPhaseRuntimeParameters.decodeC(null, catalog),
-        GoalPhaseRuntimeParameters.decodeC(ComponentInitializationParameters.empty, catalog),
-        GoalPhaseRuntimeParameters.decodeC(ComponentInitializationParameters.empty, null))
+      val results = Vector(GoalPhaseRuntimeParameters.decodeC(null),
+        GoalPhaseRuntimeParameters.decodeC(ComponentInitializationParameters.empty))
       Then("all remain configuration failures rather than default or human-authorized starts")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }

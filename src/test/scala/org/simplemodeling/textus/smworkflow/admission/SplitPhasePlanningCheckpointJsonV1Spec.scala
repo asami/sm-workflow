@@ -12,7 +12,7 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def json(raw: String, schema: String = J.schema): Json = parser.parse(raw.substring(schema.length + 1)).toOption.get
@@ -21,20 +21,23 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
 
   "Closed passive checkpoint frames" should {
-    "store a mechanical locator rather than a duplicate computation and resolve legacy used members" in {
-      Given("one actual mechanical capture and an existing full v1 mapping")
+    "store a current mechanical locator without projecting old full mapping rows" in {
+      Given("one actual mechanical capture and its current full mapping")
       val saved = capture().record
       val locator = K.Locator(saved.reference, saved.origin)
-      val legacy = json(take(J.encodeC(saved)))
-      val unused = payload(legacy)(o => o.remove("originalContext").remove("snapshot")
-        .add("originalStart", Json.fromString("unused old copy")))
-      When("a compact row and legacy rows project the selected native origin")
+      val mapping = take(J.encodeC(saved))
+      When("the compact row is read with unused annotations")
       val encoded = take(J.encodeLocatorC(locator))
-      val observed = Vector(encoded, raw(legacy), raw(unused)).map(value => take(J.decodeLocatorC(reference, value)))
-      Then("all select the same native result without decoding or certifying unused copies")
-      observed shouldBe Vector.fill(3)(locator)
+      val extended = payload(json(encoded, J.locatorSchema))(_.add("oldCopy", Json.False))
+      val observed = take(J.decodeLocatorC(reference, raw(extended, J.locatorSchema)))
+      Then("the current native origin is selected without a whole mapping copy")
+      observed shouldBe locator
       json(encoded, J.locatorSchema).hcursor.downField("payload").keys.get.toSet shouldBe Set("reference", "origin")
-      J.decodeC(reference, raw(unused)).isSuccess shouldBe false
+      When("a full mapping or obsolete v1 locator is supplied instead")
+      val unsupported = Vector(J.decodeLocatorC(reference, mapping),
+        J.decodeLocatorC(reference, "sm-workflow.split-phase-planning-checkpoint-locator.v1:" + encoded))
+      Then("unsupported representations are not silently projected into a current locator")
+      unsupported.foreach(_.isSuccess shouldBe false)
     }
 
     "reject crossed or malformed used locator fields without accepting a fallback result" in {
@@ -43,7 +46,7 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       val encoded = take(J.encodeLocatorC(K.Locator(saved.reference, saved.origin)))
       val frame = json(encoded, J.locatorSchema)
       val malformed = Vector(
-        payload(frame)(_.remove("origin")), payload(frame)(_.add("extra", Json.True)),
+        payload(frame)(_.remove("origin")),
         frame.hcursor.downField("payload").downField("origin").downField("Mechanical")
           .downField("checkpoint").withFocus(_.mapObject(_.remove("revision"))).top.get,
         frame.mapObject(_.add("schemaVersion", Json.fromString("unsupported"))))
@@ -72,7 +75,7 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       val captures = Vector(capture(), take(K.captureCompletionC(completion(), reference)).get)
       val frames = captures.map(saved => json(take(J.encodeC(saved.record))))
       val indices = captures.map(saved => json(take(J.encodeIndexC(saved.index)), J.indexSchema))
-      When("existing v1 mapping and index envelopes use formatted JSON")
+      When("current v2 mapping and index envelopes use formatted JSON")
       val mappings = frames.map(frame => take(J.decodeC(reference, J.schema + ":" + frame.spaces2)))
       val observed = captures.zip(indices).map { (saved, frame) =>
         take(J.decodeIndexC(saved.index.instance, saved.index.context, J.indexSchema + ":" + frame.spaces2))
@@ -103,7 +106,7 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
           .hcursor.downField("payload").downField("startReference")
           .withFocus(_.mapObject(_.add("certificate", Json.True))).top.get
       }
-      When("the malformed raw members reach the existing v1 reader")
+      When("the malformed raw members reach the current v2 reader")
       val results = malformed.map(frame => J.decodeC(reference, raw(frame)))
       val extended = extensions.map(frame => take(J.decodeC(reference, raw(frame))))
       Then("unused certificates do not gate selected original data, while missing consumed fields and incompatible types fail")
@@ -141,7 +144,7 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
           estimates = partition.estimates.copy(reference = partition.estimates.reference.copy(revision = "old-copy"))))),
           predecessorRevision = InstanceRevision(41), committedRevision = InstanceRevision(42))
       }
-      When("new payloads are emitted and existing full v1 mapping and native payload frames are read")
+      When("new payloads are emitted and current full v2 mapping and native payload frames are read")
       val mappings = changed.map(saved => take(J.decodeC(reference, take(J.encodeC(saved)))))
       val nativepayloads = changed.map(saved => J.payloadCodec.decode(J.payloadCodec.encode(saved)))
       val legacy = originals.map(saved => take(J.decodeC(reference, raw(payload(json(take(J.encodeC(saved))))(
@@ -153,8 +156,8 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       legacy.map(_.committedRevision) shouldBe Vector.fill(2)(InstanceRevision(42))
     }
 
-    "read typed passive snapshot data through both legacy origins without constructing frontier admission" in {
-      Given("full v1 mechanical and completion mappings with no selected frontier objective")
+    "read typed passive snapshot data through both current origins without constructing frontier admission" in {
+      Given("current v2 mechanical and completion mappings with no selected frontier objective")
       val originals = Vector(capture().record, take(K.captureCompletionC(completion(), reference)).get.record)
       val changed = originals.map(saved => saved.copy(snapshot = saved.snapshot.copy(objective = None)))
       When("the existing standalone mapping and native payload readers decode those nested snapshots")
@@ -176,27 +179,28 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       J.decodeIndexC(InstanceIdentity("other"), saved.index.context, encoded).isSuccess shouldBe false
       J.decodeIndexC(saved.index.instance, saved.index.context.copy(revision = "2"), encoded).isSuccess shouldBe false
       val changed = payload(json(encoded, J.indexSchema))(_.add("unknown", Json.True))
-      J.decodeIndexC(saved.index.instance, saved.index.context, raw(changed, J.indexSchema)).isSuccess shouldBe false
+      take(J.decodeIndexC(saved.index.instance, saved.index.context, raw(changed, J.indexSchema))) shouldBe saved.index
       J.encodeIndexC(saved.index.copy(mapping = reference.copy(identity = "語" * (J.maximumPayloadBytes / 2)))).isSuccess shouldBe false
       J.decodeC(reference, J.schema + ":" + ("語" * (J.maximumPayloadBytes / 2))).isSuccess shouldBe false
       J.encodeIndexC(null).isSuccess shouldBe false
     }
 
-    "reject undeclared nested index fields without encoding an expected index copy" in {
+    "ignore unused nested index fields and reject unreadable consumed addresses" in {
       Given("a selected stored context index")
       val saved = capture()
       val frame = json(take(J.encodeIndexC(saved.index)), J.indexSchema)
+      val extended = frame.hcursor.downField("payload").downField("instance")
+        .withFocus(_.mapObject(_.add("proof", Json.True))).top.get
       val malformed = Vector(
-        frame.hcursor.downField("payload").downField("instance")
-          .withFocus(_.mapObject(_.add("proof", Json.True))).top.get,
         frame.hcursor.downField("payload").downField("context")
           .withFocus(_.mapObject(_.remove("revision"))).top.get,
         frame.hcursor.downField("payload").downField("mapping")
           .withFocus(_.mapObject(_.add("revision", Json.fromInt(1)))).top.get)
-      When("those declared-field and type violations reach index decoding")
+      When("unused annotations and consumed type violations reach index decoding")
       val results = malformed.map(value => J.decodeIndexC(saved.index.instance, saved.index.context,
         raw(value, J.indexSchema)))
-      Then("each invalid address is refused without newest-reference fallback")
+      Then("unused diagnostics survive while unreadable addresses fail without newest-reference fallback")
+      take(J.decodeIndexC(saved.index.instance, saved.index.context, raw(extended, J.indexSchema))) shouldBe saved.index
       results.foreach(_.isSuccess shouldBe false)
     }
   }

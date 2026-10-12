@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 private[admission] object SplitPhasePartitionReplyFixture {
   val values = Map[String, ConfigurationValue](
@@ -30,9 +30,8 @@ private[admission] object SplitPhasePartitionReplyFixture {
     instanceIdentity: String = "reply-instance", startIdentity: String = "reply-start",
     novel: Boolean = true, edge: Boolean = true): T.PartitionBound = {
     val original = SplitPhaseTypedStartFixture
-    val command = original.command.copy(selectionIdentity = startIdentity)
     val record = original.record.copy(reference = original.record.reference.copy(identity = startIdentity),
-      instanceIdentity = InstanceIdentity(instanceIdentity), command = command, selection = original.selectionFor(command))
+      instanceIdentity = InstanceIdentity(instanceIdentity))
     val start = take(original.prepare(record))
     val current = take(start.initial.appendC(initialRevision, original.instance.history.head.copy(
       correlation = start.initial.correlation, causation = start.initial.causation)))

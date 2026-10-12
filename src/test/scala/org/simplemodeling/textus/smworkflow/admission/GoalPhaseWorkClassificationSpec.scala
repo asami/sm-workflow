@@ -7,14 +7,13 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 import GoalPhaseWorkClassification.*
 import GoalPhaseWorkClassification.given
 import GoalPhaseOrderedProgression as O
 
 /** Planning/codec evidence only: not execution, consent or Skill integration.
   * @since   Oct.  8, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
@@ -26,13 +25,13 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
   private val coding = Classification(Kind.CODING, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL)
   private val review = Classification(Kind.REVIEW, Complexity.STANDARD, Domain.ENGINEERING, Footprint.SMALL)
   private val assignment = Assignment(coding, coding.copy(complexity = Complexity.COMPLEX), review)
-  private val legacy = O.Plan("selected-plan", "1", "PHASE-5", "owned-repository",
+  private val unclassified = O.Plan("selected-plan", "1", "PHASE-5", "owned-repository",
     Vector(O.Step("S1", "Implement the selected boundary", Vector("src/one.scala"), Vector.empty, Vector("focused"))),
     Vector("whole-phase"), repairLimit = 1)
-  private val classified = legacy.copy(steps = legacy.steps.map(_.copy(workClassification = Some(assignment))),
+  private val classified = unclassified.copy(steps = unclassified.steps.map(_.copy(workClassification = Some(assignment))),
     phaseReviewClassification = Some(review.copy(footprint = Footprint.LARGE)))
   private def selection(plan: O.Plan) = GoalPhaseNativeRun.SelectedPlan("selected-start", "participant",
-    GoalPhaseStartInput(plan.phase, plan.repository), plan)
+    plan)
   private def metadata(example: String, rules: String) =
     afterWord(s"in spec:goal-phase-work-classification, example:$example, rules:$rules, phase:5")
 
@@ -90,17 +89,17 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
         rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
       }
     }
-    "E3 retain absent legacy fields and classified selected-plan storage" must metadata("E3", "R3") {
-      "without introducing concrete runtime settings into historical Plan data" in {
-        Given("Spec: docs/spec/goal-phase-work-classification.md; Rule: R3; Example: E3; legacy and newly classified selected Plans")
-        When("the normal selected-plan codec persists and decodes both formats")
-        val legacywire = take(GoalPhaseSelectedPlanJsonV1.encodeC(selection(legacy)))
+    "E3 retain absent optional classification and classified selected-plan storage" must metadata("E3", "R3") {
+      "without introducing concrete runtime settings into current Plan data" in {
+        Given("Spec: docs/spec/goal-phase-work-classification.md; Rule: R3; Example: E3; current Plans with optional classification absent or present")
+        When("the normal selected-plan codec persists and decodes both current values")
+        val unclassifiedwire = take(GoalPhaseSelectedPlanJsonV1.encodeC(selection(unclassified)))
         val classifiedwire = take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(selection(classified)))
-        val parsed = io.circe.parser.parse(legacywire).toOption.get.hcursor.downField("payload").downField("plan")
+        val parsed = io.circe.parser.parse(unclassifiedwire).toOption.get.hcursor.downField("payload").downField("plan")
         Then("absence stays absence and classified history roundtrips independently of a current profile mapping")
         parsed.downField("phaseReviewClassification").focus shouldBe None
         parsed.downField("steps").downArray.downField("workClassification").focus shouldBe None
-        take(GoalPhaseSelectedPlanJsonV1.decodeC(legacywire)) shouldBe selection(legacy)
+        take(GoalPhaseSelectedPlanJsonV1.decodeC(unclassifiedwire)) shouldBe selection(unclassified)
         take(GoalPhaseSelectedPlanJsonV1.decodeStorageC(classifiedwire)) shouldBe selection(classified)
         classifiedwire should not include "gpt-"
         classifiedwire should not include "reasoning-effort"
@@ -110,10 +109,10 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
       "on the existing operation payload surfaces" in {
         Given("Spec: docs/spec/goal-phase-work-classification.md; Rule: R3; Example: E4; retained native Start and an assigned semantic request")
         val snapshot = O.Snapshot("a" * 40, "b" * 40)
-        val inputs = Vector(legacy, classified)
+        val inputs = Vector(unclassified, classified)
         When("the existing Start-result and Work-input codecs encode and decode their payloads")
         val outcomes = inputs.map { plan =>
-          val start = GoalPhaseNativeRun.Payload(Json.obj(), "/owned/repository", "main", plan, snapshot)
+          val start = GoalPhaseNativeRun.Payload("participant", "/owned/repository", "main", plan, snapshot)
           val request = GoalPhaseNativeWork.Request("instance", "2", "ImplementStep", Some("S1"), 1,
             plan.steps.head.purpose, plan, snapshot, Vector.empty, None, None, None)
           (start, GoalPhaseNativeRun.codec.decode(GoalPhaseNativeRun.codec.encode(start)),
@@ -126,16 +125,18 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
         }
       }
     }
-    "E5 reject unknown classification input and incomplete assignments" must metadata("E5", "R2,R4") {
-      "rather than accepting model controls as semantic classification" in {
+    "E5 consume only actual semantic classification and complete assignments" must metadata("E5", "R2,R4") {
+      "without rejecting inert model hints or accepting malformed semantic values" in {
         Given("Spec: docs/spec/goal-phase-work-classification.md; Rules: R2,R4; Example: E5; typed classification input")
         val json = coding.asJson
-        When("input adds concrete controls, unsupported enums or null required members")
-        val rejected = Vector(json.deepMerge(Json.obj("model" -> Json.fromString("unrequested"))),
-          json.mapObject(_.add("complexity", Json.fromString("UNBOUNDED"))),
+        When("input adds unused concrete hints, unsupported enums or null required members")
+        val annotated = json.deepMerge(Json.obj("model" -> Json.fromString("unrequested"), "effort" -> Json.True))
+        val consumed = annotated.as[Classification]
+        val rejected = Vector(json.mapObject(_.add("complexity", Json.fromString("UNBOUNDED"))),
           json.mapObject(_.add("footprint", Json.Null))).map(_.as[Classification])
         val missing = assignment.copy(repair = null).validateC
-        Then("classification decoding and Plan assignment validation reject without issuing work")
+        Then("unused model hints change no classification while actual semantic contradictions fail at their owner")
+        consumed shouldBe Right(coding)
         rejected.foreach(_.isLeft shouldBe true)
         missing shouldBe a[Consequence.Failure[?]]
       }

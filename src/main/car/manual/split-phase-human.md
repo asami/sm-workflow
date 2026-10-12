@@ -1,7 +1,7 @@
 # SplitPhase Human direction contract
 
 This contract describes the separately assembled Human profile introduced in v7
-and retained in the current v12 definition, with a separate reasoning question.
+and retained in `split-phase-minimal-operation-v13`, with a separate reasoning question.
 The normal three-workflow factory includes this paired connection; the older
 planning-only SplitPhase assembly does not. A host must supply canonical storage, authenticated
 participants and an independent Human answer verifier before installing it.
@@ -30,14 +30,16 @@ Human task. The Decision retains the original context, first checkpoint,
 scope-publication reference and complete bounded frontier. Its declared Human
 SPI is `SplitHumanService.presentSplitHumanDirection`.
 
-`SplitPhaseService.submitSplitHumanDirection` receives the common CNCF Decision
-result envelope for that exact issued Decision. The actual owning completion
-validates it, obtains independent Human evidence and commits the canonical
-answer. Its acknowledgement contains the original issued Decision and committed
-completion. It is not Terminal. Clients must use the assigned completion route
-and preserve the handle, continuation, expected revision, snapshot, actor,
-host-assigned result reference and execution evidence; an application answer
-payload alone is not a complete submission.
+`SplitPhaseService.submitSplitHumanDirection` receives the current
+`sm-workflow.result-submission.v1` frame with the requested answer under
+`result.value`, its actual Human result/evidence reference and independently
+supplied evidence. The host session identifies the execution; `requestIdentity`
+is supplied only for actual ambiguity. Workflow resolves the issued Decision,
+actor and stored controls internally, obtains independent Human evidence and
+commits the answer. Its acknowledgement is not Terminal.
+Use the assigned completion route, without echoing a handle, continuation,
+expected revision, snapshot, issued question or participant certificate.
+No full Decision-envelope or identity-only alternative is supported.
 
 | Recorded answer | Subsequent public advance in the Human profile | What it does not establish |
 | --- | --- | --- |

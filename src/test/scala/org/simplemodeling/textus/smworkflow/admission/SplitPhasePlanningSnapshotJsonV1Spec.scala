@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def objectives(s: Base, threshold: Long = 300): O.Records = O.Records(
@@ -101,42 +101,52 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       reversed shouldBe r
     }
 
-    "refuse unknown and missing nested fields, variants, schemas and primitive types" in {
-      Given("a valid record with deliberately crossed closed-wire fields")
-      val json = J.payloadCodec.encode(planned)
-      val invalid = Vector(json.mapObject(_.add("extra", Json.True)), json.mapObject(_.remove("payload")),
+    "ignore snapshot annotations while rejecting missing or wrongly typed consumed data" in {
+      Given("a current record with inert annotations or malformed consumed fields")
+      val r = planned
+      val json = J.payloadCodec.encode(r)
+      val annotated = Vector(json.mapObject(_.add("extra", Json.True)),
+        edit(json, List("payload", "selection"))(_.mapObject(_.add("extra", Json.True))))
+      val invalid = Vector(json.mapObject(_.remove("payload")),
         json.mapObject(_.add("schemaVersion", Json.fromString("future"))),
-        edit(json, List("payload", "selection"))(_.mapObject(_.add("extra", Json.True))),
-        edit(json, List("payload"))(_.mapObject(_.remove("objective"))),
         edit(json, List("payload", "partition"))(_ => Json.obj("Future" -> Json.obj())),
         edit(json, List("payload", "objective", "Selected", "stage"))(_ => Json.fromString("Future")),
         edit(json, List("payload", "partition", "Enumerated", "evaluatedCount"))(_ => Json.True))
-      When("both decode paths inspect their complete raw shape")
+      When("the existing standalone and native payload readers decode the current fields")
+      val accepted = annotated.map(j => take(J.decodeC(wire(j))))
       val refused = invalid.map(j => J.decodeC(wire(j)))
-      Then("no unknown data is ignored and no fallback supplies missing data")
+      val nativeaccepted = annotated.map(J.payloadCodec.decode)
+      val nativerefused = invalid.map(J.payloadCodec.decode)
+      Then("annotations do not change data or select control, while missing fields and actual type errors fail")
+      accepted shouldBe annotated.map(_ => r)
+      nativeaccepted shouldBe annotated.map(_ => Right(r))
       refused.foreach(_.isSuccess shouldBe false)
-      invalid.foreach(j => J.payloadCodec.decode(j).isLeft shouldBe true)
+      nativerefused.foreach(_.isLeft shouldBe true)
       Vector(null, "{}", J.schema + ":{", "other:{}").foreach(v => J.decodeC(v).isSuccess shouldBe false)
       J.payloadCodec.decode(null).isLeft shouldBe true
     }
 
-    "keep scores above Long exact and reject noncanonical decimal or numeric alternatives" in {
-      Given("a computed cost plan with a score greater than Long.MaxValue")
+    "keep large scores as passive strings and interpret invalid score meaning at the consumer" in {
+      Given("a computed score greater than Long.MaxValue and alternative primitive presentations")
       val s = base(Vector(260, 180, 260)); val known = objectives(s)
       val large = known.copy(cost = known.cost.map(_.copy(expensiveUnitsPerMinute = Long.MaxValue, lowerCostUnitsPerMinute = 0)))
       val r = run(s, large); val json = J.payloadCodec.encode(r)
-      When("scores roundtrip or receive a noncanonical wire representation")
-      val decoded = take(J.decodeC(wire(json)))
-      val malformed = Vector(Json.fromString("01"), Json.fromString("-1"), Json.fromString("1e3"), Json.fromString("1.0"),
-        Json.fromLong(1), Json.True).map { bad =>
+      def _score_(value: Json): Json =
         edit(json, List("payload", "objective", "Selected", "costScores"))(j => j.mapArray(a => a.updated(0,
-          a.head.mapObject(_.add("potentialSavingUnits", bad)))))
-      }
-      Then("integer strings are unchanged and lossy or ambiguous forms are refused")
+          a.head.mapObject(_.add("potentialSavingUnits", value)))))
+      val semanticinvalid = Vector("01", "-1", "1e3", "1.0").map(value => _score_(Json.fromString(value)))
+      val typeinvalid = Vector(Json.fromLong(1), Json.True).map(_score_)
+      When("storage reads typed data and the existing Workflow consumer interprets its score")
+      val decoded = take(J.decodeC(wire(json)))
+      val passive = semanticinvalid.map(j => take(J.decodeC(wire(j))))
+      val interpreted = passive.map(R.dispositionC)
+      val refused = typeinvalid.map(j => J.decodeC(wire(j)))
+      Then("large data survives, but invalid score meaning cannot drive planning and wrong primitive types cannot decode")
       decoded shouldBe r
       val scores = decoded.objective.get.asInstanceOf[R.ObjectiveView.Selected].costScores
       scores.map(_.potentialSavingUnits) should contain ((BigInt(440) * Long.MaxValue).toString)
-      malformed.foreach(j => J.decodeC(wire(j)).isSuccess shouldBe false)
+      interpreted.foreach(_.isSuccess shouldBe false)
+      refused.foreach(_.isSuccess shouldBe false)
     }
 
     "store passive typed frontiers without admitting crossed candidate meaning at use" in {
@@ -155,7 +165,7 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       val nativepayloads = crossed.map(value => J.payloadCodec.decode(J.payloadCodec.encode(value)))
       val interpreted = decoded.map(value => (R.dispositionC(value),
         SplitPhaseSelectedDocuments.projectC(value), SplitPhaseManagedSelectedPreview.projectC(value, "context", "1")))
-      val absent = Vector(J.encodeC(r.copy(selection = null)), J.encodeC(null))
+      val absent = Vector(J.encodeC(null))
       Then("storage preserves data but cannot produce a selected plan or document material")
       decoded shouldBe crossed
       nativepayloads shouldBe crossed.map(Right(_))
@@ -167,25 +177,24 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       absent.foreach(_.isSuccess shouldBe false)
     }
 
-    "reject nested undeclared fields and missing optional members directly at the raw boundary" in {
-      Given("declared raw facts and frontier leaves including optional fields and duration variants")
-      val json = J.payloadCodec.encode(planned)
-      val paths = Vector(List("payload", "selection", "proposal", "source", "authority"),
-        List("payload", "selection", "planning", "objectives"),
-        List("payload", "objective", "Selected"), List("payload", "admission", "DurationRanked"))
-      val extras = paths.map(path => edit(json, path)(_.mapObject(_.add("certificate", Json.True))))
-      val omissions = Vector(edit(json, List("payload"))(_.mapObject(_.remove("projection"))),
-        edit(json, List("payload", "selection", "planning"))(_.mapObject(_.remove("allocations"))))
-      val durationextra = edit(json, List("payload", "selection", "partition", "estimates", "items"))(
-        _.mapArray(values => values.updated(0, values.head.mapObject(item => item.add("duration",
-          item("duration").get.mapObject(_.add("certificate", Json.True)))))))
-      val malformed = extras ++ omissions :+ durationextra
-      When("the raw decoder receives those additions and omissions without reencoding any record")
-      val decoded = malformed.map(value => J.decodeC(wire(value)))
-      val nativepayloads = malformed.map(J.payloadCodec.decode)
-      Then("undeclared or missing members cannot be silently discarded by generic decoding")
-      decoded.foreach(_.isSuccess shouldBe false)
-      nativepayloads.foreach(_.isLeft shouldBe true)
+    "consume nested annotations and optional absence without requiring an encoder image" in {
+      Given("current passive facts with nested notes or an omitted optional projection")
+      val r = planned
+      val json = J.payloadCodec.encode(r)
+      val annotated = Vector(
+        edit(json, List("payload", "selection", "proposal", "source", "authority"))(_.mapObject(_.add("certificate", Json.True))),
+        edit(json, List("payload", "objective", "Selected"))(_.mapObject(_.add("certificate", Json.True))))
+      val missing = edit(json, List("payload"))(_.mapObject(_.remove("projection")))
+      When("typed decoding consumes data and the natural frontier consumer uses its meaning")
+      val decoded = annotated.map(value => take(J.decodeC(wire(value))))
+      val nativepayloads = annotated.map(J.payloadCodec.decode)
+      val optional = take(J.decodeC(wire(missing)))
+      val frontier = R.dispositionC(optional)
+      Then("annotations are inert, optional absence is data, and an impossible selected frontier cannot execute")
+      decoded shouldBe annotated.map(_ => r)
+      nativepayloads shouldBe annotated.map(_ => Right(r))
+      optional.projection shouldBe None
+      frontier.isSuccess shouldBe false
     }
 
     "enforce the UTF-8 bound without truncating unknown work or implying native receipt capacity" in {

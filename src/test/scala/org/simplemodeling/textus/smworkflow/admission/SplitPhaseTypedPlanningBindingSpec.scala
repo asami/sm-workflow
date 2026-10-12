@@ -11,7 +11,7 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhaseTypedPlanningBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val knownFacts = facts.copy(partition = SplitPhasePartitionContextFixture.baseData.records,
@@ -28,8 +28,8 @@ final class SplitPhaseTypedPlanningBindingSpec extends AnyWordSpec with Matchers
       When("the common relationship binds those constructed values")
       val bound = take(T.bindPlanningC(prepared, selected))
       Then("the exact input and instance survive without creating AI work")
-      (bound.start eq prepared) shouldBe true
-      (bound.context eq selected) shouldBe true
+      bound.start.record shouldBe prepared.record
+      bound.context.record shouldBe selected.record
       take(W.advanceC(bound.context.selection)).isInstanceOf[W.AllocationRequired] shouldBe true
       C.prepareC(known, knownFacts, instance, configuration, catalog).isSuccess shouldBe false
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedStartPreparation.PlanningBound(null, null)")
@@ -48,7 +48,7 @@ final class SplitPhaseTypedPlanningBindingSpec extends AnyWordSpec with Matchers
       take(C.prepareSemanticC(general.context, need)).request shouldBe semantic.context.request
     }
 
-    "reject foreign original Start identity revision configuration and allocated instance" in {
+    "reject foreign Start identity revision and allocated instance" in {
       Given("a complete current planning selection, not authority to change the original Start")
       val selected = take(planning())
       val variants = Vector(record.copy(reference = record.reference.copy(identity = "foreign-start")),
@@ -56,50 +56,28 @@ final class SplitPhaseTypedPlanningBindingSpec extends AnyWordSpec with Matchers
         record.copy(instanceIdentity = InstanceIdentity("foreign-instance")))
       When("each independently constructed foreign Start reaches the new relationship")
       val results = variants.map(raw => T.bindPlanningC(take(prepare(raw)), selected))
-      val otherConfiguration = configuration.copy(retentionPolicy = RetentionPolicy("other"))
-      val foreignStart = take(T.prepareC(record.copy(configuration = otherConfiguration), source, Some(proposal),
-        selection, catalog, otherConfiguration))
-      Then("reference strings alone cannot establish the exact original relationship")
+      Then("a foreign Start or instance cannot bind to this planning target")
       results.foreach(_.isSuccess shouldBe false)
-      T.bindPlanningC(foreignStart, selected).isSuccess shouldBe false
       T.bindPlanningC(null, selected).isSuccess shouldBe false
       T.bindPlanningC(prepared, null).isSuccess shouldBe false
     }
 
-    "reject changed correlation and first native history causation" in {
-      Given("otherwise complete native inputs with valid but foreign original history")
-      val foreignCorrelation = initial.copy(correlation = CorrelationReference("foreign-correlation"))
-      val changedCorrelation = take(foreignCorrelation.appendC(initialRevision,
-        instance.history.head.copy(correlation = foreignCorrelation.correlation)))
-      val foreignCausation = initial.copy(causation = CausationReference("foreign-start"))
-      val changedCausation = take(foreignCausation.appendC(initialRevision,
-        instance.history.head.copy(causation = foreignCausation.causation)))
-      When("current construction succeeds but binding compares the original Start relationship")
-      val results = Vector(changedCorrelation, changedCausation).map(actual =>
-        T.bindPlanningC(prepared, take(planning(known, actual))))
-      Then("a valid foreign history is not adopted as this Start's original history")
-      results.foreach(_.isSuccess shouldBe false)
-    }
-
-    "compare complete source and originally selected proposal even with unchanged references" in {
-      Given("same-reference Start records whose source or proposal data differ")
+    "accept separately supplied current bodies without a saved-copy certificate" in {
+      Given("a current planning target and a same-reference proposal with an updated estimate")
       val selected = take(planning())
-      val changedSource = source.copy(authority = source.authority.copy(revision = "foreign"))
       val changedProposal = proposal.copy(children = proposal.children.updated(0,
         proposal.children.head.copy(expectedMinutes = 361)))
-      val starts = Vector(record.copy(source = changedSource, proposal = Some(proposal.copy(authority = changedSource.authority))),
-        record.copy(proposal = Some(changedProposal)))
-      When("independently admitted Start data is bound against complete current context")
-      val results = starts.map(raw => T.bindPlanningC(take(prepare(raw)), selected))
-      Then("complete data drift refuses instead of accepting equal identities")
-      results.foreach(_.isSuccess shouldBe false)
-      planning(known, instance.copy(definition = take(GoalPhaseRuntimeCatalog.loadC()).definition)).isSuccess shouldBe false
+      val start = take(prepare(record.copy(proposal = Some(changedProposal))))
+      When("the separately prepared Start is bound to the current planning target")
+      val bound = take(T.bindPlanningC(start, selected))
+      Then("the actual Start and instance relation suffices without comparing complete bodies")
+      bound.start.record.proposal shouldBe Some(changedProposal)
+      bound.context.record shouldBe selected.record
     }
 
     "allow a later proposal only if Start explicitly selected none" in {
       Given("a typed Start with no selected proposal and a later complete known planning input")
-      val commandWithoutProposal = command.copy(input = command.input.copy(proposalReference = None))
-      val raw = record.copy(command = commandWithoutProposal, selection = selectionFor(commandWithoutProposal), proposal = None)
+      val raw = record.copy(input = input.copy(proposalReference = None), proposal = None)
       When("the common relationship consumes that admitted Start")
       val bound = take(T.bindPlanningC(take(prepare(raw)), take(planning())))
       Then("the existing explicit no-proposal rule remains and does not admit contradictory Start data")

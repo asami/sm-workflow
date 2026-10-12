@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def readJson(path: String): Json =
@@ -22,15 +22,6 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
 
   private def text(value: Json, field: String): String =
     value.hcursor.get[String](field).fold(error => fail(error.message), identity)
-
-  private def fields(element: Json): Json = Json.fromValues(array(element, "fields").map { field =>
-    Json.obj(
-      "name" -> Json.fromString(text(field, "name")),
-      "type" -> Json.fromString(text(field, "type")),
-      "multiplicity" -> Json.fromString(text(field, "multiplicity")),
-      "required" -> Json.fromBoolean(field.hcursor.get[Boolean]("required").fold(error => fail(error.message), identity))
-    )
-  })
 
   "The authored packaging descriptor" should {
     "provide the canonical project identity without granting runtime authority" in {
@@ -59,45 +50,80 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
   }
 
   "The authored ABI manifest" should {
-    "retain the complete generated CML contract without presenting it as active operation authority" in {
-      Given("the current generated CML model metadata and the authored schema-v2 ABI contract")
-      val metadata = readJson("target/cozy/model-metadata.json")
-      text(metadata, "schema") shouldBe "cozy.cml.model-metadata.v1"
-      val component = metadata.hcursor.downField("surface").downField("component").focus.getOrElse(fail("Missing CML surface"))
-      val services = array(component, "services")
-      val elements = array(metadata, "modelElements")
+    "describe the minimal participant Operations and genuine capability contracts" in {
+      Given("the source-managed schema-v2 ABI used for CAR distribution")
       val abi = readJson("src/main/car/abi-manifest.json")
 
-      When("its full declarative ABI is projected using Cozy's service, operation and field contract")
-      val expectedExports = Json.obj(
-        "components" -> Json.arr(Json.obj("namespace" -> Json.fromString("org.simplemodeling.textus"), "id" -> Json.fromString("SmWorkflow"))),
-        "services" -> Json.fromValues(services.map(s => Json.obj("name" -> Json.fromString(text(s, "name"))))),
-        "operations" -> Json.fromValues(services.flatMap { service =>
-          array(service, "operations").map { operation => Json.obj(
-            "service" -> Json.fromString(text(service, "name")),
-            "name" -> Json.fromString(text(operation, "name")),
-            "kind" -> Json.fromString(text(operation, "operationType")),
-            "input" -> Json.fromString(text(operation, "inputType")),
-            "output" -> Json.fromString(text(operation, "outputType"))
-          ) }
-        }),
-        "types" -> Json.fromValues(elements.filter(e => text(e, "kind") != "entity").map { element =>
-          val kind = text(element, "kind").toLowerCase(java.util.Locale.ROOT)
-          Json.obj("name" -> Json.fromString(text(element, "name")),
-            "kind" -> Json.fromString(if (kind == "command" || kind == "query") "value" else kind),
-            "fields" -> fields(element))
-        }),
-        "entities" -> Json.fromValues(elements.filter(e => text(e, "kind") == "entity").map { element =>
-          Json.obj("name" -> Json.fromString(text(element, "name")), "fields" -> fields(element))
-        })
-      )
+      When("a consumer reads the exported Operations and value fields")
+      val exports = abi.hcursor.downField("abi").downField("exports").focus.getOrElse(fail("Missing exports"))
+      val operations = array(exports, "operations")
+      val types = array(exports, "types")
+      def names(service: String): Vector[String] =
+        operations.filter(op => text(op, "service") == service).map(op => text(op, "name"))
+      def valueFields(name: String): Vector[String] =
+        array(types.find(value => text(value, "name") == name && text(value, "kind") == "value")
+          .getOrElse(fail(s"Missing value $name")), "fields").map(field => text(field, "name"))
+      def operation(service: String, name: String): Json =
+        operations.find(op => text(op, "service") == service && text(op, "name") == name)
+          .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("all declared services, operations, input/output types and fields match rather than an empty facade")
+      Then("the distribution identifies this component and exactly the normal four, six and five participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
-      abi.hcursor.downField("component").focus shouldBe readJson("src/main/car/component-descriptor.json").hcursor.downField("component").focus
-      abi.hcursor.downField("abi").focus shouldBe Some(Json.obj(
-        "version" -> Json.fromInt(1), "exports" -> expectedExports, "dependencies" -> Json.arr()
-      ))
+      abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
+      abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
+      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.0-SNAPSHOT")
+      abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
+      names("GoalPhaseService") should contain theSameElementsAs Vector(
+        "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision")
+      names("SplitPhaseService") should contain theSameElementsAs Vector(
+        "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
+        "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
+      names("RepositorySyncService") should contain theSameElementsAs Vector(
+        "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
+        "submitNativeMergeReview", "submitRepositoryConflictDecision")
+
+      And("nominal input types describe the consumed business values, not additional control envelopes")
+      val participantServices = Set("GoalPhaseService", "SplitPhaseService", "RepositorySyncService")
+      val participantInputs = operations.filter(op => participantServices.contains(text(op, "service")))
+        .map(op => text(op, "name") -> op.hcursor.get[Option[String]]("input")
+          .fold(error => fail(error.message), identity)).toMap
+      participantInputs shouldBe Map(
+        "advanceGoalPhase" -> "GoalPhaseAdvanceInput",
+        "advanceSplitPhase" -> "SplitPhaseAdvanceInput",
+        "advanceRepositorySync" -> "RepositorySyncAdvanceInput",
+        "startGoalPhase" -> "GoalPhaseStartInput",
+        "submitGoalPhaseWorkResult" -> "GoalPhaseWorkResult",
+        "submitGoalPhaseOrderedDecision" -> "GoalPhaseOrderedDecisionAnswer",
+        "startSplitPhase" -> "SplitPhaseStartInput",
+        "submitPartitionSemanticResult" -> "SplitPhasePartitionSemanticResult",
+        "submitHandoffScopeResult" -> "SplitPhaseScopeSemanticResult",
+        "submitReasoningResult" -> "SplitPhaseReasoningSemanticResult",
+        "submitSplitHumanDirection" -> "SplitPhaseHumanDirectionAnswer",
+        "startRepositorySync" -> "RepositorySyncStartInput",
+        "submitRepositorySyncWorkResult" -> "RepositorySyncConflictResult",
+        "submitNativeMergeReview" -> "RepositorySyncNativeMergeReviewResult",
+        "submitRepositoryConflictDecision" -> "RepositorySyncHumanConflictAnswer")
+          .view.mapValues(value => Some(value)).toMap
+      valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity")
+      valueFields("SplitPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity", "contextIdentity")
+      valueFields("RepositorySyncAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity")
+      valueFields("GoalPhaseStartInput") should contain theSameElementsAs Vector("phaseIdentity", "repositoryIdentity")
+      valueFields("SplitPhaseStartInput") should contain theSameElementsAs Vector(
+        "sourcePhaseIdentity", "invocationMode", "proposalReference")
+      valueFields("RepositorySyncStartInput") should contain theSameElementsAs Vector(
+        "repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch", "remoteEndpointIdentity", "syncMode")
+      types.map(value => text(value, "name")) should not contain "GoalPhaseStartCommand"
+      types.map(value => text(value, "name")) should not contain "SplitPhaseStartCommand"
+      types.map(value => text(value, "name")) should not contain "RepositorySyncStartCommand"
+
+      And("semantic, Human and deterministic admission contracts retain their actual request and result types")
+      val semantic = operation("SplitSemanticService", "assessPartitionSemanticInputs")
+      text(semantic, "input") shouldBe "SplitPhasePartitionSemanticRequest"
+      text(semantic, "output") shouldBe "SplitPhasePartitionSemanticResult"
+      text(operation("SplitHumanService", "presentReasoningHumanDirection"), "input") shouldBe "SplitPhaseReasoningHumanDirectionRequest"
+      text(operation("RepositoryConflictService", "resolveRepositoryMergeConflicts"), "output") shouldBe "RepositorySyncConflictResult"
+      text(operation("RepositorySyncSemanticAdmissionService", "admitNativeMergeReview"), "input") shouldBe "RepositorySyncNativeMergeReviewRequest"
+      text(operation("GoalPhaseSemanticAdmissionService", "admitOrderedStepReview"), "output") shouldBe "GoalPhaseWorkSubmissionResult"
     }
   }
 }

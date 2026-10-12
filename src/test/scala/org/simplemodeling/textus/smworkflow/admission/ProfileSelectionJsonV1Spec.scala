@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class ProfileSelectionJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val selection = Selection("selection-1", StateMachineOperationIdentity("GoalPhaseService", "startGoalPhase"),
@@ -31,19 +31,26 @@ final class ProfileSelectionJsonV1Spec extends AnyWordSpec with Matchers with Gi
       val original = selection.copy(selectedInput = Some(TypedValue("GoalPhaseStartInput", Json.obj(
         "phaseIdentity" -> Json.fromString("phase-2"), "repositoryIdentity" -> Json.fromString("repository")))))
       When("the host records and reads the selection")
-      take(ProfileSelectionJsonV1.decodeStorageC(take(ProfileSelectionJsonV1.encodeStorageC(original)))) shouldBe original
-      Then("absent input remains absent and malformed typed payloads cannot be decoded")
-      take(ProfileSelectionJsonV1.decodeC(take(ProfileSelectionJsonV1.encodeC(selection)))).selectedInput shouldBe None
+      val restored = take(ProfileSelectionJsonV1.decodeStorageC(take(ProfileSelectionJsonV1.encodeStorageC(original))))
+      val absent = take(ProfileSelectionJsonV1.decodeC(take(ProfileSelectionJsonV1.encodeC(selection))))
+      Then("explicit typed facts survive and absent input remains absent")
+      restored shouldBe original
+      absent.selectedInput shouldBe None
+    }
+
+    "reject missing or type-invalid consumed typed payloads" in {
+      Given("a record with missing, empty, null or nonobject typed-input facts")
       val malformed = Vector(Json.obj("typeIdentity" -> Json.fromString("GoalPhaseStartInput")),
         Json.obj("typeIdentity" -> Json.fromString(" "), "value" -> Json.obj()),
-        Json.obj("typeIdentity" -> Json.fromString("GoalPhaseStartInput"), "value" -> Json.Null),
-        Json.obj("typeIdentity" -> Json.fromString("GoalPhaseStartInput"), "value" -> Json.obj(),
-          "approved" -> Json.fromBoolean(true)), Json.fromString("input"))
-      malformed.foreach(value => ProfileSelectionJsonV1.decodeC(
-        json.mapObject(_.add("selectedInput", value)).noSpaces) shouldBe a[Consequence.Failure[?]])
-      Vector(selection.copy(selectedInput = null), selection.copy(selectedInput = Some(null)),
-        selection.copy(selectedInput = Some(TypedValue("Input", Json.Null)))).foreach(value =>
-        ProfileSelectionJsonV1.encodeC(value) shouldBe a[Consequence.Failure[?]])
+        Json.obj("typeIdentity" -> Json.fromString("GoalPhaseStartInput"), "value" -> Json.Null), Json.fromString("input"))
+      val incomplete = Vector(selection.copy(selectedInput = null), selection.copy(selectedInput = Some(null)),
+        selection.copy(selectedInput = Some(TypedValue("Input", Json.Null))))
+      When("the codec consumes or writes those incomplete facts")
+      val decoded = malformed.map(value => ProfileSelectionJsonV1.decodeC(json.mapObject(_.add("selectedInput", value)).noSpaces))
+      val encoded = incomplete.map(ProfileSelectionJsonV1.encodeC)
+      Then("consumed missing and invalid types fail without using diagnostic fields as controls")
+      decoded.foreach(_ shouldBe a[Consequence.Failure[?]])
+      encoded.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
     "retain every origin and optional recommendation without upgrading authority" in {
@@ -75,16 +82,38 @@ final class ProfileSelectionJsonV1Spec extends AnyWordSpec with Matchers with Gi
       }
     }
 
-    "reject missing or extra fields and incompatible schema" in {
+    "reject missing consumed fields and incompatible schema" in {
       Given("a valid persisted host record")
       val root = json.asObject.get
-      When("each required field is omitted, an undeclared field is added, or the schema changes")
+      When("each required field is omitted or the consumed schema or operation changes shape")
       val variants = root.keys.toVector.map(name => Json.fromJsonObject(root.remove(name))) ++ Vector(
-        json.mapObject(_.add("authority", Json.fromBoolean(true))),
         json.mapObject(_.add("schemaVersion", Json.fromString("foreign"))),
         json.mapObject(_.add("startOperation", Json.obj("service" -> Json.fromString("GoalPhaseService")))))
       Then("none can be interpreted as a valid selection record")
       variants.foreach(value => ProfileSelectionJsonV1.decodeC(value.noSpaces) shouldBe a[Consequence.Failure[?]])
+    }
+
+    "ignore extra record and typed-input fields without upgrading human authority" in {
+      Given("a nonhuman selection carrying unused approval-looking diagnostics")
+      val input = Json.obj("phaseIdentity" -> Json.fromString("phase-2"), "repositoryIdentity" -> Json.fromString("repository"))
+      val original = selection.copy(origin = SelectionOrigin.Skill,
+        selectedInput = Some(TypedValue("GoalPhaseStartInput", input)))
+      val decorated = parse(take(ProfileSelectionJsonV1.encodeC(original))).toOption.get.mapObject(_.add("authority", Json.True)
+        .add("startOperation", Json.obj("service" -> Json.fromString("GoalPhaseService"),
+          "operation" -> Json.fromString("startGoalPhase"), "diagnostic" -> Json.arr()))
+        .add("selectedInput", Json.obj("typeIdentity" -> Json.fromString("GoalPhaseStartInput"),
+          "value" -> input, "approved" -> Json.True)))
+      When("the codec consumes declared fields and Start evaluates the actual origin")
+      val restored = take(ProfileSelectionJsonV1.decodeC(decorated.noSpaces))
+      val binding = Binding(selection.startOperation, selection.workflowIdentity, selection.workflowRevision, "GoalPhaseStartInput")
+      val port = new SelectionPort {
+        def loadC(id: String) = Consequence.success(Some(restored))
+      }
+      val admitted = ProfileStartAdmission.admitC(binding, TypedValue("GoalPhaseStartInput", input), restored.selectionId,
+        restored.participantIdentity, restored.idempotencyKey, port)
+      Then("diagnostics are ignored and the actual nonhuman origin cannot acquire Start authority")
+      restored shouldBe original
+      admitted shouldBe a[Consequence.Failure[?]]
     }
 
     "reject coerced values, unknown origins and malformed optional references" in {

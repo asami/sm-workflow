@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDire
   * Neither calculation grants persistence, resolves planning data or terminates.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseNativeHumanAnswer {
   final class Verified private[SplitPhaseNativeHumanAnswer] (
@@ -23,39 +23,14 @@ private[smworkflow] object SplitPhaseNativeHumanAnswer {
     current: InstanceRecord): Consequence[InstanceRecord] =
     if (plan == null || submitted == null || current == null || submitted.result == null)
       _invalid("genuine plan, submitted answer or current state is absent")
-    else if (!SplitPhaseDefinitionBinding.sameRecord(current, plan.next))
-      _invalid("answer is not the exact current issued Human suspension")
-    else _prepare_record_c(plan.question, submitted, current)
+    else _prepare_record_c(submitted, current)
 
-  /** Structural stored completion inspection, not a verified current-call answer. */
-  def inspectStoredC(question: WorkflowInteraction[H.Input, Nothing], issued: InstanceRecord,
-    completion: WorkflowCompletionRecordJsonV1.Record[A.Answer], answered: InstanceRecord): Consequence[Unit] =
-    if (question == null || issued == null || completion == null || answered == null)
-      _invalid("stored answer is incomplete")
+  private def _prepare_record_c(submitted: ContinuationResult[A.Answer],
+    current: InstanceRecord): Consequence[InstanceRecord] =
+    if (submitted == null || current == null || submitted.result == null)
+      _invalid("submitted answer or current state is absent")
     else for {
-      expected <- _prepare_record_c(question, completion.result, issued)
-      _ <- if (SplitPhaseDefinitionBinding.sameRecord(expected, answered) &&
-          completion.instanceRevision == answered.revision && completion.closingResult.contains(
-            StateMachineOperationResult(H.closingType, completion.result.resultReference))) Consequence.unit
-        else _invalid("stored complete answer, closing result or native history differs")
-    } yield ()
-
-  /** Shared native answer calculation for the two separately declared Human
-    * questions. This remains passive; evidence and publication are separate.
-    */
-  def prepareQuestionC(question: WorkflowInteraction[?, Nothing], submitted: ContinuationResult[A.Answer],
-    current: InstanceRecord): Consequence[InstanceRecord] = _prepare_record_c(question, submitted, current)
-
-  private def _prepare_record_c(question: WorkflowInteraction[?, Nothing],
-    submitted: ContinuationResult[A.Answer], current: InstanceRecord): Consequence[InstanceRecord] =
-    if (question == null || submitted == null || current == null || submitted.result == null)
-      _invalid("complete question, submitted answer or current state is absent")
-    else for {
-      _ <- A.encodeC(submitted.result.value)
-      _ <- WorkflowProtocolV1.admitDecisionResultC(question, submitted).map(_ => ())
-      _ <- current.validateC
-      _ <- if (current.lifecycle == Lifecycle.Active && current.revision.value < Long.MaxValue &&
-          current.currentProgression.contains(ProgressionReference("HumanPending")) &&
+      _ <- if (current.currentProgression.contains(ProgressionReference("HumanPending")) &&
           SplitPhaseHumanDirectionLifecycle.permits("Awaiting", "human-direction-recorded", "Answered"))
         Consequence.unit else _invalid("answer is not the exact current issued Human suspension")
       next <- current.appendC(current.revision, HistoryEntry(HistorySequence(current.history.size.toLong + 1L),
@@ -70,7 +45,7 @@ private[smworkflow] object SplitPhaseNativeHumanAnswer {
     else for {
       next <- prepareC(plan, submitted, current)
       binding = V.AnswerContext(core.component.get.core.instanceId, plan.question, submitted,
-        plan.source.record.snapshot.first.originalStart.command.participantIdentity)
+        plan.source.record.snapshot.first.originalStart.participantIdentity)
       admitted <- V.admitForCallC(binding, core, evidence)
     } yield new Verified(next, admitted)
 

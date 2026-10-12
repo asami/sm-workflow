@@ -1,9 +1,168 @@
 # GoalPhase native retained applicability — Phase 5
 
-Status: connected source correction; all changed executable cases UNVERIFIED.
-Registered-runner tests and assembled independent read-only review remain pending.
+## Current Phase 5.2 C16 — consume assigned work and actual completion once
+
+Initial work, review, repair, next-Step and resumed Human branches return the
+actual issued work when its assigned completion is absent; when present they
+consume its semantic result and continue the existing controller. Normal routing
+does not reread issued input already consumed by issueAssignedC, compare record
+frontiers or recertify a decoded common instance. Read-only predecessor walks
+still resolve their actual saved work, not an unchanged-history certificate.
+
+Missing review or Phase-check host installation remains WAIT/nonacceptance,
+without an extra record-copy refusal. Actual result meaning, independent review,
+Human evidence, ordered checks/commits, effect scope and shared native CAS/grants
+remain at their owners. No verifier/stamp or replay/intermediate-recovery promise
+is added. Normal specs consume actual assignments and assert meaningful outcome
+and revision at refused mutation boundaries, not full history/body equivalence.
+
+C16 passed fresh focused validation6 suites45 tests, SBT/wrapper0/lockreleased;
+[terminal evidence](../../.codex-workflow/phases/PHASE-5.2/normal-consumer-proof-validation-01-terminal.md). Earlier
+passes retain their earlier scope; all-fifteen public contract alignment, connected
+Step review/commits and full Phase release/closure are still required. This section
+supersedes older consumer-comparison and recovery requirements below.
+
+## Current C14 Start consumption — focused validation 67 PASS
+
+This section takes precedence over earlier Start/replay observations below.
+The normal action carries actual typed business input and actual host selection
+directly. Start reads the actual selected Plan once, consumes its selected
+allocation/participant and Phase/repository/effect target, captures the actual
+clean native Git base, then creates/appends a NEW instance. It does not re-admit
+the selected copy, compare SelectedPlan.input, load an old Start receipt or
+reconstruct prior history as a reuse certificate. Actual later Work owns Plan
+consumption; no ignored preliminary Work projection remains in Start.
+
+Child closure derives identity from the actual child selection/invocation and
+calls the installed child Operations with actual business fields. It creates no
+identity-only Repository Command. Current participant, selected effect scope,
+native state/CAS and existing grants retain their owning boundaries; later
+consumer proof predicates are separate remaining migration work, not accepted
+by this Start change. No legacy Start adapter or compatibility route is retained.
+
+The logical Persistence value contains configuration and instance/Continuation
+destinations only, without an executable-catalog proof. Current normal Operation
+and storage fixtures use those actual values. C14 main/Test compiled and fresh
+registered serial validation passed all67 tests in9 suites, SBT/wrapper0 and
+lockreleased; [terminal evidence](../../.codex-workflow/phases/PHASE-5.2/current-start-validation-01-terminal.md).
+This scoped result does not complete the connected Step/Phase. Original evidence
+and files remain; unsupported old runs restart as NEW without recovery/replay guarantees.
+
+### C8 focused validation — 57 PASS
+
+Fresh registered request01 completed eight suites,57 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Actual current codec/semantic consumers and the existing normal Goal/Repository/
+Direct Operation programs passed. No product input changed during execution;
+only documentation/evidence was updated after terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/result-consumers-validation-01-terminal.md).
+This supersedes the authored UNVERIFIED status above only for bounded C8
+validation, not connected Step/full Phase acceptance. Remaining migration,
+independent review, owned commits and final release/closure remain mandatory.
+
+## Current Phase 5.2 contract — 2026-10-11
+
+This section supersedes the historical observations below. C7 focused validation
+passes 52 tests in seven suites. Candidate reads only v2,
+Validation only v2, Work request only v2 and Work result only its current v1.
+Step closure reads only v3, containing Input, ordinal and optional actual commit;
+no authority/reference/revision or policy copy is saved. Parent closure remains
+current v2 with actual child association/result/revision and no saved command.
+Typed codecs consume real fields once; unused top-level/nested annotations are
+inert. No exact-key/recursive shape preflight, old reader, legacy normalization,
+unchanged-body proof or compatibility adapter remains in these codecs.
+
+The existing host reader owns current-call Step/Phase permission. Closure uses
+its Boolean admission, not an Authorization object to compare or persist. Actual
+effect scope, fixed program, native state and shared CAS remain at their owners;
+their existence does not make every older duplicate check necessary. Complete
+remaining consumer/public-definition/DTO/legacy migration and connected review/
+release remain mandatory. Unsupported old runs preserve evidence/files and
+restart as NEW at the initial boundary, without intermediate recovery promises.
+
+E1/E2/E5/E7/E10 now cover current typed facts, optional fields, inert annotations,
+actual missing/mistyped consumed fields and unsupported historical schemas.
+E9/E13 remain current Start/parent-child codec cases. Existing normal
+ThreeWorkflowGoalOperationSpec programs preserve ordered repair/check/review/
+Step commit/Phase review/installed child convergence. Classification connection
+from the retired GoalPhaseNativeRunSpec is observed there, not through a legacy
+CLI/Receiver fixture. Replay/duplicate/lost-ack/restoration matrices are retired.
+
+Correction to the earlier C6 report: request02's six-suite47PASS included two
+normal production-composition whole-Phase programs with real installed child
+convergence (raw log lines167,210). Its additional legacy native example failed
+before child Start, so the overall invocation failed and permission is consumed.
+The broad statement that child closure had not executed was incorrect. Neither
+the47PASS nor prior C5's41PASS accepted the newly authored C7 changes or Phase.
+
+Fresh C7 request01 passed all52 tests in seven completed suites, zero failures or
+aborts, with SBT/wrapper exit0 and shared lock released. The parent admitted the
+current typed result and consumed permission. The classification-frontier and
+current codec assertions passed with the normal Goal/Repository/Direct Operation
+programs. [Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/goal-native-contract-validation-01-terminal.md).
+This accepts only the bounded C7 validation, not the complete Step or Phase.
+
+### C8 result consumers — authored, UNVERIFIED
+
+Goal work completion consumes the actual issued WorkOrder input and selects its
+controller by the issued Continuation locator. It does not compare a regenerated
+WorkOrder, Plan, candidate, check list, presentation or current-state copy.
+Review completion consumes the controller's actual ReviewStep/ReviewPhase
+candidate and checks together with the new semantic result and independent
+review evidence. The former E6 assignment/copy certificate matrix is removed;
+existing normal Operation programs exercise the real connection.
+
+Ordered Human completion consumes the actual saved question directly. Current
+input/answer codecs consume meaningful work/result/choice/rationale members;
+unused root/nested annotations are inert. Missing or mistyped consumed members
+and an unknown actual choice fail at their consuming decoder, not a key-set
+certificate. The existing independent Human evidence owner remains unchanged.
+C8's fresh eight-suite validation is pending; C7 evidence above does not validate
+these new inputs. This is not Step or Phase acceptance.
+
+## Historical observations — nonnormative for Phase 5.2
+
+The following earlier records, including old-reader and replay/reopen claims,
+are retained as history only. They do not authorize compatibility or additional
+guarantees; the current contract above takes precedence.
+
+Status: current Phase 5.2 C5 focused validation passes 41 tests in five suites.
+Complete migration and assembled independent read-only review remain pending.
 This implements the adopted Phase 5 policy; it adds no approval, repair frame,
 counter change or Phase acceptance condition.
+
+Current Phase 5.2 precedence: R4 and the following C6 contract define current-only storage.
+Its C5 source/spec changes passed fresh registered-runner validation on 2026-10-11:
+five suites, 41 tests, SBT/wrapper exit0 and shared lock released. The other
+sections retain earlier Phase 5 observations; their old
+readers, exact-shape refusals, replay and physical-reopen coverage do not define
+current Phase 5.2 acceptance. Those still-connected legacy paths must be migrated
+and removed, not accepted as compatibility. Normal-use limits and the complete
+replacement contract are in [Phase 5.2](../phase/phase-5.2.md).
+
+### Current C6 parent-child closure — codec passed, connection UNVERIFIED
+
+Parent closure writes/reads only `sm-workflow.goal-phase-native-repository-closure.v2`:
+actual parent Input, child identity, optional result and child native revision.
+There is no saved child command, copied authorization, full-input comparison,
+sameTarget certificate or post-child Git/convergence recertification. The
+existing host reader admits actual Phase authority and the installed child owns
+its real permission, scoped Git effects and convergence. Parent uses the actual
+host-selected child routing key, invokes the installed child's normal Operations,
+consumes its terminal result and records the actual child's revision.
+
+E13 now covers current typed intent/result, optional Plan presentation, inert
+annotations, missing/wrong consumed types and unsupported v1 records. One existing
+normal native whole-Phase child closure example is selected for C6 execution;
+historic replay/reopen/identical-answer guarantees below are not acceptance.
+Old records/evidence remain untouched; NEW selection/invocation and initial Start
+replace unsupported in-flight records, not a compatibility reader or restoration
+mechanism. Complete remaining contract/legacy migration and assembled review
+remain mandatory. C6 request02 passes six suites47 tests, including current E13.
+The additional one-example native child test fails in its legacy fixture's bare
+completion before child Start; it has not verified the actual child closure.
+The overall invocation failed. No restoration/replay guarantee is reinstated.
 
 ## R1 — Saved candidate facts, not a host-path declaration witness
 
@@ -99,16 +258,38 @@ actual fixture review admission occurs once and duplicate completion fails.
 These cases are UNVERIFIED. E8 exercises current issued rows and fixture evidence,
 not historical store-wide migration or a deployed independent AI executor.
 
-## R4 — Native Start reads structure, not a canonical-body certificate
+## R4 — Native Start stores consumed facts, not a command copy
 
-The retained Start v1 reader accepts permitted optional Plan representations
-without requiring full encode/decode equality. It checks declared envelope,
-payload, command and nested Plan/candidate shape; typed Plan/Start consumers keep
-real selected Phase/repository, participant, invocation, base and state checks.
-E9: GoalPhaseNativeRetentionApplicabilitySpec reads an older omitted optional
-Plan classification representation and rejects undeclared nested execution/
-authority and malformed current fields. This is a codec case, not physical
-old-Start-store validation. It is UNVERIFIED.
+Current native Start writes and reads only
+`sm-workflow.goal-phase-native-start.v2`. Its payload contains participantIdentity,
+root, branch, selected plan and original Git base. Later Human decisions and
+paired repository closure consume the stored participant directly. No original
+StartCommand is serialized, reconstructed or compared; there is no substitute
+unchanged-copy certificate or validation marker.
+
+The current schema and typed consumed fields are decoded once. Optional Plan
+classification remains optional; unknown unused envelope/payload/nested diagnostic
+fields are ignored and confer no authority. Missing/wrong consumed types fail at
+the typed reader. Actual participant admission, selected Phase/repository and Git
+effect target remain with their consumers. Controller construction owns real
+Plan/base validity; session lookup does not repeat that validation.
+
+There is no v1 reader, adapter or runtime fallback. Old in-flight v1 records and
+their evidence are preserved, not rewritten or marked accepted. To proceed, use
+a NEW host selection/invocation and Start from the initial boundary. Intermediate
+restoration, identical replay and competing-answer guarantees are outside scope.
+No continued-use v1 execution was identified in this development task; this is
+not a global physical store audit or migration claim.
+
+E9: GoalPhaseNativeRetentionApplicabilitySpec covers the current consumed payload,
+optional classification, harmless diagnostics including inert obsolete command
+fields, actual missing/wrong required types and unsupported v1 schema. Normal
+Goal/Repository/Direct Operation suites cover the connected participant and
+managed-storage paths. Fresh C5 validation passes all five suites, 41 tests,
+including current E9 and classification E4. This is focused evidence only;
+passing these cases alone cannot close the complete Phase migration. Running
+remaining historical cases does not restore their excluded guarantees or readers
+to current acceptance.
 
 ## R5 — Native Step commit facts, not a complete closure-policy witness
 

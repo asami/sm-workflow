@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object GoalPhaseNativeClosure {
   final case class StepProgram(step: String, ordinal: Int)
@@ -32,42 +32,27 @@ private[smworkflow] object GoalPhaseNativeClosure {
   }
   final case class Input(instance: String, sourceRevision: String, plan: String, planRevision: String,
     step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: String)
-  final case class Authorization(reference: String, revision: Int, input: Input)
   trait AuthorityPort {
     /** Observe host-recorded authority for this actual current call. Never
       * synthesize approval from a worker result or a missing record.
       */
-    def loadForCallC(core: ActionCall.Core, input: Input): Consequence[Option[Authorization]]
+    def isGrantedC(core: ActionCall.Core, input: Input): Consequence[Boolean]
   }
   final case class Installation(policy: Policy, authority: AuthorityPort) {
     def validateC = if (policy == null || authority == null) F.invalid("native Step closure authority is missing")
       else policy.validateC
   }
-  final case class Payload(input: Input, ordinal: Int, authority: String,
-    authorityRevision: Int, commit: Option[O.Commit])
+  final case class Payload(input: Input, ordinal: Int, commit: Option[O.Commit])
   final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseAdvanceResult"
-    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-step-closure.v2"),
+    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-step-closure.v3"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("native Step closure envelope differs")
-      schema <- root("schemaVersion").flatMap(_.asString).toRight("native Step closure schema is missing")
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-step-closure.v1", "sm-workflow.goal-phase-native-step-closure.v2")(schema),
-        (), "native Step closure schema differs")
-      fields <- root("payload").get.asObject.toRight("native Step closure payload is missing")
-      required = Set("input", "ordinal", "authority", "authorityRevision")
-      legacy = if (schema.endsWith(".v1")) Set("policy") else Set.empty[String]
-      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
-        fields.keys.toSet.subsetOf(required ++ Set("commit") ++ legacy) &&
-        fields("input").flatMap(_.asObject).exists { input =>
-          input.keys.toSet == Set("instance", "sourceRevision", "plan", "planRevision", "step", "generation", "parent", "candidate", "reviewEvidence") &&
-            input("parent").exists(GoalPhaseNativeWork.snapshotShape) &&
-            input("candidate").exists(GoalPhaseNativeWork.snapshotShape)
-        } && fields("commit").forall(value => value.isNull || value.asObject.exists(_.keys.toSet == Set("identity", "parent", "tree"))),
-        (), "native Step closure has undeclared or missing fields")
-      payload <- Json.fromJsonObject(fields.remove("policy")).as[Payload].left.map(_.message)
+      wire <- Option(value).toRight("native Step closure is missing")
+      schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-step-closure.v3", (), "native Step closure schema differs")
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
 
@@ -85,14 +70,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
     saved <- result match {
       case Some(value) => store.completedC(value).map(Some(_))
       case None => for {
-        authority <- store.installation.authority.loadForCallC(core, store.input)
+        authority <- store.installation.authority.isGrantedC(core, store.input)
         closed <- authority match {
-          case None => Consequence.success(Option.empty[Saved])
-          case Some(value) => for {
-            _ <- if (value != null && id(value.reference) && value.revision > 0 && value.input == store.input)
-              Consequence.unit else F.invalid("Step closure authority crosses its selected plan/candidate/review")
+          case false => Consequence.success(Option.empty[Saved])
+          case true => for {
             _ <- store.preconditionsC
-            payload = Payload(store.input, store.ordinal, value.reference, value.revision, None)
+            payload = Payload(store.input, store.ordinal, None)
             intent <- store.saveC("intent", from, "Closing", payload)
             _ <- store.ackC("goal-step-commit-prepared:" + store.input.step)
             actual <- E.commitGoalStepC(core, store.ordinal)

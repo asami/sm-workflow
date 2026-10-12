@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.syntax.all.*
+import io.circe.Json
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
@@ -9,11 +10,10 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedReasoningWorkIssue as I,
   SplitPhaseExplicitReasoningSemantic as S, SplitPhaseExplicitReasoningSemanticJson as J,
   SplitPhaseTypedReasoningCompletion as P, SplitPhaseRetainedReasoningSource as D,
@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedReasoningW
   * Judgment. Native completion and the deterministic successor are one UoW.
   * Metadata alone survives calls; neither Core nor a provider/pool is retained.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedReasoningCompletion {
   final class Observed private[SplitPhaseManagedReasoningCompletion] (
@@ -36,20 +36,14 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
   /** Advance reads the assigned native task, never reconstructs a fresh issue
     * from a suspended frontier or treats it as partition/scope work.
     */
-  def pendingForAdvanceC(command: SplitPhaseAdvanceCommand, current: InstanceRecord,
+  def pendingForAdvanceC(current: InstanceRecord,
     declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core):
       Consequence[WorkflowInteraction[S.Request, Nothing]] = for {
-    _ <- if (core != null && core.action != null && core.action.request != null &&
-        core.action.request.service.contains(K.advanceOperation.service) &&
-        core.action.request.operation == K.advanceOperation.operation) Consequence.unit
-      else Consequence.securityPermissionDenied("Pending reasoning requires its actual advance Operation")
     identity <- current.suspension.map(value => Consequence.success(
       ContinuationIdentity(value.continuationIdentity.value)))
       .getOrElse(_invalid("pending query has no selected native suspension"))
     work <- _work_c(identity, declaration, catalog, core)
-    owning <- SplitPhaseReasoningInvocation.queryC(work)
-    _ <- if (owning == command) Consequence.unit else _invalid("pending work belongs to another query context")
     // Native storage resolves this saved issue. This query consumes its current
     // assignment, not a freshly reconstructed source, Context or presentation.
     _ <- work.current match {
@@ -68,42 +62,12 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     _ <- U.bindTargetsC(params.configuration, declaration)
     provided = SplitPhaseDefinitionBinding.providedDefinition
     op <- provided.providedOperations.find(o => o.service == I.completionOperation.service &&
-      o.name == I.completionOperation.operation && o.inputType.contains(J.resultCodec.typeIdentity) &&
-      o.resultType.contains(I.closingType.value)).map(Consequence.success)
-      .getOrElse(_invalid("generated result Operation differs from reasoning codecs"))
+      o.name == I.completionOperation.operation).map(Consequence.success)
+      .getOrElse(_invalid("reasoning result Operation is absent"))
     declared <- _operation_c(None, op, declaration, catalog, native)
-  } yield new spec.OperationDefinition {
-    val specification = declared.specification
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      declared.createOperationRequest(request).flatMap {
-        case command: CommandAction => Consequence.success(new CommandAction {
-          val request = command.request
-          override def commandExecutionMode = command.commandExecutionMode
-          def createCall(capsule: ActionCall.Core): ActionCall = new ProcedureActionCall {
-            val core = capsule
-            private var delegate = Option.empty[ActionCall]
-            def execute(): Consequence[OperationResponse] = for {
-              response <- for {
-                  native <- _native_c(core, declaration, catalog)
-                  bound <- _operation_c(Some(core), op, declaration, catalog, native)
-                  action <- bound.createOperationRequest(core.action.request).flatMap {
-                    case value: CommandAction => Consequence.success(value)
-                    case _ => _invalid("native result Operation is not a command")
-                  }
-                  call = action.createCall(core.copy(action = action))
-                  response <- { delegate = Some(call); call.execute() }
-                } yield response
-            } yield response
-            override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
-              val actual = delegate
-              delegate = None
-              actual.fold(Consequence.success(response))(_.afterCommitResponseC(response))
-            }
-          }
-        })
-        case _ => _invalid("reasoning result declaration is not a command")
-      }
-  }
+  } yield CallScopedOperationBinding.wrapResult(declared, (core, result) =>
+    _native_c(core, declaration, catalog).flatMap(native =>
+      _operation_c(Some(core), op, declaration, catalog, native, Some(result))))
 
   /** Authoritative retained observation. Does not resubmit the result, run AI,
     * regenerate earlier documents, or allocate a new planning version.
@@ -153,7 +117,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
 
   private def _operation_c(core: Option[ActionCall.Core], op: GeneratedProvidedApiAbi.Operation,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    native: WorkflowManagedCompletion[S.Judgment]): Consequence[spec.OperationDefinition] = {
+    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[Json]] = None): Consequence[spec.OperationDefinition] = {
     var selected = Option.empty[P.Plan]
     val issued = new IssuedWorkOrderPersistence[S.Request] {
       def putIfAbsentC(value: WorkflowInteraction[S.Request, Nothing]) = _invalid("completion cannot issue work")
@@ -164,10 +128,8 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     }
     val codec = new WorkflowCompletionServiceOperation.Codec[S.Judgment] {
       val resultTypeIdentity = J.resultCodec.typeIdentity
-      def decodeC(request: Request) = WorkflowJsonCommandRequest.commandArguments(request) match {
-        case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, J.resultCodec)
-        case _ => _invalid("completion requires one typed JSON result")
-      }
+      def decodeC(request: Request) = result.map(NativeWorkflowResultInput.typedC(_, J.resultCodec))
+        .getOrElse(_invalid("reasoning completion has no resolved semantic result"))
       def encodeC(resume: ContinuationRuntime.Resume) = _invalid("acknowledgement requires committed readback")
       override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Judgment],
         completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
@@ -186,10 +148,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
       def selectC(submitted: ContinuationResult[S.Judgment], current: InstanceRecord) = core match {
         case None => _invalid("closing requires the actual result Operation")
         case Some(call) => for {
-          command <- SplitPhaseReasoningInvocation.completionQueryC(call, declaration, catalog)
           work <- _work_c(submitted.continuationId, declaration, catalog, call)
-          owning <- SplitPhaseReasoningInvocation.queryC(work)
-          _ <- if (command == owning) Consequence.unit else _invalid("completion query crosses its native issued work")
           source <- _source_c(work, declaration, catalog, call)
           pending <- P.pendingC(source, current, work)
           plan <- P.admitC(pending, submitted)
@@ -214,25 +173,15 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
       descriptiveAttributes = SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation.specification.content.descriptiveAttributes)
   }
 
-  /** The actual native pre-issue history selects exactly one original reader.
-    * Purpose names are only routing, not proof: each reader checks its complete
-    * canonical receipt and original input; errors do not fall back to another.
+  /** The issued work supplies its business query. Actual pre-issue history
+    * selects the source reader; it is not compared to another request copy.
     */
   private def _source_c(work: WorkflowInteraction[S.Request, Nothing], declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[D.Source] = for {
-    _ <- SplitPhaseReasoningInvocation.actorC(core, None)
     command <- SplitPhaseReasoningInvocation.queryC(work)
     completioncall = core.action.request.service.contains(I.completionOperation.service) &&
       Set(I.completionOperation.operation, SplitPhaseReasoningHumanDirection.completionOperation.operation)
         .contains(core.action.request.operation)
-    owning <- if (completioncall) SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog)
-      else if (core.action.request.service.contains(K.advanceOperation.service) && core.action.request.operation == K.advanceOperation.operation)
-        WorkflowJsonCommandRequest.commandArguments(core.action.request) match {
-          case List(Argument("arg1", wire: String, _)) => SplitPhaseAdvanceCommandJsonV1.decodeC(wire)
-          case _ => _invalid("advance query is absent")
-        }
-      else Consequence.securityPermissionDenied("Reasoning observation requires advance or its exact result Operation")
-    _ <- if (owning == command) Consequence.unit else _invalid("owning query crosses original issued context")
     current <- CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition, declaration.instances, declaration.continuations)
       .loadForCallC(declaration.configuration, work.handle.instanceIdentity, core).flatMap {
         case Some(value) => value.validateC
@@ -275,7 +224,6 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
           }
       }
     } yield source
-    _ <- SplitPhaseReasoningInvocation.actorC(core, Some(source.checkpoint.originalStart.command.participantIdentity))
   } yield source
 
   private def _storage_c(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,

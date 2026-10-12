@@ -1,6 +1,129 @@
 # GoalPhase ordered progression
 
-## Current result —1036 Human acknowledgement-loss recovery verified
+## Current C18 ordered Phase contract — 2026-10-12
+
+This section and the linked [normal host contract](normal-three-workflow-host.md)
+govern current behavior. The execution revision is
+`goal-phase-minimal-operation-v5`. Exactly four normal public Operations are
+`startGoalPhase`, `advanceGoalPhase`, `submitGoalPhaseWorkResult` and
+`submitGoalPhaseOrderedDecision`. Start/results require JSON string `arg1`;
+advance normally needs none, with only a genuinely necessary session/instance
+selector when context is ambiguous. There is no old Command `INPUT` carrier
+or Provided `inputType`. Start takes phaseIdentity/repositoryIdentity; the
+owning host resolves actual selected plan, participant and allocation.
+
+The current composite retains phase and orderedDecision roles, with thirteen
+real configurations. Pending is phase.Idle; whole closure is PhaseClosed.
+The old Step-close and closure-Human constituents/lifecycles/public operations,
+exclusive receipt/artifact/Command families and dedicated ABI copies are removed
+without a compatibility reader. A Step terminal is never whole-Phase completion.
+
+Normal advance issues implementation, inspects the owned candidate, performs
+selected managed checks, requests independent Step review, handles assigned
+repair/Human direction and commits the accepted Step. After all Steps it
+performs whole-Phase inspection/checks/review and calls the installed
+RepositorySync Operations for observed repository convergence before closing.
+The AI returns only its requested business outcome/summary/findings or Human
+choice/rationale, not a stage, command, saved Plan or execution-control echo.
+ResumeAssignedWork, Defer and Cancel do not replace the original Plan or refund
+its repair allowance.
+
+Five genuine Required capabilities cover implementation, repair, ordered Step
+review, whole-Phase review and ordered Human work. ReviewOrderedStep is the
+semantic Judgment with accept/repair/decision-needed alternatives.
+AdmitOrderedStepReview represents the EXISTING native result admission through
+internal GoalPhaseSemanticAdmissionService, not a new public verifier or
+additional runtime check.
+
+Work/Human result submission binds through CNCF's existing public work/Decision
+completion Operations with actual business codecs, ClosingPrograms and issued
+work/question readers. CNCF invokes its internal `completeC`; sm-workflow does
+not. The actual participant/target/effect scope and independent Human/reviewer
+evidence are consumed by their owning boundaries. Common state/CAS/grants/
+atomic writes are not copied into another gate. No source-line, origin,
+whole-declaration/history equality or unchanged-input certificate is required.
+
+Duplicate or competing answers are user errors, not a unique-winner, exact
+replay-response or complete-history guarantee. Intermediate restoration and
+acknowledgement-loss recovery are not current acceptance requirements. Avoid
+fatal file destruction and allow a NEW Start from the initial boundary;
+unsupported old executions keep historical records without silent migration.
+Direct public Operation executable specs cover normal behavior; command/skill
+wiring belongs to Phase 6 and does not require another CLI round trip here.
+
+C18 implementation/fixture migration is in progress and uncompiled/untested.
+The actual corrected CNCF public-binder dependency is required for its connected
+validation. Earlier counts below do not establish current Step/Phase acceptance;
+connected independent reviews and owned commits/final release remain open.
+
+## Historical chronology — nonnormative
+
+All following dated candidates, requirements and results describe their original
+inputs and cutoffs. They are retained as history, not current compatibility,
+source/provenance comparison, replay, intermediate-recovery or extra acceptance
+obligations. Their wording does not override the current contract above.
+
+## C10 legacy route retirement — 44 focused tests PASS
+
+The normal factory uses ThreeWorkflowHostParameters and the native three-service
+assembly. The unused GoalPhaseLauncherAssembly/managed Goal review, repair,
+registration, artifact and full-question Human graph and its dedicated fixtures
+are removed. Required test-only composition uses the existing common factory,
+not a compatibility adapter. Current normal Operation/ordered Human behavior
+remains on the [normal host contract](normal-three-workflow-host.md).
+The dated launcher/fixture observations below describe historical inputs and
+outcomes, not a currently supported entry or restoration/replay guarantee.
+No historical result is rewritten or promoted to current acceptance. Fresh C10
+registered request01 passed 44 tests in seven suites, SBT/wrapper zero and shared
+lock released; the parent admitted the current typed result and consumed permission.
+This bounded result is not full acceptance; remaining Phase 5.2 migration/review/release
+obligations stay open.
+
+### C8 focused validation — 57 PASS
+
+Fresh registered request01 completed eight suites,57 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Actual current codec/semantic consumers and the existing normal Goal/Repository/
+Direct Operation programs passed. No product input changed during execution;
+only documentation/evidence was updated after terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/result-consumers-validation-01-terminal.md).
+This supersedes the authored UNVERIFIED status above only for bounded C8
+validation, not connected Step/full Phase acceptance. Remaining migration,
+independent review, owned commits and final release/closure remain mandatory.
+
+## Current Phase 5.2 precedence — 2026-10-11
+
+Normal direct Operations, not the historical native CLI/Receiver fixture, own
+current acceptance. C6's47 passing focused/normal examples include two complete
+ordered Phase programs with actual installed RepositorySync child convergence;
+the separate old native example failed before child Start and the overall
+invocation failed. Raw evidence/history/consumed permission remain unchanged.
+C7 retires GoalPhaseNativeRunSpec and moves its required classification meaning
+into those existing normal programs. No compatibility route, replay/duplicate/
+lost-ack/intermediate-restoration guarantee or extra scenario is added.
+Current codecs and sole permission-owner contract are specified in
+[native retention](goal-phase-native-retention-applicability.md) and
+[WorkClassification](goal-phase-work-classification.md). C7 passes all52 tests
+in seven suites through fresh request01; typed result/consumed permission admitted,
+SBT/wrapper0 and lock released. [Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/goal-native-contract-validation-01-terminal.md).
+Complete Phase migration/review/release stays
+OPEN. All dated results and stronger old claims below are historical, not
+current acceptance conditions.
+
+### C8 actual result consumption — authored, UNVERIFIED
+
+Owning completion uses the actual issued WorkOrder business input and controller,
+not a regenerated assignment certificate. Review uses the controller's actual
+candidate/check references and the new semantic disposition/findings; it no
+longer compares copied Request targets. Ordered Human completion consumes the
+actual saved question without regenerated-question or work/result-copy checks.
+Existing normal two-Step programs submit minimal business answers with inert
+diagnostics and continue through real review, commit and installed child closure.
+Their C8 eight-suite validation is pending. No replay/restoration guarantee,
+new acceptance condition or bounded-slice completion is introduced.
+
+## Historical result —1036 Human acknowledgement-loss recovery verified
 
 Fresh1036 passed260/260 tests in31 completed GoalPhase/common-guard suites,
 zero failures/aborts/canceled/ignored/pending. Normal compilation dependencies

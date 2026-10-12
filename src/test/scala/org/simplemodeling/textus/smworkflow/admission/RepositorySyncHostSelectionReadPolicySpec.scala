@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class RepositorySyncHostSelectionReadPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncHostSelectionReadPolicy.*
@@ -28,7 +28,7 @@ final class RepositorySyncHostSelectionReadPolicySpec extends AnyWordSpec with M
     MigrationPolicy("v1"), RetentionPolicy("v1"), LeasePolicy("v1"),
     DeliveryConfiguration.SameStore(WorkflowStoreIdentity("repository-records")))
   private val workflow = RepositorySyncManagedFetch.Declaration(runtime, collection("instances"), collection("continuations"),
-    RepositorySyncStartInput("repository", "main", "origin", "main", "remote", "FULL_STATE", "policy-v1"),
+    RepositorySyncStartInput("repository", "main", "origin", "main", "remote", "FULL_STATE"),
     RepositoryGitRuntimePrograms.Target(Path.of("/owned/repository"), "main", "origin", "main", "/owned/remote.git"))
 
   "RepositorySync host selection composition" should {

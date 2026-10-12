@@ -13,7 +13,6 @@ import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseReasoningHumanDirection as H,
   SplitPhaseHumanDirectionAnswerContract as A, SplitPhaseHumanAnswerVerification as V,
   SplitPhaseHumanReasoningResolution as R, SplitPhasePlanningSnapshot as S,
@@ -23,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseReasoningHumanD
   * Canonical answer/native state and the complete deterministic successor are
   * one managed UoW; no decoded question/result is execution authority.
   * @since Oct. 7, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   final class Observed private[SplitPhaseManagedReasoningHumanCompletion] (
@@ -41,7 +40,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     evidence: V.EvidencePort, core: ActionCall.Core, observation: () => Consequence[Unit],
     delegate: ActionCall => Unit): Consequence[OperationResponse] = for {
     _ <- SplitPhaseReasoningInvocation.actorC(core, None)
-    issued <- _issued_c(submitted, declaration, catalog, core)
+    issued <- _issued_c(submitted.continuationId, declaration, catalog, core)
     command <- H.commandC(issued)
     plan <- _plan_c(command, declaration, catalog, core, Some(issued))
     storage <- H.storageC(declaration, catalog, core)
@@ -53,7 +52,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
         }
         calculated <- _calculate_c(plan, submitted, resolution)
         _ <- V.admitForCallC(V.AnswerContext(core.component.get.core.instanceId, plan.question, submitted,
-          plan.source.source.checkpoint.originalStart.command.participantIdentity), core, evidence).map(_ => ())
+          plan.source.source.checkpoint.originalStart.participantIdentity), core, evidence).map(_ => ())
         operation <- SplitPhaseDefinitionBinding.providedDefinition.providedOperations.find(o =>
           o.service == H.completionOperation.service && o.name == H.completionOperation.operation)
           .map(Consequence.success).getOrElse(_invalid("Provided answer Operation is absent"))
@@ -71,26 +70,26 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   /** Read query from the actual issued reasoning question. Never substitutes
     * an advance Core, a request-decoded source or an arbitrary locator.
     */
-  def completionQueryC(submitted: ContinuationResult[A.Answer],
+  def completionQueryC(identity: ContinuationIdentity,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    core: ActionCall.Core): Consequence[SplitPhaseAdvanceCommand] = for {
-    question <- _issued_c(submitted, declaration, catalog, core)
+    core: ActionCall.Core): Consequence[SplitPhaseAdvanceTarget] = for {
+    question <- _issued_c(identity, declaration, catalog, core)
     command <- H.commandC(question)
   } yield command
 
-  private def _issued_c(submitted: ContinuationResult[A.Answer],
+  private def _issued_c(identity: ContinuationIdentity,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core): Consequence[WorkflowInteraction[H.Input, Nothing]] = for {
     _ <- if (core.action.request.service.contains(H.completionOperation.service) &&
-        core.action.request.operation == H.completionOperation.operation && isReasoning(submitted.continuationId))
+        core.action.request.operation == H.completionOperation.operation && isReasoning(identity))
       Consequence.unit else _invalid("query does not belong to reasoning Human completion")
     storage <- H.storageC(declaration, catalog, core)
     questions <- storage.bindDecisionC(H.completionOperation, H.inputCodec)
-    question <- questions.loadC(submitted.continuationId)(using core.executionContext)
+    question <- questions.loadC(identity)(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("actual issued reasoning Human question is absent")))
   } yield question
 
-  def observeForAdvanceC(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def observeForAdvanceC(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[Observed] = for {
     plan <- _plan_c(command, declaration, catalog, core)
     storage <- H.storageC(declaration, catalog, core)
@@ -133,10 +132,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     bound <- {
       val codec = new WorkflowCompletionServiceOperation.Codec[A.Answer] {
         val resultTypeIdentity = A.resultType
-        def decodeC(request: Request) = WorkflowJsonCommandRequest.commandArguments(request) match {
-          case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, A.payloadCodec)
-          case _ => _invalid("answer requires one complete typed result")
-        }
+        def decodeC(request: Request) = Consequence.success(submitted)
         def encodeC(resume: ContinuationRuntime.Resume) = _invalid("answer acknowledgement needs committed readback")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[A.Answer],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
@@ -172,7 +168,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     }
   } yield bound
 
-  private def _plan_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _plan_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     selected: Option[WorkflowInteraction[H.Input, Nothing]] = None): Consequence[H.Plan] = for {
     plan <- H.sourceC(command, declaration, catalog, core)
@@ -185,7 +181,7 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
           .flatMap(_.map(Consequence.success).getOrElse(_invalid("actual issued reasoning Human question is absent")))
       } yield actual
     }
-    resolved <- H.selectIssuedC(plan, issued)
+    resolved <- H.consumeIssuedC(plan, issued)
   } yield resolved
 
   private def _calculate_c(plan: H.Plan, submitted: ContinuationResult[A.Answer], resolution: Option[R.Record]):

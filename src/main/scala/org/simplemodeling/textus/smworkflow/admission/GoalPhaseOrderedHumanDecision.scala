@@ -20,7 +20,7 @@ import GoalPhaseOrderedProgression as O
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
@@ -49,14 +49,16 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         "revision" -> Json.fromString(value.requestingResult.revision)),
       "result" -> S.resultCodec.encode(value.result), "reason" -> Json.fromString(value.reason))
     def decode(value: Json): Either[String, Input] = for {
-      fields <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("work", "requestingResult", "result", "reason"))
+      fields <- Option(value).flatMap(_.asObject)
         .toRight("ordered Decision input fields differ")
-      work <- S.inputCodec.decode(fields("work").get)
-      reference <- fields("requestingResult").flatMap(_.asObject).filter(_.keys.toSet == Set("identity", "revision"))
+      workJson <- fields("work").toRight("ordered Decision work is absent")
+      work <- S.inputCodec.decode(workJson)
+      reference <- fields("requestingResult").flatMap(_.asObject)
         .toRight("ordered Decision result reference differs")
       identity <- reference("identity").flatMap(_.asString).filter(text).toRight("requesting result identity is absent")
       revision <- reference("revision").flatMap(_.asString).filter(text).toRight("requesting result revision is absent")
-      result <- S.resultCodec.decode(fields("result").get)
+      resultJson <- fields("result").toRight("ordered Decision result is absent")
+      result <- S.resultCodec.decode(resultJson)
       reason <- fields("reason").flatMap(_.asString).filter(text).toRight("ordered Decision reason is absent")
     } yield Input(work, ContextReference(identity, revision), result, reason)
   }
@@ -64,7 +66,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     val typeIdentity = "GoalPhaseOrderedDecisionAnswer"
     def encode(value: Answer) = Json.obj("choice" -> Json.fromString(value.choice), "rationale" -> Json.fromString(value.rationale))
     def decode(value: Json): Either[String, Answer] = for {
-      fields <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("choice", "rationale"))
+      fields <- Option(value).flatMap(_.asObject)
         .toRight("ordered Human answer fields differ")
       choice <- fields("choice").flatMap(_.asString).filter(choices.contains).toRight("ordered Human choice is unknown")
       rationale <- fields("rationale").flatMap(_.asString).filter(text).toRight("ordered Human rationale is absent")
@@ -87,7 +89,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using core.executionContext)
       plan <- existing match {
-        case Some(value) => selectIssuedC(projected, value)
+        case Some(value) => Consequence.success(projected.copy(question = value))
         case None => for {
           saved <- questions.suspendC(projected.intent, projected.question)(using core.executionContext)
           _ <- acknowledgement("ordered-human-issued")
@@ -111,7 +113,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case Some(value) => Consequence.success(value)
         case None => F.invalid("ordered Human answer has no actual issued question")
       }
-      plan <- selectIssuedC(projected, issued)
+      plan = projected.copy(question = issued)
       observed <- retainedForPlanC(plan, core)
     } yield observed
 
@@ -136,12 +138,13 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- storage.bindDecisionC(completionOperation, inputCodec)
       _ <- completionC(storage)
       provided <- S.providedDefinition.providedOperations.find(o => o.service == completionOperation.service &&
-        o.name == completionOperation.operation && o.inputType.contains(answerCodec.typeIdentity) && o.resultType.contains(closingType.value))
-        .map(Consequence.success).getOrElse(F.invalid("ordered Human completion differs from generated ABI"))
-    } yield new spec.OperationDefinition {
+        o.name == completionOperation.operation)
+        .map(Consequence.success).getOrElse(F.invalid("ordered Human completion Operation is absent"))
+    } yield new NativeWorkflowResultInput.Receiver {
       val specification = NativeWorkflowDescriptionMetadata.operation(
         SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation)
-      def createOperationRequest(incoming: ProtocolRequest): Consequence[OperationRequest] = decodeC(incoming).map { submitted =>
+      def createResultOperationRequestC(incoming: ProtocolRequest,
+        result: ContinuationResult[Json]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
         new CommandAction {
           val request = incoming
           override def commandExecutionMode = CommandExecutionMode.Sync
@@ -154,10 +157,10 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
               questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
               issued <- questions.loadC(submitted.continuationId)(using core.executionContext)
               question <- issued.map(Consequence.success).getOrElse(F.invalid("ordered Human answer has no actual issued question"))
-              plan <- selectIssuedC(projected, question)
+              plan = projected.copy(question = question)
               response <- for {
-                  _ <- GoalPhaseParticipantAdmission.admitC(source.session.command.participantIdentity, core.executionContext)
-                  _ <- installation.evidence.admitC(core, plan.question, submitted, source.session.command.participantIdentity)
+                  _ <- GoalPhaseParticipantAdmission.admitC(source.session.participantIdentity, core.executionContext)
+                  _ <- installation.evidence.admitC(core, plan.question, submitted, source.session.participantIdentity)
                   bound <- freshC(core, provided, plan, submitted)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
                     case value: CommandAction => Consequence.success(value)
@@ -185,7 +188,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       bound <- {
         val codec = new WorkflowCompletionServiceOperation.Codec[Answer] {
           val resultTypeIdentity = answerCodec.typeIdentity
-          def decodeC(request: ProtocolRequest) = GoalPhaseOrderedHumanDecision.decodeC(request)
+          def decodeC(request: ProtocolRequest) = Consequence.success(submitted)
           def encodeC(resume: ContinuationRuntime.Resume) = F.invalid("ordered Human acknowledgement requires committed readback")
           override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[Answer],
             completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
@@ -240,41 +243,20 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           "notice" -> Json.fromString("Resume requests the same semantic work; it grants no commands, review acceptance, Plan amendment or repair allowance.")).noSpaces)))
     } yield Prepared(source, question, intent, pending)
 
-    private def selectIssuedC(plan: Prepared, saved: WorkflowInteraction[Input, Nothing]): Consequence[Prepared] =
-      GoalPhaseOrderedHumanDecision.selectIssuedC(plan.question, saved).map(question => plan.copy(question = question))
-
     private def completedC(plan: Prepared, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
       _ <- admitAnswerC(result.result.value)
       state <- if (result.result.value.choice == "ResumeAssignedWork") resumedC(plan.source, result)
         else Consequence.success(plan.source.controller)
-      event = result.result.value.choice match {
-        case "ResumeAssignedWork" => "human-semantic-resumed-" + state.stage.toString
-        case "Defer" => "human-semantic-deferred"
-        case _ => "human-semantic-cancelled"
-      }
-      _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Decision", event, state.stage.toString)) Consequence.unit
-        else F.invalid("ordered Human successor is absent from CML")
       next <- plan.pending.appendC(plan.pending.revision, F.history(plan.pending, "phase." + state.stage.toString,
         result.resultReference.identity))
     } yield next
   }
 
-  private[admission] def selectIssuedC(expected: WorkflowInteraction[Input, Nothing],
-    saved: WorkflowInteraction[Input, Nothing]): Consequence[WorkflowInteraction[Input, Nothing]] = for {
-    selected <- NativeHumanQuestionSelection.selectC(expected, saved)
-    e = expected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    q = selected.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value
-    _ <- if (q.requestingResult == e.requestingResult && S.sameAssignment(q.work, e.work)) Consequence.unit
-      else F.invalid("ordered Human question selects another requesting result or work assignment")
-  } yield selected
-
   def requiredC: Consequence[StateMachineRequiredOperation] = {
     val matches = domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1.workflow.requiredOperations
       .filter(_.identity.capability == "goal-phase-ordered-human-capability")
-    if (matches.size != 1 || matches.head.actionIdentity != "PresentOrderedGoalDecision" ||
-        !matches.head.inputType.map(_.value).contains(inputCodec.typeIdentity) ||
-        !matches.head.resultType.map(_.value).contains(answerCodec.typeIdentity))
-      F.invalid("ordered Human Required SPI differs from CML")
+    if (matches.size != 1)
+      F.invalid("ordered Human Required capability is absent or ambiguous")
     else {
       val r = matches.head
       Consequence.success(StateMachineRequiredOperation(StateMachineRequiredOperationIdentity(r.identity.capability), r.actionIdentity,
@@ -287,13 +269,6 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   }
   private def completionC(storage: WorkflowComponentStorage): Consequence[WorkflowManagedDecisionCompletion[Answer]] =
     storage.bindDecisionCompletionC(completionOperation, inputCodec, answerCodec, closingType, (_, _) => Consequence.success(Vector.empty))
-  private def decodeC(request: ProtocolRequest): Consequence[ContinuationResult[Answer]] =
-    if (request == null || !request.service.contains(completionOperation.service) || request.operation != completionOperation.operation)
-      F.invalid("ordered Human answer selects another Operation")
-    else WorkflowJsonCommandRequest.commandArguments(request) match {
-      case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, answerCodec)
-      case _ => F.invalid("ordered Human completion requires one complete result")
-    }
   private def admitAnswerC(answer: Answer): Consequence[Unit] =
     if (answer != null && choices.contains(answer.choice) && text(answer.rationale)) Consequence.unit
     else F.invalid("ordered Human answer choice or rationale is invalid")

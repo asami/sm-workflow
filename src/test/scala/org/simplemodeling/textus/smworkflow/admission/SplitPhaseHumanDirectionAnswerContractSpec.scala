@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanDirectionA
 /** Closed answer interpretation; generated payload compatibility is not consent.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
@@ -90,6 +90,12 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
             Then("only the original declared answer is produced, not a consent receipt or command permission")
             decoded shouldBe Right(answer)
           }
+          Given("the same answer with an unused diagnostic larger than the former complete-wire limit")
+          val annotated = original.mapObject(_.add("unusedDiagnostic", Json.fromString("x" * (A.maximumBytes + 1))))
+          When("the owning decoder consumes only the actual choice and reference")
+          val actual = A.payloadCodec.decode(annotated)
+          Then("large unused diagnostics do not change business meaning or create authority")
+          actual shouldBe Right(answer)
         }
       }
       "refuse malformed references, invalid UTF-8 values and oversized complete payloads" in {

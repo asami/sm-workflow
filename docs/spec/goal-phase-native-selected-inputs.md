@@ -1,5 +1,46 @@
 # Native GoalPhase selected inputs
 
+## Current Phase 5.2 C30 selected-input contract
+
+Normal ingress resolves the actual business input and host selection. The owning
+Start action passes those typed values directly to GoalPhaseNativeRun; it does
+not reconstruct a full Command, reload the selection or compare selected-input
+copies. Native identity uses the actual selection and invocation identities.
+
+Start loads the actual selected Plan once. Its consumer checks the selected
+allocation/participant and the Plan's Phase/repository against the requested
+business and host effect target, then captures the actual clean Git root,
+branch and base. The passive SelectedPlan stores only selectionIdentity,
+participantIdentity and plan; the unused stored input echo is removed.
+Its reader consumes the schema and typed data without a root-key or whole-body
+comparison, a repeated Plan precheck or a second selected-ID admission.
+Unused annotations are inert. Work consumes the actual Plan at its progression
+boundary; malformed dependencies cannot issue work. Start adds no ignored Plan precheck.
+
+Start creates and appends the new native instance. It does not reuse a prior
+Start receipt or guarantee duplicate/replay/intermediate recovery. Later work
+consumes the saved native Plan. To abandon an execution, select a NEW invocation
+and start at the beginning; do not overwrite unrelated existing files.
+
+The logical Persistence value carries only configuration and the instance/
+Continuation destinations. Storage readers do not require a catalog/definition
+copy. The actual service assembly still resolves its executable definition.
+Native storage, current principal, scoped effects and common state/CAS/grants
+remain at their consuming owners. The obsolete raw Start/CLI adapters and their
+exclusive tests are removed, not supported through compatibility.
+
+C30's changed reader/fixture inputs are authored, not yet validated. The current
+connected eight-suite invocation and focused closure remain to be executed.
+
+Historical C14 main/Test compiled and all67 tests in the declared nine suites passed through
+the fresh registered serial runner, SBT/wrapper0 and lock released.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/current-start-validation-01-terminal.md).
+Earlier results below retain their original inputs. Complete public contract
+migration and connected Step/Phase review/release remain required; this focused
+result is not Step or Phase acceptance.
+
+## Historical observations — nonnormative for Phase 5.2
+
 Status: fresh1040 passed264/264 tests in32 GoalPhase/common-guard suites with
 normal compilation dependencies and no failures/aborts/canceled/ignored/pending.
 Parent admitted actual current typed result, consumed permission,

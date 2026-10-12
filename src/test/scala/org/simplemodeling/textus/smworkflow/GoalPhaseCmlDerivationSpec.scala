@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * Owned producer JVM only; never starts SBT or mutates application sources.
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def execute(argv: Vector[String], log: Path): String = {
@@ -24,7 +24,7 @@ final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with Gi
     output
   }
   "Actual GoalPhase CML producer" should {
-    "derive legacy, ordered and mixed states without treating a closed Step as a closed Phase" in {
+    "derive each actual ordered frontier with only whole-Phase closure terminal" in {
       Given("the admitted Cozy producer runtime, current CML and independent combination probe")
       val cp = Files.readString(Path.of(sys.props.getOrElse("sm-workflow.cozy-runtime-classpath",
         "/Users/asami/src/dev2025/cozy/target/cozy.d/runtime-classpath.txt"))).trim
@@ -35,12 +35,12 @@ final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with Gi
       val javaExecutable = Path.of(sys.props("java.home"), "bin", "java").toString
       execute(Vector(javaExecutable, "-cp", cp, "scala.tools.nsc.Main", "-classpath", cp, "-d", classes.toString,
         "src/test/probes/GoalPhaseCmlDerivationProbe.scala"), work.resolve("compile.log"))
-      When("the real producer derives every reachable Step/Human/Phase combination")
+      When("the real producer derives every phase and retained ordered-Decision configuration")
       val output = execute(Vector(javaExecutable, "-cp", classes.toString + java.io.File.pathSeparator + cp,
         "cozy.modeler.GoalPhaseCmlDerivationProbe", "src/main/cozy/sm-workflow.cml"), work.resolve("probe.log"))
-      Then("the78 combinations are unique, all60 mixed cases remain decisions, and only whole-Phase closure derives PhaseClosed")
+      Then("the13 configurations are unique and only whole-Phase closure derives PhaseClosed")
       output.linesIterator.exists(_ ==
-        "accepted workflow=GoalPhaseWorkflow version=goal-phase-ordered-run-v4 combinations=78 mixedDecision=60 phaseClosure=1") shouldBe true
+        "accepted workflow=GoalPhaseWorkflow version=goal-phase-minimal-operation-v5 combinations=13 phaseClosure=1") shouldBe true
     }
   }
 }

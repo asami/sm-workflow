@@ -14,27 +14,24 @@ import org.goldenport.protocol.Argument
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartCommand
 import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedFetch as Fetch
 import RepositorySyncNativeConvergence as R
 import RepositorySyncManagedGitObservation as G
-import WorkflowManagedProcessExecution as E
 
 /** Owning Phase calls the actually installed child Start/advance Operations.
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
   final case class Input(instance: String, sourceRevision: String, plan: O.Plan,
     base: O.Snapshot, completed: Vector[O.ClosedStep], candidate: O.Snapshot,
     review: String, childInvocation: String)
-  final case class Authorization(reference: String, revision: Int, input: Input)
   trait AuthorityPort {
-    def loadForCallC(core: ActionCall.Core, input: Input): Consequence[Option[Authorization]]
+    def isGrantedC(core: ActionCall.Core, input: Input): Consequence[Boolean]
   }
   final case class Installation(declaration: Fetch.Declaration, selectionIdentity: String,
     selections: ProfileStartAdmission.CallScopedSelectionPort, authority: AuthorityPort,
@@ -58,87 +55,31 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       _ <- humanConflict.fold(Consequence.unit)(_.validateC)
     } yield ()
     def bindServiceC(params: ComponentCreate, acknowledge: String => Consequence[Unit]): Consequence[spec.ServiceDefinition] =
-      RepositorySyncManagedServiceAssembly.bindC(params, declaration, selections,
+      RepositorySyncManagedServiceAssembly.bindC(params, declaration,
         nativeProgression = true, nativeAcknowledgement = acknowledge, conflictPolicy = conflicts,
         validationPolicy = Some(validation), nativeReview = review, convergence = Some(convergence), humanConflict = humanConflict)
   }
-  final case class Payload(input: Input, childCommand: RepositorySyncStartCommand, childIdentity: String,
-    authority: String, authorityRevision: Int, result: Option[R.Result], childRevision: Option[String])
+  final case class Payload(input: Input, childIdentity: String,
+    result: Option[R.Result], childRevision: Option[String])
   final case class Result(plan: O.Plan, originalBase: O.Snapshot, completed: Vector[O.ClosedStep],
     reviewedCandidate: O.Snapshot, repository: R.Result, repositoryRevision: String)
   val resultCodec = new WorkflowResultJsonV1.PayloadCodec[Result] {
     val typeIdentity = "GoalPhaseAdvanceResult"
     def encode(value: Result): Json = value.asJson
-    def decode(value: Json): Either[String, Result] = for {
-      _ <- Either.cond(resultShape(value), (), "whole-Phase Terminal has undeclared or malformed fields")
-      cursor = value.hcursor
-      plan <- cursor.get[O.Plan]("plan").left.map(_.message)
-      base <- cursor.get[O.Snapshot]("originalBase").left.map(_.message)
-      completed <- cursor.get[Vector[O.ClosedStep]]("completed").left.map(_.message)
-      candidate <- cursor.get[O.Snapshot]("reviewedCandidate").left.map(_.message)
-      repositoryJson <- cursor.downField("repository").focus.toRight("missing repository result")
-      repository <- R.resultCodec.decode(repositoryJson)
-      revision <- cursor.get[String]("repositoryRevision").left.map(_.message)
-    } yield Result(plan, base, completed, candidate, repository, revision)
+    def decode(value: Json): Either[String, Result] =
+      Option(value).toRight("whole-Phase result is missing").flatMap(_.as[Result].left.map(_.message))
   }
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseAdvanceResult"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-repository-closure.v1"),
-      "payload" -> Json.obj("input" -> value.input.asJson,
-        "childCommand" -> RepositorySyncStartServiceOperation.commandJson(value.childCommand),
-        "childIdentity" -> Json.fromString(value.childIdentity), "authority" -> Json.fromString(value.authority),
-        "authorityRevision" -> Json.fromInt(value.authorityRevision), "result" -> value.result.asJson,
-        "childRevision" -> value.childRevision.asJson))
+    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-repository-closure.v2"),
+      "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      _ <- Either.cond(value.asObject.exists(_.keys.toSet == Set("schemaVersion", "payload")) &&
-        value.hcursor.get[String]("schemaVersion").contains("sm-workflow.goal-phase-native-repository-closure.v1"),
-        (), "Phase repository closure envelope differs")
-      fields <- value.hcursor.downField("payload").focus.flatMap(_.asObject)
-        .filter(_.keys.forall(Set("input", "childCommand", "childIdentity", "authority", "authorityRevision", "result", "childRevision")))
-        .toRight("Phase repository closure has undeclared fields")
-      _ <- Either.cond(fields("input").exists(inputShape), (), "Phase repository closure contains malformed nested fields")
-      cursor = Json.fromJsonObject(fields).hcursor
-      input <- cursor.get[Input]("input").left.map(_.message)
-      command <- fields("childCommand").flatMap(v => RepositorySyncStartServiceOperation.decodeCommandC(v.noSpaces).toOption)
-        .toRight("Phase repository closure child command is incomplete")
-      child <- cursor.get[String]("childIdentity").left.map(_.message)
-      authority <- cursor.get[String]("authority").left.map(_.message)
-      revision <- cursor.get[Int]("authorityRevision").left.map(_.message)
-      result <- fields("result").filterNot(_.isNull) match {
-        case None => Right(None)
-        case Some(value) => R.resultCodec.decode(value).map(Some(_))
-      }
-      childrevision <- cursor.get[Option[String]]("childRevision").left.map(_.message)
-    } yield Payload(input, command, child, authority, revision, result, childrevision)
+      wire <- Option(value).toRight("Phase repository closure is missing")
+      schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-repository-closure.v2", (), "Phase repository closure schema differs")
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+    } yield payload
   }
-
-  private def inputShape(value: Json): Boolean = value.asObject.exists(fields =>
-    fields.keys.forall(Set("instance", "sourceRevision", "plan", "base", "completed", "candidate", "review", "childInvocation")) &&
-      fields("plan").exists(GoalPhaseNativeWork.planShape) && fields("base").exists(GoalPhaseNativeWork.snapshotShape) &&
-      fields("candidate").exists(GoalPhaseNativeWork.snapshotShape) &&
-      fields("completed").flatMap(_.asArray).exists(_.forall(GoalPhaseNativeWork.closedShape)))
-  private def resultShape(value: Json): Boolean = value.asObject.exists(fields =>
-    fields.keys.forall(Set("plan", "originalBase", "completed", "reviewedCandidate", "repository", "repositoryRevision")) &&
-      fields("plan").exists(GoalPhaseNativeWork.planShape) && fields("originalBase").exists(GoalPhaseNativeWork.snapshotShape) &&
-      fields("reviewedCandidate").exists(GoalPhaseNativeWork.snapshotShape) &&
-      fields("completed").flatMap(_.asArray).exists(_.forall(GoalPhaseNativeWork.closedShape)))
-
-  /** Actual owning candidate/chain and invocation scope; no complete Plan or review-body witness. */
-  private[admission] def sameTarget(left: Input, right: Input): Boolean =
-    left != null && right != null && left.instance == right.instance && left.sourceRevision == right.sourceRevision &&
-      left.plan != null && right.plan != null && left.plan.identity == right.plan.identity && left.plan.revision == right.plan.revision &&
-      left.plan.phase == right.plan.phase && left.plan.repository == right.plan.repository &&
-      left.base == right.base && left.candidate == right.candidate && left.review == right.review &&
-      left.childInvocation == right.childInvocation && left.completed != null && right.completed != null &&
-      left.completed.map(s => s.step -> s.commit) == right.completed.map(s => s.step -> s.commit)
-
-  private[admission] def childTargetC(command: RepositorySyncStartCommand, payload: Payload,
-    participant: String, declaration: Fetch.Declaration): Consequence[Unit] = for {
-    identity <- Fetch.identityC(command)
-    _ <- if (Fetch.sameTarget(command.input, declaration.input) && command.participantIdentity == participant &&
-        command.idempotencyKey == payload.input.childInvocation && identity.value == payload.childIdentity) Consequence.unit
-      else F.invalid("saved child Start crosses its actual repository, participant or invocation")
-  } yield ()
 
   def inputC(from: InstanceRecord, controller: O.State): Consequence[Input] =
     if (controller.stage == O.Stage.PhaseClosing && controller.cursor == controller.plan.steps.size &&
@@ -164,12 +105,10 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         prepared <- prior match {
           case Some(value) => Consequence.success(Some(value))
           case None => for {
-            authority <- installation.authority.loadForCallC(core, input)
+            authority <- installation.authority.isGrantedC(core, input)
             saved <- authority match {
-              case None => Consequence.success(Option.empty[(InstanceRecord, Payload)])
-              case Some(value) => for {
-                _ <- if (value != null && id(value.reference) && value.revision > 0 && sameTarget(value.input, input)) Consequence.unit
-                  else F.invalid("repository closure authority crosses the whole selected Phase")
+              case false => Consequence.success(Option.empty[(InstanceRecord, Payload)])
+              case true => for {
                 actual <- G.observeC(core)
                 _ <- if (actual.head == input.candidate.head && actual.tree == input.candidate.tree &&
                   actual.branch == d.target.localBranch && actual.dirty.isEmpty) Consequence.unit
@@ -178,11 +117,12 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
                 _ <- if (entered.stage == O.Stage.PhaseClosing && domain.statemachine.GoalPhaseRunLifecycle.permits(
                   "PhaseClosing", "phase-closure-intent-saved", "PhaseClosing")) Consequence.unit
                   else F.invalid("repository closure intent is absent from CML")
-                command = RepositorySyncStartCommand(installation.declaration.input, installation.selectionIdentity,
-                  session.command.participantIdentity, input.childInvocation)
-                identity <- Fetch.identityC(command)
-                intent <- store.saveC("intent", from, Payload(input, command, identity.value,
-                  value.reference, value.revision, None, None), closed = false)
+                selection <- installation.selections.loadForCallC(installation.selectionIdentity, core).flatMap {
+                  case Some(value) => Consequence.success(value)
+                  case None => F.invalid("child repository host selection is missing")
+                }
+                identity <- Fetch.identityC(selection.selectionId, selection.idempotencyKey)
+                intent <- store.saveC("intent", from, Payload(input, identity.value, None, None), closed = false)
                 _ <- store.ackC("goal-repository-prepared")
               } yield Some(intent)
             }
@@ -193,21 +133,18 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
             "Review acceptance grants no RepositorySync Start or remote effects; the Phase remains open.")
           case Some((intent, payload)) => for {
             // Exact installed Operations, current caller/participant and same Subsystem.
-            identity <- Fetch.identityC(payload.childCommand)
-            childcommand = payload.childCommand
-            selectedinput = payload.input
             definition <- RepositorySyncDefinitionBinding.bindC
+            identity = InstanceIdentity(payload.childIdentity)
+            selectedinput = payload.input
             childStorage <- Fetch.bindC(installation.declaration, definition, core)
             instances <- childStorage.bindInstancesC()(using core.executionContext)
             existing <- instances.loadC(identity)(using core.executionContext)
             _ <- existing match {
-              case None => invokeC(core, Fetch.startOperation.operation, RepositorySyncStartServiceOperation.encodeCommand(childcommand)).map(_ => ())
-              case Some(_) => Fetch.sessionC(identity.value, installation.declaration, definition, core).flatMap(s =>
-                if (Fetch.sameTarget(s.command.input, childcommand.input) && s.command.selectionIdentity == childcommand.selectionIdentity &&
-                    s.command.participantIdentity == childcommand.participantIdentity && s.command.idempotencyKey == childcommand.idempotencyKey)
-                  Consequence.unit else F.invalid("selected child Start differs from its owning Phase invocation"))
+              case None => invokeC(core, Fetch.startOperation.operation, childStartInput(installation)).map(_ => ())
+              case Some(_) => Consequence.unit
             }
-            childWire <- invokeC(core, Fetch.advanceOperation.operation, RepositorySyncManagedServiceAssembly.encodeAdvance(identity.value))
+            childWire <- invokeC(core, Fetch.advanceOperation.operation,
+              Json.obj("instanceIdentity" -> Json.fromString(identity.value)).noSpaces)
             terminal <- if (io.circe.parser.parse(childWire).toOption.exists(_.hcursor.get[String]("kind").contains("TERMINAL")))
               WorkflowTerminalJsonV1.decodeC(childWire, R.resultCodec).map(Some(_))
               else Consequence.success(None)
@@ -218,22 +155,10 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
                   case t: WorkflowContinuation.Terminal[?] => Consequence.success(t.result.value.asInstanceOf[R.Result])
                   case _ => F.invalid("child has no actual typed Terminal")
                 }
-                child <- Fetch.sessionC(identity.value, installation.declaration, definition, core)
-                record = child.started.current
-                handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, record)
-                _ <- if (record.lifecycle == Lifecycle.Completed && record.suspension.isEmpty &&
-                    value.handle == handle && result.instanceIdentity == identity.value &&
-                    result.repositoryRoot == d.target.root.toString && result.localBranch == d.target.localBranch &&
-                    result.remote == d.target.remote && result.remoteBranch == d.target.remoteBranch)
-                  Consequence.unit else F.invalid("child Terminal differs from its actual completed native instance")
-                actual <- G.observeC(core)
-                remote <- G.remoteTipC(core, d.target.remoteBranch)
-                ancestry <- E.executeNativeGitC(core, E.NativeGitEffect.IsAncestor(selectedinput.candidate.head, result.tip))
-                _ <- G.requiredTextC(ancestry).flatMap(text => if (text.isEmpty) Consequence.unit
-                  else F.invalid("repository ancestry observation is malformed"))
-                _ <- if (actual.head == result.tip && actual.tree == result.tree && actual.dirty.isEmpty &&
-                  actual.trackingTip.contains(remote) && result.tip == remote && actual.counts.contains(G.Counts(0, 0)))
-                  Consequence.unit else F.invalid("child convergence is not the actual current native repository")
+                record <- instances.loadC(identity)(using core.executionContext).flatMap {
+                  case Some(value) => Consequence.success(value)
+                  case None => F.invalid("completed child repository instance is missing")
+                }
                 _ <- store.ackC("goal-repository-executed")
                 entered <- controller.acceptC(O.ClosureIntentSaved(selectedinput.candidate, store.intentIdentity))
                 closed <- entered.acceptC(O.PhaseRepositoryClosed(store.intentIdentity, selectedinput.base.head,
@@ -252,6 +177,18 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       } yield response
     }
   } yield wire
+
+  private def childStartInput(installation: Installation): String = {
+    val input = installation.declaration.input
+    Json.obj("input" -> Json.obj(
+      "repositoryIdentity" -> Json.fromString(input.repositoryIdentity),
+      "localBranch" -> Json.fromString(input.localBranch),
+      "trackingRemote" -> Json.fromString(input.trackingRemote),
+      "trackingBranch" -> Json.fromString(input.trackingBranch),
+      "remoteEndpointIdentity" -> Json.fromString(input.remoteEndpointIdentity),
+      "syncMode" -> Json.fromString(input.syncMode)),
+      "selectionIdentity" -> Json.fromString(installation.selectionIdentity)).noSpaces
+  }
 
   private def invokeC(core: ActionCall.Core, name: String, wire: String): Consequence[String] = for {
     service <- core.component.get.core.protocol.services.services.find(_.name == "RepositorySyncService")
@@ -285,12 +222,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     def loadC(key: String): Consequence[Option[(InstanceRecord, Payload)]] = adapter.loadRetainedC(reference(key))(using core.executionContext).flatMap {
       case None => Consequence.success(None)
       case Some(value) =>
-        val p = value.receipt.payload.value
-        if (sameTarget(p.input, input) && id(p.authority) &&
-          p.authorityRevision > 0)
-          childTargetC(p.childCommand, p, session.command.participantIdentity, d.repositoryClosure.get.declaration)
-            .map(_ => Some(value.receipt.next -> p))
-        else F.invalid("retained repository closure crosses its actual Phase/child invocation")
+        Consequence.success(Some(value.receipt.next -> value.receipt.payload.value))
     }
     def saveC(key: String, current: InstanceRecord, payload: Payload, closed: Boolean): Consequence[(InstanceRecord, Payload)] = for {
       _ <- if (current.currentProgression.contains(ProgressionReference("phase.PhaseClosing"))) Consequence.unit

@@ -10,7 +10,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Original fixture data is privately constructed at the actual typed Start
   * position, not the older semantic fixture's proposal.Awaiting position.
   * @since   Oct.  2, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 11, 2026
   */
 private[admission] object SplitPhaseObservedCheckpointFixture {
   val current = take(f.initial.appendC(initialRevision, f.instance.history.head.copy(
@@ -20,9 +20,9 @@ private[admission] object SplitPhaseObservedCheckpointFixture {
   def forBoundary(base: SplitPhaseExplicitPartitionFixture.Base, boundary: B.Validated,
     objectives: SplitPhaseExplicitObjectiveSelection.Records = SplitPhaseExplicitObjectiveSelection.Records(None, None, None)): K.Captured = {
     val proposal = boundary.shape.records.proposal
-    val command = f.command.copy(input = f.command.input.copy(proposalReference = Some(proposal.reference.identity)))
-    val raw = f.record.copy(source = base.source, proposal = Some(proposal), command = command, selection = f.selectionFor(command))
-    val start = take(T.prepareC(raw, raw.source, raw.proposal, raw.selection, f.catalog, f.configuration))
+    val raw = f.record.copy(source = base.source, proposal = Some(proposal),
+      input = f.input.copy(sourcePhaseIdentity = base.source.phase.value, proposalReference = Some(proposal.reference.identity)))
+    val start = take(T.prepareC(raw, raw.source, raw.proposal, f.catalog, f.configuration))
     val facts = C.Facts(boundary.shape.records, boundary.records, base.records,
       knownFacts.planning.copy(source = base.source.reference, authority = base.source.authority, objectives = objectives))
     val context = f.context.copy(facts = facts)

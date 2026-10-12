@@ -1,11 +1,9 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import cats.data.NonEmptyVector
 import io.circe.{Json, parser}
 import java.nio.file.Files
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
-import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.datastore.DataStore
@@ -14,21 +12,18 @@ import org.goldenport.cncf.subsystem.SubsystemEventStoreBootstrap
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.configuration.{Configuration as HostConfiguration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
-import org.goldenport.protocol.{Argument, Request as ProtocolRequest}
-import org.goldenport.protocol.spec as spec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseStartCommand, SplitPhaseStartInput}
 import SplitPhaseExplicitDurationCalibration.*
 import SplitPhaseExplicitCalibrationRecordJsonV1.Record
 import SplitPhaseCalibrationReadPolicy.Purpose
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -51,8 +46,6 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
   private val values = Map[String, ConfigurationValue](prefix + "store-name" -> ConfigurationValue.StringValue("workflow")) ++
     Purpose.values.map(p => prefix + p.key -> ConfigurationValue.StringValue(collection(p.toString).print))
   private def host(data: Map[String, ConfigurationValue]) = ResolvedConfiguration(HostConfiguration(data), ConfigurationTrace.empty)
-  private val command = SplitPhaseStartCommand(SplitPhaseStartInput("77", "PREVIEW", "authority", None, None, None),
-    "selection", "participant", "start-key")
 
   "Managed calibration loading" should {
     "compose only exact independent calibration purposes without unrelated role prerequisites" in {
@@ -74,7 +67,7 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
       take(reader).loadForCallC(record.reference, null) shouldBe a[Consequence.Failure[?]]
     }
 
-    "round-trip only closed independently referenced source data without constructing executable input" in {
+    "consume independently referenced source data and ignore unused diagnostics without constructing executable input" in {
       Given("separate current history and policy projections")
       val historyRaw = take(SplitPhaseCalibrationSourceJsonV1.encodeSnapshotC(snapshot))
       val policyRaw = take(SplitPhaseCalibrationSourceJsonV1.encodePolicyC(policy))
@@ -84,11 +77,14 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
       When("exact references and malformed projections are decoded")
       val history = take(SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(snapshot.reference, historyRaw))
       val observedPolicy = take(SplitPhaseCalibrationSourceJsonV1.decodePolicyC(policy.reference, policyRaw))
-      Then("complete data survives but extra fields and crossed revisions fail")
+      val withDiagnostic = take(SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(snapshot.reference,
+        SplitPhaseCalibrationSourceJsonV1.snapshotSchema + ":" + changed.noSpaces))
+      Then("complete data survives unused fields while missing consumed fields and crossed references fail")
       history shouldBe snapshot
       observedPolicy shouldBe policy
-      Vector(changed, missing).foreach(j => SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(snapshot.reference,
-        SplitPhaseCalibrationSourceJsonV1.snapshotSchema + ":" + j.noSpaces) shouldBe a[Consequence.Failure[?]])
+      withDiagnostic shouldBe snapshot
+      SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(snapshot.reference,
+        SplitPhaseCalibrationSourceJsonV1.snapshotSchema + ":" + missing.noSpaces) shouldBe a[Consequence.Failure[?]]
       SplitPhaseCalibrationSourceJsonV1.decodeSnapshotC(snapshot.reference.copy(revision = "2"), historyRaw)
         .shouldBe(a[Consequence.Failure[?]])
       SplitPhaseCalibrationSourceJsonV1.decodePolicyC(policy.reference, historyRaw) shouldBe a[Consequence.Failure[?]]
@@ -97,7 +93,7 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
         .shouldBe(a[Consequence.Failure[?]])
     }
 
-    "load and calculate through real Service CLI and pool reopen using only current managed readers" in {
+    "load and calculate through direct managed Operation calls and pool reopen" in {
       Given("canonical SQLite storage with a private data installer, not Start or human authority")
       val path = Files.createTempDirectory("smwf-calibration-read-").resolve("host.sqlite")
       val driftHistory = snapshot.copy(reference = Reference("drift-history", "1"))
@@ -146,8 +142,7 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
           retainedReader = Some(reader)
           var captured = Vector.empty[ActionCall.Core]
           var loaded = 0
-          val probe = new ProfileStartAdmission.CallScopedSelectionPort {
-            def loadForCallC(identity: String, capsule: ActionCall.Core): Consequence[Option[ProfileStartAdmission.Selection]] = {
+          val probe: ActionCall.Core => Consequence[Unit] = capsule => {
               captured :+= capsule
               final class Installer extends ProcedureActionCall {
                 val core = capsule
@@ -201,26 +196,14 @@ final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matche
                 reader.loadForCallC(record.reference, capsule.copy(component = None)) shouldBe a[Consequence.Failure[?]]
               }
               capsule.executionContext.dataStoreSpace.captureBinding() shouldBe prior
-              Consequence.success(None) // Probe never authorizes Start or instance creation.
-            }
+              Consequence.unit
           }
-          val entry = new SplitPhaseEntryAssessment.Port {
-            def loadSourceC(phase: String, authority: String) = Consequence.stateConflict("No Start source in this data probe")
-            def loadProposalC(reference: String) = Consequence.stateConflict("No Start proposal in this data probe")
-          }
-          val factory = new GoalPhaseConfiguredComponentFactory(Vector.empty, Vector.empty, (creation, parameters, resolved) => {
-            given ExecutionContext = resolved
-            SplitPhaseManagedStartAssembly.bindC(creation, workflow, catalog, probe, entry).map(operation =>
-              spec.ServiceDefinition("SplitPhaseService", spec.OperationDefinitionGroup(NonEmptyVector.of(operation))))
-          }).primaryFactory
+          val factory = ManagedCallProbeFixture.factory(probe)
           val built = take(factory.createPrimaryC(ComponentCreate(owner, ComponentOrigin.Builtin)))
           owner.add(built)
-          When(s"current Service and ordinary CLI dispatch load calibration in $mode mode")
-          val wire = SplitPhaseStartServiceOperation.encodeCommand(command)
-          owner.executeOperationResponse(ProtocolRequest.of(component = built.name, service = "SplitPhaseService", operation = "startSplitPhase",
-            arguments = List(Argument("arg1", wire)))) shouldBe a[Consequence.Failure[?]]
-          new CncfRuntime().executeCommandResponse(owner, Array(s"${built.name}/SplitPhaseService/startSplitPhase", "--json", wire))
-            .shouldBe(a[Consequence.Failure[?]])
+          When(s"direct managed Operation dispatch loads calibration in $mode mode")
+          take(owner.executeOperationResponse(ManagedCallProbeFixture.request(built.name)))
+          take(owner.executeOperationResponse(ManagedCallProbeFixture.request(built.name)))
           Then("only the current declared data path loads inputs without creating Workflow history")
           captured.size shouldBe 2
           captured.head.executionContext should not be theSameInstanceAs(captured.last.executionContext)

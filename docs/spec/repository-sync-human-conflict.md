@@ -2,7 +2,32 @@
 
 Date: 2026-10-06
 
-## Current result —1036 Human acknowledgement-loss recovery verified
+## Current Phase 5.2 precedence — 2026-10-11
+
+C11 retires the old Repository admission/full-envelope review graph and its
+direct full-command managed fixture. Current normal Human/conflict behavior is
+on ThreeWorkflowRepositoryOperationSpec through the normal three-service factory.
+Goal/Repository Start and advance use only their session-resolved current inputs;
+there is no standalone old command/identity-only decoder. The dated fixture and
+reopen/recovery examples below remain historical records, not current guarantees
+or passing tests. Fresh C11 validation completed seven suites with all49 tests
+passing through the registered shared-serial runner; this is bounded evidence,
+not Step/full-Phase acceptance.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/legacy-repository-validation-01-terminal.md).
+No new Human/effect verifier or restoration contract is introduced.
+
+Use the [normal three-workflow host](normal-three-workflow-host.md) and its
+current RepositorySync/ordered Human Operations. C10 retires the unused old
+Goal launcher/managed Human graph and the associated fixture programs discussed
+below. Their recorded evidence remains historical, not a supported alternate
+Operation contract or a mandatory acknowledgement-loss/replay/recovery feature.
+Current independent Human evidence and conflict materialization remain at their
+existing owners. C10 registered request01 passed 44 tests in seven suites,
+including normal Repository Operation behavior; SBT/wrapper zero, shared lock
+released, current typed result admitted by the parent. Complete public/internal/storage
+contract migration, connected review and release still remain in this same Goal.
+
+## Historical result —1036 Human acknowledgement-loss recovery verified
 
 Fresh1036 passed260/260 tests in31 completed GoalPhase/common-guard suites,
 zero failures/aborts/canceled/ignored/pending. Normal compilation dependencies

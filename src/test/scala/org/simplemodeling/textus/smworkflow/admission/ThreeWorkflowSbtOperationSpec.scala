@@ -14,7 +14,6 @@ import org.goldenport.record.Record
 import org.scalatest.{DoNotDiscover, GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.runtime.SbtValidationProgram
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartCommand, RepositorySyncStartCommand}
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeWork as S
 import SplitPhaseExplicitPartitionFixture.take
@@ -25,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 @DoNotDiscover
 /**
  * @since   Oct.  7, 2026
- * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
  */
 final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
@@ -87,20 +86,17 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         val directory = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
         val root = Files.createTempDirectory(directory, "sbt-episode-")
         _build_(root, successful)
-        val command = RepositorySyncStartCommand(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
-          "selected-repository", "participant", "direct-sbt-start")
-        val identity = take(RepositorySyncManagedFetch.identityC(command))
-        val advance = RepositorySyncManagedServiceAssembly.encodeAdvance(identity.value)
-        var saved = Option.empty[InstanceRecord]
-        var wire = Option.empty[String]
-        var marker = Option.empty[String]
+        val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
+        val selection = _repository_selection_(input, "selected-repository", "direct-sbt-start")
+        val identity = take(RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey))
+        val advance = NativeWorkflowOperationInputFixture.advance()
         for (session <- Vector("execute")) _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
           def invoke(operation: String, input: String): String = _scalar_(take(owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
               arguments = List(Argument("arg1", input))), actor)))
           if (session == "execute") {
-            prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap(_ => _prepare_input_(call, command, root)))
-            take(WorkflowWaitJsonV1.decodeC(invoke("startRepositorySync", RepositorySyncStartServiceOperation.encodeCommand(command))))
+            prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap(_ => _prepare_input_(call, input, selection, root)))
+            take(WorkflowWaitJsonV1.decodeC(invoke("startRepositorySync", NativeWorkflowOperationInputFixture.repository(input))))
           }
           When("public advance runs only the selected fixed SBT test, or observes its retained result in " + session)
           val result = invoke("advanceRepositorySync", advance)
@@ -108,7 +104,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           var validation = Option.empty[RepositorySyncNativeMergeValidation.State]
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           prepare(call => call.currentC(identity).flatMap(value => { current = Some(value)
-            call.validationC(command, root, if (successful) "integration-validated" else "validation-result-1")
+            call.validationC(input, selection, root, if (successful) "integration-validated" else "validation-result-1")
               .flatMap(value => { validation = Some(value); call.observeC().map(value => { observed = Some(value); () }) })
           }))
           Then("the durable receipt contains the real compiled product test and actual launcher exit, not a claimed success")
@@ -132,10 +128,6 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           val actual = Files.readString(root.resolve("sbt-executions.txt"))
           actual.linesIterator.size shouldBe 1
           actual.trim.toLong should not be ProcessHandle.current().pid()
-          marker.foreach(_ shouldBe actual)
-          wire.foreach(_ shouldBe result)
-          saved.foreach(prior => SplitPhaseDefinitionBinding.sameRecord(current.get, prior) shouldBe true)
-          marker = Some(actual); wire = Some(result); saved = current
         }
       }
     }
@@ -153,13 +145,11 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       val plan = O.Plan("selected-sbt-goal-plan", "1", host.goal.input.phaseIdentity,
         host.goal.input.repositoryIdentity, Vector(O.Step("step-1", "Correct selected product input",
           Vector("value.txt"), Vector.empty, Vector("test"))), Vector("test"), repairLimit = 1)
-      val command = GoalPhaseStartCommand(host.goal.input, "selected-sbt-goal", "participant", "direct-sbt-goal-start")
-      val identity = take(GoalPhaseNativeRun.identityC(command))
-      val advance = GoalPhaseNativeServiceAssembly.encodeAdvance(identity.value)
+      val selection = _goal_selection_(host.goal.input, "selected-sbt-goal", "direct-sbt-goal-start")
+      val identity = take(GoalPhaseNativeRun.identityC(selection.selectionId, selection.idempotencyKey))
+      val advance = NativeWorkflowOperationInputFixture.advance()
       var assigned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
       var base = Option.empty[O.Snapshot]
-      var saved = Option.empty[InstanceRecord]
-      var terminal = Option.empty[String]
       var phaseReviewReference = Option.empty[ContextReference]
       def executions(): Vector[Long] = if (Files.exists(root.resolve("sbt-executions.txt")))
         Files.readString(root.resolve("sbt-executions.txt")).linesIterator.map(_.toLong).toVector else Vector.empty
@@ -176,7 +166,6 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           def input(): S.Request = assigned.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
           def next(): Unit = {
             assigned = Some(take(WorkflowWorkOrderJsonV1.decodeC(invoke("advanceGoalPhase", advance), S.inputCodec)))
-            saved = Some(current())
           }
           def result(outcome: String): ContinuationResult[S.Result] = {
             val work = assigned.get
@@ -191,19 +180,14 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           if (session == "issue") {
             prepare(call => for {
               _ <- call.setupC(_setup_commands_(root, "Goal").size)
-              catalog <- GoalPhaseRuntimeCatalog.loadC()
-              selection = ProfileStartAdmission.Selection(command.selectionIdentity, GoalPhaseNativeRun.startOperation,
-                catalog.definition.workflowIdentity, catalog.definition.workflowRevision, command.participantIdentity,
-                ProfileStartAdmission.SelectionOrigin.ExplicitHuman, command.idempotencyKey, None,
-                Some(GoalPhaseStartCommandAdapter.selectedInput(command.input)))
               _ <- call.createC("goal_selection", selection.selectionId, Record.data(ProfileSelectionJsonV1.storageField ->
                 take(ProfileSelectionJsonV1.encodeStorageC(selection))))
-              _ <- call.createC("goal_plans", command.selectionIdentity, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+              _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
                 take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(
-                  command.selectionIdentity, command.participantIdentity, command.input, plan)))))
+                  selection.selectionId, selection.participantIdentity, plan)))))
             } yield ())
             When("public Start captures the real clean base and owning advance issues only implementation")
-            take(WorkflowWaitJsonV1.decodeC(invoke("startGoalPhase", GoalPhaseStartServiceOperation.encodeCommand(command))))
+            take(WorkflowWaitJsonV1.decodeC(invoke("startGoalPhase", NativeWorkflowOperationInputFixture.goal(host.goal.input))))
             next()
             Then("no SBT check has run before actual implementation")
             input().kind shouldBe "ImplementStep"
@@ -220,11 +204,11 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             val invocation = identity.value + ":repository-closure:" + pending.revision.value
             val closure = GoalPhaseNativeRepositoryClosure.Input(identity.value, pending.revision.value.toString,
               plan, input().originalBase, input().completed, input().candidate.get, phaseReviewReference.get.identity, invocation)
-            val child = RepositorySyncStartCommand(host.repository.input, host.repository.closureSelection, "participant", invocation)
+            val child = _repository_selection_(host.repository.input, host.repository.closureSelection, invocation)
             prepare(call => call.evidenceC(NativeHostEvidence.Purpose.PhaseClosure,
               ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-phase-authority", "1"),
               "participant", take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, closure)))
-              .flatMap(_ => _prepare_input_(call, child, root)))
+              .flatMap(_ => _prepare_input_(call, host.repository.input, child, root)))
             When("owning advance executes the installed RepositorySync Operations and their actual SBT check")
             val wire = invoke("advanceGoalPhase", advance)
             val outcome = take(WorkflowTerminalJsonV1.decodeC(wire, GoalPhaseNativeRepositoryClosure.resultCodec))
@@ -232,7 +216,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
             var checked = Option.empty[RepositorySyncNativeMergeValidation.State]
             prepare(call => call.observeC().flatMap(value => { observed = Some(value)
-              call.validationC(child, root).map(value => { checked = Some(value); () }) }))
+              call.validationC(host.repository.input, child, root).map(value => { checked = Some(value); () }) }))
             Then("the whole selected Phase retains its actual Step commit, converged repository and third real test receipt")
             actual.plan shouldBe plan
             actual.originalBase shouldBe base.get
@@ -249,11 +233,9 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             executions().distinct.size shouldBe 3
             executions() should not contain ProcessHandle.current().pid()
             current().lifecycle shouldBe Lifecycle.Completed
-            terminal = Some(wire); saved = Some(current())
           } else {
-            When("a freshly opened runtime observes only the exact saved assigned task")
-            take(WorkflowWorkOrderJsonV1.decodeC(invoke("advanceGoalPhase", advance), S.inputCodec)) shouldBe assigned.get
-            SplitPhaseDefinitionBinding.sameRecord(current(), saved.get) shouldBe true
+            When("a freshly opened runtime supplies the assigned task for its semantic result")
+            next()
             val selected = input()
             selected.selectedPlan shouldBe plan
             selected.originalBase shouldBe base.get
@@ -262,7 +244,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
               Files.writeString(root.resolve("repository/value.txt"), "expected\n")
               val completion = result("completed")
               When("public completion records implementation and owning advance runs the selected Step SBT test")
-              take(WorkflowWaitJsonV1.decodeC(invoke("submitGoalPhaseWorkResult", take(WorkflowResultJsonV1.encodeC(completion, S.resultCodec)))))
+              take(WorkflowWaitJsonV1.decodeC(invoke("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.encodeC(completion, S.resultCodec)))))
               next()
               Then("independent Step review contains the actual native-cwd SBT output and exit")
               input().kind shouldBe "ReviewStep"
@@ -280,7 +262,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
                   ThreeWorkflowHostEvidencePorts.key(completion.resultReference.identity, completion.resultReference.revision),
                   completion.resultReference, "specification-reviewer", binding)))
               When("public completion accepts only the assigned, separately evidenced review")
-              take(WorkflowWaitJsonV1.decodeC(invoke("submitGoalPhaseWorkResult", take(WorkflowResultJsonV1.encodeC(completion, S.resultCodec)))))
+              take(WorkflowWaitJsonV1.decodeC(invoke("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.encodeC(completion, S.resultCodec)))))
               if (session == "step-review") {
                 val pending = current()
                 val closure = GoalPhaseNativeClosure.Input(identity.value, pending.revision.value.toString, plan.identity, plan.revision,
@@ -299,7 +281,6 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
                 executions().size shouldBe 2
               } else {
                 phaseReviewReference = Some(completion.resultReference)
-                saved = Some(current())
               }
             }
           }

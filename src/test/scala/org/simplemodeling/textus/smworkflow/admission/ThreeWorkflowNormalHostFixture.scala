@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
 /** Normal host-file data only; no private runtime enrollment or injected ports.
   * Real-effects scenarios must additionally declare their owned process plan.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[admission] object ThreeWorkflowNormalHostFixture {
   def collection(name: String): String = EntityCollectionId("smworkflow", "cli", name).print
@@ -46,7 +46,7 @@ private[admission] object ThreeWorkflowNormalHostFixture {
         GoalPhaseNativeValidation.Policy("phase-checks", 1, Vector(GoalPhaseNativeValidation.Check("test", 1))),
         GoalPhaseNativeReview.Policy("independent-review", 1),
         GoalPhaseNativeClosure.Policy("step-commits", 1, Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1)))),
-      Repository(RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "owned-upstream", "FULL_STATE", "v1"),
+      Repository(RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "owned-upstream", "FULL_STATE"),
         "selected-repository-closure", RepositorySyncNativeMergeValidation.Policy("repository-checks", 1,
           "required", "Run the selected product check", Vector(RepositorySyncNativeMergeValidation.Check("test", 1))),
         RepositorySyncNativeConflictInput.Policy(Set("docs/phase.md")), RepositorySyncNativeMergeReview.Policy("merge-review", 1)))

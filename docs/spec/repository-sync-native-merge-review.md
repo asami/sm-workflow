@@ -1,5 +1,23 @@
 # Native independent pending-merge review
 
+## Current Phase 5.2 C16 — consume the assigned review and its result
+
+Owning advance chooses assigned work or actual completion by completion presence,
+not equality of pending/current records. Source lookup consumes the actual typed
+issued input without repeated codec/state certificates or eager Git preconditions.
+Native capture owns real review context; result submission performs no Git effect;
+final authorized convergence owns current native effect preconditions. Independent
+review evidence and meaningful result admission remain at their actual owners.
+
+Current normal scenarios consume the actual returned assignment and assert real
+checks/files/convergence, without whole-record/history/response replay equality.
+No verifier, acceptance stamp or recovery guarantee replaces the removed checks.
+C16 passed fresh focused validation6 suites45 tests, SBT/wrapper0/lockreleased;
+[terminal evidence](../../.codex-workflow/phases/PHASE-5.2/normal-consumer-proof-validation-01-terminal.md). Public contract
+migration and connected Step/Phase review/release remain unfinished.
+
+## Historical native-review observations — nonnormative for Phase 5.2
+
 2026-10-08 Phase5 source correction: CML/application Request now omits validation/
 review policy identity and revision markers; v2 writes actual selected meaning,
 v1 reads discard obsolete markers, and Request/Result reads use declared typed

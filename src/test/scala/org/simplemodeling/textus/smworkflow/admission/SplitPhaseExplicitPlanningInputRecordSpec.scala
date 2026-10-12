@@ -7,14 +7,13 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPlanningInputJsonV1 as J,
   SplitPhaseExplicitPartitionComputation as E, SplitPhaseExplicitPartitionContext as C,
-  SplitPhaseExplicitProposalPrecheck as P, SplitPhaseExplicitBoundaryValidation as B,
-  SplitPhaseExplicitObjectiveSelection as O, SplitPhaseExplicitCandidateProjection as Q}
+  SplitPhaseExplicitProposalPrecheck as P, SplitPhaseExplicitBoundaryValidation as B}
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhasePartitionContextFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class Row(purpose: J.Purpose, raw: String, recover: String => Boolean,
@@ -66,25 +65,6 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
   private def payload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject) =
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
 
-  // Mutate actual declared data, not source text or a canonical encoder image.
-  // The incoming-by-child object is a dynamic typed map, not a closed record.
-  private def _malformed(value: Json, openmap: Boolean = false): Vector[Json] = value.asObject match {
-    case Some(fields) =>
-      val direct = if (openmap) Vector.empty else
-        Vector(value.mapObject(_.add("undeclared", Json.True))) ++
-          fields.keys.toVector.map(key => value.mapObject(_.remove(key)))
-      direct ++ fields.toVector.flatMap { case (key, child) =>
-        _malformed(child, key == "incomingByChild").map(changed => value.mapObject(_.add(key, changed)))
-      }
-    case None => value.asArray match {
-      case Some(items) => items.indices.toVector.flatMap(index =>
-        _malformed(items(index)).map(changed => Json.fromValues(items.updated(index, changed))))
-      case None if value.isNull => Vector.empty
-      case None if value.isString => Vector(Json.True, Json.Null)
-      case None => Vector(Json.fromString("wrong-type"), Json.Null)
-    }
-  }
-
   "Independent typed planning input records" should {
     "round-trip every purpose with its own exact reference without context data" in {
       Given("nine independent source records and explicit optional absences")
@@ -106,49 +86,62 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
       planning.downField("objectives").downField("cost").focus shouldBe Some(Json.Null)
     }
 
-    "close envelope nested fields and explicit optional absence for all nine purposes" in {
-      Given("valid independent typed records")
-      When("foreign schema, purpose, unknown and missing nested data arrive")
-      Then("raw decoding refuses them without legacy fallback")
-      rows.foreach { r =>
+    "consume current typed rows without refusing inert fields or absent optional data" in {
+      Given("independent records with annotations or malformed required values")
+      val all = rows
+      val cases = all.map { r =>
         val original = json(r.raw)
-        val changed = Vector(
-          original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
-          original.mapObject(_.add("purpose", Json.fromString("foreign"))),
-          original.mapObject(_.add("admitted", Json.True)),
-          payload(original)(_.remove("reference")),
+        val unused = Vector(original.mapObject(_.add("admitted", Json.True)),
           payload(original)(_.add("digest", Json.fromString("legacy"))),
-          payload(original)(o => o.add("reference", o("reference").get.mapObject(_.add("claim", Json.True)))),
+          payload(original)(o => o.add("reference", o("reference").get.mapObject(_.add("claim", Json.True)))))
+        val invalid = Vector(original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
+          original.mapObject(_.add("purpose", Json.fromString("foreign"))),
+          payload(original)(_.remove("reference")),
           payload(original)(o => o.add("reference", o("reference").get.mapObject(_.remove("revision")))))
-        changed.foreach(v => r.valid(wire(v)) shouldBe false)
+        (r, unused, invalid)
+      }
+      val planning = all.last
+      When("the existing raw decoder consumes the selected purpose and typed values")
+      val accepted = cases.flatMap { case (r, unused, _) => unused.map(v => r.recover(wire(v))) }
+      val refused = cases.flatMap { case (r, _, invalid) => invalid.map(v => r.valid(wire(v))) }
+      val optional = planning.recover(wire(payload(json(planning.raw))(_.remove("allocations"))))
+      Then("inert data and optional absence are accepted, but missing consumed data and crossed purposes fail")
+      accepted.foreach(_ shouldBe true)
+      refused.foreach(_ shouldBe false)
+      optional shouldBe true
+      all.foreach { r =>
         r.valid("not-json") shouldBe false
         r.valid(null) shouldBe false
       }
-      val planning = rows.last
-      planning.valid(wire(payload(json(planning.raw))(_.remove("allocations")))) shouldBe false
-      J.encodePlanningC(facts.planning.copy(objectives = null)).isSuccess shouldBe false
     }
 
-    "refuse malformed sums enums primitives and oversized UTF-8 data at the raw boundary" in {
+    "consume decoder-supported durations while refusing unknown variants and oversized UTF-8 data" in {
       Given("known and unresolved duration rows plus a typed ownership enum")
       val estimates = json(take(J.encodeEstimatesC(facts.partition.estimates)))
       val items = estimates.hcursor.downField("payload").downField("items").focus.get.asArray.get
       val invalidDurations = Vector(Json.obj("kind" -> Json.fromString("Unknown")),
-        Json.obj("kind" -> Json.fromString("Known"), "minutes" -> Json.fromString("260")),
-        Json.obj("kind" -> Json.fromString("Known"), "minutes" -> Json.fromInt(260), "reason" -> Json.fromString("extra")))
-      When("malformed durations, enums and byte limits are checked")
-      Then("the storage boundary rejects structural deviations")
-      invalidDurations.foreach { duration =>
-        val variant = payload(estimates)(_.add("items", Json.fromValues(items.updated(0,
-          items.head.mapObject(_.add("duration", duration))))))
-        J.decodeEstimatesC(facts.partition.estimates.reference, wire(variant)).isSuccess shouldBe false
-      }
+        Json.obj("kind" -> Json.fromString("Known"), "minutes" -> Json.fromString("not-a-minute")))
+      val annotated = payload(estimates)(_.add("items", Json.fromValues(items.updated(0,
+        items.head.mapObject(_.add("duration", Json.obj("kind" -> Json.fromString("Known"),
+          "minutes" -> Json.fromString("260"), "reason" -> Json.fromString("unused"))))))))
       val ownership = json(take(J.encodeOwnershipC(facts.boundary.ownership)))
-      J.decodeOwnershipC(facts.boundary.ownership.reference,
-        wire(payload(ownership)(_.add("timing", Json.fromString("Unknown"))))).isSuccess shouldBe false
       val huge = facts.partition.estimates.copy(items = facts.partition.estimates.items.updated(1,
         facts.partition.estimates.items(1).copy(duration = E.Duration.Unresolved("語" * (J.maximumPayloadBytes / 3 + 1)))))
-      J.encodeEstimatesC(huge).isSuccess shouldBe false
+      When("the existing type decoder consumes durations and enums within the storage bound")
+      val accepted = J.decodeEstimatesC(facts.partition.estimates.reference, wire(annotated))
+      val refused = invalidDurations.map { duration =>
+        val variant = payload(estimates)(_.add("items", Json.fromValues(items.updated(0,
+          items.head.mapObject(_.add("duration", duration))))))
+        J.decodeEstimatesC(facts.partition.estimates.reference, wire(variant))
+      }
+      val wrongenum = J.decodeOwnershipC(facts.boundary.ownership.reference,
+        wire(payload(ownership)(_.add("timing", Json.fromString("Unknown")))))
+      val oversized = J.encodeEstimatesC(huge)
+      Then("unknown variants and unreadable values fail, while supported numeric strings and inert annotations recover the same duration")
+      take(accepted) shouldBe facts.partition.estimates
+      refused.foreach(_.isSuccess shouldBe false)
+      wrongenum.isSuccess shouldBe false
+      oversized.isSuccess shouldBe false
       rows.foreach(r => r.valid(J.schema + ":" + "語" * (J.maximumPayloadBytes / 3 + 1)) shouldBe false)
     }
 
@@ -182,40 +175,5 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
       take(readboundary) shouldBe boundary
     }
 
-    "reject recursively malformed declared data including populated optional allocations and objective policies" in {
-      Given("Spec: docs/spec/split-phase-planning-input-applicability.md; Rule: R1; Example: E2; all nine purposes and populated optional planning subrecords")
-      val source = baseData.source
-      val objectives = O.Records(
-        Some(O.CostPolicy(O.CostPolicyReference("cost", "1"), source.reference, source.authority,
-          O.ProfileIdentity("deep"), O.ProfileIdentity("routine"), Long.MaxValue, 1L, 300L)),
-        Some(O.DemandRecord(O.DemandReference("demands", "1"), source.reference, source.authority,
-          Vector(O.ItemDemand(P.WorkItemIdentity("item-0"), O.Demand.ExpensiveReasoning),
-            O.ItemDemand(P.WorkItemIdentity("item-1"), O.Demand.Unresolved("unknown")),
-            O.ItemDemand(P.WorkItemIdentity("item-2"), O.Demand.SettledExecution)))),
-        Some(O.OverheadPolicy(O.OverheadPolicyReference("overhead", "1"), source.reference, source.authority, 1L, 2L, 3L, 4L, 5L)))
-      val allocations = Q.Records(Q.AllocationReference("allocations", "1"), source.reference, source.authority,
-        Vector(Q.Allocation(Vector(0), P.ProposalReference("allocated", "1"),
-          B.OwnershipReference("allocated-owner", "1"), B.HandoffPlanReference("allocated-handoff", "1"))))
-      val planning = facts.planning.copy(allocations = Some(allocations), objectives = objectives)
-      val populated = row(J.Purpose.Planning, planning, J.encodePlanningC,
-        raw => J.decodePlanningC(planning.reference, raw),
-        raw => J.decodePlanningC(planning.reference.copy(identity = "foreign"), raw),
-        raw => J.decodePlanningC(planning.reference.copy(revision = "2"), raw))
-      val independent = rows.init :+ populated
-      When("unknown or missing record fields and wrong primitive types arrive at every populated nested position")
-      val results = independent.map { r =>
-        val original = json(r.raw)
-        val malformed = _malformed(original.hcursor.downField("payload").focus.get)
-        r -> malformed.map(changed => r.valid(wire(original.mapObject(_.add("payload", changed)))))
-      }
-      Then("every structural deviation is refused, while complete optional data and Long values remain readable")
-      populated.recover(populated.raw) shouldBe true
-      results.foreach { case (r, valid) =>
-        withClue(r.purpose.toString) {
-          valid.nonEmpty shouldBe true
-          valid.forall(value => !value) shouldBe true
-        }
-      }
-    }
   }
 }

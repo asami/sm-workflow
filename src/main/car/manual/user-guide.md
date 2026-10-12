@@ -89,8 +89,11 @@ val response = owner.executeOperationResponseInContext(
 ```
 
 `owner`, `component` and `actor` are the actual configured Subsystem, component
-and resolved caller. `advanceWire` is the complete typed JSON command, not a
-shell command. An unbound `ExecutionContext.create()` is not authentication or
+and resolved caller. `advanceWire` contains only necessary current session/target
+selectors, not a Command envelope or shell command. Omit `arguments` entirely
+when the actual host session has one applicable target. Start instead supplies
+its genuine business object under `input` in required `arg1` JSON.
+An unbound `ExecutionContext.create()` is not authentication or
 an effect grant. Direct dispatch uses normal ActionCall, commit and after-commit
 response processing without launching a CLI merely to invoke the Operation.
 
@@ -108,7 +111,10 @@ issued state. Supply session context and only a request selector when actual
 issued generations are ambiguous. The three Split semantic completions also
 resolve their assigned destination; return `result.value` without a destination
 echo. Other actual artifact/result/evidence references remain required business
-data. A historical full-envelope client retains its original wire contract.
+data. Semantic evidence is consumed once; it is not echoed in outer execution
+evidence as a comparison copy. Actual independently supplied execution/Human/
+reviewer evidence keeps its distinct purpose. No historical full-envelope client
+contract is supported.
 Never add a cursor, argv, winning candidate, storage plan or permission to an
 advance command. Do not invent a human answer or accepted review.
 
@@ -147,8 +153,8 @@ the Operation caller is direct rather than a CLI process.
 ## Continue normal work or start a NEW execution
 
 Open a fresh configured runtime and use the same session context, adding a target
-selector only for genuine ambiguity. Historical identity-based clients still use
-their saved Workflow identity and original context. Do not reinstall instances
+selector only for genuine ambiguity. Removed identity-only or full-envelope
+interfaces are not alternatives. Do not reinstall instances
 or fabricate history. Normal pending work and completed outcomes are consumed
 through the public interface. Return each requested answer once; duplicate or
 competing submissions are caller misuse, without an identical-response guarantee.

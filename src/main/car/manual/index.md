@@ -76,8 +76,10 @@ user-approved and its native commit/closure outcome is recorded separately. This
 claim CLI/skill integration or the excluded replay/recovery guarantees.
 An actual invocation session requires no duplicate field.
 Otherwise supply `sessionIdentity` in a `sm-workflow.session-operation.v1` object.
-Start also supplies `input` as the business command object or its existing encoded
-string. Advance needs no instance/revision/snapshot/context echo. Several actual
+Start also supplies `input` as the actual business object, not an encoded legacy
+command. Its `arg1` JSON string is required; advance `arg1` is optional when the
+host supplies a session and a single target resolves. No issued envelope,
+revision or snapshot echo is requested. Several actual
 targets need only `instanceIdentity`; Split needs `contextIdentity` only when
 several owned partition contexts exist. Workflow never chooses the newest row.
 
@@ -91,7 +93,14 @@ need the actual result/artifact or independently supplied evidence reference in
 when supplied by the actual host. `requestIdentity` selects among genuinely
 ambiguous current pending requests. Completed generations are not scanned to
 reject an ordinary answer or to provide delayed-answer/replay guarantees.
-Supported historical identity-only/full-envelope input remains available.
+There is no supported identity-only/full-envelope or prefixed command alternative.
+Unused obsolete fields are ignored without selecting an old route. Phase 5.3 owns
+the later business-type and session-contract redesign; Phase 6 owns client wiring.
+
+Current definitions are `goal-phase-minimal-operation-v5`,
+`split-phase-minimal-operation-v13` and `repository-sync-minimal-operation-v11`.
+Their Provided descriptors declare the actual nominal INPUT types. The sole
+public JSON carrier is `arg1`, not a second generated Command body.
 
 Association is retained in the native initial instance row, not a separate
 post-Start index. Allocation alone is not successful Start and grants no effect
@@ -144,8 +153,9 @@ host-definition and fifteen provided Operation input/response contracts.
 
 ## Failure and recovery
 
-The three public advance decoders consume their declared schema and actual
-instance/context reference fields. Unused diagnostics and extra stage, cursor,
+The three public advance routes consume session context and only genuinely needed
+instance/context selectors. They have no old prefixed Command decoder.
+Unused diagnostics and extra stage, cursor,
 argv, receipt or permission-looking fields are ignored, never accepted as
 controls. Missing/wrongly typed required fields or incompatible schemas fail
 conversion. Logical references stay exact without trimming or speculative
@@ -171,13 +181,13 @@ certificate. Duplicate answers and intermediate recovery remain outside the
 component guarantee.
 Older SplitPhase data, including `split-phase-public-advance-v5` and
 `split-phase-human-terminal-v8` and `split-phase-reasoning-demand-v9`, is not silently rebound to the current
-`split-phase-selected-application-v12` definition. The additive planning assembly
+`split-phase-minimal-operation-v13` definition. The additive planning assembly
 installs paired native reasoning issue/result/successor handlers. The normal
 factory now selects the native three-workflow connection; declaration alone
 still does not grant execution or prove a supported outcome.
 The reasoning request carries the Workflow-assigned result identity/revision.
-Normal reduced submission resolves it internally; only a historical full-envelope
-client copies that reference. Neither client selects a destination or replacement
+Normal result submission resolves it internally; no full-envelope client alternative
+is supported. The client selects neither a destination nor a replacement
 planning/demand reference. The application
 request uses its closed v2 schema without a v1 fallback.
 

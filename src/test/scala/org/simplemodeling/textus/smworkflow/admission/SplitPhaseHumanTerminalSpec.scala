@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanTerminal a
 /** Passive terminal values retain facts; decoding does not authorize progression.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 11, 2026
   */
 final class SplitPhaseHumanTerminalSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
@@ -38,7 +38,7 @@ final class SplitPhaseHumanTerminalSpec extends AnyWordSpec with Matchers with G
         T.payloadCodec.typeIdentity shouldBe "SplitPhaseAdvanceResult"
       }
     }
-    "reject undeclared outcomes, schemas and authority metadata at every record boundary" in {
+    "ignore unused terminal metadata while refusing unsupported actual outcome or schema" in {
       Given("one valid terminal payload with incompatible external variants")
       val original = _take(T.encodeC(_result(T.Outcome.Blocked)))
       val paths = Vector(Vector.empty[String], Vector("payload"), Vector("payload", "context"), Vector("payload", "answer"))
@@ -49,7 +49,13 @@ final class SplitPhaseHumanTerminalSpec extends AnyWordSpec with Matchers with G
       val alternatives = Vector("WAIT", "DEFERRED", "blocked", " CANCELLED", "")
         .map(value => original.hcursor.downField("payload").downField("outcome").withFocus(_ => Json.fromString(value)).top.get)
       val schema = original.mapObject(_.add("schemaVersion", Json.fromString("unsupported")))
-      (metadata ++ alternatives :+ schema).foreach { value =>
+      When("unused metadata accompanies the actual terminal facts")
+      val annotated = metadata.map(T.payloadCodec.decode)
+      Then("only the original terminal meaning is consumed, with no authority granted")
+      annotated.foreach(_ shouldBe Right(_result(T.Outcome.Blocked)))
+
+      Given("unsupported actual outcomes or schema")
+      (alternatives :+ schema).foreach { value =>
         When("an incompatible terminal payload is decoded")
         val decoded = T.payloadCodec.decode(value)
         Then("no supported terminal data or authority is reconstructed")

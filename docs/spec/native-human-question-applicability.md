@@ -1,5 +1,82 @@
 # Native Human Question Applicability
 
+## C9 current Human consumers — focused validation 47 PASS
+
+This section supersedes the historical selector, copy-comparison, old-format
+and replay obligations below. It implements the existing Phase 5.2 policy;
+it adds no repair allowance or guarantee.
+
+Repository, Split Scope and Split Reasoning consume the actual issued question
+selected by the owning Operation. They do not regenerate a question or compare
+whole native records, routes, presentation or copied result targets. Scope
+interpretation consumes the owning source's actual work-item ranges; Reasoning
+interpretation consumes its actual pending unknown items. Neither requires
+the interpretation's references to be repeated in outer result evidence.
+Independent host Human evidence still belongs to its existing ingress owner.
+
+Current conflict input/answer readers decode typed business fields once and
+ignore inert command/grant/path annotations. Conflict mode and worktree are
+current required fields: there is no missing-field legacy normalizer. Semantic
+conflict IDs/text, scope ranges and reasoning coverage remain business inputs,
+not saved-copy certificates. Input decoders do not bound the entire wire merely
+because unused diagnostics are large.
+
+Current E1/E2 cover Goal input/answer consumption; E5/E6 cover current Repository
+typed fields and inert annotations. Former E3/E4 copy-selector examples are
+retired, not replaced by a new verifier. Normal Direct/Repository Operation
+programs consume these results without routing/evidence echoes. Repeatability,
+winner uniqueness, complete history and intermediate recovery are not guarantees.
+
+Fresh registered request02 completed eight suites,47 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Request01's compiler failure remains history: the existing reasoning generator
+was moved before a pure for-enumerator assignment without restoring a check.
+All five old alias calls in
+`SplitPhaseManagedPlanningCheckpointSpec` are now removed: the redundant
+postimage/selector/correlation matrix is retired, and genuine frontier fixture
+reading uses the existing passive payload codec. No deleted production helper
+is restored as compatibility. The same invocation compiled the affected caller;
+its entire legacy fixture was not separately executed. No product input changed
+while either invocation was live. C8's 57 PASS below remains historical evidence.
+[C9 terminal evidence](../../.codex-workflow/phases/PHASE-5.2/human-consumers-validation-02-terminal.md).
+This is bounded C9 validation, not connected Step/Phase acceptance. Full migration,
+independent review, owned commits and final release/closure remain open.
+
+### C8 focused validation — 57 PASS
+
+Fresh registered request01 completed eight suites,57 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Actual current codec/semantic consumers and the existing normal Goal/Repository/
+Direct Operation programs passed. No product input changed during execution;
+only documentation/evidence was updated after terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/result-consumers-validation-01-terminal.md).
+This supersedes C8's historical authored UNVERIFIED status only for bounded C8
+validation, not connected Step/full Phase acceptance. Remaining migration,
+independent review, owned commits and final release/closure remain mandatory.
+
+## Current Phase 5.2 precedence — 2026-10-11
+
+C8 source/spec correction passed its bounded validation. This section supersedes the
+historical contracts below; it adds no policy, repair allowance or guarantee.
+
+Goal ordered Human completion uses the actual issued question selected by the
+owning Operation. It does not regenerate an expected Decision or compare work,
+requesting-result, presentation, route or requirement copies. E1/E2 now cover
+the current input/answer consumers: inert root/nested annotations are accepted;
+actual missing/mistyped business fields and unknown choices cannot supply a
+meaningful Decision. Independent Human evidence, participant and managed state
+remain at their existing owners, not a parallel comparison gate.
+
+The C9 section above records subsequent authored Repository/Split migration.
+Historical copy/shape refusals, optional old-format readers and replay/restoration
+claims are not current acceptance guarantees or compatibility permission.
+Normal Operation verification is the connection surface. Full Phase migration/
+review/release remains open. Original nine/history/consumed3/3 and frames remain unchanged.
+
+## Historical observations — nonnormative for Phase 5.2
+
 Status: source correction; executable examples UNVERIFIED.
 
 This follows the already adopted Phase 5 removal policy. It adds no policy,

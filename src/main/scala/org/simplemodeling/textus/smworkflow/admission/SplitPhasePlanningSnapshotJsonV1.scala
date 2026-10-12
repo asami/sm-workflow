@@ -14,9 +14,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   SplitPhaseExplicitPartitionComputation as E, SplitPhaseExplicitObjectiveSelection as O}
 
 /**
- * Closed passive storage payload, not a decoded executable planning outcome.
+ * Passive typed storage payload, not a decoded executable planning outcome.
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
   val schema = "sm-workflow.split-phase-planning-snapshot.v1"
@@ -83,129 +83,43 @@ private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
 
   val payloadCodec: PayloadCodec[R.Record] = new PayloadCodec[R.Record] {
     val typeIdentity = "SplitPhasePlanningSnapshot"
-    def encode(value: R.Record): Json = jsonC(value).toOption.getOrElse(
+    def encode(value: R.Record): Json = _json_c(value).toOption.getOrElse(
       throw new IllegalArgumentException("Invalid or oversized SplitPhase planning snapshot"))
-    def decode(value: Json): Either[String, R.Record] = decodeJsonC(value).toOption
-      .toRight("Invalid or oversized SplitPhase planning snapshot")
+    def decode(value: Json): Either[String, R.Record] =
+      _guarded(_bounded_c(value).flatMap(_ => _decode_payload_c(value))).toOption
+        .toRight("Invalid or oversized SplitPhase planning snapshot")
   }
 
-  def encodeC(record: R.Record): Consequence[String] = jsonC(record).map(json => prefix + json.noSpaces)
+  def encodeC(record: R.Record): Consequence[String] = _json_c(record).map(json => prefix + json.noSpaces)
   def decodeC(raw: String): Consequence[R.Record] =
-    if (raw == null || bytes(raw) > maximumPayloadBytes || !raw.startsWith(prefix))
-      invalid("encoding is unsupported or oversized")
-    else parser.parse(raw.substring(prefix.length)).fold(_ => invalid("JSON is invalid"), decodeJsonC)
+    if (raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(prefix))
+      _invalid("encoding is unsupported or oversized")
+    else parser.parse(raw.substring(prefix.length)).fold(
+      _ => _invalid("JSON is invalid"), json => _guarded(_decode_payload_c(json)))
 
-  private def jsonC(record: R.Record): Consequence[Json] = guarded {
-    for {
-      json <- renderC(record)
-      _ <- if (_record_shape(json.hcursor.downField("payload").focus.get)) Consequence.unit
-        else invalid("declared data is incomplete")
-      _ <- boundedC(json)
-    } yield json
-  }
-  private def decodeJsonC(json: Json): Consequence[R.Record] = guarded {
-    for {
-      _ <- boundedC(json)
-      root <- json.asObject.filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .map(Consequence.success).getOrElse(invalid("envelope fields differ"))
-      _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit else invalid("schema differs")
-      _ <- if (_record_shape(root("payload").get)) Consequence.unit else invalid("declared nested fields differ")
-      record <- root("payload").get.as[R.Record].fold(_ => invalid("raw shape differs"), Consequence.success)
-    } yield record
-  }
-  private def renderC(record: R.Record): Consequence[Json] = guarded {
-    Consequence.success(Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> record.asJson))
+  private def _json_c(record: R.Record): Consequence[Json] = _guarded {
+    if (record == null) _invalid("data is absent")
+    else {
+      val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> record.asJson)
+      _bounded_c(json).map(_ => json)
+    }
   }
 
-  // Closed wire structure, not a regenerated-body certificate or frontier admission.
-  // Meaning is consumed by the actual Workflow routing/restoration/document owners.
-  private def _object(fields: (String, Json => Boolean)*): Json => Boolean = value =>
-    value.asObject.exists(o => o.keys.toSet == fields.map(_._1).toSet &&
-      fields.forall { case (key, rule) => o(key).exists(rule) })
-  private def _array(rule: Json => Boolean): Json => Boolean = value => value.asArray.exists(_.forall(rule))
-  private def _optional(rule: Json => Boolean): Json => Boolean = value => value.isNull || rule(value)
-  private def _variant(cases: (String, Json => Boolean)*): Json => Boolean = value =>
-    value.asObject.exists(o => o.size == 1 && cases.exists { case (key, rule) => o(key).exists(rule) })
-  private val _string: Json => Boolean = _.isString
-  private val _number: Json => Boolean = _.isNumber
-  private val _boolean: Json => Boolean = _.isBoolean
-  private val _decimal: Json => Boolean = _.asString.exists(_.matches("0|[1-9][0-9]*"))
-  private val _identity = _object("value" -> _string)
-  private val _identities = _array(_identity)
-  private val _reference = _object("identity" -> _string, "revision" -> _string)
-  private val _key = _object("cutAfterIndices" -> _array(_number))
-  private val _keys = _array(_key)
-  private def _input(purpose: SplitPhaseExplicitPlanningInputJsonV1.Purpose): Json => Boolean =
-    payload => SplitPhaseExplicitPlanningInputJsonV1.hasDeclaredFields(purpose, payload)
-  import SplitPhaseExplicitPlanningInputJsonV1.Purpose
-  private val _proposal_records = _object("source" -> _input(Purpose.Source),
-    "inventory" -> _input(Purpose.Inventory), "proposal" -> _input(Purpose.Proposal))
-  private val _handoff = _object("identity" -> _identity, "producingChild" -> _identity,
-    "receivingChild" -> _identity, "kind" -> _string, "input" -> _string, "action" -> _string,
-    "output" -> _string, "owner" -> _identity, "invalidationReason" -> _string, "authority" -> _reference)
-  private val _scope = _object("original" -> _handoff, "producingItems" -> _identities, "receivingItems" -> _identities)
-  private val _gap = _object("original" -> _handoff, "producingItems" -> _identities, "receivingItems" -> _identities,
-    "producingOwners" -> _identities, "receivingOwners" -> _identities)
-  private val _local = _object("original" -> _handoff, "phase" -> _identity,
-    "producingItems" -> _identities, "receivingItems" -> _identities)
-  private val _repository = _object("phase" -> _identity, "ownedItems" -> _identities, "repositories" -> _identities)
-  private val _numbering = _object("reason" -> _string, "records" -> _proposal_records)
-  private val _built = _object("key" -> _key, "proposal" -> _input(Purpose.Proposal),
-    "ownership" -> _input(Purpose.Ownership), "handoffs" -> _input(Purpose.Handoffs), "localHandoffs" -> _array(_local))
-  private val _projection_candidate = _variant("BuiltView" -> _built,
-    "SemanticView" -> _object("key" -> _key, "gaps" -> _array(_gap)),
-    "DecisionView" -> _object("key" -> _key, "reason" -> _string,
-      "repositories" -> _array(_repository), "numbering" -> _optional(_numbering)))
-  private val _projection = _variant("Projected" -> _object("candidates" -> _array(_built)),
-    "Requirements" -> _object("candidates" -> _array(_projection_candidate),
-      "scopes" -> _array(_scope), "decisionKeys" -> _keys))
-  private val _unresolved = _object("identity" -> _identity, "reason" -> _string)
-  private val _range = _object("firstIndex" -> _number, "endExclusive" -> _number,
-    "ownedItems" -> _identities, "expectedMinutes" -> _number)
-  private val _candidate = _object("key" -> _key, "children" -> _array(_range))
-  private val _partition = _variant(
-    "Enumerated" -> _object("evaluatedCount" -> _number, "rejectedByCeiling" -> _number, "candidates" -> _array(_candidate)),
-    "SemanticRequired" -> _object("items" -> _array(_unresolved), "afterItems" -> _identities),
-    "NoAdmissible" -> _object("reason" -> _string, "evaluatedCount" -> _number, "rejectedByCeiling" -> _number))
-  private val _rebalance = _object("shortChild" -> _identity, "neighbor" -> _identity, "movedItems" -> _identities,
-    "resultingShortMinutes" -> _number, "resultingNeighborMinutes" -> _number, "blockedByHandoff" -> _boolean)
-  private val _merge = _object("shortChild" -> _identity, "neighbor" -> _identity,
-    "combinedMinutes" -> _number, "blockedByHandoff" -> _boolean)
-  private val _review = _object("rebalanceAttempts" -> _array(_rebalance),
-    "mergeAttempts" -> _array(_merge), "rejection" -> _optional(_string))
-  private val _status = _variant("Accepted" -> _object(), "EvidenceRequired" -> _object(),
-    "Rejected" -> _object("reason" -> _string))
-  private val _assessment = _object("key" -> _key, "boundaryProof" -> _optional(_key),
-    "shortReview" -> _optional(_review), "status" -> _status)
-  private val _ranked = _object("key" -> _key,
-    "score" -> _object("distanceFromSixHoursMinutes" -> _number, "subFiveHourChildren" -> _number))
-  private val _admission = _variant(
-    "EvidenceRequired" -> _object("assessments" -> _array(_assessment), "pendingKeys" -> _keys, "rejectedKeys" -> _keys),
-    "NoAdmissible" -> _object("assessments" -> _array(_assessment), "rejectedKeys" -> _keys),
-    "DurationRanked" -> _object("assessments" -> _array(_assessment), "eligible" -> _array(_ranked),
-      "durationLeaderKeys" -> _keys, "rejectedKeys" -> _keys))
-  private val _cost = _object("key" -> _key, "potentialSavingUnits" -> _decimal, "materialSavingUnits" -> _decimal)
-  private val _overhead = _object("key" -> _key, "childCount" -> _number, "handoffCount" -> _number,
-    "validationRunCount" -> _number, "totalUnits" -> _decimal)
-  private val _handoff_authority = _object("handoff" -> _handoff,
-    "producingItems" -> _identities, "receivingItems" -> _identities)
-  private val _authority = _object("sourceAuthority" -> _reference, "handoffs" -> _array(_handoff_authority))
-  private val _objective = _variant(
-    "RecordRequired" -> _object("required" -> _string, "leaderKeys" -> _keys, "costScores" -> _array(_cost)),
-    "ReasoningDemandRequired" -> _object("items" -> _array(_unresolved), "leaderKeys" -> _keys),
-    "Selected" -> _object("key" -> _key, "stage" -> _string,
-      "costScores" -> _array(_cost), "overheadScores" -> _array(_overhead)),
-    "HumanDecisionRequired" -> _object("leaderKeys" -> _keys, "authorities" -> _array(_authority),
-      "costScores" -> _array(_cost), "overheadScores" -> _array(_overhead)))
-  private val _record_shape = _object("selection" -> SplitPhaseExplicitPartitionContextJsonV1.hasDeclaredFacts,
-    "partition" -> _partition, "projection" -> _optional(_projection),
-    "admission" -> _optional(_admission), "objective" -> _optional(_objective))
-  private def boundedC(json: Json): Consequence[Unit] =
-    if (json != null && bytes(prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.unit
-    else invalid("payload exceeds its UTF-8 bound")
-  private def bytes(text: String): Int = text.getBytes(UTF_8).length
-  private def invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase planning snapshot " + reason)
-  private def guarded[T](body: => Consequence[T]): Consequence[T] = try body catch {
-    case NonFatal(_) => invalid("data cannot be encoded or decoded")
+  // Each ingress bounds its own representation; typed decoding runs only once.
+  private def _decode_payload_c(json: Json): Consequence[R.Record] = for {
+    version <- json.hcursor.get[String]("schemaVersion").fold(
+      _ => _invalid("schema is missing"), Consequence.success)
+    _ <- if (version == schema) Consequence.unit else _invalid("schema differs")
+    record <- json.hcursor.get[R.Record]("payload").fold(
+      _ => _invalid("raw data is malformed"), Consequence.success)
+  } yield record
+
+  private def _bounded_c(json: Json): Consequence[Unit] =
+    if (json != null && _bytes(prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.unit
+    else _invalid("payload exceeds its UTF-8 bound")
+  private def _bytes(text: String): Int = text.getBytes(UTF_8).length
+  private def _invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase planning snapshot " + reason)
+  private def _guarded[T](body: => Consequence[T]): Consequence[T] = try body catch {
+    case NonFatal(_) => _invalid("data cannot be encoded or decoded")
   }
 }

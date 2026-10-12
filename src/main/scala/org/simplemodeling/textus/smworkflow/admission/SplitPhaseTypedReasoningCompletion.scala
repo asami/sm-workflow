@@ -47,24 +47,19 @@ private[smworkflow] object SplitPhaseTypedReasoningCompletion {
     } yield new Pending(prepared, current)
 
   def admitC(pending: Pending, submitted: ContinuationResult[S.Judgment]): Consequence[Plan] =
-    if (pending == null || submitted == null || submitted.result == null || submitted.result.value == null ||
-        submitted.evidence == null || submitted.evidence.references == null)
+    if (pending == null || submitted == null || submitted.result == null || submitted.result.value == null)
       _invalid("requires constructed pending work and the requested Judgment")
     else {
       val assignment = pending.prepared.request.result
       for {
-        _ <- if (submitted.resultReference == ContextReference(assignment.identity, assignment.revision) &&
-            submitted.result.value.evidence != null && submitted.result.value.evidence.forall(e =>
-              e != null && submitted.evidence.references.contains(ContextReference(e.identity, e.revision))))
-          Consequence.unit else _invalid("crosses the assigned reply or its execution evidence")
         // Workflow-owned stable data versions. No caller-selected references,
         // candidate allocator, source hash or replacement authority is involved.
-        references = submitted.result.value.decision match {
+        references <- Consequence.success(submitted.result.value.decision match {
           case S.Decision.Enriched => S.ResolutionReferences(
             Some(W.DataReference(assignment.identity + ":planning", assignment.revision)),
             Some(O.DemandReference(assignment.identity + ":demands", assignment.revision)))
           case _ => S.ResolutionReferences(None, None)
-        }
+        })
         prepared = pending.prepared
         semantic <- S.admitC(prepared, assignment, references, submitted.result.value)
         mechanical <- semantic match {

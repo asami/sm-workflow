@@ -10,7 +10,6 @@ import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowManagedMe
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.goldenport.configuration.ResolvedConfiguration
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopePlanningCheckpointPreparation as C,
   SplitPhaseScopePlanningCheckpointJsonV1 as J, SplitPhaseManagedScopeProjectionCheckpoint as S,
   SplitPhasePlanningCheckpointPreparation as K,
@@ -22,7 +21,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopePlanningCh
   * the Subsystem's canonical DataStoreSpace and common pool, with no local DB.
   *
   * @since Oct.  5, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedScopePlanningCheckpoint {
   final class Observed private[SplitPhaseManagedScopePlanningCheckpoint] (
@@ -34,7 +33,7 @@ private[smworkflow] object SplitPhaseManagedScopePlanningCheckpoint {
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     observation: () => Consequence[Unit]) {
 
-    def loadForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    def loadForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       scope <- _scope_c(core)
       result <- _read_c(command, scope, core)
     } yield result
@@ -45,7 +44,7 @@ private[smworkflow] object SplitPhaseManagedScopePlanningCheckpoint {
       result <- _read_c(command, scope, core)
     } yield result
 
-    private def _read_c(command: SplitPhaseAdvanceCommand, scope: S.Port, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    private def _read_c(command: SplitPhaseAdvanceTarget, scope: S.Port, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       prior <- scope.loadForCallC(command, core).flatMap {
         case Some(value) => Consequence.success(value)
         case None => _invalid("actual scope publication is absent")
@@ -53,7 +52,7 @@ private[smworkflow] object SplitPhaseManagedScopePlanningCheckpoint {
       result <- _load_c(prior, core)
     } yield result
 
-    def executeForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Observed] = for {
+    def executeForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Observed] = for {
       scope <- _scope_c(core)
       prior <- scope.loadForCallC(command, core).flatMap {
         case Some(value) => Consequence.success(value)

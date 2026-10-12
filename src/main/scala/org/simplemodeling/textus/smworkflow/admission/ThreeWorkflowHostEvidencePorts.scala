@@ -5,16 +5,16 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.workflow.{ContextReference, WorkflowResultJsonV1}
+import org.goldenport.cncf.workflow.{ContextReference}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import NativeHostEvidence.{Purpose, Observed}
+import NativeHostEvidence.Purpose
 
 /** Adapters for the existing independent ports. Actual independently issued
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHostEvidence.Reader) {
   import ThreeWorkflowHostEvidencePorts.*
@@ -64,41 +64,30 @@ private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHos
     } yield ()
   }
   val stepClosure: GoalPhaseNativeClosure.AuthorityPort = new GoalPhaseNativeClosure.AuthorityPort {
-    def loadForCallC(core: ActionCall.Core, input: GoalPhaseNativeClosure.Input) = for {
+    def isGrantedC(core: ActionCall.Core, input: GoalPhaseNativeClosure.Input) = for {
       binding <- stepClosureBindingC(core, input)
       actual <- reader.loadC(core, Purpose.StepClosure, key(input.instance, input.sourceRevision),
         binding)
-      revision <- integerRevisionC(actual)
-    } yield actual.zip(revision).map { (o, revision) => GoalPhaseNativeClosure.Authorization(o.evidence.reference, revision, input) }
+    } yield actual.nonEmpty
   }
   val phaseClosure: GoalPhaseNativeRepositoryClosure.AuthorityPort = new GoalPhaseNativeRepositoryClosure.AuthorityPort {
-    def loadForCallC(core: ActionCall.Core, input: GoalPhaseNativeRepositoryClosure.Input) = for {
+    def isGrantedC(core: ActionCall.Core, input: GoalPhaseNativeRepositoryClosure.Input) = for {
       binding <- phaseClosureBindingC(core, input)
       actual <- reader.loadC(core, Purpose.PhaseClosure, key(input.instance, input.sourceRevision),
         binding)
-      revision <- integerRevisionC(actual)
-    } yield actual.zip(revision).map { (o, revision) => GoalPhaseNativeRepositoryClosure.Authorization(o.evidence.reference, revision, input) }
+    } yield actual.nonEmpty
   }
   val convergence: RepositorySyncNativeConvergence.AuthorityPort = new RepositorySyncNativeConvergence.AuthorityPort {
-    def admitC(core: ActionCall.Core, originalCommand: Json, target: RepositoryGitRuntimePrograms.Target,
+    def admitC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext, target: RepositoryGitRuntimePrograms.Target,
       effect: RepositorySyncNativeConvergence.Effect) = for {
-      selection <- originalCommand.hcursor.get[String]("selectionIdentity").fold(
-        _ => Consequence.stateConflict("Repository effect has no original selected command"), Consequence.success)
-      invocation <- originalCommand.hcursor.get[String]("idempotencyKey").fold(
-        _ => Consequence.stateConflict("Repository effect has no original invocation"), Consequence.success)
-      binding <- repositoryEffectBindingC(core, originalCommand, target, effect)
-      actual <- reader.loadC(core, Purpose.RepositoryEffect, key(selection, invocation, effect.toString),
+      binding <- repositoryEffectBindingC(core, context, target, effect)
+      actual <- reader.loadC(core, Purpose.RepositoryEffect, key(context.selectionIdentity, context.invocationIdentity, effect.toString),
         binding)
       _ <- if (actual.nonEmpty) Consequence.unit
         else Consequence.securityPermissionDenied("Repository effect has no independently issued host authorization")
     } yield ()
   }
 
-  private def integerRevisionC(actual: Option[Observed]): Consequence[Option[Int]] = actual match {
-    case None => Consequence.success(None)
-    case Some(value) => value.evidence.revision.toIntOption.filter(_ > 0).map(v => Consequence.success(Some(v)))
-      .getOrElse(Consequence.stateConflict("Native closure authority requires its positive integer revision"))
-  }
 }
 
 /** Shared wire bindings for the development host/client. Encoding is passive:
@@ -106,27 +95,28 @@ private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHos
   */
 private[smworkflow] object ThreeWorkflowHostEvidencePorts {
   def key(parts: String*): String = Json.fromValues(parts.map(Json.fromString)).noSpaces
-  def ownedBinding(core: ActionCall.Core, value: Json): Json = Json.obj(
-    "componentInstance" -> Json.fromString(core.component.get.core.instanceId.canonicalKey), "value" -> value)
-  private def authorityBindingC(core: ActionCall.Core, purpose: Purpose, value: Json): Consequence[Json] =
-    NativeHostAuthorityScope.select(purpose, ownedBinding(core, value), legacy = true)
-      .fold(Consequence.stateConflict(_), Consequence.success)
+  private def scopeBinding(core: ActionCall.Core, scope: Json): Json = Json.obj(
+    "componentInstance" -> Json.fromString(core.component.get.core.instanceId.canonicalKey), "scope" -> scope)
   def stepClosureBindingC(core: ActionCall.Core, input: GoalPhaseNativeClosure.Input): Consequence[Json] =
-    authorityBindingC(core, Purpose.StepClosure, input.asJson)
+    Consequence.success(scopeBinding(core, input.asJson.mapObject(_.add("kind", Json.fromString("step-closure")))))
   def phaseClosureBindingC(core: ActionCall.Core, input: GoalPhaseNativeRepositoryClosure.Input): Consequence[Json] =
-    authorityBindingC(core, Purpose.PhaseClosure, Json.obj(
+    Consequence.success(scopeBinding(core, Json.obj("kind" -> Json.fromString("phase-closure"),
       "instance" -> Json.fromString(input.instance), "sourceRevision" -> Json.fromString(input.sourceRevision),
       "plan" -> Json.obj("identity" -> Json.fromString(input.plan.identity), "revision" -> Json.fromString(input.plan.revision),
         "phase" -> Json.fromString(input.plan.phase), "repository" -> Json.fromString(input.plan.repository)),
       "base" -> input.base.asJson, "candidate" -> input.candidate.asJson,
       "completed" -> Json.fromValues(input.completed.map(step => Json.obj("step" -> Json.fromString(step.step), "commit" -> step.commit.asJson))),
-      "review" -> Json.fromString(input.review), "childInvocation" -> Json.fromString(input.childInvocation)))
-  def repositoryEffectBindingC(core: ActionCall.Core, originalCommand: Json, target: RepositoryGitRuntimePrograms.Target,
-    effect: RepositorySyncNativeConvergence.Effect): Consequence[Json] =
-    authorityBindingC(core, Purpose.RepositoryEffect, Json.obj("originalCommand" -> originalCommand,
-      "target" -> Json.obj("root" -> Json.fromString(target.root.toString), "localBranch" -> Json.fromString(target.localBranch),
+      "review" -> Json.fromString(input.review), "childInvocation" -> Json.fromString(input.childInvocation))))
+  def repositoryEffectBindingC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext,
+    target: RepositoryGitRuntimePrograms.Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Json] =
+    Consequence.success(scopeBinding(core, Json.obj("kind" -> Json.fromString("repository-effect"),
+      "selection" -> Json.fromString(context.selectionIdentity), "invocation" -> Json.fromString(context.invocationIdentity),
+      "participant" -> Json.fromString(context.participantIdentity), "repository" -> Json.fromString(context.repositoryIdentity),
+      "endpointIdentity" -> Json.fromString(context.remoteEndpointIdentity), "mode" -> Json.fromString(context.syncMode),
+      "effect" -> Json.fromString(effect.toString), "target" -> Json.obj(
+        "root" -> Json.fromString(target.root.toString), "localBranch" -> Json.fromString(target.localBranch),
         "remote" -> Json.fromString(target.remote), "remoteBranch" -> Json.fromString(target.remoteBranch),
-        "endpoint" -> Json.fromString(target.endpoint)), "effect" -> Json.fromString(effect.toString)))
+        "endpoint" -> Json.fromString(target.endpoint)))))
   def splitStartBindingC(value: SplitPhaseTypedStartHumanVerification.StartContext): Consequence[Json] =
     NativeHostSplitStartScope.bindingC(value)
   def splitAnswerBindingC(value: SplitPhaseHumanAnswerVerification.AnswerContext): Consequence[Json] =
@@ -172,48 +162,39 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
           Json.obj("choice" -> Json.fromString(submitted.result.value.choice)))
       case _ => Consequence.stateConflict("Ordered Human evidence has no actual assigned-work question")
     }
-  def reviewBindingC[A](core: ActionCall.Core, input: Json, submitted: ContinuationResult[A],
-    codec: WorkflowResultJsonV1.PayloadCodec[A]): Consequence[Json] = {
-    if (core == null || codec == null || submitted == null || submitted.handle == null || submitted.runId == null ||
-        submitted.continuationId == null ||
-        submitted.resultReference == null || submitted.result == null || submitted.result.value == null || submitted.evidence == null)
-      return Consequence.stateConflict("Independent review has no actual result target")
-    val purpose = if (codec.typeIdentity == GoalPhaseNativeWork.resultCodec.typeIdentity) Some(Purpose.GoalReview)
-      else if (codec.typeIdentity == RepositorySyncNativeMergeReview.resultCodec.typeIdentity) Some(Purpose.RepositoryReview) else None
-    purpose.map { purpose =>
-      NativeHostReviewScope.select(purpose, ownedBinding(core, Json.obj("input" -> input,
-        "result" -> reviewResultJson(submitted, codec))), legacy = true).fold(Consequence.stateConflict(_), Consequence.success)
-    }.getOrElse(Consequence.stateConflict("Independent review has no declared semantic result type"))
-  }
   def goalReviewBindingC(core: ActionCall.Core, input: GoalPhaseNativeWork.Request,
-    submitted: ContinuationResult[GoalPhaseNativeWork.Result]): Consequence[Json] =
-    reviewBindingC(core, Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-work-request.v2"),
-      "payload" -> Json.obj("instanceIdentity" -> Json.fromString(input.instanceIdentity), "sourceRevision" -> Json.fromString(input.sourceRevision),
-        "kind" -> Json.fromString(input.kind), "stepIdentity" -> input.stepIdentity.map(Json.fromString).getOrElse(Json.Null),
-        "generation" -> Json.fromLong(input.generation), "selectedPlan" -> Json.obj(
-          "identity" -> Json.fromString(input.selectedPlan.identity), "revision" -> Json.fromString(input.selectedPlan.revision),
-          "phase" -> Json.fromString(input.selectedPlan.phase), "repository" -> Json.fromString(input.selectedPlan.repository)),
-        "originalBase" -> input.originalBase.asJson, "candidate" -> input.candidate.asJson,
-        "checksReceipt" -> input.checksReceipt.asJson, "review" -> input.review.map(r => Json.obj("changedPaths" -> r.changedPaths.asJson)).getOrElse(Json.Null))),
-      submitted, GoalPhaseNativeWork.resultCodec)
+    submitted: ContinuationResult[GoalPhaseNativeWork.Result]): Consequence[Json] = {
+    val result = submitted.result.value
+    val target = Json.obj("instance" -> Json.fromString(input.instanceIdentity), "sourceRevision" -> Json.fromString(input.sourceRevision),
+      "workKind" -> Json.fromString(input.kind), "step" -> input.stepIdentity.asJson, "generation" -> Json.fromLong(input.generation),
+      "plan" -> Json.obj("identity" -> Json.fromString(input.selectedPlan.identity), "revision" -> Json.fromString(input.selectedPlan.revision),
+        "phase" -> Json.fromString(input.selectedPlan.phase), "repository" -> Json.fromString(input.selectedPlan.repository)),
+      "base" -> input.originalBase.asJson, "candidate" -> input.candidate.asJson, "checksReceipt" -> input.checksReceipt.asJson,
+      "changedPaths" -> input.review.map(_.changedPaths).getOrElse(Vector.empty).asJson)
+    val verdict = Json.obj("outcome" -> Json.fromString(result.outcome), "findings" -> result.findings.asJson,
+      "repairSummary" -> (if (result.outcome == "repair") Json.fromString(result.summary) else Json.Null))
+    Consequence.success(reviewTarget(core, "goal-review", target, submitted, verdict))
+  }
   def repositoryReviewBindingC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
-    submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] =
-    reviewBindingC(core, Json.obj("schemaVersion" -> Json.fromString("sm-workflow.repository-native-merge-review-request.v2"),
-      "payload" -> Json.obj("instanceIdentity" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
-        "localTip" -> Json.fromString(input.localTip), "remoteTip" -> Json.fromString(input.remoteTip), "indexTree" -> Json.fromString(input.indexTree),
-        "changedPaths" -> input.changedPaths.asJson, "validationMode" -> Json.fromString(input.validationMode), "selectedChecks" -> input.selectedChecks.asJson,
-        "checks" -> Json.fromValues(input.checks.map(r => Json.obj("identity" -> Json.fromString(r.identity),
-          "termination" -> Json.fromString(r.termination), "exitCode" -> r.exitCode.asJson))))), submitted, RepositorySyncNativeMergeReview.resultCodec)
-
-  // Actual result correlation and semantic disposition only. No complete
-  // transport validation/serialization round-trip at this evidence adapter.
-  private def reviewResultJson[A](value: ContinuationResult[A], codec: WorkflowResultJsonV1.PayloadCodec[A]): Json = Json.obj(
-    "schemaVersion" -> Json.fromString(org.goldenport.cncf.workflow.WorkflowProtocolV1.schemaVersion), "kind" -> Json.fromString("CONTINUATION_RESULT"),
-    "handle" -> Json.obj("componentIdentity" -> Json.fromString(value.handle.componentIdentity.name),
-      "workflowIdentity" -> Json.fromString(value.handle.workflowIdentity.value), "workflowRevision" -> Json.fromString(value.handle.workflowRevision.value),
-      "instanceIdentity" -> Json.fromString(value.handle.instanceIdentity.value), "protocolVersion" -> Json.fromString(value.handle.protocolVersion)),
-    "runId" -> Json.fromString(value.runId.value), "continuationId" -> Json.fromString(value.continuationId.value),
-    "result" -> Json.obj("reference" -> Json.obj("identity" -> Json.fromString(value.resultReference.identity), "revision" -> Json.fromString(value.resultReference.revision)),
-      "typeIdentity" -> Json.fromString(value.result.typeIdentity), "value" -> codec.encode(value.result.value)),
-    "executionEvidence" -> Json.obj("workerIdentity" -> value.evidence.workerIdentity.asJson))
+    submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] = {
+    val result = submitted.result.value
+    val target = Json.obj("instance" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
+      "localTip" -> Json.fromString(input.localTip), "remoteTip" -> Json.fromString(input.remoteTip), "indexTree" -> Json.fromString(input.indexTree),
+      "changedPaths" -> input.changedPaths.asJson, "validationMode" -> Json.fromString(input.validationMode), "selectedChecks" -> input.selectedChecks.asJson,
+      "checks" -> Json.fromValues(input.checks.map(r => Json.obj("identity" -> Json.fromString(r.identity),
+        "termination" -> Json.fromString(r.termination), "exitCode" -> r.exitCode.asJson))))
+    val verdict = Json.obj("decision" -> Json.fromString(result.decision), "findings" -> Json.fromValues(result.findings.map(f => Json.obj(
+      "identity" -> Json.fromString(f.identity), "affectedPaths" -> f.affectedPaths.asJson,
+      "repairRationale" -> (if (result.decision == "repair") Json.fromString(f.rationale) else Json.Null)))))
+    Consequence.success(reviewTarget(core, "repository-review", target, submitted, verdict))
+  }
+  private def reviewTarget[A](core: ActionCall.Core, kind: String, target: Json,
+    value: ContinuationResult[A], verdict: Json): Json = Json.obj(
+    "componentInstance" -> Json.fromString(core.component.get.core.instanceId.canonicalKey), "attestation" -> Json.obj(
+      "kind" -> Json.fromString(kind), "target" -> target, "result" -> Json.obj(
+        "handle" -> NativeHostHumanScope.handleJson(value.handle), "runId" -> Json.fromString(value.runId.value),
+        "continuationId" -> Json.fromString(value.continuationId.value),
+        "reference" -> Json.obj("identity" -> Json.fromString(value.resultReference.identity), "revision" -> Json.fromString(value.resultReference.revision)),
+        "typeIdentity" -> Json.fromString(value.result.typeIdentity), "worker" -> Json.fromString(value.evidence.workerIdentity.get),
+        "verdict" -> verdict)))
 }

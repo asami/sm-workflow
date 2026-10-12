@@ -56,14 +56,6 @@ private[admission] object NativeHostHumanEvidenceFixture {
   val goalAnswer = result(goalQuestion, Goal.Answer("ResumeAssignedWork", "Original direction explanation"), Goal.answerCodec.typeIdentity)
   val repositoryAnswer = result(repositoryQuestion, Repository.Answer("ProvideResolution",
     Vector(RepositorySyncConflictSemantic.Resolution("conflict", "Actual resolved contents\n")), "Original direction explanation"), Repository.answerCodec.typeIdentity)
-  private def parsed(value: String) = io.circe.parser.parse(value).toOption.get
-  def raw(purpose: Purpose): Json = {
-    val (question, answer) = if (purpose == Purpose.GoalHuman)
-      (parsed(take(WorkflowDecisionJsonV1.encodeC(goalQuestion, Goal.inputCodec))), parsed(take(WorkflowResultJsonV1.encodeC(goalAnswer, Goal.answerCodec))))
-    else (parsed(take(WorkflowDecisionJsonV1.encodeC(repositoryQuestion, Repository.inputCodec))), parsed(take(WorkflowResultJsonV1.encodeC(repositoryAnswer, Repository.answerCodec))))
-    Json.obj("componentInstance" -> Json.fromString(owner.canonicalKey), "question" -> question, "result" -> answer,
-      "submittingParticipant" -> Json.fromString("actual-submitter"))
-  }
   def production(purpose: Purpose): Json = if (purpose == Purpose.GoalHuman)
     take(ThreeWorkflowHostEvidencePorts.goalHumanBindingC(owner.canonicalKey, goalQuestion, goalAnswer, "actual-submitter"))
   else take(ThreeWorkflowHostEvidencePorts.repositoryHumanBindingC(Repository.AnswerContext(owner, repositoryQuestion, repositoryAnswer, "actual-submitter")))
@@ -87,11 +79,11 @@ final class NativeHostHumanScopeSpec extends AnyWordSpec with Matchers with Give
     "produce actual question direction and participant facts without complete question or answer transport copies" in {
       Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R1; Example: E1; passive typed Human question and answer fixtures")
       When("both production helpers build their selected attestation")
-      val cases = Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).map(p => (p, production(p), raw(p)))
-      Then("production equals semantic legacy extraction, not full public wire envelopes or diagnostic copies")
-      cases.foreach { (purpose, produced, original) =>
-        NativeHostHumanScope.select(purpose, original, legacy = true) shouldBe Right(produced)
-        read(purpose, original).binding shouldBe produced
+      val cases = Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).map(p => (p, production(p)))
+      Then("production is current selected semantic data, not full public wire envelopes or diagnostic copies")
+      cases.foreach { (purpose, produced) =>
+        NativeHostHumanScope.select(purpose, produced) shouldBe Right(produced)
+        read(purpose, produced).binding shouldBe produced
         produced.asObject.get.keys.toSet shouldBe Set("componentInstance", "humanAttestation")
         produced.noSpaces should not include "Original direction explanation"
         produced.noSpaces should not include "Original native conflict text"
@@ -102,22 +94,11 @@ final class NativeHostHumanScopeSpec extends AnyWordSpec with Matchers with Give
     "ignore unused question Plan context presentation and explanatory answer copies while consuming original direction" in {
       Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R1; Example: E2; independently saved actual Human direction")
       Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).foreach { purpose =>
-        val saved = read(purpose, raw(purpose))
-        var changed = alter(raw(purpose), Vector("question"))(_.mapObject(_.add("presentation", Json.True)
-          .add("sourceLine", Json.Null).add("generatorProvenance", Json.True)))
-        changed = alter(changed, Vector("question", "request", "context"))(_.mapObject(_.add("summary", Json.True)))
-        changed = alter(changed, Vector("question", "request", "context", "snapshot"))(_.mapObject(_.add("workspaceRevision", Json.True).add("evidenceRevision", Json.Null)))
-        changed = alter(changed, Vector("result"))(_.mapObject(_.add("completionFacts", Json.True)))
-        if (purpose == Purpose.GoalHuman) {
-          changed = alter(changed, Vector("question", "request", "input", "value"))(_.mapObject(_.add("reason", Json.True).add("result", Json.Null)))
-          changed = alter(changed, Vector("question", "request", "input", "value", "work", "payload", "selectedPlan"))(_.mapObject(_.add("steps", Json.True).add("repairLimit", Json.Null)))
-          changed = alter(changed, Vector("result", "result", "value"))(_.mapObject(_.add("rationale", Json.True)))
-        } else {
-          changed = alter(changed, Vector("question", "request", "input", "value", "payload"))(_.mapObject(_.add("rationale", Json.True)))
-          changed = alter(changed, Vector("question", "request", "input", "value", "payload", "conflict", "conflicts"))(_.mapArray(_.map(
-            _.mapObject(_.add("worktree", Json.True).add("base", Json.obj("identity" -> Json.fromString("c" * 40), "text" -> Json.True))))))
-          changed = alter(changed, Vector("result", "result", "value", "payload"))(_.mapObject(_.add("rationale", Json.True)))
-        }
+        val binding = production(purpose)
+        val saved = read(purpose, binding)
+        val changed = alter(binding, Vector("humanAttestation", "question"))(_.mapObject(
+          _.add("presentation", Json.True).add("sourceLine", Json.Null).add("generator", Json.True)
+            .add("expectedRevision", Json.False).add("modelRevision", Json.True).add("commandGrant", Json.True)))
         When("only diagnostic or copied explanatory fields become different or unusable")
         val admitted = observe(saved, purpose, changed)
         Then("the original attested target/direction still resolves without renewing evidence")
@@ -125,7 +106,7 @@ final class NativeHostHumanScopeSpec extends AnyWordSpec with Matchers with Give
         admitted.toOption.get.evidence.occurredAt shouldBe saved.occurredAt
       }
     }
-    "reject foreign owner submitter worker slot model requesting result native target choice or resolution" in {
+    "reject foreign owner submitter worker slot requesting result native target choice or resolution" in {
       Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R2; Example: E3; actual ordered and conflict Human attestations")
       Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).foreach { purpose =>
         val binding = production(purpose)
@@ -135,7 +116,6 @@ final class NativeHostHumanScopeSpec extends AnyWordSpec with Matchers with Give
         val variants = Vector(binding.mapObject(_.add("componentInstance", Json.fromString("foreign-owner"))),
           alter(binding, Vector("humanAttestation"))(_.mapObject(_.add("submittingParticipant", Json.fromString("foreign-submitter")))),
           alter(binding, questionPath)(_.mapObject(_.add("continuationId", Json.fromString("foreign-slot")))),
-          alter(binding, questionPath)(_.mapObject(_.add("modelRevision", Json.fromString("foreign-model")))),
           alter(binding, questionPath :+ "source" :+ "requestingResult")(_.mapObject(_.add("identity", Json.fromString("foreign-requesting-result")))),
           alter(binding, answerPath)(_.mapObject(_.add("worker", Json.fromString("foreign-human")))),
           alter(binding, answerPath)(_.mapObject(_.add("choice", Json.fromString("Cancel"))))) ++
@@ -153,58 +133,19 @@ final class NativeHostHumanScopeSpec extends AnyWordSpec with Matchers with Give
         observe(saved.copy(occurredAt = now.plusSeconds(1).toString), purpose, binding).isSuccess shouldBe false
       }
     }
-    "read legacy v1 through v6 records without body certificates and reject their reintroduction in v7 storage" in {
-      Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R3; Example: E4; recognized complete old Human records")
-      When("legacy records extract original attested meaning while current readers require selected fields")
-      Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).foreach { purpose =>
-        val current = read(purpose, raw(purpose))
-        val wire = take(encodeStorageC(current))
-        val payload = io.circe.parser.parse(wire.substring(schema.length + 1)).toOption.get
-        Vector("v1", "v2", "v3", "v4", "v5", "v6").foreach { version =>
-          val oldSchema = "sm-workflow.native-host-evidence." + version
-          val body = payload.mapObject(_.add("schemaVersion", Json.fromString(oldSchema)).add("binding", raw(purpose)))
-          val old = if (version == "v1") body.mapObject(_.add("validUntil", Json.True)) else body
-          take(decodeStorageC(oldSchema + ":" + old.noSpaces)) shouldBe current
-        }
-        Then("original issuer/participants/time survive without storage rewrite or new authority")
-        current.occurredAt shouldBe evidence(purpose, raw(purpose)).occurredAt
-        decodeStorageC(schema + ":" + payload.mapObject(_.add("binding", raw(purpose))).noSpaces).isSuccess shouldBe false
-        val malformed = alter(current.binding, Vector("humanAttestation", "question"))(_.mapObject(_.add("sourceLine", Json.True)))
-        decodeStorageC(schema + ":" + payload.mapObject(_.add("binding", malformed)).noSpaces).isSuccess shouldBe false
-      }
-    }
     "keep literal native paths and resolution text as semantics without narrowing valid scope to display-safe strings" in {
       Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R2; Example: E5; a native path containing a newline and a literal resolution")
       val binding = production(Purpose.RepositoryHuman)
       val literal = alter(binding, Vector("humanAttestation", "question", "source", "conflict", "conflicts"))(_.mapArray(_.map(
         _.mapObject(_.add("path", Json.fromString("literal\nname.scala"))))))
       When("the actual scoped path and answer are selected")
-      val selected = NativeHostHumanScope.select(Purpose.RepositoryHuman, literal, legacy = false)
+      val selected = NativeHostHumanScope.select(Purpose.RepositoryHuman, literal)
       Then("native path scope stays literal; no management hash or diagnostic-body copy is introduced")
       selected shouldBe Right(literal)
       val actual = read(Purpose.RepositoryHuman, literal)
       observe(actual, Purpose.RepositoryHuman, literal).isSuccess shouldBe true
       actual.binding.noSpaces should not include "worktree"
       at(actual.binding, "humanAttestation", "answer", "resolutions").asArray.get.head.hcursor.get[String]("text").toOption.get shouldBe "Actual resolved contents\n"
-    }
-    "refuse mismatched actual question answer correlation in legacy reads and direct typed producers" in {
-      Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R2; Example: E6; real answer/issued-question correlation rather than whole transport equality")
-      val failed = Vector(Purpose.GoalHuman, Purpose.RepositoryHuman).flatMap { purpose =>
-        val original = raw(purpose)
-        val variants = Vector(alter(original, Vector("result"))(_.mapObject(_.add("continuationId", Json.fromString("foreign-slot")))),
-          alter(original, Vector("result", "contextSnapshot"))(_.mapObject(_.add("modelRevision", Json.fromString("foreign-model")))),
-          alter(original, Vector("result", "result"))(_.mapObject(_.add("typeIdentity", Json.fromString("ForeignAnswer")))))
-        variants.map(v => NativeHostHumanScope.select(purpose, v, legacy = true))
-      }
-      When("legacy answer correlation or typed actual response selects a foreign slot model or type")
-      val wrongGoal = ThreeWorkflowHostEvidencePorts.goalHumanBindingC(owner.canonicalKey, goalQuestion,
-        goalAnswer.copy(continuationId = ContinuationIdentity("foreign-slot")), "actual-submitter")
-      val wrongRepository = ThreeWorkflowHostEvidencePorts.repositoryHumanBindingC(Repository.AnswerContext(owner,
-        repositoryQuestion, repositoryAnswer.copy(contextSnapshot = repositoryAnswer.contextSnapshot.copy(modelRevision = Some("foreign-model"))), "actual-submitter"))
-      Then("real target conflicts fail before evidence issuance or any command; source/generator display is no gate")
-      failed.foreach(_.isLeft shouldBe true)
-      wrongGoal.isSuccess shouldBe false
-      wrongRepository.isSuccess shouldBe false
     }
   }
 }

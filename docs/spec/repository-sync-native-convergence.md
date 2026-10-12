@@ -1,5 +1,51 @@
 # RepositorySync native convergence
 
+## Current Phase 5.2 C18 contract
+
+This section supersedes the historical v9/v10 requirements below. The current
+declared execution revision is `repository-sync-minimal-operation-v11`.
+The five normal public Operations are `startRepositorySync`,
+`advanceRepositorySync`, `submitRepositorySyncWorkResult`,
+`submitRepositoryConflictDecision` and `submitNativeMergeReview`.
+Start and result submission require JSON string `arg1`; advance may omit it.
+No full stage Command is a public `INPUT`, and Provided `inputType` is absent.
+Start consumes only the genuine repository/branch/remote/sync-mode input;
+selected invocation, participant and effect authority are host facts, not
+caller echoes or an unused repository-policy-version certificate.
+
+Normal advance owns managed fetch, preservation, integration, required checks,
+conflict application and nonforce convergence. It returns assigned semantic
+conflict/review work or Human questions when needed. Completion records the
+business answer through CNCF's existing public work/Decision completion
+binders, with actual codecs, ClosingPrograms and current-call readers. It
+does not call internal `completeC`, run an AI execution platform, or accept
+caller stage/argv hints as command authority. The actual conflict/review
+Judgment admissions are internal to the owning route, not extra public stages.
+
+Selected repository/file/command scope is checked at effects to avoid
+wrong-repository mutation or unrelated-file overwrite. Actual Human/reviewer
+evidence is consumed where it authorizes progression/effects. Common storage
+owns its existing state/CAS/grant/atomic-write behavior; sm-workflow neither
+duplicates those checks nor adds an unchanged-definition/history/postimage
+certificate. Unused old BoundaryCaptured/RelationClassified/admitted-stage
+declarations and obsolete review/Command DTOs are removed, not retained for
+compatibility.
+
+Normal convergence and preservation of owned content remain the functional
+contract. Duplicate answers and races are user errors; unique-winner,
+matching-retry-response, complete-history and intermediate-recovery guarantees
+are not acceptance requirements. Avoid fatal file destruction and allow a
+new execution from Start. Do not silently resume an unsupported old revision;
+retain historical records without treating them as compatible current input.
+
+C18 is not yet compiled or tested. Historical successful validations below
+belong to their original inputs, not current Step/Phase acceptance. The selected
+normal Operation specs will run after the connected migration and actual CNCF
+public-binder dependency correction are available; no common-framework
+guarantee suite or separate command/skill round trip is required here.
+
+## Historical native convergence implementation and validation — nonnormative
+
 Date: 2026-10-06. CML revision `repository-sync-native-convergence-v10`, validated1008.
 
 Actual1008 passed346/346 tests in27 completed suites, zero failure/abort/skip.

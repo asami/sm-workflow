@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
   val schema = "sm-workflow.three-workflow-host.v1"
@@ -48,43 +48,10 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
   }
   def encode(value: Definition): Json = value.asJson
   def decodeDefinitionC(value: Json): Consequence[Definition] =
-    Option(value).filter(_definition_shape).toRight("Three-workflow host declared fields differ")
+    Option(value).toRight("Three-workflow host definition is absent")
       .flatMap(_.as[Definition].left.map(_.message))
       .flatMap(d => Either.cond(d.schemaVersion == schema, d, "Three-workflow host schema differs"))
       .fold(Consequence.configurationInvalid(_), Consequence.success)
-
-  // Shape belongs to this input boundary; typed decoding owns field values.
-  // A valid value need not be the serializer's exact presentation (e.g. Set
-  // members may repeat). This does not admit host policies or command grants.
-  private def _object_shape(value: Json, names: Set[String],
-    nested: Map[String, Json => Boolean] = Map.empty): Boolean =
-    value.asObject.exists(fields => fields.keys.toSet == names &&
-      nested.forall((name, shape) => fields(name).exists(shape)))
-  private def _check_array_shape(value: Json): Boolean =
-    value.asArray.exists(_.forall(item => _object_shape(item, Set("identity", "ordinal"))))
-  private def _validation_shape(value: Json): Boolean =
-    _object_shape(value, Set("identity", "revision", "checks"), Map("checks" -> _check_array_shape))
-  private def _program_array_shape(value: Json): Boolean =
-    value.asArray.exists(_.forall(item => _object_shape(item, Set("step", "ordinal"))))
-  private def _closure_shape(value: Json): Boolean =
-    _object_shape(value, Set("identity", "revision", "programs"), Map("programs" -> _program_array_shape))
-  private def _goal_shape(value: Json): Boolean =
-    _object_shape(value, Set("input", "candidatePaths", "stepValidation", "phaseValidation", "review", "closure"), Map(
-      "input" -> (v => _object_shape(v, Set("phaseIdentity", "repositoryIdentity"))),
-      "stepValidation" -> _validation_shape, "phaseValidation" -> _validation_shape,
-      "review" -> (v => _object_shape(v, Set("identity", "revision"))),
-      "closure" -> _closure_shape))
-  private def _repository_shape(value: Json): Boolean =
-    _object_shape(value, Set("input", "closureSelection", "validation", "conflicts", "review"), Map(
-      "input" -> (v => _object_shape(v, Set("repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch",
-        "remoteEndpointIdentity", "syncMode", "repositoryPolicyVersion"))),
-      "validation" -> (v => _object_shape(v, Set("identity", "revision", "mode", "reason", "checks"), Map("checks" -> _check_array_shape))),
-      "conflicts" -> (v => _object_shape(v, Set("semanticPaths", "maximumConflicts", "maximumBlobBytes"))),
-      "review" -> (v => _object_shape(v, Set("identity", "revision", "maximumPaths", "maximumDiffBytes")))))
-  private def _definition_shape(value: Json): Boolean =
-    _object_shape(value, Set("schemaVersion", "target", "goal", "repository"), Map(
-      "target" -> (v => _object_shape(v, Set("root", "localBranch", "remote", "remoteBranch", "endpoint"))),
-      "goal" -> _goal_shape, "repository" -> _repository_shape))
 
   val definition = ComponentParameterKey.required("sm-workflow.host.definition",
     ComponentParameterDecoder[Definition] {
@@ -105,8 +72,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       resolved <- parameters.resolve(definition)
       settings <- resolved.value.map(Consequence.success).getOrElse(
         Consequence.configurationInvalid("Three-workflow host definition is not configured"))
-      catalog <- GoalPhaseRuntimeCatalog.loadC()
-      persistence <- GoalPhaseRuntimeParameters.decodeC(parameters, catalog)
+      persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)

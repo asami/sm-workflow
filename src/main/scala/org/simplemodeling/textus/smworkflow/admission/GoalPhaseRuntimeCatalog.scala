@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1
-import domain.statemachine.candidateadmission.{CandidateAdmissionProducerAbi as CompiledProducerAbi, GoalPhaseWorkflowCandidateAdmissionProducer1}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.{CandidateAdmissionProducerAbi, CandidateWorkflowAbi, WorkflowInstancePersistence}
 import java.nio.ByteBuffer
@@ -11,7 +10,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 
 /**
- * Immutable compiled-definition admission, with no storage or authority lookup.
+ * Resolve and consume the official executable definition; no compiled-copy proof.
  * @since   Oct.  1, 2026
  * @version Oct.  8, 2026
  */
@@ -64,78 +63,10 @@ private[smworkflow] object GoalPhaseRuntimeCatalog {
       Consequence.configurationInvalid("GoalPhase runtime catalog text is missing")
     else for {
       producer <- CandidateAdmissionProducerAbi.parseC(producerJson)
-      _ <- admitCompiledProducerC(producer)
       compiled = GoalPhaseWorkflowStateMachineWorkflow1.workflow
       workflow <- CandidateWorkflowAbi.parseSelectedC(workflowJson, producer, "src/main/cozy/sm-workflow.cml",
         compiled.identity, compiled.version)
-      _ <- admitCompiledC(workflow)
       binding <- WorkflowInstancePersistence.bindCandidateDefinitionC(workflow)
     } yield new Catalog(workflow, producer, binding)
 
-  private def admitCompiledProducerC(received: CandidateAdmissionProducerAbi.Artifact): Consequence[Unit] = {
-    import CandidateAdmissionProducerAbi.*
-    val compiled = GoalPhaseWorkflowCandidateAdmissionProducer1.producer
-    def source(value: CompiledProducerAbi.SourceIdentity): SourceLocation =
-      SourceLocation(value.line.getOrElse(-1))
-    def reference(value: CompiledProducerAbi.SourceReference): SourceReference =
-      SourceReference(value.value, source(value.source))
-    def operation(value: CompiledProducerAbi.Operation): Operation =
-      Operation(ServiceIdentity(value.service), OperationIdentity(value.name),
-        value.inputType.map(TypeIdentity.apply), value.resultType.map(TypeIdentity.apply))
-    val model = Model(ModelIdentity(compiled.model.compositeStateMachineIdentity),
-      compiled.model.compositeStateMachineName, source(compiled.model.compositeStateMachineSource),
-      compiled.model.workflow.map(value => Workflow(WorkflowIdentity(value.identity), WorkflowVersion(value.version),
-        source(value.rootSource), source(value.definitionSource))))
-    val generator = Generator(compiled.generator.schemaVersion, compiled.generator.generatorIdentity)
-    val judgments = compiled.judgments.map(value => Judgment(JudgmentActionIdentity(value.actionIdentity),
-      operation(value.operation), value.inputBinding.map(InputBinding.apply),
-      reference(value.goal), reference(value.context), reference(value.candidate),
-      value.alternatives.map(reference), value.criteria.map(reference), reference(value.expectedResult),
-      reference(value.rationale), reference(value.evidence), reference(value.evidenceScope),
-      reference(value.evidenceFreshness), reference(value.evidenceProvenance),
-      source(value.actionSource), source(value.semanticSource)))
-    val admissions = compiled.admissions.map(value => Admission(AdmissionActionIdentity(value.actionIdentity),
-      JudgmentActionIdentity(value.candidateJudgmentActionIdentity), operation(value.operation),
-      value.inputBinding.map(InputBinding.apply), value.effectClass, value.transactionRequirement,
-      source(value.actionSource), source(value.semanticSource), source(value.candidateActionSource)))
-    val relations = compiled.judgmentAdmissions.map(value => JudgmentAdmission(
-      JudgmentActionIdentity(value.judgmentActionIdentity), AdmissionActionIdentity(value.admissionActionIdentity),
-      source(value.judgmentSource), source(value.admissionSource), source(value.candidateActionSource)))
-    val required = compiled.requiredSpi.map(value => RequiredSpi(RequiredSpiIdentity(value.capability),
-      JudgmentActionIdentity(value.actionIdentity), operation(value.operation),
-      source(value.capabilitySource), source(value.actionSource)))
-    val expected = ProducerModel(model, generator, judgments, admissions, relations, required)
-    val matches = received.models.filter(_.model.workflow.exists(value =>
-      expected.model.workflow.exists(key => key.identity == value.identity && key.version == value.version)))
-    if (matches.size == 1 && CandidateAdmissionProducerAbi.compatiblePolicy(matches.head, expected)) Consequence.unit
-    else Consequence.configurationInvalid("GoalPhase runtime producer policy differs from compiled definition")
-  }
-
-  private def admitCompiledC(received: CandidateWorkflowAbi.Definition): Consequence[Unit] = {
-    val compiled = GoalPhaseWorkflowStateMachineWorkflow1.workflow
-    def operation(service: String, name: String, input: Option[String], result: Option[String]) =
-      CandidateWorkflowAbi.Operation(service, name, input, result)
-    val actions = compiled.actions.map(action => CandidateWorkflowAbi.Action(action.identity, action.kind,
-      operation(action.operation.service, action.operation.name, action.operation.inputType, action.operation.resultType),
-      action.inputBinding, action.source.line.getOrElse(-1)))
-    val required = compiled.requiredOperations.map(spi => CandidateWorkflowAbi.RequiredSpi(spi.identity.capability,
-      spi.actionIdentity, operation(spi.operation.service, spi.operation.operation,
-        spi.inputType.map(_.value), spi.resultType.map(_.value)), spi.capabilitySource.line.getOrElse(-1)))
-    val expected = CandidateWorkflowAbi.Workflow(compiled.identity, compiled.version,
-      compiled.source.root.line.getOrElse(-1), compiled.source.definition.line.getOrElse(-1),
-      compiled.states.map(_.name), actions, required)
-    if (compiled.schemaVersion == CandidateWorkflowAbi.schemaVersion &&
-        CandidateWorkflowAbi.compatibleWorkflow(received.workflow, expected))
-      Consequence.unit
-    else Consequence.configurationInvalid("GoalPhase runtime catalog differs from compiled Workflow")
-  }
-
-  def admitBindingC(catalog: Catalog, declaration: GoalPhaseManagedStartAssembly.Declaration,
-    producer: CandidateAdmissionProducerAbi.Artifact
-  ): Consequence[Unit] =
-    if (catalog == null || declaration == null || declaration.definition == null || producer == null)
-      Consequence.configurationInvalid("GoalPhase Factory differs from its admitted runtime catalog")
-    else if (!SplitPhaseDefinitionBinding.sameDefinition(declaration.definition, catalog.definition))
-      Consequence.configurationInvalid("GoalPhase Factory execution definition is not resolved by this catalog")
-    else admitCompiledProducerC(producer)
 }

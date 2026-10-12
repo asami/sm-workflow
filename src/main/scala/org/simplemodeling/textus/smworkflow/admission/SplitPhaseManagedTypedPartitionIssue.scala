@@ -17,33 +17,22 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Internal host capability. No public selector, pool, provider or retained call.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
   final class Port private[SplitPhaseManagedTypedPartitionIssue] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog) {
     def issueForCallC(binding: T.PartitionBound, core: ActionCall.Core): Consequence[String] =
-      if (binding == null || binding.context.record.owner.configuration != declaration.configuration)
-        Consequence.stateConflict("SplitPhase partition issue differs from its bound Workflow configuration")
+      if (binding == null)
+        Consequence.stateConflict("SplitPhase partition issue source is absent")
       else for {
-        _ <- actorC(core, Some(binding.start.record.command.participantIdentity))
+        _ <- actorC(core, Some(binding.start.record.participantIdentity))
         policy <- SplitPhasePartitionReplyAllocationPolicy.decodeC(core.component.get.subsystem.get.configuration)
         allocated <- policy.allocateC(binding)
         plan <- I.prepareC(binding, allocated)
-        wire <- withWorkForCallC(core) { (work, issued, instances) =>
+        wire <- withWorkForCallC(core) { work =>
           given ExecutionContext = core.executionContext
-          instances.load(declaration.configuration, plan.intent.current.identity).flatMap {
-            case Some(actual) if actual == plan.intent.current => work.suspendC(plan.intent, plan.interaction) match {
-            case Consequence.Failure(_) => uncertainC("SplitPhase partition issue is not established; observe on a later call")
-            case Consequence.Success(retained) if retained.instance == plan.projected =>
-              issued.loadC(binding.context.record.owner.continuation) match {
-                case Consequence.Success(Some(actual)) if actual == plan.interaction => Consequence.success(plan.wire)
-                case _ => uncertainC("SplitPhase partition committed WorkOrder readback differs or is unavailable")
-              }
-            case _ => uncertainC("SplitPhase partition committed suspension differs")
-            }
-            case _ => Consequence.stateConflict("SplitPhase partition issue predecessor differs from its current call")
-          }
+          work.suspendC(plan.intent, plan.interaction).map(_ => plan.wire)
         }
       } yield wire
 
@@ -51,12 +40,11 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
     def loadForCallC(identity: ContinuationIdentity, core: ActionCall.Core):
         Consequence[Option[WorkflowInteraction[S.Request, Nothing]]] = for {
       _ <- actorC(core, None)
-      loaded <- withWorkForCallC(core)((_, issued, _) => issued.loadC(identity))
+      loaded <- withWorkForCallC(core)(_.loadC(identity)(using core.executionContext))
     } yield loaded
 
     private def withWorkForCallC[A](current: ActionCall.Core)(
-      f: (WorkflowManagedIssuedWork[S.Request], WorkflowIssuedWorkDataStorePersistence[S.Request],
-        WorkflowInstancePersistence) => Consequence[A]): Consequence[A] = {
+      f: WorkflowManagedIssuedWork[S.Request] => Consequence[A]): Consequence[A] = {
       final class CurrentCall(val core: ActionCall.Core) extends ProcedureActionCall {
         def runC(): Consequence[A] = {
           given ExecutionContext = executionContext
@@ -68,13 +56,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
               SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition),
               declaration.instances, declaration.continuations)
             work <- storage.bindIssuedC(C.completionOperation, J.requestCodec)
-            store <- space.dataStore(declaration.instances)
-            issued <- WorkflowIssuedWorkDataStorePersistence.bindC(store, declaration.configuration,
-              SmWorkflowComponent.componentId, C.completionOperation, Vector(catalog.definition),
-              declaration.instances, declaration.continuations, J.requestCodec)
-            instances <- WorkflowInstanceDataStorePersistence.bindC(store, declaration.configuration,
-              Vector(catalog.definition), declaration.instances)
-            result <- f(work, issued, instances)
+            result <- f(work)
           } yield result
           finally space.restoreBinding(prior)
         }

@@ -20,16 +20,15 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Real pure captures exercise wire data, not native execution or publication.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 11, 2026
   */
 final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _completion_first(source: Base, boundary: B.Validated): K.Record = {
     val f = SplitPhaseTypedStartFixture
     val proposal = boundary.shape.records.proposal
-    val command = f.command.copy(input = f.command.input.copy(proposalReference = Some(proposal.reference.identity)))
-    val raw = f.record.copy(source = source.source, proposal = Some(proposal), command = command,
-      selection = f.selectionFor(command))
-    val start = take(TS.prepareC(raw, raw.source, raw.proposal, raw.selection, f.catalog, f.configuration))
+    val raw = f.record.copy(source = source.source, proposal = Some(proposal),
+      input = f.input.copy(sourcePhaseIdentity = source.source.phase.value, proposalReference = Some(proposal.reference.identity)))
+    val start = take(TS.prepareC(raw, raw.source, raw.proposal, f.catalog, f.configuration))
     val partition = source.records.copy(estimates = source.records.estimates.copy(items =
       source.records.estimates.items.updated(1, source.records.estimates.items(1).copy(duration = E.Duration.Unresolved("novel")))))
     val facts = C.Facts(boundary.shape.records, boundary.records, partition,

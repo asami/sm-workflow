@@ -18,7 +18,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[admission] object SplitPhasePartitionContextFixture {
   val baseData = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
@@ -38,7 +38,7 @@ private[admission] object SplitPhasePartitionContextFixture {
     W.Data(W.DataReference("planning", "1"), baseData.source.reference, baseData.source.authority, None, O.Records(None, None, None)))
   val record = C.Record(S.ContextReference("partition-context", "1"), C.Owner(
     take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, instance)), instance.revision, configuration,
-    SplitPhaseExplicitStartPreparation.Reference("host-start-record", "1"), ContinuationIdentity("host-continuation"),
+    SplitPhaseTypedStartPreparation.Reference("host-start-record", "1"), ContinuationIdentity("host-continuation"),
     C.completionOperation, ExecutionRequirement(Vector(CapabilityRequirement("semantic.partition")), RiskLevel("bounded"),
       ReasoningLevel.Deep, true), MinimalPresentation("Partition semantics", "Only unknown work")), facts)
 }
@@ -152,23 +152,28 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       take(J.decodeC(value.reference, take(J.encodeC(value)))) shouldBe value
     }
 
-    "reject nested unknown missing invalid schema and crossed reference data but accept member formatting" in {
-      Given("one valid closed context envelope")
+    "ignore inert context annotations while rejecting missing data and a different selected reference" in {
+      Given("a current context with annotations or malformed consumed owner fields")
       val original = json(take(J.encodeC(record)))
-      val variants = Vector(original.mapObject(_.add("admitted", Json.True)),
-        original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
-        mapPayload(original)(_.remove("owner")), mapPayload(original)(_.add("prepared", Json.True)),
+      val annotated = Vector(original.mapObject(_.add("admitted", Json.True)),
+        mapPayload(original)(_.add("prepared", Json.True)),
+        mapPayload(original)(o => o.add("facts", o("facts").get.mapObject(_.add("digest", Json.fromString("legacy"))))))
+      val variants = Vector(original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
+        mapPayload(original)(_.remove("owner")),
         mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove("continuation")))),
-        mapPayload(original)(o => o.add("facts", o("facts").get.mapObject(_.add("digest", Json.fromString("legacy"))))),
         mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.add("handle", o("owner").get.hcursor
           .downField("handle").focus.get.mapObject(_.add("componentIdentity", Json.fromString("invalid component"))))))))
       When("wire data is decoded at its boundary")
-      Then("unknown/missing nested fields and invalid ownership data cannot become context")
-      variants.foreach(value => J.decodeC(record.reference, raw(value)).isSuccess shouldBe false)
-      J.decodeC(record.reference.copy(revision = "2"), raw(original)).isSuccess shouldBe false
+      val decoded = annotated.map(value => J.decodeC(record.reference, raw(value)))
+      val discovered = annotated.map(value => J.findForInstanceC(raw(value), instance.identity.value))
+      val refused = variants.map(value => J.decodeC(record.reference, raw(value)))
+      val foreign = J.decodeC(record.reference.copy(revision = "2"), raw(original))
+      Then("annotations give no control, discovery reaches the selected row, and malformed consumed data fails")
+      decoded.foreach(_.toOption.get shouldBe record)
+      discovered.foreach(_.toOption.get shouldBe Some(record))
+      refused.foreach(_.isSuccess shouldBe false)
+      foreign.isSuccess shouldBe false
       take(J.decodeC(record.reference, J.schema + ":" + original.spaces2)) shouldBe record
-      J.encodeC(record.copy(facts = facts.copy(proposal = null))).isSuccess shouldBe false
-      J.encodeC(record.copy(owner = record.owner.copy(start = null))).isSuccess shouldBe false
     }
 
     "accept declared Set values independent of array ordering and repetition" in {
@@ -209,8 +214,8 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       decoded.owner.requirement shouldBe requirement
     }
 
-    "reject undeclared nested fields and missing optional declarations before typed construction" in {
-      Given("a v1 context with complete declared owner and independent input fields")
+    "read nested annotations and absent optional values without a separate structure certificate" in {
+      Given("a current context whose optional fields are absent or whose nested data has inert annotations")
       val original = json(take(J.encodeC(record)))
       val variants = Vector(
         original.hcursor.downField("payload").downField("owner").downField("requirement")
@@ -225,8 +230,8 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
           .withFocus(_.mapObject(_.remove("allocations"))).top.get)
       When("these wire structures are decoded")
       val results = variants.map(value => J.decodeC(record.reference, raw(value)))
-      Then("unknown fields and omitted declared fields are rejected without a re-encoding proof")
-      results.foreach(_.isSuccess shouldBe false)
+      Then("the existing typed decoder recovers the same passive data without granting authority")
+      results.foreach(_.toOption.get shouldBe record)
     }
 
     "enforce the UTF-8 byte bound and keep semantic numerical validation outside raw decoding" in {

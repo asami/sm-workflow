@@ -9,12 +9,11 @@ import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStoreCondition
 import org.goldenport.cncf.security.SecuritySubject
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowManagedMechanicalTransition}
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord, Lifecycle}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRecord, Lifecycle}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.{WorkflowContinuation, WorkflowInteraction}
-import org.goldenport.protocol.Argument
 import org.goldenport.configuration.ResolvedConfiguration
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceCommand
+import org.simplemodeling.textus.smworkflow.value.{SplitPhasePartitionContextReference}
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpointPreparation as K,
   SplitPhasePlanningCheckpointJsonV1 as J, SplitPhasePlanningCheckpointPublication as U,
   SplitPhasePlanningCheckpointObservation as O,
@@ -23,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
 /** Internal managed dependency, not an installed public advance action or
   * WorkflowInteraction. All physical work borrows the actual owning call.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
   /** Observed native data only. It does not authorize fresh planning or prove
@@ -48,30 +47,24 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
     /** Read current progression before any planning or issue allocation. The
       * original context may precede legitimate later native history.
       */
-    def loadCurrentForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[ObservedCurrent] = for {
-      owning <- actorC(core, None)
-      _ <- if (owning == command) Consequence.unit else invalid("current-state query differs from its exact owning advance command")
+    def loadCurrentForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[ObservedCurrent] = for {
+      _ <- actorC(core, None)
       reads <- currentReadsC(core)
-      original <- reads.loadOriginalForCommandC(command, core)
-      _ <- actorC(core, Some(original.start.command.participantIdentity)).map(_ => ())
-      _ <- if (original.start.instanceIdentity.value == command.instanceIdentity) Consequence.unit
-        else invalid("current-state query differs from its original Start or bound configuration")
+      original <- reads.loadOriginalForTargetC(command, core)
+      _ <- actorC(core, Some(original.start.participantIdentity))
       instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
         declaration.instances, declaration.continuations)
-      current <- instances.loadForCallC(declaration.configuration, original.start.instanceIdentity, core).flatMap {
+      current <- instances.loadForCallC(declaration.configuration, InstanceIdentity(command.instanceIdentity), core).flatMap {
         case Some(value) => Consequence.success(value)
         case None => invalid("canonical current instance is absent")
       }
-      _ <- if (SplitPhaseDefinitionBinding.sameDefinition(current.definition, catalog.definition)) Consequence.unit
-        else invalid("canonical current definition differs from the admitted catalog")
-      _ <- O.verifyStartLineageC(original, current)
     } yield new ObservedCurrent(original, current)
 
     /** Return genuine pending work, never re-prepare/re-issue it. An absent or
       * different publication at a native suspension is a conflict, not a fresh
       * planning branch. Unsuspended native data alone is not a typed Terminal.
       */
-    def loadPendingPartitionForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core):
+    def loadPendingPartitionForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core):
         Consequence[Option[WorkflowInteraction[SplitPhaseExplicitPartitionSemantic.Request, Nothing]]] = for {
       observed <- loadCurrentForCallC(command, core)
       result <- observed.current.suspension match {
@@ -102,7 +95,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       * fall back to another on error. None is only exact pre-issue absence,
       * not authorization to plan or an observation of a typed Terminal.
       */
-    def loadRetainedForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Retained]] = for {
+    def loadRetainedForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Retained]] = for {
       observed <- loadCurrentForCallC(command, core)
       _ <- if (observed.current.suspension.isEmpty) Consequence.unit
         else invalid("suspended native state requires its actual pending work, not retained-output absence")
@@ -136,8 +129,10 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       if (captured == null || captured.mechanicalIntent.isEmpty || captured.completion.nonEmpty)
         invalid("execution requires an actual constructed mechanical capture")
       else for {
-        command <- actorC(core, Some(captured.record.originalStart.command.participantIdentity))
-        _ <- queryC(command, captured.record)
+        _ <- actorC(core, Some(captured.record.originalStart.participantIdentity))
+        command = SplitPhaseAdvanceTarget(captured.record.originalStart.instanceIdentity.value,
+          SplitPhasePartitionContextReference(captured.record.originalContext.reference.identity,
+            captured.record.originalContext.reference.revision))
         reads <- currentReadsC(core)
         existing <- reads.loadSelectionForCallC(command, core)
         result <- existing match {
@@ -165,16 +160,15 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
         }
       } yield result
 
-    def loadMechanicalForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
-      current <- actorC(core, None)
-      _ <- if (current == command) Consequence.unit else invalid("query differs from its exact owning advance command")
+    def loadMechanicalForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+      _ <- actorC(core, None)
       result <- readMechanicalC(command, core)
     } yield result
 
     def loadMechanicalForReasoningCompletionC(core: ActionCall.Core): Consequence[Option[Observed]] =
       SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog).flatMap(readMechanicalC(_, core))
 
-    private def readMechanicalC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core): Consequence[Option[Observed]] = for {
+    private def readMechanicalC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core): Consequence[Option[Observed]] = for {
       reads <- currentReadsC(core)
       loaded <- reads.loadSelectionForCallC(command, core)
       result <- loaded match {
@@ -186,10 +180,9 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
     /** Explicit original AI-origin query. Never appends a mechanical transition
       * and never falls back to reconstructing a planning result.
       */
-    def loadPartitionCompletionForCallC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core):
+    def loadPartitionCompletionForCallC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core):
         Consequence[Option[SplitPhaseManagedTypedPartitionCompletion.ObservedCompletion]] = for {
-      current <- actorC(core, None)
-      _ <- if (current == command) Consequence.unit else invalid("AI query differs from its owning advance command")
+      _ <- actorC(core, None)
       result <- readPartitionCompletionC(command, core)
     } yield result
 
@@ -197,22 +190,19 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
         Consequence[Option[SplitPhaseManagedTypedPartitionCompletion.ObservedCompletion]] =
       SplitPhaseReasoningInvocation.completionQueryC(core, declaration, catalog).flatMap(readPartitionCompletionC(_, core))
 
-    private def readPartitionCompletionC(command: SplitPhaseAdvanceCommand, core: ActionCall.Core):
+    private def readPartitionCompletionC(command: SplitPhaseAdvanceTarget, core: ActionCall.Core):
         Consequence[Option[SplitPhaseManagedTypedPartitionCompletion.ObservedCompletion]] = for {
       reads <- currentReadsC(core)
       mapping <- reads.loadMappingForCallC(command, core)
       result <- mapping match {
         case None => Consequence.success(None)
         case Some((_, saved)) => for {
-          _ <- queryC(command, saved)
-          _ <- SplitPhaseReasoningInvocation.actorC(core, Some(saved.originalStart.command.participantIdentity))
+          _ <- SplitPhaseReasoningInvocation.actorC(core, Some(saved.originalStart.participantIdentity))
           identity <- saved.origin match {
             case K.Origin.PartitionCompletion(value, _) => Consequence.success(value)
             case _ => invalid("mechanical origin is not an AI completion")
           }
           observed <- SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, core)
-          _ <- if (observed.exists(_.record.checkpoint.contains(saved))) Consequence.unit
-            else invalid("original AI completion differs from its exact selected mapping")
           _ <- reads.requireDocumentsForCallC(saved, core)
         } yield observed
       }
@@ -222,7 +212,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
       reads: SplitPhasePlanningCheckpointDataStorePort, core: ActionCall.Core): Consequence[Observed] = {
       val mapping = selected.record
       for {
-      _ <- SplitPhaseReasoningInvocation.actorC(core, Some(mapping.originalStart.command.participantIdentity))
+      _ <- SplitPhaseReasoningInvocation.actorC(core, Some(mapping.originalStart.participantIdentity))
       retained <- selected.mechanical match {
         case Some(value) => Consequence.success(value)
         case None => invalid("AI-origin checkpoint needs its genuine completion observation, not a mechanical fallback")
@@ -252,7 +242,7 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
     if (declaration == null || catalog == null || rowObservation == null) invalid("admitted current catalog is absent")
     else Consequence.success(new Port(declaration, catalog, rowObservation))
 
-  private def actorC(core: ActionCall.Core, participant: Option[String]): Consequence[SplitPhaseAdvanceCommand] =
+  private def actorC(core: ActionCall.Core, participant: Option[String]): Consequence[Unit] =
     if (core == null || core.action == null || core.action.request == null || core.executionContext == null ||
         core.executionContext.security == null || !core.component.exists(c =>
           c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))
@@ -265,17 +255,8 @@ private[smworkflow] object SplitPhaseManagedPlanningCheckpoint {
           !(kind == SubjectKind.User || kind == SubjectKind.Service) || !participant.forall(_ == subject.subjectId) ||
           request.operation != K.advanceOperation.operation || !request.service.contains(K.advanceOperation.service))
         Consequence.securityPermissionDenied("SplitPhase checkpoint requires the original authenticated advance participant")
-      else WorkflowJsonCommandRequest.commandArguments(request) match {
-        case List(Argument("arg1", raw: String, _)) => SplitPhaseAdvanceCommandJsonV1.decodeC(raw)
-        case _ => invalid("owning advance call has no exact single generated command")
-      }
+      else Consequence.unit
     }
-  private def queryC(command: SplitPhaseAdvanceCommand, mapping: K.Record): Consequence[Unit] =
-    if (command.instanceIdentity == mapping.originalStart.instanceIdentity.value &&
-        command.context.identity == mapping.originalContext.reference.identity &&
-        command.context.revision == mapping.originalContext.reference.revision &&
-        mapping.originalStart.configuration == mapping.originalContext.owner.configuration) Consequence.unit
-    else invalid("query and original mapping relationship differ")
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase managed checkpoint " + reason)
   private def uncertain[A](reason: String): Consequence[A] = DataStoreConditionalTransitionFailure.transactionIndeterminate(
     "SplitPhase managed checkpoint " + reason)

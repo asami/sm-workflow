@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncNativeConflictContinuation {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositorySyncWorkResult")
@@ -57,25 +57,23 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
           saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
         } yield selected
       }
-      wire <- if (same(source.current, plan.next) || same(source.current, source.conflicted.record))
-        WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
-        else for {
-          completion <- nativeCompletionC(source.session.storage)
-          actual <- completion.loadRetainedC(continuationId(source.conflicted))(using core.executionContext).flatMap {
-            case Some(value) => Consequence.success(value.completion)
-            case None => invalid("unsuspended conflict history has no actual committed completion")
-          }
-          next <- completedC(plan, actual.result, policy)
-          wire <- if (actual.result.result.value.decision == "resolved") for {
+      completion <- nativeCompletionC(source.session.storage)
+      retained <- completion.loadRetainedC(continuationId(source.conflicted))(using core.executionContext)
+      wire <- retained match {
+        case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+        case Some(value) => for {
+          next <- completedC(plan, value.completion.result, policy)
+          wire <- if (value.completion.result.result.value.decision == "resolved") for {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store, plan.input,
-              actual.result.result.value, source.current, next, policy)
+              value.completion.result.result.value, source.current, next, policy)
             wire <- RepositorySyncNativeMergeValidation.waitC(source.store, pending, validationPolicy, review)
           } yield wire else humanPort match {
             case Some(port) => port.advanceC(RepositorySyncHumanConflict.Source(source.session, source.store, plan.input,
-              actual.result.resultReference, actual.result.result.value.rationale, next, source.current))
-            case None => waitC(next, actual.result)
+              value.completion.result.resultReference, value.completion.result.result.value.rationale, next, source.current))
+            case None => waitC(next, value.completion.result)
           }
         } yield wire
+      }
     } yield wire
 
     private def sourceC(identity: String, core: ActionCall.Core): Consequence[Source] = for {
@@ -92,7 +90,7 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       }
       instances <- session.storage.bindInstancesC()(using core.executionContext)
       current <- instances.loadC(InstanceIdentity(identity))(using core.executionContext).flatMap {
-        case Some(value) => value.validateC
+        case Some(value) => Consequence.success(value)
         case None => invalid("native conflict instance is missing")
       }
     } yield Source(session, store, conflicted, current)
@@ -121,15 +119,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       completion.result.result.value.rationale, next, source.current)
 
     private def prepareC(source: Source, input: I.Request): Consequence[Plan] = for {
-      _ <- policy.validateC
-      _ <- if (input != null && input.instanceIdentity == source.current.identity.value &&
-          input.conflictRevision == source.conflicted.record.revision.value.toString &&
-          input.localTip == source.conflicted.payload.before.head &&
-          source.conflicted.payload.mergeHead.contains(input.remoteTip) && input.conflicts != null &&
-          input.conflicts.nonEmpty && input.conflicts.forall(c => c != null && policy.semanticPaths(c.path)) &&
-          input.conflicts.map(_.identity) == input.conflicts.indices.map(i => "conflict-" + (i + 1)).toVector &&
-          input.conflicts.map(_.path).toSet == source.conflicted.payload.after.get.dirty.filter(_.unmerged).map(_.path).toSet)
-        Consequence.unit else invalid("conflict input differs from its native source, assigned IDs or host policy")
       required <- RepositorySyncDefinitionBinding.conflictOperationC
       from = source.conflicted.record
       bundle = ContextBundle("Resolve only the issued native text conflicts",
@@ -146,7 +135,7 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       intent = WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,
         declaration.configuration, from, from.revision, entry,
         ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available))
-      admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
+      next <- from.appendC(from.revision, entry)
       handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, from)
       work = WorkflowInteraction[I.Request, Nothing](handle, WorkflowContinuation.WorkOrder(
         ContinuationRequest(continuation.runId, continuation.continuationId, continuation.expectedRevision,
@@ -155,9 +144,10 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_CONFLICT"),
           ReasoningLevel.Standard, false), MinimalPresentation("Native repository conflicts",
           "Return only the assigned resolution proposal. Workflow owns materialization, validation and repository effects.")))
-    } yield Plan(source, input, intent, admitted.next, work)
+    } yield Plan(source, input, intent, next, work)
 
-    private[RepositorySyncNativeConflictContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result]):
+    private[RepositorySyncNativeConflictContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result],
+      result: Option[ContinuationResult[io.circe.Json]] = None):
         Consequence[spec.OperationDefinition] = {
       val provided = RepositorySyncDefinitionBinding.providedDefinition
       val op = provided.providedOperations.find(o => o.service == completionOperation.service && o.name == completionOperation.operation)
@@ -173,10 +163,8 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       }
       val codec = new WorkflowCompletionServiceOperation.Codec[S.Result] {
         val resultTypeIdentity = S.resultCodec.typeIdentity
-        def decodeC(request: ProtocolRequest) = WorkflowJsonCommandRequest.commandArguments(request) match {
-          case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, S.resultCodec)
-          case _ => invalid("completion requires one canonical typed result envelope")
-        }
+        def decodeC(request: ProtocolRequest) = result.map(NativeWorkflowResultInput.typedC(_, S.resultCodec))
+          .getOrElse(invalid("conflict completion has no resolved semantic result"))
         def encodeC(resume: ContinuationRuntime.Resume) = invalid("completion acknowledgement requires actual native commit")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Result],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] =
@@ -228,16 +216,13 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
       Vector(definition), declaration.instances, declaration.continuations)
     native <- nativeCompletionC(storage)
     declared <- port.operationC(None, native)
-  } yield CallScopedOperationBinding.wrap(declared, core => F.bindC(declaration, definition, core)
-    .flatMap(nativeCompletionC).flatMap(actual => port.operationC(Some(core), actual)))
+  } yield CallScopedOperationBinding.wrapResult(declared, (core, result) => F.bindC(declaration, definition, core)
+    .flatMap(nativeCompletionC).flatMap(actual => port.operationC(Some(core), actual, Some(result))))
 
   private def completedC(plan: Plan, submitted: ContinuationResult[S.Result], policy: I.Policy): Consequence[InstanceRecord] = for {
     _ <- S.admitC(plan.input, submitted.result.value, policy)
     current = plan.next
     stage = if (submitted.result.value.decision == "resolved") "MergeResolutionAdmitted" else "ConflictDecisionRequired"
-    event = if (submitted.result.value.decision == "resolved") "resolution-plan-admitted" else "conflict-decision-required"
-    _ <- if (domain.statemachine.RepositorySyncBoundaryLifecycle.permits("MergeConflicted", event, stage)) Consequence.unit
-      else invalid("conflict successor is not declared by CML")
     entry = HistoryEntry(HistorySequence(current.history.size.toLong + 1), current.revision.next, Lifecycle.Active,
       Some(ProgressionReference("sync." + stage)), current.correlation, CausationReference(submitted.resultReference.identity),
       current.derivedCompositeOccurrence, current.committedPredecessor, None)
@@ -246,9 +231,9 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
   private def nativeCompletionC(storage: WorkflowComponentStorage) = storage.bindCompletionC(completionOperation,
     S.inputCodec, S.resultCodec, closingType, (_, _) => Consequence.success(Vector.empty))
   private def inputC(work: WorkflowInteraction[I.Request, Nothing]): Consequence[I.Request] = work.current match {
-    case order: WorkflowContinuation.WorkOrder[?] if order.request.input.exists(v =>
-        v.typeIdentity == S.inputCodec.typeIdentity && v.value.isInstanceOf[I.Request]) =>
-      Consequence.success(order.request.input.get.value.asInstanceOf[I.Request])
+    case order: WorkflowContinuation.WorkOrder[I.Request] =>
+      order.request.input.map(value => Consequence.success(value.value))
+        .getOrElse(invalid("issued conflict work has no assigned native input"))
     case _ => invalid("issued conflict work has no assigned native input")
   }
   private def continuationId(source: N.Stage): ContinuationIdentity =
@@ -261,7 +246,6 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
           "The assigned proposal is saved; native materialization, validation, review and convergence remain incomplete."
         else "Human decision remains required. This AI result grants no consent, file change or command authority."))))
   } yield wire
-  private def same(a: InstanceRecord, b: InstanceRecord) = SplitPhaseDefinitionBinding.sameRecord(a, b)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native conflict continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

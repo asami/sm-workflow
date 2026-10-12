@@ -67,14 +67,9 @@ private[smworkflow] object SplitPhaseTypedScopeWorkIssue {
         MinimalPresentation("HandoffScopeRequired", "Return only the assigned original transfer scopes; Workflow retains every candidate and decision.")))
   } yield new Plan(source, intent, admitted.next, work, request)
 
-  /** Canonical issued envelope plus the original host result/evidence. */
-  def admitC(plan: Plan, submitted: ContinuationResult[S.Judgment]): Consequence[S.Admitted] = for {
-    _ <- WorkflowProtocolV1.admitResultC(plan.work, submitted).map(_ => ())
-    admitted <- S.admitC(plan.request, submitted.resultReference, submitted.result.value)
-    _ <- if (admitted.judgment.evidence.forall(reference => submitted.evidence.references.contains(
-        ContextReference(reference.identity, reference.revision)))) Consequence.unit
-      else Consequence.stateConflict("Scope judgment evidence differs from its actual execution evidence")
-  } yield admitted
+  /** Semantic consumption; the canonical completion owns frame/state admission. */
+  def admitC(plan: Plan, submitted: ContinuationResult[S.Judgment]): Consequence[S.Admitted] =
+    S.admitC(plan.request, ContextReference(plan.request.result.identity, plan.request.result.revision), submitted.result.value)
 
   def projectCompletionC(plan: Plan, submitted: ContinuationResult[S.Judgment]): Consequence[CompletionProjection] = for {
     admitted <- admitC(plan, submitted)

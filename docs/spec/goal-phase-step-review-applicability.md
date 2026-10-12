@@ -1,5 +1,22 @@
 # GoalPhase Step review applicability — existing Phase 5 policy
 
+## Current Phase 5.2 C15 — legacy Step-close path removed
+
+The old Step-close input/routing, review snapshot/result adaptation and admission
+graph, including its exclusive tests, is retired without a compatibility path.
+The normal native GoalPhase work/result/advance Operations remain. Current native
+review and Human evidence belong to their actual consumers; the old copy, legacy
+payload and intermediate-recovery cases below are historical, not acceptance
+requirements for the removed graph. No additional review or recovery guarantee is
+introduced by its deletion.
+
+C15 remains UNVERIFIED pending the complete frozen patch and one fresh registered
+shared-serial fourteen-suite run. The remaining public CML/ABI/DTO and current
+consumer migration is not complete. Connected Step/Phase review and release remain
+open; accounting, original history and consumed repair frames are unchanged.
+
+## Historical Phase 5 correction
+
 Status: source implementation and executable cases added; UNVERIFIED. Normal
 Cozy generation, affected-suite execution and assembled independent review
 have not run for these inputs. This is an existing-policy implementation

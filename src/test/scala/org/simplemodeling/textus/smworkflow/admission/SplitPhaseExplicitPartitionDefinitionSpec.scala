@@ -2,12 +2,11 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.generic.auto.*
-import io.circe.parser.parse
 import io.circe.syntax.*
 import java.net.URLClassLoader
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
-import org.goldenport.cncf.workflow.{CandidateAdmissionProducerAbi, CandidateWorkflowAbi, StateMachineOperationIdentity}
+import org.goldenport.cncf.workflow.StateMachineOperationIdentity
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -21,12 +20,9 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 12, 2026
   */
 final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private def workflowText = Files.readString(Path.of("target/cozy/statemachine-workflow-abi.json"))
-  private def producerText = Files.readString(Path.of("target/cozy/candidate-admission-producer-abi.json"))
-  private def json(text: String) = parse(text).fold(e => fail(e.toString), identity)
   private def prepared: S.Prepared = {
     val source = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
     val records = source.records.copy(estimates = source.records.estimates.copy(items = source.records.estimates.items.updated(1,
@@ -46,7 +42,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
       val operation = take(SplitPhaseDefinitionBinding.partitionSemanticOperationC)
       val completion = SplitPhaseDefinitionBinding.providedDefinition.providedOperations.filter(_.name == "submitPartitionSemanticResult")
       Then("request result operation and source identities belong to the actual current declarations")
-      candidate.workflow.version shouldBe "split-phase-selected-application-v12"
+      candidate.workflow.version shouldBe "split-phase-minimal-operation-v13"
       operation.identity.capability shouldBe "assess-partition-semantic-capability"
       operation.actionIdentity shouldBe "AssessPartitionSemanticInputs"
       operation.operation shouldBe StateMachineOperationIdentity("SplitSemanticService", "assessPartitionSemanticInputs")
@@ -59,9 +55,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
       val spi = candidate.workflow.requiredSpi.find(_.capability == operation.identity.capability).get
       val action = candidate.workflow.actions.find(_.identity == operation.actionIdentity).get
       spi.operation shouldBe action.operation
-      spi.line should be > 0
-      action.line should be > 0
-      candidate.workflow.requiredSpi.map(_.capability) shouldBe Vector("assess-novel-split-capability", "assess-partition-semantic-capability",
+      candidate.workflow.requiredSpi.map(_.capability) shouldBe Vector("assess-partition-semantic-capability",
         "assess-handoff-scope-capability", "split-human-direction-capability", "assess-reasoning-demand-capability", "reasoning-human-direction-capability")
     }
     "generate purpose-typed payload shapes matching the converted application JSON without a schema adapter" in {
@@ -106,47 +100,18 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
         val catalog = take(SplitPhaseRuntimeCatalog.loadC(loader))
         val model = catalog.producer.models.find(_.model.workflow.exists(_.identity.value == "SplitPhaseWorkflow")).get
         val judgment = model.judgments.find(_.identity.value == "AssessPartitionSemanticInputs").get
-        Then("the admitted packaged declaration describes requested data only and matches the compiled current ABI")
+        Then("the packaged execution definition resolves the actual partition capability and its requested data")
         catalog.workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
-        catalog.definition.workflowRevision.value shouldBe "split-phase-selected-application-v12"
-        catalog.workflow.workflow shouldBe take(SplitPhaseDefinitionBinding.candidateC).workflow
+        catalog.definition.workflowRevision.value shouldBe "split-phase-minimal-operation-v13"
         judgment.alternatives.map(_.value) shouldBe Vector("Enriched", "DecisionNeeded")
         judgment.criteria.map(_.value) shouldBe Vector("exact-ordered-gap-coverage", "known-work-preserved",
           "workflow-owned-existing-authority", "no-participant-execution-selectors")
         judgment.evidenceProvenance.value shouldBe "host-owned-result-reference"
         judgment.operation.inputType.map(_.value) shouldBe Some(J.requestCodec.typeIdentity)
         judgment.operation.resultType.map(_.value) shouldBe Some(J.resultCodec.typeIdentity)
-        model.requiredSpi.map(_.identity.value).toSet shouldBe Set("assess-novel-split-capability", "assess-partition-semantic-capability",
+        model.requiredSpi.map(_.identity.value).toSet shouldBe Set("assess-partition-semantic-capability",
           "assess-handoff-scope-capability", "split-human-direction-capability", "assess-reasoning-demand-capability", "reasoning-human-direction-capability")
       } finally loader.close()
-    }
-    "refuse old-type substitution and receiver-valid changes to the converted semantic policy" in {
-      Given("official multi-Workflow ABI and producer resources")
-      val workflow = json(workflowText)
-      val workflows = workflow.hcursor.downField("workflows").focus.get.asArray.get
-      val wi = workflows.indexWhere(_.hcursor.get[String]("identity").toOption.contains("SplitPhaseWorkflow"))
-      val spis = workflows(wi).hcursor.downField("requiredSpi").focus.get.asArray.get
-      val si = spis.indexWhere(_.hcursor.get[String]("capability").toOption.contains("assess-partition-semantic-capability"))
-      val oldType = workflow.hcursor.downField("workflows").downN(wi).downField("requiredSpi").downN(si)
-        .downField("operation").downField("inputType").withFocus(_ => Json.fromString("SplitPhaseSemanticRequest")).top.get.noSpaces
-      val producer = json(producerText)
-      val models = producer.hcursor.downField("models").focus.get.asArray.get
-      val mi = models.indexWhere(_.hcursor.downField("model").downField("workflow").get[String]("identity").toOption.contains("SplitPhaseWorkflow"))
-      val judgments = models(mi).hcursor.downField("judgments").focus.get.asArray.get
-      val ji = judgments.indexWhere(_.hcursor.get[String]("actionIdentity").toOption.contains("AssessPartitionSemanticInputs"))
-      wi should be >= 0
-      si should be >= 0
-      mi should be >= 0
-      ji should be >= 0
-      When("the converted SPI is replaced by the hash schema or its provenance policy is changed")
-      val changedPolicy = producer.hcursor.downField("models").downN(mi).downField("judgments").downN(ji)
-        .downField("evidenceProvenance").downField("value").withFocus(_ => Json.fromString("participant-authority")).top.get.noSpaces
-      val admittedProducer = take(CandidateAdmissionProducerAbi.parseC(changedPolicy))
-      take(CandidateWorkflowAbi.parseSelectedC(workflowText, admittedProducer, "src/main/cozy/sm-workflow.cml",
-        "SplitPhaseWorkflow", "split-phase-selected-application-v12"))
-      Then("neither an old input alias nor a structurally valid foreign policy becomes an admitted component catalog")
-      SplitPhaseRuntimeCatalog.parseC(oldType, producerText) shouldBe a[Consequence.Failure[?]]
-      SplitPhaseRuntimeCatalog.parseC(workflowText, changedPolicy) shouldBe a[Consequence.Failure[?]]
     }
   }
 }

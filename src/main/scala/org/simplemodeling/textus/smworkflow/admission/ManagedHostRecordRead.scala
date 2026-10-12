@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 /**
  * Internal call-scoped read seam, not a storage grant or physical owner.
  * @since   Oct.  1, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object ManagedHostRecordRead {
   def loadNativeEvidenceC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
@@ -44,33 +44,31 @@ private[smworkflow] object ManagedHostRecordRead {
     _loadC(core, storeName, collection, identity, () => RepositorySyncHostSelectionReadPolicy.admitC(
       core.component.get.subsystem.get.configuration, storeName, collection))
 
-  def loadSplitEntryC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
-    identity: String, purpose: SplitPhaseHostEntryReadPolicy.Purpose): Consequence[Option[Record]] =
-    _loadC(core, storeName, collection, identity, () => SplitPhaseHostEntryReadPolicy.admitC(
-      core.component.get.subsystem.get.configuration, purpose, storeName, collection))
-
-  def loadSplitProposalC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
-    identity: String, purpose: SplitPhaseHostProposalReadPolicy.Purpose): Consequence[Option[Record]] =
-    _loadC(core, storeName, collection, identity, () => SplitPhaseHostProposalReadPolicy.admitC(
-      core.component.get.subsystem.get.configuration, purpose, storeName, collection))
+  /** Discovery borrows the same owning call/store as selection lookup. */
+  def searchProfileSelectionsC(core: ActionCall.Core, storeName: String,
+    collection: DataStore.CollectionId, profile: ProfileSelectionDataStorePort.Profile): Consequence[Vector[Record]] =
+    core.component.flatMap(_.subsystem) match {
+      case None => Consequence.configurationInvalid("Selection discovery requires its owning Subsystem")
+      case Some(subsystem) =>
+        val admission = profile match {
+          case ProfileSelectionDataStorePort.Profile.GoalPhase =>
+            GoalPhaseHostRecordReadPolicy.admitC(subsystem.configuration,
+              GoalPhaseHostRecordReadPolicy.Purpose.Selection, storeName, collection)
+          case ProfileSelectionDataStorePort.Profile.SplitPhase =>
+            SplitPhaseHostSelectionReadPolicy.admitC(subsystem.configuration, storeName, collection)
+          case ProfileSelectionDataStorePort.Profile.RepositorySync =>
+            RepositorySyncHostSelectionReadPolicy.admitC(subsystem.configuration, storeName, collection)
+        }
+        admission.flatMap(_ => new ContextSearchCall(core, storeName, collection).searchC())
+    }
 
   def loadHumanQuestionC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
-    identity: String, workflow: GoalPhaseManagedStartAssembly.Declaration): Consequence[Option[Record]] =
+    identity: String, workflow: GoalPhaseRuntimeParameters.Persistence): Consequence[Option[Record]] =
     _loadC(core, storeName, collection, identity, () => GoalPhaseHumanQuestionStoragePolicy.decodeC(
       core.component.get.subsystem.get.configuration, workflow).flatMap { declared =>
       if (declared.storeName == storeName && declared.collection == collection) Consequence.unit
       else Consequence.stateConflict("Human question read differs from its host declaration")
     })
-
-  def loadSplitSemanticInputC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
-    identity: String): Consequence[Option[Record]] =
-    _loadC(core, storeName, collection, identity, () => SplitPhaseHostSemanticInputReadPolicy.admitC(
-      core.component.get.subsystem.get.configuration, storeName, collection))
-
-  def loadSplitStartRecordC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
-    identity: String): Consequence[Option[Record]] =
-    _loadC(core, storeName, collection, identity, () => SplitPhaseHostStartRecordReadPolicy.admitC(
-      core.component.get.subsystem.get.configuration, storeName, collection))
 
   def loadSplitCalibrationC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
     identity: String, purpose: SplitPhaseCalibrationReadPolicy.Purpose): Consequence[Option[Record]] =

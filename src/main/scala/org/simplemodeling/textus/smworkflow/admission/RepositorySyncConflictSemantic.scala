@@ -11,7 +11,7 @@ import RepositorySyncNativeConflictInput as I
 /** Closed semantic proposal only. No path, tip, operation, authority or process
   * data can be returned in a resolution. Native materialization is separate.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object RepositorySyncConflictSemantic {
   final case class Resolution(conflictIdentity: String, text: String)
@@ -37,44 +37,20 @@ private[smworkflow] object RepositorySyncConflictSemantic {
     }
   } yield ()
 
-  private final class Codec[A](val typeIdentity: String, schema: String, shape: Json => Boolean,
-    normalize: Json => Json = (value: Json) => value)(using Encoder[A], Decoder[A])
+  private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, A] = for {
-      root <- Option(value).filter(_.noSpaces.getBytes(UTF_8).length <= 16 * 1024 * 1024)
-        .flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("Native conflict payload envelope is missing, oversized or incompatible")
-      _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Native conflict payload schema differs")
-      body = root("payload").get
-      _ <- Either.cond(shape(body), (), "Native conflict payload has undeclared or missing nested fields")
-      parsed <- normalize(body).as[A].left.map(_.message)
+      json <- Option(value).toRight("Current typed payload is missing")
+      version <- json.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(version == schema, (), "Current typed payload schema differs")
+      parsed <- json.hcursor.get[A]("payload").left.map(_.message)
     } yield parsed
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[I.Request] =
-    new Codec[I.Request]("RepositorySyncConflictRequest", "sm-workflow.repository-sync-conflict-request.v1", requestShape, normalizeRequest)
+    new Codec[I.Request]("RepositorySyncConflictRequest", "sm-workflow.repository-sync-conflict-request.v1")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
-    new Codec[Result]("RepositorySyncConflictResult", "sm-workflow.repository-sync-conflict-result.v1", resultShape)
+    new Codec[Result]("RepositorySyncConflictResult", "sm-workflow.repository-sync-conflict-result.v1")
 
-  // Admission checks declared fields directly, once. It does not recreate an
-  // encoded payload to certify that old storage matches today's producer.
-  private[admission] def exact(value: Json, required: Set[String], optional: Set[String] = Set.empty): Boolean =
-    Option(value).flatMap(_.asObject).exists(o => required.subsetOf(o.keys.toSet) && o.keys.toSet.subsetOf(required ++ optional))
-  private[admission] def requestShape(value: Json): Boolean =
-    exact(value, Set("instanceIdentity", "conflictRevision", "localTip", "remoteTip", "conflicts")) &&
-      value.hcursor.downField("conflicts").focus.flatMap(_.asArray).exists(_.forall { c =>
-        exact(c, Set("identity", "path", "base", "local", "remote"), Set("mode", "worktree")) &&
-          Vector("base", "local", "remote").forall(k => c.hcursor.downField(k).focus.exists(exact(_, Set("identity", "text"))))
-      })
-  private[admission] def resolutionShape(value: Json): Boolean = exact(value, Set("conflictIdentity", "text"))
-  private[admission] def resultShape(value: Json): Boolean =
-    exact(value, Set("decision", "resolutions", "rationale")) &&
-      value.hcursor.downField("resolutions").focus.flatMap(_.asArray).exists(_.forall(resolutionShape))
-  private[admission] def normalizeRequest(value: Json): Json = value.mapObject { root =>
-    root.add("conflicts", root("conflicts").get.mapArray(_.map(_.mapObject { fields =>
-      val mode = if (fields.contains("mode")) fields else fields.add("mode", Json.fromString("100644"))
-      if (mode.contains("worktree")) mode else mode.add("worktree", Json.fromString(""))
-    })))
-  }
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync conflict semantic " + reason)
 }

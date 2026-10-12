@@ -7,35 +7,41 @@ import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMo
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.security.SecuritySubject
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseAdvanceCommand, SplitPhasePartitionContextReference}
+import org.simplemodeling.textus.smworkflow.value.{SplitPhasePartitionContextReference}
 
 /** Public Start/advance context resolution, not a second Workflow engine.
   * Actual calls retain actor, capabilities, UoW and managed storage ownership.
   * @since   Oct. 10, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeWorkflowSessionInput {
   val schema = "sm-workflow.session-operation.v1"
   private final case class Invocation(json: Json, session: Option[String], instance: Option[String])
-  private type Advance = (InstanceRecord, Json, ActionCall.Core) => Consequence[String]
+  private type Advance = (InstanceRecord, Json, ActionCall.Core) => Consequence[NativeWorkflowAdvanceInput.Resolved]
+  private type Selections = ActionCall.Core => Consequence[ProfileSelectionDataStorePort]
 
   def goal(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       "startGoalPhase", "advanceGoalPhase", (instance, _, _) =>
-        Consequence.success(GoalPhaseNativeServiceAssembly.encodeAdvance(instance.identity.value)))
+        Consequence.success(NativeWorkflowAdvanceInput.Goal(instance.identity.value)),
+      NativeWorkflowStartInput.Kind.GoalPhase, _ =>
+        GoalPhaseNativeInputReadPolicy.bindC(creation.configuration, declaration).map(_.selections))
 
   def repository(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: RepositorySyncManagedFetch.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       "startRepositorySync", "advanceRepositorySync", (instance, _, _) =>
-        Consequence.success(RepositorySyncManagedServiceAssembly.encodeAdvance(instance.identity.value)))
+        Consequence.success(NativeWorkflowAdvanceInput.Repository(instance.identity.value)),
+      NativeWorkflowStartInput.Kind.RepositorySync, _ =>
+        RepositorySyncHostSelectionReadPolicy.bindC(creation.configuration, declaration))
 
   def split(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: SplitPhaseManagedStartAssembly.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
@@ -45,10 +51,10 @@ private[smworkflow] object NativeWorkflowSessionInput {
         contexts <- port.findForCallC(instance.identity, core)
         selector <- _optional_string_c(json, "contextIdentity")
         selected <- selectC(contexts, selector, _.reference.identity, "partition context")
-        command = SplitPhaseAdvanceCommand(instance.identity.value,
+        command = SplitPhaseAdvanceTarget(instance.identity.value,
           SplitPhasePartitionContextReference(selected.reference.identity, selected.reference.revision))
-        wire <- SplitPhaseAdvanceCommandJsonV1.encodeC(command)
-      } yield wire)
+      } yield NativeWorkflowAdvanceInput.Split(command), NativeWorkflowStartInput.Kind.SplitPhase, _ =>
+        SplitPhaseHostSelectionReadPolicy.bindC(creation.configuration, declaration))
 
   /** Reuse actual host context when no explicit identifier is needed. An
     * explicit identifier changes only routing context, not actor/authority/UoW.
@@ -75,11 +81,12 @@ private[smworkflow] object NativeWorkflowSessionInput {
 
   private def _service(service: spec.ServiceDefinition, creation: ComponentCreate, configuration: Configuration,
     instances: DataStore.CollectionId, continuations: DataStore.CollectionId, definition: DefinitionBinding,
-    start: String, advance: String, resolve: Advance): spec.ServiceDefinition = {
+    start: String, advance: String, resolve: Advance, kind: NativeWorkflowStartInput.Kind,
+    selections: Selections): spec.ServiceDefinition = {
     val operations = service.operations.operations.toVector.map { operation =>
       if (operation.name == start || operation.name == advance)
         new Operation(operation, creation, configuration, instances, continuations, definition,
-          operation.name == start, resolve)
+          operation.name == start, resolve, kind, selections)
       else operation
     }
     NativeWorkflowDescriptionMetadata.service(service,
@@ -88,23 +95,28 @@ private[smworkflow] object NativeWorkflowSessionInput {
 
   private final class Operation(original: spec.OperationDefinition, creation: ComponentCreate,
     configuration: Configuration, instances: DataStore.CollectionId, continuations: DataStore.CollectionId,
-    definition: DefinitionBinding, start: Boolean, resolve: Advance) extends spec.OperationDefinition {
-    val specification = original.specification
+    definition: DefinitionBinding, start: Boolean, resolve: Advance, kind: NativeWorkflowStartInput.Kind,
+    selections: Selections) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(original.specification,
+      original.specification.response,
+      if (start) WorkflowJsonCommandRequest.definition else WorkflowJsonCommandRequest.optionalDefinition)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      WorkflowJsonCommandRequest.commandArguments(request) match {
-        case Nil if !start => _action_c(request, Json.obj())
-        case List(Argument("arg1", raw: String, _)) => io.circe.parser.parse(raw) match {
-          case Right(json) if json.hcursor.get[String]("schemaVersion").contains(schema) => _action_c(request, json)
-          case _ => original.createOperationRequest(request)
+      if (request == null || request.operation != original.name || !request.service.contains(kind.operation.service))
+        Consequence.stateConflict("Workflow request differs from its owning Operation")
+      else WorkflowJsonCommandRequest.inputC(request).flatMap {
+        case None if !start => _action_c(request, Json.obj())
+        case Some(raw) => io.circe.parser.parse(raw) match {
+          case Right(json) => _action_c(request, json)
+          case Left(_) => Consequence.stateConflict("Workflow business input JSON is invalid")
         }
-        case _ => original.createOperationRequest(request)
+        case _ => Consequence.stateConflict("Workflow operation requires its business input JSON")
       }
 
     private def _action_c(request: Request, json: Json): Consequence[OperationRequest] = for {
       session <- _optional_string_c(json, "sessionIdentity")
-      instance <- _optional_string_c(json, "instanceIdentity")
+      instance <- if (start) Consequence.success(Option.empty[String]) else _optional_string_c(json, "instanceIdentity")
     } yield BoundAction(request, Invocation(json, session, instance), original, creation, configuration,
-      instances, continuations, definition, start, resolve)
+      instances, continuations, definition, start, resolve, kind, selections)
   }
 
   private def _optional_string_c(json: Json, field: String): Consequence[Option[String]] =
@@ -113,7 +125,8 @@ private[smworkflow] object NativeWorkflowSessionInput {
 
   private final case class BoundAction(request: Request, invocation: Invocation, original: spec.OperationDefinition,
     creation: ComponentCreate, configuration: Configuration, instances: DataStore.CollectionId,
-    continuations: DataStore.CollectionId, definition: DefinitionBinding, start: Boolean, resolve: Advance) extends CommandAction {
+    continuations: DataStore.CollectionId, definition: DefinitionBinding, start: Boolean, resolve: Advance,
+    kind: NativeWorkflowStartInput.Kind, selections: Selections) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
@@ -121,9 +134,21 @@ private[smworkflow] object NativeWorkflowSessionInput {
       def execute(): Consequence[OperationResponse] = for {
         context <- contextC(executionContext, invocation.session)
         selectedcore = core.copy(executionContext = context)
-        wire <- if (start) invocation.json.hcursor.get[Json]("input").fold(
-          _ => Consequence.stateConflict("Workflow Start requires its business input"),
-          input => Consequence.success(input.asString.getOrElse(input.noSpaces)))
+        operation <- if (start) for {
+          json <- invocation.json.hcursor.get[Json]("input").fold(
+            _ => Consequence.stateConflict("Workflow Start requires its business input"), Consequence.success)
+          input <- NativeWorkflowStartInput.decodeC(kind, json)
+          reader <- selections(selectedcore)
+          records <- reader.findForCallC(selectedcore)
+          selector <- _optional_string_c(invocation.json, "selectionIdentity")
+          selected <- NativeWorkflowStartInput.selectC(records, input,
+            SecuritySubject.from(context.security).subjectId, definition, selector)
+          action <- original match {
+            case receiver: NativeWorkflowStartInput.Receiver =>
+              receiver.createStartOperationRequestC(BoundAction.this.request, input, selected)
+            case _ => Consequence.configurationInvalid("Workflow Start has no direct business-input receiver")
+          }
+        } yield action
         else for {
           storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, configuration,
             Vector(definition), instances, continuations)
@@ -132,9 +157,12 @@ private[smworkflow] object NativeWorkflowSessionInput {
             definition.workflowIdentity)(using context)
           selected <- selectC(candidates, invocation.instance, _.identity.value, "instance")
           resolved <- resolve(selected, invocation.json, selectedcore)
-        } yield resolved
-        operation <- original.createOperationRequest(BoundAction.this.request.copy(arguments = List(Argument("arg1", wire)),
-          properties = BoundAction.this.request.properties.filter(_.name == "textus.format")))
+          action <- original match {
+            case receiver: NativeWorkflowAdvanceInput.Receiver =>
+              receiver.createAdvanceOperationRequestC(BoundAction.this.request, resolved)
+            case _ => Consequence.configurationInvalid("Workflow advance has no direct target receiver")
+          }
+        } yield action
         result <- operation match {
           case command: CommandAction =>
             val call = command.createCall(selectedcore.copy(action = command))

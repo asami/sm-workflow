@@ -3,7 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.context.SubjectKind
-import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore, DataStoreConditionalTransitionFailure}
+import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
 import org.goldenport.cncf.security.SecuritySubject
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.record.Record
@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /** Inert context data only. No Start consent, issued work or completion grant.
   * Owns stored input metadata, never a call, provider, writer or physical lease.
   * @since   Oct.  2, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedPartitionContextRegistration {
   final class Port private[SplitPhaseManagedPartitionContextRegistration] (
@@ -35,7 +35,6 @@ private[smworkflow] object SplitPhaseManagedPartitionContextRegistration {
           DataStore.StringEntryId(expected.reference.identity))
         prepared <- preparation.preparePlanningRecordForCallC(expected, core)
         retained <- SplitPhasePartitionContextRetention.retainPlanningC(prepared, new SplitPhasePartitionContextRetention.Port {
-          def loadC() = storage.loadC()
           def createC(row: Record) = storage.createC(row)
         })
       } yield retained
@@ -59,10 +58,9 @@ private[smworkflow] object SplitPhaseManagedPartitionContextRegistration {
   private def name(value: String): Boolean = value != null && value.nonEmpty && value.trim == value
 }
 
-/** Fixed-identity data retention. The supplied seam itself grants no authority. */
+/** One normal Create. The supplied seam itself grants no authority. */
 private[smworkflow] object SplitPhasePartitionContextRetention {
   trait Port {
-    def loadC(): Consequence[Option[Record]]
     def createC(row: Record): Consequence[Unit]
   }
   def retainC(prepared: C.Prepared, storage: Port): Consequence[C.Record] =
@@ -74,29 +72,6 @@ private[smworkflow] object SplitPhasePartitionContextRetention {
     else _retain_record_c(prepared.record, storage)
 
   private def _retain_record_c(expected: C.Record, storage: Port): Consequence[C.Record] =
-    storage.loadC().flatMap {
-      // Reuse resolves selected stored data, not an unchanged-copy claim.
-      // This record is inert; current facts are loaded at preparation.
-      case Some(row) => _read_c(expected.reference, row)
-      case None => J.encodeC(expected).flatMap { raw =>
-        storage.createC(Record.data(J.storageField -> raw)) match {
-          case Consequence.Failure(_) => uncertainC("SplitPhase context Create is not established; observe the same identity on a later call")
-          case Consequence.Success(_) => storage.loadC() match {
-            case Consequence.Success(Some(row)) => _read_c(expected.reference, row) match {
-              case Consequence.Success(actual) => Consequence.success(actual)
-              case _ => uncertainC("SplitPhase context committed readback cannot resolve its selected data")
-            }
-            case _ => uncertainC("SplitPhase context committed readback is unavailable")
-          }
-        }
-      }
-    }
-  private def _read_c(reference: SplitPhaseExplicitPartitionSemantic.ContextReference, row: Record): Consequence[C.Record] =
-    if (row == null) Consequence.stateConflict("SplitPhase retained context row is absent")
-    else row.getString(J.storageField) match {
-      case Some(raw) => J.decodeC(reference, raw)
-      case None => Consequence.stateConflict("SplitPhase retained context payload is absent")
-    }
-  private def uncertainC(message: String): Consequence[C.Record] =
-    DataStoreConditionalTransitionFailure.transactionIndeterminate(message)
+    J.encodeC(expected).flatMap(raw =>
+      storage.createC(Record.data(J.storageField -> raw)).map(_ => expected))
 }

@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Pure projection from constructed current facts. Not publication or authority.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 private[smworkflow] object SplitPhaseTypedPartitionWorkIssue {
   final class Plan private[SplitPhaseTypedPartitionWorkIssue] (
@@ -18,8 +18,8 @@ private[smworkflow] object SplitPhaseTypedPartitionWorkIssue {
     val projected: InstanceRecord, val interaction: WorkflowInteraction[S.Request, Nothing], val wire: String)
 
   def prepareC(binding: T.PartitionBound, allocation: SplitPhasePartitionReplyAllocationPolicy.Allocated): Consequence[Plan] =
-    if (binding == null || allocation == null || !(allocation.binding eq binding))
-      Consequence.stateConflict("SplitPhase partition issue requires its constructed binding and exact reply allocation")
+    if (binding == null || allocation == null)
+      Consequence.stateConflict("SplitPhase partition issue requires current binding and allocated reply")
     else {
       val prepared = binding.context
       val owner = prepared.record.owner

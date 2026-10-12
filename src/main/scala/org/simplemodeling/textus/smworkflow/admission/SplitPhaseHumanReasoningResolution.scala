@@ -66,15 +66,14 @@ private[smworkflow] object SplitPhaseHumanReasoningResolution {
   } yield record
 
   def calculateC(plan: H.Plan, submitted: ContinuationResult[A.Answer], record: Record): Consequence[R.Record] = for {
-    // The owning reader decoded this Record. Consume its semantic target here;
-    // native Decision completion owns common result admission before effects.
-    _ <- admitTargetC(plan, submitted, record)
-    references = S.ResolutionReferences(
-      Some(W.DataReference(submitted.continuationId.value + ":human-planning", submitted.expectedRevision.value)),
-      Some(O.DemandReference(submitted.continuationId.value + ":human-demands", submitted.expectedRevision.value)))
     // Only this new Human interpretation needs semantic preparation. Reading
     // the earlier saved AI completion does not replay its semantic calculation.
     restored <- W.restoreReasoningC(plan.source.source)
+    // Consume the decoded interpretation for the owning pending reasoning work;
+    // native Decision completion owns result admission, not a copied target proof.
+    references = S.ResolutionReferences(
+      Some(W.DataReference(submitted.continuationId.value + ":human-planning", submitted.expectedRevision.value)),
+      Some(O.DemandReference(submitted.continuationId.value + ":human-demands", submitted.expectedRevision.value)))
     prepared <- S.prepareC(plan.source.request.context, restored.pending, plan.source.request.result)
     outcome <- S.admitC(prepared, prepared.request.result, references, record.interpretation)
     admitted <- outcome match {
@@ -86,22 +85,6 @@ private[smworkflow] object SplitPhaseHumanReasoningResolution {
     _ <- if (projected.disposition == R.Disposition.Planned) Consequence.unit
       else _invalid("complete Human interpretation did not produce a selected planning successor")
   } yield projected.record
-
-  /** Resolve retained interpretation to its real Decision/source assignment.
-    * This does not rerun semantic admission or planning to certify a saved body.
-    * The owning record reader admits transport shape before this selection.
-    */
-  def admitTargetC(plan: H.Plan, submitted: ContinuationResult[A.Answer], record: Record): Consequence[Unit] = for {
-    selected <- submitted.result.value match {
-      case A.Answer.ProvideResolution(reference) => Consequence.success(reference)
-      case _ => _invalid("canonical Human answer did not select interpretation")
-    }
-    _ <- if (record.reference == selected && submitted.resultReference != ContextReference(selected.identity, selected.revision) &&
-        record.decision == submitted.continuationId.value && record.reasoningResult == plan.source.completion.result.resultReference &&
-        record.interpretation.evidence.forall(e =>
-          submitted.evidence.references.contains(ContextReference(e.identity, e.revision)))) Consequence.unit
-      else _invalid("Human interpretation crosses its selected Decision, saved AI result or answer evidence")
-  } yield ()
 
   private def _reference(identity: String, revision: String): Json =
     Json.obj("identity" -> Json.fromString(identity), "revision" -> Json.fromString(revision))

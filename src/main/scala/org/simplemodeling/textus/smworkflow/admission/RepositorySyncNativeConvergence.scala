@@ -17,14 +17,14 @@ import WorkflowManagedProcessExecution as E
   * recorded as normal progression. Intermediate recovery and replay guarantees
   * are not supplied here. Push remains non-forcing; actual convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
   enum Effect { case CommitPending, Push, FinalFetch }
   trait AuthorityPort {
     // Trusted host reads its current human-selected scope/grants. Review text
     // and a successful Start are not grants for these additional effects.
-    def admitC(core: ActionCall.Core, originalCommand: Json, target: Target, effect: Effect): Consequence[Unit]
+    def admitC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext, target: Target, effect: Effect): Consequence[Unit]
   }
   final case class Result(instanceIdentity: String, repositoryRoot: String, localBranch: String,
     remote: String, remoteBranch: String, tip: String, tree: String)
@@ -33,16 +33,8 @@ private[smworkflow] object RepositorySyncNativeConvergence {
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] = new WorkflowResultJsonV1.PayloadCodec[Result] {
     val typeIdentity = "RepositorySyncNativeConvergenceResult"
     def encode(value: Result): Json = value.asJson
-    def decode(value: Json): Either[String, Result] = for {
-      fields <- Option(value).flatMap(_.asObject).filter(_.keys.toSet ==
-        Set("instanceIdentity", "repositoryRoot", "localBranch", "remote", "remoteBranch", "tip", "tree"))
-        .toRight("Native convergence result differs")
-      result <- Json.fromJsonObject(fields).as[Result].left.map(_ => "Native convergence result is incomplete")
-      _ <- Either.cond(Vector(result.instanceIdentity, result.repositoryRoot, result.localBranch, result.remote,
-        result.remoteBranch).forall(v => v != null && v.nonEmpty) &&
-        Vector(result.tip, result.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")),
-        (), "Native convergence identities are incomplete")
-    } yield result
+    def decode(value: Json): Either[String, Result] =
+      Option(value).toRight("Native convergence result is missing").flatMap(_.as[Result].left.map(_.message))
   }
 
   def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[String] = for {
@@ -118,5 +110,5 @@ private[smworkflow] object RepositorySyncNativeConvergence {
   } yield actual
 
   private def authorizeC(store: N.Store, authority: AuthorityPort, effect: Effect) =
-    authority.admitC(store.core, RepositorySyncStartServiceOperation.commandJson(store.command), store.declaration.target, effect)
+    authority.admitC(store.core, store.context, store.declaration.target, effect)
 }

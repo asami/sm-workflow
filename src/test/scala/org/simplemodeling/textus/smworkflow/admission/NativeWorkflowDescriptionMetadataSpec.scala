@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
+import org.goldenport.schema.Multiplicity
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.value.BaseContent
@@ -14,19 +15,24 @@ import org.scalatest.wordspec.AnyWordSpec
   * nonempty descriptions or that native all-three production hosts are installed.
   * The complete generated Help contract separately requires real descriptions.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _operations: Vector[(String, spec.OperationDefinition)] = Vector(
     "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation,
     "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
-    "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.RequestStepCloseOperation,
+    "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
+    "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.StartRepositorySyncOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.AdvanceRepositorySyncOperation,
-    "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.RequestMergeReviewOperation,
+    "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
+    "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
     "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.StartSplitPhaseOperation,
     "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.AdvanceSplitPhaseOperation,
+    "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation,
+    "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation,
+    "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation,
     "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation
   )
   private val _services: Vector[spec.ServiceDefinition] = Vector(
@@ -35,14 +41,15 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
     SmWorkflowComponent.SplitPhaseServiceService
   )
   private val _typed_response_operations: Vector[spec.OperationDefinition] = Vector(
-    SmWorkflowComponent.GoalPhaseServiceService.RegisterGoalPhaseSubmissionOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.RegisterGoalPhaseArtifactsOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.PrepareGoalPhaseHumanDecisionOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.RecordGoalPhaseHumanAnswerOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseReviewOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.PrepareGoalPhaseReviewDecisionOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseHumanDecisionOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.GetGoalPhaseHumanDecisionResultOperation
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
+    SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation,
+    SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation,
+    SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation,
+    SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation
   )
 
   "Native workflow descriptions" should {
@@ -51,9 +58,11 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
         s"connect $service.${declared.name}'s generated descriptions without replacing the runtime transport" in {
           Given("the actual generated CML operation, without injected description text or an executed handler")
           val content = declared.specification.content
+          val optional = Set("advanceGoalPhase", "advanceRepositorySync", "advanceSplitPhase").contains(declared.name)
+          val request = if (optional) WorkflowJsonCommandRequest.optionalDefinition else WorkflowJsonCommandRequest.definition
 
-          When("the native JSON operation specification is assembled from that declaration")
-          val actual = NativeWorkflowDescriptionMetadata.operation(declared)
+          When("the native JSON operation specification is assembled with its selected input domain")
+          val actual = NativeWorkflowDescriptionMetadata.operation(declared.specification, spec.ResponseDefinition.void, request)
 
           Then("only generated descriptions are borrowed and the canonical JSON request/response contract remains native")
           actual.name shouldBe declared.name
@@ -61,7 +70,7 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
           actual.content.descriptiveAttributes shouldBe content.descriptiveAttributes
           actual.summary shouldBe declared.specification.summary
           actual.description shouldBe declared.specification.description
-          actual.request should be theSameInstanceAs WorkflowJsonCommandRequest.definition
+          actual.request.parameters.head.domain.multiplicity shouldBe (if (optional) Multiplicity.ZeroOne else Multiplicity.One)
           actual.request should not be declared.specification.request
           actual.response shouldBe spec.ResponseDefinition.void
           actual.response should not be declared.specification.response
@@ -72,7 +81,7 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
     "existing typed response contracts" which {
       _typed_response_operations.foreach { declared =>
         s"retain ${declared.name}'s existing response while connecting its generated description" in {
-          Given("the actual generated registration, Human or recovery specification and its existing typed response")
+          Given("the actual current generated result or Human completion specification and its existing typed response")
           val generated = declared.specification
           val response = generated.response
 
@@ -83,7 +92,7 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
           actual.name shouldBe generated.name
           actual.content.nameAttributes shouldBe BaseContent.simple(generated.name).nameAttributes
           actual.content.descriptiveAttributes shouldBe generated.content.descriptiveAttributes
-          actual.request should be theSameInstanceAs WorkflowJsonCommandRequest.definition
+          actual.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
           actual.response should be theSameInstanceAs response
           actual.response should not be spec.ResponseDefinition.void
         }

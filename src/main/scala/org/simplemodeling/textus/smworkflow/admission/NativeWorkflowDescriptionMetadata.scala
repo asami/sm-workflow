@@ -7,7 +7,7 @@ import org.goldenport.value.BaseContent
   * not a replacement metadata source or a capability/handler installation.
   * Runtime JSON decoding, responses and bound operation objects stay native.
   * @since   Oct.  7, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object NativeWorkflowDescriptionMetadata {
   def operation(declared: spec.OperationDefinition): spec.OperationDefinition.Specification =
@@ -19,9 +19,13 @@ private[smworkflow] object NativeWorkflowDescriptionMetadata {
     */
   def operation(declared: spec.OperationDefinition.Specification,
     response: spec.ResponseDefinition): spec.OperationDefinition.Specification =
+    operation(declared, response, WorkflowJsonCommandRequest.definition)
+
+  def operation(declared: spec.OperationDefinition.Specification,
+    response: spec.ResponseDefinition, request: spec.RequestDefinition): spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
       content = BaseContent.simple(declared.name, declared.content.descriptiveAttributes),
-      request = WorkflowJsonCommandRequest.definition,
+      request = request,
       response = response
     )
 

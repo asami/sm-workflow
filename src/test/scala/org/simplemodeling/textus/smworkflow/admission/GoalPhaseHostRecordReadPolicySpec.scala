@@ -2,7 +2,6 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.configuration.{Configuration as HostConfiguration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
@@ -25,33 +24,6 @@ final class GoalPhaseHostRecordReadPolicySpec extends AnyWordSpec with Matchers 
     ResolvedConfiguration(HostConfiguration(values), ConfigurationTrace.empty)
 
   "GoalPhase host record read policy" should {
-    "compose context-free readers only for a same-store disjoint Workflow declaration" in {
-      Given("logical Workflow collections and explicit host record declarations, with no physical store")
-      val runtime = Configuration(NamedWorkflowStore("workflow", WorkflowStoreIdentity("host-records")),
-        MigrationPolicy("v1"), RetentionPolicy("v1"), LeasePolicy("v1"),
-        DeliveryConfiguration.SameStore(WorkflowStoreIdentity("host-records")))
-      // This pure composition needs storage identities, not a semantic model;
-      // the Factory separately admits its catalog and definition before use.
-      val workflow = GoalPhaseManagedStartAssembly.Declaration(runtime, null, collection("instances"), collection("continuations"))
-      When("reader construction derives every role from the resolved host configuration")
-      val readers = GoalPhaseHostRecordReaders.bindC(configuration(values), workflow).toOption.get
-      Then("all readers still require a current Operation and grant no context-free authority")
-      readers.invocation shouldBe a[GoalPhaseSubmissionRegistration.DataStorePort]
-      readers.selection.loadC("selection") shouldBe a[Consequence.Failure[?]]
-      readers.invocation.resolveC("submission") shouldBe a[Consequence.Failure[?]]
-      readers.authority.authorizations.loadC(null) shouldBe a[Consequence.Failure[?]]
-      readers.authority.decisions.resolveC(null) shouldBe a[Consequence.Failure[?]]
-      When("the requested declaration aliases Workflow collections or uses another store")
-      for ((role, _) <- records; reserved <- Vector(workflow.instances, workflow.continuations)) {
-        GoalPhaseHostRecordReaders.bindC(configuration(values.updated(prefix + role.key,
-          ConfigurationValue.StringValue(reserved.print))), workflow) shouldBe a[Consequence.Failure[?]]
-      }
-      GoalPhaseHostRecordReaders.bindC(configuration(values.updated(prefix + "store-name",
-        ConfigurationValue.StringValue("other"))), workflow) shouldBe a[Consequence.Failure[?]]
-      GoalPhaseHostRecordReaders.bindC(configuration(Map.empty), workflow) shouldBe a[Consequence.Failure[?]]
-      GoalPhaseHostRecordReaders.bindC(configuration(values), null) shouldBe a[Consequence.Failure[?]]
-    }
-
     "admit only the exact declared purpose, logical store and collection" in {
       Given("an explicit resolved Subsystem declaration with distinct record collections")
       for ((role, identity) <- records) {

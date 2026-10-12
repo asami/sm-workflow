@@ -4,7 +4,10 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import org.goldenport.kaleidox.{Config => KaleidoxConfig, Model}
 
-/** Exercise the real Scala2.12 producer rather than reconstructing CML rules. */
+/** Exercise the actual Scala2.12 producer for the ordered phase and Decision roles.
+  * @since   Oct.  6, 2026
+  * @version Oct. 12, 2026
+  */
 object GoalPhaseCmlDerivationProbe {
   def main(args: Array[String]): Unit = {
     require(args.length == 1, "Expected one actual CML source")
@@ -15,31 +18,28 @@ object GoalPhaseCmlDerivationProbe {
     val selected = CompositeStateMachineCml.workflowDefinitions(model).filter(_.identity == "GoalPhaseWorkflow")
     require(selected.size == 1, "Expected one GoalPhase Workflow")
     val workflow = selected.head
-    require(workflow.version == "goal-phase-ordered-run-v4", workflow.version)
+    require(workflow.version == "goal-phase-minimal-operation-v5", workflow.version)
     val phases = Vector("Idle", "Implementation", "InspectCandidate", "Validation", "Review", "Repair", "Closing",
       "PhaseInspection", "PhaseValidation", "PhaseReview", "PhaseClosing", "Decision", "Closed")
-    val named = Map("Implementation" -> "OrderedImplementation", "InspectCandidate" -> "OrderedInspectCandidate",
-      "Validation" -> "OrderedValidation", "Review" -> "OrderedReview", "Repair" -> "OrderedRepair",
-      "Closing" -> "OrderedClosing", "PhaseInspection" -> "PhaseInspection", "PhaseValidation" -> "PhaseValidation",
-      "PhaseReview" -> "PhaseReview", "PhaseClosing" -> "PhaseClosing", "Decision" -> "PhaseDecision", "Closed" -> "PhaseClosed")
-    // When all reachable combinations are derived from normalized producer output.
-    val actual = for (step <- Vector("Awaiting", "Closed"); human <- Vector("Idle", "Awaiting", "Answered"); phase <- phases) yield {
-      val configuration = Map("step" -> step, "human" -> human, "phase" -> phase,
-        "orderedDecision" -> "Retained")
+    val named = Map("Idle" -> "Pending", "Implementation" -> "OrderedImplementation",
+      "InspectCandidate" -> "OrderedInspectCandidate", "Validation" -> "OrderedValidation",
+      "Review" -> "OrderedReview", "Repair" -> "OrderedRepair", "Closing" -> "OrderedClosing",
+      "PhaseInspection" -> "PhaseInspection", "PhaseValidation" -> "PhaseValidation",
+      "PhaseReview" -> "PhaseReview", "PhaseClosing" -> "PhaseClosing",
+      "Decision" -> "PhaseDecision", "Closed" -> "PhaseClosed")
+    // When each actual phase configuration is derived from normalized producer output.
+    val actual = phases.map { phase =>
+      val configuration = Map("phase" -> phase, "orderedDecision" -> "Retained")
       val states = workflow.compositeStateMachine.derivations
         .filter(_.configuration.bindings.map(b => b.role -> b.state).toMap == configuration).map(_.state)
-      val expected = if (phase == "Idle") {
-        if (step == "Closed") "Closed"
-        else Map("Idle" -> "Pending", "Awaiting" -> "HumanPending", "Answered" -> "HumanAnswered")(human)
-      } else if (step == "Awaiting" && human == "Idle") named(phase) else "PhaseDecision"
-      (step, human, phase, states, expected)
+      (phase, states)
     }
-    // Then legacy closure never substitutes for Phase closure, and mixed axes stay nonterminal.
-    require(actual.size == 78, "Expected all78 reachable combinations")
-    actual.foreach { case (step, human, phase, states, expected) =>
-      require(states == Vector(expected), s"$step/$human/$phase: $states != $expected")
+    // Then every real frontier is unique and only whole-Phase closure is terminal.
+    require(workflow.compositeStateMachine.derivations.size == 13, "Expected the13 actual phase configurations")
+    actual.foreach { case (phase, states) =>
+      require(states == Vector(named(phase)), s"$phase: $states != ${named(phase)}")
     }
-    require(actual.count(_._4 == Vector("PhaseClosed")) == 1, "Only the supported whole-Phase closure derives PhaseClosed")
-    println("accepted workflow=GoalPhaseWorkflow version=goal-phase-ordered-run-v4 combinations=78 mixedDecision=60 phaseClosure=1")
+    require(actual.count(_._2 == Vector("PhaseClosed")) == 1, "Only whole-Phase closure derives PhaseClosed")
+    println("accepted workflow=GoalPhaseWorkflow version=goal-phase-minimal-operation-v5 combinations=13 phaseClosure=1")
   }
 }

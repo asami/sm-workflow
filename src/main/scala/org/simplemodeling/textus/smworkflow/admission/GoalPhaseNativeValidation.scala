@@ -19,7 +19,7 @@ import RepositorySyncNativeMergeValidation as V
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object GoalPhaseNativeValidation {
   final case class Check(identity: String, ordinal: Int)
@@ -37,25 +37,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-validation.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("native Goal validation envelope differs")
-      schema <- root("schemaVersion").flatMap(_.asString).toRight("native Goal validation schema is missing")
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-validation.v1", "sm-workflow.goal-phase-native-validation.v2")(schema),
-        (), "native Goal validation schema differs")
-      fields <- root("payload").get.asObject.toRight("native Goal validation payload is missing")
-      required = Set("sourceRevision", "step", "candidate", "selected", "receipts")
-      legacy = if (schema.endsWith(".v1")) Set("policy") else Set.empty[String]
-      _ <- Either.cond(required.subsetOf(fields.keys.toSet) &&
-        fields.keys.toSet.subsetOf(required ++ Set("outcome") ++ legacy) &&
-        fields("candidate").flatMap(_.asObject).exists(_.keys.toSet == Set("head", "tree")) &&
-        fields("selected").flatMap(_.asArray).exists(_.forall(item =>
-          item.asObject.exists(_.keys.toSet == Set("identity", "ordinal")))) &&
-        fields("receipts").flatMap(_.asArray).exists(_.forall(item => item.asObject.exists { receipt =>
-          val keys = receipt.keys.toSet
-          val required = Set("identity", "termination", "stdout", "stderr")
-          required.subsetOf(keys) && keys.subsetOf(required + "exitCode")
-        })), (), "native Goal validation has undeclared fields")
-      payload <- Json.fromJsonObject(fields.remove("policy")).as[Payload].left.map(_.message)
+      wire <- Option(value).toRight("native Goal validation is missing")
+      schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-validation.v2", (), "native Goal validation schema differs")
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)

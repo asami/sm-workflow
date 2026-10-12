@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -36,52 +36,20 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder
   private given Decoder[Payload] = deriveDecoder
-  private val stages = Set("Preserving", "IndexCaptured", "CheckpointCreating", "CheckpointCreated",
-    "CheckpointInstalling", "LocalStatePreserved", "Integrating", "Integrated", "PendingMergePrepared", "MergeConflicted", "MaterializingConflict",
-    "ValidationChecking", "MergeValidated", "IntegrationValidationChecking", "IntegrationValidated", "ReviewAccepted", "NativeCommitPreparing", "NativeCommitObserved",
-    "NativePushPreparing", "NativePushObserved", "NativeFinalFetching", "Converged")
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "RepositorySyncAdvanceResult"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
-      root <- Option(value).flatMap(_.asObject).filter(_.keys.toSet == Set("schemaVersion", "payload"))
-        .toRight("Native repository progress envelope differs")
-      version <- root("schemaVersion").flatMap(_.asString).toRight("Native progress schema is missing")
-      _ <- Either.cond(Set(schema, "sm-workflow.repository-sync-native-progress.v1", "sm-workflow.repository-sync-native-progress.v2")(version), (), "Native progress schema differs")
-      fields <- root("payload").flatMap(_.asObject).filter { fields =>
-        val required = Set("stage", "root", "before", "indexTree", "checkpoint", "after", "method", "mergeHead")
-        val legacy = if (version != schema) Set("originalCommand") else Set.empty[String]
-        required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required ++ Set("materialization", "validation", "finalTip") ++ legacy)
-      }.toRight("Native progress payload differs")
-      normalized <- if (version.endsWith(".v1")) fields("validation").filterNot(_.isNull) match {
-        case Some(value) => RepositorySyncNativeMergeValidation.legacyStateJson(value).map(v => fields.add("validation", v))
-        case None => Right(fields)
-      } else Right(fields)
-      // Old materialization copies are ignored, never required or compared.
-      payload <- Json.fromJsonObject(normalized.remove("originalCommand").remove("materialization")).as[Payload].left.map(_ => "Native progress data is incomplete")
-      _ <- Either.cond(stages(payload.stage) && payload.before != null &&
-        payload.root != null && payload.root.nonEmpty &&
-        Vector(payload.indexTree, payload.checkpoint, payload.mergeHead, payload.finalTip).flatten.forall(oid) &&
-        (!Set("IndexCaptured", "CheckpointCreating", "CheckpointCreated", "CheckpointInstalling")(payload.stage) || payload.indexTree.nonEmpty) &&
-        (!Set("CheckpointCreated", "CheckpointInstalling")(payload.stage) || payload.checkpoint.nonEmpty) &&
-        (!Set("LocalStatePreserved", "Integrated", "PendingMergePrepared", "MergeConflicted")(payload.stage) || payload.after.nonEmpty) &&
-        (payload.stage != "PendingMergePrepared" || (payload.indexTree.nonEmpty && payload.mergeHead.nonEmpty)) &&
-        (!Set("ValidationChecking", "MergeValidated", "ReviewAccepted", "NativeCommitPreparing", "NativeCommitObserved")(payload.stage) || payload.mergeHead.nonEmpty) &&
-        (!Set("IntegrationValidationChecking", "IntegrationValidated")(payload.stage) ||
-          (payload.mergeHead.isEmpty && payload.method.exists(Set("equal", "local-ahead", "fast-forward")))) &&
-        (!Set("ValidationChecking", "MergeValidated", "IntegrationValidationChecking", "IntegrationValidated", "ReviewAccepted", "NativeCommitPreparing", "NativeCommitObserved",
-            "NativePushPreparing", "NativePushObserved", "NativeFinalFetching", "Converged")(payload.stage) ||
-          (payload.validation.nonEmpty && payload.after.nonEmpty && payload.indexTree.nonEmpty &&
-            (payload.mergeHead.nonEmpty || payload.method.exists(Set("equal", "local-ahead", "fast-forward"))))) &&
-        (!Set("NativeCommitObserved", "NativePushPreparing", "NativePushObserved", "NativeFinalFetching", "Converged")(payload.stage) ||
-          payload.finalTip.nonEmpty),
-        (), "Native progress stage shape differs")
+      wire <- Option(value).toRight("Native repository progress is missing")
+      version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(version == schema, (), "Native progress schema differs")
+      payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
     } yield payload
   }
 
   final class Store private[RepositorySyncNativeProgressStore] (
     val declaration: RepositorySyncManagedFetch.Declaration, val core: ActionCall.Core,
-    val original: RepositorySyncManagedFetch.Payload, val command: org.simplemodeling.textus.smworkflow.value.RepositorySyncStartCommand,
+    val original: RepositorySyncManagedFetch.Payload, val context: RepositorySyncManagedFetch.StartContext,
     val identity: String,
     adapter: WorkflowManagedMechanicalTransition[Payload], storage: WorkflowComponentStorage,
     acknowledgement: String => Consequence[Unit]) {
@@ -128,7 +96,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
 
     def payload(stage: String, before: Git.Observed): Payload = Payload(stage, original.repositoryRoot, before)
     def scopeC(actual: Git.Observed): Consequence[Unit] = Git.rootC(core).flatMap(root =>
-      if (root == original.repositoryRoot && actual.branch == declaration.input.localBranch) Consequence.unit
+      if (root == original.repositoryRoot && actual.branch == context.localBranch) Consequence.unit
       else invalid("actual root/branch crosses the original host mapping"))
     def acknowledgeC(stage: String): Consequence[Unit] = acknowledgement(stage) match {
       case Consequence.Success(_) => Consequence.unit
@@ -139,10 +107,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   def bindC(session: RepositorySyncManagedFetch.Session, declaration: RepositorySyncManagedFetch.Declaration,
     core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[Store] =
     session.storage.bindMechanicalC(RepositorySyncManagedFetch.advanceOperation, codec).map(adapter =>
-      new Store(declaration, core, session.started.receipt.payload.value, session.command,
+      new Store(declaration, core, session.started.receipt.payload.value, session.context,
         session.started.receipt.next.identity.value, adapter, session.storage, acknowledgement))
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native progression " + reason)
   def uncertain[A](reason: String): Consequence[A] =
     DataStoreConditionalTransitionFailure.transactionIndeterminate("RepositorySync native progression " + reason)
-  private def oid(value: String) = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
 }

@@ -1,8 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.workflow.ContextReference
-import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionSemantic as T,
   SplitPhasePlanningCheckpointPreparation as K, SplitPhaseScopeProjectionCheckpointPreparation as C,
   SplitPhaseScopeSemantic as S, SplitPhaseManagedHumanCompletion as H,
@@ -12,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
   * Neither decoded data nor its reference is an AI result or execution permit.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object SplitPhaseHumanScopeResolution {
   final case class Reference(identity: String, revision: String)
@@ -40,32 +38,19 @@ private[smworkflow] object SplitPhaseHumanScopeResolution {
     else _invalid("interpretation data is incomplete or noncanonical")
 
   /** Only the existing private native observer can supply ObservedAnswer.
-    * This joins separately read data to the exact immutable completed Decision,
-    * not to a fabricated AI scope completion or new Human consent assertion.
+    * Consume the separate interpretation against the owning source's work items;
+    * no copied Decision or outer evidence-reference echo is required.
     */
   def admitC(observed: H.ObservedAnswer, record: Record): Consequence[Admitted] = for {
     _ <- inspectC(record)
     _ <- if (observed != null) Consequence.unit else _invalid("canonical Human observation is absent")
-    selected <- observed.completion.result.result.value match {
-      case A.Answer.ProvideResolution(reference) => Consequence.success(reference)
+    _ <- observed.completion.result.result.value match {
+      case _: A.Answer.ProvideResolution => Consequence.unit
       case _ => _invalid("completed Human answer did not select resolution data")
     }
     first = observed.plan.source.record.snapshot.first
-    _ <- if (selected == T.ContextReference(record.reference.identity, record.reference.revision) &&
-        observed.completion.result.resultReference != ContextReference(record.reference.identity, record.reference.revision) &&
-        record.context == first.originalContext.reference && record.checkpoint == first.reference &&
-        record.scopeCheckpoint == observed.plan.source.record.reference) Consequence.unit
-      else _invalid("selected data, independent answer result or original checkpoint differs")
-    _ <- observed.plan.question.current match {
-      case decision: WorkflowContinuation.Decision[?] if decision.request.continuationId.value == record.decision.identity =>
-        Consequence.unit
-      case _ => _invalid("interpretation does not name its actual issued Human Decision")
-    }
     request <- S.requestC(first)
     _ <- S.inspectScopesC(request, record.scopes)
-    _ <- if (record.evidence.forall(value => observed.completion.result.evidence.references.contains(
-        ContextReference(value.identity, value.revision)))) Consequence.unit
-      else _invalid("interpretation evidence is absent from the canonical Human answer")
   } yield new Admitted(observed, record, request)
 
   private def _items(items: Vector[SplitPhaseExplicitProposalPrecheck.WorkItemIdentity]): Boolean =

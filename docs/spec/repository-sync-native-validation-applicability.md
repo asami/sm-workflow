@@ -1,8 +1,112 @@
 # Native RepositorySync validation and review applicability
 
-Date: 2026-10-08. Existing Phase5 implementation correction; all changed cases
-are UNVERIFIED. Historical successful runs do not validate these new inputs.
+## Current C11 runtime precedence — bounded validation, 49 PASS
+
+The old Repository boundary/digest/checkpoint/fetch/preservation/relation/merge/
+push/convergence admission and complete-envelope review graph is removed, along
+with its standalone full-command Start transport. The normal session wrapper
+supplies resolved business Start/advance inputs to native receivers. Selected
+Repository input uses NativeWorkflowStartInput's six consumed fields, ignoring
+unused diagnostics; the owning declaration supplies its internal policy version.
+There is no replacement full-command serializer/decoder or standalone identity-only
+advance route.
+
+ThreeWorkflowRepositoryOperationSpec is the current normal factory/managed
+Git/SQLite program; RepositorySyncNativeValidationApplicabilitySpec retains
+current typed facts and semantic-result applicability. RepositorySyncManagedFetchSpec
+and its old direct-command/reopen/replay examples E3/E4/E7/E8/E12–E14 below
+are retired historical evidence, not mandatory current guarantees or passing
+examples. The historical records remain unchanged. Current independent Human,
+review and effect authority remain at their existing owners.
+
+Fresh C11 validation completed seven suites and all49 tests passed; SBT and the
+required shared-serial wrapper exited0, with the lock released. Product inputs
+remained fixed while live; these documentation updates followed terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/legacy-repository-validation-01-terminal.md).
+Earlier counts keep their original scopes;
+remaining public CML/ABI and Goal/Split full DTO/storage migration, connected
+review/owned commits and final release/closure remain required.
+
+## Earlier Phase 5.2 bounded evidence and migration observations
+
+### C8 focused validation — 57 PASS
+
+Fresh registered request01 completed eight suites,57 tests succeeded, zero
+failures/aborts/canceled/ignored/pending; SBT/wrapper exit0 and shared lock
+released. Parent admitted the current typed result and consumed permission.
+Actual current codec/semantic consumers and the existing normal Goal/Repository/
+Direct Operation programs passed. No product input changed during execution;
+only documentation/evidence was updated after terminal completion.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/result-consumers-validation-01-terminal.md).
+This supersedes the authored UNVERIFIED status above only for bounded C8
+validation, not connected Step/full Phase acceptance. Remaining migration,
+independent review, owned commits and final release/closure remain mandatory.
+
+## Current C8 review consumer — authored, UNVERIFIED
+
+Review request reads only current request.v2 and result only current result.v1.
+Typed payload decoding consumes actual business members once; unused root and
+nested annotations are inert. There is no old v1 request extraction, strict key/
+shape preflight or repeated whole-input admission at capture, prepare or result
+consumption. The actual issued row supplies the work directly, without a
+regenerated WorkOrder or source/input-copy certificate.
+
+New review results are interpreted against actual assigned changed paths:
+findings outside the assignment or contradictory accept/repair meaning cannot
+select semantic acceptance. This is new-result interpretation, not proof that
+saved inputs remained unchanged. Existing independent review evidence, actual
+effect owners and shared managed state remain unchanged. E5/E6 cover current
+typed consumers and semantic result meaning. Fresh C8 eight-suite validation is
+pending; unsupported old records retain evidence/files and restart as NEW, not
+through a compatibility reader or intermediate recovery mechanism.
+
+Correction to the earlier C6 report: its six-suite47PASS includes two normal
+whole-Phase programs with real installed child convergence. The extra old native
+fixture failed before child Start, so the overall invocation failed and its
+permission remains consumed. C7 retired that fixture and passed all52 tests in
+seven suites, including normal Goal/Repository/Direct Operations. These facts
+supersede the blanket connected-closure UNVERIFIED claim below, but do not
+validate new C8 inputs or close the full Phase.
+
+Date: 2026-10-11. C6 request02 passes six suites47 tests; its additional
+native parent-child example fails at legacy fixture completion before child Start.
+C6 connected closure remains UNVERIFIED; the overall invocation is failed.
+Historical successful runs do not validate these new inputs.
 No new policy, approval, repair frame or counter is introduced.
+
+## Current Phase 5.2 C6 contract — takes precedence over historical notes
+
+Start/fetch writes and reads only `sm-workflow.repository-sync-managed-fetch.v3`.
+Start contains a passive StartContext: selection/invocation/participant and the
+six consumed repository, branch, remote, remote branch, endpoint and mode facts.
+It stores no StartCommand or policy-version witness. Fetch consumes this context
+and actual observations, without an unchanged-local-state certificate across
+fetch. Real mapped effect scope is consumed at the effect boundary.
+
+Native progress reads only v3 and validation reads its actual typed State,
+selected checks and result facts. There is no v1/v2 reader, policy extraction,
+exact-key preflight or all-stage/OID matrix in these codecs. Unused diagnostics
+are ignored and confer no permission; missing/wrong consumed types still fail.
+Existing fixed-program permission and actual result consumption remain with
+their owners. No new verifier, validation marker or saved-input comparison.
+
+Repository effect permission uses typed StartContext and the existing host grant
+reader, not a re-encoded command. GoalPhase consumes the installed child's actual
+completion without a second parent Git/result certificate. Current E1/E10/E11
+cover actual typed facts, inert annotations and unsupported old schemas; E12
+describes normal Start/fetch, not replay or restoration. These changed cases
+pass the focused C6 request02 codec/normal-Operation block. The additional old
+native fixture must be aligned with normal resolved Operation ingress before
+claiming connected parent-child closure.
+
+Old rows and history are preserved, not rewritten. Start a NEW host selection/
+invocation from the initial boundary for unsupported old records. Full remaining
+public/internal/DTO/fixture and legacy-route retirement, connected review and
+release remain mandatory. The earlier notes below are historical, not current
+acceptance: old-reader, replay, recovery, copy/shape-refusal guarantees do not
+return merely because those old examples or code remain for later removal.
+
+## Historical Phase 5 observations
 
 ## R1 — Selected execution facts, not a policy declaration certificate
 

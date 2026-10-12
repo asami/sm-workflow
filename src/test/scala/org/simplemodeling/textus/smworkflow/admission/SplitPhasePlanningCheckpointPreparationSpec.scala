@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Constructed local test data, never public ingress, execution or readback.
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 11, 2026
  */
 private[admission] object SplitPhasePlanningCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -36,15 +36,14 @@ private[admission] object SplitPhasePlanningCheckpointFixture {
     allocation -> take(W.continueMechanicalAllocatedC(allocation))
   }
   def capture(selected: T.PlanningBound = bound()): K.Captured = {
-    val (allocation, outcome) = allocated(selected)
-    take(K.captureAllocatedC(selected, allocation, outcome, reference, anchor))
+    val (_, outcome) = allocated(selected)
+    take(K.captureMechanicalC(selected, outcome, reference, anchor))
   }
   def forBoundary(base: SplitPhaseExplicitPartitionFixture.Base, boundary: B.Validated): K.Captured = {
     val proposal = boundary.shape.records.proposal
-    val command = f.command.copy(input = f.command.input.copy(proposalReference = Some(proposal.reference.identity)))
-    val raw = f.record.copy(source = base.source, proposal = Some(proposal), command = command,
-      selection = f.selectionFor(command))
-    val start = take(T.prepareC(raw, raw.source, raw.proposal, raw.selection, f.catalog, f.configuration))
+    val raw = f.record.copy(source = base.source, proposal = Some(proposal),
+      input = f.input.copy(sourcePhaseIdentity = base.source.phase.value, proposalReference = Some(proposal.reference.identity)))
+    val start = take(T.prepareC(raw, raw.source, raw.proposal, f.catalog, f.configuration))
     val facts = C.Facts(boundary.shape.records, boundary.records, base.records,
       knownFacts.planning.copy(source = base.source.reference, authority = base.source.authority))
     val context = f.context.copy(facts = facts)
@@ -82,7 +81,7 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
       Given("a constructed original Start and all-known planning input")
       val selected = bound(); val (allocation, outcome) = allocated(selected)
       When("the original allocated outcome is captured without another planning call")
-      val saved = take(K.captureAllocatedC(selected, allocation, outcome, reference, anchor))
+      val saved = take(K.captureMechanicalC(selected, outcome, reference, anchor))
       Then("whole data and original enumeration survive, but no commit is acknowledged")
       saved.record.originalStart shouldBe f.record
       saved.record.originalContext shouldBe selected.context.record
@@ -97,22 +96,19 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
       saved.completion shouldBe None
     }
 
-    "capture unchanged preallocated data but reject another same-reference selection" in {
+    "capture computed preallocated planning without requiring the same constructed selection" in {
       Given("a retained planning row containing the complete allocation")
       val selected = bound(); val (allocation, _) = allocated(selected)
       val retained = bound(knownFacts.copy(planning = allocation.data))
       val outcome = take(W.advanceC(retained.context.selection))
-      val changed = allocation.data.copy(objectives = allocation.data.objectives.copy(overhead =
-        Some(SplitPhaseExplicitObjectiveSelection.OverheadPolicy(
-          SplitPhaseExplicitObjectiveSelection.OverheadPolicyReference("changed", "1"), allocation.data.source,
-          allocation.data.authority, 1, 0, 0, 0, 0))))
-      When("a fresh selection with equal references but different objectives is supplied")
-      val foreign = take(W.advanceC(take(W.selectC(retained.context.selection.partition, changed))))
-      Then("unchanged capture preserves complete data and foreign construction refuses")
-      take(K.captureUnchangedC(retained, outcome, reference, anchor)).record.snapshot.selection.planning shouldBe allocation.data
-      K.captureUnchangedC(retained, foreign, reference, anchor).isSuccess shouldBe false
-      K.captureAllocatedC(selected, allocation, foreign, reference, anchor).isSuccess shouldBe false
-      K.captureAllocatedC(selected, allocation, outcome, reference, anchor.copy(revision = "2")).isSuccess shouldBe false
+      val separate = bound(knownFacts.copy(planning = allocation.data.copy()))
+      When("a separately constructed equivalent selection supplies the computed outcome")
+      val computed = take(W.advanceC(separate.context.selection))
+      val saved = take(K.captureMechanicalC(retained, computed, reference, anchor))
+      Then("the actual planning snapshot is consumed without a construction-identity proof")
+      saved.record.snapshot.selection.planning shouldBe allocation.data
+      saved.record.snapshot shouldBe take(K.captureMechanicalC(retained, outcome, reference, anchor)).record.snapshot
+      saved.record.originalContext shouldBe retained.context.record
     }
 
     "capture the actual partition completion without a second mechanical append or receipt" in {
@@ -136,7 +132,7 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
       Given("absent planning inputs and an inert record type")
       When("capture producers receive no constructed planning or completion")
       val absent = Vector(K.captureCompletionC(null, reference),
-        K.captureUnchangedC(null, null, reference, anchor), K.captureAllocatedC(null, null, null, reference, anchor))
+        K.captureMechanicalC(null, null, reference, anchor))
       Then("capture is unavailable and raw mappings cannot grant it")
       absent.foreach(_.isSuccess shouldBe false)
       K.inspectIndexC(null).isSuccess shouldBe false
@@ -150,8 +146,8 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
       val retained = bound(knownFacts.copy(planning = allocation.data))
       val unchanged = take(W.advanceC(retained.context.selection))
       When("capture input omits its declared publication address")
-      val results = Vector(K.captureAllocatedC(selected, allocation, outcome, null, anchor),
-        K.captureUnchangedC(retained, unchanged, null, anchor), K.captureCompletionC(completion(), null))
+      val results = Vector(K.captureMechanicalC(selected, outcome, null, anchor),
+        K.captureMechanicalC(retained, unchanged, null, anchor), K.captureCompletionC(completion(), null))
       Then("no publishable capture is constructed rather than certifying generated records afterward")
       results.foreach(_.isSuccess shouldBe false)
     }

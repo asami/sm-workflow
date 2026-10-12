@@ -9,7 +9,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
   * neither a model, effort, worker identity nor execution permission is input.
   * The public skill-facing contract remains Phase 6 work.
   * @since   Oct.  8, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 11, 2026
   */
 private[smworkflow] object GoalPhaseWorkClassification {
   enum Kind { case PLANNING, ANALYSIS, DESIGN, CODING, REVIEW, JUDGMENT }
@@ -64,8 +64,6 @@ private[smworkflow] object GoalPhaseWorkClassification {
       cursor.get[String](key).flatMap(value => values.find(_.toString == value).toRight(
         io.circe.DecodingFailure("Unsupported WorkClassification " + key, cursor.history)))
     for {
-      _ <- Either.cond(cursor.value.asObject.exists(_.keys.toSet == Set("kind", "complexity", "domain", "footprint")),
-        (), io.circe.DecodingFailure("WorkClassification fields differ", cursor.history))
       kind <- enumeration("kind", Kind.values)
       complexity <- enumeration("complexity", Complexity.values)
       domain <- enumeration("domain", Domain.values)

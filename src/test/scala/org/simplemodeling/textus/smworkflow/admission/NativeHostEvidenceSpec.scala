@@ -12,14 +12,14 @@ import NativeHostEvidence.*
 
 /**
  * @since   Oct.  7, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-10-07T00:00:00Z")
   private val declared = Declaration("workflow", DataStore.CollectionId.EntityStore(
     EntityCollectionId("test", "host", "evidence")), "independent-host")
   private val binding = NativeHostReviewScope.select(Purpose.GoalReview,
-    NativeHostReviewEvidenceFixture.raw(Purpose.GoalReview), legacy = true).toOption.get
+    NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview)).toOption.get
   private val evidence = Evidence(schema, Purpose.GoalReview.identity, "result-at-1", "result", "1",
     declared.issuer, "actual-reviewer", binding, now.minusSeconds(1).toString)
 
@@ -55,7 +55,7 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
       Then("all evidence fields survive and only the separate current-call check admits that binding")
       decodeStorageC(wire).toOption.get shouldBe evidence
       observeC(evidence, declared, Purpose.GoalReview, "result-at-1", binding, now).isSuccess shouldBe true
-      decodeStorageC(wire.replace("\"schemaVersion\":", "\"extra\":true,\"schemaVersion\":")).isSuccess shouldBe false
+      decodeStorageC(wire.replace("\"schemaVersion\":", "\"extra\":true,\"schemaVersion\":")).toOption shouldBe Some(evidence)
     }
     "refuse crossed issuer purpose result actual candidate and future event time" in {
       Given("valid host evidence and current-call variants that do not match it")
@@ -74,30 +74,16 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
       Then("none is admitted as evidence for this current call")
       results.foreach(_.isSuccess shouldBe false)
     }
-    "read expired legacy evidence without renewing it and write only the expiry-free contract" in {
-      Given("old host records whose optional expiry is elapsed, absent or no longer a meaningful timestamp")
-      val legacyversion = "sm-workflow.native-host-evidence.v1"
+    "ignore unused storage metadata without renewing independently issued evidence" in {
+      Given("a current host record carrying unused expiry and generation metadata")
       val current = encodeStorageC(evidence).toOption.get
       val payload = io.circe.parser.parse(current.substring(schema.length + 1)).toOption.get
-        .mapObject(_.add("schemaVersion", Json.fromString(legacyversion)))
-      val legacies = Vector(None, Some(Json.fromString(now.minusSeconds(1).toString)),
-        Some(Json.fromString("obsolete-time")), Some(Json.Null)).map { expiry =>
-        legacyversion + ":" + expiry.fold(payload)(value => payload.mapObject(_.add("validUntil", value))).noSpaces
-      }
-      When("legacy rows are loaded and compared with the actual call after the former expiry")
-      val decoded = legacies.map(raw => decodeStorageC(raw).toOption.get)
-      val results = decoded.map(observeC(_, declared, Purpose.GoalReview, "result-at-1", binding, now.plusSeconds(86400)))
-      Then("original event time and scope survive, admission has no expiry, and current output has no expiry field")
-      decoded.foreach(_ shouldBe evidence)
-      results.foreach(_.isSuccess shouldBe true)
-      payload.hcursor.get[String]("occurredAt").toOption.get shouldBe evidence.occurredAt
-      io.circe.parser.parse(current.substring(schema.length + 1)).toOption.get.asObject.get.keys.toSet should not contain "validUntil"
-      decodeStorageC(schema + ":" + payload.noSpaces).isSuccess shouldBe false
-      decodeStorageC(current.replace("\"occurredAt\":", "\"validUntil\":\"obsolete-time\",\"occurredAt\":")).isSuccess shouldBe false
-      val extended = payload.mapObject(_.add("claimedPermission", Json.True))
-      decodeStorageC(legacyversion + ":" + extended.noSpaces).isSuccess shouldBe false
-      observeC(decoded.head.copy(binding = Json.obj("differentRequest" -> Json.True)), declared,
-        Purpose.GoalReview, "result-at-1", binding, now.plusSeconds(86400)).isSuccess shouldBe false
+      When("unused fields are present in the current stored representation")
+      val decoded = decodeStorageC(schema + ":" + payload.mapObject(_.add("validUntil", Json.True)
+        .add("managementHash", Json.False).add("sourceLine", Json.Null)).noSpaces)
+      Then("only current fields are consumed and the original occurrence survives")
+      decoded.toOption shouldBe Some(evidence)
+      observeC(decoded.toOption.get, declared, Purpose.GoalReview, "result-at-1", binding, now.plusSeconds(86400)).isSuccess shouldBe true
     }
     "keep evidence purpose and tuple identities disjoint without hashes or copy seals" in {
       Given("identities containing delimiters and the different host evidence purposes")
@@ -117,11 +103,11 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
       When("the production host adapter builds the passive Start evidence binding")
       val actual = ThreeWorkflowHostEvidencePorts.splitStartBindingC(
         SplitPhaseTypedStartHumanVerification.StartContext(owner, start)).toOption.get
-      Then("actual owner, command, source authority and allocated instance survive without duplicate storage/selection/proposal copies")
+      Then("actual owner, business input, source authority and allocated instance survive without duplicate storage/selection/proposal copies")
       actual.hcursor.get[String]("componentInstance").toOption.get shouldBe owner.canonicalKey
       val selected = actual.hcursor.downField("startAttestation").focus.get
-      selected.asObject.get.keys.toSet shouldBe Set("reference", "instanceIdentity", "workflowIdentity", "workflowRevision", "command", "source", "proposal")
-      selected.hcursor.downField("command").downField("input").get[String]("invocationMode").toOption.get shouldBe start.command.input.invocationMode
+      selected.asObject.get.keys.toSet shouldBe Set("reference", "instanceIdentity", "participantIdentity", "input", "source", "proposal")
+      selected.hcursor.downField("input").get[String]("invocationMode").toOption.get shouldBe start.input.invocationMode
       selected.hcursor.downField("proposal").focus.get.asObject.get.keys.toSet shouldBe Set("identity", "revision")
       actual.noSpaces should not include "configuration"
       actual.noSpaces should not include "children"
@@ -131,9 +117,8 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
     }
     "store selected attestation for a large diagnostic review without a full-body comparison or duplicate copy" in {
       Given("Spec: docs/spec/native-host-review-applicability.md; Rule: R3; Example: E6; original review diagnostics larger than a short provider comparison condition")
-      val input = NativeHostReviewEvidenceFixture.goalInput.mapObject(_.add("review",
-        NativeHostReviewEvidenceFixture.goalInput.hcursor.downField("review").focus.get.mapObject(_.add("diff", Json.fromString("x" * 40000)))))
-      val large = evidence.copy(binding = NativeHostReviewEvidenceFixture.raw(Purpose.GoalReview, Some(input)))
+      val input = NativeHostReviewEvidenceFixture.goalInput.mapObject(_.add("diff", Json.fromString("x" * 40000)))
+      val large = evidence.copy(binding = NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview, Some(input)))
       When("the host record is encoded and verified at its own boundary")
       val wire = encodeStorageC(large).toOption.get
       Then("the host attestation retains actual targets, not another diagnostic body; owning WorkOrder meaning is not replaced")
@@ -154,30 +139,25 @@ final class NativeHostEvidenceSpec extends AnyWordSpec with Matchers with GivenW
       val valid = ThreeWorkflowHostParameters.decodeDefinitionC(encoded)
       val semantic = ThreeWorkflowHostParameters.decodeDefinitionC(compatible)
       val extended = ThreeWorkflowHostParameters.decodeDefinitionC(encoded.mapObject(_.add("commandGrant", Json.True)))
-      Then("ordinary typed data and equivalent Set meaning are consumed without a serializer-body certificate, but undeclared authority is refused")
+      Then("ordinary typed data and equivalent Set meaning are consumed without a serializer-body certificate, and unused fields supply no authority")
       valid.toOption.get shouldBe value
       semantic.toOption.get shouldBe value
-      extended.isSuccess shouldBe false
+      extended.toOption shouldBe Some(value)
     }
-    "refuse recursive undeclared or missing host fields and wrong values without re-encoding the definition" in {
+    "ignore unused host fields and reject consumed values of the wrong type without re-encoding the definition" in {
       Given("Spec: docs/spec/normal-three-workflow-host.md; Rule: H8; Example: H8-2; the complete nested normal host definition")
       val encoded = ThreeWorkflowHostParameters.encode(ThreeWorkflowNormalHostFixture.definition(Paths.get("/private/tmp/smwf-normal-host")))
-      def _mutations_(value: Json): Vector[Json] = value.asObject match {
-        case Some(fields) =>
-          Vector(value.mapObject(_.add("commandGrant", Json.True))) ++
-            fields.keys.toVector.map(name => value.mapObject(_.remove(name))) ++
-            fields.toVector.flatMap((name, child) => _mutations_(child).map(changed => value.mapObject(_.add(name, changed))))
-        case None => value.asArray.toVector.flatMap(items => items.zipWithIndex.flatMap((item, index) =>
-          _mutations_(item).map(changed => Json.fromValues(items.updated(index, changed)))))
-      }
       val badschema = encoded.mapObject(_.add("schemaVersion", Json.fromString("another-host-schema")))
       val badprimitive = encoded.mapObject(_.add("target", encoded.hcursor.downField("target").focus.get.mapObject(_.add("root", Json.True))))
       val nullpolicy = encoded.mapObject(_.add("goal", encoded.hcursor.downField("goal").focus.get.mapObject(_.add("review", Json.Null))))
       val repository = encoded.hcursor.downField("repository").focus.get
       val conflicts = repository.hcursor.downField("conflicts").focus.get.mapObject(_.add("semanticPaths", Json.arr(Json.fromInt(7))))
       val wrongarray = encoded.mapObject(_.add("repository", repository.mapObject(_.add("conflicts", conflicts))))
-      When("each existing object receives an undeclared field or loses a required field, or schema/type data contradicts its declaration")
-      val refused = (_mutations_(encoded) ++ Vector(badschema, badprimitive, nullpolicy, wrongarray))
+      val unknown = encoded.mapObject(_.add("sourceLine", Json.True).add("commandGrant", Json.True)
+        .add("target", encoded.hcursor.downField("target").focus.get.mapObject(_.add("generator", Json.False))))
+      When("unused metadata accompanies ordinary input or a consumed field has the wrong type")
+      ThreeWorkflowHostParameters.decodeDefinitionC(unknown).toOption shouldBe ThreeWorkflowHostParameters.decodeDefinitionC(encoded).toOption
+      val refused = Vector(badschema, badprimitive, nullpolicy, wrongarray)
         .map(ThreeWorkflowHostParameters.decodeDefinitionC)
       Then("all malformed inputs are refused before host assembly; real programs and consent are never supplied by these fields")
       refused.foreach(_.isSuccess shouldBe false)

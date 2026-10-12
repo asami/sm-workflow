@@ -10,7 +10,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Native conflict input and closed proposal contract" should {
@@ -45,19 +45,19 @@ final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Match
       S.admitC(request, result.copy(decision = "decision-needed"), policy).isSuccess shouldBe false
       S.admitC(request, result, I.noSemanticPaths).isSuccess shouldBe false
     }
-    "reject extra process or authority fields rather than ignoring them in a result payload" in {
+    "consume actual semantic results without granting unused process annotations authority" in {
       Given("a valid typed semantic result with no command or transition authority")
       val result = S.Result("decision-needed", Vector.empty, "Human direction required")
       val wire = S.resultCodec.encode(result)
-      When("an unassigned next state or executable is inserted into the nested payload")
+      When("unused next-state and executable diagnostics accompany the semantic result")
       val next = wire.mapObject(_.add("payload", wire.hcursor.downField("payload").focus.get
         .mapObject(_.add("nextState", Json.fromString("Converged")))))
       val argv = wire.mapObject(_.add("payload", wire.hcursor.downField("payload").focus.get
         .mapObject(_.add("argv", Json.arr(Json.fromString("push"))))))
-      Then("closed shape admission refuses each injected field, while ordinary member order has no authority meaning")
+      Then("only the same business result is decoded and no command or transition is selected")
       S.resultCodec.decode(wire) shouldBe Right(result)
-      S.resultCodec.decode(next).isLeft shouldBe true
-      S.resultCodec.decode(argv).isLeft shouldBe true
+      S.resultCodec.decode(next) shouldBe Right(result)
+      S.resultCodec.decode(argv) shouldBe Right(result)
     }
   }
 }

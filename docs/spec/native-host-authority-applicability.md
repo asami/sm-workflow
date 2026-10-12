@@ -1,84 +1,65 @@
 # Native host authority applicability
 
-Date: 2026-10-08. Correction of implementation drift under the adopted Phase5
-policy, not a new policy/approval/frame. All changed executable inputs are
-UNVERIFIED; formatting inspection is not compilation or test evidence.
+Date: 2026-10-11. Phase 5.2 connected migration of the adopted removal policy.
+Current C7 focused validation passes52 tests in seven suites; the parent admitted
+the fresh typed result and consumed permission, SBT/wrapper0 and released lock.
+[Terminal evidence](../../.codex-workflow/phases/PHASE-5.2/goal-native-contract-validation-01-terminal.md).
+Complete Step/Phase acceptance remains open.
 
 ## R1 — Effect permission selects actual scope, not unchanged command content
 
-Repository effect evidence stores component instance, selected invocation,
-selection, participant, repository, logical endpoint identity, synchronization
-mode, actual physical root/branch/tracking/endpoint and effect. It does not store
-the complete Start command, policy version, source location or generator marker.
-Logical endpoint identity and physical endpoint address are distinct and both
-remain scoped. The actual command branch/tracking mapping must be compatible
-with the effect target. Admission compares these actual target facts, not a
-declaration identity/revision/full-body certificate. A grant for Push does not
-grant FinalFetch or CommitPending; another participant or trusted issuer is not
-interchangeable. Host records remain independently provisioned. Encoding or
-reading a record neither provisions evidence nor grants process execution.
+Repository effects select component instance, invocation, selection, participant,
+repository, logical endpoint, mode, physical root/branch/tracking/endpoint and
+effect. The producer emits these facts directly; no full Start command, policy
+version or generated-origin copy is encoded and selected again. The projector
+reads consumed field types, not command-to-target consistency certificates.
+The native effect owner resolves physical targets and execution permissions.
+Reader compares independently issued scope with the actual call once. Without
+that boundary an unrelated participant/endpoint/effect could reuse the grant.
+Encoding is passive and cannot create authority.
 
-E1: NativeHostAuthorityScopeSpec exercises producer/storage/consumer with changed,
-missing or unusable old policy/source metadata and retained real effect scope.
-E2: it refuses foreign invocation, participant, repository, owner, physical
-endpoint, branch, effect and trusted issuer; declared evidence participant must
-be the selected effect participant. These are ingress cases, not a Git effect
-run, permission revocation lifecycle or independent model execution.
+E1/E2: NativeHostAuthorityScopeSpec preserves selected targets with unused metadata
+and rejects actual foreign invocation/participant/repository/endpoint/effect/issuer.
 
-## R2 — Closing permission selects the real native frontier and target
+## R2 — Closing permission selects the actual native target
 
-Step permission binds actual instance/source frontier, selected Plan reference,
-Step/generation, native parent/candidate and review reference. Phase permission
-binds instance/source frontier, selected Plan reference/Phase/repository,
-base/candidate, ordered Step/native commit chain, review and child invocation.
-Phase production emits only those target facts, not whole Plan steps, repair
-policy, work descriptions or earlier review diagnostics. Plan references select
-the actual Plan; their equality is not proof that its body stayed unchanged.
-Existing Workflow/controller resolution establishes its original semantic meaning.
-Actual Git native-chain/candidate checks, state/CAS and separately current
-process permissions remain. Reading authority does not create review acceptance.
+Step scope contains instance/source frontier, Plan reference, Step/generation,
+parent/candidate and review. Phase scope contains instance/source frontier,
+Plan/Phase/repository reference, base/candidate, ordered commit chain, review and
+child invocation. References resolve execution inputs, not unchanged bodies.
+No exact-key, OID, chain-count or complete Plan prevalidation remains in the
+projector; native closure owns actual Git chain/state/CAS and effect permissions.
+E3/E5 retain actual target comparisons, unused-field tolerance and consumed types.
+Existing normal Goal/Repository Operations use direct production bindings.
 
-E3: NativeHostAuthorityScopeSpec changes irrelevant Plan/review diagnostics,
-checks omitted producer witnesses and refuses another candidate/chain/child.
-E5: it preserves actual Step scope and refuses missing/mistyped candidate/parent
-or changed generation/review. These do not prove complete Step/Phase effect runs.
-Existing ThreeWorkflowGoalOperationSpec, ThreeWorkflowSbtOperationSpec and
-ThreeWorkflowRepositoryOperationSpec now provision these selected bindings via
-the production helpers. Their normal operation/physical reopen/effect scenarios
-must be rerun for changed inputs; historical PASS does not cover this correction.
+Current C7 (focused-verified) removes Closure Authorization objects and the
+Step consumer's copied-Input/reference/positive-integer-revision gate. The same
+existing reader loads the current-call Step/Phase permission; ports return
+isGrantedC Boolean, false waits and true proceeds. No grant copy or verification
+mark is retained. Step closure v3 stores Input/ordinal/optional actual commit,
+not permission presentation. Phase closure v2 stays unchanged. Absence of
+independent authority still prevents the owning commit/child Start; review
+acceptance alone supplies none. No permission reader/schema/upstream expansion
+or blanket claim that all existing guards are necessary is introduced.
 
-## R3 — Current output and legacy reads do not restore body certificates
+## R3 — Current storage only, no compatibility or body adapters
 
-NativeHostEvidence v7 writes selected scope for the three authority purposes.
-V1/v2/v3/v4/v5 reads extract actual required scope from historical full-body records and
-discard irrelevant command/Plan metadata. V1 expiry remains ignored. Reads do
-not rewrite records, renew authority, manufacture actual scope, or substitute
-a metadata certificate. V3/v4 selected authority scopes remain readable. Missing actual fields remain explicit errors. Current
-authority rows cannot reintroduce full value/command bodies or unknown nested
-scope fields. Current outer/nested structure and types are checked directly;
-storage does not re-encode decoded JSON to certify complete equality. Writer
-serializes its selected output once; storage retains its bounded size/version
-checks. The Reader consumes its admitted storage value without a second complete
-evidence validation. Actual issuer/purpose/lookup/time/target admission remains.
+NativeHostEvidence reads/writes v7 selected fields only. The v1–v6 readers,
+expiry conversion and full-body adapters are removed. Unknown unused fields
+are ignored and cannot become commands or grants. Missing or mistyped consumed
+fields fail at decode. Reader owns current configured issuer/purpose/lookup/
+reference/participant/target/non-future occurrence and managed record permissions;
+it does not repeat complete validation after decoding.
 
-E4: NativeHostAuthorityScopeSpec covers v1/v2/v3/v4/v5/v6 extraction, current output and rejection
-of removed copies/unknown fields, with original event time preserved. These are
-codec cases, not migration of every historical store or separate-JVM evidence.
-NativeHostEvidenceSpec still covers outer shape, actual issuer/time/purpose and
-legacy expiry; these changed inputs also await runner validation.
+Historical records are not rewritten, renewed or deleted. Unsupported old
+in-flight runs restart as NEW with independently issued current evidence.
+Continued use of an actual retained record would require explicit migration,
+not a permanent old reader. Repository inventory found no checked-in old host
+rows; external stores are not assumed absent. E4's compatibility matrix is retired.
 
-## Remaining connected work
+## Remaining connected acceptance
 
-This corrects only StepClosure, PhaseClosure and RepositoryEffect authority.
-Goal/Repository review correction is recorded separately in
-[review applicability](native-host-review-applicability.md), also UNVERIFIED.
-Goal/Repository Human correction is recorded in
-[Human applicability](native-host-human-applicability.md), also UNVERIFIED.
-Split Start correction is recorded in [Start applicability](native-host-split-start-applicability.md), UNVERIFIED.
-Split answers still have complete semantic evidence bindings and downstream
-verifier comparisons. They require actual assignment/decision/result/coverage applicability,
-not reuse of an effect-grant projection or deletion of independent attestations.
-Other management hashes, application duplicates, generated/legacy consumers,
-actual execution profile/provider/Result/Workflow continuation and batches B/C
-remain unfinished. Same Goal/history/counter3/3/repair frames, parent implementation,
-registered-runner serialized tests and assembled read-only independent review.
+This slice is not full Phase acceptance. Internal Operation/storage/DTO/fixture
+and CML/ABI/public documentation migration, connected independent review and
+release remain. Original history/counter3/3/frames and parent implementation /
+registered serial runner tests / read-only review are unchanged.

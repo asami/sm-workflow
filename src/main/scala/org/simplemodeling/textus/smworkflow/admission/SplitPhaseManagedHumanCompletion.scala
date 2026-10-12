@@ -13,17 +13,17 @@ import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.value.{SplitPhaseAdvanceCommand, SplitPhasePartitionContextReference}
+import org.simplemodeling.textus.smworkflow.value.{SplitPhasePartitionContextReference}
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDirection as H,
   SplitPhaseNativeHumanAnswer as N, SplitPhaseHumanDirectionAnswerContract as A,
   SplitPhaseHumanAnswerVerification as V, SplitPhaseManagedScopeProjectionCheckpoint as D}
 
-/** Declared public Decision completion. CNCF owns atomic claim/result/native
-  * persistence; repeated answers select the retained meaning, not an unchanged
-  * question, Result transport or complete-history certificate.
+/** Declared public Decision completion. CNCF owns the actual answer/native
+  * persistence. The current issued question supplies execution context;
+  * no unchanged question, transport or complete-history certificate is required.
   *
   * @since Oct.  5, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedHumanCompletion {
   val responseSchema = "sm-workflow.split-human-direction-submission.v1"
@@ -57,16 +57,12 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
 
   private final class BoundOperation(operation: GeneratedProvidedApiAbi.Operation,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    evidence: V.EvidencePort, observation: () => Consequence[Unit]) extends spec.OperationDefinition {
+    evidence: V.EvidencePort, observation: () => Consequence[Unit]) extends NativeWorkflowResultInput.Receiver {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation)
-    def createOperationRequest(request: Request): Consequence[OperationRequest] = for {
-      submitted <- _decode_c(request)
-      _ <- if (submitted.handle.componentIdentity == SmWorkflowComponent.componentId &&
-          submitted.handle.workflowIdentity == catalog.definition.workflowIdentity &&
-          submitted.handle.workflowRevision == catalog.definition.workflowRevision) Consequence.unit
-        else _invalid("result differs from the owning Component or Workflow")
-    } yield BoundAction(request, submitted, operation, declaration, catalog, evidence, observation)
+    def createResultOperationRequestC(request: Request, result: ContinuationResult[Json]): Consequence[OperationRequest] =
+      NativeWorkflowResultInput.typedC(result, A.payloadCodec).map(submitted =>
+        BoundAction(request, submitted, operation, declaration, catalog, evidence, observation))
   }
   private final case class BoundAction(request: Request, submitted: ContinuationResult[A.Answer],
     operation: GeneratedProvidedApiAbi.Operation, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -117,12 +113,12 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
   /** Historical observation on the actual advance call. No evidence is needed
     * to read already committed facts, and no new Human answer is admitted here.
     */
-  def observeForAdvanceC(command: SplitPhaseAdvanceCommand,
+  def observeForAdvanceC(command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core): Consequence[String] =
     observeAnswerForAdvanceC(command, declaration, catalog, core).flatMap(_acknowledgement_c)
 
-  def observeAnswerForAdvanceC(command: SplitPhaseAdvanceCommand,
+  def observeAnswerForAdvanceC(command: SplitPhaseAdvanceTarget,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
     core: ActionCall.Core): Consequence[ObservedAnswer] = for {
     plan <- _plan_c(command, declaration, catalog, core)
@@ -146,7 +142,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
     bound <- {
       val codec = new WorkflowCompletionServiceOperation.Codec[A.Answer] {
         val resultTypeIdentity = A.resultType
-        def decodeC(request: Request) = _decode_c(request)
+        def decodeC(request: Request) = Consequence.success(submitted)
         def encodeC(resume: ContinuationRuntime.Resume) = _invalid("acknowledgement requires verified committed readback")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[A.Answer],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
@@ -168,11 +164,11 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
         }
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[A.Answer] {
-        def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = for {
-          _ <- admitted.evidence.forCallC(core)
-          program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+        def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = {
+          val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference)))
-        } yield WorkflowCompletionServiceOperation.SelectedClosing(program, Some(admitted.next))
+          Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(admitted.next)))
+        }
       }
       WorkflowDecisionCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, operation,
         WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
@@ -191,7 +187,7 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
     "issuedDecision" -> Json.fromString(question), "completion" -> Json.fromString(completion)).noSpaces
   }
 
-  private def _plan_c(command: SplitPhaseAdvanceCommand, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  private def _plan_c(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
     selected: Option[WorkflowInteraction[H.Input, Nothing]] = None): Consequence[H.Plan] = for {
     publication <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
@@ -212,13 +208,13 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
           .flatMap(_.map(Consequence.success).getOrElse(_invalid("actual issued question is absent")))
       } yield actual
     }
-    resolved <- H.selectIssuedC(plan, issued)
+    resolved <- H.consumeIssuedC(plan, issued)
   } yield resolved
 
-  private def _command_c(question: WorkflowInteraction[H.Input, Nothing]): Consequence[SplitPhaseAdvanceCommand] = question.current match {
+  private def _command_c(question: WorkflowInteraction[H.Input, Nothing]): Consequence[SplitPhaseAdvanceTarget] = question.current match {
     case decision: WorkflowContinuation.Decision[?] if decision.request.input.exists(value => value.value.isInstanceOf[H.Input]) =>
       val input = decision.request.input.get.value.asInstanceOf[H.Input]
-      Consequence.success(SplitPhaseAdvanceCommand(question.handle.instanceIdentity.value,
+      Consequence.success(SplitPhaseAdvanceTarget(question.handle.instanceIdentity.value,
         SplitPhasePartitionContextReference(input.context.identity, input.context.revision)))
     case _ => _invalid("issued Decision input is absent")
   }
@@ -233,16 +229,8 @@ private[smworkflow] object SplitPhaseManagedHumanCompletion {
       (_, _) => Consequence.success(Vector.empty))
   private def _provided_c: Consequence[GeneratedProvidedApiAbi.Operation] =
     SplitPhaseDefinitionBinding.providedDefinition.providedOperations.find(operation =>
-      operation.service == H.completionOperation.service && operation.name == H.completionOperation.operation &&
-        operation.inputType.contains(A.resultType) && operation.resultType.contains(H.closingType.value))
+      operation.service == H.completionOperation.service && operation.name == H.completionOperation.operation)
       .map(Consequence.success).getOrElse(_invalid("generated Provided Human operation differs"))
-  private def _decode_c(request: Request): Consequence[ContinuationResult[A.Answer]] =
-    if (request == null || request.operation != H.completionOperation.operation || !request.service.contains(H.completionOperation.service))
-      _invalid("request differs from the actual Provided Human operation")
-    else WorkflowJsonCommandRequest.commandArguments(request) match {
-      case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, A.payloadCodec)
-      case _ => _invalid("one complete typed Human result is required")
-    }
   private def _invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase managed Human completion " + reason)
   private def _uncertain[T](reason: String): Consequence[T] = DataStoreConditionalTransitionFailure.transactionIndeterminate(
     "SplitPhase managed Human completion " + reason)

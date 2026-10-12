@@ -14,11 +14,11 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 11, 2026
  */
 final class SplitPhaseTypedPartitionWorkIssueSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def binding: T.PartitionBound = {
-    val start = take(T.prepareC(record, source, Some(proposal), record.selection, catalog, configuration))
+    val start = take(T.prepareC(record, source, Some(proposal), catalog, configuration))
     val raw = SplitPhasePartitionContextFixture.record.copy(owner = SplitPhasePartitionContextFixture.record.owner.copy(
       start = record.reference, handle = take(WorkflowHandle.fromRecordC(
         org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId, instance)), instanceRevision = instance.revision))
@@ -53,7 +53,12 @@ final class SplitPhaseTypedPartitionWorkIssueSpec extends AnyWordSpec with Match
       instance.suspension shouldBe None
       I.prepareC(null, allocated).isSuccess shouldBe false
       I.prepareC(bound, null).isSuccess shouldBe false
-      I.prepareC(binding, allocated).isSuccess shouldBe false
+      Given("an equivalent current binding constructed separately from reply allocation")
+      val separate = binding
+      When("the issue consumer receives that binding and the already allocated reply")
+      val equivalent = take(I.prepareC(separate, allocated))
+      Then("the functional WorkOrder is the same without a binding-identity certificate")
+      equivalent.interaction shouldBe plan.interaction
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionWorkIssue.Plan(null, null, null, null, null)")
     }
 

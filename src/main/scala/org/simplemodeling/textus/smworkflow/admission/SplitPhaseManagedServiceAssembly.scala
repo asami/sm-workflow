@@ -1,18 +1,16 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
-import domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
-/** Additive host entry and planning-continuation assemblies. Neither activates
-  * the default launcher nor claims the complete Preview/Apply runtime.
+/** Current typed Start and planning-continuation host assembly.
   *
   * @since Oct.  2, 2026
-  * @version Oct.  5, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedServiceAssembly {
   /** Complete public service composition for a trusted host. Start and owning
@@ -42,9 +40,7 @@ private[smworkflow] object SplitPhaseManagedServiceAssembly {
     spec.OperationDefinitionGroup(
       NonEmptyVector.of(start).concat(continuation.operations.operations.toVector)))
 
-  /** Actual public continuation operations, additive to the older entry slice.
-    * This does not claim complete/default three-profile runtime assembly.
-    */
+  /** Actual public planning continuation operations. */
   def bindHostPlanningContinuationC(params: ComponentCreate,
     declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog,
@@ -81,29 +77,4 @@ private[smworkflow] object SplitPhaseManagedServiceAssembly {
   } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.SplitPhaseServiceService,
     spec.OperationDefinitionGroup(NonEmptyVector.of(advance, completion.operation, scope, human, reasoning)))
 
-  def bindHostEntrySliceC(params: ComponentCreate,
-    declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog
-  )(using context: ExecutionContext): Consequence[spec.ServiceDefinition] = {
-    val generated = SplitPhaseWorkflowStateMachineProvidedApi2.workflow
-    val names = Vector("startSplitPhase", "assessSplitProposal")
-    if (params == null || declaration == null || catalog == null || context == null ||
-        generated.identity != "SplitPhaseWorkflow" || names.exists(name =>
-          generated.providedOperations.count(operation =>
-            operation.service == "SplitPhaseService" && operation.name == name) != 1))
-      Consequence.configurationInvalid("SplitPhase managed entry Service assembly is incomplete")
-    else for {
-      selection <- SplitPhaseHostSelectionReadPolicy.bindC(params.configuration, declaration)
-      entry <- SplitPhaseHostEntryReadPolicy.bindC(params.configuration, declaration)
-      proposal <- SplitPhaseHostProposalReadPolicy.bindC(params.configuration, declaration)
-      binding <- SplitPhaseManagedStartAssembly.bindPersistenceC(params, declaration, catalog)
-      start <- SplitPhaseStartServiceOperation.bindC(selection, entry, binding.definition,
-        binding.configuration, binding.instances)
-      assessment <- SplitPhaseProposalAssessmentServiceOperation.bindC(selection, entry, proposal,
-        binding.definition, binding.configuration, binding.instances)
-      _ <- if (Vector(start, assessment).map(_.specification.name) == names) Consequence.unit
-        else Consequence.configurationInvalid("SplitPhase managed entry Service differs from its CML Operations")
-    } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.SplitPhaseServiceService,
-      spec.OperationDefinitionGroup(NonEmptyVector.of(start, assessment)))
-  }
 }

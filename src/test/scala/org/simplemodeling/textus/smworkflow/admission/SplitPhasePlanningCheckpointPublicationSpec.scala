@@ -94,7 +94,7 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       Given("one allocation saved in the original planning context and an actual semantic completion")
       val selected = bound(); val (allocation, _) = allocated(selected)
       val retained = bound(knownFacts.copy(planning = allocation.data))
-      val unchanged = take(K.captureUnchangedC(retained, take(W.advanceC(retained.context.selection)), reference, anchor))
+      val unchanged = take(K.captureMechanicalC(retained, take(W.advanceC(retained.context.selection)), reference, anchor))
       val semantic = take(K.captureCompletionC(completion(), reference)).get
       When("the actual publication descriptors for both origins are prepared")
       val mechanical = take(U.prepareC(unchanged, targets)); val ai = take(U.prepareC(semantic, targets))
