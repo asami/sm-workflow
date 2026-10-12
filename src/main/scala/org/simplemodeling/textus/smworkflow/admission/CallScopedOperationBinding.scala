@@ -5,21 +5,20 @@ import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCal
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec
-import io.circe.Json
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.ContinuationResult
 
 /** Bind application callbacks and resolved results per execution while retaining
   * the canonical completion engine. No captured host core or result-wire adapter.
   * @since   Oct.  1, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object CallScopedOperationBinding {
   def wrapResult(declared: spec.OperationDefinition,
-    bind: (ActionCall.Core, ContinuationResult[Json]) => Consequence[spec.OperationDefinition]): spec.OperationDefinition =
+    bind: (ActionCall.Core, ContinuationResult[NativeWorkflowResultInput.Value]) => Consequence[spec.OperationDefinition]): spec.OperationDefinition =
     new NativeWorkflowResultInput.Receiver {
       val specification = declared.specification
       def createResultOperationRequestC(incoming: Request,
-        result: ContinuationResult[Json]): Consequence[OperationRequest] = Consequence.success(new CommandAction {
+        result: ContinuationResult[NativeWorkflowResultInput.Value]): Consequence[OperationRequest] = Consequence.success(new CommandAction {
         val request = incoming
         override def commandExecutionMode = org.goldenport.cncf.action.CommandExecutionMode.Sync
         def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {

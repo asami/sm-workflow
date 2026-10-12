@@ -69,8 +69,11 @@ private[smworkflow] object SplitPhaseManagedScopeProjectionCheckpoint {
               DataStore.StringEntryId(row.identity))
             program <- storage.stageCreateC(row.payload)
           } yield accumulated :+ program }
+          frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+          nextFrontier <- frontier.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
+            SplitPhaseExecutionFrontier.Value.ScopeProjection(captured.record.reference), core)
           program = programs.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
-            (before, next) => before.flatMap(_ => next))
+            (before, next) => before.flatMap(_ => next)).flatMap(_ => nextFrontier)
           native <- _native_c(core)
           // Exactly the admitted local Creates plus one native receipt. No event
           // batch or caller persistence selector is introduced by this boundary.

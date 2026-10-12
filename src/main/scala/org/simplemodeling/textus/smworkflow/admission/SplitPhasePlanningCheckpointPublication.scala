@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpo
   * No store/lease/program is
   * retained or executed; native execution must separately admit its public call.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointPublication {
   final case class Row(collection: DataStore.CollectionId, identity: String, payload: StorageRecord)
@@ -37,12 +37,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
       p.planningCollection, p.proposalCollection, p.ownershipCollection, p.handoffsCollection, p.estimatesCollection,
       declaration.instances, declaration.continuations))
 
-  def indexKeyC(instance: InstanceIdentity, context: S.ContextReference): Consequence[String] = guarded {
-    if (instance == null || context == null || !canonical(instance.value) || !canonical(context.identity))
-      invalid("context locator is incomplete")
-    else M.keyC(M.Reference(Json.arr(Json.fromString(instance.value), Json.fromString(context.identity)).noSpaces,
-      context.revision)).flatMap(key => finalKeyC("planning-context:" + key))
-  }
   def mappingKeyC(reference: K.Reference): Consequence[String] = guarded {
     if (reference == null) invalid("mapping locator is absent")
     else M.keyC(M.Reference(reference.identity, reference.revision)).flatMap(key => finalKeyC("planning-snapshot:" + key))
@@ -56,9 +50,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
         case _: K.Origin.Mechanical => J.encodeLocatorC(K.Locator(captured.record.reference, captured.record.origin))
         case _: K.Origin.PartitionCompletion => J.encodeC(captured.record)
       }
-      index <- J.encodeIndexC(captured.index)
       mappingKey <- mappingKeyC(captured.record.reference)
-      indexKey <- indexKeyC(captured.index.instance, captured.index.context)
       original = captured.record.originalContext.facts
       effective = captured.record.snapshot.selection
       estimates <- if (effective.partition.estimates == original.partition.estimates) Consequence.success(Vector.empty[Row])
@@ -81,7 +73,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
         row(targets.ownerships, document.ownership.reference.identity, F.storageField, ownership),
         row(targets.handoffs, document.handoffs.reference.identity, F.storageField, handoff)) }
       rows = estimates ++ handoffs ++ planning ++ documents ++ closingEffects ++ Vector(
-        row(targets.publication, mappingKey, J.storageField, mapping), row(targets.publication, indexKey, J.indexStorageField, index))
+        row(targets.publication, mappingKey, J.storageField, mapping))
     } yield new Prepared(captured, targets, rows)
   }
 

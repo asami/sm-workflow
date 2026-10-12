@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Constructed local test data, never public ingress, execution or readback.
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 private[admission] object SplitPhasePlanningCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -135,7 +135,6 @@ final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with
         K.captureMechanicalC(null, null, reference, anchor))
       Then("capture is unavailable and raw mappings cannot grant it")
       absent.foreach(_.isSuccess shouldBe false)
-      K.inspectIndexC(null).isSuccess shouldBe false
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPreparation.Captured(null, null, null, null, None, None)")
     }
 

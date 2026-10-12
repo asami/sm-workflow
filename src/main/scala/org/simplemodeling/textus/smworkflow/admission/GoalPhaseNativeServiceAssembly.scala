@@ -15,7 +15,7 @@ import GoalPhaseNativeRun as F
 /** Current paired native host assembly, invoked through session-resolved inputs.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -72,8 +72,11 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
-      def execute(): Consequence[OperationResponse] = start.fold(port.advanceC(identity.get, core))(
-        (input, selected) => F.startC(input, selected, d, definition, plans, core)).map(OperationResponse.Scalar(_))
+      def execute(): Consequence[OperationResponse] = start match {
+        case Some((input, selected)) => F.startC(input, selected, d, definition, plans, core)
+          .map(NativeWorkflowOperationOutput.response(_))
+        case None => port.advanceC(identity.get, core).map(NativeWorkflowOperationOutput.response(_))
+      }
     }
   }
 }

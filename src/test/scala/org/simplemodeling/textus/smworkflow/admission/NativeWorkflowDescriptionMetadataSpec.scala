@@ -2,7 +2,6 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
-import org.goldenport.schema.Multiplicity
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.value.BaseContent
@@ -40,60 +39,27 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
     SmWorkflowComponent.RepositorySyncServiceService,
     SmWorkflowComponent.SplitPhaseServiceService
   )
-  private val _typed_response_operations: Vector[spec.OperationDefinition] = Vector(
-    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
-    SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation,
-    SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation,
-    SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation,
-    SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation
-  )
 
   "Native workflow descriptions" should {
-    "native JSON operation specifications" which {
+    "normal named operation specifications" which {
       _operations.foreach { case (service, declared) =>
-        s"connect $service.${declared.name}'s generated descriptions without replacing the runtime transport" in {
-          Given("the actual generated CML operation, without injected description text or an executed handler")
-          val content = declared.specification.content
-          val optional = Set("advanceGoalPhase", "advanceRepositorySync", "advanceSplitPhase").contains(declared.name)
-          val request = if (optional) WorkflowJsonCommandRequest.optionalDefinition else WorkflowJsonCommandRequest.definition
+        s"retain $service.${declared.name}'s named request, response and generated descriptions" in {
+          Given("the actual generated CML Operation and its named business contract")
+          val generated = declared.specification
 
-          When("the native JSON operation specification is assembled with its selected input domain")
-          val actual = NativeWorkflowDescriptionMetadata.operation(declared.specification, spec.ResponseDefinition.void, request)
+          When("the normal native binder borrows that declaration's metadata")
+          val actual = NativeWorkflowDescriptionMetadata.operation(declared)
 
-          Then("only generated descriptions are borrowed and the canonical JSON request/response contract remains native")
+          Then("the actual named input/output contract remains attached to the operation")
           actual.name shouldBe declared.name
           actual.content.nameAttributes shouldBe BaseContent.simple(declared.name).nameAttributes
-          actual.content.descriptiveAttributes shouldBe content.descriptiveAttributes
-          actual.summary shouldBe declared.specification.summary
-          actual.description shouldBe declared.specification.description
-          actual.request.parameters.head.domain.multiplicity shouldBe (if (optional) Multiplicity.ZeroOne else Multiplicity.One)
-          actual.request should not be declared.specification.request
-          actual.response shouldBe spec.ResponseDefinition.void
-          actual.response should not be declared.specification.response
-        }
-      }
-    }
-
-    "existing typed response contracts" which {
-      _typed_response_operations.foreach { declared =>
-        s"retain ${declared.name}'s existing response while connecting its generated description" in {
-          Given("the actual current generated result or Human completion specification and its existing typed response")
-          val generated = declared.specification
-          val response = generated.response
-
-          When("the native JSON specification borrows only descriptions with that selected response")
-          val actual = NativeWorkflowDescriptionMetadata.operation(generated, response)
-
-          Then("the response object and JSON ingress are unchanged and no generated aliases or request fields are installed")
-          actual.name shouldBe generated.name
-          actual.content.nameAttributes shouldBe BaseContent.simple(generated.name).nameAttributes
           actual.content.descriptiveAttributes shouldBe generated.content.descriptiveAttributes
-          actual.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
-          actual.response should be theSameInstanceAs response
+          actual.summary shouldBe generated.summary
+          actual.description shouldBe generated.description
+          actual.request should be theSameInstanceAs generated.request
+          actual.response should be theSameInstanceAs generated.response
+          actual.request.parameters.map(_.name) should not contain ("arg1")
+          actual.request.parameters.map(_.name) should contain ("sessionId")
           actual.response should not be spec.ResponseDefinition.void
         }
       }

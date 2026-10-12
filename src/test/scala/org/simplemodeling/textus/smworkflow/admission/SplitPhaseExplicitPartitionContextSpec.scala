@@ -165,12 +165,10 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
           .downField("handle").focus.get.mapObject(_.add("componentIdentity", Json.fromString("invalid component"))))))))
       When("wire data is decoded at its boundary")
       val decoded = annotated.map(value => J.decodeC(record.reference, raw(value)))
-      val discovered = annotated.map(value => J.findForInstanceC(raw(value), instance.identity.value))
       val refused = variants.map(value => J.decodeC(record.reference, raw(value)))
       val foreign = J.decodeC(record.reference.copy(revision = "2"), raw(original))
-      Then("annotations give no control, discovery reaches the selected row, and malformed consumed data fails")
+      Then("annotations give no control, direct decoding consumes the selected row, and malformed consumed data fails")
       decoded.foreach(_.toOption.get shouldBe record)
-      discovered.foreach(_.toOption.get shouldBe Some(record))
       refused.foreach(_.isSuccess shouldBe false)
       foreign.isSuccess shouldBe false
       take(J.decodeC(record.reference, J.schema + ":" + original.spaces2)) shouldBe record

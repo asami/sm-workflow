@@ -26,7 +26,7 @@ not prove that a Workflow completed or that human/review evidence exists.
 
 See [the reference manual](index.md) and the repository's
 `docs/spec/normal-three-workflow-host.md` for the fifteen provided Operations,
-their complete wire codecs and host configuration. A declared Required SPI
+their named business types and host configuration. A declared Required SPI
 does not become an additional provided Operation merely because Help describes
 it.
 
@@ -44,9 +44,10 @@ its separate-process observation entry as a public client.
 The example supplies owned input records through declared managed storage,
 initializes shared storage and the normal three-service bindings, then:
 
-1. Calls `startSplitPhase` with the selected input; Start creates its own instance.
-2. Registers the specification-owned partition context and calls
-   `advanceSplitPhase`; Workflow issues the genuine handoff-scope WorkOrder.
+1. Calls `startSplitPhase` with named selected business input; Start creates the
+   execution and its owning context, and returns sessionId.
+2. Calls `advanceSplitPhase` with that sessionId; Workflow returns the actual
+   handoff-scope business request.
 3. Returns only the assigned `Enriched` scope result through
    `submitHandoffScopeResult`; the reduced input omits the saved result destination
    because Workflow resolves that assignment internally.
@@ -75,24 +76,25 @@ caller. Do not substitute a private Workflow runtime or call an admission helper
 as the external interface. This is the direct call exercised by the specs:
 
 ```scala
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.{Property, Request}
 
 val response = owner.executeOperationResponseInContext(
   Request.of(
     component = component.name,
     service = "SplitPhaseService",
     operation = "advanceSplitPhase",
-    arguments = List(Argument("arg1", advanceWire))
+    properties = List(Property("sessionId", started.sessionId, None))
   ),
   actor
 )
 ```
 
 `owner`, `component` and `actor` are the actual configured Subsystem, component
-and resolved caller. `advanceWire` contains only necessary current session/target
-selectors, not a Command envelope or shell command. Omit `arguments` entirely
-when the actual host session has one applicable target. Start instead supplies
-its genuine business object under `input` in required `arg1` JSON.
+and resolved caller. `started` is the declared Start result obtained through its
+generated ValueReader from RecordResponse. Start supplies its declared business
+Value or Record as the named `input` Property and may supply a proposed sessionId.
+Advance always uses the actual returned sessionId, never a chat/ambiguity selector
+or a Command envelope.
 An unbound `ExecutionContext.create()` is not authentication or
 an effect grant. Direct dispatch uses normal ActionCall, commit and after-commit
 response processing without launching a CLI merely to invoke the Operation.
@@ -107,9 +109,9 @@ internal stage.
 A semantic participant returns only the requested typed result to the completion
 Operation identified in its issued work. With normal reduced submission, Workflow
 resolves handle, run/continuation identity, revision and snapshot from the actual
-issued state. Supply session context and only a request selector when actual
-issued generations are ambiguous. The three Split semantic completions also
-resolve their assigned destination; return `result.value` without a destination
+issued state. Supply the actual sessionId and named typed result/answer.
+The three Split semantic completions also
+resolve their assigned destination; return the semantic business value without a destination
 echo. Other actual artifact/result/evidence references remain required business
 data. Semantic evidence is consumed once; it is not echoed in outer execution
 evidence as a comparison copy. Actual independently supplied execution/Human/
@@ -118,9 +120,10 @@ contract is supported.
 Never add a cursor, argv, winning candidate, storage plan or permission to an
 advance command. Do not invent a human answer or accepted review.
 
-Decode a successful `OperationResponse.Scalar` with the declared response codec.
-Some completion Operations return an Operation-specific acknowledgement rather
-than a Workflow Wait frame. An acknowledgement proves neither Terminal nor
+Consume successful `OperationResponse.RecordResponse` with the generated
+ValueReader for the declared response. Every Submit returns actual sessionId,
+accepted, outcome and a truthful chat-oriented message, not a Workflow Wait
+frame or native envelope. An acknowledgement proves neither Terminal nor
 document application. The owning caller subsequently advances the Workflow;
 the semantic skill does not inspect state and dispatch internal effect stages.
 
@@ -152,8 +155,8 @@ the Operation caller is direct rather than a CLI process.
 
 ## Continue normal work or start a NEW execution
 
-Open a fresh configured runtime and use the same session context, adding a target
-selector only for genuine ambiguity. Removed identity-only or full-envelope
+Open a fresh configured runtime and use the returned execution sessionId.
+Removed ambiguity-selector, identity-only or full-envelope
 interfaces are not alternatives. Do not reinstall instances
 or fabricate history. Normal pending work and completed outcomes are consumed
 through the public interface. Return each requested answer once; duplicate or

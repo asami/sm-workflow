@@ -32,16 +32,40 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
   final class Port private[GoalPhaseNativeWorkContinuation](d: F.Declaration, definition: DefinitionBinding,
     acknowledgement: String => Consequence[Unit]) {
-    def advanceC(identity: String, core: ActionCall.Core): Consequence[String] = for {
+    def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       source <- F.sessionC(identity, d, definition, core)
-      draft <- prepareC(source)
-      plan <- issueAssignedC(draft, source.started.receipt.next, core)
-      completed <- completionC(plan, core)
-      wire <- completed match {
-        case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
-        case Some((state, next, result)) => continueAfterSemanticC(source, state, next, result, plan.input, core)
+      wire <- source.current.suspension match {
+        case Some(boundary) => _pending_c(source, boundary, core)
+        case None => for {
+          draft <- prepareC(source)
+          plan <- issueAssignedC(draft, source.started.receipt.next, core)
+          completed <- completionC(plan, core)
+          wire <- completed match {
+            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+            case Some((state, next, result)) => continueAfterSemanticC(source, state, next, result, plan.input, core)
+          }
+        } yield wire
       }
     } yield wire
+
+    /** Pending work is already selected by the native suspension. Read that
+      * exact assignment/question instead of replaying every completed Step. */
+    private def _pending_c(source: F.Session, boundary: SuspensionBoundary, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+      human <- GoalPhaseOrderedHumanDecision.requiredC
+      identity = ContinuationIdentity(boundary.continuationIdentity.value)
+      output <- if (boundary.completion.value == human.metadata.completionContract.identity) for {
+        reader <- source.storage.bindDecisionC(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec)
+        question <- reader.loadC(identity)(using core.executionContext).flatMap(
+          _.map(Consequence.success).getOrElse(F.invalid("pending ordered Human question is absent")))
+        output <- NativeWorkflowOperationOutput.goalHumanC(question)
+      } yield output else for {
+        reader <- source.storage.bindIssuedC(F.completionOperation, S.inputCodec)
+        work <- reader.loadC(identity)(using core.executionContext).flatMap(
+          _.map(Consequence.success).getOrElse(F.invalid("pending ordered work is absent")))
+        output <- NativeWorkflowOperationOutput.goalWorkRequestC(work)
+      } yield output
+    } yield output
 
     private def prepareC(source: F.Session): Consequence[Prepared] = for {
       input <- S.initialC(source)
@@ -123,23 +147,20 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield ReviewSource(source, candidate, validation, input, controller)
 
     private def continueAfterSemanticC(source: F.Session, controller: O.State, from: InstanceRecord,
-      submitted: ContinuationResult[S.Result], input: S.Request, core: ActionCall.Core): Consequence[String] =
+      submitted: ContinuationResult[S.Result], input: S.Request, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       if (controller.stage == O.Stage.InspectCandidate && d.candidatePaths.nonEmpty) for {
         inspected <- GoalPhaseNativeCandidate.advanceC(source, d, core, from, controller, acknowledgement)
-        current <- F.sessionC(source.current.identity.value, d, definition, core)
-        observation <- WorkflowWaitJsonV1.decodeC(inspected)
-        unfinished = current.current.currentProgression.contains(ProgressionReference("phase.InspectCandidate")) &&
-          observation.current.asInstanceOf[WorkflowContinuation.Wait].expectedRevision.value == current.current.revision.value.toString
+        unfinished = inspected.condition.contains("phase.InspectCandidate")
         wire <- if (unfinished ||
             d.validationPolicy.isEmpty) Consequence.success(inspected)
-          else continueReviewC(current, controller, from, core, inspected)
+          else continueReviewC(source, controller, from, core, inspected)
       } yield wire
       else if (controller.stage == O.Stage.Decision && d.humanDecision.nonEmpty)
         continueDecisionC(source, controller, from, submitted, input, None, core)
       else waitC(from, submitted)
 
     private def continueReviewC(source: F.Session, controller: O.State, implementation: InstanceRecord,
-      core: ActionCall.Core, fallback: String): Consequence[String] = for {
+      core: ActionCall.Core, fallback: org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       candidate <- GoalPhaseNativeCandidate.retainedC(source, d, core, implementation, controller)
       validation <- GoalPhaseNativeValidation.retainedC(source, d, core, candidate, controller)
       wire <- validation match {
@@ -150,7 +171,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             plan <- issueAssignedC(draft, value.record, core)
             completed <- completionC(plan, core)
             response <- completed match {
-              case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+              case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
               case Some((state, next, result)) =>
                 if (state.stage == O.Stage.Repair) continueRepairC(source, state, next, plan.input.review, core)
                 else if (state.stage == O.Stage.Closing && d.closureInstallation.nonEmpty)
@@ -245,12 +266,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield (selected, controller, next, result)
 
     private def continueRepairC(source: F.Session, controller: O.State, from: InstanceRecord,
-      context: Option[GoalPhaseNativeReview.Context], core: ActionCall.Core): Consequence[String] = for {
+      context: Option[GoalPhaseNativeReview.Context], core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       draft <- prepareRepairC(source, controller, from, context)
       plan <- issueAssignedC(draft, from, core)
       completed <- completionC(plan, core)
       wire <- completed match {
-        case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
         case Some((state, next, result)) => continueAfterSemanticC(source, state, next, result, plan.input, core)
       }
     } yield wire
@@ -264,7 +285,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield plan
 
     private def continueClosureC(source: F.Session, controller: O.State, from: InstanceRecord,
-      core: ActionCall.Core): Consequence[String] = for {
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       closed <- GoalPhaseNativeClosure.advanceC(source, d, core, from, controller, acknowledgement)
       current <- F.sessionC(source.current.identity.value, d, definition, core)
       wire <- closed match {
@@ -275,7 +296,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           plan <- issueAssignedC(draft, value.record, core)
           completed <- completionC(plan, core)
           response <- completed match {
-            case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
             case Some((state, next, result)) => continueAfterSemanticC(current, state, next, result, plan.input, core)
           }
         } yield response
@@ -300,7 +321,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     private def continueDecisionC(source: F.Session, controller: O.State, from: InstanceRecord,
       result: ContinuationResult[S.Result], input: S.Request, candidate: Option[GoalPhaseNativeCandidate.Saved],
-      core: ActionCall.Core): Consequence[String] = humanPortC.flatMap(_.advanceC(
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = humanPortC.flatMap(_.advanceC(
         GoalPhaseOrderedHumanDecision.Source(source, input, controller, from, result, candidate), core))
 
     private def prepareResumedC(source: GoalPhaseOrderedHumanDecision.Source, state: O.State,
@@ -312,12 +333,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield plan
 
     private def resumeDecisionC(source: GoalPhaseOrderedHumanDecision.Source, state: O.State,
-      from: InstanceRecord, answer: GoalPhaseOrderedHumanDecision.Answer, core: ActionCall.Core): Consequence[String] = for {
+      from: InstanceRecord, answer: GoalPhaseOrderedHumanDecision.Answer, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       draft <- prepareResumedC(source, state, from, answer)
       plan <- issueAssignedC(draft, from, core)
       completed <- completionC(plan, core)
       wire <- completed match {
-        case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
         case Some((nextState, next, result)) => if (isReview(plan.input)) {
           if (nextState.stage == O.Stage.Repair) continueRepairC(source.session, nextState, next, plan.input.review, core)
           else if (nextState.stage == O.Stage.Closing && d.closureInstallation.nonEmpty)
@@ -401,7 +422,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     }
 
     private[GoalPhaseNativeWorkContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result],
-      result: Option[ContinuationResult[io.circe.Json]] = None): Consequence[spec.OperationDefinition] = {
+      result: Option[ContinuationResult[NativeWorkflowResultInput.Value]] = None): Consequence[spec.OperationDefinition] = {
       val provided = S.providedDefinition
       val op = provided.providedOperations.find(o => o.service == F.completionOperation.service && o.name == F.completionOperation.operation)
       if (op.isEmpty) return F.invalid("ordered completion is absent from generated ABI")
@@ -421,7 +442,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         def encodeC(resume: ContinuationRuntime.Resume) = F.invalid("result acknowledgement requires native committed completion")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Result],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] =
-          completed.map(record => waitC(record, submitted).map(OperationResponse.Scalar(_)))
+          completed.map(record => Consequence.success(NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, record))))
             .getOrElse(uncertain("ordered result has no native committed state"))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
@@ -450,7 +471,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         }
       }
       val actualInstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
-      WorkflowCompletionServiceOperation.bindC(provided, op.get, WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void,
+      WorkflowCompletionServiceOperation.bindC(provided, op.get, SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation.specification.request, SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation.specification.response,
         codec, ContinuationRuntime.empty, issued, actualInstances, d.configuration,
         () => throw new IllegalStateException("Ordered completion requires canonical managed UoW"), Some(closing), Some(native),
         descriptiveAttributes = SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation.specification.content.descriptiveAttributes)

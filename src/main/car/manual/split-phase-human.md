@@ -1,7 +1,7 @@
 # SplitPhase Human direction contract
 
 This contract describes the separately assembled Human profile introduced in v7
-and retained in `split-phase-minimal-operation-v13`, with a separate reasoning question.
+and retained in `split-phase-business-operation-v14`, with a separate reasoning question.
 The normal three-workflow factory includes this paired connection; the older
 planning-only SplitPhase assembly does not. A host must supply canonical storage, authenticated
 participants and an independent Human answer verifier before installing it.
@@ -31,10 +31,9 @@ scope-publication reference and complete bounded frontier. Its declared Human
 SPI is `SplitHumanService.presentSplitHumanDirection`.
 
 `SplitPhaseService.submitSplitHumanDirection` receives the current
-`sm-workflow.result-submission.v1` frame with the requested answer under
-`result.value`, its actual Human result/evidence reference and independently
-supplied evidence. The host session identifies the execution; `requestIdentity`
-is supplied only for actual ambiguity. Workflow resolves the issued Decision,
+named sessionId, the typed `answer`, its genuine resultReference and independently
+supplied evidence. sessionId is the execution ID returned by Start, not a chat
+or an ambiguity selector. Workflow resolves the issued Decision,
 actor and stored controls internally, obtains independent Human evidence and
 commits the answer. Its acknowledgement is not Terminal.
 Use the assigned completion route, without echoing a handle, continuation,
@@ -53,7 +52,9 @@ submission acknowledgement must not be mistaken for that later Terminal.
 
 ## Closed answer payload
 
-The application answer schema is `sm-workflow.split-human-direction-answer.v1`.
+Public input is the declared SplitPhaseHumanDirectionAnswer business Value/Record,
+with choice and optional resolution. There is no enclosing public control frame.
+The internal business answer codec schema is `sm-workflow.split-human-direction-answer.v1`.
 Canonical output uses `schemaVersion` and `payload`, with `choice.value` in the
 payload. The choice alternatives are closed: `ProvideResolution`, `Defer` and
 `Cancel`. ProvideResolution requires a `resolution` object with canonical,
@@ -80,16 +81,18 @@ In the connected three-workflow assembly, a saved reasoning `DecisionNeeded`
 issues `SplitHumanService.presentReasoningHumanDirection`, with Required
 capability `reasoning-human-direction-capability` and input type
 `SplitPhaseReasoningHumanDirectionRequest`. This is not a scope question: its
-closed input retains the original context, complete unknown-item WorkOrder,
-saved AI result and whole planning frontier. The input schema is
-`sm-workflow.split-reasoning-human-input.v1`, bounded to 1 MiB of valid UTF-8.
+input retains typed unknown-item business request/judgment/frontier and actual
+work/result references, not String copies of native WorkOrder/Result envelopes.
+Its private issued-storage schema is `sm-workflow.split-reasoning-human-input.v2`;
+Scope uses `sm-workflow.split-human-direction-input.v2`. Existing native
+storage/transport owns its actual payload bounds.
 Return only the answer through the question's unchanged public
 `submitSplitHumanDirection` completion; clients do not choose subsequent work.
 
-The reasoning input reader consumes typed context and saved presentation strings,
+The reasoning input reader consumes the nested business records once,
 not an exact set of unused JSON annotations or a reconstructed copy certificate.
 Owning Workflow selection resolves the actual reasoning assignment and saved
-result. Separate interpretation and stopped-terminal readers likewise ignore
+result. Separate interpretation readers likewise ignore
 unused fields without turning those fields into Human consent or execution
 authority; required typed meaning and actual selected targets still apply.
 
@@ -114,10 +117,11 @@ Operation contract does not establish Phase6 CLI/skill integration.
 ### Actual answer verification
 
 An authenticated relay proves its participant identity, not Human consent.
-Fresh completion requires the host's independent verifier to bind evidence to
-the exact component instance, complete issued question, complete submitted
-result and submitting participant, with the declared Human-answer purpose.
-The evidence must come from that verifier, identify its issuer and Human
+Fresh completion uses the host's independent evidence port for the actual
+component, participant, question/business target, chosen direction and genuine
+answer reference, with the declared Human-answer purpose. It does not compare
+complete stored question/result copies or validate unused frontier diagnostics.
+The evidence must identify its authorized issuer and Human
 participant, and be valid against the current owning execution clock. A receipt
 decoded from request JSON, an old verifier observation or a skill assertion is
 not accepted instead.

@@ -1,5 +1,22 @@
 # Worker result conversion and consuming completion
 
+## Current Phase5.3 completion boundary
+
+The normal fifteen-Operation interface is the
+[common business loop](common-workflow-operation-loop.md). Named results/answers
+become native completion data using actual issued state, not a caller-provided
+control envelope. Existing public CNCF completion owns selection/commit. After
+commit, the actual business result produces structured sessionId, accepted,
+outcome and message; no eager Advance, new model call or unchanged-copy read is
+performed for acknowledgement. Direct consumers use generated ValueReader on
+RecordResponse rather than decode native Wait JSON.
+
+The dated R38 sections below retain historical evidence and limitations. They
+are not new Phase5.3 shared-infrastructure/replay/compatibility requirements.
+Current generation or compilation is not behavioral or Phase acceptance.
+
+## Historical R38 evidence and rules
+
 Status: bounded R38 conversion/consumption scenarios verified on 2026-10-09.
 The revised source-access correction was accepted by normal platform review;
 CNCF92 ran193/193. Local E1-E4 passed individually in95, whose aggregate remains

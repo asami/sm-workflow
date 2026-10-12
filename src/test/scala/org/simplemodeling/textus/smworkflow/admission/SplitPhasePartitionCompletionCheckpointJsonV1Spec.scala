@@ -20,6 +20,11 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
       Given("constructed enriched and DecisionNeeded captures with actual result evidence")
       val values = Vector(capture().record, capture(S.Decision.DecisionNeeded).record)
       When("the stored completion frames are read under the current catalog")
+      values.foreach { value =>
+        val encoded = take(J.encodeC(value))
+        val body = parser.parse(encoded.substring(J.schema.length + 1)).toOption.get.hcursor.downField("payload").focus.get
+        body.asObject.get.keys should not contain ("wire")
+      }
       val decoded = values.map(v => take(J.decodeC(v.completion.result.continuationId, take(J.encodeC(v)), Vector(f.catalog.definition))))
       Then("the requested result and downstream planning data remain available to advance")
       decoded.map(_.completion.result.result.value) shouldBe values.map(_.completion.result.result.value)
@@ -29,7 +34,7 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
       decoded.map(_.header) shouldBe Vector(None, None)
     }
     "read formatted envelopes and nested Context frames without an unchanged-body certificate" in {
-      Given("enriched and DecisionNeeded v1 completion records with inert Context data")
+      Given("enriched and DecisionNeeded current completion records with inert Context data")
       val values = Vector(capture().record, capture(S.Decision.DecisionNeeded).record)
       val frames = values.map(value => parser.parse(take(J.encodeC(value)).substring(J.schema.length + 1)).toOption.get)
       val formatted = frames.map { frame =>
@@ -50,7 +55,7 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
     }
 
     "ignore passive extension members and unused malformed publication headers" in {
-      Given("an existing v1 completion with additional unused envelope payload and reference members")
+      Given("a current completion with additional unused envelope payload and reference members")
       val value = capture().record
       val frame = parser.parse(take(J.encodeC(value)).substring(J.schema.length + 1)).toOption.get
       val variants = Vector(
@@ -84,7 +89,7 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
         frame.hcursor.downField("payload").downField("contextReference")
           .withFocus(_.mapObject(_.add("identity", Json.fromInt(1)))).top.get,
         frame.hcursor.downField("payload").downField("checkpoint").withFocus(_ => Json.Null).top.get)
-      When("malformed raw declarations reach the existing v1 reader")
+      When("malformed raw declarations reach the current reader")
       val results = malformed.map(data => J.decodeC(value.completion.result.continuationId,
         J.schema + ":" + data.noSpaces, Vector(f.catalog.definition)))
       Then("unsupported mistyped and unpaired consumed data refuse rather than becoming readable records")
@@ -105,7 +110,9 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
       results.foreach(_.isSuccess shouldBe false)
       J.decodeC(ContinuationIdentity("foreign"), raw, Vector(f.catalog.definition)).isSuccess shouldBe false
       J.decodeC(value.completion.result.continuationId, raw + (" " * J.maximumPayloadBytes), Vector(f.catalog.definition)).isSuccess shouldBe false
-      J.encodeC(value.copy(wire = value.wire + (" " * J.maximumPayloadBytes))).isSuccess shouldBe false
+      val oversized = value.completion.result.copy(result = value.completion.result.result.copy(
+        value = value.completion.result.result.value.copy(rationale = " " * J.maximumPayloadBytes)))
+      J.encodeC(value.copy(completion = value.completion.copy(result = oversized))).isSuccess shouldBe false
       J.decodeC(value.completion.result.continuationId, null, Vector(f.catalog.definition)).isSuccess shouldBe false
     }
   }

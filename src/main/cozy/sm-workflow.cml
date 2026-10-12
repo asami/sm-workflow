@@ -4,7 +4,7 @@
 
 ### DESCRIPTION
 
-Run software-development workflows with Workflow-owned state, deterministic calculations and managed effects. An AI participant receives only the issued semantic task and returns its declared result; it does not select transitions, run external commands or access storage. AI invocation and client round-trip reduction are explicit goals, not measured claims for this development runtime. The normal factory composes GoalPhase, SplitPhase and RepositorySync Operations with shared Subsystem storage and managed effects. Phase2 executable specifications call these Operations directly; CLI/skill wiring belongs to Phase6, and integrated acceptance remains incomplete. Consult the reference manual and configured host before calling an operation; declarations alone do not install handlers or grant consent.
+Run software-development workflows with Workflow-owned state, deterministic calculations and managed effects. GoalPhase, SplitPhase and RepositorySync expose named business Operations: Start creates an execution and returns sessionId; subsequent calls address that execution. Advance selects the next semantic Request, Human question, Wait or Terminal result. Submit consumes only the assigned typed result or answer and returns actual acceptance with useful chat text; it does not select the next action. Managed Workflow handlers own Git, SBT and other external effects, while the AI participant performs the requested semantic work. AI invocation and client round-trip reduction are explicit design goals, not measured performance claims. Shared Subsystem storage and configured host authority support these Operations. Declarations alone do not install handlers or grant consent; CLI/skill/client wiring is separate from direct Operation execution.
 
 ### PACKAGE
 
@@ -76,8 +76,7 @@ org.simplemodeling.textus.smworkflow
 
 | name | type | multiplicity |
 |------+------|--------------|
-| sessionIdentity | string | ? |
-| instanceIdentity | string | ? |
+| sessionId | string | 1 |
 
 ## SplitPhaseAdvanceInput
 
@@ -87,9 +86,7 @@ org.simplemodeling.textus.smworkflow
 
 | name | type | multiplicity |
 |------+------|--------------|
-| sessionIdentity | string | ? |
-| instanceIdentity | string | ? |
-| contextIdentity | string | ? |
+| sessionId | string | 1 |
 
 ## RepositorySyncAdvanceInput
 
@@ -99,8 +96,7 @@ org.simplemodeling.textus.smworkflow
 
 | name | type | multiplicity |
 |------+------|--------------|
-| sessionIdentity | string | ? |
-| instanceIdentity | string | ? |
+| sessionId | string | 1 |
 
 ## GoalPhaseStartInput
 
@@ -119,11 +115,38 @@ org.simplemodeling.textus.smworkflow
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseAdvanceResult
 
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| condition | string | ? |
+| outcome | string | ? |
+| work | GoalPhaseWorkView | ? |
+| human | GoalPhaseHumanQuestion | ? |
+| repositoryConflict | RepositorySyncConflictWorkView | ? |
+| repositoryReview | RepositorySyncMergeReviewWorkView | ? |
+| repositoryHuman | RepositorySyncHumanQuestion | ? |
+| completion | GoalPhaseCompletionResult | ? |
 
 ## GoalPhaseOrderedStep
 
@@ -261,6 +284,15 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseNativeCheckReceipt
 
 ### ATTRIBUTE
@@ -301,6 +333,15 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## SplitPhaseStartInput
 
 - input-kind :: COMMAND
@@ -318,6 +359,14 @@ OperationResult
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
 
 ## RepositorySyncStartInput
 
@@ -340,11 +389,36 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncAdvanceResult
 
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| condition | string | ? |
+| outcome | string | ? |
+| conflict | RepositorySyncConflictWorkView | ? |
+| review | RepositorySyncMergeReviewWorkView | ? |
+| human | RepositorySyncHumanQuestion | ? |
+| convergence | RepositorySyncNativeConvergenceResult | ? |
 
 ## RepositorySyncConflictBlob
 
@@ -410,6 +484,15 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncHumanConflictRequest
 
 - input-kind :: COMMAND
@@ -440,6 +523,15 @@ OperationResult
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
 
 ## RepositorySyncNativeValidationReceipt
 
@@ -502,6 +594,15 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncNativeConvergenceResult
 
 ### EXTENDS
@@ -512,7 +613,6 @@ OperationResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| instanceIdentity | string | 1 |
 | repositoryRoot | string | 1 |
 | localBranch | string | 1 |
 | remote | string | 1 |
@@ -524,7 +624,7 @@ OperationResult
 
 ## GoalPhaseWorkflow
 
-version = goal-phase-minimal-operation-v5
+version = goal-phase-business-operation-v6
 
 ### COMPOSITE-STATEMACHINE
 
@@ -914,7 +1014,7 @@ on = human-semantic-cancelled
 
 ## SplitPhaseWorkflow
 
-version = split-phase-minimal-operation-v13
+version = split-phase-business-operation-v14
 
 ### COMPOSITE-STATEMACHINE
 
@@ -2006,7 +2106,7 @@ on = documents-applied
 
 ## RepositorySyncWorkflow
 
-version = repository-sync-minimal-operation-v11
+version = repository-sync-business-operation-v12
 
 ### COMPOSITE-STATEMACHINE
 
@@ -2658,7 +2758,7 @@ Own the selected Phase's entry, assigned semantic/Human completion and mechanica
 
 ##### DESCRIPTION
 
-Advance the actual ordered Phase associated with the invocation session. Normally no JSON argument is needed; supply only an instanceIdentity selector when the session has several targets, or sessionIdentity when the host has no session. Workflow resolves saved input and selects the next semantic work or mechanical checks/effects. The caller supplies no Step, transition, argv or receipt. Step closure is not whole-Phase completion. This declaration is not an execution grant; configured checks/effects retain their owning scope and authority.
+Advance the single execution identified by sessionId. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
 
 ##### TYPE
 
@@ -2674,7 +2774,7 @@ GoalPhaseAdvanceInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | ? |
+| sessionId | string | 1 |
 
 ##### OUTPUT
 
@@ -2686,7 +2786,7 @@ GoalPhaseAdvanceResult
 
 ##### DESCRIPTION
 
-Return the assigned semantic value under result.value and its genuinely consumed result reference or execution evidence. Session context resolves the pending work; requestIdentity is needed only to distinguish applicable targets. Do not echo handle, run, revision, context snapshot or the issued envelope. The owning completion consumes actual result meaning and independent review evidence where required. No semantic result selects a cursor, command or closure permission.
+Consume outcome, summary and findings for the actual pending implementation/repair/review work, plus genuine result/artifact reference and only consumed evidence. Return committed accepted/outcome/message data for chat, not another Request. Submit never calls Advance or claims unexecuted checks, Step/Phase release or remote effects.
 
 ##### TYPE
 
@@ -2702,7 +2802,11 @@ GoalPhaseWorkResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | GoalPhaseWorkResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2714,7 +2818,7 @@ GoalPhaseWorkSubmissionResult
 
 ##### DESCRIPTION
 
-Return the ordered GoalPhase answer under result.value with its actual evidence reference. Workflow resolves the pending Decision from session context, without a copied question, handle or context snapshot. Independent host Human evidence attests the selected question, participant and answer; authentication alone is not consent. ResumeAssignedWork requests assigned semantic work again without amending the Plan or refunding repair allowance. Defer and Cancel retain direction without issuing work or commands. Only owning advance selects following work.
+Consume the pending ordered Human choice/rationale and actual evidence reference. Independent host Human evidence owns consent; authentication or AI output is not consent. ResumeAssignedWork, Defer and Cancel preserve their existing meaning without amending the plan or refunding repairs. Return actual committed acceptance/message; following work requires explicit Advance.
 
 ##### TYPE
 
@@ -2730,7 +2834,11 @@ GoalPhaseOrderedDecisionAnswer
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| answer | GoalPhaseOrderedDecisionAnswer | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2742,7 +2850,7 @@ GoalPhaseOrderedDecisionSubmissionResult
 
 ##### DESCRIPTION
 
-Start the selected Phase/repository with JSON input containing business Phase and repository references. Use actual invocation session context, or sessionIdentity when the host has none. Supply selectionIdentity only for genuinely ambiguous host selection; do not copy participant, execution controls or generated command fields. The host owns selection and actual authority. An entry acknowledgement is not Step review, document application, Git commit or Phase completion.
+Start the declared Phase/repository business input. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
 
 ##### TYPE
 
@@ -2758,7 +2866,8 @@ GoalPhaseStartInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| input | GoalPhaseStartInput | 1 |
+| sessionId | string | ? |
 
 ##### OUTPUT
 
@@ -2780,7 +2889,7 @@ Own SplitPhase entry, assigned semantic/Human completion, deterministic planning
 
 ##### DESCRIPTION
 
-Start the selected source Phase with JSON input containing sourcePhaseIdentity, invocationMode and optional proposalReference. Actual session context and host selection resolve participant and allocation; use sessionIdentity or selectionIdentity only when needed. Do not send the generated Start command or copied control fields. A successful entry returns the owning Start observation, not completed partitioning or changed documents. The host owns source authority and managed execution scope.
+Start sourcePhaseIdentity, invocationMode and optional proposalReference through the admitted host business allocation and actual independent Human/source authority. Allocate and return canonical sessionId when absent, creating this execution's native instance, retained Start and root context. The client does not register/select a context. Start returns an acknowledgement; advanceSplitPhase selects work.
 
 ##### TYPE
 
@@ -2796,7 +2905,8 @@ SplitPhaseStartInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| input | SplitPhaseStartInput | 1 |
+| sessionId | string | ? |
 
 ##### OUTPUT
 
@@ -2808,7 +2918,7 @@ SplitPhaseStartResult
 
 ##### DESCRIPTION
 
-Return partition judgment under result.value for the session's pending task. Enriched supplies only requested unknown estimates, semantic boundary judgments and their actual evidence; DecisionNeeded is semantic data, not Human consent. Workflow resolves the assigned destination internally, without result-reference, context or envelope echoes. Workflow owns calibration, enumeration, packing and ranking. Completion acknowledges this task, not downstream document application; the caller does not select an admission stage or command.
+Consume the pending partition decision, rationale, requested estimates/boundaries and actual evidence. Workflow owns the result destination, known data, calibration and packing. Enriched/DecisionNeeded is semantic data, not Human consent. Return committed acceptance and useful chat text, not document application or next work; Advance alone progresses.
 
 ##### TYPE
 
@@ -2824,7 +2934,10 @@ SplitPhasePartitionSemanticResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | SplitPhasePartitionSemanticResult | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2836,7 +2949,7 @@ SplitPhaseSemanticSubmissionResult
 
 ##### DESCRIPTION
 
-Advance the native instance and partition context resolved from the invocation session. Normally no JSON argument is needed; supply only necessary sessionIdentity, instanceIdentity or contextIdentity selectors. There is no caller-selected stage, candidate or command. Workflow absorbs mechanical work and returns the next semantic task, wait or terminal. The saved Start mode determines Preview or authorized managed Apply. Genuine scope/reasoning Decisions consume independently attested ProvideResolution or record Defer/Cancel. ALL-Built must not be converted into a Human task. Document-conflict semantic/Human handlers remain unavailable; unavailable capability is not a successful WAIT or Terminal. This declaration is not an execution grant.
+Advance sessionId through direct native pending work and owning current business frontier. Absorb deterministic calibration/packing/planning and authorized document effects. Return typed partition/scope/reasoning work, actual scope/reasoning Human question, real Wait or Preview/Apply/stopped Terminal. Work includes submission route/type; no caller stage/candidate/context selector. Unavailable handling is an error.
 
 ##### TYPE
 
@@ -2852,7 +2965,7 @@ SplitPhaseAdvanceInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | ? |
+| sessionId | string | 1 |
 
 ##### OUTPUT
 
@@ -2864,7 +2977,7 @@ SplitPhaseAdvanceResult
 
 ##### DESCRIPTION
 
-Return the handoff judgment under result.value for the session's pending task. Enriched supplies ordered producing/receiving subsets for the issued gaps; DecisionNeeded supplies no partial scopes. Supply actual semantic evidence once. Workflow resolves checkpoint and assigned destination internally, without control or reference echoes. Completion acknowledges this semantic boundary; it does not select downstream operations, transfer authority or apply documents.
+Consume the pending decision, rationale, ordered producing/receiving scopes and evidence. DecisionNeeded contains no partial scopes. Workflow owns assignment/destination. Return actual committed acceptance/message without transferring authority, applying documents or issuing work; call advanceSplitPhase after accepted intake.
 
 ##### TYPE
 
@@ -2880,7 +2993,10 @@ SplitPhaseScopeSemanticResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | SplitPhaseScopeSemanticResult | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2892,7 +3008,7 @@ SplitPhaseScopeSubmissionResult
 
 ##### DESCRIPTION
 
-Return only requested unknown-item classifications, rationale and actual evidence under result.value, or DecisionNeeded without partial assignments. Workflow resolves the session's pending reasoning task and its assigned result destination internally; no result-reference, checkpoint, context or envelope echo is needed. Workflow owns resulting data and objective-only continuation over the original frontier. A completion acknowledgement is not Preview, Apply or permission to select a stage or command.
+Consume the pending decision, rationale, unknown-item assignments and evidence. Workflow owns its destination and objective calculation; the answer supplies no checkpoint or execution grant. Return committed acceptance/message. DecisionNeeded is not Human consent, and intake is not Preview/Apply; explicit Advance chooses following work.
 
 ##### TYPE
 
@@ -2908,7 +3024,10 @@ SplitPhaseReasoningSemanticResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | SplitPhaseReasoningSemanticResult | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2920,7 +3039,7 @@ SplitPhaseReasoningSubmissionResult
 
 ##### DESCRIPTION
 
-Return the pending Human answer under result.value with its actual result/evidence reference. Workflow resolves the Decision from session context; do not copy the whole question or control envelope. Independent host Human evidence attests the selected question and answer; an authenticated relay alone is not consent. ProvideResolution names separate interpretation data, while Defer and Cancel carry no resolution. Owning advance continues scope/reasoning or observes the stopped outcome. An answer acknowledgement is not document application. Document-conflict semantic/Human resolution is not installed. Duplicate-answer, replay and intermediate-recovery guarantees are outside this interface.
+Consume the actual pending scope/reasoning Human choice and evidence reference. ProvideResolution names actual interpretation data; Defer/Cancel has no resolution. The independent host channel attests this question/answer. Return committed acceptance/chat text without eager Advance or document effects. Duplicate/replay/intermediate-recovery guarantees are excluded.
 
 ##### TYPE
 
@@ -2936,7 +3055,11 @@ SplitPhaseHumanDirectionAnswer
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| answer | SplitPhaseHumanDirectionAnswer | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -2998,7 +3121,7 @@ Own repository convergence through five normal Operations: Start, advance and as
 
 ##### DESCRIPTION
 
-Start RepositorySync with JSON input containing repositoryIdentity, localBranch, trackingRemote, trackingBranch, remoteEndpointIdentity and syncMode. Invocation session context and host selection resolve participant and allocation; use sessionIdentity or selectionIdentity only when needed, not generated command/control copies. The entry response is not a fetch, push or synchronized repository. Start grants no command or remote authority. Owning advance performs managed effects within actual configured selection and permissions.
+Start the declared repositoryIdentity, localBranch, trackingRemote, trackingBranch, remoteEndpointIdentity and syncMode. Resolve actual host business entry/participant directly, allocate sessionId when absent and return the canonical ID with the start acknowledgement. Start does not fetch/push or grant command/remote authority; owning Advance progresses.
 
 ##### TYPE
 
@@ -3014,7 +3137,8 @@ RepositorySyncStartInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| input | RepositorySyncStartInput | 1 |
+| sessionId | string | ? |
 
 ##### OUTPUT
 
@@ -3026,7 +3150,7 @@ RepositorySyncStartResult
 
 ##### DESCRIPTION
 
-Advance the RepositorySync instance associated with the invocation session. Normally no JSON argument is needed; supply only a necessary instanceIdentity selector or sessionIdentity when the host has no session. Workflow absorbs fixed managed Git/check progression and returns the next conflict/review/Human work, wait or final convergence. The caller supplies no stage, repository path, argv or receipt. Actual configured scope, effect authority and independent evidence stay with their owning boundaries. A fetched WAIT or accepted review is not final convergence; this interface promises no intermediate recovery or replay guarantee.
+Advance the single sessionId execution through direct current state and configured managed Git/check progression. Return typed conflict/review work, actual Human question, real Wait or actual convergence Terminal, with work submission route/type. The caller sends no stage/path/argv/receipt/target selector. Existing scope/effect/evidence owners remain; no replay/intermediate recovery is promised.
 
 ##### TYPE
 
@@ -3042,7 +3166,7 @@ RepositorySyncAdvanceInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | ? |
+| sessionId | string | 1 |
 
 ##### OUTPUT
 
@@ -3054,7 +3178,7 @@ RepositorySyncAdvanceResult
 
 ##### DESCRIPTION
 
-Return the assigned conflict judgment under result.value with its genuinely consumed result reference/evidence. Session context resolves the pending WorkOrder; no handle, run, revision, context or issued-envelope echo is required. The owning completion consumes conflict coverage and meaning. A resolution proposal grants no command, file-write, commit or push authority and is not convergence.
+Consume the pending conflict decision, resolution texts, rationale and genuinely consumed result/evidence reference. The issued work owns coverage and interpretation. Return committed acceptance and useful chat text. A proposal is not write/command/commit/push authority or convergence; only explicit Advance applies authorized following progression.
 
 ##### TYPE
 
@@ -3070,7 +3194,11 @@ RepositorySyncConflictResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | RepositorySyncConflictResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -3082,7 +3210,7 @@ RepositorySyncConflictSubmissionResult
 
 ##### DESCRIPTION
 
-Return the assigned merge-review judgment under result.value and its actual result/evidence reference. Workflow resolves pending work from session context; independent host evidence attests the selected review and actual reviewer. No copied WorkOrder or control envelope is required. Review acceptance alone grants no repair, command, commit, push or convergence authority.
+Consume the pending review decision, rationale, findings and actual result/evidence reference. Independent host evidence owns reviewer admission. Return committed acceptance/display text; acceptance alone is not commit/push/convergence and Submit never calls Advance.
 
 ##### TYPE
 
@@ -3098,7 +3226,11 @@ RepositorySyncNativeMergeReviewResult
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| result | RepositorySyncNativeMergeReviewResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -3110,7 +3242,7 @@ RepositorySyncNativeMergeReviewSubmissionResult
 
 ##### DESCRIPTION
 
-Return the pending conflict Decision answer under result.value and its actual result/evidence reference. Session context resolves the selected question without a complete question or control-envelope echo. Independent host Human evidence attests that selected question and answer; authentication alone is not consent. ProvideResolution supplies actual conflict text within the bounded policy; Defer and Cancel carry no file proposal. Owning advance chooses materialization, validation, review and authorized convergence. The answer grants no file, command or remote authority. An unavailable Human handler is not successful completion.
+Consume the pending Human choice, actual resolution texts, rationale and genuine result/evidence reference. The host independently attests question/answer. ProvideResolution/Defer/Cancel retain their bounded meaning and grant no file/command/remote authority. Return committed acceptance/message; explicit Advance selects authorized continuation, while unavailable handling remains an error.
 
 ##### TYPE
 
@@ -3126,7 +3258,11 @@ RepositorySyncHumanConflictAnswer
 
 | name | type | multiplicity |
 |------+------|--------------|
-| arg1 | string | 1 |
+| sessionId | string | 1 |
+| answer | RepositorySyncHumanConflictAnswer | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
 
 ##### OUTPUT
 
@@ -3418,6 +3554,15 @@ RepositorySyncNativeMergeReviewResult
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
 
 ## SplitPhasePartitionContextReference
 
@@ -3878,6 +4023,15 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## SplitPhaseScopePhaseIdentity
 
 ### ATTRIBUTE
@@ -3966,11 +4120,40 @@ OperationResult
 
 OperationResult
 
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## SplitPhaseAdvanceResult
 
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| condition | string | ? |
+| outcome | string | ? |
+| partition | SplitPhasePartitionWorkView | ? |
+| scope | SplitPhaseScopeWorkView | ? |
+| reasoning | SplitPhaseReasoningWorkView | ? |
+| scopeHuman | SplitPhaseScopeHumanQuestion | ? |
+| reasoningHuman | SplitPhaseReasoningHumanQuestion | ? |
+| selectedPlan | SplitPhaseSelectedPlanView | ? |
+| stopped | SplitPhaseStoppedResult | ? |
 
 ## SplitPhaseHumanScopeCheckpointReference
 
@@ -3981,17 +4164,12 @@ OperationResult
 | identity | string | 1 |
 | revision | string | 1 |
 
-## SplitPhaseHumanFrontierPayload
-
-### ATTRIBUTE
-
-| name | type | multiplicity |
-|------+-------+--------------|
-| value | string | 1 |
-
 ## SplitPhaseHumanDirectionRequest
 
 - input-kind :: COMMAND
+
+Native issued business data, not public Submit input. The frontier is a nested
+record decoded once by its owning business codec, never an opaque JSON string.
 
 ### ATTRIBUTE
 
@@ -4000,20 +4178,25 @@ OperationResult
 | context | SplitPhasePartitionContextReference | 1 |
 | checkpoint | SplitPhasePartitionContextReference | 1 |
 | scopeCheckpoint | SplitPhaseHumanScopeCheckpointReference | 1 |
-| frontier | SplitPhaseHumanFrontierPayload | 1 |
+| frontier | org.goldenport.record.Record | 1 |
 
 ## SplitPhaseReasoningHumanDirectionRequest
 
 - input-kind :: COMMAND
 
+Native issued business data with an actual work reference and the retained
+business judgment/frontier. Public Advance exposes the declared Human view;
+public Submit receives only the direction and genuine completion data.
+
 ### ATTRIBUTE
 
 | name | type | multiplicity |
 |------+-------+--------------|
-| context | SplitPhasePartitionContextReference | 1 |
-| reasoningWork | string | 1 |
-| reasoningResult | string | 1 |
-| frontier | string | 1 |
+| workIdentity | string | 1 |
+| request | org.goldenport.record.Record | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| judgment | org.goldenport.record.Record | 1 |
+| frontier | org.goldenport.record.Record | 1 |
 
 ## SplitPhaseHumanDirectionChoice
 
@@ -4039,6 +4222,15 @@ OperationResult
 ### EXTENDS
 
 OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
 
 # SERVICE
 
@@ -4196,3 +4388,279 @@ GoalPhaseWorkRequest
 ###### TYPE
 
 GoalPhaseWorkSubmissionResult
+
+# VALUE
+
+## WorkflowArtifactReference
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | 1 |
+
+## WorkflowExecutionObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| placement | string | 1 |
+| originContextIdentity | string | 1 |
+| executorContextIdentity | string | 1 |
+| profileIdentity | string | 1 |
+
+## WorkflowExecutionEvidence
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| references | WorkflowArtifactReference | * |
+| workerIdentity | string | ? |
+| modelIdentity | string | ? |
+| execution | WorkflowExecutionObservation | ? |
+
+## GoalPhaseWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| kind | string | 1 |
+| purpose | string | 1 |
+| stepIdentity | string | ? |
+| selectedPlan | GoalPhaseOrderedPlan | 1 |
+| originalBase | GoalPhaseNativeSnapshot | 1 |
+| completed | GoalPhaseClosedStep | * |
+| candidate | GoalPhaseNativeSnapshot | ? |
+| checksReceipt | string | ? |
+| repairDirective | GoalPhaseRepairDirective | ? |
+| review | GoalPhaseNativeReviewContext | ? |
+| decisionContext | GoalPhaseOrderedDecisionContext | ? |
+
+## GoalPhaseHumanQuestion
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| work | GoalPhaseWorkView | 1 |
+| requestingResult | GoalPhaseWorkResult | 1 |
+| rationale | string | 1 |
+| choices | string | * |
+
+## GoalPhaseCompletionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| selectedPlan | GoalPhaseOrderedPlan | 1 |
+| originalBase | GoalPhaseNativeSnapshot | 1 |
+| completed | GoalPhaseClosedStep | * |
+| reviewedCandidate | GoalPhaseNativeSnapshot | 1 |
+| repository | RepositorySyncNativeConvergenceResult | 1 |
+
+## SplitPhasePartitionWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| source | SplitPhasePartitionSourceReference | 1 |
+| items | SplitPhasePartitionNovelWork | * |
+| boundaries | SplitPhasePartitionUnknownBoundary | * |
+
+## SplitPhaseScopeWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| source | SplitPhasePartitionSourceReference | 1 |
+| gaps | SplitPhaseUnresolvedHandoffScope | + |
+| items | SplitPhasePartitionSourceItem | + |
+
+## SplitPhaseReasoningWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| source | SplitPhasePartitionSourceReference | 1 |
+| authority | SplitPhasePartitionAuthorityReference | 1 |
+| demand | SplitPhaseReasoningDemandReference | 1 |
+| items | SplitPhaseReasoningUnknownItem | * |
+
+## SplitPhaseScopeHumanQuestion
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| rationale | string | 1 |
+| choices | string | * |
+| sourcePhaseIdentity | string | 1 |
+| sourceAuthority | WorkflowArtifactReference | 1 |
+| items | SplitPhaseSelectedWorkItem | * |
+| candidates | SplitPhaseHumanCandidate | * |
+| requestedScopes | SplitPhaseUnresolvedHandoffScope | * |
+| submittedJudgment | SplitPhaseScopeSemanticResult | 1 |
+
+## SplitPhaseReasoningHumanQuestion
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| rationale | string | 1 |
+| choices | string | * |
+| sourcePhaseIdentity | string | 1 |
+| sourceAuthority | WorkflowArtifactReference | 1 |
+| work | SplitPhaseReasoningWorkView | 1 |
+| submittedJudgment | SplitPhaseReasoningSemanticResult | 1 |
+| items | SplitPhaseSelectedWorkItem | * |
+| candidates | SplitPhaseHumanCandidate | * |
+
+## SplitPhaseHumanCandidate
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| cutAfterIndices | int | * |
+| children | SplitPhaseHumanChild | * |
+| status | string | 1 |
+| issues | string | * |
+| unresolvedScopes | SplitPhaseUnresolvedHandoffScope | * |
+
+## SplitPhaseHumanChild
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| orderedWorkItems | string | * |
+| expectedMinutes | int | 1 |
+| repositories | string | * |
+
+## SplitPhaseSelectedPlanView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| mode | string | 1 |
+| sourcePhaseIdentity | string | 1 |
+| source | WorkflowArtifactReference | 1 |
+| sourceAuthority | WorkflowArtifactReference | 1 |
+| proposal | WorkflowArtifactReference | 1 |
+| cutAfterIndices | int | * |
+| objectiveStage | string | 1 |
+| validationTiming | string | 1 |
+| validationMethod | string | 1 |
+| validationDriver | string | 1 |
+| finalValidationOwner | string | 1 |
+| children | SplitPhaseSelectedChild | * |
+| handoffs | SplitPhaseScopeHandoff | * |
+| localHandoffs | SplitPhaseLocalHandoff | * |
+| documents | SplitPhaseSelectedDocument | * |
+| effectStatus | string | ? |
+
+## SplitPhaseSelectedWorkItem
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| closureCriteria | string | * |
+| prerequisiteItems | string | * |
+| authority | WorkflowArtifactReference | 1 |
+
+## SplitPhaseSelectedChild
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| orderedWorkItems | SplitPhaseSelectedWorkItem | * |
+| expectedMinutes | int | 1 |
+| repository | string | 1 |
+| closureCriteria | string | * |
+| validationOwner | string | 1 |
+| dependencies | string | * |
+| incomingHandoffIds | string | * |
+
+## SplitPhaseLocalHandoff
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| phase | string | 1 |
+| producingItems | string | * |
+| receivingItems | string | * |
+
+## SplitPhaseSelectedDocument
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| relativePath | string | 1 |
+| phase | string | 1 |
+| mode | string | 1 |
+| ownedItems | string | * |
+| sections | string | 1 |
+| childDocument | string | ? |
+
+## SplitPhaseStoppedResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| answer | WorkflowArtifactReference | 1 |
+
+## RepositorySyncConflictWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| localTip | string | 1 |
+| remoteTip | string | 1 |
+| conflicts | RepositorySyncNativeConflict | * |
+
+## RepositorySyncMergeReviewWorkView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| localTip | string | 1 |
+| remoteTip | string | 1 |
+| indexTree | string | 1 |
+| changedPaths | string | * |
+| localDiff | string | 1 |
+| remoteDiff | string | 1 |
+| validationMode | string | 1 |
+| validationReason | string | 1 |
+| selectedChecks | string | * |
+| checks | RepositorySyncNativeValidationReceipt | * |
+
+## RepositorySyncHumanQuestion
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| conflict | RepositorySyncConflictWorkView | 1 |
+| rationale | string | 1 |
+| choices | string | * |

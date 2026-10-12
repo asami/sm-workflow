@@ -88,7 +88,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
     reads <- Reads.bindC(call.core.component.get.subsystem.get.configuration, declaration, f.catalog)
     selected <- reads.loadMappingForCallC(query(saved), call.core)
     actual <- selected match {
-      case Some((_, value)) => Consequence.success(value)
+      case Some(value) => Consequence.success(value)
       case None => Consequence.stateConflict("Private observation requires an actual selected native checkpoint")
     }
   } yield actual
@@ -108,7 +108,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       (F.Purpose.PartitionPolicy, facts.partition.policy.reference.identity, take(F.encodePartitionPolicyC(facts.partition.policy))),
       (F.Purpose.Planning, facts.planning.reference.identity, take(F.encodePlanningC(facts.planning))))
     rows.map((p, id, raw) => (target(p), id, Record.data(F.storageField -> raw))) ++ Vector(
-      (collection("starts"), start.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeAllocationC(start)))),
+      (collection("starts"), start.reference.identity, Record.data(TJ.storageField -> take(TJ.encodeC(start)))),
       (collection("contexts"), context.reference.identity, Record.data(CJ.storageField -> take(CJ.encodeC(context)))))
   }
 
@@ -168,8 +168,34 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           case Some(target) => SplitPhaseManagedAdvanceServiceOperation.bindHostC(creation, declaration, f.catalog).flatMap {
             case receiver: NativeWorkflowAdvanceInput.Receiver => Consequence.success(Vector(new spec.OperationDefinition {
               val specification = receiver.specification
-              def createOperationRequest(request: Request): Consequence[OperationRequest] =
-                receiver.createAdvanceOperationRequestC(request, NativeWorkflowAdvanceInput.Split(target))
+              def createOperationRequest(incoming: Request): Consequence[OperationRequest] =
+                Consequence.success(new CommandAction {
+                  val request = incoming
+                  override def commandExecutionMode = CommandExecutionMode.Sync
+                  def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+                    val core = c
+                    private var _delegate = Option.empty[ActionCall]
+                    def execute(): Consequence[OperationResponse] = for {
+                      current <- CallScopedWorkflowInstances.managed(declaration.configuration, f.catalog.definition,
+                        declaration.instances, declaration.continuations).loadForCallC(declaration.configuration,
+                        InstanceIdentity(target.instanceIdentity), core).flatMap(_.map(Consequence.success)
+                        .getOrElse(Consequence.stateConflict("Private fixture native current is absent")))
+                      operation <- receiver.createAdvanceOperationRequestC(incoming, NativeWorkflowAdvanceInput.Split(target, current))
+                      response <- operation match {
+                        case action: CommandAction =>
+                          val call = action.createCall(core.copy(action = action))
+                          _delegate = Some(call)
+                          call.execute()
+                        case _ => Consequence.stateConflict("Private fixture receiver is not a native command")
+                      }
+                    } yield response
+                    override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
+                      val selected = _delegate; _delegate = None
+                      selected.map(_.afterCommitResponseC(response)).getOrElse(
+                        Consequence.stateConflict("Private fixture receiver was not executed"))
+                    }
+                  }
+                })
             }))
             case _ => Consequence.configurationInvalid("Private fixture requires the actual resolved-target Receiver")
           }
@@ -304,12 +330,13 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
           Record.data("mechanicalPayload" -> (prefix + changed.noSpaces)), true))
         When("the owning frontier reader resolves passive data and a selected consumer actually uses it")
         val observed = take(port.loadMechanicalForCallC(query(saved), call.core)).get
-        val frontier = take(SplitPhaseManagedPlanningFrontier.loadForAdvanceC(query(saved), declaration, f.catalog, call.core))
+        val frontier = SplitPhaseManagedPlanningFrontier.observed(observed.record.snapshot,
+          observed.publicationPostimage, observed.current, saved.record.originalStart.input.invocationMode)
         val selected = SplitPhaseSelectedDocuments.projectC(frontier.snapshot)
         Then("storage conveys no selected frontier capability and neither observation nor refused use appends")
         observed.record shouldBe passive
         frontier.snapshot shouldBe passive.snapshot
-        frontier.original.original.start shouldBe saved.record.originalStart.routing
+        frontier.invocationMode shouldBe saved.record.originalStart.input.invocationMode
         frontier.publicationPostimage shouldBe saved.next
         frontier.current shouldBe saved.next
         selected.isSuccess shouldBe false
@@ -333,21 +360,34 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
         take(installC(call, saved))
         take(call.writeC(target(F.Purpose.Estimates), estimates.reference.identity,
           Record.data(F.storageField -> take(F.encodeEstimatesC(changed))), update = true))
+        // This private resolved-target fixture supplies the execution-specific
+        // Start and actual root reference required by the current receiver.
+        // Public Start publication is exercised by the normal Operation suite.
+        val executionstart = saved.record.originalStart.copy(reference = SplitPhaseTypedStartPreparation.Reference(
+          "split-start:" + saved.before.identity.value, "1"))
+        take(call.writeC(collection("starts"), executionstart.reference.identity,
+          Record.data(TJ.storageField -> take(TJ.encodeC(executionstart)))))
+        val executioncontext = saved.record.originalContext.copy(owner = saved.record.originalContext.owner.copy(
+          start = executionstart.reference))
+        take(call.writeC(collection("contexts"), executioncontext.reference.identity,
+          Record.data(CJ.storageField -> take(CJ.encodeC(executioncontext))), update = true))
+        val frontier = take(SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call.core, declaration))
+        take(frontier.createForCallC(saved.before.identity, saved.before.revision,
+          SplitPhaseExecutionFrontier.Value.Initial(saved.record.originalContext.reference), call.core))
         When("the test-only Receiver supplies the resolved target to the actual managed advance backend")
         val component = call.core.component.get
         val response = take(component.subsystem.get.executeOperationResponseInContext(
           Request.of(component = component.name, service = K.advanceOperation.service,
             operation = K.advanceOperation.operation), call.executionContext))
-        val wire = response match {
-          case OperationResponse.Scalar(value: String) => value
-          case other => fail("Expected actual native response, got " + other.toString)
+        val advanced = response match {
+          case OperationResponse.RecordResponse(record) =>
+            take(org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceResult.createC(record))
+          case other => fail("Expected declared advance business value, got " + other.toString)
         }
-        val terminal = take(org.goldenport.cncf.workflow.WorkflowTerminalJsonV1.decodeC(wire,
-          SplitPhaseManagedSelectedPreview.payloadCodec))
-        val payload = terminal.current.asInstanceOf[WorkflowContinuation.Terminal[Json]].result.value
         val root = take(_root_c(call, saved))
         Then("current business inputs produce a selected Preview without a legacy transport or input-copy gate")
-        payload.hcursor.get[String]("mode").toOption shouldBe Some("PREVIEW")
+        advanced.kind shouldBe "Terminal"
+        advanced.selectedPlan.get.mode shouldBe "PREVIEW"
         take(SplitPhasePlanningSnapshot.dispositionC(root.snapshot)) shouldBe SplitPhasePlanningSnapshot.Disposition.Planned
         root.snapshot.selection.partition.estimates.items.head.duration shouldBe
           SplitPhaseExplicitPartitionComputation.Duration.Known(261)

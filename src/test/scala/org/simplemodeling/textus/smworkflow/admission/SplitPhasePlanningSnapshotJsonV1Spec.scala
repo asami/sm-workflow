@@ -164,7 +164,8 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       val decoded = crossed.map(value => take(J.decodeC(take(J.encodeC(value)))))
       val nativepayloads = crossed.map(value => J.payloadCodec.decode(J.payloadCodec.encode(value)))
       val interpreted = decoded.map(value => (R.dispositionC(value),
-        SplitPhaseSelectedDocuments.projectC(value), SplitPhaseManagedSelectedPreview.projectC(value, "context", "1")))
+        SplitPhaseSelectedDocuments.projectC(value), SplitPhaseSelectedDocuments.projectC(value)
+          .flatMap(documents => NativeWorkflowOperationOutput.splitSelectedC(value, documents, "PREVIEW", None))))
       val absent = Vector(J.encodeC(null))
       Then("storage preserves data but cannot produce a selected plan or document material")
       decoded shouldBe crossed

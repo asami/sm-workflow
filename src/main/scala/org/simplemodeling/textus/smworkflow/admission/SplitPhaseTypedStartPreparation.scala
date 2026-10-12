@@ -13,14 +13,16 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 private[smworkflow] object SplitPhaseTypedStartPreparation {
   final case class Reference(identity: String, revision: String)
   /** Passive routing data, never a fresh Start admission or effect grant. */
-  final case class Routing(reference: Reference, instanceIdentity: InstanceIdentity, participantIdentity: String)
-  final case class Allocation(reference: Reference, instanceIdentity: InstanceIdentity,
-    input: NativeWorkflowStartInput.Split, participantIdentity: String,
-    source: P.SourceReference, proposal: Option[P.ProposalReference])
+  final case class Routing(reference: Reference, instanceIdentity: InstanceIdentity, participantIdentity: String,
+    invocationMode: String)
+  final case class Allocation(reference: Reference, input: NativeWorkflowStartInput.Split,
+    participantIdentity: String, source: P.SourceReference, proposal: Option[P.ProposalReference],
+    planningContext: SplitPhaseExplicitPartitionSemantic.ContextReference)
+  final case class Invocation(prepared: Prepared, allocation: Reference, template: C.Record)
   final case class Record(reference: Reference, instanceIdentity: InstanceIdentity,
     configuration: Configuration, input: NativeWorkflowStartInput.Split, participantIdentity: String,
     source: P.SourceRecord, proposal: Option[P.ProposalRecord]) {
-    def routing: Routing = Routing(reference, instanceIdentity, participantIdentity)
+    def routing: Routing = Routing(reference, instanceIdentity, participantIdentity, input.invocationMode)
   }
   final class Prepared private[SplitPhaseTypedStartPreparation] (val record: Record,
     val initial: InstanceRecord)

@@ -18,33 +18,37 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedScopePro
   * Decoded input is passive data, never Human consent or an execution permit.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseNativeHumanDirection {
-  final case class FrontierPayload(value: String)
   final case class Input(context: S.ContextReference, checkpoint: K.Reference,
-    scopeCheckpoint: C.Reference, frontier: FrontierPayload)
+    scopeCheckpoint: C.Reference, frontier: SplitPhaseScopeProjectionSnapshot.Record)
   final class Plan private[SplitPhaseNativeHumanDirection] (val source: D.Observed,
     val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, val next: InstanceRecord,
-    val question: WorkflowInteraction[Input, Nothing], val wire: String)
+    val question: WorkflowInteraction[Input, Nothing])
   private final class Data(val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent,
-    val next: InstanceRecord, val question: WorkflowInteraction[Input, Nothing], val wire: String)
+    val next: InstanceRecord, val question: WorkflowInteraction[Input, Nothing])
 
   val completionOperation = StateMachineOperationIdentity("SplitPhaseService", "submitSplitHumanDirection")
   val closingType = StateMachineResultTypeReference("SplitPhaseHumanDirectionSubmissionResult")
-  val inputSchema = "sm-workflow.split-human-direction-input.v1"
+  val inputSchema = "sm-workflow.split-human-direction-input.v2"
   val choices = SplitPhaseHumanDirectionAnswerContract.choices
 
   val inputCodec: PayloadCodec[Input] = new PayloadCodec[Input] {
     val typeIdentity = "SplitPhaseHumanDirectionRequest"
-    def encode(value: Input): Json = Json.obj("schemaVersion" -> Json.fromString(inputSchema), "payload" -> value.asJson)
+    def encode(value: Input): Json = Json.obj("schemaVersion" -> Json.fromString(inputSchema), "payload" -> Json.obj(
+      "context" -> value.context.asJson, "checkpoint" -> value.checkpoint.asJson,
+      "scopeCheckpoint" -> value.scopeCheckpoint.asJson, "frontier" -> J.payloadCodec.encode(value.frontier)))
     def decode(value: Json): Either[String, Input] = for {
       json <- Option(value).toRight("Human input is absent")
       root <- json.asObject.toRight("Human input is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(inputSchema), (), "Human input schema differs")
       payload <- root("payload").toRight("Human input payload is absent")
-      input <- payload.as[Input].left.map(_.message)
-    } yield input
+      context <- payload.hcursor.get[S.ContextReference]("context").left.map(_.message)
+      checkpoint <- payload.hcursor.get[K.Reference]("checkpoint").left.map(_.message)
+      scope <- payload.hcursor.get[C.Reference]("scopeCheckpoint").left.map(_.message)
+      frontier <- payload.hcursor.get[Json]("frontier").left.map(_.message).flatMap(J.payloadCodec.decode)
+    } yield Input(context, checkpoint, scope, frontier)
   }
 
   /** Workflow selects the whole Human frontier. ALL-Built instead remains in
@@ -59,19 +63,16 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
 
   /** Consume the actual question selected by the owning storage lookup. */
   def consumeIssuedC(plan: Plan, question: WorkflowInteraction[Input, Nothing]): Consequence[Plan] =
-    WorkflowDecisionJsonV1.encodeC(question, inputCodec).map { wire =>
-      new Plan(plan.source, plan.intent, plan.next, question, wire)
-    }
+    Consequence.success(new Plan(plan.source, plan.intent, plan.next, question))
 
   private def _prepare_c(observed: D.Observed): Consequence[Plan] = for {
     data <- _prepare_data_c(observed.record)
-  } yield new Plan(observed, data.intent, data.next, data.question, data.wire)
+  } yield new Plan(observed, data.intent, data.next, data.question)
 
   private def _prepare_data_c(record: C.Record): Consequence[Data] = for {
-    frontier <- J.encodeC(record.snapshot)
-    source = record.snapshot.first
-    input = Input(source.originalContext.reference, source.reference, record.reference, FrontierPayload(frontier))
     required <- SplitPhaseDefinitionBinding.humanDirectionOperationC
+    source = record.snapshot.first
+    input = Input(source.originalContext.reference, source.reference, record.reference, record.snapshot)
     provided = SplitPhaseDefinitionBinding.providedDefinition.providedOperations.filter(operation =>
       operation.service == completionOperation.service && operation.name == completionOperation.operation)
     _ <- if (required.inputType.map(_.value).contains(inputCodec.typeIdentity) &&
@@ -111,8 +112,7 @@ private[smworkflow] object SplitPhaseNativeHumanDirection {
       source.originalStart.configuration, base, base.revision, entry,
       ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available))
     admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
-    wire <- WorkflowDecisionJsonV1.encodeC(question, inputCodec)
-  } yield new Data(intent, admitted.next, question, wire)
+  } yield new Data(intent, admitted.next, question)
 
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase Human direction " + reason)
 }

@@ -19,7 +19,7 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "checkpoint", name))
@@ -103,8 +103,8 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       ai.rows.count(_.collection == targets.estimates) shouldBe 1
       ai.rows.count(_.collection == targets.planning) shouldBe 1
       ai.rows.count(_.collection == targets.handoffs) shouldBe built(semantic).size + 1
-      mechanical.rows.count(_.collection == targets.publication) shouldBe 2
-      ai.rows.count(_.collection == targets.publication) shouldBe 2
+      mechanical.rows.count(_.collection == targets.publication) shouldBe 1
+      ai.rows.count(_.collection == targets.publication) shouldBe 1
       ai.captured.mechanicalIntent shouldBe None
     }
 
@@ -123,24 +123,10 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningCheckpointPublication.Prepared(null, null, Vector.empty)")
     }
 
-    "derive injective Unicode delimiter locators and bound the final prefixed physical key" in {
-      Given("query tuples containing delimiters and non-ASCII identities")
-      val first = take(U.indexKeyC(InstanceIdentity("a/@語"), S.ContextReference("b", "1")))
-      val second = take(U.indexKeyC(InstanceIdentity("a"), S.ContextReference("/@語b", "1")))
-      When("canonical tuples and invalid names are encoded")
-      Then("distinct tuples cannot alias and final UTF-8 bytes must fit")
-      first should not be second
-      first should startWith ("planning-context:")
-      take(U.mappingKeyC(reference)) should startWith ("planning-snapshot:")
-      Vector(" padded ", "\n", "語" * 600, "\ud800").foreach(id => U.indexKeyC(InstanceIdentity(id), S.ContextReference("b", "1")).isSuccess shouldBe false)
-      U.mappingKeyC(reference.copy(identity = "語" * 600)).isSuccess shouldBe false
-      U.indexKeyC(null, null).isSuccess shouldBe false
-    }
-
     "prepare passive Create descriptors without repeating the native count or duplicate-target gate" in {
       Given("complete descriptor vectors and actual captured rows, without native execution or a storage grant")
-      val t = targets; val saved = capture(); val frame = take(J.encodeIndexC(saved.index))
-      def rows(count: Int) = Vector.tabulate(count)(i => U.Row(t.publication, s"capacity-$i", StorageRecord.data(J.indexStorageField -> frame)))
+      val t = targets; val saved = capture(); val frame = take(J.encodeLocatorC(K.Locator(saved.record.reference, saved.record.origin)))
+      def rows(count: Int) = Vector.tabulate(count)(i => U.Row(t.publication, s"capacity-$i", StorageRecord.data(J.storageField -> frame)))
       val baseline = take(U.prepareC(saved, t))
       When("passive rows and closing effects are prepared without executing a native program")
       val overflow = U.prepareC(saved, t, rows(65 - baseline.rows.size))
@@ -169,14 +155,14 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
       val later = take(f.instance.appendC(f.instance.revision, f.instance.history.last.copy(
         sequence = HistorySequence(2), revision = InstanceRevision(2), causation = CausationReference("x" * 530000))))
       val saved = capture(bound(current = later))
-      When("only the actual mapping index and generated-document rows are prepared")
+      When("only the actual mapping and generated-document rows are prepared")
       val prepared = U.prepareC(saved, targets)
       Then("passive row data succeeds without encoding a discarded whole-history copy or granting native execution")
       RJ.encodeC(saved.record.snapshot).isSuccess shouldBe true
       WorkflowInstanceRecordJsonV1.encodeC(saved.before).isSuccess shouldBe true
       WorkflowInstanceRecordJsonV1.encodeC(saved.next).isSuccess shouldBe true
       prepared.isSuccess shouldBe true
-      take(prepared).rows.count(_.collection == targets.publication) shouldBe 2
+      take(prepared).rows.count(_.collection == targets.publication) shouldBe 1
     }
   }
 }

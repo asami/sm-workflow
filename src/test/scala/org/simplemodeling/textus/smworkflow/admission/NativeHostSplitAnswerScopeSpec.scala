@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * not a public input, native history, consent enrollment or execution permit.
   * Normal managed Operation examples exercise genuinely issued questions.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[admission] object NativeHostSplitAnswerEvidenceFixture {
   val owner = ComponentInstanceId(SmWorkflowComponent.componentId, "split-answer-spec")
@@ -32,24 +32,21 @@ private[admission] object NativeHostSplitAnswerEvidenceFixture {
   def ref(identity: String, revision: String = "1"): Json = Json.obj("identity" -> Json.fromString(identity), "revision" -> Json.fromString(revision))
   val context = SplitPhaseExplicitPartitionSemantic.ContextReference("original-context", "1")
   val scope = Scope.Input(context, SplitPhasePlanningCheckpointPreparation.Reference("planning-checkpoint", "1"),
-    SplitPhaseScopeProjectionCheckpointPreparation.Reference("scope-checkpoint", "1"), Scope.FrontierPayload("unusable-independent-frontier-copy"))
+    SplitPhaseScopeProjectionCheckpointPreparation.Reference("scope-checkpoint", "1"), null)
   val model = ContextSnapshot(handle.workflowRevision.value, modelRevision = Some("actual-model"))
-  private val workTarget = Json.obj("context" -> ref(context.identity), "source" -> ref("source"), "authority" -> ref("authority"),
-    "demand" -> ref("demands"), "items" -> Json.arr(Json.obj("identity" -> Json.obj("value" -> Json.fromString("unknown-item")),
-      "reason" -> Json.fromString("Original explanation"), "closure" -> Json.fromString("unused-closure-copy"))), "result" -> ref("reasoning-result"))
-  val work = Json.obj("schemaVersion" -> Json.fromString(WorkflowProtocolV1.schemaVersion), "kind" -> Json.fromString("WORK_ORDER"),
-    "handle" -> NativeHostHumanScope.handleJson(handle), "request" -> Json.obj("runId" -> Json.fromString("instance"),
-      "continuationId" -> Json.fromString("reasoning-slot"), "expectedRevision" -> Json.fromString("3"),
-      "resultType" -> Json.fromString(SplitPhaseExplicitReasoningSemanticJson.resultCodec.typeIdentity),
-      "context" -> Json.obj("snapshot" -> Json.obj("workflowRevision" -> Json.fromString(model.workflowRevision), "modelRevision" -> Json.fromString("actual-model"))),
-      "input" -> Json.obj("typeIdentity" -> Json.fromString(SplitPhaseExplicitReasoningSemanticJson.requestCodec.typeIdentity),
-        "value" -> Json.obj("schemaVersion" -> Json.fromString(SplitPhaseExplicitReasoningSemanticJson.requestCodec.schema), "payload" -> workTarget))))
-  val reasoningResult = Json.obj("schemaVersion" -> Json.fromString(WorkflowProtocolV1.schemaVersion), "kind" -> Json.fromString("CONTINUATION_RESULT"),
-    "handle" -> NativeHostHumanScope.handleJson(handle), "runId" -> Json.fromString("instance"), "continuationId" -> Json.fromString("reasoning-slot"),
-    "expectedRevision" -> Json.fromString("3"), "contextSnapshot" -> Json.obj("workflowRevision" -> Json.fromString(model.workflowRevision), "modelRevision" -> Json.fromString("actual-model")),
-    "result" -> Json.obj("reference" -> ref("reasoning-result"), "typeIdentity" -> Json.fromString(SplitPhaseExplicitReasoningSemanticJson.resultCodec.typeIdentity),
-      "value" -> Json.fromString("unused-completed-result-body-copy")))
-  val reasoning = Reasoning.Input(context, work.noSpaces, reasoningResult.noSpaces, "unusable-independent-frontier-copy")
+  // This attestation-only fixture supplies typed consumed source data. Its
+  // unused judgment/frontier are deliberately absent, not public/native inputs.
+  private val authority = SplitPhaseExplicitProposalPrecheck.AuthorityReference("authority", "1")
+  private val item = SplitPhaseExplicitProposalPrecheck.WorkItemIdentity("unknown-item")
+  private val request = SplitPhaseExplicitReasoningSemantic.Request(context,
+    SplitPhaseExplicitProposalPrecheck.SourceReference("source", "1"), authority,
+    SplitPhaseExplicitObjectiveSelection.DemandReference("demands", "1"),
+    Vector(SplitPhaseExplicitReasoningSemantic.UnknownItem(item, "Original explanation",
+      SplitPhaseExplicitBoundaryValidation.Item(item,
+        Vector(SplitPhaseExplicitBoundaryValidation.ClosureCriterion("complete unknown work")),
+        Vector.empty, authority))), SplitPhaseExplicitPartitionSemantic.ResultReference("reasoning-result", "1"))
+  val reasoning = Reasoning.Input(ContinuationIdentity("reasoning-slot"), request,
+    ContextReference("reasoning-result", "1"), null, null)
   private def question[W](input: W, typeIdentity: String) = {
     val request = ContinuationRequest(StateMachineRunIdentity("instance"), ContinuationIdentity("split-human-slot"), StateMachineRevision("5"),
       StateMachineRequiredOperationIdentity("actual-human-capability"), StateMachineOperationIdentity("HumanService", "answer"),

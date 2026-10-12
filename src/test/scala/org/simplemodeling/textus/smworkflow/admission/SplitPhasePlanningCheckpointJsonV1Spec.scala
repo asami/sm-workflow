@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Json, JsonObject, parser}
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRevision}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRevision
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,7 +12,7 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def json(raw: String, schema: String = J.schema): Json = parser.parse(raw.substring(schema.length + 1)).toOption.get
@@ -66,23 +66,17 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       captures.foreach { saved =>
         take(J.decodeC(reference, take(J.encodeC(saved.record)))) shouldBe saved.record
         J.payloadCodec.decode(J.payloadCodec.encode(saved.record)) shouldBe Right(saved.record)
-        take(J.decodeIndexC(saved.index.instance, saved.index.context, take(J.encodeIndexC(saved.index)))) shouldBe saved.index
       }
     }
 
-    "read both origins and selected index data without requiring wire formatting" in {
-      Given("mechanical and completion mappings with their selected context indices")
+    "read both origins without requiring wire formatting" in {
+      Given("mechanical and completion mappings with their actual business data")
       val captures = Vector(capture(), take(K.captureCompletionC(completion(), reference)).get)
       val frames = captures.map(saved => json(take(J.encodeC(saved.record))))
-      val indices = captures.map(saved => json(take(J.encodeIndexC(saved.index)), J.indexSchema))
-      When("current v2 mapping and index envelopes use formatted JSON")
+      When("the current mapping envelopes use formatted JSON")
       val mappings = frames.map(frame => take(J.decodeC(reference, J.schema + ":" + frame.spaces2)))
-      val observed = captures.zip(indices).map { (saved, frame) =>
-        take(J.decodeIndexC(saved.index.instance, saved.index.context, J.indexSchema + ":" + frame.spaces2))
-      }
-      Then("selected raw values survive without an executable capability or representation certificate")
+      Then("the selected raw values survive without a context index or representation certificate")
       mappings shouldBe captures.map(_.record)
-      observed shouldBe captures.map(_.index)
     }
 
     "consume both origins without rejecting unused nested diagnostics" in {
@@ -171,37 +165,5 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
       selected.foreach(_.isSuccess shouldBe false)
     }
 
-    "resolve selected index queries and enforce whole UTF-8 frame limits" in {
-      Given("a complete index for one exact original context")
-      val saved = capture(); val encoded = take(J.encodeIndexC(saved.index))
-      When("query facts fields or byte bounds differ")
-      Then("no newest mapping fallback or truncation is admitted")
-      J.decodeIndexC(InstanceIdentity("other"), saved.index.context, encoded).isSuccess shouldBe false
-      J.decodeIndexC(saved.index.instance, saved.index.context.copy(revision = "2"), encoded).isSuccess shouldBe false
-      val changed = payload(json(encoded, J.indexSchema))(_.add("unknown", Json.True))
-      take(J.decodeIndexC(saved.index.instance, saved.index.context, raw(changed, J.indexSchema))) shouldBe saved.index
-      J.encodeIndexC(saved.index.copy(mapping = reference.copy(identity = "語" * (J.maximumPayloadBytes / 2)))).isSuccess shouldBe false
-      J.decodeC(reference, J.schema + ":" + ("語" * (J.maximumPayloadBytes / 2))).isSuccess shouldBe false
-      J.encodeIndexC(null).isSuccess shouldBe false
-    }
-
-    "ignore unused nested index fields and reject unreadable consumed addresses" in {
-      Given("a selected stored context index")
-      val saved = capture()
-      val frame = json(take(J.encodeIndexC(saved.index)), J.indexSchema)
-      val extended = frame.hcursor.downField("payload").downField("instance")
-        .withFocus(_.mapObject(_.add("proof", Json.True))).top.get
-      val malformed = Vector(
-        frame.hcursor.downField("payload").downField("context")
-          .withFocus(_.mapObject(_.remove("revision"))).top.get,
-        frame.hcursor.downField("payload").downField("mapping")
-          .withFocus(_.mapObject(_.add("revision", Json.fromInt(1)))).top.get)
-      When("unused annotations and consumed type violations reach index decoding")
-      val results = malformed.map(value => J.decodeIndexC(saved.index.instance, saved.index.context,
-        raw(value, J.indexSchema)))
-      Then("unused diagnostics survive while unreadable addresses fail without newest-reference fallback")
-      take(J.decodeIndexC(saved.index.instance, saved.index.context, raw(extended, J.indexSchema))) shouldBe saved.index
-      results.foreach(_.isSuccess shouldBe false)
-    }
   }
 }

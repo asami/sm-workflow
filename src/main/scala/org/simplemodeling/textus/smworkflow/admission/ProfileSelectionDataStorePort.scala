@@ -7,7 +7,7 @@ import org.goldenport.cncf.datastore.DataStore
 /** Read-only host record adapter. No install/upsert method or physical owner.
   * The owning Subsystem must hold the normal Operation execution lease.
   * @since   Oct.  1, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object ProfileSelectionDataStorePort {
   enum Profile { case GoalPhase, SplitPhase, RepositorySync }
@@ -17,17 +17,9 @@ private[smworkflow] final class ProfileSelectionDataStorePort(
   storeName: String, collection: DataStore.CollectionId,
   profile: ProfileSelectionDataStorePort.Profile = ProfileSelectionDataStorePort.Profile.GoalPhase
 ) extends ProfileStartAdmission.CallScopedSelectionPort {
-  def findForCallC(core: ActionCall.Core): Consequence[Vector[ProfileStartAdmission.Selection]] =
-    ManagedHostRecordRead.searchProfileSelectionsC(core, storeName, collection, profile).flatMap { records =>
-      records.foldLeft(Consequence.success(Vector.empty[ProfileStartAdmission.Selection])) { (prior, row) =>
-        for {
-          values <- prior
-          raw <- row.getString(ProfileSelectionJsonV1.storageField).map(Consequence.success)
-            .getOrElse(Consequence.stateConflict("Host selection record has no typed payload"))
-          selected <- ProfileSelectionJsonV1.decodeStorageC(raw)
-        } yield values :+ selected
-      }
-    }
+  def loadForBusinessC(input: NativeWorkflowStartInput.BusinessInput, participant: String,
+    core: ActionCall.Core): Consequence[Option[ProfileStartAdmission.Selection]] =
+    loadForCallC(NativeWorkflowStartBusinessKey(input, participant), core)
 
   def loadForCallC(identity: String, core: ActionCall.Core): Consequence[Option[ProfileStartAdmission.Selection]] = {
     val loaded = profile match {
@@ -44,10 +36,7 @@ private[smworkflow] final class ProfileSelectionDataStorePort(
           case None => Consequence.success(None)
           case Some(value) => value.getString(ProfileSelectionJsonV1.storageField) match {
             case None => Consequence.stateConflict("Host selection record has no typed payload")
-            case Some(raw) => ProfileSelectionJsonV1.decodeStorageC(raw).flatMap { selected =>
-              if (selected.selectionId == identity) Consequence.success(Some(selected))
-              else Consequence.stateConflict("Host selection record identity differs from lookup")
-            }
+            case Some(raw) => ProfileSelectionJsonV1.decodeStorageC(raw).map(Some(_))
           }
       }
     }

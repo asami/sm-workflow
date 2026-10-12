@@ -5,8 +5,6 @@ import io.circe.{Json, Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
@@ -18,7 +16,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
+import org.simplemodeling.textus.smworkflow.value.{RepositorySyncStartInput, RepositorySyncStartResult}
 import RepositorySyncManagedGitObservation as Git
 import WorkflowManagedProcessExecution as Process
 
@@ -59,7 +57,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
   } yield Session(storage, started, context)
 
   def codec(start: Boolean): WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = if (start) "RepositorySyncStartResult" else "RepositorySyncAdvanceResult"
+    val typeIdentity = if (start) "RepositorySyncNativeStartRecord" else "RepositorySyncNativeFetchRecord"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
@@ -86,22 +84,14 @@ private[smworkflow] object RepositorySyncManagedFetch {
       left.trackingBranch == right.trackingBranch && left.remoteEndpointIdentity == right.remoteEndpointIdentity &&
       left.syncMode == right.syncMode
 
-  def identityC(selectionIdentity: String, invocationIdentity: String): Consequence[InstanceIdentity] =
-    if (selectionIdentity == null || invocationIdentity == null)
-      invalid("selected invocation is incomplete")
-    else {
-      val identity = InstanceIdentity("repository-sync:" + URLEncoder.encode(selectionIdentity, UTF_8) + ":" +
-        URLEncoder.encode(invocationIdentity, UTF_8))
-      WorkflowMechanicalTransition.keyC(reference(identity.value, "start")).map(_ => identity)
-    }
-
   def startC(input: NativeWorkflowStartInput.Repository, selected: ProfileStartAdmission.Selection,
-    declaration: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[String] = {
+    declaration: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[RepositorySyncStartResult] = {
     if (input == null || selected == null || core == null || core.executionContext == null)
       return invalid("Start dependencies are incomplete")
     for {
     _ <- GoalPhaseParticipantAdmission.admitC(selected.participantIdentity, core.executionContext)
-    identity <- identityC(selected.selectionId, selected.idempotencyKey)
+    identity <- core.executionContext.security.session.flatMap(_.sessionId).map(value =>
+      Consequence.success(InstanceIdentity(value))).getOrElse(invalid("Start requires its canonical sessionId"))
     storage <- bindC(declaration, definition, core)
     _ <- if (sameTarget(input, declaration.input)) Consequence.unit
       else invalid("requested Start crosses its actual repository/tracking/effect scope")
@@ -121,12 +111,13 @@ private[smworkflow] object RepositorySyncManagedFetch {
       reference(identity.value, "start"), active, active.revision,
       history(active, "sync.BoundaryAssessment", "managed-start-record:" + identity.value),
       TypedValue(codec(true).typeIdentity, payload)), empty)(using core.executionContext)
-    wire <- waitC(saved.receipt.next, "Repository sync started", "The selected business target is saved; Workflow owns the next Git assessment.")
-    } yield wire
+    } yield RepositorySyncStartResult(saved.receipt.next.identity.value, "started",
+      "Started repository synchronization for " + input.repositoryIdentity + " on " + input.localBranch +
+        ". Advance owns the next Git assessment; no fetch or push is claimed.")
   }
 
   def advanceC(identity: String, declaration: Declaration, definition: DefinitionBinding, core: ActionCall.Core,
-    acknowledgement: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
+    acknowledgement: () => Consequence[Unit] = () => Consequence.unit): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- sessionC(identity, declaration, definition, core)
     fetched <- fetchC(session, declaration, core, acknowledgement)
     wire <- waitC(fetched._1, "Repository tracking observed", "Actual relation: " +
@@ -206,12 +197,9 @@ private[smworkflow] object RepositorySyncManagedFetch {
         context.trackingBranch == d.target.remoteBranch && context.remoteEndpointIdentity == d.input.remoteEndpointIdentity &&
         context.syncMode == d.input.syncMode)
       Consequence.unit else invalid("actual runtime worktree/branch differs from the original selected scope"))
-  private def waitC(record: InstanceRecord, title: String, detail: String): Consequence[String] = for {
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, record)
-    interaction = WorkflowInteraction[Nothing, Nothing](handle, WorkflowContinuation.Wait(StateMachineRevision(record.revision.value.toString),
-      ContextSnapshot(handle.workflowRevision.value), MinimalPresentation(title, detail)))
-    wire <- WorkflowWaitJsonV1.encodeC(interaction)
-  } yield wire
+  private def waitC(record: InstanceRecord, title: String, detail: String): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] =
+    Consequence.success(NativeWorkflowOperationOutput.repositoryWait(record.identity.value, title + ": " + detail,
+      record.currentProgression.map(_.value).getOrElse("pending")))
   private[admission] def reference(identity: String, purpose: String) = WorkflowMechanicalTransition.Reference(identity + ":managed-" + purpose, "1")
   private def history(current: InstanceRecord, progression: String, cause: String): HistoryEntry =
     HistoryEntry(HistorySequence(current.history.size.toLong + 1), current.revision.next, Lifecycle.Active,

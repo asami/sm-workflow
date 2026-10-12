@@ -67,47 +67,43 @@ the result through that assigned completion operation. Workflow supplies interna
 controls from actual issued state; the client does not reproduce them as proof.
 A Decision requires the host's independent human channel.
 
-### Session input under development
+### Current business Operation loop
 
-The normal factory has session routes for all three Start/advance families.
-Phase 5.1's fixed normal-use boundary has direct Operation validation and
-independent closure PASS; formal release without additional tests/review is
-user-approved and its native commit/closure outcome is recorded separately. This does not
-claim CLI/skill integration or the excluded replay/recovery guarantees.
-An actual invocation session requires no duplicate field.
-Otherwise supply `sessionIdentity` in a `sm-workflow.session-operation.v1` object.
-Start also supplies `input` as the actual business object, not an encoded legacy
-command. Its `arg1` JSON string is required; advance `arg1` is optional when the
-host supplies a session and a single target resolves. No issued envelope,
-revision or snapshot echo is requested. Several actual
-targets need only `instanceIdentity`; Split needs `contextIdentity` only when
-several owned partition contexts exist. Workflow never chooses the newest row.
+Phase5.3 replaces the former universal-string and ambiguous-session interface.
+Implementation/validation is in progress, not Phase acceptance. Start takes
+named `input` with its declared business type and an optional proposed
+`sessionId`. It creates one execution and returns its actual sessionId.
+Use that returned ID for every Advance and Submit; a chat is not an execution
+selector. Two independent executions can share one authenticated chat.
 
-Reduced `sm-workflow.result-submission.v1` input retains actual `result.value`
-and consumed facts/evidence. Partition, handoff-scope and reasoning semantic
-completion resolve the result destination from the actual saved WorkOrder;
-omit `result.reference` rather than return a comparison copy. Obsolete destination
-echoes on these three reduced paths are ignored. Other completion Operations still
-need the actual result/artifact or independently supplied evidence reference in
-`result.reference`; Workflow does not invent it. Its `sessionIdentity` is optional
-when supplied by the actual host. `requestIdentity` selects among genuinely
-ambiguous current pending requests. Completed generations are not scanned to
-reject an ordinary answer or to provide delayed-answer/replay guarantees.
-There is no supported identity-only/full-envelope or prefixed command alternative.
-Unused obsolete fields are ignored without selecting an old route. Phase 5.3 owns
-the later business-type and session-contract redesign; Phase 6 owns client wiring.
+Advance takes only the required sessionId and returns a declared business result
+with kind Request, Human, Wait or Terminal. Request/Human supplies
+submitOperation, submitSessionId and resultType, with the complete requested
+business view. The parent Goal can display a child Repository request while
+preserving the child's own submitSessionId. Do not select internal stages.
 
-Current definitions are `goal-phase-minimal-operation-v5`,
-`split-phase-minimal-operation-v13` and `repository-sync-minimal-operation-v11`.
-Their Provided descriptors declare the actual nominal INPUT types. The sole
-public JSON carrier is `arg1`, not a second generated Command body.
+Submit takes sessionId, the declared `result` or `answer`, and genuine
+completion/reference/evidence data. Three Split semantic completions obtain the
+assigned result destination internally; the other six completions require
+resultReference. Workflow resolves native work/decision/revision from actual
+issued state. No caller ambiguity selectors or native envelope echoes are used.
 
-Association is retained in the native initial instance row, not a separate
-post-Start index. Allocation alone is not successful Start and grants no effect
-authority. Legacy rows without association are not automatically rebound. Repeated
-Start is not an intermediate-allocation recovery protocol; use a NEW execution
-after abandonment.
-These Operation shapes do not claim Phase6 CLI or skill integration.
+Every successful Submit returns actual accepted/outcome/message after commit,
+without eager Advance or an additional model/readback proof. Next work requires
+explicit Advance. A failed completion is an error, not an invented acceptance.
+
+Current definitions are `goal-phase-business-operation-v6`,
+`split-phase-business-operation-v14` and `repository-sync-business-operation-v12`.
+CML, generated descriptors, installed request metadata and direct binders agree
+on named business parameters. Outputs use existing RecordResponse with the
+generated Values' business Records; typed callers use their ValueReader.
+JSON formatting remains at existing protocol ingress/egress, not a String
+business facade or native WorkOrder/Wait/Terminal response.
+
+Start does not reuse a prior allocation/execution or guarantee intermediate
+recovery. After abandonment use a NEW execution; uncertain previous effects
+are not automatically restored. Existing permissions/actual effect scope remain
+at their owners. This interface does not claim Phase6 CLI/skill/client wiring.
 
 WAIT and a completion acknowledgement are nonterminal. A semantic completion
 does not by itself prove document application, Git execution or whole-workflow
@@ -153,8 +149,9 @@ host-definition and fifteen provided Operation input/response contracts.
 
 ## Failure and recovery
 
-The three public advance routes consume session context and only genuinely needed
-instance/context selectors. They have no old prefixed Command decoder.
+The three public advance routes consume the explicit `sessionId` and resolve
+current execution data internally. They accept no instance/context ambiguity
+selectors and have no old prefixed Command decoder.
 Unused diagnostics and extra stage, cursor,
 argv, receipt or permission-looking fields are ignored, never accepted as
 controls. Missing/wrongly typed required fields or incompatible schemas fail
@@ -181,7 +178,7 @@ certificate. Duplicate answers and intermediate recovery remain outside the
 component guarantee.
 Older SplitPhase data, including `split-phase-public-advance-v5` and
 `split-phase-human-terminal-v8` and `split-phase-reasoning-demand-v9`, is not silently rebound to the current
-`split-phase-minimal-operation-v13` definition. The additive planning assembly
+`split-phase-business-operation-v14` definition. The additive planning assembly
 installs paired native reasoning issue/result/successor handlers. The normal
 factory now selects the native three-workflow connection; declaration alone
 still does not grant execution or prove a supported outcome.

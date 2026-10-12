@@ -1,6 +1,21 @@
 # SmWorkflow
 
-## Current delivery boundary (2026-10-11)
+## Current development boundary (2026-10-12)
+
+Phase5.2 is formally released locally at
+`8e87c18647a712be909470224ac05aca52f5d799` (95 suites/626 tests passed).
+Phase5.3 is active, not accepted or released. Its common typed Operation loop
+uses named business inputs, one returned sessionId per execution, explicit
+Advance and truthful Submit acceptance/message. Structured responses use the
+existing CNCF RecordResponse/ValueReader boundary, not native JSON-string frames.
+See the [current Operation contract](docs/spec/common-workflow-operation-loop.md)
+and [Phase5.3 scope](docs/phase/phase-5.3.md). Skill/CLI wiring remains Phase6.
+
+Phase5/5.1 retain their authorized formal approved-unverified release meaning.
+The older delivery/fixture sections below are historical; they neither require
+retrospective validation nor reopen excluded replay/recovery guarantees.
+
+## Historical delivery boundary (2026-10-11)
 
 Phase 5 is formally released. Phase 5.1 accepts the normal public Operations of
 GoalPhaseWorkflow, SplitPhaseWorkflow and RepositorySyncWorkflow, safe selected

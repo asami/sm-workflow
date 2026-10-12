@@ -1,5 +1,15 @@
 # Native three-workflow launcher assembly
 
+## Current Phase5.3 interface
+
+The installed fifteen Operations use the named business inputs and structured
+outputs in the [common loop contract](common-workflow-operation-loop.md).
+Metadata/introspection describes actual named parameters and multiplicities.
+The normal direct Operation specs exercise that path; source/generation/compile
+alone does not establish passing execution or Phase acceptance. Phase6 still
+owns CLI/skill/client wiring. Historical launcher results below remain evidence
+for their original factory/host boundaries, not acceptance of changed inputs.
+
 ## Contract and evidence boundary
 
 `SmWorkflowConfiguredComponentFactory` resolves the canonical initialization

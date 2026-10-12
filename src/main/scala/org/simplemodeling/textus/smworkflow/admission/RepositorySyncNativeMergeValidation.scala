@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
   final case class Check(identity: String, ordinal: Int)
@@ -48,12 +48,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   }
 
   def waitC(store: N.Store, pending: N.Stage, policy: Option[Policy],
-    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[String] = for {
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     stage <- policy match {
       case Some(value) => advanceC(store, pending, value)
       case None => Consequence.success(pending)
     }
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, stage.record)
     detail = stage.payload.stage match {
       case "MergeValidated" => "Actual selected merge checks passed. Independent semantic review, commit, push and convergence remain incomplete."
       case "ValidationChecking" if stage.payload.validation.exists(s => !successful(s.receipts)) =>
@@ -62,9 +61,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       case _ => "An explicit host validation policy is required. No product-test skip, review acceptance or convergence is inferred."
     }
     wire <- if (stage.payload.stage == "MergeValidated" && review.nonEmpty) review.get.advanceC(store.identity, store.core)
-      else WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
-      WorkflowContinuation.Wait(StateMachineRevision(stage.record.revision.value.toString),
-        ContextSnapshot(handle.workflowRevision.value), MinimalPresentation("Pending merge validation", detail))))
+      else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(stage.record.identity.value, detail, stage.payload.stage))
   } yield wire
 
   def advanceC(store: N.Store, pending: N.Stage, policy: Policy): Consequence[N.Stage] = for {

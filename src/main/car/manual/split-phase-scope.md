@@ -1,6 +1,6 @@
 # SplitPhase handoff scope contract
 
-The current SplitPhase definition is `split-phase-minimal-operation-v13`. Its handoff
+The current SplitPhase definition is `split-phase-business-operation-v14`. Its handoff
 scope task is distinct from the partition-estimate/boundary task and older
 novel-work inputs. Its managed continuation is included in the normal
 three-workflow factory. Earlier additive assemblies remain separate fixtures,
@@ -31,11 +31,10 @@ native commit/closure outcome is recorded separately. Skill/CLI wiring remains P
 
 ## Advance input
 
-With an actual host session and one applicable target, call advance without
-`arg1`. Otherwise its optional JSON supplies only the necessary `sessionIdentity`,
-`instanceIdentity` or `contextIdentity` selector. Workflow resolves the stored
-instance and partition context. The nominal `SplitPhaseAdvanceInput` declaration
-describes those optional selectors; it is not another mandatory argument.
+Pass the required named sessionId returned by Start. Workflow directly resolves
+that execution's actual current context and pending task. Different executions
+in one chat have different IDs; no candidate discovery or caller ambiguity
+selection is performed. Start alone accepts an optional proposed sessionId.
 
 There is no `SplitPhaseAdvanceCommand`, prefixed command frame, revision/snapshot
 echo or identity-only alternative. Unused diagnostic, stage, action, storage or
@@ -46,10 +45,11 @@ consuming boundaries, not as unchanged-input certificates.
 
 ## Issued scope request
 
-`SplitPhaseScopeSemanticRequest` carries the original context, checkpoint and
-source references, a host-assigned result reference, distinct unresolved handoff
-gaps and the relevant original items with their closure, prerequisites and
-authority. Each gap retains its complete original transfer and the ordered
+Public Advance returns a typed scope view with the original source reference,
+distinct unresolved handoff gaps and relevant original items with their closure,
+prerequisites and authority. Private issued work owns its original context,
+checkpoint and host-assigned result destination; callers do not echo them.
+Each gap retains its complete original transfer and the ordered
 producing/receiving source ranges.
 
 Workflow retains the complete candidate frontier, including Built candidates
@@ -72,7 +72,7 @@ issued request; the answer does not echo or certify them.
 Semantic evidence references are consumed once in the requested result, not
 echoed in outer execution evidence. Independently supplied execution evidence
 retains its distinct meaning. Normal submission resolves the host-assigned result
-destination and issued controls internally; return `result.value`, not a
+destination and issued controls internally; return the declared `result`, not a
 destination, continuation, revision or snapshot comparison copy. There is no
 supported historical full-envelope submission alternative.
 Unused legacy context/checkpoint copies and diagnostic fields are ignored, not
@@ -86,11 +86,11 @@ The application request and result payload codecs use separate typed schemas
 `payload`; readers decode consumed typed fields without an exact-key or
 re-encoding comparison certificate. Old unused fields do not grant authority.
 Decode limits payloads to 1 MiB. CNCF owns the
-outer WorkOrder/result envelopes. The normal component also accepts
-`sm-workflow.result-submission.v1` with the typed semantic payload under
-`result.value`, consumed evidence and session or necessary request selection.
-This is distinct from returning a bare application payload where the owning
-public Operation expects the current minimal submission frame.
+outer WorkOrder/result envelopes internally. The normal public Operation takes
+explicit `sessionId` and the declared `SplitPhaseScopeSemanticResult` as `result`,
+plus consumed completion facts and execution evidence. Its assigned destination
+is resolved internally; no request/context selector or historical submission
+frame is accepted. The private storage codecs are not the public input contract.
 
 ## Effects and retained observation
 
@@ -178,9 +178,10 @@ append native history. Other remaining source/copy checks are separate adopted
 removal work, not justified by this document-read contract.
 
 An advance while the genuine scope task is pending returns that same issued
-work. After a valid result is committed, the completion returns a WAIT
-acknowledgement for the semantic boundary. Later advance independently observes
-the retained completion. The planning assembly continues an ALL-Built frontier
+work. After a valid result is committed, completion returns the declared
+`SplitPhaseScopeSubmissionResult` with `accepted`, `outcome` and `message`.
+This acknowledgement does not select the next work. Later explicit Advance
+observes the retained completion. The planning assembly continues an ALL-Built frontier
 through any genuinely required reasoning to the saved selected plan, without
 inventing Human work. The paired Human assembly also issues a
 Decision when the whole frontier requires Human direction, and can continue
@@ -203,8 +204,8 @@ handler is not yet installed.
 
 ## Compatibility and remaining validation
 
-Older v5–v12 execution definitions are not automatically migrated or silently
-rebound to the current v13 definition. Abandon unsupported old executions and
+Older v5–v13 execution definitions are not automatically migrated or silently
+rebound to the current `split-phase-business-operation-v14` definition. Abandon unsupported old executions and
 start NEW; generated declarations do not establish storage compatibility.
 
 The reasoning extension declares a distinct `assessReasoningDemand` capability

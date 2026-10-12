@@ -8,6 +8,7 @@ import org.goldenport.protocol.spec.OperationDefinition
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
@@ -19,25 +20,28 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation)
-  private def request(operation: OperationDefinition, input: Option[String]): Request =
+  private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "GoalPhaseService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
-      properties = input.toList.map(value => Property("arg1", value, None)))
+      properties = properties)
 
   "GoalPhase generated public Operations" should {
-    "accept one JSON carrier and permit input-free advance" in {
-      Given("the four generated normal Operations and a JSON input")
-      val supplied = operations.map(operation => operation -> request(operation, Some("{}")))
-      val absent = operations.map(operation => operation -> request(operation, None))
-      When("their generated request readers construct the actual command actions")
-      val presentResults = supplied.map((operation, input) => operation.createOperationRequest(input))
-      val absentResults = absent.map((operation, input) => operation.createOperationRequest(input))
-      Then("Start and answers need JSON, while advance may resolve its input from the session")
-      presentResults.foreach(_.isSuccess shouldBe true)
-      absentResults.map(_.isSuccess) shouldBe Vector(false, true, false, false)
+    "bind named Start business data and explicit Advance session to generated actions" in {
+      Given("a declared Phase/repository input and the session returned by a Start execution")
+      val start = admission.NativeWorkflowOperationInputFixture.goal(GoalPhaseStartInput("phase-5.3", "sm-workflow"))
+      val advance = admission.NativeWorkflowOperationInputFixture.advance("goal-execution-1")
+      When("the generated Start and Advance readers construct actions from named parameters")
+      val started = operations(0).createOperationRequest(request(operations(0), start))
+      val advanced = operations(1).createOperationRequest(request(operations(1), advance))
+      val absent = operations.map(op => op.createOperationRequest(request(op, Nil)))
+      Then("Start accepts its business value without a proposed ID, and Advance requires its selected session")
+      started.isSuccess shouldBe true
+      advanced.isSuccess shouldBe true
+      absent.foreach(_.isSuccess shouldBe false)
       val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("business types and existing optional advance selectors retain the single JSON parameter")
+      And("all four Provided operations declare their business inputs, without a universal argument")
+      operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
         "advanceGoalPhase" -> Some("GoalPhaseAdvanceInput"),
@@ -53,7 +57,7 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       val native = admission.GoalPhaseRuntimeCatalog.loadC()
       Then("the native catalog is usable and only the current assignment capabilities remain")
       native.isSuccess shouldBe true
-      workflow.version shouldBe "goal-phase-minimal-operation-v5"
+      workflow.version shouldBe "goal-phase-business-operation-v6"
       workflow.states.map(_.name) shouldBe Vector("Pending", "OrderedImplementation", "OrderedInspectCandidate",
         "OrderedValidation", "OrderedReview", "OrderedRepair", "OrderedClosing", "PhaseInspection",
         "PhaseValidation", "PhaseReview", "PhaseClosing", "PhaseDecision", "PhaseClosed")

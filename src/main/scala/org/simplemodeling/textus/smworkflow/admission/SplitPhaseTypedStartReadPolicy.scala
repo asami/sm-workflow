@@ -10,7 +10,7 @@ import SplitPhaseExplicitPlanningInputJsonV1.Purpose
 /**
  * Independent read purpose. Not a storage grant or human ingress.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartReadPolicy {
   val prefix = "sm-workflow.split-phase.typed-starts."
@@ -31,7 +31,6 @@ private[smworkflow] object SplitPhaseTypedStartReadPolicy {
   def bindC(host: ResolvedConfiguration, workflow: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[SplitPhaseTypedStartDataStorePort] = for {
     inputs <- SplitPhasePlanningInputReadPolicy.bindC(host, workflow)
-    selections <- SplitPhaseHostSelectionReadPolicy.bindC(host, workflow)
     contexts <- SplitPhaseManagedPartitionPreparation.bindC(host, workflow, catalog)
     declared <- decodeC(host)
     inputDeclaration <- SplitPhasePlanningInputReadPolicy.decodeC(host)
@@ -41,7 +40,7 @@ private[smworkflow] object SplitPhaseTypedStartReadPolicy {
       contextDeclaration.collection, declared.collection, workflow.instances, workflow.continuations)
     _ <- if (declared.storeName == workflow.configuration.workflowStore.name && targets.distinct.size == 14)
       Consequence.unit else Consequence.configurationInvalid("SplitPhase typed Start requires fourteen distinct same-store purposes")
-  } yield new SplitPhaseTypedStartDataStorePort(declared, workflow, catalog, inputs, selections, contexts)
+  } yield new SplitPhaseTypedStartDataStorePort(declared, workflow, catalog, inputs, contexts)
 
   def admitC(host: ResolvedConfiguration, store: String, collection: DataStore.CollectionId): Consequence[Unit] =
     decodeC(host).flatMap { declared =>

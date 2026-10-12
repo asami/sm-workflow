@@ -8,23 +8,21 @@ import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRevision}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRevision
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningCheckpointPreparation as K,
   SplitPhaseExplicitPartitionContextJsonV1 as C, SplitPhaseTypedStartJsonV1 as T,
   SplitPhasePlanningSnapshotJsonV1 as R, SplitPhaseExplicitPartitionSemantic as S,
   SplitPhaseTypedStartPreparation as TS}
 
-/** Inert mapping/index frames. Neither codec reconstructs executable
+/** Inert mapping/locator frames. Neither codec reconstructs executable
   * planning, a current call, native readback or a human invocation.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-planning-checkpoint.v2"
   val storageField = "splitPhasePlanningCheckpointPayload"
   val locatorSchema = "sm-workflow.split-phase-planning-checkpoint-locator.v2"
-  val indexSchema = "sm-workflow.split-phase-planning-context-index.v1"
-  val indexStorageField = "splitPhasePlanningContextIndexPayload"
   val maximumPayloadBytes = 1024 * 1024
   private final case class Payload(reference: K.Reference, contextReference: S.ContextReference,
     startReference: TS.Reference, originalContext: String, originalStart: String, origin: K.Origin,
@@ -35,8 +33,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
   private given originDecoder: Decoder[K.Origin] = deriveDecoder[K.Origin]
   private given payloadEncoder: Encoder[Payload] = deriveEncoder[Payload]
   private given payloadDecoder: Decoder[Payload] = deriveDecoder[Payload]
-  private given indexEncoder: Encoder[K.ContextIndex] = deriveEncoder[K.ContextIndex]
-  private given indexDecoder: Decoder[K.ContextIndex] = deriveDecoder[K.ContextIndex]
   private given _locator_encoder: Encoder[K.Locator] = deriveEncoder[K.Locator]
   private given _locator_decoder: Decoder[K.Locator] = deriveDecoder[K.Locator]
 
@@ -70,23 +66,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
       payload <- payloadC(locatorSchema, json)
       value <- payload.as[K.Locator].fold(_ => invalid("locator type differs"), Consequence.success)
       _ <- if (value.reference == reference) Consequence.unit else invalid("selected locator differs")
-    } yield value
-  }
-
-  def encodeIndexC(value: K.ContextIndex): Consequence[String] = guarded {
-    val json = envelope(indexSchema, value.asJson)
-    for {
-      _ <- boundedC(indexSchema, json)
-    } yield indexSchema + ":" + json.noSpaces
-  }
-  def decodeIndexC(instance: InstanceIdentity, context: S.ContextReference,
-    raw: String): Consequence[K.ContextIndex] = guarded {
-    for {
-      json <- parseC(indexSchema, raw)
-      payload <- payloadC(indexSchema, json)
-      value <- payload.as[K.ContextIndex].fold(_ => invalid("index shape differs"), Consequence.success)
-      _ <- if (value.instance == instance && value.context == context)
-        Consequence.unit else invalid("selected index query differs")
     } yield value
   }
 

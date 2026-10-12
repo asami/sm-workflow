@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedStartPrepar
  * Start admission consumes the independent host boundary's outcome. It does
  * not wrap that outcome in another receipt or repeat its evidence checks.
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartHumanVerification {
   val purpose = "split-phase-start"
@@ -27,7 +27,8 @@ private[smworkflow] object SplitPhaseTypedStartHumanVerification {
     def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json): Consequence[Unit]
   }
   final class Admitted private[SplitPhaseTypedStartHumanVerification] (val prepared: T.Prepared)
-  def admitForCallC(prepared: T.Prepared, core: ActionCall.Core, evidence: EvidencePort): Consequence[Admitted] =
+  def admitForCallC(prepared: T.Prepared, allocation: T.Reference,
+    core: ActionCall.Core, evidence: EvidencePort): Consequence[Admitted] =
     if (prepared == null || core == null || core.executionContext == null ||
         !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty) ||
         evidence == null)
@@ -35,7 +36,7 @@ private[smworkflow] object SplitPhaseTypedStartHumanVerification {
     else for {
       _ <- participantC(prepared.record.participantIdentity, core)
       target <- ThreeWorkflowHostEvidencePorts.splitStartBindingC(StartContext(core.component.get.core.instanceId, prepared.record))
-      lookup = ThreeWorkflowHostEvidencePorts.key(prepared.record.reference.identity, prepared.record.reference.revision)
+      lookup = ThreeWorkflowHostEvidencePorts.key(allocation.identity, allocation.revision)
       _ <- try Option(evidence.admitC(core, lookup, target)).getOrElse(
         Consequence.serviceUnavailable("SplitPhase human Start host evidence returned no outcome"))
         catch { case NonFatal(_) => Consequence.serviceUnavailable("SplitPhase human Start verification is indeterminate") }

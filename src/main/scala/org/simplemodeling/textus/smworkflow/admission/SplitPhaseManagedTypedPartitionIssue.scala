@@ -22,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
   final class Port private[SplitPhaseManagedTypedPartitionIssue] (
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog) {
-    def issueForCallC(binding: T.PartitionBound, core: ActionCall.Core): Consequence[String] =
+    def issueForCallC(binding: T.PartitionBound, core: ActionCall.Core): Consequence[WorkflowInteraction[S.Request, Nothing]] =
       if (binding == null)
         Consequence.stateConflict("SplitPhase partition issue source is absent")
       else for {
@@ -30,11 +30,11 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
         policy <- SplitPhasePartitionReplyAllocationPolicy.decodeC(core.component.get.subsystem.get.configuration)
         allocated <- policy.allocateC(binding)
         plan <- I.prepareC(binding, allocated)
-        wire <- withWorkForCallC(core) { work =>
+        issued <- withWorkForCallC(core) { work =>
           given ExecutionContext = core.executionContext
-          work.suspendC(plan.intent, plan.interaction).map(_ => plan.wire)
+          work.suspendC(plan.intent, plan.interaction).map(_ => plan.interaction)
         }
-      } yield wire
+      } yield issued
 
     /** Immutable observed work only; no progression, result admission or claim. */
     def loadForCallC(identity: ContinuationIdentity, core: ActionCall.Core):

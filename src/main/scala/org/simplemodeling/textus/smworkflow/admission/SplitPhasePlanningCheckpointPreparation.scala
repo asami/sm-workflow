@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /** Passive publication preparation. Captured is neither a committed native
   * receipt nor an authenticated/public Operation invocation.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
   final case class Reference(identity: String, revision: String)
@@ -24,10 +24,9 @@ private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
   }
   final case class Record(reference: Reference, originalContext: C.Record, originalStart: T.Record,
     origin: Origin, snapshot: R.Record, predecessorRevision: InstanceRevision, committedRevision: InstanceRevision)
-  final case class ContextIndex(instance: InstanceIdentity, context: S.ContextReference, mapping: Reference)
   final case class Locator(reference: Reference, origin: Origin)
   final class Captured private[SplitPhasePlanningCheckpointPreparation] (
-    val record: Record, val index: ContextIndex, val before: InstanceRecord, val next: InstanceRecord,
+    val record: Record, val before: InstanceRecord, val next: InstanceRecord,
     val mechanicalIntent: Option[M.Intent[Record]],
     val completion: Option[WorkflowCompletionRecordJsonV1.Record[S.Judgment]])
 
@@ -52,17 +51,9 @@ private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
           Origin.PartitionCompletion(plan.submitted.continuationId, result), projected.record,
           original.context.currentInstance.revision, plan.next.revision)
         retained = WorkflowCompletionRecordJsonV1.Record(plan.next.revision, plan.submitted, Some(plan.closing))
-      } yield Some(new Captured(record, index(record), plan.pending.current, plan.next, None, Some(retained)))
+      } yield Some(new Captured(record, plan.pending.current, plan.next, None, Some(retained)))
     }
   }
-
-  def inspectIndexC(value: ContextIndex): Consequence[Unit] =
-    if (value != null && value.instance != null && name(value.instance.value) && value.context != null &&
-        name(value.context.identity) && name(value.context.revision) && validReference(value.mapping)) Consequence.unit
-    else invalid("context index is incomplete")
-
-  def index(record: Record): ContextIndex = ContextIndex(record.originalStart.instanceIdentity,
-    record.originalContext.reference, record.reference)
 
   private def mechanicalC(bound: T.PlanningBound, outcome: W.Outcome, reference: Reference,
     anchor: M.Reference): Consequence[Captured] = for {
@@ -79,7 +70,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPreparation {
       projected.record, before.revision, next.revision)
     intent = M.Intent(bound.start.record.configuration, anchor, before, before.revision, entry,
       TypedValue("SplitPhasePlanningCheckpoint", record))
-  } yield new Captured(record, index(record), before, next, Some(intent), None)
+  } yield new Captured(record, before, next, Some(intent), None)
 
   private def validReference(r: Reference): Boolean = r != null && name(r.identity) && name(r.revision)
   private def name(value: String): Boolean = value != null && value.nonEmpty && value.trim == value

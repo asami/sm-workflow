@@ -34,7 +34,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     declaration: F.Declaration, definition: DefinitionBinding, policy: I.Policy,
     acknowledgement: String => Consequence[Unit], evidence: S.EvidencePort) {
 
-    def advanceC(identity: String, core: ActionCall.Core): Consequence[String] = for {
+    def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
       source <- sourceC(identity, core)
       native <- source.session.storage.bindIssuedC(completionOperation, S.inputCodec)
       existing <- native.loadC(continuationId(source.validated))(using core.executionContext)
@@ -52,7 +52,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       completion <- nativeCompletionC(source.session.storage)
       retained <- completion.loadRetainedC(continuationId(source.validated))(using core.executionContext)
       wire <- retained match {
-        case None => WorkflowWorkOrderJsonV1.encodeC(plan.work, S.inputCodec)
+        case None => NativeWorkflowOperationOutput.repositoryReviewRequestC(plan.work)
         case Some(value) => for {
           next <- completedC(plan, value.completion.result, policy)
           wire <- waitC(next, value.completion.result)
@@ -101,11 +101,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         case Some(value) if value.payload.stage == "MergeValidated" => Consequence.success(value)
         case _ => invalid("semantic review selection has no genuine native review")
       }
-      instances <- session.storage.bindInstancesC()(using core.executionContext)
-      current <- instances.loadC(InstanceIdentity(identity))(using core.executionContext).flatMap {
-        case Some(value) => Consequence.success(value)
-        case None => invalid("native review instance is missing")
-      }
+      current = session.started.current
     } yield Source(session, store, validated, current)
 
     private def prepareC(source: Source, input: I.Request): Consequence[Plan] = for {
@@ -137,7 +133,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     } yield Plan(source, input, intent, next, work)
 
     private[RepositorySyncNativeMergeReviewContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result],
-      result: Option[ContinuationResult[io.circe.Json]] = None):
+      result: Option[ContinuationResult[NativeWorkflowResultInput.Value]] = None):
         Consequence[spec.OperationDefinition] = {
       val provided = RepositorySyncDefinitionBinding.providedDefinition
       val op = provided.providedOperations.find(o => o.service == completionOperation.service && o.name == completionOperation.operation)
@@ -158,7 +154,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         def encodeC(resume: ContinuationRuntime.Resume) = invalid("completion acknowledgement requires actual native commit")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, submitted: ContinuationResult[S.Result],
           completed: Option[InstanceRecord]): Consequence[OperationResponse] =
-          completed.map(record => waitC(record, submitted).map(OperationResponse.Scalar(_)))
+          completed.map(record => Consequence.success(NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, record))))
             .getOrElse(uncertain("review completion has no native committed state"))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
@@ -183,7 +179,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         }
       }
       val actualInstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
-      WorkflowCompletionServiceOperation.bindC(provided, op.get, WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void,
+      WorkflowCompletionServiceOperation.bindC(provided, op.get, SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation.specification.request, SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation.specification.response,
         codec, ContinuationRuntime.empty, issued, actualInstances, declaration.configuration,
         () => throw new IllegalStateException("Review completion requires canonical managed UoW"), Some(closing), Some(native),
         descriptiveAttributes = SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation.specification.content.descriptiveAttributes)
@@ -231,13 +227,10 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
   }
   private def continuationId(source: N.Stage): ContinuationIdentity =
     ContinuationIdentity(source.record.identity.value + ":native-review:" + source.record.revision.value)
-  private def waitC(next: InstanceRecord, result: ContinuationResult[S.Result]): Consequence[String] = for {
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, next)
-    wire <- WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
-      WorkflowContinuation.Wait(StateMachineRevision(next.revision.value.toString), result.contextSnapshot,
-        MinimalPresentation("Native merge review retained",
-          "The independent review is saved. Repair, Human decision or authorized final convergence remains incomplete."))))
-  } yield wire
+  private def waitC(next: InstanceRecord, result: ContinuationResult[S.Result]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] =
+    Consequence.success(NativeWorkflowOperationOutput.repositoryWait(next.identity.value,
+      "The independent review is saved. Repair, Human decision or authorized final convergence remains incomplete.",
+      result.result.value.decision))
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native review continuation " + reason)
   private def uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)

@@ -14,7 +14,7 @@ import RepositorySyncManagedFetch as Fetch
 /** Current trusted-host entry/owning-advance pair with session-resolved inputs.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   /** Normal host-record composition: no injected in-memory selection callback.
@@ -127,11 +127,15 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
-      def execute(): Consequence[OperationResponse] = start.fold(
-        if (nativeProgression) RepositorySyncNativeProgression.advanceC(identity.get, declaration, definition,
-          core, acknowledgement, nativeAcknowledgement, conflicts, validationPolicy, review, convergence)
-        else Fetch.advanceC(identity.get, declaration, definition, core, acknowledgement))(
-        (input, selected) => Fetch.startC(input, selected, declaration, definition, core)).map(OperationResponse.Scalar(_))
+      def execute(): Consequence[OperationResponse] = start match {
+        case Some((input, selected)) => Fetch.startC(input, selected, declaration, definition, core)
+          .map(NativeWorkflowOperationOutput.response(_))
+        case None =>
+          val result = if (nativeProgression) RepositorySyncNativeProgression.advanceC(identity.get, declaration, definition,
+            core, acknowledgement, nativeAcknowledgement, conflicts, validationPolicy, review, convergence)
+          else Fetch.advanceC(identity.get, declaration, definition, core, acknowledgement)
+          result.map(NativeWorkflowOperationOutput.response(_))
+      }
     }
   }
 }

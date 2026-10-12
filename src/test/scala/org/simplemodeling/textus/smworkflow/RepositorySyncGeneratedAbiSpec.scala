@@ -20,25 +20,29 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation)
-  private def request(operation: OperationDefinition, input: Option[String]): Request =
+  private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
-      properties = input.toList.map(value => Property("arg1", value, None)))
+      properties = properties)
 
   "RepositorySync generated public Operations" should {
-    "accept one JSON input and resolve advance without a nested command chain" in {
-      Given("the five generated normal Operations")
-      val supplied = operations.map(operation => operation -> request(operation, Some("{}")))
-      val absent = operations.map(operation => operation -> request(operation, None))
-      When("their generated request readers construct command actions")
-      val presentResults = supplied.map((operation, input) => operation.createOperationRequest(input))
-      val absentResults = absent.map((operation, input) => operation.createOperationRequest(input))
-      Then("only advance may omit the JSON argument")
-      presentResults.foreach(_.isSuccess shouldBe true)
-      absentResults.map(_.isSuccess) shouldBe Vector(false, true, false, false, false)
+    "bind named repository Start and explicit Advance session to generated actions" in {
+      Given("a repository/branch/remote selection and an independent execution session")
+      val start = admission.NativeWorkflowOperationInputFixture.repository(
+        RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE"))
+      val advance = admission.NativeWorkflowOperationInputFixture.advance("repository-execution-1")
+      When("the generated readers construct actions from their named parameters")
+      val started = operations(0).createOperationRequest(request(operations(0), start))
+      val advanced = operations(1).createOperationRequest(request(operations(1), advance))
+      val absent = operations.map(op => op.createOperationRequest(request(op, Nil)))
+      Then("Start accepts its business selection and Advance requires the canonical session")
+      started.isSuccess shouldBe true
+      advanced.isSuccess shouldBe true
+      absent.foreach(_.isSuccess shouldBe false)
       val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("current business results and optional advance selectors are declared without control envelopes")
+      And("all five Provided operations declare business types without control envelopes")
+      operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startRepositorySync" -> Some("RepositorySyncStartInput"),
         "advanceRepositorySync" -> Some("RepositorySyncAdvanceInput"),
@@ -51,11 +55,11 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       Given("repository, branch, remote and synchronization-mode business data")
       val input = RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE")
       When("the actual Start fixture produces the public business input")
-      val wire = admission.NativeWorkflowOperationInputFixture.repository(input)
-      Then("the public reader consumes that input without a control envelope")
-      val business = io.circe.parser.parse(wire).toOption.get.hcursor.downField("input").focus.get
-      admission.NativeWorkflowStartInput.decodeC(admission.NativeWorkflowStartInput.Kind.RepositorySync, business)
-        .isSuccess shouldBe true
+      val properties = admission.NativeWorkflowOperationInputFixture.repository(input)
+      val consumed = admission.NativeWorkflowOperationInput.valueC[RepositorySyncStartInput](
+        request(operations.head, properties), "input")
+      Then("the public named ValueReader consumes the repository selection without a control envelope")
+      consumed shouldBe org.goldenport.Consequence.success(input)
     }
 
     "resolve only the current conflict, native review and Human capabilities" in {
@@ -65,7 +69,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       val candidate = admission.RepositorySyncDefinitionBinding.candidateC
       Then("the native convergence definition remains usable without obsolete review or admission stages")
       candidate.isSuccess shouldBe true
-      workflow.version shouldBe "repository-sync-minimal-operation-v11"
+      workflow.version shouldBe "repository-sync-business-operation-v12"
       workflow.requiredOperations.map(_.identity.capability).toSet shouldBe Set(
         "resolve-repository-conflict-capability", "native-merge-review-capability", "repository-conflict-human-capability")
       workflow.actions.filter(_.kind == "ADMISSION").map(_.operation.service).toSet shouldBe

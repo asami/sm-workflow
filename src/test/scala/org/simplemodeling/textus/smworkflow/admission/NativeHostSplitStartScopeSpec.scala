@@ -14,7 +14,7 @@ import SplitPhaseTypedStartHumanVerification.StartContext
 
 /** Passive scope/storage examples, not independent Human or actual execution.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 final class NativeHostSplitStartScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val start = SplitPhaseTypedStartFixture.record
@@ -41,12 +41,15 @@ final class NativeHostSplitStartScopeSpec extends AnyWordSpec with Matchers with
       selected.noSpaces should not include "configuration"
       selected.noSpaces should not include "recommendationReference"
       selected.noSpaces should not include "children"
+      selected.noSpaces should not include "instanceIdentity"
       selected.hcursor.downField("startAttestation").downField("input").get[String]("invocationMode").toOption.get shouldBe "PREVIEW"
     }
     "discard obsolete copied infrastructure and generated witnesses without renewing consent" in {
       Given("Spec: docs/spec/native-host-split-start-applicability.md; Rule: R1; Example: E2; unused metadata whose meaningful Start target is unchanged")
       val changed = attestation(selected)(_.add("configuration", Json.True).add("sourceLine", Json.Null)
         .add("generator", Json.True).add("commandGrant", Json.True)
+        .add("instanceIdentity", Json.fromString("another-new-execution"))
+        .add("reference", Json.obj("identity" -> Json.fromString("another-execution-start"), "revision" -> Json.fromString("1")))
         .add("workflowRevision", Json.fromString("obsolete")).add("command", Json.False))
       When("current evidence selection and current-call observation ignore these non-authoritative copies")
       val scope = NativeHostSplitStartScope.select(Purpose.SplitStart, changed).toOption.get
@@ -57,12 +60,10 @@ final class NativeHostSplitStartScopeSpec extends AnyWordSpec with Matchers with
       observed.toOption.get.evidence.participant shouldBe "authorized-human-relay"
       observed.toOption.get.occurredAt shouldBe now.minusSeconds(60)
     }
-    "reject another actual invocation source authority participant or workflow allocation" in {
+    "reject another actual owner, source authority, participant or business mode" in {
       Given("Spec: docs/spec/native-host-split-start-applicability.md; Rule: R2; Example: E3; independently attested consent and real target substitutions")
       val variants = Vector(
         selected.mapObject(_.add("componentInstance", Json.fromString("another-owner"))),
-        attestation(selected)(_.add("instanceIdentity", Json.fromString("another-instance"))),
-        alter(selected, Vector("startAttestation", "reference"))(_.mapObject(_.add("revision", Json.fromString("another-original")))),
         alter(selected, Vector("startAttestation", "source", "authority"))(_.mapObject(_.add("revision", Json.fromString("another-authority")))),
         attestation(selected)(_.add("participantIdentity", Json.fromString("another-actor"))),
         alter(selected, Vector("startAttestation", "input"))(_.mapObject(_.add("invocationMode", Json.fromString("APPLY")))))

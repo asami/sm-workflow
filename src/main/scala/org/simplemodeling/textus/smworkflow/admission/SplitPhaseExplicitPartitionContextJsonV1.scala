@@ -48,18 +48,6 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
       value <- _decode_json_c(json)
     } yield value
 
-  /** Unrelated rows are not a health-validation gate for this selected instance. */
-  def findForInstanceC(raw: String, instanceIdentity: String): Consequence[Option[C.Record]] =
-    if (raw == null || !raw.startsWith(_prefix)) Consequence.success(None)
-    else parser.parse(raw.substring(_prefix.length)) match {
-      case Right(json) if json.hcursor.downField("payload").downField("owner").downField("handle")
-          .downField("instanceIdentity").get[String]("value").contains(instanceIdentity) =>
-        if (_bytes(raw) > maximumPayloadBytes)
-          Consequence.stateConflict("SplitPhase partition context encoding is unsupported")
-        else _decode_json_c(json).map(Some(_))
-      case _ => Consequence.success(None)
-    }
-
   private def _decode_json_c(json: Json): Consequence[C.Record] = for {
     version <- json.hcursor.get[String]("schemaVersion").fold(
       _ => Consequence.stateConflict("SplitPhase partition context schema is missing"), Consequence.success)

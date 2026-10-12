@@ -14,11 +14,11 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /** Current allocation targets and consumed Start data, not command copies.
   * Older Start representations are unsupported; use a NEW execution.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseTypedStartJsonV1 {
-  val schema = "sm-workflow.split-phase-typed-start-record.v2"
-  val allocationSchema = "sm-workflow.split-phase-typed-start-allocation.v2"
+  val schema = "sm-workflow.split-phase-typed-start-record.v3"
+  val allocationSchema = "sm-workflow.split-phase-typed-start-allocation.v3"
   val storageField = "splitPhaseTypedStartPayload"
   val maximumPayloadBytes = 1024 * 1024
   import SplitPhaseExplicitPartitionRawCodecs.given
@@ -34,27 +34,29 @@ private[smworkflow] object SplitPhaseTypedStartJsonV1 {
     "proposalReference" -> input.proposalReference.map(Json.fromString).getOrElse(Json.Null))
 
   /** Allocation retains only actual input and subsequent read targets. */
-  def encodeAllocationC(value: T.Record): Consequence[String] = guarded {
-    renderC(allocationSchema, Json.obj("reference" -> value.reference.asJson,
-      "instanceIdentity" -> value.instanceIdentity.asJson,
+  def encodeAllocationC(value: T.Allocation): Consequence[String] = guarded {
+    renderC(allocationSchema, Json.obj(
       "input" -> inputJson(value.input), "participantIdentity" -> Json.fromString(value.participantIdentity),
-      "source" -> value.source.reference.asJson, "proposal" -> value.proposal.map(_.reference).asJson))
+      "source" -> value.source.asJson, "proposal" -> value.proposal.asJson,
+      "planningContext" -> value.planningContext.asJson))
   }
 
   def decodeAllocationC(reference: T.Reference, raw: String): Consequence[T.Allocation] = for {
     payload <- payloadC(allocationSchema, reference, raw)
-    routing <- routingC(reference, payload)
     input <- inputC(payload)
+    participant <- payload.hcursor.get[String]("participantIdentity").fold(
+      _ => invalid("participant is malformed"), Consequence.success)
     source <- payload.hcursor.get[P.SourceReference]("source").fold(
       _ => invalid("source target is malformed"), Consequence.success)
     proposal <- payload.hcursor.get[Option[P.ProposalReference]]("proposal").fold(
       _ => invalid("proposal target is malformed"), Consequence.success)
-  } yield T.Allocation(routing.reference, routing.instanceIdentity, input,
-    routing.participantIdentity, source, proposal)
+    context <- payload.hcursor.get[SplitPhaseExplicitPartitionSemantic.ContextReference]("planningContext").fold(
+      _ => invalid("planning context target is malformed"), Consequence.success)
+  } yield T.Allocation(reference, input, participant, source, proposal, context)
 
   /** Routing does not reload bodies, prepare a Start or re-admit consent. */
   def decodeRoutingC(reference: T.Reference, raw: String): Consequence[T.Routing] =
-    payloadC(allocationSchema, reference, raw).flatMap(routingC(reference, _))
+    payloadC(schema, reference, raw).flatMap(routingC(reference, _))
 
   def encodeC(value: T.Record): Consequence[String] = guarded {
     renderC(schema, Payload(value.reference, value.instanceIdentity, value.configuration,
@@ -76,8 +78,10 @@ private[smworkflow] object SplitPhaseTypedStartJsonV1 {
       _ => invalid("instance allocation is malformed"), Consequence.success)
     participant <- payload.hcursor.get[String]("participantIdentity").fold(
       _ => invalid("participant is malformed"), Consequence.success)
+    mode <- payload.hcursor.downField("input").get[String]("invocationMode").fold(
+      _ => invalid("invocation mode is malformed"), Consequence.success)
     _ <- if (ref == reference) Consequence.unit else invalid("selected allocation address differs")
-  } yield T.Routing(ref, instance, participant)
+  } yield T.Routing(ref, instance, participant, mode)
 
   private def inputC(payload: Json): Consequence[NativeWorkflowStartInput.Split] =
     payload.hcursor.downField("input").focus.map(Consequence.success)

@@ -21,12 +21,12 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
  * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
-  val schema = "sm-workflow.split-phase-partition-completion-checkpoint.v1"
+  val schema = "sm-workflow.split-phase-partition-completion-checkpoint.v2"
   val storageField = "splitPhasePartitionCompletionCheckpointPayload"
   val maximumPayloadBytes = K.maximumPayloadBytes
   private final case class Payload(contextReference: SP.ContextReference, startReference: TP.Reference,
     context: String, start: String, issued: String, completion: String, before: String, next: String,
-    mappingReference: Option[KP.Reference], checkpoint: Option[String], wire: String)
+    mappingReference: Option[KP.Reference], checkpoint: Option[String])
   private given Encoder[Payload] = deriveEncoder[Payload]
   private given Decoder[Payload] = deriveDecoder[Payload]
 
@@ -35,12 +35,18 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
       context <- C.encodeC(value.context)
       start <- T.encodeC(value.start)
       issued <- S.encodeWorkOrderC(value.issued)
-      completion <- WorkflowCompletionRecordJsonV1.encodeC(value.completion, S.resultCodec)
+      resultPayload <- S.resultCodec.encodeC(value.completion.result.result.value)
+      completion <- WorkflowCompletionRecordJsonV1.encodeC(value.completion,
+        new WorkflowResultJsonV1.PayloadCodec[SP.Judgment] {
+          val typeIdentity = S.resultCodec.typeIdentity
+          def encode(result: SP.Judgment): Json = resultPayload
+          def decode(data: Json): Either[String, SP.Judgment] = S.resultCodec.decode(data)
+        })
       before <- WorkflowInstanceRecordJsonV1.encodeC(value.before)
       next <- WorkflowInstanceRecordJsonV1.encodeC(value.next)
       checkpoint <- value.checkpoint.fold(Consequence.success(Option.empty[String]))(k => K.encodeC(k).map(Some(_)))
       payload = Payload(value.context.reference, value.start.reference, context, start, issued, completion, before, next,
-        value.checkpoint.map(_.reference), checkpoint, value.wire)
+        value.checkpoint.map(_.reference), checkpoint)
       raw = schema + ":" + _envelope(payload).noSpaces
       _ <- if (raw.getBytes(UTF_8).length <= maximumPayloadBytes) Consequence.unit else _invalid("whole frame is oversized")
     } yield raw
@@ -65,7 +71,7 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
         K.decodeC(payload.mappingReference.get, k).map(Some(_)))
       // Publication consumes the original header separately. Observation and
       // advance use planning/result data, not that redundant metadata copy.
-      value = A.Record(context, start, issued, completion, before, next, checkpoint, None, payload.wire)
+      value = A.Record(context, start, issued, completion, before, next, checkpoint, None)
       _ <- if (completion.result.continuationId == identity) Consequence.unit
         else _invalid("selected continuation differs")
     } yield value

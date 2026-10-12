@@ -15,12 +15,12 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedPartitionC
 /** Actual original completion facts. Raw Record is inert; only a selected Plan
   * can construct Captured. Nothing here executes a transition or recovers a Plan.
   * @since   Oct.  2, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointPreparation {
   final case class Record(context: C.Record, start: T.Record, issued: WorkflowInteraction[S.Request, Nothing],
     completion: WorkflowCompletionRecordJsonV1.Record[S.Judgment], before: InstanceRecord, next: InstanceRecord,
-    checkpoint: Option[K.Record], header: Option[E.Record], wire: String)
+    checkpoint: Option[K.Record], header: Option[E.Record])
   final class Captured private[SplitPhasePartitionCompletionCheckpointPreparation] (
     val record: Record, val checkpoint: Option[K.Captured])
 
@@ -49,7 +49,7 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointPreparation {
       }
       record = Record(plan.pending.binding.context.record, plan.pending.binding.start.record, plan.pending.issued,
         WorkflowCompletionRecordJsonV1.Record(plan.next.revision, plan.submitted, Some(plan.closing)),
-        plan.pending.current, plan.next, checkpoint.map(_.record), header, plan.wire)
+        plan.pending.current, plan.next, checkpoint.map(_.record), header)
     } yield new Captured(record, checkpoint)
   }
   private def _invalid[A](why: String): Consequence[A] = Consequence.stateConflict("SplitPhase AI checkpoint " + why)

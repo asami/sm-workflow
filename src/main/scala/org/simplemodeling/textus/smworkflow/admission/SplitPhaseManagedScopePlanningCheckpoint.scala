@@ -64,7 +64,9 @@ private[smworkflow] object SplitPhaseManagedScopePlanningCheckpoint {
         case None => for {
           continued <- W.continuePublishedScopeC(prior)
           captured <- C.captureC(continued)
-          program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
+          frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+          program <- frontier.stageCreateForCallC(captured.record.next.identity, captured.record.next.revision,
+            SplitPhaseExecutionFrontier.Value.ScopePlanning(captured.record.reference), core)
           native <- _native_c(core)
           _ <- native.executeC(captured.intent, program)(using core.executionContext) match {
             case Consequence.Success(_) => Consequence.unit

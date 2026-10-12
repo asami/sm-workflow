@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Test allocations are data only, not genuine human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 private[admission] object SplitPhaseTypedStartFixture {
   val original = SplitPhasePartitionContextFixture
@@ -35,6 +35,9 @@ private[admission] object SplitPhaseTypedStartFixture {
   val selection = selectionFor(input)
   val record = T.Record(reference, original.instance.identity, configuration, input,
     participantIdentity, source, Some(proposal))
+  def allocationFor(value: T.Record, template: SplitPhaseExplicitPartitionSemantic.ContextReference = original.record.reference): T.Allocation =
+    T.Allocation(value.reference, value.input, value.participantIdentity, value.source.reference,
+      value.proposal.map(_.reference), template)
   def prepare(value: T.Record) = T.prepareC(value, value.source, value.proposal, catalog, configuration)
   val prepared = take(prepare(record))
   val initial = prepared.initial
@@ -125,34 +128,40 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       invalid.foreach(value => prepare(value).isSuccess shouldBe false)
     }
 
-    "store current allocation targets and route without reading unused bodies" in {
-      Given("a current allocation with minimal business input")
-      val expected = T.Allocation(record.reference, record.instanceIdentity, input, participantIdentity,
-        source.reference, Some(proposal.reference))
-      val wire = take(J.encodeAllocationC(record))
+    "separate reusable host input targets from the retained execution's routing" in {
+      Given("a host business allocation with a planning template reference and no allocated execution ID")
+      val expected = allocationFor(record)
+      val wire = take(J.encodeAllocationC(expected))
       val encoded = parser.parse(wire.substring(J.allocationSchema.length + 1)).toOption.get
-      When("the actual allocation is decoded")
+
+      When("the actual host allocation is decoded at its selected address")
       val decoded = take(J.decodeAllocationC(record.reference, wire))
-      Then("input and targets survive without a command or saved selection envelope")
+
+      Then("business input and direct read targets survive without a native instance or copied physical key")
       decoded shouldBe expected
       encoded.hcursor.downField("payload").focus.get.asObject.get.keys.toSet shouldBe
-        Set("reference", "instanceIdentity", "input", "participantIdentity", "source", "proposal")
-      Given("routing data with unused input and source bodies removed and obsolete annotations added")
-      val routing = payload(encoded)(_.remove("input").remove("source").add("proposal", Json.False)
-        .add("selection", Json.Null).add("command", Json.False).add("workflowRevision", Json.True))
-      val routingwire = J.allocationSchema + ":" + routing.noSpaces
-      When("only routing is consumed")
+        Set("input", "participantIdentity", "source", "proposal", "planningContext")
+
+      Given("the retained execution mode with unused Start business fields and source removed")
+      val execution = json(take(J.encodeC(record)))
+      val routing = payload(execution)(_.add("input", Json.obj("invocationMode" -> Json.fromString(record.input.invocationMode)))
+        .remove("source").add("proposal", Json.False)
+        .add("selection", Json.Null).add("command", Json.False))
+      val routingwire = raw(routing)
+
+      When("the later owner consumes only its actual saved execution's routing")
       val route = take(J.decodeRoutingC(record.reference, routingwire))
-      Then("reference, native instance and participant remain available")
+
+      Then("its native instance and participant are read without reloading planning bodies")
       route shouldBe record.routing
-      When("fresh preparation needs the absent business input and source")
-      val fresh = J.decodeAllocationC(record.reference, routingwire)
-      Then("missing consumed data fails at its actual reader")
-      fresh.isSuccess shouldBe false
-      When("another physical revision or an old full-record representation is requested")
-      val rejected = Vector(J.decodeAllocationC(record.reference.copy(revision = "2"), wire),
-        J.decodeAllocationC(record.reference, take(J.encodeC(record))))
-      Then("wrong addresses and unsupported representations are not silently projected")
+
+      When("a business reader consumes missing input or an unsupported old allocation representation")
+      val rejected = Vector(J.decodeC(record.reference, routingwire),
+        J.decodeAllocationC(record.reference, take(J.encodeC(record))),
+        J.decodeRoutingC(record.reference, wire),
+        J.decodeAllocationC(record.reference, wire.replace(J.allocationSchema, "sm-workflow.split-phase-typed-start-allocation.v2")))
+
+      Then("these fail at the consuming format or data boundary, without legacy adaptation")
       rejected.foreach(_.isSuccess shouldBe false)
     }
 

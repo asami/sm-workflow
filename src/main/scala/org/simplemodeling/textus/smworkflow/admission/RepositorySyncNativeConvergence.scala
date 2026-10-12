@@ -17,7 +17,7 @@ import WorkflowManagedProcessExecution as E
   * recorded as normal progression. Intermediate recovery and replay guarantees
   * are not supplied here. Push remains non-forcing; actual convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
   enum Effect { case CommitPending, Push, FinalFetch }
@@ -37,7 +37,7 @@ private[smworkflow] object RepositorySyncNativeConvergence {
       Option(value).toRight("Native convergence result is missing").flatMap(_.as[Result].left.map(_.message))
   }
 
-  def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[String] = for {
+  def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     _ <- if (authority != null && (accepted.payload.stage == "ReviewAccepted" ||
         (accepted.payload.stage == "IntegrationValidated" && accepted.payload.mergeHead.isEmpty &&
           accepted.payload.after.nonEmpty))) Consequence.unit
@@ -53,14 +53,10 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     _ <- store.acknowledgeC("convergence-observed")
     completed <- store.closeC(finalStage)
     _ <- store.acknowledgeC("converged")
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, completed)
     result = Result(store.identity, finalStage.payload.root, store.declaration.target.localBranch,
       store.declaration.target.remote, store.declaration.target.remoteBranch,
       finalStage.payload.finalTip.get, finalStage.payload.indexTree.get)
-    terminal <- WorkflowProtocolV1.projectTerminalC(handle, completed, TypedValue(resultCodec.typeIdentity, result),
-      MinimalPresentation("Repository synchronized", "Actual selected local, tracking and remote tips converged with a clean repository."))
-    wire <- WorkflowTerminalJsonV1.encodeC(terminal, resultCodec)
-  } yield wire
+  } yield NativeWorkflowOperationOutput.repositoryComplete(completed.identity.value, result)
 
   private def commitC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[N.Stage] = for {
     _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, accepted)

@@ -117,7 +117,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
 
   private def _operation_c(core: Option[ActionCall.Core], op: GeneratedProvidedApiAbi.Operation,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[Json]] = None): Consequence[spec.OperationDefinition] = {
+    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[NativeWorkflowResultInput.Value]] = None): Consequence[spec.OperationDefinition] = {
     var selected = Option.empty[P.Plan]
     val issued = new IssuedWorkOrderPersistence[S.Request] {
       def putIfAbsentC(value: WorkflowInteraction[S.Request, Nothing]) = _invalid("completion cannot issue work")
@@ -139,7 +139,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
         // actual instance. A second read or copied Plan cannot certify it.
         (plan, completed) match {
           case (Some(value), Some(actual)) =>
-            _ack_c(value.submitted, actual.revision.value.toString).map(OperationResponse.Scalar(_))
+            Consequence.success(NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(value.submitted, actual)))
           case _ => _uncertain("completion response lacks its selected disposition or actual committed instance")
         }
       }
@@ -156,7 +156,10 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
           row <- _row_c(plan, targets)
           storage <- ComponentRecordStorage.bindForCallC(call, targets.storeName, row.collection, DataStore.StringEntryId(row.identity))
           staged <- storage.stageCreateC(row.payload)
-          program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
+          nextFrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
+            SplitPhaseExecutionFrontier.Value.ReasoningCompletion(submitted.continuationId), call)
+          program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(plan.closing)))
         } yield {
           selected = Some(plan)
@@ -167,14 +170,14 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     val instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
       declaration.instances, declaration.continuations)
     val currentinstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
-    WorkflowCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, op, WorkflowJsonCommandRequest.definition,
-      spec.ResponseDefinition.void, codec, ContinuationRuntime.empty, issued, currentinstances, declaration.configuration,
+    WorkflowCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, op, SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation.specification.request,
+      SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation.specification.response, codec, ContinuationRuntime.empty, issued, currentinstances, declaration.configuration,
       () => throw new IllegalStateException("Reasoning completion requires canonical managed UoW"), Some(closing), Some(native),
       descriptiveAttributes = SmWorkflowComponent.SplitPhaseServiceService.SubmitReasoningResultOperation.specification.content.descriptiveAttributes)
   }
 
-  /** The issued work supplies its business query. Actual pre-issue history
-    * selects the source reader; it is not compared to another request copy.
+  /** The issued work supplies its actual pre-issue revision. The business
+    * reference at that revision selects its source without a history scan.
     */
   private def _source_c(work: WorkflowInteraction[S.Request, Nothing], declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[D.Source] = for {
@@ -182,48 +185,39 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     completioncall = core.action.request.service.contains(I.completionOperation.service) &&
       Set(I.completionOperation.operation, SplitPhaseReasoningHumanDirection.completionOperation.operation)
         .contains(core.action.request.operation)
-    current <- CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition, declaration.instances, declaration.continuations)
-      .loadForCallC(declaration.configuration, work.handle.instanceIdentity, core).flatMap {
-        case Some(value) => value.validateC
-        case None => _invalid("canonical reasoning instance is absent")
-      }
-    identity = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.continuationId
-    issueindex = current.history.indexWhere(_.suspension.exists(_.continuationIdentity.value == identity.value))
-    _ <- if (issueindex > 0) Consequence.unit else _invalid("native issued reasoning prefix is absent")
-    before = current.history(issueindex - 1)
+    request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
+    revision <- request.expectedRevision.value.toLongOption.map(value => Consequence.success(
+      org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRevision(value - 1L)))
+      .getOrElse(_invalid("issued reasoning revision is not numeric"))
+    frontierReader <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+    before <- frontierReader.loadForCallC(work.handle.instanceIdentity, revision, core).flatMap(
+      _.map(Consequence.success).getOrElse(_invalid("issued reasoning business source is absent")))
     host = core.component.get.subsystem.get.configuration
-    source <- if (before.causation.value.startsWith("human-resolution:")) for {
-      reader <- SplitPhaseManagedHumanResolutionCheckpoint.bindC(host, declaration, catalog)
-      observed <- (if (completioncall) reader.loadForReasoningCompletionC(core) else reader.loadForCallC(command, core))
-        .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected Human successor is absent")))
-      source <- D.humanResolutionC(observed)
-    } yield source
-    else if (before.causation.value.startsWith("scope-planning:")) for {
-      reader <- SplitPhaseManagedScopePlanningCheckpoint.bindC(host, declaration, catalog)
-      observed <- (if (completioncall) reader.loadForReasoningCompletionC(core) else reader.loadForCallC(command, core))
-        .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected scope successor is absent")))
-      source <- D.scopePlanningC(observed)
-    } yield source
-    else for {
-      reads <- SplitPhasePlanningCheckpointDataStorePort.bindC(host, declaration, catalog)
-      mapping <- reads.loadMappingForCallC(command, core).flatMap {
-        case Some((_, saved)) => Consequence.success(saved)
-        case _ => _invalid("selected original mapping is absent")
-      }
-      reader <- SplitPhaseManagedPlanningCheckpoint.bindC(host, declaration, catalog)
-      source <- mapping.origin match {
-        case _: K.Origin.Mechanical => (if (completioncall) reader.loadMechanicalForReasoningCompletionC(core)
-          else reader.loadMechanicalForCallC(command, core)).flatMap {
-            case Some(value) => D.mechanicalC(value)
-            case None => _invalid("selected mechanical receipt is absent")
-          }
-        case _: K.Origin.PartitionCompletion => (if (completioncall) reader.loadPartitionCompletionForReasoningCompletionC(core)
-          else reader.loadPartitionCompletionForCallC(command, core)).flatMap {
-            case Some(value) => D.partitionCompletionC(value)
-            case None => _invalid("selected partition completion is absent")
-          }
-      }
-    } yield source
+    source <- before match {
+      case _: SplitPhaseExecutionFrontier.Value.HumanResolution => for {
+        reader <- SplitPhaseManagedHumanResolutionCheckpoint.bindC(host, declaration, catalog)
+        observed <- (if (completioncall) reader.loadForReasoningCompletionC(core) else reader.loadForCallC(command, core))
+          .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected Human successor is absent")))
+        source <- D.humanResolutionC(observed)
+      } yield source
+      case _: SplitPhaseExecutionFrontier.Value.ScopePlanning => for {
+        reader <- SplitPhaseManagedScopePlanningCheckpoint.bindC(host, declaration, catalog)
+        observed <- (if (completioncall) reader.loadForReasoningCompletionC(core) else reader.loadForCallC(command, core))
+          .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected scope successor is absent")))
+        source <- D.scopePlanningC(observed)
+      } yield source
+      case SplitPhaseExecutionFrontier.Value.MechanicalPlanning(reference) => for {
+        reader <- SplitPhaseManagedPlanningCheckpoint.bindC(host, declaration, catalog)
+        observed <- reader.loadMechanicalForReferenceC(command, reference, core)
+        source <- D.mechanicalC(observed)
+      } yield source
+      case SplitPhaseExecutionFrontier.Value.PartitionCompletion(identity) =>
+        SplitPhaseManagedTypedPartitionCompletion.observeForCallC(identity, declaration, catalog, core).flatMap {
+          case Some(value) => D.partitionCompletionC(value)
+          case None => _invalid("selected partition completion is absent")
+        }
+      case _ => _invalid("issued reasoning reference has no reasoning source")
+    }
   } yield source
 
   private def _storage_c(core: ActionCall.Core, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -252,10 +246,6 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
 
   private val _field = "splitPhaseReasoningSuccessorPayload"
   private val _prefix = "sm-workflow.reasoning-successor.v1:"
-  private def _ack_c(submitted: ContinuationResult[S.Judgment], revision: String): Consequence[String] =
-    WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](submitted.handle,
-      WorkflowContinuation.Wait(StateMachineRevision(revision), submitted.contextSnapshot,
-        MinimalPresentation("ReasoningResultAdmitted", "Assigned reasoning is saved; Workflow owns the next planning or Human action."))))
   private def _key_c(submitted: ContinuationResult[S.Judgment]): Consequence[String] =
     WorkflowMechanicalTransition.keyC(WorkflowMechanicalTransition.Reference(submitted.continuationId.value,
       submitted.resultReference.revision)).map("reasoning-successor:" + _)

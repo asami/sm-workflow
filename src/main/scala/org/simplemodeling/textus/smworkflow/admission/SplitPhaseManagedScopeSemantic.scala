@@ -1,5 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import cats.syntax.all.*
+
 import io.circe.Json
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall}
@@ -60,7 +62,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
       reads <- D.bindC(core.component.get.subsystem.get.configuration, declaration, catalog)
       mapping <- reads.loadMappingForCallC(command, core)
       routed <- mapping match {
-        case Some((_, saved)) if saved.snapshot.projection.exists {
+        case Some(saved) if saved.snapshot.projection.exists {
             case need: R.ProjectionView.Requirements => need.candidates.exists(_.isInstanceOf[R.CandidateProjectionView.SemanticView])
             case _ => false
           } => for {
@@ -165,16 +167,9 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
     _native_c(core, declaration, catalog).flatMap(native =>
       _operation_c(Some(core), op, port, declaration, catalog, native, Some(result))))
 
-  private def _ack_c(plan: I.Plan, submitted: ContinuationResult[S.Judgment], next: InstanceRecord):
-      Consequence[OperationResponse] =
-    WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](plan.work.handle,
-      WorkflowContinuation.Wait(StateMachineRevision(next.revision.value.toString), submitted.contextSnapshot,
-        MinimalPresentation("HandoffScopeResultAdmitted", "Only the assigned scope reply is committed; planning/application remain unfinished."))))
-      .map(OperationResponse.Scalar(_))
-
   private def _operation_c(core: Option[ActionCall.Core], op: GeneratedProvidedApiAbi.Operation, port: Port,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[Json]] = None): Consequence[spec.OperationDefinition] = {
+    native: WorkflowManagedCompletion[S.Judgment], result: Option[ContinuationResult[NativeWorkflowResultInput.Value]] = None): Consequence[spec.OperationDefinition] = {
     val instances = CallScopedWorkflowInstances.managed(declaration.configuration, catalog.definition,
       declaration.instances, declaration.continuations)
     var selected = Option.empty[(I.Plan, ContinuationResult[S.Judgment], InstanceRecord)]
@@ -196,7 +191,7 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
         selected = None
         captured match {
           case Some((plan, _, _)) => completed match {
-            case Some(actual) => _ack_c(plan, submitted, actual)
+            case Some(actual) => Consequence.success(NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, actual)))
             case None => _uncertain("scope completion has no committed instance")
           }
           case None => _uncertain("scope completion has no selected disposition")
@@ -215,18 +210,21 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
           source <- _source_c(_command(request, work.handle.instanceIdentity.value), declaration, catalog, call)
           plan <- I.prepareC(source)
           next <- I.completedC(plan, submitted)
+          frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
+          nextFrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
+            SplitPhaseExecutionFrontier.Value.ScopeCompletion(submitted.continuationId), call)
         } yield {
           selected = Some((plan, submitted, next))
           val result = StateMachineOperationResult(I.closingType, submitted.resultReference)
-          val program = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
-            ActionExecution.Completed(result))
+          val program = nextFrontier.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+            ActionExecution.Completed(result)))
           WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
         }
       }
     }
     val currentinstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
     WorkflowCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, op,
-      WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, ContinuationRuntime.empty,
+      SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation.specification.request, SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation.specification.response, codec, ContinuationRuntime.empty,
       issued, currentinstances, declaration.configuration,
       () => throw new IllegalStateException("Scope completion must use canonical managed UoW"), Some(closing), Some(native),
       descriptiveAttributes = SmWorkflowComponent.SplitPhaseServiceService.SubmitHandoffScopeResultOperation.specification.content.descriptiveAttributes)

@@ -15,7 +15,7 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _binding = take(T.bindPartitionC(prepared, partition))
@@ -36,24 +36,6 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
   private def pending(plan: I.Plan) = take(P.pendingC(context, facts, prepared, plan.projected, plan.interaction, configuration, catalog))
 
   "Typed partition completion" should {
-    "project the selected disposition from actual committed native state without a planned-body certificate" in {
-      Given("an admitted issued answer and a real native append following its selected completion")
-      val issued = issue
-      val completed = take(P.admitC(pending(issued), result(issued)))
-      val actual = take(completed.next.appendC(completed.next.revision, completed.next.history.last.copy(
-        sequence = HistorySequence(4), revision = InstanceRevision(4), causation = CausationReference("native-observation"))))
-      When("the response projects actual committed state rather than proving equality to the selected Plan")
-      val wire = take(P.committedWireC(completed, actual))
-      val observed = take(WorkflowWaitJsonV1.decodeC(wire))
-      val wait = observed.current.asInstanceOf[WorkflowContinuation.Wait]
-      Then("the actual native revision and original requested disposition are consumed without replacing native history")
-      wait.expectedRevision shouldBe StateMachineRevision(actual.revision.value.toString)
-      wait.expectedRevision should not be StateMachineRevision(completed.next.revision.value.toString)
-      wait.presentation.title shouldBe "HostAllocationRequired"
-      observed.handle shouldBe issued.interaction.handle
-      actual.history.dropRight(1) shouldBe completed.next.history
-    }
-
     "absorb host candidate allocation without another history entry or repeated enumeration" in {
       Given("a privately admitted completion whose next need is candidate allocation")
       val issued = issue
@@ -90,8 +72,6 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       completed.next.currentProgression shouldBe issued.projected.currentProgression
       completed.next.lifecycle shouldBe Lifecycle.Active
       completed.closing.typeReference shouldBe P.closingType
-      val wait = take(WorkflowWaitJsonV1.decodeC(completed.wire)).current.asInstanceOf[WorkflowContinuation.Wait]
-      wait.presentation.title shouldBe "HostAllocationRequired"
     }
 
     "consume saved presentation and diagnostic Context without reconstructing its issued WorkOrder" in {
@@ -149,7 +129,7 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       P.pendingC(context, facts, prepared, issued.projected, crossedissue, configuration, catalog).isSuccess shouldBe false
       P.admitC(null, submitted).isSuccess shouldBe false
       assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionCompletion.Pending(null, null, null, null)")
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionCompletion.Plan(null, null, null, None, null, null, null)")
+      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionCompletion.Plan(null, null, null, None, null, null)")
     }
 
     "retain unresolved human direction without partial enrichment or a fabricated next WorkOrder" in {
@@ -164,8 +144,6 @@ final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matc
       completed.semantic shouldBe a[S.DecisionNeeded]
       completed.mechanical shouldBe None
       completed.next.suspension shouldBe None
-      take(WorkflowWaitJsonV1.decodeC(completed.wire)).current.asInstanceOf[WorkflowContinuation.Wait]
-        .presentation.title shouldBe "HumanDirectionRequired"
       P.admitC(pending(issued), submitted.copy(result = submitted.result.copy(value =
         judgment.copy(estimates = submitted.result.value.estimates)))).isSuccess shouldBe false
     }

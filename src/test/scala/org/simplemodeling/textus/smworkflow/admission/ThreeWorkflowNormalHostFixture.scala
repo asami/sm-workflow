@@ -47,7 +47,7 @@ private[admission] object ThreeWorkflowNormalHostFixture {
         GoalPhaseNativeReview.Policy("independent-review", 1),
         GoalPhaseNativeClosure.Policy("step-commits", 1, Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1)))),
       Repository(RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "owned-upstream", "FULL_STATE"),
-        "selected-repository-closure", RepositorySyncNativeMergeValidation.Policy("repository-checks", 1,
+        RepositorySyncNativeMergeValidation.Policy("repository-checks", 1,
           "required", "Run the selected product check", Vector(RepositorySyncNativeMergeValidation.Check("test", 1))),
         RepositorySyncNativeConflictInput.Policy(Set("docs/phase.md")), RepositorySyncNativeMergeReview.Policy("merge-review", 1)))
   }

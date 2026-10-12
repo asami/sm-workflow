@@ -14,7 +14,7 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseTypedPartitionWorkIssueSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def binding: T.PartitionBound = {
@@ -49,7 +49,12 @@ final class SplitPhaseTypedPartitionWorkIssueSpec extends AnyWordSpec with Match
       plan.projected.history.dropRight(1) shouldBe instance.history
       plan.projected.currentProgression shouldBe instance.currentProgression
       plan.projected.suspension.get.continuationIdentity.value shouldBe work.request.continuationId.value
-      take(WorkflowWorkOrderJsonV1.decodeC(plan.wire, J.requestCodec)) shouldBe plan.interaction
+      val output = take(NativeWorkflowOperationOutput.splitPartitionRequestC(plan.interaction))
+      output.kind shouldBe "Request"
+      output.submitOperation shouldBe Some("submitPartitionSemanticResult")
+      output.submitSessionId shouldBe Some(instance.identity.value)
+      output.partition.get.items.map(_.identity.value) shouldBe Vector("item-1")
+      output.partition.get.boundaries.map(_.edge.afterItem.value) shouldBe Vector("item-0")
       instance.suspension shouldBe None
       I.prepareC(null, allocated).isSuccess shouldBe false
       I.prepareC(bound, null).isSuccess shouldBe false
@@ -59,7 +64,7 @@ final class SplitPhaseTypedPartitionWorkIssueSpec extends AnyWordSpec with Match
       val equivalent = take(I.prepareC(separate, allocated))
       Then("the functional WorkOrder is the same without a binding-identity certificate")
       equivalent.interaction shouldBe plan.interaction
-      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionWorkIssue.Plan(null, null, null, null, null)")
+      assertDoesNotCompile("new org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedPartitionWorkIssue.Plan(null, null, null, null)")
     }
 
     "refuse replacing a constructed current suspension without a legacy fallback" in {

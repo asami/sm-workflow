@@ -82,9 +82,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   final class Port(d: F.Declaration, definition: DefinitionBinding,
     installation: Installation,
     sourceReader: (String, ContinuationIdentity, ActionCall.Core) => Consequence[Source],
-    resume: (Source, O.State, InstanceRecord, Answer, ActionCall.Core) => Consequence[String],
+    resume: (Source, O.State, InstanceRecord, Answer, ActionCall.Core) => Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult],
     acknowledgement: String => Consequence[Unit]) {
-    def advanceC(source: Source, core: ActionCall.Core): Consequence[String] = for {
+    def advanceC(source: Source, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       projected <- prepareC(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using core.executionContext)
@@ -97,7 +97,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       }
       retained <- retainedForPlanC(plan, core)
       wire <- retained match {
-        case None => WorkflowDecisionJsonV1.encodeC(plan.question, inputCodec)
+        case None => NativeWorkflowOperationOutput.goalHumanC(plan.question)
         case Some((state, next, result)) => if (result.result.value.choice == "ResumeAssignedWork")
           resume(source, state, next, result.result.value, core)
         else waitC(next, result)
@@ -144,7 +144,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       val specification = NativeWorkflowDescriptionMetadata.operation(
         SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation)
       def createResultOperationRequestC(incoming: ProtocolRequest,
-        result: ContinuationResult[Json]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
+        result: ContinuationResult[NativeWorkflowResultInput.Value]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
         new CommandAction {
           val request = incoming
           override def commandExecutionMode = CommandExecutionMode.Sync
@@ -196,8 +196,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             _ <- acknowledgement("ordered-human-completed")
             // Managed completion supplies authoritative committed state. The
             // response performs no second store/body/semantic admission.
-            wire <- waitC(actual, result)
-          } yield OperationResponse.Scalar(wire)
+          } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(result, actual))
         }
         val closing = new WorkflowCompletionServiceOperation.ClosingProgram[Answer] {
           def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = {
@@ -206,8 +205,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(expected)))
           }
         }
-        WorkflowDecisionCompletionServiceOperation.bindC(S.providedDefinition, provided, WorkflowJsonCommandRequest.definition,
-          spec.ResponseDefinition.void, codec, questions, instances, closing, native,
+        WorkflowDecisionCompletionServiceOperation.bindC(S.providedDefinition, provided, SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation.specification.request,
+          SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation.specification.response, codec, questions, instances, closing, native,
           SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation.specification.content.descriptiveAttributes)
       }
     } yield bound

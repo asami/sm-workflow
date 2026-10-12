@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 
 /** Selected advance targets passed directly to the native action owner.
   * Not a public decoder, command envelope or additional admission stage.
@@ -14,7 +15,7 @@ private[smworkflow] object NativeWorkflowAdvanceInput {
   sealed trait Resolved
   final case class Goal(instanceIdentity: String) extends Resolved
   final case class Repository(instanceIdentity: String) extends Resolved
-  final case class Split(command: SplitPhaseAdvanceTarget) extends Resolved
+  final case class Split(command: SplitPhaseAdvanceTarget, current: InstanceRecord) extends Resolved
 
   trait Receiver extends spec.OperationDefinition {
     def createAdvanceOperationRequestC(request: Request, input: Resolved): Consequence[OperationRequest]

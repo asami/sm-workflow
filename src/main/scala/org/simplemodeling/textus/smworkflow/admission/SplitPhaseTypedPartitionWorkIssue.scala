@@ -10,12 +10,12 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Pure projection from constructed current facts. Not publication or authority.
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseTypedPartitionWorkIssue {
   final class Plan private[SplitPhaseTypedPartitionWorkIssue] (
     val binding: T.PartitionBound, val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent,
-    val projected: InstanceRecord, val interaction: WorkflowInteraction[S.Request, Nothing], val wire: String)
+    val projected: InstanceRecord, val interaction: WorkflowInteraction[S.Request, Nothing])
 
   def prepareC(binding: T.PartitionBound, allocation: SplitPhasePartitionReplyAllocationPolicy.Allocated): Consequence[Plan] =
     if (binding == null || allocation == null)
@@ -54,7 +54,6 @@ private[smworkflow] object SplitPhaseTypedPartitionWorkIssue {
             required.identity, required.operation, Some(TypedValue(J.requestCodec.typeIdentity, request)),
             required.resultType, bundle, required.metadata.completionContract, required.metadata.evidenceContract,
             owner.completion), owner.requirement, owner.presentation))
-        wire <- J.encodeWorkOrderC(interaction)
-      } yield new Plan(binding, intent, admitted.next, interaction, wire)
+      } yield new Plan(binding, intent, admitted.next, interaction)
     }
 }

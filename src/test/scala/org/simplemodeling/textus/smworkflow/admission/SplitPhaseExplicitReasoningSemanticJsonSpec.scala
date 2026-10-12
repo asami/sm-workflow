@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -163,46 +163,29 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
         resultresults.foreach(_.isLeft shouldBe true)
       }
 
-      "consume passive reasoning Human input without reconstructing native authority from its opaque strings" in {
-        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R18; Example: E38; typed input with opaque saved presentation strings and inert annotations")
-        val input = SplitPhaseReasoningHumanDirection.Input(S.ContextReference("reasoning-context", "1"),
-          "opaque WorkOrder presentation", "opaque result presentation", "opaque frontier presentation")
-        val wire = SplitPhaseReasoningHumanDirection.inputCodec.encode(input)
-        val missing = _object_mutations(wire)
-        val malformed = missing ++ Vector(_rewrite(wire, List("schemaVersion"))(_ => Json.fromString("foreign")),
-          _rewrite(wire, List("payload", "reasoningResult"))(_ => Json.True))
+      "decode reasoning Human business data without reparsing native work and result envelopes" in {
+        Given("a typed request, judgment and planning frontier, with actual work/result references but no native authority")
+        val input = SplitPhaseReasoningHumanDirection.Input(ContinuationIdentity("reasoning-slot"), _request,
+          FrameworkReference("reasoning-result", "1"), _judgment,
+          SplitPhasePlanningCheckpointFixture.capture().record.snapshot)
+        val encoded = SplitPhaseReasoningHumanDirection.inputCodec.encode(input)
+        val keys = Vector("workIdentity", "request", "resultReference", "judgment", "frontier")
+        val missing = keys.map(key => encoded.hcursor.downField("payload").withFocus(_.mapObject(_.remove(key))).top.get)
+        val malformed = missing ++ Vector(_rewrite(encoded, List("schemaVersion"))(_ => Json.fromString("foreign")),
+          _rewrite(encoded, List("payload", "judgment"))(_ => Json.True))
 
-        When("the passive codec consumes typed data and the actual evidence-target boundary consumes the opaque source")
-        val restored = SplitPhaseReasoningHumanDirection.inputCodec.decode(_with_unused_fields(wire))
+        When("the existing business codecs consume the nested data and ignore passive extension annotations")
+        val restored = SplitPhaseReasoningHumanDirection.inputCodec.decode(_with_unused_fields(encoded))
         val refused = malformed.map(SplitPhaseReasoningHumanDirection.inputCodec.decode)
         val target = NativeHostSplitAnswerScope.reasoningTargetC(input, _frame().handle)
 
-        Then("unused fields survive without premature semantic re-admission while missing typed data and unusable actual targets refuse")
+        Then("business data survives once and the actual host target uses its work/reference rather than a native wire copy")
         restored shouldBe Right(input)
-        missing.nonEmpty shouldBe true
         refused.foreach(_.isLeft shouldBe true)
-        target.isSuccess shouldBe false
-      }
-
-      "consume both stopped terminal alternatives without treating passive annotations as transitions" in {
-        Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R18; Example: E38; Blocked and Cancelled terminal data without a native instance")
-        val values = Vector(SplitPhaseHumanTerminal.Outcome.Blocked, SplitPhaseHumanTerminal.Outcome.Cancelled).map(outcome =>
-          SplitPhaseHumanTerminal.Result(outcome, S.ContextReference("reasoning-context", "1"),
-            ContinuationIdentity("human-slot"), FrameworkReference("human-answer", "1")))
-        val wires = values.map(value => take(SplitPhaseHumanTerminal.encodeC(value)))
-        val malformed = wires.flatMap(_object_mutations) ++ Vector(
-          _rewrite(wires.head, List("payload", "outcome"))(_ => Json.fromString("CONTINUE")),
-          _rewrite(wires.head, List("payload", "answer", "revision"))(_ => Json.fromInt(1)),
-          _rewrite(wires.head, List("schemaVersion"))(_ => Json.fromString("foreign")))
-
-        When("the terminal data reader consumes annotated values and malformed required fields")
-        val restored = wires.map(value => SplitPhaseHumanTerminal.payloadCodec.decode(_with_unused_fields(value)))
-        val refused = malformed.map(SplitPhaseHumanTerminal.payloadCodec.decode)
-
-        Then("the declared stopped meanings remain closed without a native append consent or executable capability")
-        restored shouldBe values.map(Right(_))
-        malformed.nonEmpty shouldBe true
-        refused.foreach(_.isLeft shouldBe true)
+        encoded.noSpaces should not include "reasoningWork"
+        encoded.noSpaces should not include "reasoningResult"
+        target.isSuccess shouldBe true
+        target.toOption.get.hcursor.downField("work").get[String]("continuationId").toOption shouldBe Some("reasoning-slot")
       }
 
       "decode declared passive Human interpretation data independently of presentation diagnostic and unused fields" in {

@@ -146,7 +146,7 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       val saved = capture().record
       val identity = ContinuationIdentity("実例:[]\"\\")
       val variants = Vector(saved.copy(checkpoint = None), saved.copy(header = None),
-        saved.copy(before = saved.next), saved.copy(wire = "unused stored response diagnostic"),
+        saved.copy(before = saved.next),
         saved.copy(start = saved.start.copy(instanceIdentity = WorkflowInstancePersistence.InstanceIdentity("foreign"))),
         saved.copy(checkpoint = saved.checkpoint.map(k => k.copy(reference = k.reference.copy(identity = "caller-selected")))))
       When("the existing frame codec preserves typed data without repeating native admission")
@@ -159,7 +159,6 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       Then("consumed result planning and presentation data remain available while physical address bounds still apply")
       decoded.map(_.completion.result.result.value) shouldBe variants.map(_.completion.result.result.value)
       decoded.map(_.checkpoint.map(_.snapshot)) shouldBe variants.map(_.checkpoint.map(_.snapshot))
-      decoded.map(_.wire) shouldBe variants.map(_.wire)
       keys.map(take(_)).distinct.size shouldBe 1
       invalidkeys.foreach(_.isSuccess shouldBe false)
       absentplan.isSuccess shouldBe false

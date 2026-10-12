@@ -13,6 +13,7 @@ import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseReasoningHumanDirection as H,
   SplitPhaseHumanDirectionAnswerContract as A, SplitPhaseHumanAnswerVerification as V,
   SplitPhaseHumanReasoningResolution as R, SplitPhasePlanningSnapshot as S,
@@ -100,22 +101,15 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     observed <- _observe_c(plan, completion, completion.result, declaration, core)
   } yield observed
 
-  def terminalC(observed: Observed): Consequence[String] = for {
+  def terminalC(observed: Observed): Consequence[org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceResult] = for {
     outcome <- observed.completion.result.result.value match {
       case A.Answer.Defer => Consequence.success(SplitPhaseHumanTerminal.Outcome.Blocked)
       case A.Answer.Cancel => Consequence.success(SplitPhaseHumanTerminal.Outcome.Cancelled)
       case _ => _invalid("resolved interpretation is not a stopped terminal")
     }
     answer = observed.completion.result
-    result = SplitPhaseHumanTerminal.Result(outcome, observed.plan.source.request.context,
-      answer.continuationId, answer.resultReference)
-    handle <- WorkflowHandle.fromRecordC(answer.handle.componentIdentity, observed.current)
-    terminal <- WorkflowProtocolV1.projectTerminalC(handle, observed.current,
-      TypedValue(SplitPhaseHumanTerminal.payloadCodec.typeIdentity, result),
-      MinimalPresentation("SplitPhase " + outcome.toString, "The recorded Human direction ended the reasoning split run.",
-        reason = Some(outcome.toString)))
-    wire <- WorkflowTerminalJsonV1.encodeC(terminal, SplitPhaseHumanTerminal.payloadCodec)
-  } yield wire
+  } yield NativeWorkflowOperationOutput.splitStopped(observed.current.identity.value,
+    if (outcome == SplitPhaseHumanTerminal.Outcome.Blocked) "BLOCKED" else "CANCELLED", answer.resultReference)
 
   private def _fresh_c(plan: H.Plan, submitted: ContinuationResult[A.Answer], resolution: Option[R.Record],
     downstream: Option[S.Record], next: InstanceRecord,
@@ -129,42 +123,32 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
     row <- _row_c(submitted, resolution, downstream, targets)
     target <- ComponentRecordStorage.bindForCallC(core, targets.storeName, row.collection, DataStore.StringEntryId(row.identity))
     staged <- target.stageCreateC(row.payload)
+    frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+    nextFrontier <- frontier.stageCreateForCallC(next.identity, next.revision,
+      SplitPhaseExecutionFrontier.Value.ReasoningHumanAnswer(submitted.continuationId), core)
     bound <- {
       val codec = new WorkflowCompletionServiceOperation.Codec[A.Answer] {
         val resultTypeIdentity = A.resultType
         def decodeC(request: Request) = Consequence.success(submitted)
         def encodeC(resume: ContinuationRuntime.Resume) = _invalid("answer acknowledgement needs committed readback")
         override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[A.Answer],
-          completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
-          val readback = for {
-            actual <- completed.map(Consequence.success).getOrElse(_uncertain("canonical committed instance is absent"))
-            _ <- if (resume != null && resume.result != null) Consequence.unit
-              else _uncertain("canonical committed closing result is absent")
-            _ <- observation()
-            // The successor row is staged with the native completion in the
-            // same managed program. Project the owning commit, not a second
-            // load/recalculation and equality proof of the emitted bodies.
-            retained = WorkflowCompletionRecordJsonV1.Record(actual.revision, result, Some(resume.result))
-            wire <- _ack_c(new Observed(plan, retained, resolution, downstream, actual, actual))
-          } yield OperationResponse.Scalar(wire)
-          readback match {
-            case Consequence.Success(value) => Consequence.success(value)
-            case _ => _uncertain("committed answer readback is not established; observe later without resubmitting")
-          }
-        }
+          completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
+          actual <- completed.map(Consequence.success).getOrElse(_uncertain("canonical committed instance is absent"))
+          _ <- observation()
+        } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(result, actual))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[A.Answer] {
         def selectC(result: ContinuationResult[A.Answer], current: InstanceRecord) = {
           // Native selection and managed completion own the actual issued
           // result, predecessor, suspension and CAS. This owning call already
           // admitted independent Human direction; staging is not publication.
-          val program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          val program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(StateMachineOperationResult(H.closingType, result.resultReference))))
           Consequence.success(WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next)))
         }
       }
       WorkflowDecisionCompletionServiceOperation.bindC(SplitPhaseDefinitionBinding.providedDefinition, operation,
-        WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
+        SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation.specification.request, SmWorkflowComponent.SplitPhaseServiceService.SubmitSplitHumanDirectionOperation.specification.response, codec, questions, instances, closing, native)
     }
   } yield bound
 
@@ -235,13 +219,6 @@ private[smworkflow] object SplitPhaseManagedReasoningHumanCompletion {
   private def _native_c(storage: WorkflowComponentStorage): Consequence[WorkflowManagedDecisionCompletion[A.Answer]] =
     storage.bindDecisionCompletionC(H.completionOperation, H.inputCodec, A.payloadCodec, H.closingType,
       (_, _) => Consequence.success(Vector.empty))
-  private def _ack_c(observed: Observed): Consequence[String] = for {
-    completion <- WorkflowCompletionRecordJsonV1.encodeC(observed.completion, A.payloadCodec)
-    question <- WorkflowDecisionJsonV1.encodeC(observed.plan.question, H.inputCodec)
-  } yield Json.obj("schemaVersion" -> Json.fromString(SplitPhaseManagedHumanCompletion.responseSchema),
-    "completingRevision" -> Json.fromLong(observed.completion.instanceRevision.value),
-    "currentRevision" -> Json.fromLong(observed.current.revision.value),
-    "issuedDecision" -> Json.fromString(question), "completion" -> Json.fromString(completion)).noSpaces
   private def _invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase managed reasoning Human " + reason)
   private def _uncertain[T](reason: String): Consequence[T] = DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
 }

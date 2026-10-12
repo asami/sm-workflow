@@ -8,21 +8,19 @@ import SplitPhaseTypedStartHumanVerification.StartContext
 /** Human consent to the actual Start target, not a stored command/definition
   * or unchanged source-body certificate. No later Apply/command grant follows.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeHostSplitStartScope {
   def bindingC(value: StartContext): Consequence[Json] = {
     if (value == null || value.componentInstance == null || value.start == null)
       return Consequence.stateConflict("Human Start has no actual owner/input")
     val r = value.start
-    if (r.reference == null || r.instanceIdentity == null || r.input == null ||
+    if (r.input == null ||
         r.source == null || r.source.reference == null || r.source.phase == null ||
         r.source.authority == null || r.proposal == null || r.proposal.exists(p => p == null || p.reference == null))
       return Consequence.stateConflict("Human Start has no actual invocation/source target")
     Consequence.success(Json.obj("componentInstance" -> Json.fromString(value.componentInstance.canonicalKey),
       "startAttestation" -> Json.obj(
-        "reference" -> reference(r.reference.identity, r.reference.revision),
-        "instanceIdentity" -> Json.fromString(r.instanceIdentity.value),
         "participantIdentity" -> Json.fromString(r.participantIdentity),
         "input" -> SplitPhaseTypedStartJsonV1.inputJson(r.input),
         "source" -> Json.obj("reference" -> reference(r.source.reference.identity, r.source.reference.revision),
@@ -37,8 +35,7 @@ private[smworkflow] object NativeHostSplitStartScope {
       root <- obj(binding)
       owner <- text(root, "componentInstance")
       target <- at(root, "startAttestation")
-      fields <- strings(target, Vector("instanceIdentity", "participantIdentity"))
-      ref <- at(target, "reference").flatMap(NativeHostHumanScope.referenceTarget)
+      fields <- strings(target, Vector("participantIdentity"))
       request <- at(target, "input")
       requestFields <- strings(request, Vector("sourcePhaseIdentity", "invocationMode"))
       proposalInput <- optionalText(request, "proposalReference")
@@ -51,7 +48,7 @@ private[smworkflow] object NativeHostSplitStartScope {
         case Some(value) => obj(value).flatMap(NativeHostHumanScope.referenceTarget)
       }
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "startAttestation" -> Json.fromJsonObject(
-      fields.add("reference", ref).add("input", Json.fromJsonObject(
+      fields.add("input", Json.fromJsonObject(
         requestFields.add("proposalReference", proposalInput.map(Json.fromString).getOrElse(Json.Null))))
         .add("source", Json.obj("reference" -> sourceRef, "phase" -> Json.fromString(phase), "authority" -> authority))
         .add("proposal", proposal)))

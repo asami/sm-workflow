@@ -5,10 +5,33 @@ RepositorySync assemblies together. Use the official development CAR/classpath
 and the ordinary CNCF launcher. Factory composition does not start a workflow,
 install initial records, initialize a second pool or grant a process command.
 
-## Current Phase 5.2 composition — minimal public Operation contract
+## Current Phase5.3 composition — common business Operation loop
+
+The normal factory still installs exactly fifteen provided Operations using
+current public CNCF services and the Subsystem-owned storage/process facilities.
+Start receives named typed input and optional proposed sessionId, then returns
+the actual execution ID. Advance receives that sessionId. Submit receives that
+sessionId and its declared result/answer, completion data and genuine reference
+where required. All outputs are declared business Values carried as structured
+RecordResponse; subsequent work is selected only by explicit Advance.
+
+See the complete [current contract](common-workflow-operation-loop.md).
+Current revisions are goal-phase-business-operation-v6,
+split-phase-business-operation-v14 and repository-sync-business-operation-v12.
+No positional JSON-string endpoint, caller ambiguity-selector path or alternate
+legacy business interface remains. Current native business references resolve
+the execution and pending task; independent executions can share one chat.
+Host selection/permission/effect and actual native transaction owners remain.
+
+Phase5.2 is formally released at8e87c18647a712be909470224ac05aca52f5d799.
+Phase5.3 is active and unaccepted; current generation/compile observations do
+not establish passing tests, Step/Phase acceptance or release.
+
+## Historical Phase 5.2 composition — minimal public Operation contract
 
 This section and the normal configuration/caller/Operation contract below
-govern Phase 5.2. Dated C4–C16 results retain their original input scope.
+describe Phase5.2's then-current input scope, not the Phase5.3 interface.
+Dated C4–C16 results retain their original input scope.
 Current-feature validation06 passed26 suites/194 tests for the C18–C29 migration.
 The initial connected Step review found remaining raw-reader and manual migration
 items. C30 removes those items; its affected validation is not yet executed.
@@ -191,82 +214,37 @@ common storage/process bootstrap, retaining the ingress-resolved actor, session
 and UnitOfWork. ExecutionContext.create() alone is not authentication or an effect
 grant. A direct invocation needs no launcher process.
 
-With one associated target, advance needs no JSON argument:
+Use the returned execution ID as a named parameter:
 
 ```scala
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Property, Request}
 val response = owner.executeOperationResponseInContext(
   Request.of(component = component.name, service = "SplitPhaseService",
-    operation = "advanceSplitPhase"),
+    operation = "advanceSplitPhase",
+    properties = List(Property("sessionId", started.sessionId, None))),
   actor
 )
 ```
 
-Optional arg1 JSON contains only necessary sessionIdentity (host has no session),
-instanceIdentity (several associated targets) or Split contextIdentity (several
-applicable contexts). Identity is routing, not permission. Workflow never chooses
-the latest/first row or consumes caller stage, argv or receipt.
-
-Start and completion require a JSON string in arg1, as argument or named property.
-The reader consumes that carrier, not unused Request properties, switches or
-format diagnostics. Those cannot grant authority. Optional absence is distinct
-from a supplied non-string/null value or ambiguous actual arg1 carriers.
+Start supplies named input and optional proposed sessionId. Submit supplies named
+sessionId/result or answer, plus the genuine reference/completion/evidence fields.
+Declared business Values, Records and existing transport JSON are interpreted
+once; unused diagnostic properties do not provide authority. No optional
+input-free Advance or ambiguity-selection interface remains.
 
 ### Fifteen normal Operations
 
-| Service | Operation | Consumed business input |
-| --- | --- | --- |
-| GoalPhaseService | startGoalPhase | input: phaseIdentity, repositoryIdentity |
-| GoalPhaseService | advanceGoalPhase | No argument normally; necessary session/instance selector only |
-| GoalPhaseService | submitGoalPhaseWorkResult | result.value: assigned implementation/repair/review result; actual reference/evidence |
-| GoalPhaseService | submitGoalPhaseOrderedDecision | result.value: choice and rationale; actual Human reference/evidence |
-| SplitPhaseService | startSplitPhase | input: sourcePhaseIdentity, invocationMode, optional proposalReference |
-| SplitPhaseService | advanceSplitPhase | No argument normally; necessary session/instance/context selector only |
-| SplitPhaseService | submitPartitionSemanticResult | result.value: requested unknown estimates and boundary judgment |
-| SplitPhaseService | submitHandoffScopeResult | result.value: requested scope judgment |
-| SplitPhaseService | submitSplitHumanDirection | result.value: Human choice and interpretation-data reference when applicable; actual Human reference/evidence |
-| SplitPhaseService | submitReasoningResult | result.value: requested unknown-item classification |
-| RepositorySyncService | startRepositorySync | input: repositoryIdentity, localBranch, trackingRemote, trackingBranch, remoteEndpointIdentity, syncMode |
-| RepositorySyncService | advanceRepositorySync | No argument normally; necessary session/instance selector only |
-| RepositorySyncService | submitRepositorySyncWorkResult | result.value: assigned conflict judgment; actual reference/evidence |
-| RepositorySyncService | submitNativeMergeReview | result.value: assigned independent review; actual reference/evidence |
-| RepositorySyncService | submitRepositoryConflictDecision | result.value: Human conflict answer; actual reference/evidence |
+The complete names, declared business types, response types and loop semantics
+are in [the current contract](common-workflow-operation-loop.md). CML and
+generated metadata are authoritative. Every normal Advance takes sessionId.
+Every Submit returns actual accepted/outcome/message after commit. Obtain next
+work with explicit Advance, not by dispatching stages in a client.
 
-For example, Split Start is
-`{"input":{"sourcePhaseIdentity":"PHASE-2","invocationMode":"PREVIEW"}}`.
-Host selection resolves allocation and participant. Add selectionIdentity only
-for genuine selection ambiguity, not a generated command or a consent claim.
-
-### Requested results, not copied controls
-
-The caller performs issued semantic work and returns its result to the named
-completion Operation. result.value uses that Operation's semantic payload format.
-Do not echo handle, run, expected revision, model, context snapshot, participant
-or the issued question. The session resolves current pending work; requestIdentity
-only distinguishes applicable pending targets and grants no permission to another
-session or historical generation.
-
-Partition, scope and reasoning completions resolve assigned result destinations
-internally and need no result.reference echo. Supply their actual semantic evidence
-once in the judgment. Other completions consume a genuinely needed result/evidence
-reference under result.reference. Independent Human/review evidence must actually
-exist; it cannot be fabricated from a question or selected profile.
-completionFacts defaults to none; omitted executionEvidence means no observed
-executor evidence, not invented actor/model/context. Unused diagnostics are not
-commands, grants or an alternate legacy API.
-
-Responses are JSON strings in OperationResponse.Scalar: actual WorkOrder, Decision,
-Wait, Terminal or Operation-specific acknowledgement. Completion acknowledgement
-is not a final outcome. Invoke owning advance again; Workflow absorbs mechanical
-progression and returns only next semantic work, wait or terminal.
-
-GoalPhase ResumeAssignedWork, Defer and Cancel cannot replace the Plan or refund
-repair allowance. Split ALL-Built is not a Human task. Document-conflict handlers
-are unavailable, not successful wait/terminal. Git, product checks and document
-writes are real managed effects on configured targets with bounded permissions.
-Duplicate answers, unique winner, identical replay, complete history and
-intermediate recovery are outside current guarantees. Restart is a NEW invocation
-from the beginning while avoiding destructive overwrite of existing files.
+Structured outputs use existing OperationResponse.RecordResponse with generated
+ValueReader consumption, not native WorkOrder/Decision/Wait/Terminal JSON String.
+Actual independently issued Human/reviewer evidence and process permission
+remain distinct from semantic interpretation. Three Split semantic completions
+resolve their assigned destination; no caller echoes native work/context controls.
 
 ### Scoped evidence and remaining Phase 5.2 work
 

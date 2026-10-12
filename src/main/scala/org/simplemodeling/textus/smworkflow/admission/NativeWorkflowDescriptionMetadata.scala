@@ -5,13 +5,13 @@ import org.goldenport.value.BaseContent
 
 /** Descriptions come only from the actual generated CML declaration. This is
   * not a replacement metadata source or a capability/handler installation.
-  * Runtime JSON decoding, responses and bound operation objects stay native.
+  * Generated named parameter/output contracts stay attached to real binders.
   * @since   Oct.  7, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeWorkflowDescriptionMetadata {
   def operation(declared: spec.OperationDefinition): spec.OperationDefinition.Specification =
-    operation(declared.specification, spec.ResponseDefinition.void)
+    operation(declared.specification, declared.specification.response)
 
   /** The caller supplies its existing response contract. Registration and
     * Human/recovery operations already expose generated typed responses;
@@ -19,7 +19,7 @@ private[smworkflow] object NativeWorkflowDescriptionMetadata {
     */
   def operation(declared: spec.OperationDefinition.Specification,
     response: spec.ResponseDefinition): spec.OperationDefinition.Specification =
-    operation(declared, response, WorkflowJsonCommandRequest.definition)
+    operation(declared, response, declared.request)
 
   def operation(declared: spec.OperationDefinition.Specification,
     response: spec.ResponseDefinition, request: spec.RequestDefinition): spec.OperationDefinition.Specification =

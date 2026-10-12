@@ -15,7 +15,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, GoalPhaseStartResult}
 import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 
@@ -53,7 +53,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     current: InstanceRecord)
 
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
-    val typeIdentity = "GoalPhaseStartResult"
+    val typeIdentity = "GoalPhaseNativeStartRecord"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
@@ -65,20 +65,14 @@ private[smworkflow] object GoalPhaseNativeRun {
     } yield payload
   }
 
-  def identityC(selectionIdentity: String, invocationIdentity: String): Consequence[InstanceIdentity] = {
-    if (selectionIdentity == null || invocationIdentity == null)
-      return invalid("selected invocation is missing")
-    val id = InstanceIdentity("goal-phase:" + token(selectionIdentity) + ":" + token(invocationIdentity))
-    WorkflowMechanicalTransition.keyC(reference(id.value)).map(_ => id)
-  }
-
   def startC(input: GoalPhaseStartInput, selected: ProfileStartAdmission.Selection,
-    d: Declaration, definition: DefinitionBinding, plans: PlanPort, core: ActionCall.Core): Consequence[String] = for {
+    d: Declaration, definition: DefinitionBinding, plans: PlanPort, core: ActionCall.Core): Consequence[GoalPhaseStartResult] = for {
     storage <- bindC(d, definition, core)
     _ <- if (plans != null && input != null && selected != null) Consequence.unit
       else invalid("Start business input or plan source is missing")
     _ <- GoalPhaseParticipantAdmission.admitC(selected.participantIdentity, core.executionContext)
-    identity <- identityC(selected.selectionId, selected.idempotencyKey)
+    identity <- core.executionContext.security.session.flatMap(_.sessionId).map(value =>
+      Consequence.success(InstanceIdentity(value))).getOrElse(invalid("Start requires its canonical sessionId"))
     admitted <- plans.loadForCallC(selected.selectionId, core).flatMap {
       case Some(value) if value.selectionIdentity == selected.selectionId &&
           value.participantIdentity == selected.participantIdentity => Consequence.success(value)
@@ -105,8 +99,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     saved <- starts.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(identity.value),
       active, active.revision, history(active, "phase.Implementation", "ordered-goal-plan-saved:" + identity.value),
       TypedValue(codec.typeIdentity, payload)), empty)(using core.executionContext)
-    wire <- waitC(saved.receipt.next, "Ordered Phase selected", "The complete plan and original native base are saved; Step and Phase closure remain unfinished.")
-  } yield wire
+  } yield GoalPhaseStartResult(saved.receipt.next.identity.value, "started",
+    "Started Phase " + input.phaseIdentity + " in " + input.repositoryIdentity +
+      ". The selected plan is saved; Advance selects the first work.")
 
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     storage <- bindC(d, definition, core)
@@ -120,11 +115,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         p.branch == d.target.localBranch && p.plan.phase == d.input.phaseIdentity && p.plan.repository == d.input.repositoryIdentity)
       Consequence.unit else invalid("retained original plan scope differs from the host")
     _ <- GoalPhaseParticipantAdmission.admitC(p.participantIdentity, core.executionContext)
-    instances <- storage.bindInstancesC()(using core.executionContext)
-    current <- instances.loadC(InstanceIdentity(identity))(using core.executionContext).flatMap {
-      case Some(value) => Consequence.success(value)
-      case None => invalid("native ordered instance is missing")
-    }
+    current = started.current
     root <- G.rootC(core)
     branch <- G.branchC(core)
     _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
@@ -167,12 +158,10 @@ private[smworkflow] object GoalPhaseNativeRun {
     HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, Lifecycle.Active,
       Some(ProgressionReference(progression)), from.correlation, CausationReference(cause),
       from.derivedCompositeOccurrence, from.committedPredecessor, None)
-  def waitC(record: InstanceRecord, title: String, detail: String): Consequence[String] = for {
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, record)
-    wire <- WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
-      WorkflowContinuation.Wait(StateMachineRevision(record.revision.value.toString),
-        ContextSnapshot(record.definition.workflowRevision.value), MinimalPresentation(title, detail))))
-  } yield wire
+  def waitC(record: InstanceRecord, title: String, detail: String):
+    Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
+    Consequence.success(NativeWorkflowOperationOutput.goalWait(record.identity.value, title + ": " + detail,
+      record.currentProgression.map(_.value).getOrElse("pending")))
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase native run: " + reason)
   private def token(value: String) = URLEncoder.encode(value, UTF_8)
   private def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")

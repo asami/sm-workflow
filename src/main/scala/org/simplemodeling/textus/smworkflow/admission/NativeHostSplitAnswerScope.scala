@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Json, JsonObject, parser}
+import io.circe.{Json, JsonObject}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -13,7 +13,7 @@ import SplitPhaseHumanDirectionAnswerContract as A
   * question/frontier/Result transport copy certificate. Original issued meaning
   * and resolution interpretation remain owned by their Workflow records.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeHostSplitAnswerScope {
   def bindingC(value: AnswerContext): Consequence[Json] = {
@@ -33,7 +33,7 @@ private[smworkflow] object NativeHostSplitAnswerScope {
             "checkpoint" -> ref(input.checkpoint.identity, input.checkpoint.revision),
             "scopeCheckpoint" -> ref(input.scopeCheckpoint.identity, input.scopeCheckpoint.revision)))
           case input: SplitPhaseReasoningHumanDirection.Input if q.input.get.typeIdentity == SplitPhaseReasoningHumanDirection.inputCodec.typeIdentity && input.context != null =>
-            reasoningSource(ref(input.context.identity, input.context.revision), input.reasoningWork, input.reasoningResult)
+            reasoningSource(input)
           case _ => Left("Split Human evidence has no actual Scope or Reasoning target")
         }
         val direction = r.result.value match {
@@ -75,7 +75,7 @@ private[smworkflow] object NativeHostSplitAnswerScope {
   // Kept signature for the native issued-source consumer, not a handle certificate.
   def reasoningTargetC(input: SplitPhaseReasoningHumanDirection.Input, handle: WorkflowHandle): Consequence[Json] =
     if (input == null || input.context == null) invalid("reasoning question target is absent")
-    else reasoningSource(ref(input.context.identity, input.context.revision), input.reasoningWork, input.reasoningResult)
+    else reasoningSource(input)
       .fold(Consequence.stateConflict(_), Consequence.success)
 
   private def questionTarget(input: JsonObject): Either[String, Json] = for {
@@ -109,26 +109,20 @@ private[smworkflow] object NativeHostSplitAnswerScope {
       .add("source", source).add("authority", authority).add("demand", demand).add("items", Json.fromValues(ids.map(Json.fromString)))))
   } yield selected
 
-  private def reasoningSource(context: Json, workRaw: String, resultRaw: String): Either[String, Json] = for {
-    work <- parsed(workRaw)
-    result <- parsed(resultRaw)
-    request <- at(work, "request")
-    typed <- at(request, "input")
-    payload <- at(typed, "value")
-    input <- at(payload, "payload")
-    fields <- strings(request, Vector("continuationId"))
-    source <- at(input, "source").flatMap(referenceTarget)
-    authority <- at(input, "authority").flatMap(referenceTarget)
-    demand <- at(input, "demand").flatMap(referenceTarget)
-    items <- input("items").flatMap(_.asArray).toRight("Split reasoning items must be an array")
-    ids <- items.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty))((prior, row) => for {
-      values <- prior
-      item <- obj(row)
-      id <- at(item, "identity").flatMap(text(_, "value"))
-    } yield values :+ Json.fromString(id))
-    reference <- at(result, "result").flatMap(at(_, "reference")).flatMap(referenceTarget)
-  } yield Json.obj("kind" -> Json.fromString("reasoning"), "context" -> context, "result" -> reference, "work" -> Json.fromJsonObject(fields
-    .add("source", source).add("authority", authority).add("demand", demand).add("items", Json.fromValues(ids))))
+  private def reasoningSource(input: SplitPhaseReasoningHumanDirection.Input): Either[String, Json] =
+    if (input == null || input.request == null || input.workIdentity == null || input.resultReference == null)
+      Left("Split reasoning question target is absent")
+    else {
+      val request = input.request
+      Right(Json.obj("kind" -> Json.fromString("reasoning"),
+        "context" -> ref(request.context.identity, request.context.revision),
+        "result" -> ref(input.resultReference.identity, input.resultReference.revision),
+        "work" -> Json.obj("continuationId" -> Json.fromString(input.workIdentity.value),
+          "source" -> ref(request.source.identity, request.source.revision),
+          "authority" -> ref(request.authority.identity, request.authority.revision),
+          "demand" -> ref(request.demand.identity, request.demand.revision),
+          "items" -> Json.fromValues(request.items.map(item => Json.fromString(item.identity.value))))))
+    }
 
   private def answerTarget(input: JsonObject): Either[String, Json] = for {
     reference <- at(input, "reference").flatMap(referenceTarget)
@@ -145,7 +139,5 @@ private[smworkflow] object NativeHostSplitAnswerScope {
       fields <- prior
       value <- text(value, key)
     } yield fields.add(key, Json.fromString(value)))
-  private def parsed(raw: String): Either[String, JsonObject] =
-    Option(raw).toRight("Split reasoning target is absent").flatMap(v => parser.parse(v).left.map(_.message)).flatMap(obj)
   private def invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("Split Human attestation " + reason)
 }

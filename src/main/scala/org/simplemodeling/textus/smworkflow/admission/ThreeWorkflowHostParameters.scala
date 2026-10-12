@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
   val schema = "sm-workflow.three-workflow-host.v1"
@@ -27,7 +27,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
   final case class Goal(input: GoalPhaseStartInput, candidatePaths: Vector[String],
     stepValidation: GoalPhaseNativeValidation.Policy, phaseValidation: GoalPhaseNativeValidation.Policy,
     review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy)
-  final case class Repository(input: RepositorySyncStartInput, closureSelection: String,
+  final case class Repository(input: RepositorySyncStartInput,
     validation: RepositorySyncNativeMergeValidation.Policy, conflicts: RepositorySyncNativeConflictInput.Policy,
     review: RepositorySyncNativeMergeReview.Policy)
   final case class Definition(schemaVersion: String, target: Target, goal: Goal, repository: Repository)
@@ -78,10 +78,9 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
         persistence.continuations, settings.repository.input, target)
-      selections <- RepositorySyncHostSelectionReadPolicy.bindC(creation.configuration, repository)
       ports = new ThreeWorkflowHostEvidencePorts(evidence)
-      closure = GoalPhaseNativeRepositoryClosure.Installation(repository, settings.repository.closureSelection,
-        selections, ports.phaseClosure, settings.repository.validation, ports.convergence,
+      closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
+        ports.phaseClosure, settings.repository.validation, ports.convergence,
         settings.repository.conflicts, Some(RepositorySyncNativeMergeReview.Installation(settings.repository.review,
           ports.repositoryReview)), Some(RepositorySyncHumanConflict.Installation(ports.repositoryHuman)))
       goal = GoalPhaseNativeRun.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

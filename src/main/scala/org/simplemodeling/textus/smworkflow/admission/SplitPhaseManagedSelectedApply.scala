@@ -12,6 +12,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{HistoryEntry, H
   ProgressionReference, CausationReference, InstanceRecord}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
+import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapshotJsonV1 as J,
   SplitPhaseManagedPlanningFrontier as F, SplitPhasePlanningCheckpointPreparation as K,
   SplitPhaseSelectedDocumentEffect as E}
@@ -23,41 +24,36 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseManagedSelectedApply {
-  val schema = "sm-workflow.split-phase-selected-application.v1"
   val appliedProgression = "entry.Applied"
   val terminalPrefix = "selected-application-completed:"
-  val payloadCodec: WorkflowResultJsonV1.PayloadCodec[Json] = new WorkflowResultJsonV1.PayloadCodec[Json] {
-    val typeIdentity = "SplitPhaseAdvanceResult"
-    def encode(value: Json): Json = value
-    def decode(value: Json): Either[String, Json] = Option(value).filter(v =>
-      v.hcursor.get[String]("schemaVersion").contains(schema) && v.hcursor.get[String]("mode").contains("APPLY") &&
-      v.hcursor.downField("effect").get[String]("status").contains("applied"))
-      .toRight("Selected SplitPhase application receipt differs")
-  }
-
-  def advanceC(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core,
-    observation: () => Consequence[Unit] = () => Consequence.unit): Consequence[String] = for {
-    original <- F.loadForAdvanceC(command, declaration, catalog, core)
-    result <- advanceObservedC(command, original, declaration, catalog, core, observation)
-  } yield result
+  private val _effect_status_codec: WorkflowResultJsonV1.PayloadCodec[E.Status] =
+    new WorkflowResultJsonV1.PayloadCodec[E.Status] {
+      val typeIdentity = "SplitPhaseSelectedDocumentEffectStatus"
+      def encode(value: E.Status): Json = Json.fromString(value.toString)
+      def decode(value: Json): Either[String, E.Status] =
+        value.asString.flatMap(status => E.Status.values.find(_.toString == status))
+          .toRight("Selected document effect status is absent")
+    }
 
   def advanceObservedC(command: SplitPhaseAdvanceTarget, original: F.Observed,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
-    core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[String] = for {
+    core: ActionCall.Core, observation: () => Consequence[Unit]): Consequence[V.SplitPhaseAdvanceResult] = for {
     storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
       SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition), declaration.instances, declaration.continuations)
     intentions <- storage.bindMechanicalC(K.advanceOperation, J.payloadCodec)
-    effects <- storage.bindMechanicalC(K.advanceOperation, payloadCodec)
+    effects <- storage.bindMechanicalC(K.advanceOperation, _effect_status_codec)
     intentReference = WorkflowMechanicalTransition.Reference(command.instanceIdentity + ":selected-application-intent", "1")
     effectReference = WorkflowMechanicalTransition.Reference(command.instanceIdentity + ":selected-application-effect", "1")
     intentEntry = history(original.current, Lifecycle.Active, Some(E.applyingProgression),
       "selected-application-intent:" + command.instanceIdentity)
     intentTransition = WorkflowMechanicalTransition.Intent(declaration.configuration, intentReference, original.current,
       original.current.revision, intentEntry, TypedValue(J.payloadCodec.typeIdentity, original.snapshot))
-    intentResult <- intentions.executeC(intentTransition, empty)(using core.executionContext)
+    frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+    intentFrontier <- frontier.stageCreateForCallC(original.current.identity, intentEntry.revision,
+      SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
+    intentResult <- intentions.executeC(intentTransition, intentFrontier)(using core.executionContext)
     intent = intentResult.receipt.next
-    source <- F.loadForAdvanceC(command, declaration, catalog, core)
+    source = F.afterTransition(original, intent)
     actualPreparation <- E.prepareC(source, command.context.identity, command.context.revision)
     effected <- E.applyC(actualPreparation, core)
     _ <- effected.status match {
@@ -66,22 +62,20 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
       case _ => uncertain("document application did not return an applied result")
     }
     _ <- observation()
-    projected <- SplitPhaseManagedSelectedPreview.projectC(source.snapshot, command.context.identity, command.context.revision)
-    payload = projected.deepMerge(Json.obj("schemaVersion" -> Json.fromString(schema), "mode" -> Json.fromString("APPLY"),
-      "effect" -> effected.payload))
+    publicResult <- NativeWorkflowOperationOutput.splitSelectedC(source.snapshot, actualPreparation.projection, "APPLY", Some("applied"))
     effectEntry = history(intent, Lifecycle.Active, Some(appliedProgression),
       "selected-application-effect:" + command.instanceIdentity)
     effectTransition = WorkflowMechanicalTransition.Intent(declaration.configuration, effectReference, intent, intent.revision,
-      effectEntry, TypedValue(payloadCodec.typeIdentity, payload))
-    applied <- effects.executeC(effectTransition, empty)(using core.executionContext)
+      effectEntry, TypedValue(_effect_status_codec.typeIdentity, effected.status))
+    appliedFrontier <- frontier.stageCreateForCallC(intent.identity, effectEntry.revision,
+      SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
+    applied <- effects.executeC(effectTransition, appliedFrontier)(using core.executionContext)
     instances <- storage.bindInstancesC()(using core.executionContext)
     completed <- instances.appendC(applied.receipt.next.identity, applied.receipt.next.revision,
       history(applied.receipt.next, Lifecycle.Completed, None, terminalPrefix + command.instanceIdentity))(using core.executionContext)
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, completed)
-    terminal <- WorkflowProtocolV1.projectTerminalC(handle, completed, TypedValue(payloadCodec.typeIdentity, payload),
-      MinimalPresentation("SplitPhase Applied", "The selected source sections and child documents were applied and read back."))
-    wire <- WorkflowTerminalJsonV1.encodeC(terminal, payloadCodec)
-  } yield wire
+    _ <- frontier.createForCallC(completed.identity, completed.revision,
+      SplitPhaseExecutionFrontier.Value.SelectedApply(intentReference), core)
+  } yield NativeWorkflowOperationOutput.splitSelected(completed.identity.value, publicResult)
 
   private def history(current: InstanceRecord, lifecycle: Lifecycle, progression: Option[String], cause: String): HistoryEntry =
     HistoryEntry(HistorySequence(current.history.size.toLong + 1L), current.revision.next, lifecycle,

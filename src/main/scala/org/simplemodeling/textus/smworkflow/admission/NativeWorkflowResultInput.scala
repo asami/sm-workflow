@@ -1,118 +1,120 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
-import io.circe.Json
+import scala.reflect.ClassTag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
+import org.simplemodeling.textus.smworkflow.value as V
 
-/** Normal result ingress resolves issued control context, not caller echoes.
-  * Normal answers resolve the currently pending request; an explicit identity
-  * may select an associated issued request. Duplicate/delayed-answer handling
-  * is not a sm-workflow guarantee.
-  * Existing completion owns result meaning, state, scope, authority and CAS.
-  * The host performs issued semantic work and returns its result; Workflow
-  * does not have to invoke an AI runtime to consume that answer.
+/** Named business results address one execution's current assignment directly.
+  * Native completion consumes the typed result and owns its state, scope,
+  * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeWorkflowResultInput {
-  val schema = "sm-workflow.result-submission.v1"
+  type Value = GoalPhaseNativeWork.Result | GoalPhaseOrderedHumanDecision.Answer |
+    SplitPhaseExplicitPartitionSemantic.Judgment | SplitPhaseScopeSemantic.Judgment |
+    SplitPhaseExplicitReasoningSemantic.Judgment | SplitPhaseHumanDirectionAnswerContract.Answer |
+    RepositorySyncConflictSemantic.Result | RepositorySyncNativeMergeReview.Result |
+    RepositorySyncHumanConflict.Answer
+
+
   trait Receiver extends spec.OperationDefinition {
     final def createOperationRequest(request: Request): Consequence[OperationRequest] =
       _invalid("completion requires its resolved result input")
     def createResultOperationRequestC(request: Request,
-      result: ContinuationResult[Json]): Consequence[OperationRequest]
+      result: ContinuationResult[Value]): Consequence[OperationRequest]
   }
 
-  /** Ordinary execution data for completion queries, not an admission seal. */
   private trait ResolvedAction extends CommandAction {
-    def resolvedResult: ContinuationResult[Json]
+    def resolvedResult: ContinuationResult[Value]
   }
-
-  def resolvedC(core: ActionCall.Core): Consequence[ContinuationResult[Json]] = core.action match {
+  def resolvedC(core: ActionCall.Core): Consequence[ContinuationResult[Value]] = core.action match {
     case action: ResolvedAction => Consequence.success(action.resolvedResult)
     case _ => _invalid("completion query has no resolved result input")
   }
 
-  def typedC[A](result: ContinuationResult[Json], codec: WorkflowResultJsonV1.PayloadCodec[A]):
-      Consequence[ContinuationResult[A]] = codec.decode(result.result.value).fold(_invalid(_), value =>
-    Consequence.success(ContinuationResult(result.handle, result.runId, result.continuationId,
-      result.expectedRevision, result.contextSnapshot, TypedValue(result.result.typeIdentity, value),
-      result.resultReference, result.completionFacts, result.evidence)))
+  // The concrete completion consumes its business type without serialization
+  // or a second JSON decoder. This is the private heterogeneous callback bridge.
+  def typedC[A: ClassTag](result: ContinuationResult[Value], codec: WorkflowResultJsonV1.PayloadCodec[A]):
+      Consequence[ContinuationResult[A]] =
+    summon[ClassTag[A]].unapply(result.result.value) match {
+      case Some(value) => Consequence.success(ContinuationResult(result.handle, result.runId, result.continuationId,
+        result.expectedRevision, result.contextSnapshot, TypedValue(result.result.typeIdentity, value),
+        result.resultReference, result.completionFacts, result.evidence))
+      case None => _invalid("completion requires business value " + codec.typeIdentity)
+    }
 
-  private def _resolved_action(command: CommandAction, result: ContinuationResult[Json]): CommandAction =
+  private def _resolved_action(command: CommandAction, result: ContinuationResult[Value]): CommandAction =
     new ResolvedAction {
       val request = command.request
       val resolvedResult = result
       override def commandExecutionMode = command.commandExecutionMode
       def createCall(core: ActionCall.Core): ActionCall = command.createCall(core)
     }
-  private final case class Submission(identity: Option[String], session: Option[String], value: Json,
-    reference: Option[Json], facts: Json, evidence: Json)
+  private final case class Submission(session: String, value: Value,
+    reference: Option[ContextReference], facts: Vector[ContextReference], evidence: ExecutionEvidence)
   private final case class Assigned(handle: WorkflowHandle, request: ContinuationRequest[?])
   private final case class Target(operation: StateMachineOperationIdentity,
-    contracts: () => Consequence[Vector[String]],
-    load: (WorkflowComponentStorage, ContinuationIdentity, org.goldenport.cncf.context.ExecutionContext) => Consequence[Assigned])
+    readC: Request => Consequence[Value],
+    load: (WorkflowComponentStorage, ContinuationIdentity, ExecutionContext) => Consequence[Assigned])
 
   def goal(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
-      Vector(_work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, () =>
-        _contracts_c(Vector("ImplementStep", "ReviewStep", "RepairStep", "ReviewPhase").map(kind =>
-          () => GoalPhaseNativeWork.requiredC(kind)))),
-        _decision(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec,
-          () => _contracts_c(Vector(() => GoalPhaseOrderedHumanDecision.requiredC)))))
+      Vector(
+        _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result").map[Value](value =>
+            GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings))),
+        _decision(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.GoalPhaseOrderedDecisionAnswer](request, "answer").map[Value](value =>
+            GoalPhaseOrderedHumanDecision.Answer(value.choice, value.rationale)))))
 
   def repository(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: RepositorySyncManagedFetch.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
-      Vector(_work(RepositorySyncNativeConflictContinuation.completionOperation, RepositorySyncConflictSemantic.inputCodec,
-          () => _contracts_c(Vector(() => RepositorySyncDefinitionBinding.conflictOperationC))),
-        _work(RepositorySyncNativeMergeReviewContinuation.completionOperation, RepositorySyncNativeMergeReview.inputCodec,
-          () => _contracts_c(Vector(() => RepositorySyncDefinitionBinding.nativeReviewOperationC))),
-        _decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec,
-          () => _contracts_c(Vector(() => RepositorySyncDefinitionBinding.humanConflictOperationC)))))
+      Vector(
+        _work(RepositorySyncNativeConflictContinuation.completionOperation, RepositorySyncConflictSemantic.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncConflictResult](request, "result").map[Value](value =>
+            RepositorySyncConflictSemantic.Result(value.decision, value.resolutions.map(_resolution), value.rationale))),
+        _work(RepositorySyncNativeMergeReviewContinuation.completionOperation, RepositorySyncNativeMergeReview.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeReviewResult](request, "result").map[Value](value =>
+            RepositorySyncNativeMergeReview.Result(value.decision, value.rationale, value.findings.map(f =>
+              RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale))))),
+        _decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncHumanConflictAnswer](request, "answer").map[Value](value =>
+            RepositorySyncHumanConflict.Answer(value.choice, value.resolutions.map(_resolution), value.rationale)))))
 
   def split(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: SplitPhaseManagedStartAssembly.Declaration, definition: DefinitionBinding): spec.ServiceDefinition = {
-    val humancontracts = () => _contracts_c(Vector(() => SplitPhaseDefinitionBinding.humanDirectionOperationC,
-      () => SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC))
-    val human = Target(SplitPhaseNativeHumanDirection.completionOperation, humancontracts, (storage, identity, context) =>
+    val human = Target(SplitPhaseNativeHumanDirection.completionOperation, _human_c, (storage, identity, context) =>
       if (SplitPhaseManagedReasoningHumanCompletion.isReasoning(identity))
-        _decision(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseReasoningHumanDirection.inputCodec, humancontracts)
+        _decision(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseReasoningHumanDirection.inputCodec, _human_c)
           .load(storage, identity, context)
-      else _decision(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseNativeHumanDirection.inputCodec, humancontracts)
+      else _decision(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseNativeHumanDirection.inputCodec, _human_c)
         .load(storage, identity, context))
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
-      Vector(_work(SplitPhaseExplicitPartitionContext.completionOperation, SplitPhaseExplicitPartitionSemanticJson.requestCodec,
-          () => _contracts_c(Vector(() => SplitPhaseDefinitionBinding.partitionSemanticOperationC))),
-        _work(SplitPhaseTypedScopeWorkIssue.completionOperation, SplitPhaseScopeSemanticJson.requestCodec,
-          () => _contracts_c(Vector(() => SplitPhaseDefinitionBinding.scopeSemanticOperationC))),
-        _work(SplitPhaseTypedReasoningWorkIssue.completionOperation, SplitPhaseExplicitReasoningSemanticJson.requestCodec,
-          () => _contracts_c(Vector(() => SplitPhaseDefinitionBinding.reasoningSemanticOperationC))), human))
+      Vector(
+        _work(SplitPhaseExplicitPartitionContext.completionOperation, SplitPhaseExplicitPartitionSemanticJson.requestCodec, _partition_c),
+        _work(SplitPhaseTypedScopeWorkIssue.completionOperation, SplitPhaseScopeSemanticJson.requestCodec, _scope_c),
+        _work(SplitPhaseTypedReasoningWorkIssue.completionOperation, SplitPhaseExplicitReasoningSemanticJson.requestCodec, _reasoning_c),
+        human))
   }
 
-  private def _contracts_c(required: Vector[() => Consequence[StateMachineRequiredOperation]]): Consequence[Vector[String]] =
-    required.foldLeft(Consequence.success(Vector.empty[String])) { (acc, operation) =>
-      for {
-        prior <- acc
-        current <- operation()
-      } yield prior :+ current.metadata.completionContract.identity
-    }
-
   private def _work[W](operation: StateMachineOperationIdentity,
-    codec: WorkflowResultJsonV1.PayloadCodec[W], contracts: () => Consequence[Vector[String]]): Target =
-      Target(operation, contracts, (storage, identity, context) =>
+    codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
+    Target(operation, read, (storage, identity, context) =>
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case order: WorkflowContinuation.WorkOrder[?] => Consequence.success(Assigned(value.handle, order.request))
@@ -122,8 +124,8 @@ private[smworkflow] object NativeWorkflowResultInput {
       })
 
   private def _decision[W](operation: StateMachineOperationIdentity,
-    codec: WorkflowResultJsonV1.PayloadCodec[W], contracts: () => Consequence[Vector[String]]): Target =
-      Target(operation, contracts, (storage, identity, context) =>
+    codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
+    Target(operation, read, (storage, identity, context) =>
       storage.bindDecisionC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case question: WorkflowContinuation.Decision[?] => Consequence.success(Assigned(value.handle, question.request))
@@ -145,31 +147,16 @@ private[smworkflow] object NativeWorkflowResultInput {
   private final class Operation(original: spec.OperationDefinition, creation: ComponentCreate, configuration: Configuration,
     instances: DataStore.CollectionId, continuations: DataStore.CollectionId, definition: DefinitionBinding,
     target: Target) extends spec.OperationDefinition {
-    val specification = original.specification
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
-      WorkflowJsonCommandRequest.inputC(request).flatMap {
-        case Some(raw) => io.circe.parser.parse(raw) match {
-          case Right(json) =>
-            _submission_c(json).map(value => BoundAction(request, value, original, creation, configuration,
-              instances, continuations, definition, target))
-          case Left(_) => _invalid("result input must be JSON")
-        }
-        case _ => _invalid("result requires one JSON input")
-      }
-  }
-
-  private def _submission_c(json: Json): Consequence[Submission] = {
-    val decoded = for {
-      identity <- json.hcursor.get[Option[String]]("requestIdentity").left.map(_.message)
-      session <- json.hcursor.get[Option[String]]("sessionIdentity").left.map(_.message)
-      result <- json.hcursor.get[Json]("result").left.map(_.message)
-      value <- result.hcursor.get[Json]("value").left.map(_.message)
-    } yield Submission(identity, session, value, result.hcursor.downField("reference").focus,
-      json.hcursor.downField("completionFacts").focus.getOrElse(Json.arr()),
-      json.hcursor.downField("executionEvidence").focus.getOrElse(Json.obj(
-        "references" -> Json.arr(), "workerIdentity" -> Json.Null,
-        "modelIdentity" -> Json.Null, "skillDispatch" -> Json.Null)))
-    decoded.fold(_invalid(_), Consequence.success)
+    val specification = NativeWorkflowDescriptionMetadata.operation(original)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] = for {
+      session <- NativeWorkflowOperationInput.textC(request, "sessionId")
+      value <- target.readC(request)
+      reference <- NativeWorkflowOperationInput.optionalValueC[V.WorkflowArtifactReference](request, "resultReference")
+      facts <- NativeWorkflowOperationInput.vectorC[V.WorkflowArtifactReference](request, "completionFacts")
+      evidence <- NativeWorkflowOperationInput.optionalValueC[V.WorkflowExecutionEvidence](request, "executionEvidence")
+        .flatMap(_evidence_c)
+    } yield BoundAction(request, Submission(session, value, reference.map(_reference), facts.map(_reference), evidence),
+      original, creation, configuration, instances, continuations, definition, target)
   }
 
   private final case class BoundAction(request: Request, submission: Submission, original: spec.OperationDefinition,
@@ -179,27 +166,33 @@ private[smworkflow] object NativeWorkflowResultInput {
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       private var _delegate: Option[ActionCall] = None
-      def execute(): Consequence[OperationResponse] =
-        for {
-          context <- NativeWorkflowSessionInput.contextC(executionContext, submission.session)
-          storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, configuration,
-            Vector(definition), instances, continuations)
-          identity <- _identity_c(storage, definition, target, submission, context)
-          assigned <- target.load(storage, identity, context)
-          submitted <- _result_c(assigned, submission)
-          operation <- original match {
-            case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)
-            case _ => _invalid("completion has no resolved result receiver")
-          }
-          result <- operation match {
-            case command: CommandAction =>
-              val action = _resolved_action(command, submitted)
-              val call = action.createCall(core.copy(action = action, executionContext = context))
-              _delegate = Some(call)
-              call.execute()
-            case _ => _invalid("result completion is not a command Operation")
-          }
-        } yield result
+      def execute(): Consequence[OperationResponse] = for {
+        context <- NativeWorkflowSessionInput.contextC(executionContext, Some(submission.session))
+        storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, configuration,
+          Vector(definition), instances, continuations)
+        binding <- storage.bindInstancesC()(using context)
+        current <- binding.loadC(InstanceIdentity(submission.session))(using context).flatMap {
+          case Some(value) => Consequence.success(value)
+          case None => _invalid("result session has no native execution")
+        }
+        identity <- current.suspension.map(value => Consequence.success(
+          ContinuationIdentity(value.continuationIdentity.value)))
+          .getOrElse(_invalid("result session has no pending assignment"))
+        assigned <- target.load(storage, identity, context)
+        submitted <- _result_c(assigned, submission)
+        operation <- original match {
+          case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)
+          case _ => _invalid("completion has no resolved result receiver")
+        }
+        result <- operation match {
+          case command: CommandAction =>
+            val action = _resolved_action(command, submitted)
+            val call = action.createCall(core.copy(action = action, executionContext = context))
+            _delegate = Some(call)
+            call.execute()
+          case _ => _invalid("result completion is not a command Operation")
+        }
+      } yield result
       override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
         val selected = _delegate
         _delegate = None
@@ -208,80 +201,108 @@ private[smworkflow] object NativeWorkflowResultInput {
     }
   }
 
-  private def _identity_c(storage: WorkflowComponentStorage, definition: DefinitionBinding, target: Target,
-    submission: Submission, context: ExecutionContext): Consequence[ContinuationIdentity] =
-    context.security.session.flatMap(_.sessionId) match {
-      case None => _invalid("result requires its actual workflow session")
-      case Some(session) => for {
-        binding <- storage.bindInstancesC()(using context)
-        instances <- binding.findBySessionC(session, definition.workflowIdentity)(using context)
-        contracts <- target.contracts()
-        // Result ingress resolves currently pending work only. No completed
-        // generation scan, delayed-answer certificate or replay lookup.
-        identities = instances.flatMap(_.suspension.toVector)
-          .filter(boundary => contracts.contains(boundary.completion.value))
-          .map(_.continuationIdentity.value).distinct
-        selected <- NativeWorkflowSessionInput.selectC(identities, submission.identity, identity => identity, "issued request")
-      } yield ContinuationIdentity(selected)
-    }
-
-  private def _result_c(assigned: Assigned, submission: Submission): Consequence[ContinuationResult[Json]] = {
+  private def _result_c(assigned: Assigned, submission: Submission): Consequence[ContinuationResult[Value]] = {
     val request = assigned.request
     request.resultType.map(_.value).map { resulttype =>
-      for {
-        reference <- _result_reference_c(request, submission)
-        facts <- _references(submission.facts).fold(_invalid(_), Consequence.success)
-        evidence <- _evidence(submission.evidence).fold(_invalid(_), Consequence.success)
-      } yield ContinuationResult(assigned.handle, request.runId, request.continuationId,
+      _result_reference_c(request, submission.reference).map(reference =>
+        ContinuationResult(assigned.handle, request.runId, request.continuationId,
           request.expectedRevision, request.context.snapshot, TypedValue(resulttype, submission.value),
-          reference, facts, evidence)
+          reference, submission.facts, submission.evidence))
     }.getOrElse(_invalid("issued result has no declared result type"))
   }
 
-  private def _references(json: Json): Either[String, Vector[ContextReference]] =
-    json.asArray.toRight("result references must be an array").flatMap(_.foldLeft[
-      Either[String, Vector[ContextReference]]](Right(Vector.empty)) { (prior, value) => for {
-      accumulated <- prior
-      identity <- value.hcursor.get[String]("identity").left.map(_.message)
-      revision <- value.hcursor.get[String]("revision").left.map(_.message)
-    } yield accumulated :+ ContextReference(identity, revision) })
+  private def _result_reference_c(request: ContinuationRequest[?],
+    supplied: Option[ContextReference]): Consequence[ContextReference] = request.input.map(_.value) match {
+    case Some(value: SplitPhaseExplicitPartitionSemantic.Request) =>
+      Consequence.success(ContextReference(value.reply.result.identity, value.reply.result.revision))
+    case Some(value: SplitPhaseScopeSemantic.Request) =>
+      Consequence.success(ContextReference(value.result.identity, value.result.revision))
+    case Some(value: SplitPhaseExplicitReasoningSemantic.Request) =>
+      Consequence.success(ContextReference(value.result.identity, value.result.revision))
+    case _ => supplied.map(Consequence.success).getOrElse(
+      _invalid("completion requires its actual result or evidence reference"))
+  }
 
-  private def _evidence(json: Json): Either[String, ExecutionEvidence] = for {
-    references <- _references(json.hcursor.downField("references").focus.getOrElse(Json.arr()))
-    worker <- json.hcursor.get[Option[String]]("workerIdentity").left.map(_.message)
-    execution <- json.hcursor.downField("execution").focus.filterNot(_.isNull) match {
-      case None => Right(None)
-      case Some(value) => for {
-        placement <- value.hcursor.get[String]("placement").left.map(_.message)
-        selected <- ExecutionPlacement.values.find(_.value == placement).toRight("unsupported execution placement")
-        origin <- value.hcursor.get[String]("originContextIdentity").left.map(_.message)
-        executor <- value.hcursor.get[String]("executorContextIdentity").left.map(_.message)
-        profile <- value.hcursor.get[String]("profileIdentity").left.map(_.message)
-      } yield Some(ExecutionObservation(selected, origin, executor, profile))
-    }
-  } yield ExecutionEvidence(references, worker,
-    json.hcursor.downField("modelIdentity").focus.flatMap(_.asString), execution = execution)
+  private def _reference(value: V.WorkflowArtifactReference): ContextReference =
+    ContextReference(value.identity, value.revision)
 
-  /** The actual stored assignment owns these three result destinations. An old
-    * echoed reference is unused input, not a selector or an equality certificate.
-    * Other completions consume a caller's real result/artifact/evidence locator.
-    */
-  private def _result_reference_c(request: ContinuationRequest[?], submission: Submission): Consequence[ContextReference] =
-    request.input.map(_.value) match {
-      case Some(value: SplitPhaseExplicitPartitionSemantic.Request) =>
-        Consequence.success(ContextReference(value.reply.result.identity, value.reply.result.revision))
-      case Some(value: SplitPhaseScopeSemantic.Request) =>
-        Consequence.success(ContextReference(value.result.identity, value.result.revision))
-      case Some(value: SplitPhaseExplicitReasoningSemantic.Request) =>
-        Consequence.success(ContextReference(value.result.identity, value.result.revision))
-      case _ => submission.reference match {
-        case Some(reference) =>
-          val decoded = for {
-            identity <- reference.hcursor.get[String]("identity").left.map(_.message)
-            revision <- reference.hcursor.get[String]("revision").left.map(_.message)
-          } yield ContextReference(identity, revision)
-          decoded.fold(_invalid(_), Consequence.success)
-        case None => _invalid("completion requires its actual result or evidence reference")
+  private def _evidence_c(value: Option[V.WorkflowExecutionEvidence]): Consequence[ExecutionEvidence] = value match {
+    case None => Consequence.success(ExecutionEvidence(Vector.empty, None, None))
+    case Some(value) =>
+      val observation = value.execution match {
+        case None => Consequence.success(Option.empty[ExecutionObservation])
+        case Some(actual) => ExecutionPlacement.values.find(_.value == actual.placement)
+          .map(placement => Consequence.success(Some(ExecutionObservation(placement,
+            actual.originContextIdentity, actual.executorContextIdentity, actual.profileIdentity))))
+          .getOrElse(_invalid("unsupported execution placement"))
+      }
+      observation.map(execution => ExecutionEvidence(value.references.map(_reference),
+        value.workerIdentity, value.modelIdentity, execution = execution))
+  }
+
+  private def _resolution(value: V.RepositorySyncConflictResolution): RepositorySyncConflictSemantic.Resolution =
+    RepositorySyncConflictSemantic.Resolution(value.conflictIdentity, value.text)
+
+  private def _enum_c[A](values: Array[A], value: String): Consequence[A] =
+    values.find(_.toString == value).map(Consequence.success)
+      .getOrElse(_invalid("unknown business alternative " + value))
+
+  private def _partition_c(request: Request): Consequence[Value] = {
+    import SplitPhaseExplicitPartitionSemantic as S
+    import SplitPhaseExplicitProposalPrecheck as P
+    for {
+      value <- NativeWorkflowOperationInput.valueC[V.SplitPhasePartitionSemanticResult](request, "result")
+      decision <- _enum_c(S.Decision.values, value.decision)
+      boundaries <- value.boundaries.foldLeft(Consequence.success(Vector.empty[S.BoundaryJudgment])) { (prior, boundary) =>
+        for {
+          accumulated <- prior
+          disposition <- _enum_c(SplitPhasePartitionEnumeration.EdgeDisposition.values, boundary.disposition)
+        } yield accumulated :+ S.BoundaryJudgment(P.WorkItemIdentity(boundary.afterItem.value), disposition, boundary.rationale)
+      }
+    } yield S.Judgment(decision, value.rationale, value.estimates.map(e =>
+      S.NovelEstimate(P.WorkItemIdentity(e.identity.value), e.minimumMinutes, e.maximumMinutes,
+        e.assumptions, e.noveltyBasis)), boundaries, value.evidence.map(e => S.EvidenceReference(e.identity, e.revision)))
+  }
+
+  private def _scope_c(request: Request): Consequence[Value] = {
+    import SplitPhaseScopeSemantic as S
+    import SplitPhaseExplicitProposalPrecheck as P
+    for {
+      value <- NativeWorkflowOperationInput.valueC[V.SplitPhaseScopeSemanticResult](request, "result")
+      decision <- _enum_c(S.Decision.values, value.decision)
+    } yield S.Judgment(decision, value.rationale, value.scopes.map(scope =>
+      S.Scope(SplitPhaseExplicitBoundaryValidation.HandoffIdentity(scope.handoff.value),
+        scope.producingItems.toVector.map(i => P.WorkItemIdentity(i.value)),
+        scope.receivingItems.toVector.map(i => P.WorkItemIdentity(i.value)), scope.rationale)),
+      value.evidence.toVector.map(e => SplitPhaseExplicitPartitionSemantic.EvidenceReference(e.identity, e.revision)))
+  }
+
+  private def _reasoning_c(request: Request): Consequence[Value] = {
+    import SplitPhaseExplicitReasoningSemantic as S
+    import SplitPhaseExplicitProposalPrecheck as P
+    for {
+      value <- NativeWorkflowOperationInput.valueC[V.SplitPhaseReasoningSemanticResult](request, "result")
+      decision <- _enum_c(S.Decision.values, value.decision)
+      assignments <- value.assignments.foldLeft(Consequence.success(Vector.empty[S.Assignment])) { (prior, item) =>
+        for {
+          accumulated <- prior
+          classification <- _enum_c(S.Classification.values, item.classification)
+        } yield accumulated :+ S.Assignment(P.WorkItemIdentity(item.identity.value), classification, item.rationale)
+      }
+    } yield S.Judgment(decision, value.rationale, assignments,
+      value.evidence.map(e => SplitPhaseExplicitPartitionSemantic.EvidenceReference(e.identity, e.revision)))
+  }
+
+  private def _human_c(request: Request): Consequence[Value] =
+    NativeWorkflowOperationInput.valueC[V.SplitPhaseHumanDirectionAnswer](request, "answer").flatMap { value =>
+      import SplitPhaseHumanDirectionAnswerContract.Answer
+      value.choice.value match {
+        case "ProvideResolution" => value.resolution.map(reference => Consequence.success[Value](
+          Answer.ProvideResolution(SplitPhaseExplicitPartitionSemantic.ContextReference(reference.identity, reference.revision))))
+          .getOrElse(_invalid("Human ProvideResolution requires its resolution reference"))
+        case "Defer" => Consequence.success(Answer.Defer)
+        case "Cancel" => Consequence.success(Answer.Cancel)
+        case _ => _invalid("Human answer is not a declared choice")
       }
     }
 

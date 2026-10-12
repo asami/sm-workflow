@@ -13,7 +13,7 @@ import ProfileStartAdmission.{Selection, SelectionOrigin}
 
 /**
  * @since   Oct. 11, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 12, 2026
  */
 final class NativeWorkflowStartInputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
@@ -84,10 +84,10 @@ final class NativeWorkflowStartInputSpec extends AnyWordSpec with Matchers with 
       }
       When("the current principal requests the business input without a selector")
       val actual = cases.map { (input, binding, selected) =>
-        take(selectC(Vector(selected), input, "actual-principal", binding, None))
+        take(admitSelectedC(selected, input, "actual-principal", binding))
       }
-      Then("the owning stored selections supply their internal identities and invocation keys")
-      actual shouldBe cases.map(_._3)
+      Then("each direct business entry authorizes the actual requested target without caller control echoes")
+      actual shouldBe Vector.fill(cases.size)(())
     }
 
     "not select another actor, target, workflow or a diagnostic claim of human consent" in {
@@ -100,22 +100,22 @@ final class NativeWorkflowStartInputSpec extends AnyWordSpec with Matchers with 
         selected.copy(selectedInput = Some(TypedValue(Kind.GoalPhase.inputType,
           goalJson.mapObject(_.add("phaseIdentity", Json.fromString("another-phase")))))))
       When("the actual principal requests the original Goal business target")
-      val actual = selectC(records, business.head._3, "actual-principal", binding, None)
+      val actual = records.map(admitSelectedC(_, business.head._3, "actual-principal", binding))
       Then("none is an associated Start selection")
-      actual shouldBe a[Consequence.Failure[?]]
+      actual.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
-    "ask for a selector only when matching stored alternatives are genuinely ambiguous" in {
-      Given("two human selections of the same business target")
-      val binding = definition(Kind.GoalPhase)
-      val first = record(Kind.GoalPhase, goalJson, binding)
-      val second = first.copy(selectionId = "selected-2", idempotencyKey = "another-stored-invocation")
-      When("the caller omits a selector or explicitly chooses the second associated record")
-      val ambiguous = selectC(Vector(first, second), business.head._3, "actual-principal", binding, None)
-      val chosen = take(selectC(Vector(first, second), business.head._3, "actual-principal", binding, Some(second.selectionId)))
-      Then("ambiguity is not silently resolved by ordering, while the actual selected alternative is returned")
-      ambiguous shouldBe a[Consequence.Failure[?]]
-      chosen shouldBe second
+    "address each family, participant and business target with a direct host-entry key" in {
+      Given("the three actual business inputs and another participant requesting the same target")
+      val keys = business.map { (_, _, input) => NativeWorkflowStartBusinessKey(input, "actual-principal") }
+      When("Workflow constructs the host-entry address from its consumed business values")
+      val anotheractor = NativeWorkflowStartBusinessKey(business.head._3, "another-principal")
+      val anothertarget = NativeWorkflowStartBusinessKey(Goal(GoalPhaseStartInput("phase-3", "repository")), "actual-principal")
+      Then("separate families, participants and targets do not require candidate lookup or a public selector")
+      keys.distinct.size shouldBe 3
+      keys.head should not be anotheractor
+      keys.head should not be anothertarget
+      NativeWorkflowStartBusinessKey(business.head._3, "actual-principal") shouldBe keys.head
     }
 
     "use a genuine proposal choice without requiring its saved authority or source snapshot" in {
@@ -127,10 +127,12 @@ final class NativeWorkflowStartInputSpec extends AnyWordSpec with Matchers with 
       val input = take(decodeC(Kind.SplitPhase, proposal))
       val malformed = splitJson.mapObject(_.add("proposalReference", Json.fromBoolean(true)))
       When("the caller requests that actual proposal without an internal allocation command")
-      val chosen = take(selectC(Vector(first, second), input, "actual-principal", binding, None))
+      val chosen = admitSelectedC(second, input, "actual-principal", binding)
+      val wrongtarget = admitSelectedC(first, input, "actual-principal", binding)
       val invalid = decodeC(Kind.SplitPhase, malformed)
       Then("the proposal selects its owning record without redundant control input, and its consumed type must be valid")
-      chosen shouldBe second
+      chosen.isSuccess shouldBe true
+      wrongtarget shouldBe a[Consequence.Failure[?]]
       invalid shouldBe a[Consequence.Failure[?]]
     }
   }

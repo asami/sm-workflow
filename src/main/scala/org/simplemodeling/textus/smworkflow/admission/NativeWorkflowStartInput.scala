@@ -7,12 +7,13 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.DefinitionBindin
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
-import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
+import org.goldenport.record.Record
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, SplitPhaseStartInput, RepositorySyncStartInput}
 
 /** Business inputs and current selection lookup for the normal Start route.
   * No command echo, transport reconstruction or independent admission stamp.
   * @since   Oct. 11, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeWorkflowStartInput {
   enum Kind(val operation: StateMachineOperationIdentity, val inputType: String) {
@@ -43,6 +44,15 @@ private[smworkflow] object NativeWorkflowStartInput {
       selection: ProfileStartAdmission.Selection): Consequence[OperationRequest]
   }
 
+  def fromRecordC(kind: Kind, record: Record): Consequence[BusinessInput] = kind match {
+    case Kind.GoalPhase => GoalPhaseStartInput.createC(record).map(Goal(_))
+    case Kind.SplitPhase => SplitPhaseStartInput.createC(record).map(value =>
+      Split(value.sourcePhaseIdentity, value.invocationMode, value.proposalReference))
+    case Kind.RepositorySync => RepositorySyncStartInput.createC(record).map(value =>
+      Repository(value.repositoryIdentity, value.localBranch, value.trackingRemote,
+        value.trackingBranch, value.remoteEndpointIdentity, value.syncMode))
+  }
+
   def decodeC(kind: Kind, json: Json): Consequence[BusinessInput] = {
     val decoded: Either[String, BusinessInput] = kind match {
       case Kind.GoalPhase => for {
@@ -66,21 +76,21 @@ private[smworkflow] object NativeWorkflowStartInput {
     decoded.fold(Consequence.stateConflict(_), Consequence.success)
   }
 
-  /** Match actual requested business targets, not whole saved JSON or copies.
-    * The consuming Start still owns authentication, consent and effect scope.
+  /** Consume the one independently stored business entry at this boundary.
+    * Its actual target/type/participant are authority data, not a candidate
+    * search or a whole JSON unchanged-input comparison.
     */
-  def selectC(records: Vector[ProfileStartAdmission.Selection], input: BusinessInput,
-    participant: String, definition: DefinitionBinding, selector: Option[String]):
-    Consequence[ProfileStartAdmission.Selection] = {
-    val candidates = records.filter { record =>
-      record.participantIdentity == participant && record.startOperation == input.kind.operation &&
-        record.workflowIdentity == definition.workflowIdentity &&
+  def admitSelectedC(record: ProfileStartAdmission.Selection, input: BusinessInput,
+    participant: String, definition: DefinitionBinding): Consequence[Unit] =
+    if (record.participantIdentity == participant && record.startOperation == input.kind.operation &&
+        record.workflowIdentity == definition.workflowIdentity && record.workflowRevision == definition.workflowRevision &&
         record.origin == ProfileStartAdmission.SelectionOrigin.ExplicitHuman &&
-        record.selectedInput.exists(value => value.typeIdentity == input.kind.inputType &&
-          decodeC(input.kind, value.value).toOption.contains(input))
-    }
-    NativeWorkflowSessionInput.selectC(candidates, selector, _.selectionId, "Start selection")
-  }
+        record.selectedInput.exists(_.typeIdentity == input.kind.inputType))
+      record.selectedInput.map(value => decodeC(input.kind, value.value)).get.flatMap { selected =>
+        if (selected == input) Consequence.unit
+        else Consequence.stateConflict("Host Start entry belongs to another business target")
+      }
+    else Consequence.stateConflict("Host Start entry does not authorize this workflow participant/input")
 
   private def text(json: Json, field: String): Either[String, String] =
     json.hcursor.get[String](field).left.map(_ => "Start requires string " + field)

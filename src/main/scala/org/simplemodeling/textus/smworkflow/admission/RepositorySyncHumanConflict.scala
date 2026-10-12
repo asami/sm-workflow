@@ -72,7 +72,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
     installation: Installation, sourceReader: (String, ActionCall.Core) => Consequence[Source],
     acknowledgement: String => Consequence[Unit], sourceValidation: Option[RepositorySyncNativeMergeValidation.Policy],
     sourceReview: Option[RepositorySyncNativeMergeReviewContinuation.Port]) {
-    def advanceC(source: Source): Consequence[String] = for {
+    def advanceC(source: Source): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
       projected <- prepareC(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using source.store.core.executionContext)
@@ -86,7 +86,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       native <- completionC(source.session.storage)
       retained <- native.loadRetainedC(identity(source))(using source.store.core.executionContext)
       wire <- retained match {
-        case None => WorkflowDecisionJsonV1.encodeC(plan.question, inputCodec)
+        case None => NativeWorkflowOperationOutput.repositoryHumanC(plan.question)
         case Some(value) => for {
           next <- completedC(plan, value.completion.result)
           answer = value.completion.result.result.value
@@ -113,7 +113,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       val specification = NativeWorkflowDescriptionMetadata.operation(
         SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation)
       def createResultOperationRequestC(incoming: ProtocolRequest,
-        result: ContinuationResult[Json]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
+        result: ContinuationResult[NativeWorkflowResultInput.Value]): Consequence[OperationRequest] = NativeWorkflowResultInput.typedC(result, answerCodec).map { submitted =>
         new CommandAction {
           val request = incoming
           override def commandExecutionMode = CommandExecutionMode.Sync
@@ -165,8 +165,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
             _ <- acknowledgement("human-conflict-completed")
             // The managed completion already supplies committed state; do not
             // reread the source, question and answer as a body certificate.
-            wire <- waitC(actual, result)
-          } yield OperationResponse.Scalar(wire)
+          } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(result, actual))
         }
         val closing = new WorkflowCompletionServiceOperation.ClosingProgram[Answer] {
           def selectC(result: ContinuationResult[Answer], current: InstanceRecord) = {
@@ -176,7 +175,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
           }
         }
         WorkflowDecisionCompletionServiceOperation.bindC(RepositorySyncDefinitionBinding.providedDefinition, provided,
-          WorkflowJsonCommandRequest.definition, spec.ResponseDefinition.void, codec, questions, instances, closing, native)
+          SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation.specification.request, SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation.specification.response, codec, questions, instances, closing, native)
       }
     } yield bound
 
@@ -244,16 +243,14 @@ private[smworkflow] object RepositorySyncHumanConflict {
     storage.bindDecisionCompletionC(completionOperation, inputCodec, answerCodec, closingType, (_, _) => Consequence.success(Vector.empty))
   private def identity(source: Source): ContinuationIdentity =
     ContinuationIdentity(source.from.identity.value + ":human-conflict:" + source.from.revision.value)
-  private def waitC(next: InstanceRecord, result: ContinuationResult[Answer]): Consequence[String] = for {
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, next)
-    wire <- WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
-      WorkflowContinuation.Wait(StateMachineRevision(next.revision.value.toString), result.contextSnapshot,
-        MinimalPresentation("Repository Human answer retained", result.result.value.choice match {
+  private def waitC(next: InstanceRecord, result: ContinuationResult[Answer]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = {
+    val detail = result.result.value.choice match {
           case "ProvideResolution" => "Resolution retained; owning advance still requires materialization, validation, review and authorized convergence."
           case "Defer" => "Human deferred the conflict; no automatic question, file choice, command or closure follows."
           case _ => "Human cancelled this decision path; pending repository state is preserved, not automatically aborted or converged."
-        }))))
-  } yield wire
+        }
+    Consequence.success(NativeWorkflowOperationOutput.repositoryWait(next.identity.value, detail, result.result.value.choice))
+  }
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync Human conflict " + reason)
   private def uncertain[A](reason: String): Consequence[A] = org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
 }

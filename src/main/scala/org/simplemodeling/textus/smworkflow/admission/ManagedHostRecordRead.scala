@@ -3,7 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore, Query, QueryDirective}
+import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -44,24 +44,6 @@ private[smworkflow] object ManagedHostRecordRead {
     _loadC(core, storeName, collection, identity, () => RepositorySyncHostSelectionReadPolicy.admitC(
       core.component.get.subsystem.get.configuration, storeName, collection))
 
-  /** Discovery borrows the same owning call/store as selection lookup. */
-  def searchProfileSelectionsC(core: ActionCall.Core, storeName: String,
-    collection: DataStore.CollectionId, profile: ProfileSelectionDataStorePort.Profile): Consequence[Vector[Record]] =
-    core.component.flatMap(_.subsystem) match {
-      case None => Consequence.configurationInvalid("Selection discovery requires its owning Subsystem")
-      case Some(subsystem) =>
-        val admission = profile match {
-          case ProfileSelectionDataStorePort.Profile.GoalPhase =>
-            GoalPhaseHostRecordReadPolicy.admitC(subsystem.configuration,
-              GoalPhaseHostRecordReadPolicy.Purpose.Selection, storeName, collection)
-          case ProfileSelectionDataStorePort.Profile.SplitPhase =>
-            SplitPhaseHostSelectionReadPolicy.admitC(subsystem.configuration, storeName, collection)
-          case ProfileSelectionDataStorePort.Profile.RepositorySync =>
-            RepositorySyncHostSelectionReadPolicy.admitC(subsystem.configuration, storeName, collection)
-        }
-        admission.flatMap(_ => new ContextSearchCall(core, storeName, collection).searchC())
-    }
-
   def loadHumanQuestionC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
     identity: String, workflow: GoalPhaseRuntimeParameters.Persistence): Consequence[Option[Record]] =
     _loadC(core, storeName, collection, identity, () => GoalPhaseHumanQuestionStoragePolicy.decodeC(
@@ -79,30 +61,6 @@ private[smworkflow] object ManagedHostRecordRead {
     identity: String): Consequence[Option[Record]] =
     _loadC(core, storeName, collection, identity, () => SplitPhasePartitionContextReadPolicy.admitC(
       core.component.get.subsystem.get.configuration, storeName, collection))
-
-  /** Discovery stays inside the declared context collection and current call.
-    * It returns stored candidates; the owning consumer selects real ancestry.
-    */
-  def searchSplitPartitionContextsC(core: ActionCall.Core, storeName: String,
-    collection: DataStore.CollectionId): Consequence[Vector[Record]] =
-    SplitPhasePartitionContextReadPolicy.admitC(core.component.get.subsystem.get.configuration,
-      storeName, collection).flatMap(_ => new ContextSearchCall(core, storeName, collection).searchC())
-
-  private final class ContextSearchCall(val core: ActionCall.Core, storename: String,
-    collection: DataStore.CollectionId) extends ProcedureActionCall {
-    def searchC(): Consequence[Vector[Record]] = {
-      given ExecutionContext = executionContext
-      val space = executionContext.dataStoreSpace
-      val prior = space.captureBinding()
-      try for {
-        _ <- bind_component_application_datastore_c(storename)
-        found <- space.search(collection, QueryDirective(Query.Empty))
-      } yield found.records
-      finally space.restoreBinding(prior)
-    }
-    def execute(): Consequence[OperationResponse] =
-      Consequence.stateConflict("Host record discovery is not a transport Operation")
-  }
 
   def loadSplitPlanningInputC(core: ActionCall.Core, storeName: String, collection: DataStore.CollectionId,
     identity: String, purpose: SplitPhaseExplicitPlanningInputJsonV1.Purpose): Consequence[Option[Record]] =

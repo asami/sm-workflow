@@ -19,7 +19,7 @@ import RepositorySyncNativeMergeValidation as V
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseNativeValidation {
   final case class Check(identity: String, ordinal: Int)
@@ -57,7 +57,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     storeC(session, d, core, candidate, controller, _ => Consequence.unit).flatMap(_.preconditionsC)
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[String] = for {
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     store <- storeC(session, d, core, candidate, controller, acknowledgement)
     retained <- store.loadC("validation")
     actual <- retained match {

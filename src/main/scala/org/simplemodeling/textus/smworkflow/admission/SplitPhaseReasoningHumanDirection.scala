@@ -22,25 +22,36 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
   * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseReasoningHumanDirection {
-  final case class Input(context: SplitPhaseExplicitPartitionSemantic.ContextReference,
-    reasoningWork: String, reasoningResult: String, frontier: String)
+  final case class Input(workIdentity: ContinuationIdentity, request: S.Request,
+    resultReference: ContextReference, judgment: S.Judgment, frontier: SplitPhasePlanningSnapshot.Record) {
+    def context: SplitPhaseExplicitPartitionSemantic.ContextReference = request.context
+  }
   final class Plan private[SplitPhaseReasoningHumanDirection] (
     val source: SplitPhaseManagedReasoningCompletion.Observed,
     val intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent,
     val next: InstanceRecord, val question: WorkflowInteraction[Input, Nothing])
   val completionOperation = SplitPhaseNativeHumanDirection.completionOperation
   val closingType = SplitPhaseNativeHumanDirection.closingType
-  val schema = "sm-workflow.split-reasoning-human-input.v1"
+  val schema = "sm-workflow.split-reasoning-human-input.v2"
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Input] = new WorkflowResultJsonV1.PayloadCodec[Input] {
     val typeIdentity = "SplitPhaseReasoningHumanDirectionRequest"
-    def encode(value: Input): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
+    def encode(value: Input): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> Json.obj(
+      "workIdentity" -> Json.fromString(value.workIdentity.value), "request" -> J.requestCodec.encode(value.request),
+      "resultReference" -> Json.obj("identity" -> Json.fromString(value.resultReference.identity),
+        "revision" -> Json.fromString(value.resultReference.revision)),
+      "judgment" -> J.resultCodec.encode(value.judgment), "frontier" -> R.payloadCodec.encode(value.frontier)))
     def decode(value: Json): Either[String, Input] = for {
       json <- Option(value).toRight("Reasoning Human input is absent")
       root <- json.asObject.toRight("Reasoning Human input is not an object")
       _ <- Either.cond(root("schemaVersion").flatMap(_.asString).contains(schema), (), "Reasoning Human schema differs")
       payload <- root("payload").toRight("Reasoning Human payload is absent")
-      input <- payload.as[Input].left.map(_.message)
-    } yield input
+      work <- payload.hcursor.get[String]("workIdentity").left.map(_.message)
+      request <- payload.hcursor.get[Json]("request").left.map(_.message).flatMap(J.requestCodec.decode)
+      identity <- payload.hcursor.downField("resultReference").get[String]("identity").left.map(_.message)
+      revision <- payload.hcursor.downField("resultReference").get[String]("revision").left.map(_.message)
+      judgment <- payload.hcursor.get[Json]("judgment").left.map(_.message).flatMap(J.resultCodec.decode)
+      frontier <- payload.hcursor.get[Json]("frontier").left.map(_.message).flatMap(R.payloadCodec.decode)
+    } yield Input(ContinuationIdentity(work), request, ContextReference(identity, revision), judgment, frontier)
   }
 
   def commandC(question: WorkflowInteraction[Input, Nothing]): Consequence[SplitPhaseAdvanceTarget] =
@@ -60,11 +71,20 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
     instances <- storage.bindInstancesC()(using core.executionContext)
     current <- instances.loadC(InstanceIdentity(command.instanceIdentity))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("native instance is absent")))
-    required <- SplitPhaseDefinitionBinding.reasoningSemanticOperationC
-    identity <- current.history.reverseIterator.flatMap(_.suspension)
-      .find(_.completion.value == required.metadata.completionContract.identity)
-      .map(v => Consequence.success(ContinuationIdentity(v.continuationIdentity.value)))
-      .getOrElse(_invalid("native reasoning assignment is absent"))
+    reader <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(core, declaration)
+    revision = if (current.suspension.nonEmpty) InstanceRevision(current.revision.value - 1L) else current.revision
+    frontier <- reader.loadForCallC(current.identity, revision, core).flatMap(
+      _.map(Consequence.success).getOrElse(_invalid("reasoning business source is absent")))
+    identity <- frontier match {
+      case SplitPhaseExecutionFrontier.Value.ReasoningCompletion(work) => Consequence.success(work)
+      case SplitPhaseExecutionFrontier.Value.ReasoningHumanAnswer(decision) => for {
+        decisions <- storage.bindDecisionC(completionOperation, inputCodec)
+        question <- decisions.loadC(decision)(using core.executionContext).flatMap(
+          _.map(Consequence.success).getOrElse(_invalid("reasoning Human question is absent")))
+        input <- NativeWorkflowOperationOutput.decisionInputC(question)
+      } yield input.workIdentity
+      case _ => _invalid("current business reference is not a reasoning Human source")
+    }
     saved <- SplitPhaseManagedReasoningCompletion.observeForCallC(identity, declaration, catalog, core)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("canonical reasoning answer is absent")))
     _ <- if (saved.request.context ==
@@ -78,10 +98,8 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
       Consequence.unit else _invalid("saved result is not a genuine DecisionNeeded")
     base = source.next
     original = source.source
-    work <- J.encodeWorkOrderC(source.work)
-    result <- WorkflowResultJsonV1.encodeC(source.completion.result, J.resultCodec)
-    frontier <- R.encodeC(original.snapshot)
-    input = Input(source.request.context, work, result, frontier)
+    input = Input(source.completion.result.continuationId, source.request,
+      source.completion.result.resultReference, source.completion.result.result.value, original.snapshot)
     required <- SplitPhaseDefinitionBinding.reasoningHumanDirectionOperationC
     identity = ContinuationIdentity("split-reasoning-human:" + base.identity.value + ":" + base.revision.next.value.toString)
     bundle = ContextBundle("Human classification of the retained unresolved reasoning work",
@@ -113,8 +131,16 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
     Consequence.success(new Plan(plan.source, plan.intent, plan.next, question))
 
   def advanceC(command: SplitPhaseAdvanceTarget, declaration: SplitPhaseManagedStartAssembly.Declaration,
-    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[String] = for {
-    plan <- sourceC(command, declaration, catalog, core)
+    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceResult] =
+    sourceC(command, declaration, catalog, core).flatMap(_advance_plan_c(_, declaration, catalog, core))
+
+  def advanceObservedC(source: SplitPhaseManagedReasoningCompletion.Observed,
+    declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
+    core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceResult] =
+    prepareC(source).flatMap(_advance_plan_c(_, declaration, catalog, core))
+
+  private def _advance_plan_c(plan: Plan, declaration: SplitPhaseManagedStartAssembly.Declaration,
+    catalog: SplitPhaseRuntimeCatalog.Catalog, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.SplitPhaseAdvanceResult] = for {
     storage <- storageC(declaration, catalog, core)
     decisions <- storage.bindDecisionC(completionOperation, inputCodec)
     identity = plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.continuationId
@@ -128,7 +154,7 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
           case _ => _uncertain("question commit is not established; observe later without reissuing")
         }
     }
-    wire <- WorkflowDecisionJsonV1.encodeC(question, inputCodec)
+    wire <- NativeWorkflowOperationOutput.splitReasoningHumanC(question)
   } yield wire
 
   def storageC(declaration: SplitPhaseManagedStartAssembly.Declaration,

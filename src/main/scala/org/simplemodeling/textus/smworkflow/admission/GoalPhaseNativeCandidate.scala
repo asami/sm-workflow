@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
   final case class Payload(sourceRevision: String, step: String,
@@ -57,7 +57,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   } yield saved
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[String] = for {
+    from: InstanceRecord, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&

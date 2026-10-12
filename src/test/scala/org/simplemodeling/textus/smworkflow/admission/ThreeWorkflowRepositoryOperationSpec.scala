@@ -3,7 +3,6 @@ package org.simplemodeling.textus.smworkflow.admission
 import cats.data.NonEmptyVector
 import io.circe.Json
 import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -17,9 +16,9 @@ import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.subsystem.SubsystemExecutionProfile
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeContinuationIdentity, *}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.goldenport.protocol.{Argument, Request}
+import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
@@ -30,6 +29,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
+import org.simplemodeling.textus.smworkflow.value as V
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhaseTypedStartFixture as StorageFixture
 
@@ -49,9 +49,9 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     Some(131072), Some(16384), Some(16), Some(131072), Some(1), Some(131072), Some(4194304))
   private val _environment_ = Map("PATH" -> "/usr/bin:/bin", "GIT_TERMINAL_PROMPT" -> "0",
     "GIT_CONFIG_NOSYSTEM" -> "1", "GIT_CONFIG_GLOBAL" -> "/dev/null", "LC_ALL" -> "C")
-  protected def _scalar_(value: OperationResponse): String = value match {
-    case OperationResponse.Scalar(wire: String) => wire
-    case other => fail(s"Expected public Operation JSON: $other")
+  protected def _value_[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
+    case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(record))
+    case other => fail(s"Expected declared public business value: $other")
   }
   protected def _classpath_(): String = {
     val testpaths = Iterator.iterate(Option(this.getClass.getClassLoader))(_.flatMap(loader => Option(loader.getParent)))
@@ -62,76 +62,6 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       .map(_.trim).filter(_.nonEmpty).toVector
     (Vector(Path.of(this.getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toString) ++
       testpaths ++ runtimepaths).distinct.mkString(java.io.File.pathSeparator)
-  }
-  /** Specification IPC only: another JVM opens the production host and invokes
-    * fixed public Operations. Neither selected rows nor native history travel.
-    */
-  protected def _separate_operation_observation_(root: Path, scenario: String, goal: Boolean,
-    identity: InstanceIdentity, advance: String, host: Option[ThreeWorkflowHostParameters.Definition] = None,
-    completion: Option[String] = None, interruptValidation: Boolean = false,
-    interruptGit: Option[String] = None, allowProgress: Boolean = false): Json = {
-    require(!interruptValidation || interruptGit.isEmpty, "Select one owned interruption")
-    require(interruptGit.forall(Set("commit", "push", "final-fetch")), "Unknown owned Git interruption")
-    val directory = Files.createTempDirectory(root, "operation-observation-")
-    val input = directory.resolve("input.json")
-    val output = directory.resolve("output.json")
-    val log = directory.resolve("process.log")
-    Files.writeString(input, Json.obj("scenario" -> Json.fromString(scenario), "goal" -> Json.fromBoolean(goal),
-      "identity" -> Json.fromString(identity.value), "advance" -> Json.fromString(advance),
-      "host" -> host.map(ThreeWorkflowHostParameters.encode).getOrElse(Json.Null),
-      "completion" -> completion.map(Json.fromString).getOrElse(Json.Null)).noSpaces)
-    val command = Vector(Path.of(System.getProperty("java.home"), "bin/java").toString, "-cp", _classpath_(),
-      "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowRepositoryProcessObservation",
-      root.toString, input.toString, output.toString)
-    val process = new ProcessBuilder(command*).redirectErrorStream(true).redirectOutput(log.toFile).start()
-    var children = Vector.empty[ProcessHandle]
-    try {
-      if (interruptValidation || interruptGit.nonEmpty) {
-        val marker = root.resolve(interruptGit.map(_ + "-executed.txt").getOrElse("validation-entered.txt"))
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
-        var reportedpid = Option.empty[Long]
-        // CREATE_NEW makes the file visible before writeString publishes its
-        // PID bytes. Readiness requires the actual owned process, not existence.
-        while (reportedpid.isEmpty && process.isAlive && System.nanoTime() < deadline) {
-          children = process.toHandle.descendants().toList.asScala.toVector
-          if (Files.exists(marker)) reportedpid = Files.readString(marker).trim.toLongOption
-            .filter(pid => children.exists(_.pid() == pid))
-          if (reportedpid.isEmpty) Thread.sleep(20)
-        }
-        withClue(s"Managed effect did not report its owned PID; diagnostic retained at $log")(reportedpid.isDefined shouldBe true)
-        val effectpid = reportedpid.get
-        children.map(_.pid()) should contain(effectpid)
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS) shouldBe true
-        // Stop the owned caller before its waiting program, preventing result
-        // recording between termination of the program and the caller.
-        children.filter(_.isAlive).foreach(_.destroyForcibly())
-        process.exitValue() should not be 0
-        Files.exists(output) shouldBe false
-        return Json.obj("pid" -> Json.fromLong(process.pid()),
-          (if (interruptValidation) "validationPid" else "effectPid") -> Json.fromLong(effectpid),
-          "exit" -> Json.fromInt(process.exitValue()))
-      }
-      if (!process.waitFor(45, TimeUnit.SECONDS)) {
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS)
-        fail(s"Owned Operation observer timed out; diagnostic retained at $log")
-      }
-      Files.size(log) should be <= 131072L
-      withClue(Files.readString(log))(process.exitValue() shouldBe 0)
-      Files.size(output) should be <= 2097152L
-      val result = io.circe.parser.parse(Files.readString(output)).fold(error => fail(error.message), value => value)
-      result.hcursor.get[Long]("pid").toOption.get shouldBe process.pid()
-      process.pid() should not be ProcessHandle.current().pid()
-      result
-    } finally {
-      if (process.isAlive && children.isEmpty) children = process.toHandle.descendants().toList.asScala.toVector
-      if (process.isAlive) {
-        process.destroyForcibly()
-        process.waitFor(10, TimeUnit.SECONDS)
-      }
-      children.filter(_.isAlive).foreach(_.destroyForcibly())
-    }
   }
   protected def conflict_path(scenario: String): Option[String] = scenario match {
     case "Conflict" | "ConflictDelayed" => Some("shared.txt")
@@ -260,6 +190,29 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
           case Some(record) => Consequence.success(record)
           case None => Consequence.stateConflict("Specification has no Operation-created RepositorySync instance")
         }
+    def repositoryWorkC[A](identity: InstanceIdentity, operation: StateMachineOperationIdentity,
+      codec: WorkflowResultJsonV1.PayloadCodec[A]): Consequence[WorkflowInteraction[A, Nothing]] = for {
+      current <- currentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Repository has no pending work"))
+      definition <- RepositorySyncDefinitionBinding.bindC
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(definition), _collection_("instances"), _collection_("continuations"))
+      reader <- storage.bindIssuedC(operation, codec)
+      work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Repository assignment is absent")))
+    } yield work
+    def repositoryQuestionC(identity: InstanceIdentity): Consequence[WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]] = for {
+      current <- currentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Repository has no pending Human question"))
+      definition <- RepositorySyncDefinitionBinding.bindC
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(definition), _collection_("instances"), _collection_("continuations"))
+      reader <- storage.bindDecisionC(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)
+      question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Repository question is absent")))
+    } yield question
     def goalCurrentC(identity: InstanceIdentity): Consequence[InstanceRecord] =
       GoalPhaseRuntimeCatalog.loadC().flatMap(catalog => CallScopedWorkflowInstances.managed(_configuration_, catalog.definition,
         _collection_("instances"), _collection_("continuations"))
@@ -267,6 +220,38 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
           case Some(record) => Consequence.success(record)
           case None => Consequence.stateConflict("Specification has no Operation-created GoalPhase instance")
         }
+    /** Host evidence reads the real issued input, never a fixture-seeded
+      * assignment or a public native-control echo. */
+    def goalWorkC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]] = for {
+      current <- goalCurrentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Goal has no pending work"))
+      storage <- goalStorageC()
+      reader <- storage.bindIssuedC(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec)
+      work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Goal assignment is absent")))
+    } yield work
+    def goalQuestionC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]] = for {
+      current <- goalCurrentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Goal has no pending Human question"))
+      storage <- goalStorageC()
+      reader <- storage.bindDecisionC(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec)
+      question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Goal question is absent")))
+    } yield question
+    private def goalStorageC(): Consequence[WorkflowComponentStorage] = for {
+      catalog <- GoalPhaseRuntimeCatalog.loadC()
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
+    } yield storage
+    def goalChildSessionC(identity: InstanceIdentity, sourceRevision: String): Consequence[String] = for {
+      storage <- goalStorageC()
+      reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, GoalPhaseNativeRepositoryClosure.codec)
+      closed <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(identity.value +
+        ":ordered-repository-closure:" + sourceRevision + ":closed", "1"))(using executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(Consequence.stateConflict("Specification has no actual closed parent-child receipt")))
+    } yield closed.receipt.payload.value.childSessionId
     def evidenceC(purpose: NativeHostEvidence.Purpose, identity: String, reference: ContextReference,
       participant: String, binding: Json): Consequence[Unit] = {
       val now = executionContext.clock.instant()
@@ -304,18 +289,17 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       }
     }
     def observeC(): Consequence[RepositorySyncManagedGitObservation.Observed] = RepositorySyncManagedGitObservation.observeC(core)
-    def validationC(input: RepositorySyncStartInput, selection: ProfileStartAdmission.Selection, root: Path,
+    def validationC(input: RepositorySyncStartInput, identity: InstanceIdentity, root: Path,
       stageKey: String = "integration-validated"): Consequence[RepositorySyncNativeMergeValidation.State] =
-      nativeStageC(input, selection, root, stageKey).flatMap(stage => stage.flatMap(_.payload.validation)
+      nativeStageC(input, identity, root, stageKey).flatMap(stage => stage.flatMap(_.payload.validation)
         .map(Consequence.success).getOrElse(Consequence.stateConflict("Specification has no actual selected validation receipt")))
-    def nativeStageC(input: RepositorySyncStartInput, selection: ProfileStartAdmission.Selection, root: Path,
+    def nativeStageC(input: RepositorySyncStartInput, identity: InstanceIdentity, root: Path,
       stageKey: String): Consequence[Option[RepositorySyncNativeProgressStore.Stage]] = {
       val definition = take(RepositorySyncDefinitionBinding.bindC)
       val declaration = RepositorySyncManagedFetch.Declaration(_configuration_, _collection_("instances"),
         _collection_("continuations"), input, Programs.Target(root.resolve("repository"), "main", "origin", "main",
           root.resolve("upstream.git").toString))
       for {
-        identity <- RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey)
         session <- RepositorySyncManagedFetch.sessionC(identity.value, declaration, definition, core)
         store <- RepositorySyncNativeProgressStore.bindC(session, declaration, core, _ => Consequence.unit)
         stage <- store.loadC(stageKey)
@@ -408,7 +392,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       var setup: Setup => Consequence[Unit] = _ => Consequence.unit
       val probe = new spec.OperationDefinition {
         val specification = spec.OperationDefinition.Specification(name = "prepareInput",
-          request = WorkflowJsonCommandRequest.definition, response = spec.ResponseDefinition.void)
+          request = spec.RequestDefinition.empty, response = spec.ResponseDefinition.void)
         def createOperationRequest(r: Request): Consequence[OperationRequest] = Consequence.success(new CommandAction {
           val request = r
           override def commandExecutionMode = CommandExecutionMode.Sync
@@ -451,12 +435,13 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   protected def _repository_selection_(input: RepositorySyncStartInput, identity: String,
     invocation: String): ProfileStartAdmission.Selection = {
     val definition = take(RepositorySyncDefinitionBinding.bindC)
-    val json = take(io.circe.parser.parse(NativeWorkflowOperationInputFixture.repository(input))
-      .fold(error => Consequence.stateConflict(error.message), Consequence.success))
+    val json = Json.obj("repositoryIdentity" -> Json.fromString(input.repositoryIdentity), "localBranch" -> Json.fromString(input.localBranch),
+      "trackingRemote" -> Json.fromString(input.trackingRemote), "trackingBranch" -> Json.fromString(input.trackingBranch),
+      "remoteEndpointIdentity" -> Json.fromString(input.remoteEndpointIdentity), "syncMode" -> Json.fromString(input.syncMode))
     ProfileStartAdmission.Selection(identity, RepositorySyncManagedFetch.startOperation,
       definition.workflowIdentity, definition.workflowRevision, "participant",
       ProfileStartAdmission.SelectionOrigin.ExplicitHuman, invocation, None,
-      Some(TypedValue("RepositorySyncStartInput", json.hcursor.downField("input").focus.get)))
+      Some(TypedValue("RepositorySyncStartInput", json)))
   }
   protected def _prepare_input_(call: Setup, input: RepositorySyncStartInput,
     selection: ProfileStartAdmission.Selection, root: Path, merged: Boolean = false): Consequence[Unit] = {
@@ -467,7 +452,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     val now = call.executionContext.clock.instant()
     val effects = (if (merged) Vector(RepositorySyncNativeConvergence.Effect.CommitPending) else Vector.empty) ++
       Vector(RepositorySyncNativeConvergence.Effect.Push, RepositorySyncNativeConvergence.Effect.FinalFetch)
-    call.createC("repository_selections", selection.selectionId, Record.data(ProfileSelectionJsonV1.storageField ->
+    call.createC("repository_selections", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Repository(input.repositoryIdentity,
+      input.localBranch, input.trackingRemote, input.trackingBranch, input.remoteEndpointIdentity, input.syncMode), selection.participantIdentity), Record.data(ProfileSelectionJsonV1.storageField ->
       take(ProfileSelectionJsonV1.encodeStorageC(selection)))).flatMap { _ => effects.foldLeft(Consequence.unit) { (prior, effect) =>
       val identity = ThreeWorkflowHostEvidencePorts.key(selection.selectionId, selection.idempotencyKey, effect.toString)
       val binding = take(ThreeWorkflowHostEvidencePorts.repositoryEffectBindingC(call.core, context, target, effect))
@@ -494,132 +480,50 @@ object ThreeWorkflowValidationInterruption {
   }
 }
 
-object ThreeWorkflowRepositoryProcessObservation {
-  private final class Observer extends ThreeWorkflowManagedRepositoryFixture {
-    def observe(root: Path, input: Json): Json = {
-      require(input.asObject.exists(_.keys.toSet == Set("scenario", "goal", "identity", "advance", "host", "completion")),
-        "Expected the closed specification observation input")
-      def _read_[A: io.circe.Decoder](key: String): A =
-        input.hcursor.get[A](key).fold(error => fail(error.message), value => value)
-      val scenario = _read_[String]("scenario")
-      require(Set("Goal", "Conflict", "ConflictDelayed", "ConflictLiteral", "Diverged", "Interrupted", "InterruptedCommit", "InterruptedPush",
-        "InterruptedFinalFetch", "Equal", "LocalAhead", "RemoteAhead")(scenario), "Unknown owned scenario")
-      val goal = _read_[Boolean]("goal")
-      val identity = InstanceIdentity(_read_[String]("identity"))
-      val advance = _read_[String]("advance")
-      val host = _read_[Option[Json]]("host").map(value => take(ThreeWorkflowHostParameters.decodeDefinitionC(value)))
-      val completion = _read_[Option[String]]("completion")
-      require(completion.isEmpty || goal, "This specification observer completes only assigned Goal work")
-      var observation = Option.empty[Json]
-      _with_runtime_(root, scenario, host) { (owner, component, actor, prepare) =>
-        def _current_(): String = {
-          var state = Option.empty[InstanceRecord]
-          prepare(call => (if (goal) call.goalCurrentC(identity) else call.currentC(identity))
-            .map(value => { state = Some(value); () }))
-          take(WorkflowInstanceRecordJsonV1.encodeC(state.get))
-        }
-        def _invoke_(operation: String, wire: String): String = _scalar_(take(owner.executeOperationResponseInContext(
-          Request.of(component = component.name, service = if (goal) "GoalPhaseService" else "RepositorySyncService",
-            operation = operation, arguments = List(Argument("arg1", wire))), actor)))
-        val before = _current_()
-        val operation = if (goal) "advanceGoalPhase" else "advanceRepositorySync"
-        val result = _invoke_(operation, advance)
-        val acknowledgement = completion.map(wire => _invoke_("submitGoalPhaseWorkResult", wire))
-        val resumed = completion.map(_ => _invoke_(operation, advance))
-        observation = Some(Json.obj("pid" -> Json.fromLong(ProcessHandle.current().pid()),
-          "before" -> Json.fromString(before), "result" -> Json.fromString(result),
-          "acknowledgement" -> acknowledgement.map(Json.fromString).getOrElse(Json.Null),
-          "resumed" -> resumed.map(Json.fromString).getOrElse(Json.Null), "after" -> Json.fromString(_current_())))
-      }
-      observation.get
-    }
-  }
-  def main(args: Array[String]): Unit = {
-    require(args.length == 3, "Expected owned specification root, input and output")
-    val root = Path.of(args(0)).toAbsolutePath.normalize
-    val input = Path.of(args(1)).toAbsolutePath.normalize
-    val output = Path.of(args(2)).toAbsolutePath.normalize
-    require(input.startsWith(root) && output.startsWith(root), "Observation files must belong to the owned fixture")
-    require(Files.size(input) <= 2097152L, "Specification observation exceeds its finite input bound")
-    val request = io.circe.parser.parse(Files.readString(input)).fold(error =>
-      throw new IllegalArgumentException(error.message), value => value)
-    Files.writeString(output, new Observer().observe(root, request).noSpaces)
-  }
-}
-
 final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   "RepositorySync public Operations on the production three-workflow composition" should {
-      "E7 converge only the explicitly selected associated synchronization when a session has two real Starts" in {
-        Given("Spec: docs/spec/session-workflow-context-resolution.md; Rule: R3; Example: E7; owned equal Git repositories and two selected synchronizations in one invocation session")
-        val workroot = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
-        val root = Files.createTempDirectory(workroot, "repository-session-targets-")
-        val startInput = ThreeWorkflowNormalHostFixture.definition(root).repository.input
-        val selections = Vector("first", "second").map(label => _repository_selection_(startInput,
-          "session-repository-" + label, "session-repository-start-" + label))
-        val identities = selections.map(selection => take(RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey)))
-        for (episode <- Vector("publish")) _with_runtime_(root, "Equal") {
-          (owner, component, actor, prepare) =>
-          val context = take(ExecutionContext.withRoutingSessionIdentity(actor, "two-repository-targets"))
-          def _call_(target: Option[String], foreign: Boolean = false) = {
-            val query = Json.obj("schemaVersion" -> Json.fromString(NativeWorkflowSessionInput.schema))
-            val arguments = target.map(value => List(Argument("arg1", query.mapObject(
-              _.add("instanceIdentity", Json.fromString(value))).noSpaces))).getOrElse(Nil)
-            val invocation = if (foreign) take(ExecutionContext.withRoutingSessionIdentity(actor, "unassociated-repository-session"))
-              else context
-            owner.executeOperationResponseInContext(Request.of(component = component.name, service = "RepositorySyncService",
-              operation = "advanceRepositorySync", arguments = arguments), invocation)
-          }
-          def _states_(): Vector[InstanceRecord] = {
-            var records = Vector.empty[InstanceRecord]
-            prepare(call => identities.foldLeft(Consequence.unit)((prior, identity) =>
-              prior.flatMap(_ => call.currentC(identity).map(value => { records = records :+ value; () }))))
-            records
-          }
-          def _expect_unchanged_(observed: Vector[InstanceRecord], original: Vector[InstanceRecord]): Unit = {
-            observed.size shouldBe original.size
-            observed.zip(original).foreach { (current, prior) =>
-              current.revision shouldBe prior.revision
-            }
-          }
-          if (episode == "publish") {
-            When("the existing fixture prepares selected inputs and the two real public Starts publish their session associations")
-            prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap(_ =>
-              selections.foldLeft(Consequence.unit)((prior, selection) =>
-                prior.flatMap(_ => _prepare_input_(call, startInput, selection, root)))))
-            val started = selections.map(selection => take(WorkflowWaitJsonV1.decodeC(_scalar_(take(
-              owner.executeOperationResponseInContext(Request.of(component = component.name, service = "RepositorySyncService",
-                operation = "startRepositorySync", arguments = List(Argument("arg1",
-                  NativeWorkflowOperationInputFixture.repository(startInput, Some(selection.selectionId))))), context))))).handle.instanceIdentity)
-            Then("both distinct targets were created by Workflow, not by fixture history or an association side-write")
-            started shouldBe identities
-            started.distinct.size shouldBe 2
-          }
-          val before = _states_()
-          When("advance omits its necessary selector while two associated targets exist")
-          val ambiguous = _call_(None)
-          val afterambiguous = _states_()
-          Then("ambiguity prevents progression of either synchronization")
-          ambiguous.isSuccess shouldBe false
-          ambiguous.toString should include("ambiguous instance")
-          _expect_unchanged_(afterambiguous, before)
-          When("another session supplies the identity of a real target outside its associations")
-          val foreign = _call_(Some(identities.head.value), foreign = true)
-          val afterforeign = _states_()
-          Then("the selector cannot borrow the owning session's target or perform its effects")
-          foreign.isSuccess shouldBe false
-          foreign.toString should include("no associated instance")
-          _expect_unchanged_(afterforeign, before)
-          When("the owning session supplies only the minimal selector for the first synchronization")
-          val wire = _scalar_(take(_call_(Some(identities.head.value))))
-          val terminal = take(WorkflowTerminalJsonV1.decodeC(wire, RepositorySyncNativeConvergence.resultCodec))
-          val afterselected = _states_()
-          Then("actual convergence belongs only to the selected instance without advancing the second instance")
-          terminal.handle.instanceIdentity shouldBe identities.head
-          afterselected.head.lifecycle shouldBe Lifecycle.Completed
-          _expect_unchanged_(afterselected.tail, before.tail)
+    "converge two independent execution sessions from one chat without association selectors" in {
+      Given("Phase5.3 P53-02–05: one admitted repository business input and two real Starts in the same authenticated chat")
+      val workroot = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
+      val root = Files.createTempDirectory(workroot, "repository-sessions-")
+      val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
+      val selection = _repository_selection_(input, "two-execution-entry", "host-repository-entry")
+      _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
+        def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+          _value_[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+        prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap(_ =>
+          _prepare_input_(call, input, selection, root)))
+        When("the same business input is started twice")
+        val starts = Vector.fill(2)(invoke[V.RepositorySyncStartResult]("startRepositorySync",
+          NativeWorkflowOperationInputFixture.repository(input)))
+        Then("the executions have distinct IDs, independent of their shared chat or host entry")
+        starts.map(_.sessionId).distinct.size shouldBe 2
+        val ids = starts.map(value => InstanceIdentity(value.sessionId))
+        def current(id: InstanceIdentity): InstanceRecord = {
+          var observed = Option.empty[InstanceRecord]
+          prepare(call => call.currentC(id).map(value => { observed = Some(value); () }))
+          observed.get
         }
+        val secondbefore = current(ids.last)
+        When("the first session advances to actual convergence")
+        val first = invoke[V.RepositorySyncAdvanceResult]("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(ids.head.value))
+        Then("its Terminal belongs only to that execution")
+        first.kind shouldBe "Terminal"
+        first.sessionId shouldBe ids.head.value
+        first.convergence.get.localBranch shouldBe "main"
+        current(ids.head).lifecycle shouldBe Lifecycle.Completed
+        current(ids.last).revision shouldBe secondbefore.revision
+        When("the second session advances independently")
+        val second = invoke[V.RepositorySyncAdvanceResult]("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(ids.last.value))
+        Then("it consumes its own execution and returns actual business convergence")
+        second.kind shouldBe "Terminal"
+        second.sessionId shouldBe ids.last.value
+        second.convergence.get.tip shouldBe first.convergence.get.tip
+        current(ids.last).lifecycle shouldBe Lifecycle.Completed
       }
+    }
     for (scenario <- Vector("Equal", "LocalAhead", "RemoteAhead")) {
       s"reach observed convergence with real managed Git and validation for $scenario" in {
         Given("owned local and bare repositories, fixed host capabilities and specification-owned selection/effect authority")
@@ -627,45 +531,46 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         val root = Files.createTempDirectory(work, "episode-")
         val startInput = ThreeWorkflowNormalHostFixture.definition(root).repository.input
         val selection = _repository_selection_(startInput, "selected-repository", "direct-repository-start")
-        val identity = take(RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey))
+        var execution = Option.empty[InstanceIdentity]
+        def identity: InstanceIdentity = execution.get
         val start = NativeWorkflowOperationInputFixture.repository(startInput)
         Given("advance carries unused diagnostics and caller controls that do not choose a native route")
-        val advance = io.circe.parser.parse(NativeWorkflowOperationInputFixture.advance()).toOption.get
-          .mapObject(_.add("stage", Json.fromString("Completed"))
-            .add("argv", Json.arr(Json.fromString("must-not-execute")))
-            .add("diagnostics", Json.obj("expectedRevision" -> Json.fromInt(999)))).spaces2
+        def advance: List[Property] = NativeWorkflowOperationInputFixture.advance(identity.value) ++ List(
+          Property("stage", "Completed", None), Property("argv", Vector("must-not-execute"), None),
+          Property("diagnostics", Json.obj("expectedRevision" -> Json.fromInt(999)), None))
         for (session <- Vector("execute")) _with_runtime_(root, scenario) { (owner, component, actor, prepare) =>
           val invocationcontext = actor
           Given("every normal episode uses the actual host session and minimum public input")
-          def _invoke_(operation: String, wire: String): String = _scalar_(take(owner.executeOperationResponseInContext(
-            Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
-              arguments = if (operation == "advanceRepositorySync" && wire == "{}") Nil
-                else List(Argument("arg1", wire))), invocationcontext)))
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+            _value_[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+              service = "RepositorySyncService", operation = operation, properties = properties), invocationcontext)))
           if (session == "execute") {
             prepare(call => call.setupC(_setup_commands_(root, scenario).size).flatMap(_ => _prepare_input_(call, startInput, selection, root)))
             if (scenario == "LocalAhead") Files.writeString(root.resolve("repository/intended.txt"), "intended local work\n")
             When("public Start durably records the selected invocation")
-            take(WorkflowWaitJsonV1.decodeC(_invoke_("startRepositorySync", start))).handle.instanceIdentity shouldBe identity
+            val started = _invoke_[V.RepositorySyncStartResult]("startRepositorySync", start)
+          execution = Some(InstanceIdentity(started.sessionId))
             var before = Option.empty[InstanceRecord]
             prepare(call => call.currentC(identity).map(value => { before = Some(value); () }))
             When("the actual target is changed while caller stage argv and diagnostic fields are retained")
-            val foreign = io.circe.parser.parse(advance).toOption.get
-              .mapObject(_.add("instanceIdentity", Json.fromString("foreign-instance"))).noSpaces
+            val foreign = advance.map {
+              case p if p.name == "sessionId" => Property("sessionId", "foreign-instance", None)
+              case p => p
+            }
             val rejected = owner.executeOperationResponseInContext(Request.of(component = component.name,
-              service = "RepositorySyncService", operation = "advanceRepositorySync",
-              arguments = List(Argument("arg1", foreign))), actor)
+              service = "RepositorySyncService", operation = "advanceRepositorySync", properties = foreign), actor)
             Then("the actual native Start lookup refuses absence before Git effects and preserves the original instance")
             rejected.isSuccess shouldBe false
-            rejected.toString should include("no associated instance")
+            rejected.toString should include("no original managed native Start")
             prepare(call => call.currentC(identity).map(value => {
               value.revision shouldBe before.get.revision
               ()
             }))
           }
           When("public advance owns actual Git integration, selected validation and non-force convergence for " + session)
-          val wire = _invoke_("advanceRepositorySync", advance)
-          val outcome = take(WorkflowTerminalJsonV1.decodeC(wire, RepositorySyncNativeConvergence.resultCodec))
-          val payload = outcome.current.asInstanceOf[WorkflowContinuation.Terminal[RepositorySyncNativeConvergence.Result]].result.value
+          val outcome = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
+          outcome.kind shouldBe "Terminal"
+          val payload = outcome.convergence.get
           var current = Option.empty[InstanceRecord]
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           var validation = Option.empty[RepositorySyncNativeMergeValidation.State]
@@ -673,11 +578,11 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             current = Some(state)
             call.observeC().flatMap(value => {
               observed = Some(value)
-              call.validationC(startInput, selection, root).map(value => { validation = Some(value); () })
+              call.validationC(startInput, identity, root).map(value => { validation = Some(value); () })
             })
           }))
           Then("the terminal matches actual equal clean local/tracking tips and the completed native handle")
-          payload.instanceIdentity shouldBe identity.value
+          outcome.sessionId shouldBe identity.value
           payload.repositoryRoot shouldBe root.resolve("repository").toString
           observed.get.head shouldBe payload.tip
           observed.get.trackingTip shouldBe Some(payload.tip)
@@ -685,7 +590,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           observed.get.counts shouldBe Some(RepositorySyncManagedGitObservation.Counts(0, 0))
           observed.get.dirty shouldBe empty
           current.get.lifecycle shouldBe Lifecycle.Completed
-          outcome.handle shouldBe take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, current.get))
+          outcome.sessionId shouldBe current.get.identity.value
           Then("the saved product-check receipt contains the independently executed suite result, not a Git observation")
           validation.get.selected shouldBe ThreeWorkflowNormalHostFixture.definition(root).repository.validation.checks
           validation.get.mode shouldBe "required"
@@ -709,8 +614,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         val path = conflict_path(scenario).get
         val startInput = ThreeWorkflowNormalHostFixture.definition(root).repository.input
         val selection = _repository_selection_(startInput, "selected-repository", "direct-repository-start")
-        val identity = take(RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey))
-        val advance = NativeWorkflowOperationInputFixture.advance()
+        var execution = Option.empty[InstanceIdentity]
+        def identity: InstanceIdentity = execution.get
+        def advance: List[Property] = NativeWorkflowOperationInputFixture.advance(identity.value)
         var conflict = Option.empty[WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]]
         var question = Option.empty[WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]]
         var review = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
@@ -718,22 +624,33 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         val sessions = Vector("issue", "semantic") ++ (if (decision == "decision-needed") Vector("human") else Vector.empty) ++
           Vector("review", "converge")
         for (session <- sessions) _with_runtime_(root, scenario) { (owner, component, actor, prepare) =>
-          def _call_(operation: String, wire: String) = owner.executeOperationResponseInContext(
+          def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
-              arguments = List(Argument("arg1", wire))), actor)
-          def _invoke_(operation: String, wire: String): String = _scalar_(take(_call_(operation, wire)))
-          def _answer_(operation: String, wire: String): String = _invoke_(operation, wire)
+              properties = properties), actor)
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(_call_(operation, properties)))
           def _current_(): InstanceRecord = {
             var state = Option.empty[InstanceRecord]
             prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
             state.get
           }
-          def _review_(wire: String): Unit = {
-            review = Some(take(WorkflowWorkOrderJsonV1.decodeC(wire, RepositorySyncNativeMergeReview.inputCodec)))
-            val input = review.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request.input.get.value
-            input.changedPaths shouldBe Vector(path)
-            input.checks.map(_.identity) shouldBe Vector("index-local", "index-remote", "test")
-            input.checks.last.stdout should include("All tests passed")
+          def _load_conflict_(): WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing] = {
+            var actual = Option.empty[WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]]
+            prepare(call => call.repositoryWorkC(identity, RepositorySyncNativeConflictContinuation.completionOperation,
+              RepositorySyncConflictSemantic.inputCodec).map(value => { actual = Some(value); () }))
+            actual.get
+          }
+          def _load_question_(): WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing] = {
+            var actual = Option.empty[WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]]
+            prepare(call => call.repositoryQuestionC(identity).map(value => { actual = Some(value); () }))
+            actual.get
+          }
+          def _review_(response: V.RepositorySyncAdvanceResult): Unit = {
+            response.kind shouldBe "Request"
+            response.review.get.changedPaths shouldBe Vector(path)
+            response.review.get.checks.map(_.identity) shouldBe Vector("index-local", "index-remote", "test")
+            response.review.get.checks.last.stdout should include("All tests passed")
+            prepare(call => call.repositoryWorkC(identity, RepositorySyncNativeMergeReviewContinuation.completionOperation,
+              RepositorySyncNativeMergeReview.inputCodec).map(value => { review = Some(value); () }))
             Files.readString(root.resolve("repository").resolve(path)) shouldBe "resolved shared line\n"
             saved = Some(_current_())
           }
@@ -741,10 +658,13 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             When("selected fixed fixture commands create the owned initial conflict")
             prepare(call => call.setupC(_setup_commands_(root, scenario).size, Some(root), scenario)
               .flatMap(_ => _prepare_input_(call, startInput, selection, root, merged = true)))
-            take(WorkflowWaitJsonV1.decodeC(_invoke_("startRepositorySync", NativeWorkflowOperationInputFixture.repository(startInput))))
+            val started = _invoke_[V.RepositorySyncStartResult]("startRepositorySync", NativeWorkflowOperationInputFixture.repository(startInput))
+            execution = Some(InstanceIdentity(started.sessionId))
             When("owning advance observes the actual failed merge and issues only assigned conflict work")
-            conflict = Some(take(WorkflowWorkOrderJsonV1.decodeC(_invoke_("advanceRepositorySync", advance),
-              RepositorySyncConflictSemantic.inputCodec)))
+            val response = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
+            response.kind shouldBe "Request"
+            response.conflict.get.conflicts.map(_.path) shouldBe Vector(path)
+            conflict = Some(_load_conflict_())
             val input = conflict.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request.input.get.value
             Then("the assigned conflict preserves the exact literal path and actual base/local/remote contents")
             input.conflicts.map(_.path) shouldBe Vector(path)
@@ -766,20 +686,26 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
                 RepositorySyncConflictSemantic.Result(decision, resolutions, "Specification-owned response to the assigned conflict")),
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-worker")))
             val before = Files.readString(root.resolve("repository").resolve(path))
-            val encoded = io.circe.parser.parse(take(NativeWorkflowOperationInputFixture.encodeC(result,
-              RepositorySyncConflictSemantic.resultCodec))).toOption.get
-            val annotated = encoded.hcursor.downField("result").downField("value").downField("payload")
-              .withFocus(_.mapObject(_.add("argv", Json.arr(Json.fromString("push"))))).top.get
-            val wire = annotated.mapObject(_.remove("requestIdentity").add("command", Json.True)).noSpaces
+            val business = Json.obj("decision" -> Json.fromString(result.result.value.decision),
+              "resolutions" -> Json.fromValues(result.result.value.resolutions.map(value => Json.obj(
+                "conflictIdentity" -> Json.fromString(value.conflictIdentity), "text" -> Json.fromString(value.text)))),
+              "rationale" -> Json.fromString(result.result.value.rationale), "argv" -> Json.arr(Json.fromString("push")))
+            val wire = take(NativeWorkflowOperationInputFixture.submissionC(result)).map {
+              case p if p.name == "result" => Property("result", business, None)
+              case p => p
+            } :+ Property("command", true, None)
             When("only the semantic business answer with inert diagnostics completes its unique assigned conflict")
-            val acknowledgement = _answer_("submitRepositorySyncWorkResult", wire)
-            take(WorkflowWaitJsonV1.decodeC(acknowledgement))
+            val acknowledgement = _invoke_[V.RepositorySyncConflictSubmissionResult]("submitRepositorySyncWorkResult", wire)
+            acknowledgement.accepted shouldBe true
+            acknowledgement.message should include(result.result.value.rationale)
             Then("semantic completion retains the result without writing a resolution file")
             Files.readString(root.resolve("repository").resolve(path)) shouldBe before
-            val next = _invoke_("advanceRepositorySync", advance)
+            val next = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
             if (decision == "resolved") _review_(next)
             else {
-              question = Some(take(WorkflowDecisionJsonV1.decodeC(next, RepositorySyncHumanConflict.inputCodec)))
+              next.kind shouldBe "Human"
+              next.human.get.conflict.conflicts.map(_.path) shouldBe Vector(path)
+              question = Some(_load_question_())
               val request = question.get.current.asInstanceOf[WorkflowContinuation.Decision[RepositorySyncHumanConflict.Input]].request
               request.completionOperation shouldBe RepositorySyncHumanConflict.completionOperation
               request.input.get.value.conflict shouldBe input
@@ -797,11 +723,14 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
                 RepositorySyncHumanConflict.Answer("ProvideResolution", order.input.get.value.conflict.conflicts.map(c =>
                   RepositorySyncConflictSemantic.Resolution(c.identity, "resolved shared line\n")), "Explicit test-owned Human resolution")),
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("participant")))
-            val encoded = io.circe.parser.parse(take(NativeWorkflowOperationInputFixture.encodeC(result,
-              RepositorySyncHumanConflict.answerCodec))).toOption.get
-            val annotated = encoded.hcursor.downField("result").downField("value").downField("payload")
-              .withFocus(_.mapObject(_.add("command", Json.True))).top.get
-            val wire = annotated.mapObject(_.remove("requestIdentity").add("grant", Json.True)).noSpaces
+            val business = Json.obj("choice" -> Json.fromString(result.result.value.choice),
+              "resolutions" -> Json.fromValues(result.result.value.resolutions.map(value => Json.obj(
+                "conflictIdentity" -> Json.fromString(value.conflictIdentity), "text" -> Json.fromString(value.text)))),
+              "rationale" -> Json.fromString(result.result.value.rationale), "command" -> Json.True)
+            val wire = take(NativeWorkflowOperationInputFixture.submissionC(result)).map {
+              case p if p.name == "answer" => Property("answer", business, None)
+              case p => p
+            } :+ Property("grant", true, None)
             val before = Files.readString(root.resolve("repository").resolve(path))
             When("the genuinely current Human answer has no separately prepared host evidence")
             _call_("submitRepositoryConflictDecision", wire).isSuccess shouldBe false
@@ -811,8 +740,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             Given("explicit specification-owned Human evidence bound to the exact question and answer")
             prepare(_.humanEvidenceC(work, result))
             When("public Human completion consumes the evidenced choice/resolutions without routing echoes or diagnostic authority")
-            val acknowledgement = _answer_("submitRepositoryConflictDecision", wire)
-            take(WorkflowWaitJsonV1.decodeC(acknowledgement))
+            val acknowledgement = _invoke_[V.RepositorySyncHumanConflictSubmissionResult]("submitRepositoryConflictDecision", wire)
+            acknowledgement.accepted shouldBe true
+            acknowledgement.message should include("ProvideResolution")
             Then("Human completion retains one adjacent unsuspended answer without performing file effects")
             val accepted = _current_()
             accepted.history.size shouldBe saved.get.history.size + 1
@@ -820,7 +750,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             accepted.currentProgression shouldBe Some(ProgressionReference("sync.MergeResolutionAdmitted"))
             Files.readString(root.resolve("repository").resolve(path)) shouldBe before
             When("owning advance materializes and validates the retained resolution before independent review")
-            _review_(_invoke_("advanceRepositorySync", advance))
+            _review_(_invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance))
           } else if (session == "review") {
             Given("the actual merge-review assignment after normal resolution and checks")
             val work = review.get
@@ -833,15 +763,16 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-reviewer")))
             Given("independent specification-owned evidence for only the actual current merge review")
             prepare(_.reviewEvidenceC(input, result))
-            val wire = take(NativeWorkflowOperationInputFixture.encodeC(result, RepositorySyncNativeMergeReview.resultCodec))
+            val wire = take(NativeWorkflowOperationInputFixture.submissionC(result))
             When("the public completion accepts that current merge review without answering another synchronization")
-            val acknowledgement = _answer_("submitNativeMergeReview", wire)
-            take(WorkflowWaitJsonV1.decodeC(acknowledgement))
+            val acknowledgement = _invoke_[V.RepositorySyncNativeMergeReviewSubmissionResult]("submitNativeMergeReview", wire)
+            acknowledgement.accepted shouldBe true
+            acknowledgement.message should include(result.result.value.rationale)
           } else {
             When("owning advance commits the reviewed resolution and observes convergence or its retained terminal")
-            val wire = _invoke_("advanceRepositorySync", advance)
-            val result = take(WorkflowTerminalJsonV1.decodeC(wire, RepositorySyncNativeConvergence.resultCodec))
-            val payload = result.current.asInstanceOf[WorkflowContinuation.Terminal[RepositorySyncNativeConvergence.Result]].result.value
+            val result = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
+            result.kind shouldBe "Terminal"
+            val payload = result.convergence.get
             var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
             prepare(call => call.observeC().map(value => { observed = Some(value); () }))
             Then("the terminal matches the actual clean equal repository tips and retained resolved file")
@@ -853,7 +784,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             Files.readString(root.resolve("repository").resolve(path)) shouldBe "resolved shared line\n"
             val current = _current_()
             current.lifecycle shouldBe Lifecycle.Completed
-            result.handle shouldBe take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, current))
+            result.sessionId shouldBe current.identity.value
             saved = Some(current)
           }
         }
@@ -866,29 +797,40 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
       val root = Files.createTempDirectory(work, "episode-")
       val startInput = ThreeWorkflowNormalHostFixture.definition(root).repository.input
       val selection = _repository_selection_(startInput, "selected-repository", "direct-repository-start")
-      val identity = take(RepositorySyncManagedFetch.identityC(selection.selectionId, selection.idempotencyKey))
+      var execution = Option.empty[InstanceIdentity]
+        def identity: InstanceIdentity = execution.get
       val start = NativeWorkflowOperationInputFixture.repository(startInput)
-      val advance = NativeWorkflowOperationInputFixture.advance()
+      def advance: List[Property] = NativeWorkflowOperationInputFixture.advance(identity.value)
       var issued = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
       var pending = Option.empty[InstanceRecord]
       for (session <- Vector("issue", "complete")) _with_runtime_(root, "Diverged") {
         (owner, component, actor, prepare) =>
-        def _call_(operation: String, wire: String) = owner.executeOperationResponseInContext(
+        def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
-            arguments = List(Argument("arg1", wire))), actor)
-        def _invoke_(operation: String, wire: String): String = _scalar_(take(_call_(operation, wire)))
+            properties = properties), actor)
+        def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = _value_[A](take(_call_(operation, properties)))
         def _current_(): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
+        def _review_(): WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing] = {
+          val response = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
+          response.kind shouldBe "Request"
+          response.review.get.changedPaths shouldBe Vector("local.txt", "remote.txt")
+          response.review.get.checks.last.stdout should include("All tests passed")
+          var actual = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
+          prepare(call => call.repositoryWorkC(identity, RepositorySyncNativeMergeReviewContinuation.completionOperation,
+            RepositorySyncNativeMergeReview.inputCodec).map(value => { actual = Some(value); () }))
+          actual.get
+        }
         if (session == "issue") {
           prepare(call => call.setupC(_setup_commands_(root, "Diverged").size, Some(root))
             .flatMap(_ => _prepare_input_(call, startInput, selection, root, merged = true)))
-          take(WorkflowWaitJsonV1.decodeC(_invoke_("startRepositorySync", start))).handle.instanceIdentity shouldBe identity
+          val started = _invoke_[V.RepositorySyncStartResult]("startRepositorySync", start)
+            execution = Some(InstanceIdentity(started.sessionId))
           When("advance performs a real pending merge and validation before issuing the assigned independent review")
-          val request = take(WorkflowWorkOrderJsonV1.decodeC(_invoke_("advanceRepositorySync", advance),
-            RepositorySyncNativeMergeReview.inputCodec))
+          val request = _review_()
           val order = request.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request
           val input = order.input.get.value
           Then("both parent diffs and actual selected check receipts are covered by the saved review")
@@ -905,8 +847,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         } else {
           if (session == "complete") {
             When("a fresh runtime supplies the assigned review for its semantic result")
-            issued = Some(take(WorkflowWorkOrderJsonV1.decodeC(_invoke_("advanceRepositorySync", advance),
-              RepositorySyncNativeMergeReview.inputCodec)))
+            issued = Some(_review_())
             val request = issued.get
             val order = request.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request
             val input = order.input.get.value
@@ -915,7 +856,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               order.context.snapshot, TypedValue(RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
                 RepositorySyncNativeMergeReview.Result("accept", "Specification-owned review covers both parent diffs and actual checks", Vector.empty)),
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-reviewer")))
-            val wire = take(NativeWorkflowOperationInputFixture.encodeC(result, RepositorySyncNativeMergeReview.resultCodec))
+            val wire = take(NativeWorkflowOperationInputFixture.submissionC(result))
             When("the semantic result has no separately prepared host review evidence")
             _call_("submitNativeMergeReview", wire).isSuccess shouldBe false
             Then("the public completion refuses it without appending a native transition")
@@ -923,7 +864,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             Given("explicit specification-owned host evidence bound to the original assigned review and exact result")
             prepare(_.reviewEvidenceC(input, result))
             When("only that assigned semantic result is returned through the public completion Operation")
-            take(WorkflowWaitJsonV1.decodeC(_invoke_("submitNativeMergeReview", wire)))
+            val acknowledgement = _invoke_[V.RepositorySyncNativeMergeReviewSubmissionResult]("submitNativeMergeReview", wire)
+            acknowledgement.accepted shouldBe true
+            acknowledgement.message should include(result.result.value.rationale)
             val accepted = _current_()
             Then("completion commits one adjacent unsuspended ReviewAccepted entry without claiming convergence")
             accepted.history.size shouldBe pending.get.history.size + 1
@@ -931,9 +874,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             accepted.currentProgression shouldBe Some(ProgressionReference("sync.ReviewAccepted"))
           }
           When("owning advance commits and pushes the accepted merge or returns its retained terminal")
-          val wire = _invoke_("advanceRepositorySync", advance)
-          val result = take(WorkflowTerminalJsonV1.decodeC(wire, RepositorySyncNativeConvergence.resultCodec))
-          val payload = result.current.asInstanceOf[WorkflowContinuation.Terminal[RepositorySyncNativeConvergence.Result]].result.value
+          val result = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
+          result.kind shouldBe "Terminal"
+          val payload = result.convergence.get
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           prepare(call => call.observeC().map(value => { observed = Some(value); () }))
           Then("the real clean equal tips, both preserved files and durable Completed state match the terminal")
@@ -946,7 +889,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           Files.readString(root.resolve("repository/remote.txt")) shouldBe "remote addition\n"
           val state = _current_()
           state.lifecycle shouldBe Lifecycle.Completed
-          result.handle shouldBe take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, state))
+          result.sessionId shouldBe state.identity.value
         }
       }
     }

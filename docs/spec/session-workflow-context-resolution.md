@@ -1,6 +1,33 @@
 # Session-resolved public Workflow Operations
 
-## Current C18 public contract — 2026-10-12
+## Current Phase5.3 execution contract — 2026-10-12
+
+The [common Operation loop](common-workflow-operation-loop.md) supersedes the
+old session-association/ambiguity-selector contract below. Start receives named
+business input, accepts an optional proposed sessionId and returns one ID for
+the actual new execution. Advance/Submit use that required execution ID directly.
+An authenticated chat can contain independent executions; no caller supplies
+target/context/request ambiguity selectors and no discovery/count/filter pipeline
+chooses the latest row.
+
+Current native state identifies pending work/decision. Split's actual revision
+selects a closed business frontier reference, not a native-state clone or
+comparison certificate. Necessary ordered Goal business history and actual
+owning transaction reads remain; wrappers/response rendering do not reread
+stored result copies to certify unchanged data. No new verifier or compatibility
+route is introduced.
+
+The normal direct Goal/Repository/Split specs contain distinct-session
+interleaving and new-execution restart examples. Submit returns actual
+accepted/outcome/message before a separate Advance. No duplicate-answer winner,
+identical replay, complete-history or intermediate-recovery guarantee is added.
+Current source/generation/compile observations do not establish Phase acceptance.
+
+## Historical C18 public contract and later Phase5.2 evidence
+
+All following rules/examples/validation records retain their original historical
+input scope. Their old interface, open milestones and broader assurance scenarios
+are not current Phase5.3 requirements or alternate public routes.
 
 R1–R5 and the connected normal-use acceptance below remain the session contract.
 This section takes precedence over dated migration cutoffs and all historical

@@ -1,0 +1,342 @@
+package org.simplemodeling.textus.smworkflow.admission
+
+import cats.data.NonEmptyVector
+import org.goldenport.Consequence
+import org.goldenport.cncf.workflow.{WorkflowInstancePersistence, ContextReference}
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.{ContinuationResult, WorkflowInteraction, WorkflowContinuation}
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.RecordPresentable
+import org.simplemodeling.textus.smworkflow.value as V
+
+/** Concrete public business output projections from their actual owning
+  * outcome. No extra store read, result verifier or transport envelope.
+  * @since   Oct. 12, 2026
+  * @version Oct. 12, 2026
+  */
+private[smworkflow] object NativeWorkflowOperationOutput {
+  import SplitPhaseExplicitProposalPrecheck as P
+  import SplitPhaseExplicitBoundaryValidation as B
+  import SplitPhaseExplicitPartitionSemantic as S
+  import SplitPhasePlanningSnapshot as R
+
+  type SubmissionValue = V.GoalPhaseWorkSubmissionResult | V.GoalPhaseOrderedDecisionSubmissionResult |
+    V.SplitPhaseSemanticSubmissionResult | V.SplitPhaseScopeSubmissionResult | V.SplitPhaseReasoningSubmissionResult |
+    V.SplitPhaseHumanDirectionSubmissionResult | V.RepositorySyncConflictSubmissionResult |
+    V.RepositorySyncNativeMergeReviewSubmissionResult | V.RepositorySyncHumanConflictSubmissionResult
+
+  /** Existing structured protocol egress. Domain DTOs are not primitive
+    * scalars; carry their declared business record without a String envelope. */
+  def response(value: RecordPresentable): OperationResponse =
+    OperationResponse.RecordResponse(value.toRecord())
+
+  def goalWork(value: GoalPhaseNativeWork.Request): V.GoalPhaseWorkView =
+    V.GoalPhaseWorkView(value.kind, value.purpose, value.stepIdentity, _goal_plan(value.selectedPlan),
+      _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.candidate.map(_goal_snapshot),
+      value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
+      value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(c =>
+        V.GoalPhaseNativeCheckReceipt(c.identity, c.termination, c.exitCode, c.stdout, c.stderr)))),
+      value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale)))
+
+  def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]): Consequence[V.GoalPhaseAdvanceResult] =
+    workInputC(work).map(value => V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
+      Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
+      None, None, Some(goalWork(value)), None, None, None, None, None))
+
+  def goalHumanC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]): Consequence[V.GoalPhaseAdvanceResult] =
+    decisionInputC(question).map(value => V.GoalPhaseAdvanceResult(question.handle.instanceIdentity.value, "Human", value.reason,
+      Some(GoalPhaseOrderedHumanDecision.completionOperation.operation), Some(question.handle.instanceIdentity.value),
+      Some("GoalPhaseOrderedDecisionAnswer"), None, None, None,
+      Some(V.GoalPhaseHumanQuestion(goalWork(value.work), _goal_result(value.result), value.reason,
+        GoalPhaseOrderedHumanDecision.choices)), None, None, None, None))
+
+  def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
+    V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,
+      None, None, None, None, None, None)
+
+  def goalChild(session: String, child: V.RepositorySyncAdvanceResult): V.GoalPhaseAdvanceResult =
+    V.GoalPhaseAdvanceResult(session, child.kind, child.message, child.submitOperation, child.submitSessionId,
+      child.resultType, child.condition, child.outcome, None, None, child.conflict, child.review, child.human, None)
+
+  def goalComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
+    completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
+    repository: V.RepositorySyncNativeConvergenceResult): V.GoalPhaseAdvanceResult =
+    V.GoalPhaseAdvanceResult(session, "Terminal", "The ordered Phase and repository synchronization completed.",
+      None, None, None, None, Some("completed"), None, None, None, None, None,
+      Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
+        _goal_snapshot(candidate), repository)))
+
+  def repositoryConflict(value: RepositorySyncNativeConflictInput.Request): V.RepositorySyncConflictWorkView =
+    V.RepositorySyncConflictWorkView(value.localTip, value.remoteTip, value.conflicts.map(c =>
+      V.RepositorySyncNativeConflict(c.identity, c.path, V.RepositorySyncConflictBlob(c.base.identity, c.base.text),
+        V.RepositorySyncConflictBlob(c.local.identity, c.local.text), V.RepositorySyncConflictBlob(c.remote.identity, c.remote.text),
+        c.mode, c.worktree)))
+
+  def repositoryConflictRequestC(work: WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]):
+    Consequence[V.RepositorySyncAdvanceResult] = workInputC(work).map(value =>
+      V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Resolve only the selected repository conflicts.",
+        Some(RepositorySyncNativeConflictContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
+        Some("RepositorySyncConflictResult"), None, None, Some(repositoryConflict(value)), None, None, None))
+
+  def repositoryReviewRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]):
+    Consequence[V.RepositorySyncAdvanceResult] = for {
+    value <- workInputC(work)
+    receipts <- value.checks.foldLeft(Consequence.success(Vector.empty[V.RepositorySyncNativeValidationReceipt])) { (prior, receipt) => for {
+      values <- prior
+      code <- receipt.exitCode.map(Consequence.success).getOrElse(
+        Consequence.stateConflict("Merge review has no completed check exit status"))
+    } yield values :+ V.RepositorySyncNativeValidationReceipt(receipt.identity, receipt.termination, code, receipt.stdout, receipt.stderr) }
+    view = V.RepositorySyncMergeReviewWorkView(value.localTip, value.remoteTip, value.indexTree, value.changedPaths,
+      value.localDiff, value.remoteDiff, value.validationMode, value.validationReason, value.selectedChecks, receipts)
+  } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Independently review the selected merge.",
+    Some(RepositorySyncNativeMergeReviewContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
+    Some("RepositorySyncNativeMergeReviewResult"), None, None, None, Some(view), None, None)
+
+  def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]):
+    Consequence[V.RepositorySyncAdvanceResult] = decisionInputC(question).map(value =>
+      V.RepositorySyncAdvanceResult(question.handle.instanceIdentity.value, "Human", value.rationale,
+        Some(RepositorySyncHumanConflict.completionOperation.operation), Some(question.handle.instanceIdentity.value),
+        Some("RepositorySyncHumanConflictAnswer"), None, None, None, None,
+        Some(V.RepositorySyncHumanQuestion(repositoryConflict(value.conflict), value.rationale, RepositorySyncHumanConflict.choices)), None))
+
+  def repositoryWait(session: String, message: String, condition: String): V.RepositorySyncAdvanceResult =
+    V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None)
+
+  def repositoryConvergence(value: RepositorySyncNativeConvergence.Result): V.RepositorySyncNativeConvergenceResult =
+    V.RepositorySyncNativeConvergenceResult(value.repositoryRoot, value.localBranch, value.remote, value.remoteBranch, value.tip, value.tree)
+
+  def repositoryComplete(session: String, value: RepositorySyncNativeConvergence.Result): V.RepositorySyncAdvanceResult =
+    V.RepositorySyncAdvanceResult(session, "Terminal", "Actual local, tracking and remote tips converged with a clean repository.",
+      None, None, None, None, Some("converged"), None, None, None, Some(repositoryConvergence(value)))
+
+  private def _goal_plan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
+    V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
+      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks)),
+      value.phaseChecks, value.repairLimit)
+  private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
+    V.GoalPhaseNativeSnapshot(value.head, value.tree)
+  private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
+    V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review)
+  private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
+    V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings)
+
+  /** Called only by the owning completion's after-commit projection. The
+    * native closing result remains its real type/reference pair; it is not
+    * an empty business DTO or a substitute for this public result. */
+  def accepted[A <: NativeWorkflowResultInput.Value](submitted: ContinuationResult[A],
+    completed: WorkflowInstancePersistence.InstanceRecord): SubmissionValue = {
+    val session = completed.identity.value
+    submitted.result.value match {
+      case value: GoalPhaseNativeWork.Result =>
+        V.GoalPhaseWorkSubmissionResult(session, true, "accepted", "Accepted " + value.outcome + ": " + value.summary)
+      case value: GoalPhaseOrderedHumanDecision.Answer =>
+        V.GoalPhaseOrderedDecisionSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
+      case value: SplitPhaseExplicitPartitionSemantic.Judgment =>
+        V.SplitPhaseSemanticSubmissionResult(session, true, "accepted", "Accepted partition " + value.decision + ": " + value.rationale)
+      case value: SplitPhaseScopeSemantic.Judgment =>
+        V.SplitPhaseScopeSubmissionResult(session, true, "accepted", "Accepted handoff scope " + value.decision + ": " + value.rationale)
+      case value: SplitPhaseExplicitReasoningSemantic.Judgment =>
+        V.SplitPhaseReasoningSubmissionResult(session, true, "accepted", "Accepted reasoning " + value.decision + ": " + value.rationale)
+      case value: SplitPhaseHumanDirectionAnswerContract.Answer =>
+        val choice = value match {
+          case SplitPhaseHumanDirectionAnswerContract.Answer.ProvideResolution(reference) =>
+            "ProvideResolution " + reference.identity + "@" + reference.revision
+          case SplitPhaseHumanDirectionAnswerContract.Answer.Defer => "Defer"
+          case SplitPhaseHumanDirectionAnswerContract.Answer.Cancel => "Cancel"
+        }
+        V.SplitPhaseHumanDirectionSubmissionResult(session, true, "accepted", "Accepted Human " + choice + ".")
+      case value: RepositorySyncConflictSemantic.Result =>
+        V.RepositorySyncConflictSubmissionResult(session, true, "accepted", "Accepted conflict " + value.decision + ": " + value.rationale)
+      case value: RepositorySyncNativeMergeReview.Result =>
+        V.RepositorySyncNativeMergeReviewSubmissionResult(session, true, "accepted", "Accepted merge review " + value.decision + ": " + value.rationale)
+      case value: RepositorySyncHumanConflict.Answer =>
+        V.RepositorySyncHumanConflictSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
+    }
+  }
+
+  def splitPartition(value: S.Request): V.SplitPhasePartitionWorkView =
+    V.SplitPhasePartitionWorkView(_source(value.source), value.items.map(item =>
+      V.SplitPhasePartitionNovelWork(_item_identity(item.identity), item.reason, _item(item.closure))),
+      value.boundaries.map(boundary => V.SplitPhasePartitionUnknownBoundary(
+        V.SplitPhasePartitionEdge(_item_identity(boundary.edge.afterItem), boundary.edge.disposition.toString,
+          _authority(boundary.edge.authority)), _item(boundary.left), _item(boundary.right))))
+
+  def splitScopeC(value: SplitPhaseScopeSemantic.Request): Consequence[V.SplitPhaseScopeWorkView] = for {
+    actual <- value.gaps.foldLeft(Consequence.success(Vector.empty[V.SplitPhaseUnresolvedHandoffScope])) { (prior, gap) => for {
+      values <- prior
+      producing <- _nonempty_c(gap.producingItems.map(_item_identity), "scope producing items")
+      receiving <- _nonempty_c(gap.receivingItems.map(_item_identity), "scope receiving items")
+    } yield values :+ V.SplitPhaseUnresolvedHandoffScope(_handoff(gap.original), producing, receiving) }
+    gaps <- _nonempty_c(actual, "scope gaps")
+    items <- _nonempty_c(value.items.map(_item), "scope source items")
+  } yield V.SplitPhaseScopeWorkView(_source(value.source), gaps, items)
+
+  def splitReasoning(value: SplitPhaseExplicitReasoningSemantic.Request): V.SplitPhaseReasoningWorkView =
+    V.SplitPhaseReasoningWorkView(_source(value.source), _authority(value.authority),
+      V.SplitPhaseReasoningDemandReference(value.demand.identity, value.demand.revision), value.items.map(item =>
+        V.SplitPhaseReasoningUnknownItem(_item_identity(item.identity), item.reason, _item(item.closure))))
+
+  def splitPartitionRequestC(work: WorkflowInteraction[S.Request, Nothing]): Consequence[V.SplitPhaseAdvanceResult] =
+    workInputC(work).map(value => splitRequest(work.handle.instanceIdentity.value, "submitPartitionSemanticResult",
+      "SplitPhasePartitionSemanticResult", "Assess only the unresolved partition work and boundaries.",
+      partition = Some(splitPartition(value))))
+
+  def splitScopeRequestC(work: WorkflowInteraction[SplitPhaseScopeSemantic.Request, Nothing]):
+    Consequence[V.SplitPhaseAdvanceResult] = for {
+    input <- workInputC(work)
+    value <- splitScopeC(input)
+  } yield splitRequest(work.handle.instanceIdentity.value, "submitHandoffScopeResult", "SplitPhaseScopeSemanticResult",
+    "Resolve only the requested handoff scopes.", scope = Some(value))
+
+  def splitReasoningRequestC(work: WorkflowInteraction[SplitPhaseExplicitReasoningSemantic.Request, Nothing]):
+    Consequence[V.SplitPhaseAdvanceResult] = workInputC(work).map(value => splitRequest(work.handle.instanceIdentity.value,
+      "submitReasoningResult", "SplitPhaseReasoningSemanticResult", "Classify only the unresolved reasoning items.",
+      reasoning = Some(splitReasoning(value))))
+
+  /** The private issued input still owns its saved business frame. Consume it
+    * once for the public question; never reissue or consult candidate stores. */
+  def splitScopeHumanC(question: WorkflowInteraction[SplitPhaseNativeHumanDirection.Input, Nothing]):
+    Consequence[V.SplitPhaseAdvanceResult] = for {
+    input <- decisionInputC(question)
+    snapshot = input.frontier
+    request <- SplitPhaseScopeSemantic.requestC(snapshot.first)
+    scope <- splitScopeC(request)
+    judgment <- _scope_judgment_c(snapshot.judgment)
+    source = snapshot.first.snapshot.selection.proposal.source
+    value = V.SplitPhaseScopeHumanQuestion(snapshot.judgment.rationale, SplitPhaseHumanDirectionAnswerContract.choices,
+      source.phase.value, V.WorkflowArtifactReference(source.authority.identity, source.authority.revision),
+      snapshot.first.snapshot.selection.boundary.boundary.items.map(_selected_item),
+      _human_candidates(snapshot.first.snapshot), scope.gaps.toVector, judgment)
+  } yield splitRequest(question.handle.instanceIdentity.value, "submitSplitHumanDirection", "SplitPhaseHumanDirectionAnswer",
+    value.rationale, scopeHuman = Some(value))
+
+  def splitReasoningHumanC(question: WorkflowInteraction[SplitPhaseReasoningHumanDirection.Input, Nothing]):
+    Consequence[V.SplitPhaseAdvanceResult] = for {
+    input <- decisionInputC(question)
+    request = input.request
+    snapshot = input.frontier
+    source = snapshot.selection.proposal.source
+    judgment = input.judgment
+    value = V.SplitPhaseReasoningHumanQuestion(judgment.rationale, SplitPhaseHumanDirectionAnswerContract.choices,
+      source.phase.value, V.WorkflowArtifactReference(source.authority.identity, source.authority.revision),
+      splitReasoning(request), V.SplitPhaseReasoningSemanticResult(judgment.decision.toString, judgment.rationale,
+        judgment.assignments.map(a => V.SplitPhaseReasoningAssignment(_item_identity(a.identity), a.classification.toString,
+          a.rationale)), judgment.evidence.map(e => V.SplitPhasePartitionEvidenceReference(e.identity, e.revision))),
+      snapshot.selection.boundary.boundary.items.map(_selected_item), _human_candidates(snapshot))
+  } yield splitRequest(question.handle.instanceIdentity.value, "submitSplitHumanDirection", "SplitPhaseHumanDirectionAnswer",
+    value.rationale, reasoningHuman = Some(value))
+
+  def workInputC[A](value: WorkflowInteraction[A, Nothing]): Consequence[A] = value.current match {
+    case work: WorkflowContinuation.WorkOrder[A] => work.request.input.map(_.value).map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Issued work has no business input"))
+    case _ => Consequence.stateConflict("Requested work is not a WorkOrder")
+  }
+  def decisionInputC[A](value: WorkflowInteraction[A, Nothing]): Consequence[A] = value.current match {
+    case question: WorkflowContinuation.Decision[A] => question.request.input.map(_.value).map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Issued Human question has no business input"))
+    case _ => Consequence.stateConflict("Requested Human question is not a Decision")
+  }
+
+  private def _scope_judgment_c(value: SplitPhaseScopeSemantic.Judgment): Consequence[V.SplitPhaseScopeSemanticResult] = for {
+    scopes <- value.scopes.foldLeft(Consequence.success(Vector.empty[V.SplitPhaseResolvedHandoffScope])) { (prior, scope) => for {
+      accumulated <- prior
+      producing <- _nonempty_c(scope.producingItems.map(_item_identity), "submitted scope producing items")
+      receiving <- _nonempty_c(scope.receivingItems.map(_item_identity), "submitted scope receiving items")
+    } yield accumulated :+ V.SplitPhaseResolvedHandoffScope(V.SplitPhaseScopeHandoffIdentity(scope.handoff.value),
+      producing, receiving, scope.rationale) }
+    evidence <- _nonempty_c(value.evidence.map(e => V.SplitPhasePartitionEvidenceReference(e.identity, e.revision)),
+      "submitted scope evidence")
+  } yield V.SplitPhaseScopeSemanticResult(value.decision.toString, value.rationale, scopes, evidence)
+
+  private def _human_candidates(snapshot: R.Record): Vector[V.SplitPhaseHumanCandidate] = snapshot.partition match {
+    case R.PartitionView.Enumerated(_, _, candidates) =>
+      val projections = snapshot.projection.toVector.flatMap(_.candidates).map(c => c.key -> c).toMap
+      candidates.map { candidate =>
+        val projected = projections.get(candidate.key)
+        val gaps = projected.toVector.collect { case value: R.CandidateProjectionView.SemanticView => value.gaps }.flatten
+        V.SplitPhaseHumanCandidate(candidate.key.cutAfterIndices, candidate.children.map(child =>
+          V.SplitPhaseHumanChild(child.ownedItems.map(_.value), child.expectedMinutes, snapshot.selection.boundary.ownership.children
+            .filter(c => child.ownedItems.exists(id => snapshot.selection.proposal.proposal.children.find(_.phase == c.phase)
+              .exists(_.ownedUnfinishedItems.contains(id)))).map(_.repository.value).distinct)),
+          projected.map {
+            case _: R.CandidateProjectionView.BuiltView => "Built"
+            case _: R.CandidateProjectionView.SemanticView => "ScopeRequired"
+            case _: R.CandidateProjectionView.DecisionView => "DecisionNeeded"
+          }.getOrElse("Unprojected"), projected.toVector.collect { case value: R.CandidateProjectionView.DecisionView =>
+            value.reason.toString }, gaps.map(gap => V.SplitPhaseUnresolvedHandoffScope(_handoff(gap.original),
+            NonEmptyVector.fromVectorUnsafe(gap.producingItems.map(_item_identity)),
+            NonEmptyVector.fromVectorUnsafe(gap.receivingItems.map(_item_identity)))))
+      }
+    case _ => Vector.empty
+  }
+
+  /** Only the chosen Built candidate is consumed, not a second planning pass
+    * or a round trip through a JSON transport envelope. Documents are already
+    * produced by their owning deterministic document projection. */
+  def splitSelectedC(snapshot: R.Record, documents: SplitPhaseSelectedDocuments.Projection,
+    mode: String, effect: Option[String]): Consequence[V.SplitPhaseSelectedPlanView] = for {
+    selected <- snapshot.objective match {
+      case Some(value: R.ObjectiveView.Selected) => Consequence.success(value)
+      case _ => Consequence.stateConflict("Split selected output has no selected objective")
+    }
+    built <- snapshot.projection.toVector.flatMap(_.candidates).collectFirst {
+      case value: R.CandidateProjectionView.BuiltView if value.key == selected.key => value
+    }.map(Consequence.success).getOrElse(Consequence.stateConflict("Split selected output has no Built candidate"))
+    items = snapshot.selection.boundary.boundary.items.map(item => item.identity -> item).toMap
+    children = built.proposal.children.zip(built.ownership.children).map { (child, owner) =>
+      V.SplitPhaseSelectedChild(child.phase.value, child.ownedUnfinishedItems.map(id => _selected_item(items(id))),
+        child.expectedMinutes, owner.repository.value, owner.closureCriteria.map(_.value), owner.validationOwner.value,
+        owner.dependencies.map(_.value), built.handoffs.incomingByChild(child.phase).map(_.value))
+    }
+  } yield V.SplitPhaseSelectedPlanView(mode, built.proposal.phase.value,
+    V.WorkflowArtifactReference(built.proposal.source.identity, built.proposal.source.revision),
+    V.WorkflowArtifactReference(built.proposal.authority.identity, built.proposal.authority.revision),
+    V.WorkflowArtifactReference(built.proposal.reference.identity, built.proposal.reference.revision),
+    selected.key.cutAfterIndices, selected.stage.toString, built.ownership.timing.toString, built.ownership.method,
+    built.ownership.driver, built.ownership.finalValidationOwner.value, children, built.handoffs.handoffs.map(_handoff),
+    built.localHandoffs.map(value => V.SplitPhaseLocalHandoff(value.original.identity.value, value.phase.value,
+      value.producingItems.map(_.value), value.receivingItems.map(_.value))), documents.documents.map(value =>
+      V.SplitPhaseSelectedDocument(value.relativePath, value.phase.value,
+        if (value.updateSourceSections) "updateSourceSections" else "createChild", value.ownedItems.map(_.value),
+        value.sections, value.childDocument)), effect)
+
+  def splitRequest(session: String, operation: String, resultType: String, message: String,
+    partition: Option[V.SplitPhasePartitionWorkView] = None, scope: Option[V.SplitPhaseScopeWorkView] = None,
+    reasoning: Option[V.SplitPhaseReasoningWorkView] = None,
+    scopeHuman: Option[V.SplitPhaseScopeHumanQuestion] = None,
+    reasoningHuman: Option[V.SplitPhaseReasoningHumanQuestion] = None): V.SplitPhaseAdvanceResult =
+    V.SplitPhaseAdvanceResult(session, if (scopeHuman.nonEmpty || reasoningHuman.nonEmpty) "Human" else "Request",
+      message, Some(operation), Some(session), Some(resultType), None, None, partition, scope, reasoning,
+      scopeHuman, reasoningHuman, None, None)
+
+  def splitSelected(session: String, value: V.SplitPhaseSelectedPlanView): V.SplitPhaseAdvanceResult =
+    V.SplitPhaseAdvanceResult(session, "Terminal", "Split plan " + value.mode + " completed.", None, None, None,
+      None, Some(if (value.mode == "APPLY") "Applied" else "Previewed"), None, None, None, None, None, Some(value), None)
+
+  def splitStopped(session: String, outcome: String, answer: ContextReference): V.SplitPhaseAdvanceResult =
+    V.SplitPhaseAdvanceResult(session, "Terminal", "The recorded Human direction ended this split run: " + outcome,
+      None, None, None, None, Some(outcome), None, None, None, None, None, None,
+      Some(V.SplitPhaseStoppedResult(outcome, V.WorkflowArtifactReference(answer.identity, answer.revision))))
+
+  private def _source(value: P.SourceReference): V.SplitPhasePartitionSourceReference =
+    V.SplitPhasePartitionSourceReference(value.identity, value.revision)
+  private def _authority(value: P.AuthorityReference): V.SplitPhasePartitionAuthorityReference =
+    V.SplitPhasePartitionAuthorityReference(value.identity, value.revision)
+  private def _item_identity(value: P.WorkItemIdentity): V.SplitPhasePartitionWorkItemIdentity =
+    V.SplitPhasePartitionWorkItemIdentity(value.value)
+  private def _item(value: B.Item): V.SplitPhasePartitionSourceItem =
+    V.SplitPhasePartitionSourceItem(_item_identity(value.identity),
+      value.closureCriteria.map(c => V.SplitPhasePartitionClosureCriterion(c.value)),
+      value.prerequisiteItems.map(_item_identity), _authority(value.authority))
+  private def _selected_item(value: B.Item): V.SplitPhaseSelectedWorkItem =
+    V.SplitPhaseSelectedWorkItem(value.identity.value, value.closureCriteria.map(_.value),
+      value.prerequisiteItems.map(_.value), V.WorkflowArtifactReference(value.authority.identity, value.authority.revision))
+  private def _handoff(value: B.Handoff): V.SplitPhaseScopeHandoff =
+    V.SplitPhaseScopeHandoff(V.SplitPhaseScopeHandoffIdentity(value.identity.value),
+      V.SplitPhaseScopePhaseIdentity(value.producingChild.value), V.SplitPhaseScopePhaseIdentity(value.receivingChild.value),
+      value.kind, value.input, value.action, value.output, V.SplitPhaseScopePhaseIdentity(value.owner.value),
+      value.invalidationReason, _authority(value.authority))
+  private def _nonempty_c[A](values: Vector[A], field: String): Consequence[NonEmptyVector[A]] =
+    NonEmptyVector.fromVector(values).map(Consequence.success).getOrElse(
+      Consequence.stateConflict("Split output requires " + field))
+
+}

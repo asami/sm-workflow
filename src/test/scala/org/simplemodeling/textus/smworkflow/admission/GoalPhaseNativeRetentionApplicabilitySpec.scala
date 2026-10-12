@@ -16,7 +16,7 @@ import RepositorySyncNativeProgressStore as N
 
 /** Native saved inputs are scoped facts, not complete host-declaration witnesses.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val candidate = O.Snapshot("a" * 40, "b" * 40)
@@ -232,8 +232,9 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
       val input = L.Input(work.instanceIdentity, work.sourceRevision, work.selectedPlan,
         work.originalBase, Vector(closed), candidate, "phase-review", "owned-child-invocation")
       val child = "owned-child-instance"
-      val result = R.Result(child, "/selected/repository", "main", "origin", "main", "f" * 40, candidate.tree)
-      val saved = L.Payload(input, child, None, None)
+      val result = org.simplemodeling.textus.smworkflow.value.RepositorySyncNativeConvergenceResult(
+        "/selected/repository", "main", "origin", "main", "f" * 40, candidate.tree)
+      val saved = L.Payload(input, child, None)
       val wire = L.codec.encode(saved)
       val nested = payload(wire)
       val selected = nested.hcursor.downField("input").focus.get
@@ -242,26 +243,28 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
       val oldPlan = plan.mapObject(_.remove("phaseReviewClassification").add("steps",
         Json.arr(step.mapObject(_.add("workClassification", Json.Null)))))
       When("a current row omits optional presentation fields")
-      L.codec.decode(replace(wire, nested.mapObject(_.remove("result").remove("childRevision")
+      L.codec.decode(replace(wire, nested.mapObject(_.remove("result")
         .add("input", selected.mapObject(_.add("plan", oldPlan)))))) shouldBe Right(saved)
       Then("the actual parent intent is readable without command or grant copies")
       nested.hcursor.downField("childCommand").focus shouldBe None
       nested.hcursor.downField("authorityReference").focus shouldBe None
-      val terminal = L.Result(work.selectedPlan, work.originalBase, Vector(closed), candidate, result, "21")
-      val terminalWire = L.resultCodec.encode(terminal)
-      L.resultCodec.decode(terminalWire.mapObject(_.add("plan", oldPlan))) shouldBe Right(terminal)
+      val completed = saved.copy(result = Some(result))
+      val completedWire = L.codec.encode(completed)
+      L.codec.decode(completedWire) shouldBe Right(completed)
       When("unused annotations accompany a current intent or real terminal result")
       val annotated = nested.mapObject(_.add("approve", Json.True).add("childCommand", Json.True)
         .add("authority", Json.True).add("input", selected.mapObject(_.add("command", Json.True))))
       L.codec.decode(replace(wire, annotated)) shouldBe Right(saved)
-      L.resultCodec.decode(terminalWire.mapObject(_.add("repository",
-        R.resultCodec.encode(result).mapObject(_.add("grant", Json.True))))) shouldBe Right(terminal)
+      val completedBody = payload(completedWire)
+      val convergence = completedBody.hcursor.downField("result").focus.get
+      L.codec.decode(replace(completedWire, completedBody.mapObject(_.add("result",
+        convergence.mapObject(_.add("grant", Json.True)))))) shouldBe Right(completed)
       Then("typed consumers still require their actual fields and only the current saved schema")
-      Vector(nested.mapObject(_.remove("childIdentity")), nested.mapObject(_.add("childIdentity", Json.True)),
+      Vector(nested.mapObject(_.remove("childSessionId")), nested.mapObject(_.add("childSessionId", Json.True)),
         nested.mapObject(_.remove("input"))).foreach(v => L.codec.decode(replace(wire, v)).isLeft shouldBe true)
       L.codec.decode(wire.mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.goal-phase.native-repository-closure.v1")))).isLeft shouldBe true
-      L.resultCodec.decode(terminalWire.mapObject(_.add("repository",
-        R.resultCodec.encode(result).mapObject(_.add("tip", Json.True))))).isLeft shouldBe true
+      L.codec.decode(replace(completedWire, completedBody.mapObject(_.add("result",
+        convergence.mapObject(_.add("tip", Json.True)))))).isLeft shouldBe true
     }
   }
 }

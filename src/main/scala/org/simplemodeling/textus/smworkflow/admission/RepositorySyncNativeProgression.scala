@@ -12,7 +12,7 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgression {
   def advanceC(identity: String, declaration: Fetch.Declaration, definition: DefinitionBinding,
@@ -21,9 +21,50 @@ private[smworkflow] object RepositorySyncNativeProgression {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port] = None,
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None): Consequence[String] = for {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
-    fetched <- Fetch.fetchC(session, declaration, core, fetchAcknowledgement)
+    output <- session.started.current.suspension match {
+      case Some(boundary) => _pending_c(session, boundary, core)
+      case None => _advance_session_c(session, declaration, definition, core, fetchAcknowledgement, acknowledgement,
+        conflicts, validationPolicy, review, convergence)
+    }
+  } yield output
+
+  /** The native suspension is the already selected assignment. Fetch and
+    * completed-stage discovery do not run merely to display pending work. */
+  private def _pending_c(session: Fetch.Session, boundary: WorkflowInstancePersistence.SuspensionBoundary,
+    core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    human <- RepositorySyncDefinitionBinding.humanConflictOperationC
+    review <- RepositorySyncDefinitionBinding.nativeReviewOperationC
+    identity = ContinuationIdentity(boundary.continuationIdentity.value)
+    output <- if (boundary.completion.value == human.metadata.completionContract.identity) for {
+      reader <- session.storage.bindDecisionC(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)
+      question <- reader.loadC(identity)(using core.executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(invalid("pending repository Human question is absent")))
+      output <- NativeWorkflowOperationOutput.repositoryHumanC(question)
+    } yield output else if (boundary.completion.value == review.metadata.completionContract.identity) for {
+      reader <- session.storage.bindIssuedC(RepositorySyncNativeMergeReviewContinuation.completionOperation,
+        RepositorySyncNativeMergeReview.inputCodec)
+      work <- reader.loadC(identity)(using core.executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(invalid("pending repository review is absent")))
+      output <- NativeWorkflowOperationOutput.repositoryReviewRequestC(work)
+    } yield output else for {
+      reader <- session.storage.bindIssuedC(RepositorySyncNativeConflictContinuation.completionOperation,
+        RepositorySyncConflictSemantic.inputCodec)
+      work <- reader.loadC(identity)(using core.executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(invalid("pending repository conflict work is absent")))
+      output <- NativeWorkflowOperationOutput.repositoryConflictRequestC(work)
+    } yield output
+  } yield output
+
+  private def _advance_session_c(session: Fetch.Session, declaration: Fetch.Declaration, definition: DefinitionBinding,
+    core: ActionCall.Core, fetchacknowledgement: () => Consequence[Unit], acknowledgement: String => Consequence[Unit],
+    conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
+    validationpolicy: Option[RepositorySyncNativeMergeValidation.Policy],
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    fetched <- Fetch.fetchC(session, declaration, core, fetchacknowledgement)
+    identity = session.started.current.identity.value
     store <- bindC(session, declaration, core, acknowledgement)
     continued <- if (convergence.nonEmpty) for {
       integrated <- store.loadC("integration-validated")
@@ -34,7 +75,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
             case None => invalid("retained integration validation has no actual source")
           }
           source <- RepositorySyncNativeMergeValidation.integrationSourceC(original)
-          policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
+          policy <- validationpolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
           _ <- RepositorySyncNativeMergeValidation.completedC(value, source, policy, merge = false)
           _ <- if (value.payload.stage == "IntegrationValidated" && value.payload.mergeHead.isEmpty &&
               session.started.current.suspension.isEmpty) Consequence.unit
@@ -50,7 +91,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
     wire <- continued match {
       case Some(value) => Consequence.success(value)
       case None => progressC(store, fetched._1, fetched._2.after.get,
-        conflicts, validationPolicy, review, convergence)
+        conflicts, validationpolicy, review, convergence)
     }
   } yield wire
 
@@ -59,10 +100,9 @@ private[smworkflow] object RepositorySyncNativeProgression {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]): Consequence[String] = for {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     preserved <- RepositorySyncNativePreservation.preserveC(store, fetched, observed)
     integrated <- RepositorySyncNativeIntegration.integrateC(store, preserved)
-    handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, integrated.record)
     detail = if (integrated.payload.stage == "MergeConflicted")
       "Actual merge conflict retained; owning semantic/Human completion is still required. No automatic conflict choice."
       else if (integrated.payload.stage == "PendingMergePrepared")
@@ -74,17 +114,13 @@ private[smworkflow] object RepositorySyncNativeProgression {
         RepositorySyncNativeMergeValidation.waitC(store, integrated, validationPolicy, review)
       else if (integrated.payload.stage == "Integrated" && validationPolicy.nonEmpty) for {
         checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, validationPolicy.get)
-        checkedHandle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, checked.record)
         wire <- if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
           RepositorySyncNativeConvergence.advanceC(store, checked, convergence.get)
-          else WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](checkedHandle,
-            WorkflowContinuation.Wait(StateMachineRevision(checked.record.revision.value.toString),
-              ContextSnapshot(checkedHandle.workflowRevision.value), MinimalPresentation("Native integration validation",
+          else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(checked.record.identity.value,
                 if (checked.payload.stage == "IntegrationValidated") "Selected checks passed; current host convergence authority is required."
-                else "Failed or indeterminate selected validation is retained. No check replay, merge review, push or Terminal."))))
+                else "Failed or indeterminate selected validation is retained. No check replay, merge review, push or Terminal.",
+              checked.payload.stage))
       } yield wire
-      else WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](handle,
-      WorkflowContinuation.Wait(StateMachineRevision(integrated.record.revision.value.toString),
-        ContextSnapshot(handle.workflowRevision.value), MinimalPresentation("Repository native integration", detail))))
+      else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
   } yield wire
 }

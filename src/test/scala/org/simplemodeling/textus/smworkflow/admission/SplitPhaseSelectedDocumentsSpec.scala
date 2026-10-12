@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 /**
  * Deterministic material only; not a filesystem-effect or APPLY acceptance spec.
  * @since   Oct.  6, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 12, 2026
  */
 final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def snapshot(s: Base, allocate: Boolean = true): R.Record = {
@@ -36,17 +36,16 @@ final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers wi
       val broken = Vector(saved.copy(objective = None),
         saved.copy(objective = Some(selected.copy(key = R.CandidateKey(Vector(99))))),
         saved.copy(projection = Some(R.ProjectionView.Projected(Vector.empty))))
-      When("public passive preview requests material from the same raw input")
+      When("the declared selected-plan view requests material from the same raw input")
       val material = take(SplitPhaseSelectedDocuments.projectC(saved))
-      val preview = take(SplitPhaseManagedSelectedPreview.projectC(saved, "preview-context", "2"))
-      val refused = (broken :+ null).map(value =>
-        SplitPhaseManagedSelectedPreview.projectC(value, "preview-context", "2"))
-      Then("valid context and exact document material are presented, while crossed input emits no preview")
-      preview.hcursor.get[String]("mode").toOption shouldBe Some("PREVIEW")
-      preview.hcursor.downField("context").get[String]("identity").toOption shouldBe Some("preview-context")
-      preview.hcursor.downField("context").get[String]("revision").toOption shouldBe Some("2")
-      preview.hcursor.downField("documentProjection").focus shouldBe Some(material.json)
-      preview.hcursor.get[Vector[Int]]("cutAfterIndices").toOption shouldBe Some(selected.key.cutAfterIndices)
+      val preview = take(NativeWorkflowOperationOutput.splitSelectedC(saved, material, "PREVIEW", None))
+      val refused = (broken :+ null).map(value => SplitPhaseSelectedDocuments.projectC(value)
+        .flatMap(documents => NativeWorkflowOperationOutput.splitSelectedC(value, documents, "PREVIEW", None)))
+      Then("the declared value presents exactly the selected documents and partition, while crossed input emits no preview")
+      preview.mode shouldBe "PREVIEW"
+      preview.documents.map(_.relativePath) shouldBe material.documents.map(_.relativePath)
+      preview.documents.map(_.childDocument) shouldBe material.documents.map(_.childDocument)
+      preview.cutAfterIndices shouldBe selected.key.cutAfterIndices
       refused.foreach(_.isSuccess shouldBe false)
     }
 

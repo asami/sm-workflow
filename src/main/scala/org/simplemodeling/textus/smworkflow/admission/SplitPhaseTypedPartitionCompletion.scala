@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /** Pure result boundary. Neither decoded results nor allocation data can create
   * Pending/Plan; publication remains the canonical host's responsibility.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object SplitPhaseTypedPartitionCompletion {
   final case class Allocation(result: S.ResultReference, resolutions: S.ResolutionReferences)
@@ -21,16 +21,14 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
   final class Plan private[SplitPhaseTypedPartitionCompletion] (
     val pending: Pending, val submitted: ContinuationResult[S.Judgment], val semantic: S.Outcome,
     val mechanical: Option[W.Outcome], val next: InstanceRecord,
-    val closing: StateMachineOperationResult, val wire: String)
+    val closing: StateMachineOperationResult)
   val closingType = StateMachineResultTypeReference("SplitPhaseSemanticSubmissionResult")
 
   def continueAllocatedC(plan: Plan, allocated: SplitPhaseCandidateAllocationPolicy.Allocated): Consequence[Plan] =
     if (plan == null || allocated == null)
       Consequence.stateConflict("SplitPhase completion requires its plan and allocated continuation")
-    else for {
-      mechanical <- W.continueAllocatedC(allocated)
-      wire <- _wait_c(plan.pending, plan.submitted, Some(mechanical), plan.next)
-    } yield new Plan(plan.pending, plan.submitted, plan.semantic, Some(mechanical), plan.next, plan.closing, wire)
+    else W.continueAllocatedC(allocated).map(mechanical =>
+      new Plan(plan.pending, plan.submitted, plan.semantic, Some(mechanical), plan.next, plan.closing))
 
   def pendingC(raw: C.Record, facts: C.Facts, start: T.Prepared, current: InstanceRecord,
     issued: WorkflowInteraction[S.Request, Nothing], configuration: Configuration,
@@ -74,25 +72,7 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
         current.derivedCompositeOccurrence, current.committedPredecessor, None)
       next <- current.appendC(current.revision, entry)
       closing = StateMachineOperationResult(closingType, submitted.resultReference)
-      wire <- _wait_c(pending, submitted, mechanical, next)
-    } yield new Plan(pending, submitted, semantic, mechanical, next, closing, wire)
-
-  /** Response projection only. The owning managed completion supplies its
-    * committed native state; this is not admission or a second completion.
-    */
-  def committedWireC(plan: Plan, instance: InstanceRecord): Consequence[String] =
-    _wait_c(plan.pending, plan.submitted, plan.mechanical, instance)
-
-  private def _wait_c(pending: Pending, submitted: ContinuationResult[S.Judgment],
-    mechanical: Option[W.Outcome], next: InstanceRecord): Consequence[String] = {
-    val stage = mechanical.fold("HumanDirectionRequired")(stageName)
-    val detail = mechanical.fold("Semantic work requires human direction; no partial enrichment was applied.") { outcome =>
-      "Workflow completed " + outcome.trace.mechanicalStages.mkString(", ") + "; next need: " + stage + "."
-    }
-    WorkflowWaitJsonV1.encodeC(WorkflowInteraction[Nothing, Nothing](pending.issued.handle,
-      WorkflowContinuation.Wait(StateMachineRevision(next.revision.value.toString), submitted.contextSnapshot,
-        MinimalPresentation(stage, detail))))
-  }
+    } yield new Plan(pending, submitted, semantic, mechanical, next, closing)
 
   /** The context names the pre-issue revision. Recover that actual prefix, not
     * a worker-supplied predecessor snapshot or a newer unrelated progression.
@@ -110,16 +90,5 @@ private[smworkflow] object SplitPhaseTypedPartitionCompletion {
         suspension = last.suspension, history = prefix))
     }
 
-  private def stageName(outcome: W.Outcome): String = outcome match {
-    case _: W.PartitionSemanticRequired => "PartitionSemanticRequired"
-    case _: W.AllocationRequired => "HostAllocationRequired"
-    case _: W.PartitionUnavailable => "PartitionUnavailable"
-    case _: W.ProjectionRequired => "ProjectionRequired"
-    case _: W.CandidatesUnavailable => "CandidatesUnavailable"
-    case _: W.HostEvidenceRequired => "HostEvidenceRequired"
-    case _: W.ObjectiveRecordRequired => "ObjectiveRecordRequired"
-    case _: W.ReasoningRequired => "ReasoningRequired"
-    case _: W.HumanDecisionRequired => "HumanDirectionRequired"
-    case _: W.Planned => "HostPlanningPublicationRequired"
-  }
+
 }

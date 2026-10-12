@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.goldenport.configuration.ResolvedConfiguration
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionContext as C,
   SplitPhaseExplicitPartitionSemantic as S, SplitPhaseExplicitPlanningAdvance as W}
@@ -9,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Host-only composition, not registration, consent, WorkOrder issue or grant.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[smworkflow] object SplitPhaseManagedPartitionPreparation {
   final class Port private[SplitPhaseManagedPartitionPreparation] (
@@ -19,6 +20,10 @@ private[smworkflow] object SplitPhaseManagedPartitionPreparation {
     currentInputs: SplitPhasePlanningInputDataStorePort,
     instances: CallScopedWorkflowInstances.Port
   ) {
+    /** Host template data is passive; Start replaces its execution owner. */
+    def loadRecordForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Record]] =
+      contexts.loadForCallC(reference, core)
+
     def prepareForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Prepared]] =
       preparePlanningForCallC(reference, core).flatMap {
         case None => Consequence.success(None)
@@ -29,6 +34,13 @@ private[smworkflow] object SplitPhaseManagedPartitionPreparation {
       contexts.loadForCallC(reference, core).flatMap {
         case None => Consequence.success(None)
         case Some(frozen) => preparePlanningRecordForCallC(frozen, core).map(Some(_))
+      }
+
+    def preparePlanningForCurrentCallC(reference: S.ContextReference, instance: InstanceRecord,
+      core: ActionCall.Core): Consequence[Option[C.PreparedPlanning]] =
+      contexts.loadForCallC(reference, core).flatMap {
+        case None => Consequence.success(None)
+        case Some(frozen) => _prepare_current_c(frozen, instance, core).map(Some(_))
       }
 
     /** Registration and reads share the one current-input construction boundary.
@@ -47,13 +59,18 @@ private[smworkflow] object SplitPhaseManagedPartitionPreparation {
       if (frozen == null || frozen.owner == null || frozen.owner.handle == null)
         Consequence.stateConflict("SplitPhase partition preparation requires complete raw owner data")
       else for {
-        current <- currentInputs.loadCurrentForCallC(frozen.facts, core)
         instance <- instances.loadForCallC(workflow.configuration, frozen.owner.handle.instanceIdentity, core).flatMap {
           case Some(value) => Consequence.success(value)
           case None => Consequence.stateConflict("SplitPhase partition preparation requires its canonical current instance")
         }
-        prepared <- C.preparePlanningC(frozen, current, instance, workflow.configuration, catalog)
+        prepared <- _prepare_current_c(frozen, instance, core)
       } yield prepared
+
+    private def _prepare_current_c(frozen: C.Record, instance: InstanceRecord,
+      core: ActionCall.Core): Consequence[C.PreparedPlanning] = for {
+      current <- currentInputs.loadCurrentForCallC(frozen.facts, core)
+      prepared <- C.preparePlanningC(frozen, current, instance, workflow.configuration, catalog)
+    } yield prepared
   }
   def bindC(host: ResolvedConfiguration, workflow: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[Port] =

@@ -1,65 +1,98 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import cats.data.NonEmptyVector
 import io.circe.Json
 import org.goldenport.Consequence
+import org.goldenport.protocol.Property
+import org.goldenport.record.RecordPresentable
 import org.goldenport.cncf.workflow.ContextReference
-import org.goldenport.cncf.workflow.WorkflowResultJsonV1
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, SplitPhaseStartInput, RepositorySyncStartInput}
+import org.simplemodeling.textus.smworkflow.value as V
 
-/** Construct public business inputs directly, without legacy wire projection.
+/** Named public business parameters, never a native continuation envelope.
+  * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 12, 2026
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
-  def selectedGoalInput(input: GoalPhaseStartInput): TypedValue[Json] = TypedValue("GoalPhaseStartInput", Json.obj(
+  def selectedGoalInput(input: V.GoalPhaseStartInput): TypedValue[Json] = TypedValue("GoalPhaseStartInput", Json.obj(
     "phaseIdentity" -> Json.fromString(input.phaseIdentity), "repositoryIdentity" -> Json.fromString(input.repositoryIdentity)))
 
-  def goal(input: GoalPhaseStartInput, selector: Option[String] = None): String =
-    start(NativeWorkflowStartInput.Goal(input), selector)
+  def goal(input: V.GoalPhaseStartInput, session: Option[String] = None): List[Property] = _start(input, session)
+  def split(input: V.SplitPhaseStartInput, session: Option[String] = None): List[Property] = _start(input, session)
+  def repository(input: V.RepositorySyncStartInput, session: Option[String] = None): List[Property] = _start(input, session)
 
-  def split(input: SplitPhaseStartInput, selector: Option[String] = None): String =
-    start(NativeWorkflowStartInput.Split(input.sourcePhaseIdentity, input.invocationMode,
-      input.proposalReference), selector)
-
-  def repository(input: RepositorySyncStartInput, selector: Option[String] = None): String =
-    start(NativeWorkflowStartInput.Repository(input.repositoryIdentity, input.localBranch,
-      input.trackingRemote, input.trackingBranch, input.remoteEndpointIdentity, input.syncMode), selector)
-
-  def start(input: NativeWorkflowStartInput.BusinessInput, selector: Option[String] = None): String = {
-    val business = input match {
-      case NativeWorkflowStartInput.Goal(value) => selectedGoalInput(value).value
-      case NativeWorkflowStartInput.Split(phase, mode, proposal) => Json.obj((Vector(
-        "sourcePhaseIdentity" -> Json.fromString(phase), "invocationMode" -> Json.fromString(mode)) ++
-        proposal.toVector.map(value => "proposalReference" -> Json.fromString(value)))*)
-      case value: NativeWorkflowStartInput.Repository => Json.obj(
-        "repositoryIdentity" -> Json.fromString(value.repositoryIdentity), "localBranch" -> Json.fromString(value.localBranch),
-        "trackingRemote" -> Json.fromString(value.trackingRemote), "trackingBranch" -> Json.fromString(value.trackingBranch),
-        "remoteEndpointIdentity" -> Json.fromString(value.remoteEndpointIdentity), "syncMode" -> Json.fromString(value.syncMode))
-    }
-    Json.obj((Vector("input" -> business) ++ selector.toVector.map(value =>
-      "selectionIdentity" -> Json.fromString(value))) *).noSpaces
+  def start(input: NativeWorkflowStartInput.BusinessInput, session: Option[String] = None): List[Property] = input match {
+    case NativeWorkflowStartInput.Goal(value) => goal(value, session)
+    case NativeWorkflowStartInput.Split(phase, mode, proposal) => split(V.SplitPhaseStartInput(phase, mode, proposal), session)
+    case value: NativeWorkflowStartInput.Repository => repository(V.RepositorySyncStartInput(value.repositoryIdentity,
+      value.localBranch, value.trackingRemote, value.trackingBranch, value.remoteEndpointIdentity, value.syncMode), session)
   }
 
-  def advance(instance: Option[String] = None, context: Option[String] = None): String =
-    Json.obj((instance.toVector.map(value => "instanceIdentity" -> Json.fromString(value)) ++
-      context.toVector.map(value => "contextIdentity" -> Json.fromString(value))) *).noSpaces
+  private def _start(input: RecordPresentable, session: Option[String]): List[Property] =
+    Property("input", input, None) :: session.toList.map(value => Property("sessionId", value, None))
 
-  def encodeC[A](result: ContinuationResult[A], codec: WorkflowResultJsonV1.PayloadCodec[A],
-    omitReference: Boolean = false, includeRequestSelector: Boolean = false): Consequence[String] = {
-    val resultfields = Vector("value" -> codec.encode(result.result.value)) ++
-      (if (omitReference) Vector.empty else Vector("reference" -> reference(result.resultReference)))
-    val evidence = Vector("references" -> Json.fromValues(result.evidence.references.map(reference))) ++
-      result.evidence.workerIdentity.toVector.map(value => "workerIdentity" -> Json.fromString(value)) ++
-      result.evidence.execution.toVector.map(value => "execution" -> Json.obj(
-        "placement" -> Json.fromString(value.placement.value), "originContextIdentity" -> Json.fromString(value.originContextIdentity),
-        "executorContextIdentity" -> Json.fromString(value.executorContextIdentity), "profileIdentity" -> Json.fromString(value.profileIdentity)))
-    Consequence.success(Json.obj((Vector(
-      "result" -> Json.obj(resultfields*), "completionFacts" -> Json.fromValues(result.completionFacts.map(reference)),
-      "executionEvidence" -> Json.obj(evidence*)) ++ (if (includeRequestSelector)
-        Vector("requestIdentity" -> Json.fromString(result.continuationId.value)) else Vector.empty)) *).noSpaces)
+  def advance(session: String): List[Property] = List(Property("sessionId", session, None))
+
+  def submissionC[A <: NativeWorkflowResultInput.Value](result: ContinuationResult[A],
+    omitReference: Boolean = false): Consequence[List[Property]] = for {
+    business <- _business_c(result.result.value)
+    (name, value) = business
+    evidence = V.WorkflowExecutionEvidence(result.evidence.references.map(_reference),
+      result.evidence.workerIdentity, None, result.evidence.execution.map(e => V.WorkflowExecutionObservation(e.placement.value,
+        e.originContextIdentity, e.executorContextIdentity, e.profileIdentity)))
+  } yield List(Property("sessionId", result.handle.instanceIdentity.value, None), Property(name, value, None),
+    Property("completionFacts", result.completionFacts.map(_reference), None), Property("executionEvidence", evidence, None)) ++
+    (if (omitReference) Nil else List(Property("resultReference", _reference(result.resultReference), None)))
+
+  private def _business_c(value: NativeWorkflowResultInput.Value): Consequence[(String, RecordPresentable)] = value match {
+    case result: GoalPhaseNativeWork.Result => Consequence.success("result" ->
+      V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings))
+    case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
+      V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
+    case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->
+      V.SplitPhasePartitionSemanticResult(result.decision.toString, result.rationale, result.estimates.map(e =>
+        V.SplitPhasePartitionNovelEstimate(V.SplitPhasePartitionWorkItemIdentity(e.identity.value), e.minimumMinutes,
+          e.maximumMinutes, e.assumptions, e.noveltyBasis)), result.boundaries.map(b =>
+        V.SplitPhasePartitionBoundaryJudgment(V.SplitPhasePartitionWorkItemIdentity(b.afterItem.value), b.disposition.toString,
+          b.rationale)), result.evidence.map(_partition_evidence)))
+    case result: SplitPhaseScopeSemantic.Judgment => for {
+      scopes <- result.scopes.foldLeft(Consequence.success(Vector.empty[V.SplitPhaseResolvedHandoffScope])) { (prior, scope) => for {
+        values <- prior
+        producing <- _nonempty_c(scope.producingItems.map(i => V.SplitPhasePartitionWorkItemIdentity(i.value)))
+        receiving <- _nonempty_c(scope.receivingItems.map(i => V.SplitPhasePartitionWorkItemIdentity(i.value)))
+      } yield values :+ V.SplitPhaseResolvedHandoffScope(V.SplitPhaseScopeHandoffIdentity(scope.handoff.value),
+        producing, receiving, scope.rationale) }
+      evidence <- _nonempty_c(result.evidence.map(_partition_evidence))
+    } yield "result" -> V.SplitPhaseScopeSemanticResult(result.decision.toString, result.rationale, scopes, evidence)
+    case result: SplitPhaseExplicitReasoningSemantic.Judgment => Consequence.success("result" ->
+      V.SplitPhaseReasoningSemanticResult(result.decision.toString, result.rationale, result.assignments.map(a =>
+        V.SplitPhaseReasoningAssignment(V.SplitPhasePartitionWorkItemIdentity(a.identity.value), a.classification.toString,
+          a.rationale)), result.evidence.map(_partition_evidence)))
+    case answer: SplitPhaseHumanDirectionAnswerContract.Answer =>
+      val (choice, resolution) = answer match {
+        case SplitPhaseHumanDirectionAnswerContract.Answer.ProvideResolution(value) =>
+          "ProvideResolution" -> Some(V.SplitPhasePartitionContextReference(value.identity, value.revision))
+        case SplitPhaseHumanDirectionAnswerContract.Answer.Defer => "Defer" -> None
+        case SplitPhaseHumanDirectionAnswerContract.Answer.Cancel => "Cancel" -> None
+      }
+      Consequence.success("answer" -> V.SplitPhaseHumanDirectionAnswer(V.SplitPhaseHumanDirectionChoice(choice), resolution))
+    case result: RepositorySyncConflictSemantic.Result => Consequence.success("result" ->
+      V.RepositorySyncConflictResult(result.decision, result.resolutions.map(_resolution), result.rationale))
+    case result: RepositorySyncNativeMergeReview.Result => Consequence.success("result" ->
+      V.RepositorySyncNativeMergeReviewResult(result.decision, result.rationale, result.findings.map(f =>
+        V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale))))
+    case answer: RepositorySyncHumanConflict.Answer => Consequence.success("answer" ->
+      V.RepositorySyncHumanConflictAnswer(answer.choice, answer.resolutions.map(_resolution), answer.rationale))
   }
 
-  private def reference(value: ContextReference): Json = Json.obj(
-    "identity" -> Json.fromString(value.identity), "revision" -> Json.fromString(value.revision))
+  private def _reference(value: ContextReference): V.WorkflowArtifactReference =
+    V.WorkflowArtifactReference(value.identity, value.revision)
+  private def _partition_evidence(value: SplitPhaseExplicitPartitionSemantic.EvidenceReference): V.SplitPhasePartitionEvidenceReference =
+    V.SplitPhasePartitionEvidenceReference(value.identity, value.revision)
+  private def _resolution(value: RepositorySyncConflictSemantic.Resolution): V.RepositorySyncConflictResolution =
+    V.RepositorySyncConflictResolution(value.conflictIdentity, value.text)
+  private def _nonempty_c[A](values: Vector[A]): Consequence[NonEmptyVector[A]] =
+    NonEmptyVector.fromVector(values).map(Consequence.success).getOrElse(
+      Consequence.stateConflict("Fixture business value requires its declared nonempty field"))
 }

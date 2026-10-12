@@ -113,7 +113,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
     contexts: SplitPhasePartitionContextDataStorePort, inputs: SplitPhasePlanningInputDataStorePort,
     issue: SplitPhaseManagedTypedPartitionIssue.Port, instances: CallScopedWorkflowInstances.Port,
     completion: Option[WorkflowManagedCompletion[S.Judgment]],
-    result: Option[ContinuationResult[Json]] = None): Consequence[spec.OperationDefinition] = {
+    result: Option[ContinuationResult[NativeWorkflowResultInput.Value]] = None): Consequence[spec.OperationDefinition] = {
     // These closures live only in the canonical current-call Operation binding.
     var selected = Option.empty[P.Plan]
     val issued = new IssuedWorkOrderPersistence[S.Request] {
@@ -138,7 +138,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
         // Consume its native result; no extra read can certify that commit.
         (plan, completed) match {
           case (Some(value), Some(actual)) =>
-            P.committedWireC(value, actual).map(OperationResponse.Scalar(_))
+            Consequence.success(NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(value.submitted, actual)))
           case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
             "SplitPhase completion response lacks its selected disposition or actual committed instance")
         }
@@ -180,7 +180,10 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
           captured <- A.captureC(plan)
           reads <- currentReadsC(call, declaration, catalog)
           staged <- reads.stageForCallC(captured, call)
-          program = staged.flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
+          frontier <- SplitPhaseExecutionFrontierDataStorePort.bindForCallC(call, declaration)
+          nextFrontier <- frontier.stageCreateForCallC(plan.next.identity, plan.next.revision,
+            SplitPhaseExecutionFrontier.Value.PartitionCompletion(submitted.continuationId), call)
+          program = staged.flatMap(_ => nextFrontier).flatMap(_ => ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
             ActionExecution.Completed(plan.closing)))
         } yield {
           selected = Some(plan)
@@ -189,8 +192,8 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
       }
     }
     val currentInstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
-    WorkflowCompletionServiceOperation.bindC(provided, op, WorkflowJsonCommandRequest.definition,
-      spec.ResponseDefinition.void, codec, ContinuationRuntime.empty, issued, currentInstances,
+    WorkflowCompletionServiceOperation.bindC(provided, op, SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation.specification.request,
+      SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation.specification.response, codec, ContinuationRuntime.empty, issued, currentInstances,
       declaration.configuration, () => throw new IllegalStateException("Typed completion must use canonical managed UoW"),
       Some(closing), completion,
       descriptiveAttributes = SmWorkflowComponent.SplitPhaseServiceService.SubmitPartitionSemanticResultOperation.specification.content.descriptiveAttributes)
