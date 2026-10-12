@@ -259,3 +259,33 @@ Migration MUST NOT be assumed beneficial. Relevant cost includes repository sync
 The useful decision boundary is whether expected benefit from parallelism, available compute, lower semantic-provider cost, or reduced queue/wall-clock time justifies migration cost. Fine-grained Fix/Review operations normally remain on the current machine unless evidence later supports otherwise; multi-hour or otherwise substantial development units are stronger migration candidates.
 
 ExecutionEvidence SHOULD make physical placement and migration attributable where practical: machine/provider identity, migration/sync occurrence and duration, build/test duration, semantic-provider duration, escalation/decline path, and end-to-end completion time. This evidence can support later placement-policy improvement without autonomous runtime self-modification.
+
+
+### Provider tool-capability requirements
+
+Reasoning capability and execution/tool capability are separate routing dimensions. A model may have sufficient semantic ability for a WorkOrder while the environment/provider through which it is invoked lacks a required tool such as Web access, repository access, filesystem/shell execution, Git, MCP, or another application capability.
+
+ExecutionRequirement SHOULD therefore be able to express required tool capabilities independently of ReasoningLevel. Provider profiles advertise available capabilities, and routing MUST reject an incompatible provider before semantic execution when a hard requirement is known.
+
+Conceptually:
+
+~~~text
+WorkOrder
+  -> ExecutionRequirement
+       reasoning requirement
+       tool-capability requirements
+           web?
+           repository/filesystem?
+           shell/build/test?
+           git?
+           MCP/application tools?
+  -> Provider Routing
+       capability match
+       then cost/quality/locality policy
+~~~
+
+A missing required capability is not evidence that the model is unintelligent and SHOULD NOT normally be recorded as a reasoning decline/failure. It is a routing incompatibility. If the requirement becomes known only during execution, the attempt may yield a typed capability-blocked/reroute outcome and continue on a compatible provider.
+
+Tool availability may depend on the integration/harness rather than the underlying model. Therefore evidence and provider identity SHOULD distinguish model identity from execution environment/integration where practical.
+
+This is especially important for local-first operation: local providers can remain preferred for repository-local Implementation, Fix, validation interpretation, and Review work that does not require external information, while work requiring current Web information can be routed directly to a Web-capable provider instead of first failing locally.

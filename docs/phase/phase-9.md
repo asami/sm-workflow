@@ -26,6 +26,30 @@ installation or local-model performance result is required.
 
 Phase 9 also turns the minimum Acceptance Boundary contract established in Phase 6 into the governing convergence boundary. Validation or Review work outside the Effective Acceptance Boundary is not evidence that the provider is failing to converge. sm-workflow must distinguish genuine inability to satisfy required quality from provider-generated assurance work that should not have been undertaken.
 
+## Use-case-first planning and review (2026-10-11)
+
+Acceptance Boundary applies before implementation: planning starts from user-visible Use Cases and end-to-end scenarios, not from a bottom-up inventory of components to perfect. Plan bounded vertical Use Case Slices with observable outcomes, required quality attributes, explicit non-goals and early integration evidence. Components and infrastructure are supporting tasks, not independently expanding completion goals.
+
+Planning Review must check that each proposed Slice reaches an actual user-facing boundary, that component assumptions are validated through early integration, and that acceptance criteria are sufficient but do not introduce speculative assurance. Reject plans that defer all integration until component completion or turn hypothetical abnormal behavior into primary work.
+
+Implementation/Admission Review must verify the integrated Slice against the same Effective Acceptance Boundary. A locally passing component test does not substitute for a connected user scenario. Conversely, an out-of-boundary component guarantee or test does not block closure. Findings are classified as required current-Slice defects, explicit future work, or rejected assurance; AI findings alone cannot expand scope.
+
+Phase 6 remains responsible for minimal boundary propagation; Phase 9 owns the fuller planning/review/convergence interpretation. Reuse existing Goal/Phase planning, WorkOrder, Admission and Review paths. Do not introduce a second planning engine, exhaustive traceability database or additional mandatory review cycles.
+
+## 2026-10-11 clarification: external planning and contract-first slices
+
+Development planning and its approval occur separately before sm-workflow execution. sm-workflow consumes the adopted plan and Project Acceptance Boundary; it does not own a new mandatory plan-authoring or planning-review workflow. Existing PLAN_DESIGNING/PLAN_ADMITTING states are limited to operational decomposition/admission of an already adopted plan, not authorization to invent new user requirements or quality guarantees.
+
+A top-down development unit may originate from a Use Case **or** an externally observable contract such as an API/Operation, CLI/MCP command, UI action, event/message or other published interface. A full end-to-end Use Case is not mandatory for a small API change. Each unit must have observable acceptance criteria and connected evidence through the necessary implementation layers. Internal components are supporting tasks, not the default completion unit.
+
+Planning review happens in the separate planning process and checks usage-contract coverage, integration assumptions, dependencies, slice size and Effective Acceptance Boundary alignment. Execution-time Review checks delivered behavior against the adopted plan and boundary; a discovered planning gap becomes a proposal for external plan revision rather than automatic scope growth. Reuse existing Workflow operations and avoid new mandatory planning gates.
+
+## Usage Contract interpretation (2026-10-11)
+
+Usage Contract denotes user-observable operation, behavior and result, not merely an external interface signature. A consumer can be human or software. Use Cases, APIs/Operations, CLI/MCP commands, UI actions and events/messages are valid top-down entry points. Each Development Slice implements a bounded part of the adopted Usage Contract with early connected evidence.
+
+Planning and its review remain pre-execution activities. Phase 9 assesses convergence, integration, scope drift and review findings against the adopted Usage Contract and Effective Acceptance Boundary. Component-level completion alone does not establish acceptance; speculative assurance outside the boundary cannot become blocking work.
+
 ## Two escalation sources
 
 Phase 9 distinguishes:
