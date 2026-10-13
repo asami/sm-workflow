@@ -938,3 +938,18 @@ Concrete local LLM integration is a manual operational trial, recorded as
 developer-owned reference activity, not a completion condition for Phase 6, 8
 or 9. Only a need observed in real use
 can bring a bounded provider-related extension into Phase 8's selected work.
+
+
+## Safe-by-construction security review projection — 2026-10-14
+
+Application-security evidence follows the existing Step / Phase / Final review
+route; Phase 6 does not create a second security workflow. The detailed
+placement and producer dependencies are defined in
+[Phase 6 Security Review Profile](phase-6-security-review-profile.md).
+
+CNCF Phase 107 supplies safe runtime/ABI primitives, Cozy Phase 83 supplies safe
+generated surfaces, and textus-cbd-support Phase 16 supplies CAR lint/CBD Review
+evidence. Step review uses focused deterministic evidence; Phase review owns
+cross-cutting architecture/security assessment; Final reuses current evidence
+and adds only release-relevant checks. Security findings obey the same Effective
+Acceptance Boundary, staleness, repair and admission rules as other findings.
