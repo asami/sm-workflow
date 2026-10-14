@@ -114,6 +114,34 @@ and that failure/Wait/Terminal do not cause unconditional next-loop calls.
 Runtime response semantics and removal of unnecessary information reads are
 Phase 5.3 obligations; Phase 6 connects their actual skill/client/chat use.
 
+### Safety correction: managed Git/SBT and Capability Laundering — 2026-10-15
+
+A real Phase 6 implementation exposed an unsafe route: AI-generated code used Process Execution to read/write external files. This satisfies the surface rule of avoiding direct host Files APIs while laundering filesystem authority through a more powerful admitted process capability. The same pattern could use curl for network access or a database CLI for persistence.
+
+Correct this in Phase 6 rather than deferring it to the later general Safety Sandbox rollout.
+
+Phase 6 consumes a bounded early slice of CNCF Phase 110:
+
+- external Process Execution is default-deny and explicit opt-in;
+- outbound HTTP/provider access is explicit opt-in;
+- CNCF provides typed Git and SBT execution DSLs for the high-frequency workflow operations needed here;
+- sm-workflow uses those typed operations rather than constructing arbitrary git/sbt argv;
+- other required commands are admitted by explicit command name and registered process definition;
+- shell interpreters and arbitrary shell text are not an ordinary opt-in escape route;
+- using an admitted process to reproduce a denied filesystem/network/datastore effect is classified as Capability Laundering and must not be accepted as a workaround.
+
+CAR metadata/manifest requests required process/network authority; runtime/deployment configuration grants it. Neither request nor AI-selected command text creates authority. The actual Phase 6 execution remains within the existing command ownership: runtime chooses and executes admitted typed operations, while AI supplies semantic edits/diagnosis.
+
+This is a bounded upstream producer dependency, not a requirement to finish all of CNCF Phase 110 before Phase 6 can close. Implement the minimum generic CNCF Git/SBT/process/HTTP policy needed by the real Phase 6 path, re-consume it here, and leave broader SandboxContext/Loading Admission/server propagation work to the planned Safety Sandbox stream.
+
+Connected acceptance for this correction:
+
+- [ ] P6-SBX01: build/test through the CNCF SBT DSL with no arbitrary shell/ProcessExec exposed to the AI worker.
+- [ ] P6-SBX02: local Git status/diff/commit operations required by the selected workflow use the CNCF Git DSL.
+- [ ] P6-SBX03: an attempted file read/write via generic Process Execution is denied/not admitted; the supported file/resource route remains the only ordinary path.
+- [ ] P6-SBX04: an unconfigured external command and outbound HTTP destination are denied by default; an explicitly admitted command/provider succeeds within its declared scope.
+- [ ] P6-SBX05: no sm-workflow-specific bypass is introduced; missing generic behavior is implemented in CNCF Phase 110 and consumed here.
+
 ### Command execution ownership — 2026-10-12
 
 sm-workflow owns the whole command-execution activity, not merely recording a
