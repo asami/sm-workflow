@@ -15,6 +15,8 @@ Gaps discovered by this use are fixed in the owning shared layer: CNCF for runti
 
 Detailed rationale: [Safety Sandbox adoption as a development driver](../journal/2026-10-15-safety-sandbox-development-driver.md).
 
+Adopt it incrementally against the real workflow in this order: (1) Command/Operation ExecutionContext scope, (2) worktree/resource boundaries, (3) managed Git/SBT process execution and arbitrary-shell rejection, (4) provider/network authority, (5) CAR Loading Admission plus CBD lint/review, and (6) Server Sandbox plus Client->Server ExecutionContext propagation when resident-server operation is introduced. Each slice is accepted through an actual sm-workflow scenario and may create a bounded upstream CNCF Phase 110 or cbd-support Phase 16 gap; re-consume the upstream fix before moving on. Do not build all sandbox families in advance.
+
 ## Goal
 
 Close the current development rollout by resolving the necessary extensions
