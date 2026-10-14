@@ -5,6 +5,16 @@ Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
 Planned after: Phase 7, with carryover recorded from Phase 2 onward
 Depends on: practical Phase 2, Phase 5 and the selected Phase 6/7 delivery
 
+## Safety Sandbox adoption boundary (2026-10-15)
+
+Safety Sandbox is deliberately adopted only after the basic command-driven workflow functions are operational. It must not become a prerequisite that delays the foundation delivered by the earlier phases.
+
+Use real sm-workflow operation as the development driver for CNCF Phase 110 and textus-cbd-support Phase 16. Map CNCF hierarchical sandbox scopes as Server -> Client/Command -> Operation/Worker, with the resolved Effective Sandbox carried by CNCF ExecutionContext. During initial CLI use, exercise Client/Command and Operation scopes against real Git/SBT/worktree/provider effects; when resident-server operation is selected, add the Server deployment scope without changing Operation semantics.
+
+Gaps discovered by this use are fixed in the owning shared layer: CNCF for runtime capability/enforcement/loading admission, CBD Support for lint/review, sm-workflow only for workflow-specific scope/profile definitions. Do not add sm-workflow-specific direct filesystem/process/network bypasses.
+
+Detailed rationale: [Safety Sandbox adoption as a development driver](../journal/2026-10-15-safety-sandbox-development-driver.md).
+
 ## Goal
 
 Close the current development rollout by resolving the necessary extensions
