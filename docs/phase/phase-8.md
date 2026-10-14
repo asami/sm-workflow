@@ -11,7 +11,7 @@ Safety Sandbox is deliberately adopted only after the basic command-driven workf
 
 Use real sm-workflow operation as the development driver for CNCF Phase 110 and textus-cbd-support Phase 16. Map CNCF hierarchical sandbox scopes as Server -> Client/Command -> Operation/Worker, with the resolved Effective Sandbox carried by CNCF ExecutionContext. During initial CLI use, exercise Client/Command and Operation scopes against real Git/SBT/worktree/provider effects; when resident-server operation is selected, add the Server deployment scope without changing Operation semantics.
 
-Gaps discovered by this use are fixed in the owning shared layer: CNCF for runtime capability/enforcement/loading admission, CBD Support for lint/review, sm-workflow only for workflow-specific scope/profile definitions. Do not add sm-workflow-specific direct filesystem/process/network bypasses.
+Gaps discovered by this use are fixed in the owning shared layer: CNCF for runtime capability/enforcement/loading admission, CBD Support for lint/review, sm-workflow only for workflow-specific scope/profile definitions. Do not add sm-workflow-specific direct filesystem/process/network bypasses. AI-generated workflow/component code must also not define and invoke its own `main`, Scala `@main`, App-style launcher or equivalent execution root; sm-workflow execution remains owned by CNCF Runtime/Operation boundaries. Reusable logic is an Operation/Service/API, while a real external executable is invoked only through admitted managed process execution.
 
 Detailed rationale: [Safety Sandbox adoption as a development driver](../journal/2026-10-15-safety-sandbox-development-driver.md).
 
