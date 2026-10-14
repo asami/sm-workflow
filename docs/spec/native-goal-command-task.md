@@ -61,6 +61,86 @@ alone provisions the two selected-input rows. Preparation and an origin label
 establish neither consent nor semantic admission. Never seed Workflow instances,
 continuations, history, Human, review or completed-work rows.
 
+## Explicitly prepare Repository input
+
+The owning host independently records an attributable selection of the actual
+Repository business input and metadata before provisioning. Parent-selected
+details remain attributed to that parent; supplied `ExplicitHuman` metadata
+certifies no genuine Human source. The current primary repository contract
+`docs/spec/native-host-repository-start-preparation.md` defines the generated
+`RepositorySyncStartInput`, native business key and typed selection encoding.
+That contract is cited by repository-relative name because this selected native
+worktree does not contain it.
+
+The six canonical business fields are `repositoryIdentity`, `localBranch`,
+`trackingRemote`, `trackingBranch`, `remoteEndpointIdentity` and `syncMode`.
+The selected file contains ordinary business JSON. Native `RecordDecoder` and
+the generated `ValueReader` own decoding; the generated derived `Codec.AsObject`
+owns canonical JSON, and `ProfileSelectionJsonV1` owns `selectionPayload`
+storage encoding. The caller forwards the file path unchanged. It adds no
+business policy, permission or physical-target selection; actual native input,
+principal and selected-target admission retain their existing owners.
+
+```sh
+/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
+  --primary /absolute/path/to/sm-workflow \
+  --host /absolute/path/to/host \
+  --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
+  --action prepare-repository-input \
+  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-prepare-repository \
+  --input /absolute/path/to/selected-repository-input.json \
+  --selection-id '<selected Repository identity>' --participant '<actual participant>' \
+  --idempotency-key '<selected Repository key>' \
+  --selection-collection entity:smworkflow.cli.repository_selections
+```
+
+Alongside the common `primary`, `host`, `task`, `action` and `output` options,
+this fixed action requires exactly `input`, `selection-id`, `participant`,
+`idempotency-key` and `selection-collection`. The input is an existing absolute
+normalized file. The collection is literal `entity:` and exactly three dotted
+labels matching `[A-Za-z][A-Za-z0-9_]*`, selected to match the configured storage
+and read grant. The caller invokes the existing launcher/classpath once with
+fixed Main `org.simplemodeling.textus.smworkflow.host.NativeHostRepositoryStartMain`,
+those five pairs and literal `--origin ExplicitHuman`. It reads no Workflow
+route; routing may be present or absent. Main, origin, plan, request, proposal
+and permission are not selectable options for this action.
+
+Existing owned task/output preflight and exclusive raw `response.json` and
+`stderr.log` capture apply. Require zero native exit and a strict JSON object
+with a `datastore` array before displaying stdout unchanged. The passive native
+owner emits one selected Repository row; preparation creates no caller route,
+host configuration, import, storage, Workflow state or progression. Its business
+address is no execution ID or immutable receipt.
+
+Successful passive Goal preparation emits `goal_selection` and `goal_plans`,
+with one selected row in each collection; Repository preparation emits one
+selected row in `repository_selections`. For their combined use, the owning host
+separately selects a standard `datastore` envelope with these three distinct
+collection entries and their original producer row payloads, preserving the
+explicitly selected collection addresses. Composition does not mint or rewrite
+selections, authority, Workflow instances, history, reviews or permission.
+The host chooses that trusted `textus.import.data.file` before normal Start;
+StartupImport alone saves or creates the mutable input rows. Start still owns
+native input, principal and target admission and returns its actual execution
+ID. Provisioning certifies neither consent, provenance, atomicity, native child
+eligibility nor closure.
+
+An installed Goal's Repository child requires both separately admitted genuine
+PhaseClosure permission and attributable Repository business selection. See the
+current primary `docs/spec/native-host-authority-preparation.md` and
+`docs/spec/native-host-repository-effect-preparation.md`, also absent from this
+selected worktree. Actual Start, accepted Submit and accepted review grant no
+`CommitPending`, `Push` or `FinalFetch`; genuine independently issued
+RepositoryEffect authority remains separately admitted by its native owner.
+Prepared rows and origin labels grant no permission or effect.
+
+On error or uncertain effects, stop the current caller branch and retain its
+observed history and available streams. Later work requires a NEW independently
+admitted execution with its own task and actual returned ID. Do not replay the
+failed call or infer rollback or interrupted recovery. The existing common
+Operation loop, command caller and adopted security profile retain their owners;
+preparation does not supply native checks, independent review or closure.
+
 ## Start once, then explicitly Advance
 
 ```sh
