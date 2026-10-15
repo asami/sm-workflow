@@ -52,14 +52,30 @@ are prepared separately by the owning host.
 ```
 
 Select the two distinct strict dotted collection addresses to match the host's
-configured destinations. This action passes those seven selected pairs plus
-literal `--origin ExplicitHuman` to existing `NativeHostGoalStartMain`.
+configured destinations. This finite action delegates to
+`org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareGoalStart`
+through normal `CncfMain` COMMAND with one named `--input` generated
+`WorkflowGoalStartPreparationInput` JSON object and `--json`. The caller converts
+the selected input and Plan paths to absolute local `file:` URIs; the DTO also
+contains `selectionId`, `participant`, `origin: ExplicitHuman`, `idempotencyKey`,
+`selectionCollection` and `planCollection`. It forwards opaque business files
+without interpreting their contents.
 It captures `response.json` and `stderr.log`, requires zero exit and a JSON object
 with a `datastore` array, and creates no caller session. The host selects that
 successful response as trusted `textus.import.data.file`; ordinary StartupImport
 alone provisions the two selected-input rows. Preparation and an origin label
 establish neither consent nor semantic admission. Never seed Workflow instances,
 continuations, history, Human, review or completed-work rows.
+
+The current primary contract `docs/spec/normal-host-preparation-operations.md`
+defines the six normal passive preparation Operations and generated DTOs. This
+guide cites current primary-only documents by repository-relative contract name
+when they are absent from this older selected worktree. The executing CNCF
+ProcedureActionCall acquires UTF-8 through CNCF `readText`, subject to the host's
+explicit `textus.resource.url.file.roots` and `textus.resource.read.max-bytes`.
+URI metadata grants no read access. The normal configured launcher and service
+own this call; there is no product-private preparation main, extra executor JVM,
+application file reader or generic command/main/argv selector.
 
 ## Explicitly prepare Repository input
 
@@ -77,7 +93,8 @@ The six canonical business fields are `repositoryIdentity`, `localBranch`,
 The selected file contains ordinary business JSON. Native `RecordDecoder` and
 the generated `ValueReader` own decoding; the generated derived `Codec.AsObject`
 owns canonical JSON, and `ProfileSelectionJsonV1` owns `selectionPayload`
-storage encoding. The caller forwards the file path unchanged. It adds no
+storage encoding. The caller forwards the selected file as an opaque absolute
+local `file:` URI. It adds no
 business policy, permission or physical-target selection; actual native input,
 principal and selected-target admission retain their existing owners.
 
@@ -99,11 +116,14 @@ this fixed action requires exactly `input`, `selection-id`, `participant`,
 `idempotency-key` and `selection-collection`. The input is an existing absolute
 normalized file. The collection is literal `entity:` and exactly three dotted
 labels matching `[A-Za-z][A-Za-z0-9_]*`, selected to match the configured storage
-and read grant. The caller invokes the existing launcher/classpath once with
-fixed Main `org.simplemodeling.textus.smworkflow.host.NativeHostRepositoryStartMain`,
-those five pairs and literal `--origin ExplicitHuman`. It reads no Workflow
-route; routing may be present or absent. Main, origin, plan, request, proposal
-and permission are not selectable options for this action.
+and read grant. The caller invokes the existing normal `CncfMain` launcher once
+with COMMAND
+`org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryStart`,
+one `--input` generated `WorkflowRepositoryStartPreparationInput` JSON object
+and `--json`. That object contains the file URI, `selectionId`, `participant`,
+literal `origin: ExplicitHuman`, `idempotencyKey` and `selectionCollection`.
+It reads no Workflow route; routing may be present or absent. Main, origin,
+plan, request, proposal and permission are not selectable caller options.
 
 Existing owned task/output preflight and exclusive raw `response.json` and
 `stderr.log` capture apply. Require zero native exit and a strict JSON object
@@ -133,6 +153,25 @@ selected worktree. Actual Start, accepted Submit and accepted review grant no
 `CommitPending`, `Push` or `FinalFetch`; genuine independently issued
 RepositoryEffect authority remains separately admitted by its native owner.
 Prepared rows and origin labels grant no permission or effect.
+
+Use normal `NativeHostPreparationService.prepareAuthority` with generated
+`WorkflowAuthorityPreparationInput` for independently issued Step or PhaseClosure
+authority. Its single `--input` DTO supplies `request` and `reference` file URIs,
+actual participant, trusted issuer, historical `occurredAt` and collection. The
+request is the full actual closing `Wait` with its supported `authorityContext`.
+Step and Phase purposes/scopes remain distinct; an ordinary Wait or a review
+Request supplies no closing authority. Encoding the scope does not issue
+authorization. Native readers retain their current issuer, owner, scope, time
+and managed read admission.
+
+Use normal `prepareRepositoryEffect` with generated
+`WorkflowRepositoryEffectPreparationInput` for independently issued
+`CommitPending`, `Push` or `FinalFetch` authority. Its DTO contains selected
+`selection`, `target` and `reference` file URIs, the exact selected effect and
+explicit participant/issuer/time/collection. Trusted physical Git target and
+endpoint remain host-owned. It emits passive importer input without Git effects.
+Neither preparation replaces genuine source evidence or independently admitted
+authority; StartupImport alone provisions the separately selected rows.
 
 On error or uncertain effects, stop the current caller branch and retain its
 observed history and available streams. Later work requires a NEW independently
@@ -189,13 +228,41 @@ facts and declared result before semantic editing; load the actual task-installe
 not instructions granting authority or changing the route.
 
 `Human` uses the host's independent actual human channel and genuine evidence.
-`Wait` follows its actual condition without polling; `Terminal` ends. This bounded
-script's Submit supports only an outer Goal `Request` with
+`Wait` follows its actual condition without polling; `Terminal` ends. The normal
+`submit` action supports an outer Goal `Request` with
 `submitOperation=submitGoalPhaseWorkResult`,
 `submitSessionId=<outer canonical ID>` and `resultType=GoalPhaseWorkResult`.
-A forwarded child or another result/route stops and returns to the host. General
-child routing remains defined by the common loop and installed skill; do not
-guess or dispatch it through this caller.
+The current finite caller also supports only the following declared Repository
+child routes under that same outer Goal task:
+
+| Action | Issued operation | Issued result type |
+| --- | --- | --- |
+| `submit-repository-review` | `submitNativeMergeReview` | `RepositorySyncNativeMergeReviewResult` |
+| `submit-repository-repair` | `submitNativeMergeRepair` | `RepositorySyncNativeMergeRepairResult` |
+
+For either child action, the Request's session ID must match the owning outer
+Goal file. Its nonblank issued `submitSessionId` must be distinct from that outer
+ID. Call the declared `RepositorySyncService` operation with this actual child
+ID, require the response ID to match it and preserve the outer routing file for
+the host's next Goal Advance. Never guess a child ID. Other families, work or
+routes stop and return to the host; the caller exposes no arbitrary operation,
+main or argv selector.
+
+`prepare-review-input` checks the outer Goal route;
+`prepare-repository-review-input` checks the declared child review route above.
+Both take actual `request`, `result`, `reference`, `execution-evidence`, `issuer`,
+`occurred-at` and `collection` options, convert selected file paths to opaque
+file URIs and invoke normal `NativeHostPreparationService.prepareEvidence` with
+one `WorkflowEvidencePreparationInput` JSON DTO. The current caller supplies
+`family: GoalPhase` and `kind: review`; the native reader distinguishes the
+actual forwarded child context. Review forbids participant metadata. Genuine
+independent review must precede preparation; encoding supplies no provenance
+or accepted review. The same public Operation supports genuine Human evidence
+under its declared family/kind contract, requiring actual participant metadata
+and the full actual Human output. Its result and reference must come from the
+independent human channel. See current primary
+`docs/spec/native-host-human-preparation.md`. Preparation itself never answers
+Human or advances a Workflow.
 
 The caller accepts these four native field aliases only:
 
@@ -262,6 +329,83 @@ effects preserve available output and end that call with nonzero exit. Stop
 without retry, restart or automatic progression. Retain task artifacts for the
 owning host; do not recover through status/history/storage.
 
+## Owning-UoW checks and public review order
+
+After accepted semantic Submit, the owning host explicitly selects Advance.
+The native Workflow inspects/stages only its assigned candidate paths and selects
+checks from its saved policy. Thin `git_*` and `sbt_*` DSL calls express logical
+intent and closed parameters. Permission, service, binding, workspace, limits,
+lifecycle and admission checks, direct normal binary execution and typed result
+interpretation all occur inside CNCF's actual current UoW. The application
+supplies neither `ProcessExecutionRequest` nor direct `ProcessExec`, executable,
+arbitrary argv or a generic process fallback. The Workflow saves intent before
+execution and the actual bounded result afterward. An unknown effect remains
+uncertain; reopening or a failed check never authorizes replay.
+
+The logical Git work target is `sm-workflow-repository`. The selected fixed
+two-suite TestOnly build uses `sm-workflow-repository-validation-1`, bound to the
+current primary repository. These are distinct trusted workspaces: candidate
+Git staging does not redirect the primary build. The saved Check kind is
+`test-only`; CNCF owns the fixed ordered selection:
+
+1. `org.simplemodeling.textus.smworkflow.admission.NativeHostPreparationOperationSpec`
+2. `org.simplemodeling.textus.smworkflow.admission.NativeHostRepositoryStartInputSpec`
+
+The host owns the normal executable, workspaces, owner/capability/Manage grants,
+fixed classes, environment and finite launch/execution/capture/termination limits.
+Its actual `sbtExecutable` remains
+`/Users/asami/Library/Application Support/Coursier/bin/sbt`. The fixed SBT PATH
+includes the selected JDK and installed Coursier bin directory, including Cozy;
+it is not inherited from a caller-selected environment. These fixture suites
+also require the host's single unquoted `JAVA_TOOL_OPTIONS` option:
+
+```text
+-Dsmworkflow.spec.sbt=/Users/asami/Library/Caches/Coursier/arc/https/github.com/sbt/sbt/releases/download/v2.0.9/sbt-2.0.9.zip/sbt/bin/sbt
+```
+
+That existing installed script path has no whitespace and is the fixture's
+normal SBT prerequisite. Quoting a property containing spaces in
+`JAVA_TOOL_OPTIONS` fails the normal SBT shell runner's token handling. The host
+executable remains the Coursier entry above; semantic work cannot substitute it.
+CNCF runs normal SBT directly with its managed lifecycle; SBT owns native locks
+and legitimate children. Product execution has no global SBT wrapper or
+`scripted` prerequisite. Independent development SBT follows current AGENTS
+policy separately, through registered `cncf_command_runner` and the shared
+serial runner, waiting for `lock=released` before another top-level invocation.
+See current primary `docs/spec/sbt-validation-runtime.md` for the normative
+runtime and receipt contract, also cited by name when absent in this worktree.
+
+For this TestOnly selection, require actual termination `exited`, raw exit zero,
+typed `sbt.kind: test-only`, `sbt.outcome: succeeded`, the exact ordered two
+`selection.testClasses` above, `completedSuites: 2` and positive `testsRun`.
+Raw zero alone, absent legacy facts, `unverified-tests`, incomplete capture,
+failed or unresolved results do not pass. Typed selection and outcome are
+CNCF-owned facts; callers and semantic authors must not manufacture them by
+parsing logs. Historical no-facts Test compatibility does not qualify TestOnly.
+
+When those checks pass and review is installed, the check-running public Advance
+issues `Request` / `ReviewStep` in that same public call. Its actual saved checks
+are in `work.review.checks` and the host review context. A top-level `validation`
+field is not required on this Request. There is no mandatory successful Wait
+or extra Advance before this first review issue. With unfinished or failed
+validation, or absent review installation, the fallback can remain `Wait` with
+its actual condition and validation. Follow that condition without treating
+Wait or raw zero as success or automatically polling/retrying.
+
+A later independently selected Advance may explicitly reopen an already pending
+review through the retained suspension. It reuses the actual issued context,
+candidate and saved checks without another SBT execution. This optional reopening
+is not a transition required to issue the first review, an independent review
+result or permission to replay uncertain effects. Passed checks and an issued
+review grant no accepted review, Human authorization, Step commit, effect or
+Phase closure.
+
+These paragraphs prescribe evidence to observe in actual normal calls; they
+record no execution or PASS. A new independently selected execution may follow
+parent planning after earlier uncertain work, with its own task and actual Start
+ID. It is never automatic fallback, replacement routing or amendment of the old
+execution's Defer, Plan, history or repair limit.
+
 ## Acceptance and evidence owners
 
 Native Workflow owns semantic admission, mechanical checks/commands, independent
@@ -291,5 +435,7 @@ work continues. Existing Phase6.1 Step evidence/review, Phase6.2 FIX and
 Phase6.3 cross-Step/Final evidence owners remain; PHASE-6.3 owns aggregate full-suite
 validation. No additional security engine, provider query, scanner or review
 cycle follows from this guide. All-three installed tasks, modes/providers,
-independence, minimum Effective Acceptance Boundary and original Step/Phase
-acceptance remain separate obligations.
+independence, `minimumAcceptanceBoundary`, original Step evidence/acceptance,
+`solePhaseReview` and release remain separate obligations under the minimum
+Effective Acceptance Boundary. Preparation and selected checks discharge none
+of those obligations by themselves.
