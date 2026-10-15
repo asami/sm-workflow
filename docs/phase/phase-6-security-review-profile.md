@@ -40,3 +40,16 @@ Phase 6 can identify the security evidence required for a changed Slice, request
 the appropriate CAR lint/CBD Review provider evidence, preserve accepted current
 evidence across later unchanged steps, and surface a blocking security finding
 through the existing Admission Gap/repair route.
+
+## Authorization evidence routing
+
+For changes affecting public Operations, Entity access, internal-service
+delegation or access modes, consume evidence against CNCF's existing
+authorization architecture rather than requesting ad-hoc application
+authorization code.
+
+Focused/Phase evidence may include Operation authorization, internal DSL -> UoW
+Entity authorization, search/list visibility, and ServiceInternal/System
+delegation scenarios. A repair that bypasses the canonical UoW route or adds a
+parallel authorization mechanism is not preferred merely because it makes one
+test pass.
