@@ -61,10 +61,13 @@ contains `selectionId`, `participant`, `origin: ExplicitHuman`, `idempotencyKey`
 `selectionCollection` and `planCollection`. It forwards opaque business files
 without interpreting their contents.
 It captures `response.json` and `stderr.log`, requires zero exit and a JSON object
-with a `datastore` array, and creates no caller session. The host selects that
-successful response as trusted `textus.import.data.file`; ordinary StartupImport
-alone provisions the two selected-input rows. Preparation and an origin label
-establish neither consent nor semantic admission. Never seed Workflow instances,
+with a `datastore` array, and creates no caller session. For Goal-only use, the
+host may select that successful response as trusted `textus.import.data.file`;
+ordinary StartupImport alone provisions the two selected-input rows. When the
+installed Goal closure invokes RepositorySync, require the combined three-entry
+envelope described below and in the pre-Start checklist before Goal Start.
+Preparation and an origin label establish neither consent nor semantic admission.
+Never seed Workflow instances,
 continuations, history, Human, review or completed-work rows.
 
 The current primary contract `docs/spec/normal-host-preparation-operations.md`
@@ -179,6 +182,39 @@ admitted execution with its own task and actual returned ID. Do not replay the
 failed call or infer rollback or interrupted recovery. The existing common
 Operation loop, command caller and adopted security profile retain their owners;
 preparation does not supply native checks, independent review or closure.
+
+## Pre-Start checklist
+
+Before Goal Start, require the following, using the preparation contracts above:
+
+1. Record the owning host's genuine Goal business selection and complete ordered
+   Plan, attributing parent-selected details to the parent. If the installed
+   closure invokes RepositorySync, independently record its attributable
+   Repository business selection. Supplied `ExplicitHuman` certifies no consent.
+2. Match the actual selected participant to the normal host local subject. For
+   the Repository child, require all six fields (`repositoryIdentity`,
+   `localBranch`, `trackingRemote`, `trackingBranch`, `remoteEndpointIdentity`,
+   `syncMode`) to agree with the trusted logical target and physical host binding;
+   native principal and target owners still admit their use.
+3. Require successful normal passive `prepareGoalStart` output containing
+   `goal_selection` and `goal_plans`. When that closure invokes RepositorySync,
+   also require successful normal passive `prepareRepositoryStart` output
+   containing `repository_selections`, both before this Goal Start.
+4. Select trusted `textus.import.data.file` before normal startup. For combined
+   use, its standard `datastore` envelope must preserve all three original
+   producer collection entries and row payloads at their selected distinct
+   collection addresses, with matching storage destinations and managed read
+   grants. Preparation does not provision; ordinary StartupImport alone saves
+   or creates these mutable input rows. Use the detailed composition above.
+5. Keep independent review, native child eligibility and genuine Step,
+   PhaseClosure and RepositoryEffect authority with their separate owners.
+   Preparation, import and Start establish none of these permissions; separate
+   PhaseClosure authority and Repository selection are required for child entry.
+6. Use a fresh owned task with no occupied route. Retain Start's actual returned
+   canonical ID in that exact task file and reread it for independent calls.
+   Failure or uncertain effects stop the caller branch with its history retained;
+   infer neither replay permission nor rollback. Later work requires a new
+   independently admitted execution as described above.
 
 ## Start once, then explicitly Advance
 
