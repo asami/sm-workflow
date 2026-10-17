@@ -1,9 +1,14 @@
 # Managed Test Suites: Phase 5/5.1/6–6.3/7 delivery and acceptance
 
 Date: 2026-10-06
-Status: closed; PHASE-6 acceptance scope only
-Phase acceptance scope: PHASE-6
-Current status: closed; the Phase 6 owned rows are accepted through the original S6-01
+Status: in-progress; PHASE-6.1 acceptance scope only
+Phase acceptance scope: PHASE-6.1
+Current status: P61-PLAN accepts P6-PS01..04 through its complete protected Step
+review and mechanical conformance closure. Its local Step commit is next;
+P61-COMMAND and P61-ADMISSION remain unfinished. The Phase 6.1 comprehensive
+review and final release remain open; repository-full validation is
+deferred-not-run to PHASE-6.3.
+Historical PHASE-6 projection: closed; the Phase 6 owned rows are accepted through the original S6-01
 protected independent Step review and its five repository-local acceptance
 commits are complete. The sole Phase review and its M0 naming repair are
 accepted. This final local release projection includes the accepted shared
@@ -455,19 +460,19 @@ for FIX/recording/improvement and Phase 6.3 accepts integrated behavior.
       command starts a service, runtime handles readiness and owned cleanup.
       Use real representative effects plus bounded branch specs, not exhaustive
       coverage of every external tool or an AI-runner fallback.
-- [ ] P6-PS01: **Owner: [Phase 6.1](phase-6.1.md).** Start encodes a real Phase document set, then an edit between work
+- [x] P6-PS01: **Owner: [Phase 6.1](phase-6.1.md).** Start encodes a real Phase document set, then an edit between work
       steps adds/reorders work. The next dispatch uses the current plan with
       stable item IDs, preserving completed results and history without extra
       caller comparison parameters or per-iteration AI plan reconstruction.
-- [ ] P6-PS02: **Owner: [Phase 6.1](phase-6.1.md).** Remove/change the acceptance of an in-flight item. Its result is
+- [x] P6-PS02: **Owner: [Phase 6.1](phase-6.1.md).** Remove/change the acceptance of an in-flight item. Its result is
       retained with its issued context; unresolved acceptance/continuation uses
       the existing decision route. Duplicate IDs and invalid references fail as
       input contradictions; a checkbox cannot fabricate test/release success.
-- [ ] P6-PS03: **Owner: [Phase 6.1](phase-6.1.md).** Edit narrative/planning content after internal import and before
+- [x] P6-PS03: **Owner: [Phase 6.1](phase-6.1.md).** Edit narrative/planning content after internal import and before
       progress writeback. Runtime updates only owned progress fields in the
       latest document, preserving those edits. An unresolved overlapping edit
       is reported without silently overwriting either party's work.
-- [ ] P6-PS04: **Owner: [Phase 6.1](phase-6.1.md).** A normal plan refresh retains Goal/base/epoch, fix/review history
+- [x] P6-PS04: **Owner: [Phase 6.1](phase-6.1.md).** A normal plan refresh retains Goal/base/epoch, fix/review history
       and applicable actual evidence. Changed acceptance is evaluated at its
       affected scope; no blanket retest, hash/copy proof, TTL or permission renewal
       follows merely from an edit. Demonstrate refresh before dispatch after Wait.

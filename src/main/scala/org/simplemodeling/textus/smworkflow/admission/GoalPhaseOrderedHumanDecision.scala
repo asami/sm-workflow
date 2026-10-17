@@ -20,7 +20,7 @@ import GoalPhaseOrderedProgression as O
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 17, 2026
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
@@ -38,7 +38,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       else F.invalid("ordered Human answer requires its independent host evidence port")
   }
   final case class Source(session: F.Session, input: S.Request, controller: O.State,
-    from: InstanceRecord, result: ContinuationResult[S.Result], candidate: Option[GoalPhaseNativeCandidate.Saved])
+    from: InstanceRecord, result: ContinuationResult[S.Result], candidate: Option[GoalPhaseNativeCandidate.Saved],
+    documents: Option[GoalPhaseDocumentSource.Bound] = None)
   private final case class Prepared(source: Source, question: WorkflowInteraction[Input, Nothing],
     intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, pending: InstanceRecord)
 
@@ -55,11 +56,11 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       work <- S.inputCodec.decode(workJson)
       reference <- fields("requestingResult").flatMap(_.asObject)
         .toRight("ordered Decision result reference differs")
-      identity <- reference("identity").flatMap(_.asString).filter(text).toRight("requesting result identity is absent")
-      revision <- reference("revision").flatMap(_.asString).filter(text).toRight("requesting result revision is absent")
+      identity <- reference("identity").flatMap(_.asString).filter(_text).toRight("requesting result identity is absent")
+      revision <- reference("revision").flatMap(_.asString).filter(_text).toRight("requesting result revision is absent")
       resultJson <- fields("result").toRight("ordered Decision result is absent")
       result <- S.resultCodec.decode(resultJson)
-      reason <- fields("reason").flatMap(_.asString).filter(text).toRight("ordered Decision reason is absent")
+      reason <- fields("reason").flatMap(_.asString).filter(_text).toRight("ordered Decision reason is absent")
     } yield Input(work, ContextReference(identity, revision), result, reason)
   }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] = new WorkflowResultJsonV1.PayloadCodec[Answer] {
@@ -69,7 +70,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       fields <- Option(value).flatMap(_.asObject)
         .toRight("ordered Human answer fields differ")
       choice <- fields("choice").flatMap(_.asString).filter(choices.contains).toRight("ordered Human choice is unknown")
-      rationale <- fields("rationale").flatMap(_.asString).filter(text).toRight("ordered Human rationale is absent")
+      rationale <- fields("rationale").flatMap(_.asString).filter(_text).toRight("ordered Human rationale is absent")
     } yield Answer(choice, rationale)
   }
 
@@ -85,7 +86,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     resume: (Source, O.State, InstanceRecord, Answer, ActionCall.Core) => Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult],
     acknowledgement: String => Consequence[Unit]) {
     def advanceC(source: Source, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
-      projected <- prepareC(source)
+      projected <- _prepare_c(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       existing <- questions.loadC(identity(source))(using core.executionContext)
       plan <- existing match {
@@ -95,38 +96,46 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           _ <- acknowledgement("ordered-human-issued")
         } yield projected.copy(pending = saved.instance)
       }
-      retained <- retainedForPlanC(plan, core)
+      retained <- _retained_for_plan_c(plan, core)
       wire <- retained match {
         case None => NativeWorkflowOperationOutput.goalHumanC(plan.question, core)
         case Some((state, next, result)) => if (result.result.value.choice == "ResumeAssignedWork")
           resume(source, state, next, result.result.value, core)
-        else waitC(next, result)
+        else _wait_c(next, result)
       }
     } yield wire
 
     /** Read-only traversal of the actual answer, never publication or effects. */
     def retainedC(source: Source, core: ActionCall.Core):
         Consequence[Option[(O.State, InstanceRecord, ContinuationResult[Answer])]] = for {
-      projected <- prepareC(source)
+      projected <- _prepare_c(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
       issued <- questions.loadC(identity(source))(using core.executionContext).flatMap {
         case Some(value) => Consequence.success(value)
         case None => F.invalid("ordered Human answer has no actual issued question")
       }
       plan = projected.copy(question = issued)
-      observed <- retainedForPlanC(plan, core)
+      observed <- _retained_for_plan_c(plan, core)
     } yield observed
 
-    private def retainedForPlanC(plan: Prepared, core: ActionCall.Core):
+    private def _retained_for_plan_c(plan: Prepared, core: ActionCall.Core):
         Consequence[Option[(O.State, InstanceRecord, ContinuationResult[Answer])]] = for {
-      native <- completionC(plan.source.session.storage)
+      native <- _completion_c(plan.source.session.storage)
       saved <- native.loadRetainedC(identity(plan.source))(using core.executionContext)
       observed <- saved match {
         case None => Consequence.success(None)
         case Some(value) => for {
-          next <- completedC(plan, value.completion.result)
-          state <- if (value.completion.result.result.value.choice == "ResumeAssignedWork") resumedC(plan.source, value.completion.result)
-            else Consequence.success(plan.source.controller)
+          state <- _answer_state_c(plan.source, value.completion.result)
+          following <- GoalPhaseNativeHistory.nextC(plan.source.session.current, plan.source.from)
+          entry <- following match {
+            case Some(value) if value.suspension.exists(boundary =>
+                boundary.continuationIdentity.value == identity(plan.source).value &&
+                boundary.completion.value == "goal-phase-ordered-human-completion-v1") => Consequence.success(value)
+            case _ => F.invalid("ordered Human answer has no exact actual pending predecessor")
+          }
+          pending <- GoalPhaseNativeHistory.prefixC(plan.source.session.current, entry.revision)
+          next <- GoalPhaseNativeHistory.completionC(plan.source.session.current, pending,
+            value.completion.result.resultReference, state.stage.toString)
         } yield Some((state, next, value.completion.result))
       }
     } yield observed
@@ -136,7 +145,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       storage <- WorkflowComponentStorage.bindC(params, SmWorkflowComponent.componentId, d.configuration,
         Vector(definition), d.instances, d.continuations)
       _ <- storage.bindDecisionC(completionOperation, inputCodec)
-      _ <- completionC(storage)
+      _ <- _completion_c(storage)
       provided <- S.providedDefinition.providedOperations.find(o => o.service == completionOperation.service &&
         o.name == completionOperation.operation)
         .map(Consequence.success).getOrElse(F.invalid("ordered Human completion Operation is absent"))
@@ -153,7 +162,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             private var delegate = Option.empty[ActionCall]
             def execute(): Consequence[OperationResponse] = for {
               source <- sourceReader(submitted.handle.instanceIdentity.value, submitted.continuationId, core)
-              projected <- prepareC(source)
+              projected <- _prepare_c(source)
               questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
               issued <- questions.loadC(submitted.continuationId)(using core.executionContext)
               question <- issued.map(Consequence.success).getOrElse(F.invalid("ordered Human answer has no actual issued question"))
@@ -161,7 +170,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
               response <- for {
                   _ <- GoalPhaseParticipantAdmission.admitC(source.session.participantIdentity, core.executionContext)
                   _ <- installation.evidence.admitC(core, plan.question, submitted, source.session.participantIdentity)
-                  bound <- freshC(core, provided, plan, submitted)
+                  bound <- _fresh_c(core, provided, plan, submitted)
                   action <- bound.createOperationRequest(core.action.request).flatMap {
                     case value: CommandAction => Consequence.success(value)
                     case _ => F.invalid("ordered Human completion is not its canonical CommandAction")
@@ -179,12 +188,12 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       }
     }
 
-    private def freshC(core: ActionCall.Core, provided: GeneratedProvidedApiAbi.Operation,
+    private def _fresh_c(core: ActionCall.Core, provided: GeneratedProvidedApiAbi.Operation,
       plan: Prepared, submitted: ContinuationResult[Answer]): Consequence[spec.OperationDefinition] = for {
       questions <- plan.source.session.storage.bindDecisionC(completionOperation, inputCodec)
       instances <- plan.source.session.storage.bindInstancesC()(using core.executionContext)
-      native <- completionC(plan.source.session.storage)
-      expected <- completedC(plan, submitted)
+      native <- _completion_c(plan.source.session.storage)
+      expected <- _completed_c(plan, submitted)
       bound <- {
         val codec = new WorkflowCompletionServiceOperation.Codec[Answer] {
           val resultTypeIdentity = answerCodec.typeIdentity
@@ -192,7 +201,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           def encodeC(resume: ContinuationRuntime.Resume) = F.invalid("ordered Human acknowledgement requires committed readback")
           override def encodeAfterCommitC(resume: ContinuationRuntime.Resume, result: ContinuationResult[Answer],
             completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
-            actual <- completed.map(Consequence.success).getOrElse(uncertain("ordered Human completion has no committed instance"))
+            actual <- completed.map(Consequence.success).getOrElse(_uncertain("ordered Human completion has no committed instance"))
             _ <- acknowledgement("ordered-human-completed")
             // Managed completion supplies authoritative committed state. The
             // response performs no second store/body/semantic admission.
@@ -211,15 +220,17 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       }
     } yield bound
 
-    private def prepareC(source: Source): Consequence[Prepared] = for {
+    private def _prepare_c(source: Source): Consequence[Prepared] = for {
       _ <- installation.validateC
-      _ <- if (source.controller.stage == O.Stage.Decision && source.controller.decisionSource.exists(
-          Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)) &&
+      _ <- if (source.controller.stage == O.Stage.Decision && source.controller.decisionSource.exists(stage =>
+          if (source.controller.documentDecision) stage != O.Stage.Decision && stage != O.Stage.Closed
+          else Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)(stage)) &&
           source.from.currentProgression.contains(ProgressionReference("phase.Decision")) && source.from.suspension.isEmpty) Consequence.unit
         else F.invalid("ordered Human source is not a retained semantic decision")
       required <- requiredC
       input = Input(source.input, source.result.resultReference, source.result.result.value, source.controller.decision.get)
-      bundle = ContextBundle("Answer only the retained ordered semantic decision", Vector(source.result.resultReference), Vector.empty,
+      bundle = ContextBundle(if (source.controller.documentDecision) "Answer only the retained document acceptance conflict"
+        else "Answer only the retained ordered semantic decision", Vector(source.result.resultReference), Vector.empty,
         ContextSnapshot(source.from.definition.workflowRevision.value, evidenceRevision = Some(source.from.revision.value.toString)))
       continuation = Continuation(StateMachineRunIdentity(source.from.identity.value), identity(source),
         StateMachineRevision(source.from.revision.next.value.toString), required, bundle)
@@ -239,13 +250,27 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           required.operation, Some(TypedValue(inputCodec.typeIdentity, input)), required.resultType, bundle,
           required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
         MinimalPresentation("Ordered GoalPhase needs Human direction", Json.obj("choices" -> Json.arr(choices.map(Json.fromString)*),
-          "notice" -> Json.fromString("Resume requests the same semantic work; it grants no commands, review acceptance, Plan amendment or repair allowance.")).noSpaces)))
+          "notice" -> Json.fromString(if (source.controller.documentDecision)
+            "Resume rechecks current documents at the same frontier; it grants no amendment, command, review acceptance or repair allowance."
+          else "Resume requests the same semantic work; it grants no commands, review acceptance, Plan amendment or repair allowance.")).noSpaces)))
     } yield Prepared(source, question, intent, pending)
 
-    private def completedC(plan: Prepared, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
-      _ <- admitAnswerC(result.result.value)
-      state <- if (result.result.value.choice == "ResumeAssignedWork") resumedC(plan.source, result)
-        else Consequence.success(plan.source.controller)
+    private def _answer_state_c(source: Source, result: ContinuationResult[Answer]): Consequence[O.State] = for {
+      _ <- _admit_answer_c(result.result.value)
+      state <- if (result.result.value.choice == "ResumeAssignedWork") resumedC(source, result)
+        else Consequence.success(source.controller)
+      event = result.result.value.choice match {
+        case "ResumeAssignedWork" => (if (source.controller.documentDecision) "human-document-resumed-"
+          else "human-semantic-resumed-") + state.stage.toString
+        case "Defer" => "human-semantic-deferred"
+        case _ => "human-semantic-cancelled"
+      }
+      _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Decision", event, state.stage.toString))
+        Consequence.unit else F.invalid("ordered Human successor is absent from CML")
+    } yield state
+
+    private def _completed_c(plan: Prepared, result: ContinuationResult[Answer]): Consequence[InstanceRecord] = for {
+      state <- _answer_state_c(plan.source, result)
       next <- plan.pending.appendC(plan.pending.revision, F.history(plan.pending, "phase." + state.stage.toString,
         result.resultReference.identity))
     } yield next
@@ -266,18 +291,18 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           EvidenceContract("independent-ordered-human-answer-v1", Vector.empty), Vector.empty)))
     }
   }
-  private def completionC(storage: WorkflowComponentStorage): Consequence[WorkflowManagedDecisionCompletion[Answer]] =
+  private def _completion_c(storage: WorkflowComponentStorage): Consequence[WorkflowManagedDecisionCompletion[Answer]] =
     storage.bindDecisionCompletionC(completionOperation, inputCodec, answerCodec, closingType, (_, _) => Consequence.success(Vector.empty))
-  private def admitAnswerC(answer: Answer): Consequence[Unit] =
-    if (answer != null && choices.contains(answer.choice) && text(answer.rationale)) Consequence.unit
+  private def _admit_answer_c(answer: Answer): Consequence[Unit] =
+    if (answer != null && choices.contains(answer.choice) && _text(answer.rationale)) Consequence.unit
     else F.invalid("ordered Human answer choice or rationale is invalid")
-  private def waitC(next: InstanceRecord, result: ContinuationResult[Answer]) = F.waitC(next,
+  private def _wait_c(next: InstanceRecord, result: ContinuationResult[Answer]) = F.waitC(next,
     "Ordered Human answer retained", result.result.value.choice match {
       case "ResumeAssignedWork" => "Direction retained; only owning advance may issue the same semantic work. No command or closure is authorized."
       case "Defer" => "Human deferred this decision. No automatic question, work, command or closure follows."
       case _ => "Human cancelled this decision path. Repository state and history remain; the Phase is not completed."
     })
-  private def text(value: String) = value != null && value.trim.nonEmpty && value.length <= 16384 && !value.contains('\u0000')
-  private def uncertain[A](reason: String): Consequence[A] =
+  private def _text(value: String) = value != null && value.trim.nonEmpty && value.length <= 16384 && !value.contains('\u0000')
+  private def _uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
 }

@@ -19,8 +19,7 @@ import RepositorySyncNativeMergeValidation as V
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -59,23 +58,29 @@ private[smworkflow] object GoalPhaseNativeValidation {
   final case class Saved(record: InstanceRecord, payload: Payload)
 
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State): Consequence[Option[Saved]] = for {
-    store <- storeC(session, d, core, candidate, controller, _ => Consequence.unit)
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State,
+    from: Option[InstanceRecord] = None,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy)
     retained <- store.loadC("validation")
     actual <- retained.fold(Consequence.success(Option.empty[Saved]))(x => store.completedC(x).map(Some(_)))
   } yield actual
 
   def preconditionsC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State): Consequence[Unit] =
-    storeC(session, d, core, candidate, controller, _ => Consequence.unit).flatMap(_.preconditionsC)
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State,
+    from: Option[InstanceRecord] = None,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[Unit] =
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy).flatMap(_.preconditionsC)
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
-    store <- storeC(session, d, core, candidate, controller, acknowledgement)
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
+    from: Option[InstanceRecord] = None,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy)
     retained <- store.loadC("validation")
     actual <- retained match {
       case Some(value) => store.completedC(value)
-      case None => checksC(store)
+      case None => _checks_c(store)
     }
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
@@ -85,9 +90,30 @@ private[smworkflow] object GoalPhaseNativeValidation {
     })
   } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)))
 
-  private def storeC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[Store] = for {
+  private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
+    from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy]): Consequence[Store] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
+    _ <- documentpolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
+    frontier = from.getOrElse(candidate.record)
+    _ <- frontier.validateC
+    _ <- candidate.record.validateC
+    instances <- session.storage.bindInstancesC()(using core.executionContext)
+    current <- instances.loadC(session.current.identity)(using core.executionContext).flatMap(
+      _.map(Consequence.success).getOrElse(F.invalid("native Validation instance is absent")))
+    admitted <- GoalPhaseNativeHistory.prefixC(current, frontier.revision)
+    prior <- GoalPhaseNativeHistory.prefixC(current, candidate.record.revision)
+    _ <- if (frontier.identity == current.identity &&
+        frontier.definition.workflowIdentity == current.definition.workflowIdentity &&
+        frontier.definition.workflowRevision == current.definition.workflowRevision &&
+        candidate.record.identity == frontier.identity &&
+        candidate.record.definition.workflowIdentity == frontier.definition.workflowIdentity &&
+        candidate.record.definition.workflowRevision == frontier.definition.workflowRevision &&
+        admitted.currentProgression == frontier.currentProgression && admitted.suspension.isEmpty &&
+        frontier.suspension.isEmpty && frontier.revision.value >= candidate.record.revision.value &&
+        prior.currentProgression == candidate.record.currentProgression &&
+        frontier.currentProgression.contains(ProgressionReference(if (whole) "phase.PhaseValidation" else "phase.Validation")))
+      Consequence.unit else F.invalid("native checks require their actual admitted Validation source")
     _ <- if (candidate.record.currentProgression.contains(ProgressionReference(
         if (whole) "phase.PhaseValidation" else "phase.Validation")) &&
         candidate.payload.candidate.nonEmpty && candidate.payload.diff.nonEmpty) Consequence.unit
@@ -101,13 +127,13 @@ private[smworkflow] object GoalPhaseNativeValidation {
         F.invalid("required plan check has no fixed host program: " + identity))(c => Consequence.success(values :+ c))
     }}
     scope = if (whole) "phase:" + controller.plan.phase else controller.plan.steps(controller.cursor).identity
-    initial = Payload(candidate.record.revision.value.toString, scope, candidate.payload.candidate.get,
+    initial = Payload(frontier.revision.value.toString, scope, candidate.payload.candidate.get,
       selected, Vector.empty, None)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-  } yield new Store(adapter, session, d, core, candidate, controller, initial, acknowledgement)
+  } yield new Store(adapter, session, d, core, candidate, frontier, controller, initial, acknowledgement, documentpolicy)
 
-  private def checksC(store: Store): Consequence[Saved] = {
-    val initial = Saved(store.candidate.record, store.initial)
+  private def _checks_c(store: Store): Consequence[Saved] = {
+    val initial = Saved(store.frontier, store.initial)
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.receipts.size != index || !successful(current.payload.receipts, store.initial.selected)) Consequence.success(current)
       else store.loadC("check-result-" + index).flatMap {
@@ -136,7 +162,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
       if (current.payload.receipts.size == store.initial.selected.size || !successful(current.payload.receipts, store.initial.selected)) for {
         _ <- store.preconditionsC
         passed = successful(current.payload.receipts, store.initial.selected)
-        inspected <- store.controller.acceptC(O.CandidateObserved(store.initial.candidate))
+        inspected <- if (store.controller.stage.toString == store.validationStage &&
+            store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
+          else GoalPhaseNativeCandidate.observedStateC(store.controller, store.candidate.payload, store.documentPolicy)
         validated <- inspected.acceptC(O.ChecksObserved(store.initial.candidate, store.checks,
           store.reference("validation").identity, passed))
         target = if (passed) store.reviewStage else "Decision"
@@ -151,7 +179,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,
     d: F.Declaration, val core: ActionCall.Core, val candidate: GoalPhaseNativeCandidate.Saved,
-    val controller: O.State, val initial: Payload, acknowledgement: String => Consequence[Unit]) {
+    val frontier: InstanceRecord,
+    val controller: O.State, val initial: Payload, acknowledgement: String => Consequence[Unit],
+    val documentPolicy: Option[GoalPhaseDocumentProgress.Policy]) {
     val plan = controller.plan
     val base = controller.tipSnapshot
     val whole = controller.cursor == plan.steps.size
@@ -159,8 +189,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val ownedPaths = if (whole) plan.steps.flatMap(_.ownedPaths).distinct else plan.steps(controller.cursor).ownedPaths
     val validationStage = if (whole) "PhaseValidation" else "Validation"
     val reviewStage = if (whole) "PhaseReview" else "Review"
-    def reference(key: String) = WorkflowMechanicalTransition.Reference(candidate.record.identity.value +
-      ":ordered-validation:" + candidate.record.revision.value + ":" + key, "1")
+    def reference(key: String) = WorkflowMechanicalTransition.Reference(frontier.identity.value +
+      ":ordered-validation:" + frontier.revision.value + ":" + key, "1")
     def loadC(key: String): Consequence[Option[Saved]] = adapter.loadRetainedC(reference(key))(using core.executionContext).flatMap {
       case None => Consequence.success(None)
       case Some(value) =>
@@ -197,7 +227,15 @@ private[smworkflow] object GoalPhaseNativeValidation {
       actual <- G.observeC(core)
       tree <- G.indexTreeC(core)
       _ <- if (actual.branch == d.target.localBranch && actual.head == initial.candidate.head && actual.tree == base.tree &&
-          tree == initial.candidate.tree && (if (whole) actual.dirty.isEmpty else actual.dirty.forall(p => !p.unmerged && p.worktree == ' ' &&
+          tree == initial.candidate.tree && (if (whole) {
+            if (candidate.payload.selectedPaths.isEmpty) actual.dirty.isEmpty
+            else documentPolicy.exists(policy => candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
+              candidate.payload.selectedPaths.distinct == candidate.payload.selectedPaths &&
+              candidate.payload.selectedPaths.forall(policy.paths.contains) && actual.dirty.forall(p =>
+                !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
+                candidate.payload.selectedPaths.contains(p.path) &&
+                p.renamedFrom.forall(candidate.payload.selectedPaths.contains)))
+          } else actual.dirty.forall(p => !p.unmerged && p.worktree == ' ' &&
             p.index != '?' && p.index != '!' && ownedPaths.exists(covers(_, p.path)) &&
             p.renamedFrom.forall(x => ownedPaths.exists(covers(_, x)))))) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")

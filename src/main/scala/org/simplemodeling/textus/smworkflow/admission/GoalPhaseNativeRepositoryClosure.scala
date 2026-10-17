@@ -27,7 +27,7 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
@@ -86,7 +86,8 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     else F.invalid("repository closure requires actual whole-Phase checks and independent acceptance")
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[V.GoalPhaseAdvanceResult] = for {
+    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[V.GoalPhaseAdvanceResult] = for {
     installation <- d.repositoryClosure.map(Consequence.success).getOrElse(F.invalid("repository closure host is absent"))
     _ <- installation.validateC(d)
     input <- inputC(from, controller)
@@ -105,8 +106,15 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
               case false => Consequence.success(Option.empty[(InstanceRecord, Payload, Boolean)])
               case true => for {
                 actual <- G.observeC(core)
-                _ <- if (actual.head == input.candidate.head && actual.tree == input.candidate.tree &&
-                  actual.branch == d.target.localBranch && actual.dirty.isEmpty) Consequence.unit
+                _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
+                staged <- if (documentPolicy.nonEmpty && input.candidate.tree != controller.tipSnapshot.tree) for {
+                  tree <- G.indexTreeC(core)
+                } yield actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree &&
+                  tree == input.candidate.tree && actual.dirty.nonEmpty && actual.dirty.forall(p =>
+                    !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
+                    documentPolicy.get.paths.contains(p.path) && p.renamedFrom.forall(documentPolicy.get.paths.contains))
+                else Consequence.success(actual.tree == input.candidate.tree && actual.dirty.isEmpty)
+                _ <- if (actual.head == input.candidate.head && actual.branch == d.target.localBranch && staged) Consequence.unit
                   else F.invalid("accepted whole-Phase candidate changed before child Start")
                 entered <- controller.acceptC(O.ClosureIntentSaved(input.candidate, store.intentIdentity))
                 _ <- if (entered.stage == O.Stage.PhaseClosing && domain.statemachine.GoalPhaseRunLifecycle.permits(

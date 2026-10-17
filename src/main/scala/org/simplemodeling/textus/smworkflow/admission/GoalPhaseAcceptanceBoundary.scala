@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Saved application quality conditions. These values grant no execution,
   * independent review, mutation or closure authority.
   * @since   Oct. 16, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseAcceptanceBoundary {
@@ -95,7 +95,8 @@ private[smworkflow] object GoalPhaseAcceptanceBoundary {
     _ <- plan.effectiveAcceptance.fold(Consequence.unit)(validateEffectiveC)
   } yield ()
 
-  /** Start is the sole capture owner. Reconstructed work consumes this saved Plan. */
+  /** Start and live selection from raw current documents own capture. Saved issued
+    * Requests consume their selected Plan without recapturing project configuration. */
   def captureC(project: Option[Project], plan: GoalPhaseOrderedProgression.Plan): Consequence[GoalPhaseOrderedProgression.Plan] = for {
     _ <- validateProjectOptionC(project)
     _ <- validatePlanC(plan)

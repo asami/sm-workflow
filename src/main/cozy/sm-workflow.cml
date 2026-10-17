@@ -1038,6 +1038,31 @@ on = ordered-plan-selected
 
 ##### TRANSITION
 
+to = Implementation
+on = document-progress-intent
+
+##### TRANSITION
+
+to = Implementation
+on = document-progress-result
+
+##### TRANSITION
+
+to = Implementation
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = PhaseInspection
+on = documents-tail-removed
+
+##### TRANSITION
+
 to = InspectCandidate
 on = implementation-result-admitted
 
@@ -1050,10 +1075,30 @@ on = implementation-decision-needed
 
 ##### TRANSITION
 
+to = InspectCandidate
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
 to = Validation
 on = candidate-observed
 
 #### Validation
+
+##### TRANSITION
+
+to = Validation
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
 
 ##### TRANSITION
 
@@ -1066,6 +1111,16 @@ to = Decision
 on = checks-failed
 
 #### Review
+
+##### TRANSITION
+
+to = Review
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
 
 ##### TRANSITION
 
@@ -1086,6 +1141,16 @@ on = review-decision-needed
 
 ##### TRANSITION
 
+to = Repair
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
 to = InspectCandidate
 on = repair-result-admitted
 
@@ -1095,6 +1160,16 @@ to = Decision
 on = repair-decision-needed
 
 #### Closing
+
+##### TRANSITION
+
+to = Closing
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
 
 ##### TRANSITION
 
@@ -1115,10 +1190,50 @@ on = last-step-closed
 
 ##### TRANSITION
 
+to = PhaseInspection
+on = document-progress-intent
+
+##### TRANSITION
+
+to = PhaseInspection
+on = document-progress-result
+
+##### TRANSITION
+
+to = PhaseInspection
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = Implementation
+on = documents-tail-added
+
+##### TRANSITION
+
 to = PhaseValidation
 on = phase-candidate-observed
 
 #### PhaseValidation
+
+##### TRANSITION
+
+to = PhaseValidation
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = Implementation
+on = documents-tail-added
 
 ##### TRANSITION
 
@@ -1131,6 +1246,21 @@ to = Decision
 on = phase-checks-failed
 
 #### PhaseReview
+
+##### TRANSITION
+
+to = PhaseReview
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = Implementation
+on = documents-tail-added
 
 ##### TRANSITION
 
@@ -1147,6 +1277,16 @@ on = phase-review-decision-needed
 ##### TRANSITION
 
 to = PhaseClosing
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = PhaseClosing
 on = phase-closure-intent-saved
 
 ##### TRANSITION
@@ -1155,6 +1295,56 @@ to = Closed
 on = phase-repository-closed
 
 #### Decision
+
+##### TRANSITION
+
+to = Implementation
+on = human-document-resumed-Implementation
+
+##### TRANSITION
+
+to = InspectCandidate
+on = human-document-resumed-InspectCandidate
+
+##### TRANSITION
+
+to = Validation
+on = human-document-resumed-Validation
+
+##### TRANSITION
+
+to = Review
+on = human-document-resumed-Review
+
+##### TRANSITION
+
+to = Repair
+on = human-document-resumed-Repair
+
+##### TRANSITION
+
+to = Closing
+on = human-document-resumed-Closing
+
+##### TRANSITION
+
+to = PhaseInspection
+on = human-document-resumed-PhaseInspection
+
+##### TRANSITION
+
+to = PhaseValidation
+on = human-document-resumed-PhaseValidation
+
+##### TRANSITION
+
+to = PhaseReview
+on = human-document-resumed-PhaseReview
+
+##### TRANSITION
+
+to = PhaseClosing
+on = human-document-resumed-PhaseClosing
 
 ##### TRANSITION
 

@@ -10,8 +10,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  *  version Oct.  8, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -63,6 +62,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   /** Assigned AI work only. Review is deliberately a separate host-admitted event. */
   final case class SemanticCompleted(key: WorkKey, summary: String) extends Event
   final case class CandidateObserved(snapshot: Snapshot) extends Event
+  final case class PhaseDocumentCandidateObserved(snapshot: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, passed: Boolean) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
@@ -79,6 +79,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class PhaseRepositoryClosed(intent: String, base: String, tip: String,
     commits: Vector[Commit], receipt: String) extends Event
   final case class NativeFailure(reason: String) extends Event
+  final case class DocumentConflictObserved(conflicts: Vector[String]) extends Event
   /** A verified Human may ask for the same semantic work again, not authorize
     * commands, accept a review, amend the Plan or refund a repair allowance.
     */
@@ -90,7 +91,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val checksReceipt: Option[String], val reviewEvidence: Option[String],
     val closureIntent: Option[String], val decision: Option[String],
     val repositoryReceipt: Option[String], val repairDirective: Option[RepairDirective],
-    val decisionSource: Option[Stage]) {
+    val decisionSource: Option[Stage], val documentDecision: Boolean = false) {
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
     private def tip = completed.lastOption.map(_.commit.identity).getOrElse(base.head)
@@ -100,6 +101,58 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (phaseWide) None else Some(step.identity), kind, generation)
     private def semantic(kind: WorkKind, purpose: String) = Semantic(key(kind), purpose,
       completed, plan, base, candidate, checksReceipt, repairDirective)
+
+    /** Business context only: this projection grants no issue or execution authority. */
+    def protectedStepCount(issued: Boolean): Int = cursor +
+      (if (cursor < plan.steps.size && (stage != Stage.Implementation || issued)) 1 else 0)
+
+    def phaseAcceptanceLocked(issued: Boolean): Boolean =
+      stage == Stage.PhaseClosing || stage == Stage.Closed || (stage == Stage.PhaseReview && issued)
+
+    /** Compare already captured effective contracts; the declaration owner captures them. */
+    def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (stage == Stage.Decision || stage == Stage.Closed)
+        invalid("refresh requires a live non-decision frontier") else Consequence.unit
+    } yield {
+      val protectedcount = protectedStepCount(issued)
+      val phaselocked = phaseAcceptanceLocked(issued)
+      val newtail = proposed.steps.size > cursor
+      val restart = !issued && newtail && Set(Stage.PhaseInspection, Stage.PhaseValidation, Stage.PhaseReview)(stage)
+      val finish = !issued && stage == Stage.Implementation && proposed.steps.size == cursor
+      val stepacceptance = completed.nonEmpty || protectedcount > cursor
+      val conflicts = Vector(
+        Option.when(proposed.identity != plan.identity)("plan-identity"),
+        Option.when(proposed.phase != plan.phase)("phase"),
+        Option.when(proposed.repository != plan.repository)("repository"),
+        Option.when(proposed.repairLimit != plan.repairLimit)("repair-limit"),
+        Option.when(proposed.steps.take(cursor) != plan.steps.take(cursor))("completed-steps"),
+        Option.when(protectedcount > cursor && proposed.steps.lift(cursor) != plan.steps.lift(cursor))("issued-step"),
+        Option.when(phaselocked && proposed.steps != plan.steps)("phase-scope"),
+        Option.when(stepacceptance && (_acceptance_usage(proposed) != _acceptance_usage(plan) ||
+          _acceptance_conditions(proposed, Set("all", "step")) != _acceptance_conditions(plan, Set("all", "step"))))("step-acceptance"),
+        Option.when(Set(Stage.PhaseReview, Stage.PhaseClosing)(stage) && !restart &&
+          proposed.phaseChecks != plan.phaseChecks)("phase-checks"),
+        Option.when(phaselocked && _acceptance_conditions(proposed, Set("phase")) !=
+          _acceptance_conditions(plan, Set("phase")))("phase-acceptance"),
+        Option.when(phaselocked && proposed.phaseReviewClassification != plan.phaseReviewClassification)("phase-review-classification")
+      ).flatten
+      if (conflicts.nonEmpty) Left(conflicts)
+      else {
+        val clear = restart || finish
+        val nextstage = if (restart) Stage.Implementation else if (finish) Stage.PhaseInspection else stage
+        Right(new State(proposed, nextstage, cursor, generation, repairs, base, completed,
+          if (clear) None else candidate, if (clear) None else checksReceipt,
+          if (clear) None else reviewEvidence, if (clear) None else closureIntent,
+          if (clear) None else decision, repositoryReceipt, if (clear) None else repairDirective,
+          if (clear) None else decisionSource))
+      }
+    }
+
+    private def _acceptance_usage(value: Plan): Option[String] = value.effectiveAcceptance.flatMap(_.usage)
+    private def _acceptance_conditions(value: Plan, scopes: Set[String]): Map[String, GoalPhaseAcceptanceBoundary.EffectiveCondition] =
+      value.effectiveAcceptance.toVector.flatMap(_.conditions).filter(c => scopes(c.scope)).map(c => c.identity -> c).toMap
 
     def next: Next = stage match {
       case Stage.Implementation => semantic(WorkKind.ImplementStep, step.purpose)
@@ -130,6 +183,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           (!phaseWide || completed.lastOption.exists(_.commit.tree == value.tree)) =>
         success(if (phaseWide) Stage.PhaseValidation else Stage.Validation,
           newCandidate = Some(value))
+      case PhaseDocumentCandidateObserved(value, paths) if stage == Stage.PhaseInspection && phaseWide &&
+          validSnapshot(value) && value.head == tip && paths != null && paths.nonEmpty &&
+          paths.distinct == paths && paths.forall(path) &&
+          plan.steps.forall(step => paths.forall(step.ownedPaths.contains)) &&
+          completed.lastOption.exists(_.commit.tree != value.tree) =>
+        success(Stage.PhaseValidation, newCandidate = Some(value))
       case ChecksObserved(value, selected, receipt, passed) if candidate.contains(value) &&
           selected == checks && text(receipt) &&
           (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
@@ -171,8 +230,19 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         success(Stage.Closed, newRepository = Some(receipt))
       case NativeFailure(reason) if reason != null && reason.trim.nonEmpty && stage != Stage.Closed && stage != Stage.Decision =>
         success(Stage.Decision, reason = Some(reason))
+      case DocumentConflictObserved(conflicts) if stage != Stage.Decision && stage != Stage.Closed &&
+          conflicts != null && conflicts.nonEmpty && conflicts.size <= 128 &&
+          conflicts.distinct == conflicts && conflicts.forall(value => text(value) &&
+            value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384) =>
+        Consequence.success(new State(plan, Stage.Decision, cursor, generation, repairs, base, completed,
+          candidate, checksReceipt, reviewEvidence, closureIntent,
+          Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
+          repairDirective, Some(stage), true))
       case DecisionResumptionAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
-          generation < Long.MaxValue && decisionSource.exists(Set(Stage.Implementation, Stage.Repair,
+          documentDecision && decisionSource.exists(value => value != Stage.Decision && value != Stage.Closed) =>
+        success(decisionSource.get, reason = None)
+      case DecisionResumptionAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
+          !documentDecision && generation < Long.MaxValue && decisionSource.exists(Set(Stage.Implementation, Stage.Repair,
             Stage.Review, Stage.PhaseReview)) =>
         success(decisionSource.get, newGeneration = generation + 1, reason = None)
       case _ => invalid("event differs from the Workflow-assigned ordered Phase frontier")

@@ -23,8 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  *  version Oct. 14, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -44,14 +43,15 @@ private[smworkflow] object GoalPhaseNativeRun {
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
     projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
-    plan: O.Plan)
+    plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
     /** Host resolves the genuinely selected complete plan, not an AI request's
       * claim or a latest arbitrary planning file. Only Start selects this plan.
       */
     def loadForCallC(selectionIdentity: String, core: ActionCall.Core): Consequence[Option[SelectedPlan]]
   }
-  final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot)
+  final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot,
+    documents: Option[GoalPhaseDocumentSource.Bound] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -59,7 +59,7 @@ private[smworkflow] object GoalPhaseNativeRun {
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStartRecord"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v2"),
-      "payload" -> value.asJson)
+      "payload" -> (if (value.documents.isEmpty) value.asJson.mapObject(_.remove("documents")) else value.asJson))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
@@ -92,7 +92,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
       Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
     base = O.Snapshot(observed.head, observed.tree)
-    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base)
+    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents)
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)

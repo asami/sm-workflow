@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -58,15 +58,20 @@ private[smworkflow] object GoalPhaseNativeClosure {
   }
 
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State): Consequence[Saved] = for {
-    store <- storeC(session, d, core, from, controller, _ => Consequence.unit)
-    result <- store.loadC("committed").flatMap(_.map(Consequence.success).getOrElse(F.invalid("Step commit result is not recorded")))
-    saved <- store.completedC(result)
+    from: InstanceRecord, controller: O.State): Consequence[Saved] =
+    retainedOptionC(session, d, core, from, controller).flatMap(_.map(Consequence.success).getOrElse(
+      F.invalid("Step commit result is not recorded")))
+
+  def retainedOptionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    result <- store.loadC("committed")
+    saved <- result.fold(Consequence.success(Option.empty[Saved]))(value => store.completedC(value).map(Some(_)))
   } yield saved
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Option[Saved]] = for {
-    store <- storeC(session, d, core, from, controller, acknowledge)
+    store <- _store_c(session, d, core, from, controller, acknowledge)
     result <- store.loadC("committed")
     saved <- result match {
       case Some(value) => store.completedC(value).map(Some(_))
@@ -114,7 +119,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
   } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
     step.identity, controller.generation, controller.tipSnapshot, controller.candidate.get, controller.reviewEvidence.get)
 
-  private def storeC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+  private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
     input <- inputC(from, controller)
     installation <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
@@ -146,6 +151,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield saved.receipt.next
     def completedC(result: (InstanceRecord, Payload)): Consequence[Saved] = for {
+      _ <- if (result._2 != null && result._2.input == input && result._2.ordinal == ordinal &&
+          result._2.commit.nonEmpty) Consequence.unit
+        else F.invalid("retained Step closure has no actual selected commit")
       entered <- controller.acceptC(O.ClosureIntentSaved(input.candidate, intentIdentity))
       next <- entered.acceptC(O.StepCommitObserved(intentIdentity, result._2.commit.get))
     } yield Saved(result._1, result._2, next)

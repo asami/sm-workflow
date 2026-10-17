@@ -14,7 +14,7 @@ import GoalPhaseWorkClassification as W
 /** Explicit files and selection metadata are specification-owned inputs.
   * Successful preparation is no authenticated selection or native admission.
   * @since   Oct. 14, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -209,6 +209,48 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
       Then("no structured importer or file acquisition is produced")
       result.toOption shouldBe None
       reads shouldBe 0
+    }
+  }
+
+  "Explicit selected document preparation" should {
+    "emit only the two normal selected rows without acquiring the declared documents" in {
+      Given("the ordinary eight preparation fields and a source declaration in the selected plan file")
+      val source = GoalPhaseDocumentSource.Source("docs/phase.md", "docs/checklist.md")
+      val declaration = Json.obj("schemaVersion" -> Json.fromString(GoalPhaseDocumentSource.declarationSchema),
+        "phasePath" -> Json.fromString(source.phasePath), "checklistPath" -> Json.fromString(source.checklistPath))
+      var reads = Vector.empty[String]
+      val files = _files(plan = declaration)
+      When("normal passive preparation reads the explicit business input and source declaration")
+      val entries = _entries(_take(Main.prepareC(_args, path => { reads :+= path; _read(files)(path) })))
+      val row = _row(entries(1))
+      val stored = row.hcursor.get[String](GoalPhaseSelectedPlanJsonV1.storageField).toOption.get
+      Then("the existing typed plan field contains passive source selection and no document read or placeholder Plan")
+      reads shouldBe Vector("input.json", "plan.json")
+      entries.size shouldBe 2
+      entries.map(_.hcursor.get[String]("collection").toOption.get) shouldBe Vector(_selection_collection, _plan_collection)
+      row.asObject.get.keys.toSet shouldBe Set("id", GoalPhaseSelectedPlanJsonV1.storageField)
+      row.hcursor.get[String]("id").toOption shouldBe Some("selected-goal")
+      _take(GoalPhaseDocumentSource.decodeStorageC(stored)) shouldBe
+        GoalPhaseDocumentSource.Selection("selected-goal", "explicit-participant", source)
+      _selection(entries).selectedInput.get.value.as[V.GoalPhaseStartInput].toOption shouldBe Some(_input)
+    }
+
+    "refuse every invalid schema-bearing declaration without falling back to a structurally valid legacy Plan" in {
+      Given("legacy Plan JSON augmented with a declaration schema, extra authority or malformed source fields")
+      val source = Json.obj("schemaVersion" -> Json.fromString(GoalPhaseDocumentSource.declarationSchema),
+        "phasePath" -> Json.fromString("docs/phase.md"), "checklistPath" -> Json.fromString("docs/checklist.md"))
+      val variants = Vector(_plan.asJson.mapObject(_.add("schemaVersion", Json.fromString("unknown"))),
+        _plan.asJson.mapObject(_.add("schemaVersion", Json.Null)),
+        source.mapObject(_.add("plan", _plan.asJson)), source.mapObject(_.add("permission", Json.True)),
+        source.mapObject(_.remove("checklistPath")), source.mapObject(_.add("phasePath", Json.fromString("../phase.md"))))
+      When("the normal preparation route receives each selected plan file")
+      val results = variants.map(plan => Main.prepareC(_args, _read(_files(plan = plan))))
+      Then("no declaration is reinterpreted as a legacy Plan, while the schema-less legacy bytes remain unchanged")
+      results.foreach(_.isSuccess shouldBe false)
+      val entries = _entries(_take(Main.prepareC(_args, _read(_files()))))
+      val legacy = _row(entries(1)).hcursor.get[String](GoalPhaseSelectedPlanJsonV1.storageField).toOption.get
+      legacy shouldBe _take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(
+        GoalPhaseNativeRun.SelectedPlan("selected-goal", "explicit-participant", _plan)))
     }
   }
 }

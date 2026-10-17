@@ -1,6 +1,6 @@
 # Phase 6.1: Runtime Commands, Live Phase Plans and Step Admission
 
-status=planned
+status=in-progress
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
 split_validation_bootstrap=none
@@ -10,6 +10,28 @@ aggregate_validation_sequence=["PHASE-6","PHASE-6.1","PHASE-6.2","PHASE-6.3"]
 depends_on=phase-6.md
 Planned: 2026-10-13. Split from Phase 6.
 Owner: sm-workflow. Predecessor: [6](phase-6.md). Successor: [6.2](phase-6.2.md).
+
+## Current delivery — 2026-10-17
+
+The existing Phase 6.1 Goal, original base, PLAN epoch and repair history remain
+active. Deliver the following connected Steps in order:
+
+1. **P61-PLAN — accepted:** P6-PS01..04, supported Phase/checklist import,
+   live dispatch refresh, retained issued context and current-document progress
+   writeback. Complete protected Step review and mechanical conformance closure
+   are accepted; this Step is ready for its local acceptance commit.
+2. **P61-COMMAND — not started:** P6-EX01..03 and P6-HR01/04, actual commands,
+   semantic correction/revalidation and configured deterministic maintenance.
+   Source-history handling follows the `none`/`goldenport` selection below;
+   rules belong to the configured external provider.
+3. **P61-ADMISSION — not started:** P6-SQ01, real scoped producer/provider
+   review, typed Evidence/Admission and local Step commit.
+
+The sole Phase 6.1 comprehensive review and final local release remain open.
+Repository-full validation is deferred-not-run to PHASE-6.3. Phase 6 acceptance
+and its repair history remain closed and preserved; no Phase 6.2 or Phase 7
+execution follows from this record. Active execution evidence stays in ignored
+local workflow storage while this Phase is active.
 
 ## Goal and connected implementation order
 

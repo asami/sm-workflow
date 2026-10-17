@@ -14,8 +14,7 @@ import GoalPhaseNativeRun as F
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -24,7 +23,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     originalBase: O.Snapshot, completed: Vector[O.ClosedStep], candidate: Option[O.Snapshot],
     checksReceipt: Option[String], repairDirective: Option[O.RepairDirective],
     review: Option[GoalPhaseNativeReview.Context] = None,
-    decisionContext: Option[DecisionContext] = None)
+    decisionContext: Option[DecisionContext] = None,
+    documents: Option[GoalPhaseDocumentSource.Bound] = None)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None)
   object Result {
@@ -44,6 +44,17 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Encoder[DecisionContext] = deriveEncoder
   private given Decoder[DecisionContext] = deriveDecoder
 
+  // Derive the nested document payload bottom-up to keep whole-Request
+  // derivation within Scala's inline depth without changing the wire fields.
+  private given Encoder[GoalPhaseDocumentSource.Source] = deriveEncoder
+  private given Decoder[GoalPhaseDocumentSource.Source] = deriveDecoder
+  private given Encoder[GoalPhaseDocumentPlan.Binding] = deriveEncoder
+  private given Decoder[GoalPhaseDocumentPlan.Binding] = deriveDecoder
+  private given Encoder[GoalPhaseDocumentPlan.Item] = deriveEncoder
+  private given Decoder[GoalPhaseDocumentPlan.Item] = deriveDecoder
+  private given Encoder[GoalPhaseDocumentSource.Bound] = deriveEncoder
+  private given Decoder[GoalPhaseDocumentSource.Bound] = deriveDecoder
+
   def initialC(source: F.Session): Consequence[Request] = for {
     state <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
     semantic <- state.next match {
@@ -53,7 +64,8 @@ private[smworkflow] object GoalPhaseNativeWork {
   } yield Request(source.current.identity.value, source.started.receipt.next.revision.value.toString,
     semantic.key.kind.toString, semantic.key.step, semantic.key.generation, semantic.purpose,
     semantic.selectedPlan, semantic.originalBase, semantic.completed, semantic.candidate,
-    semantic.checksReceipt, semantic.repairDirective)
+    semantic.checksReceipt, semantic.repairDirective,
+    documents = source.started.receipt.payload.value.documents)
 
   def requiredC: Consequence[StateMachineRequiredOperation] = requiredC("ImplementStep")
   def requiredC(kind: String): Consequence[StateMachineRequiredOperation] = {
@@ -118,7 +130,8 @@ private[smworkflow] object GoalPhaseNativeWork {
       override def encode(value: Request): Json = {
         val payload = value.asJson.mapObject { fields =>
           val review = if (value.review.isEmpty) fields.remove("review") else fields
-          if (value.decisionContext.isEmpty) review.remove("decisionContext") else review
+          val decision = if (value.decisionContext.isEmpty) review.remove("decisionContext") else review
+          if (value.documents.isEmpty) decision.remove("documents") else decision
         }
         Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-work-request.v2"),
           "payload" -> payload)
