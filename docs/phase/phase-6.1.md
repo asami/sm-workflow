@@ -1,6 +1,6 @@
 # Phase 6.1: Runtime Commands, Live Phase Plans and Step Admission
 
-status=in-progress
+status=closed
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
 split_validation_bootstrap=none
@@ -11,9 +11,87 @@ depends_on=phase-6.md
 Planned: 2026-10-13. Split from Phase 6.
 Owner: sm-workflow. Predecessor: [6](phase-6.md). Successor: [6.2](phase-6.2.md).
 
-## Current delivery — 2026-10-17
+## Production-first boundary — adopted 2026-10-18
 
-Current status: P61-PLAN accepted; P61-COMMAND accepted through independent Step review and focused repair closure, local acceptance commit pending; P61-ADMISSION not started.
+CBD-backed review integration P6-SQ01..05 moves to [Phase 10](phase-10.md).
+Phase 6.1 closure no longer waits for CBD15 SQR-04 / CBD15.1 RR06. Those producer
+contracts remain required for Phase 10. This supersedes the earlier same-day
+CBD dependency, while retaining its implementation and adoption history.
+
+The following is the adopted pre-implementation requirement; the current
+accepted Step result is recorded below. P61-ADMISSION required an actual reviewer result through existing
+host/effect authority, Review/Submit/Advance and authorized Step commit without
+mandatory CBD calls. Required independent review, target binding, coverage and
+blocker handling remain. CBD-specific results are deferred, never fabricated PASS.
+Reconcile the actual caller and acceptance requirements; merely not starting CBD
+will still fail the current mandatory call. Do not add a dummy success adapter,
+implicit fallback or duplicate review engine. Preserve CBD source/evidence for
+Phase 10 and accepted PLAN/COMMAND, Goal/base/epoch, counters and findings.
+
+Adopt at the next ordinary planning/dispatch boundary without retargeting issued
+work. Continue independent normal Action/UoW owner repair/validation as needed.
+This planning edit changes no source or live workflow state and claims no new
+acceptance. See the [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+
+The [earlier continuation adoption](../journal/2026/10/2026-10-18-phase-6.1-cbd-external-review-adoption.md)
+records the prior external-review target and actual gaps. Its waits and counts
+are historical, not instructions to restore that dependency or reset live state.
+
+## Current acceptance state — 2026-10-18
+
+Current status: all three declared Steps are independently accepted and locally
+committed. P61-PLAN is `8c48c329`; P61-COMMAND is `1f61d94`; P61-ADMISSION is
+`0b93d134` in sm-workflow with the supporting CNCF correction `89b7e3fc`.
+Owner: sm-workflow Phase 6.1.
+Update rule: change this state only from the owning review, actual validation
+and native commit results; retain dated snapshots and all failed attempts.
+
+The revised ordinary reviewer route uses configured managed-host evidence,
+retains actual authority, target/semantic association, coverage and blocker gates,
+and needs no CBD call. In the existing isolated validation session, ordinary
+Submit accepted the actual independent result. Authorized Advance made local
+Step commit `429aa307`, then ran a fresh ProductCheck; repeated Advance retained
+the same pending Phase Review without repeating SBT or the commit. The normal
+closure consumer passed one executable test. The original Submit verifier-wrapper
+capture limitation remains recorded locally; this is no claim of a complete
+runtime contract or installed-skill production acceptance.
+
+CNCF Action calls bind their UnitOfWork to the selected target context. Nested
+synchronous invocation shares diagnostic/evaluation metadata; public fresh and
+asynchronous worker runtimes keep independent metadata. The two independent
+ADMISSION review findings are closed by focused re-review, including actual
+global-ancestor and Ephemeral/no-global Job cases. Final producer checks passed
+34 tests in three suites, with two existing pending placeholders. Normal local
+SNAPSHOT publication refreshed the dependency; the ordinary sm-workflow consumer
+passed 33 tests in three suites and prepared its normal runtime. Applicable
+PLAN/COMMAND evidence and earlier results remain retained under their conditions.
+
+ADMISSION repair 18, COMMAND repair 5, PLAN repair 11 and Phase repair 0 are
+retained. The sole independent Phase 6.1 comprehensive review
+`p61-phase-full-review-1@1` passed over the complete 76-path accumulator.
+This is the canonical closure for the final local release, bound by
+`p61-phase-closure@1`; it becomes authoritative with its verified native commit
+receipt. Six accepted Hygiene records remain in the existing journal; no new
+blocker or follow-up was found. Strict CAR lint exited 1 with partially truncated
+warning output; no strict PASS or complete current warning count is claimed.
+Repository-full validation is **deferred-not-run to PHASE-6.3**. CBD-specific
+P6-SQ01..05 remains incomplete in Phase 10. Installed three-skill acceptance
+P63-USE01..03 and successor implementation remain with their existing owners;
+none is claimed by these focused checks or local Step commits.
+
+The adopted [cost-first execution order](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md)
+changes the later work order only. Preserve accepted work and fill actual missing
+connections; production use starts after 6.3 acceptance/release. Successor plans
+and shared projections currently remain preserved local planning, separately
+from this Phase's canonical acceptance authority.
+
+## Retained delivery snapshot — 2026-10-17
+
+This snapshot retains original allocations and results. Current P61-ADMISSION
+completion follows the production-first boundary above; its CBD portion transfers
+to Phase 10. Do not use these dated counts as current live-state values.
+
+Current status: P61-PLAN accepted; P61-COMMAND accepted and locally committed; P61-ADMISSION in progress, connecting the validated bounded CBD scoped-review provider to CAM.
 Update rule: update from actual validation and the owning Step/Phase acceptance; retain historical allocations and unfinished work.
 
 The existing Phase 6.1 Goal, original base, PLAN epoch and repair history remain
@@ -28,9 +106,33 @@ active. Deliver the following connected Steps in order:
    Source-history handling follows the `none`/`goldenport` selection below;
    rules belong to the configured external provider. Its complete protected
    independent Step review and focused repair closure are accepted; the local
-   acceptance commit remains pending.
-3. **P61-ADMISSION — not started:** P6-SQ01, real scoped producer/provider
-   review, typed Evidence/Admission and local Step commit.
+   acceptance commit is `1f61d94`.
+3. **P61-ADMISSION — in progress, typed consumer connection:** P6-SQ01, real
+   scoped producer/provider review, typed Evidence/Admission and local Step
+   commit. The [minimum provider connection plan](../notes/phase-6.1-step-admission-provider-plan.md)
+   reuses CAM and actual Cozy metadata. CBD's existing review admission requires
+   hashes and its AI output is advisory-only; the required bounded scoped
+   semantic-review addition is authorized for the existing CBD main checkout.
+   The seven-path CBD provider passed normal generation/compilation and four
+   focused suites (16 tests), including the generated QUERY/factory/UoW path
+   and existing managed-effect consumers. Its missing QUERY declaration and
+   test response omission of required empty arrays were corrected; production
+   response validation remains strict. Ordinary local Cozy and CNCF artifacts
+   were refreshed from current sources without restoring SHA metadata.
+   The normal Operation Record-to-CAM adapter passed focused validation;
+   actual metadata/provider, normal Submit/Advance and local Step commit remain
+   open. The owner selected `textus-ai-runtime` in the `textus-ai-core` checkout.
+   Its ordinary application-purpose registration contract requires CBD to
+   register `car-review.semantic-consistency` against `software-analysis`;
+   that bounded bootstrap correction passed its producer checks. The normal
+   Submit acceptance connection passed three focused suites (107 tests):
+   independent host evidence first, then current configuration/File DSL input,
+   the CBD Operation and CAM. The retained C4 normal Step-closure consumer
+   passed ordinary test compilation; its execution requires the actual accepted
+   Submit and local effect authority. Real provider/Submit acceptance is open.
+   Concrete model/provider selection remains with Textus AI and CNCF
+   configuration. The ADMISSION repair count is 5;
+   closed COMMAND repair 5, PLAN repair 11 and Phase repair 0 are retained.
 
 Actual COMMAND qualification covers A/A2 focused consumer/codec checks (2 suites,
 17 tests), normal owning-UoW Compile/configured SBT source generation and real
@@ -154,40 +256,30 @@ runtime work. No snapshots/hashes/TTL/integrity ledger or abandoned-run recovery
 
 ### Staged quality review across projects — 2026-10-13
 
-Own P6-SQ01: real Cozy CML metadata -> scoped lint/independent semantic review ->
-typed Evidence/Admission -> actual local Step commit through the existing runtime.
-`STEP` is sm-workflow lifecycle meaning, not generic CNCF ABI. Reuse existing
-CAM and request only needed owner capabilities: CNCF106 REA, Cozy81 RMS,
-cbd-support15 SQR. Their bounded owner handoffs close independently of the whole
-consumer family; do not wait for unrelated roadmaps or invent circular closure.
-Use the shared adopted integration scope for needed producer work. This is an
-actual producer/provider connection, not mocked output or a complete-provider claim.
-Phase 6.3 owns P6-SQ02..05 and the PHASE/FINAL connected route.
+Reallocated 2026-10-18: ordinary Step review stays here; CBD integration moves
+to Phase 10. The heading is retained for existing document references.
 
-### Security evidence at Step admission — adopted 2026-10-14
+P61-ADMISSION accepts a genuine reviewer result on the existing normal route,
+with required independence, applicable validation, result/subject association,
+blocker disposition, host authorization and typed Git/UoW Step closure. Prove this
+with CBD unavailable/not configured; do not fabricate a CBD result or waive the
+ordinary Admission contract. Preserve the existing CAM/runtime ownership and
+make only the actual changes needed for this revised initial-use contract.
 
-Apply the [security review profile](phase-6-security-review-profile.md) as
-additional content of P6-SQ01. Request a focused check only when an explicitly
-adopted security contract is affected by this change and applicable existing
-evidence is insufficient. Public exposure, DataStore access, rendering, input
-binding and explicit escapes are possible affected areas, not automatic test
-triggers. Step completion itself requires no additional security scan. Consume
-actual CAR lint/CBD Review results through the existing typed Evidence/Admission
-route; sm-workflow does not own security rule semantics.
+CBD-specific P6-SQ01 and its actual metadata/lint/prepare/external-result/CAM
+connection now belong to [Phase 10](phase-10.md). Existing source and focused
+results remain its starting point, not accepted external execution. P6-SQ02..05
+also transfer there; ordinary integrated review and Final remain in 6.3.
 
-Reuse CNCF/Cozy guarantees for ordinary use meeting the delivered contract's
-conditions; do not rerun SQL parameter-binding, generated escaping or other
-producer security tests per application/Step. Check only an uncovered changed
-application boundary. Unaffected and already-covered scenarios must continue
-without extra security execution or a provider wait. Establish this behavior
-within the existing connection acceptance, not a new recurring verification gate.
+### Security evidence at Step admission
 
-CNCF107/Cozy83/CBD16 are bounded producer/provider handoffs for this content,
-in addition to the staged-review owners above. A locally imported plan is not
-an available provider or passing evidence. Missing required coverage remains
-an explicit gap for this connection while independent work can proceed.
-Use the existing Step review and commit sequence, retaining applicable evidence;
-do not add another mandatory security review cycle or expand full-suite ownership.
+Apply the [security profile](phase-6-security-review-profile.md) through existing
+review and applicable producer evidence. Retain runtime authority/effect checks
+and accepted managed-effects safeguards. Reuse CNCF/Cozy guarantees under their
+conditions; do not repeat their security tests or add a new scanner per Step.
+Review an uncovered changed in-scope boundary through the actual review route;
+missing required evidence is still a gap. CBD-specific additional review is
+Phase 10 work, not an initial-use provider wait or a dummy success result.
 
 ### Review and maintenance responsibilities — 2026-10-12
 
@@ -199,7 +291,8 @@ meaning-dependent GWT/names/comments and adopted semantic correction P6-HR02/03.
 
 ## Closure and successor handoff
 
-Own P6-EX01..03, P6-PS01..04, P6-SQ01 and P6-HR01/04 in the
+Own P6-EX01..03, P6-PS01..04 and P6-HR01/04, plus the revised
+ordinary P61-ADMISSION route. P6-SQ01 is owned by Phase 10; retain the other rows in the
 [single checklist](managed-test-suites-phase-checklist.md#phase-6-family--aiskill-connection).
 Prove real build/test and local Git, failure -> AI correction -> runtime validation,
 Git conflict/resolution, a representative configured tool/acceptance command and

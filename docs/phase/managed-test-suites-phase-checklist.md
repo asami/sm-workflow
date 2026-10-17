@@ -1,16 +1,40 @@
 # Managed Test Suites: Phase 5/5.1/6–6.3/7 delivery and acceptance
 
-Date: 2026-10-06
-Status: in-progress; PHASE-6.1 acceptance scope only
+Status: closed; PHASE-6.1 acceptance scope only
 Phase acceptance scope: PHASE-6.1
-Current status: P61-PLAN accepts P6-PS01..04 through its complete protected Step
-review and mechanical conformance closure, locally acceptance-committed at
-`8c48c329`. P61-COMMAND is accepted through its complete protected independent
-Step review and focused repair closure; its local acceptance commit is pending. P61-ADMISSION has not
-started: real scoped producer review, CAM Evidence/Admission and local commit
-remain required, including the C4 source-history route. The Phase 6.1 comprehensive
-review and final release remain open; repository-full validation is
-deferred-not-run to PHASE-6.3.
+
+## Current allocation — production-first, 2026-10-18
+
+CBD-backed review integration P6-SQ01..05 belongs to [Phase 10](phase-10.md).
+Earlier Phase 6 allocations below retain historical scope only where they would
+require new CBD review calls. Initial use after 6.3 needs no CBD15/15.1 handoff.
+Ordinary review, required independence, actual authorization, missing-evidence
+handling and the accepted Phase 6 managed-effects/CBD16 slice remain in force.
+No producer safeguard is disabled, no CBD result is fabricated, and generic
+security review is not deferred. Phase 10 has its own validation; the existing
+four-member 6..6.3 aggregate is unchanged.
+
+
+Date: 2026-10-06
+Current status: P61-PLAN (`8c48c329`), P61-COMMAND (`1f61d94`) and revised ordinary
+P61-ADMISSION (`0b93d134`, supporting CNCF `89b7e3fc`) are independently accepted
+and locally committed. Actual ordinary Submit/authorized Advance completed the
+isolated Step commit `429aa307` and fresh ProductCheck; the closure consumer
+passed one test. Producer validation passed 34 tests/3 suites (2 existing pending),
+and affected ordinary consumer validation passed 33 tests/3 suites with normal
+runtime preparation after local dependency refresh. The two ADMISSION review
+blockers are resolved by focused independent re-review. Original execution and
+failure history, including the Submit verifier-wrapper capture limitation, stays
+in local workflow storage; no full runtime or installed-use claim follows.
+ADMISSION repair 18, COMMAND repair 5, PLAN repair 11 and Phase repair 0 remain.
+The sole independent comprehensive Phase 6.1 review `p61-phase-full-review-1@1`
+passed over the complete 76-path accumulator. This final canonical closure binds
+`p61-phase-closure@1` and becomes authoritative with its verified native commit
+receipt. Six existing Hygiene records remain persisted; there are no new findings.
+Strict CAR lint exited 1 with partially truncated warning output; no strict PASS
+or complete current warning count is claimed. Repository-full validation is
+deferred-not-run to PHASE-6.3. P6-SQ01..05 is
+incomplete and allocated to Phase 10; P63-USE01..03 remains unchecked.
 Current COMMAND results: A/A2 focused 2 suites/17 tests and actual owning-UoW
 Compile/configured generator success plus compiler failure 1 suite/2 tests;
 existing terminating ProductCheck is the representative application acceptance
@@ -36,8 +60,8 @@ are accepted through the complete COMMAND review and focused closure. Both
 blockers are resolved; final focused checks passed 4 suites/91 tests and the
 affected rule suite's 39 tests. Two historical Hygiene findings remain
 nonblocking. COMMAND repair history is 5 and Phase repair history remains 0.
-P6-SQ01 remains incomplete pending actual producer/provider Evidence/Admission
-and the workflow's local Step commit.
+P6-SQ01 remains incomplete in Phase 10; the revised ordinary P61-ADMISSION
+Step is accepted as recorded above.
 Historical PHASE-6 projection: closed; the Phase 6 owned rows are accepted through the original S6-01
 protected independent Step review and its five repository-local acceptance
 commits are complete. The sole Phase review and its M0 naming repair are
@@ -386,39 +410,62 @@ These original P6-ID entries move from the old Phase plan to this single checkli
       intermediate scope. Final obligations remain; unknown identity mapping
       does not require semantic matching infrastructure.
 
-### Staged quality review: Phase 6 cross-project driver
+### CBD staged quality review — transferred to Phase 10, 2026-10-18
 
-Requirement: [Phase 6 staged review](phase-6.3.md#staged-quality-review-across-projects--2026-10-13).
-Producer/provider ledgers are CNCF REA-01..04 (Phase 106), Cozy RMS-01..04
-(Phase 81) and cbd-support SQR-01..04 (Phase 15). All items remain planned.
+P6-SQ01..05 remain incomplete and move to the sole
+[Phase 10 checklist](phase-10-checklist.md). Their IDs and prior implementation/
+validation attribution are retained. They are no longer completion gates for
+6.1/6.3 or initial production use. CBD15 SQR-04 and CBD15.1 RR06 are required
+producer handoffs for Phase 10, not for Phase 6.1 P61-ADMISSION.
 
-- [ ] P6-SQ01: **Owner: [Phase 6.1](phase-6.1.md).** Phase 6.1 uses actual CML metadata, lint and a scoped independent
-      semantic review through normal invocation and typed results. Covered
-      requirements admit the Step and runtime performs its local commit. Generic
-      ABI contains no STEP/PHASE/FINAL vocabulary; advisory output is not silently
-      converted to Assurance or commitment authority.
-- [ ] P6-SQ02: **Owner: [Phase 6.3](phase-6.3.md).** Phase 6.3 demonstrates that two locally acceptable Steps can conflict
-      at an integrated Usage Contract. Phase Review detects the cross-Step gap;
-      Step evidence alone cannot claim integrated PASS. Include the matrix's
-      overchecking/duplicate-state judgment in the appropriate semantic scope,
-      not a mandatory new deterministic lint rule or a per-finding review cycle.
-- [ ] P6-SQ03: **Owner: [Phase 6.3](phase-6.3.md).** A bounded repair triggers affected re-review with stable finding
-      identities and adequate surrounding context. Unrelated applicable evidence
-      remains reusable; unresolved blockers prevent closure, nonblocking recorded
-      findings do not require an empty backlog.
-- [ ] P6-SQ04: **Owner: [Phase 6.3](phase-6.3.md).** Phase 6.3 completes Final and release using sufficient Phase Review
-      plus applicable repair/validation evidence. Observe that no new comprehensive
-      semantic review or duplicate full validation is invoked solely for Final.
-      Required deterministic release checks and actual command outcomes remain.
-- [ ] P6-SQ05: **Owner: [Phase 6.3](phase-6.3.md).** Insufficient coverage, incompatible evidence and changed acceptance
-      produce specific gaps/affected work; missing facts cannot become PASS.
-      Commit-only progression/time passage does not force re-review. Reuse relies
-      on actual applicability, without hashes, content copies or TTL. Use bounded
-      branch specs alongside the connected driver, not a broad live-AI matrix.
+Ordinary Step review/Admission/commit remains in 6.1; affected repair in 6.2;
+integrated review, Final reuse and aggregate full validation remain in 6.3.
+Required independence, meaningful coverage and blocker handling stay enforced.
+No unchecked CBD item is marked PASS by this scope transfer. See the
+[decision/handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 
-These are the shared end-to-end cases, not substitutes for owner-specific checks
-and independent review. Producer closure requires only its bounded handoff, not
-the whole sm-workflow Phase 6.3 closing commit; Phase 6.3 records the integrated result.
+### Phase 6.3 production-use acceptance — 2026-10-18
+
+This names the existing installed three-family acceptance obligation explicitly,
+without reopening accepted work or adding another review/full-validation cycle.
+It is separate from the deferred CBD P6-SQ obligations.
+
+Follow [6.3's cost-first order](phase-6.3.md#cost-first-implementation-order--2026-10-18):
+reconcile/reuse current evidence, finish ready SplitPhase/RepositorySync main
+routes, fill limited GoalPhase gaps, then integrated acceptance and release.
+The USE numbering is not execution order or an extra test/review sequence.
+One blocked skill does not stop independent ready work; all rows still need
+acceptance before 6.3 closes.
+
+- [ ] P63-USE01: **Owner: [Phase 6.3](phase-6.3.md#single-repository-production-acceptance--2026-10-18).**
+      Installed `sm-repository-sync` can perform ordinary one-repository production
+      synchronization: preserve intended local state, actual fetch/classification,
+      permitted integration, conflict/decision continuation as applicable,
+      required validation/review, authorized non-force push and actual convergence
+      confirmation. Record a representative real connected effect route plus
+      applicable preservation/conflict/failure evidence, supported setup and limits.
+      No-effect-only, mock-only or helper-only evidence is insufficient. GitHub
+      setup claims require actual ordinary host/authentication evidence. No
+      dependency on 6.4 storage, Phase 7 workspace/overlay or Phase 10 CBD review.
+      This documentation edit records no execution or acceptance.
+
+- [ ] P63-USE02: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
+      Installed `sm-split-phase` supports ordinary production use: an actual
+      selected Phase follows the normal request/decision/result path to usable
+      split plans, preserving work coverage, dependency relationships, validation
+      ownership and applicable existing work/results. Reconcile accepted earlier
+      evidence and fill actual installed gaps; no helper-only completion claim.
+- [ ] P63-USE03: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
+      Installed `sm-goal-phase` supports limited single-repository production
+      development through required repair/validation/review/Admission and actual
+      local Step/Phase closure. Document this scope and its limits; related-project,
+      worktree and artifact management integration belongs to Phase 7. Reuse
+      applicable accepted GoalPhase evidence without reopening precursor work.
+
+P63-USE02/03 explicitly record the existing integrated acceptance obligations,
+not extra review/full-test campaigns. Limited GoalPhase use limits scope, not
+validation quality. These new rows remain unchecked until owner acceptance;
+ordinary split/sync use does not wait for full cross-project GoalPhase adoption.
 
 ### Security review projection — adopted 2026-10-14
 
@@ -439,9 +486,9 @@ per-Step security gate is required.
 | Owner / existing work | Added acceptance detail |
 | --- | --- |
 | Phase 6 mode/context/provider/minimum Effective Acceptance Boundary | Select applicable security requirements/evidence for the changed Slice through the existing main route. Required missing evidence is a gap; developer/AI identity is not assurance. |
-| Phase 6.1 / P6-SQ01 | Consume only missing applicable security lint/scoped review via the existing Step Evidence/Admission connection. Covered/unaffected cases make no extra security call; no extra security Step review. |
+| Phase 6.1 / ordinary Step review | Use actual reviewer results and applicable producer evidence for missing in-scope security meaning; additional CBD evaluation belongs to Phase 10. Covered/unaffected cases make no extra security call; no extra security Step review. |
 | Phase 6.2 / P6-TS02/03, P6-CB01..04 and finding recording | An attributable in-boundary security finding follows ordinary FIX/affected validation and dependency decisions; out-of-boundary proposals are recorded without automatic adoption. |
-| Phase 6.3 / P6-SQ02..05 | Consume only uncovered affected cross-Step security assessment; retain affected repair/finding identity and reuse applicable Phase/producer evidence at Final. Only required applicable missing evidence creates an Admission Gap/Unknown. |
+| Phase 6.3 / ordinary integrated review and Final | Consume only uncovered affected cross-Step security assessment; retain affected repair/finding identity and reuse applicable Phase/producer evidence at Final. Only required applicable missing evidence creates an Admission Gap/Unknown. |
 
 CNCF107/Cozy83/CBD16 provide the security content; imported plans do not prove
 available implementation or acceptance. These handoffs supplement the existing
