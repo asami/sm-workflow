@@ -138,6 +138,38 @@ Recording does not adopt work, broaden repairs/counts or recursively require ano
 review/recording cycle. Demonstrate actual file edits/results, accepted nonblocking
 and mixed reviews plus deterministic no-items/failure cases; no fabricated receipt.
 
+### Same-Context Review execution — adopted 2026-10-18
+
+Add the Same-Context Review route after Phase 6.1; do not modify or reopen the
+currently executing 6.1 delivery to introduce it. Consume cbd-support Phase 15's
+ReviewRequest Provider. For semantic STEP/FIX/REVIEW_FIX work, cbd-support returns
+the structured ReviewRequest/review policy without starting AI. sm-workflow returns
+that request to the active Codex worker that already owns the implementation
+conversation and consumes its typed Review result through the existing
+Finding/Evidence/Admission path.
+
+This is a context-quality requirement, not merely token optimization. The worker's
+current conversation may contain goal/phase intent, design choices, rejected
+alternatives, inspected source/spec relationships, test diagnostics and repair
+history that cannot be reconstructed reliably from repository files alone.
+sm-workflow therefore does not copy, snapshot, persist or reconstruct that
+conversation. Continuation keeps the semantic task in the active worker; only the
+bounded ReviewRequest and returned result cross the cbd-support boundary.
+
+Record review execution provenance sufficient to distinguish `same-context` from
+`independent-context` without introducing a context ledger. Same-context is the
+default for the connected implementation/FIX route. cbd-support must not silently
+spawn another AI session in orchestrated mode. An unavailable same-context
+continuation is reported truthfully; it is not permission for an invisible fallback.
+Independent execution is an explicit orchestration decision and is integrated at
+Phase 6.3 for review purposes that genuinely require independence.
+
+Acceptance for this slice requires one actual implementation/FIX worker to receive
+a cbd-support ReviewRequest, perform the semantic review in the same worker context,
+return the typed result, and drive the existing finding/evidence flow, while the
+cbd-support orchestrated route performs zero AI-provider invocations. Standalone
+cbd-support AI execution remains a provider-owned route and is not removed.
+
 ## Closure and successor handoff
 
 Own P6-TS01..06, P6-CB01..04 and P6-HR02/03 in the
