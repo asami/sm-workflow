@@ -1,7 +1,7 @@
 # Phase 6 CBD/CNCF dependency integration
 
 Date: 2026-10-17
-Status: bounded dependency integration accepted by the original independent S6-01 Step review; Step commits and Phase review/release pending
+Status: bounded dependency integration accepted by the original independent S6-01 Step review and local Step commits; sole Phase review and M0 repair accepted; final release pending
 
 The human-expanded existing dependency integration is implemented under
 PHASE-6 / S6-01 / S6-01D35 in the admitted main checkouts. CNCF contains only the
@@ -51,7 +51,15 @@ successful validation receipt. Execution evidence remains in the active private
 Phase workflow storage. The original protected independent Step review accepted
 the bounded integration together with the complete S6-01 accumulator.
 
-P6-SBX05 is accepted at Step scope and the whole Phase remains in progress.
+P6-SBX05 is accepted at Step scope and the Phase 6 final closure is prepared.
+The sole full Phase review found one naming blocker; its 268 private/local
+declarations and internal references were mechanically repaired across 40 files.
+Parent exact-diff assessment and successful normal `Test / compile` support the
+M0 amendment. Three unrelated nonblocking Hygiene records remain in the canonical
+follow-up journal. Phase repair1/streak0 is retained. The human-authorized
+aggregate tooling correction is accepted; native final release and committed
+closure readback establish formal closure. No behavioral test rerun or
+second full review is claimed by this mechanical repair.
 The original Goal/start/binding/bases, epoch1, repair79/streak0 and review history
 persist; all 24 original independent repair obligations are resolved. No successor Phase starts;
 PHASE-6.3 remains the sole aggregate full-suite owner. The existing

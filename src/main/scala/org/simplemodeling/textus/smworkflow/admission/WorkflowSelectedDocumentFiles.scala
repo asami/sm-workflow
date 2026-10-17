@@ -40,7 +40,7 @@ private[smworkflow] object WorkflowSelectedDocumentFiles {
     target <- targetC(core, request.repository)
     observed <- readC(core, target, selected)
     states = selected.documents.zip(observed).map((d, text) => classify(request.snapshot, d, text))
-  } yield observation(request, selected, states, applying = false)
+  } yield _observation(request, selected, states, applying = false)
 
   def applyC(core: ActionCall.Core, request: Request): Consequence[Observation] = for {
     selected <- validateC(request)
@@ -48,7 +48,7 @@ private[smworkflow] object WorkflowSelectedDocumentFiles {
     observed <- readC(core, target, selected)
     states = selected.documents.zip(observed).map((d, text) => classify(request.snapshot, d, text))
     result <- if (!states.forall(_ == State.Ready))
-      Consequence.success(observation(request, selected, states, applying = true))
+      Consequence.success(_observation(request, selected, states, applying = true))
     else {
       // Compute the complete intended write set before the first installation.
       val writes = selected.documents.zip(observed).map { (document, text) =>
@@ -82,13 +82,13 @@ private[smworkflow] object WorkflowSelectedDocumentFiles {
   private def targetC(core: ActionCall.Core, repository: String): Consequence[FileTarget] = for {
     configuration <- Option(core).flatMap(_.component).flatMap(_.subsystem).map(_.configuration)
       .filter(_ != null).map(Consequence.success).getOrElse(invalid("owning Subsystem configuration is absent"))
-    configuredRepository <- exactC(configuration.configuration.values, repositoryKey)
+    configuredRepository <- _exact_c(configuration.configuration.values, repositoryKey)
     _ <- if (repository == configuredRepository) Consequence.unit else invalid("repository is not configured")
-    workspace <- exactC(configuration.configuration.values, workspaceKey)
+    workspace <- _exact_c(configuration.configuration.values, workspaceKey)
     identity <- WorkspaceId.parseC(workspace)
   } yield FileTarget(identity)
 
-  private def exactC(values: Map[String, ConfigurationValue], key: String): Consequence[String] =
+  private def _exact_c(values: Map[String, ConfigurationValue], key: String): Consequence[String] =
     GoalPhaseHostRecordReadPolicy.storedValue(values, key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
@@ -102,7 +102,7 @@ private[smworkflow] object WorkflowSelectedDocumentFiles {
       value <- WorkflowFileExecution.readTextC(core, target, path)
     } yield values :+ value.text }
 
-  private def observation(request: Request, selected: D.Projection, states: Vector[State], applying: Boolean): Observation = {
+  private def _observation(request: Request, selected: D.Projection, states: Vector[State], applying: Boolean): Observation = {
     val inconsistent = states.head == State.Applied && states.tail.exists(_ != State.Applied)
     val conflicts = selected.documents.zip(states).collect {
       case (document, State.Conflict) => document.relativePath

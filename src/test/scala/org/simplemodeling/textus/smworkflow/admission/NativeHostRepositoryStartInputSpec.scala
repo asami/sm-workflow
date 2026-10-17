@@ -157,7 +157,7 @@ final class NativeHostRepositoryStartInputSpec extends AnyWordSpec with Matchers
     "in spec:native-host-repository-start-preparation, example:E3, rules:R1,R4, phase:6") {
     "reject omitted unknown null inexact origin and malformed collection metadata before reading" in {
       Given("the six required finite fields and variants omitting or corrupting their explicit metadata")
-      val invalidArgs: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
+      val invalidargs: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
         _args.updated("permission", "granted"), _args.updated("help", "true")) ++
         _args.keys.toVector.map(_args - _) ++ _args.keys.toVector.flatMap(key =>
           Vector[String](null, "", " ", " trimmed", "trailing ", "control\nvalue").map(value => _args.updated(key, value))) ++
@@ -170,7 +170,7 @@ final class NativeHostRepositoryStartInputSpec extends AnyWordSpec with Matchers
       val reader: String => Consequence[String] = _ => { reads += 1; Consequence.stateConflict("No input should be read") }
 
       When("each invalid argument set reaches the passive converter")
-      val results = invalidArgs.map(args => Main.prepareC(args, reader))
+      val results = invalidargs.map(args => Main.prepareC(args, reader))
 
       Then("each call fails before any selected file access")
       results.foreach(_.toOption shouldBe None)
@@ -180,14 +180,14 @@ final class NativeHostRepositoryStartInputSpec extends AnyWordSpec with Matchers
     "contain absent failed null and throwing file readers as Consequence errors" in {
       Given("valid arguments with absent, failed, null-result, null-text or throwing callbacks")
       val failed: String => Consequence[String] = _ => Consequence.stateConflict("Selected file unavailable")
-      val nullResult: String => Consequence[String] = _ => null
-      val nullText: String => Consequence[String] = _ => Consequence.success(null)
+      val nullresult: String => Consequence[String] = _ => null
+      val nulltext: String => Consequence[String] = _ => Consequence.success(null)
       val throwing: String => Consequence[String] = _ => throw new IllegalArgumentException("Selected file failure")
 
       When("the converter receives each unavailable reader, including a null reader on an empty field set")
       val results = Vector(Main.prepareC(_args, null), Main.prepareC(Map.empty[String, String], null),
-        Main.prepareC(_args, failed), Main.prepareC(_args, nullResult),
-        Main.prepareC(_args, nullText), Main.prepareC(_args, throwing))
+        Main.prepareC(_args, failed), Main.prepareC(_args, nullresult),
+        Main.prepareC(_args, nulltext), Main.prepareC(_args, throwing))
 
       Then("each callback failure is contained without successful importer JSON")
       results.foreach(_.toOption shouldBe None)
@@ -215,14 +215,14 @@ final class NativeHostRepositoryStartInputSpec extends AnyWordSpec with Matchers
       val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
       _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
         val participant = SecuritySubject.from(actor.security).subjectId
-        val failedProposal = "specification-missing-repository-entry"
-        val newProposal = "specification-new-repository-entry"
-        def start(proposal: String) = owner.executeOperationResponseInContext(Request.of(component = component.name,
+        val failedproposal = "specification-missing-repository-entry"
+        val newproposal = "specification-new-repository-entry"
+        def _start_(proposal: String) = owner.executeOperationResponseInContext(Request.of(component = component.name,
           service = "RepositorySyncService", operation = "startRepositorySync",
           properties = NativeWorkflowOperationInputFixture.repository(input, Some(proposal))), actor)
 
         When("the public Start is invoked with a separate explicit proposed execution before row provisioning")
-        val refused = start(failedProposal)
+        val refused = _start_(failedproposal)
 
         Then("the actual native consumer refuses the missing host business entry")
         refused.isSuccess shouldBe false
@@ -253,18 +253,18 @@ final class NativeHostRepositoryStartInputSpec extends AnyWordSpec with Matchers
 
         Given("a different proposed execution after provisioning, with no Advance or effect input")
         When("a NEW public Start consumes the prepared row and its actual returned ID is used for a managed read")
-        val started = read_value[V.RepositorySyncStartResult](_take(start(newProposal)))
-        val actualId = started.sessionId
+        val started = read_value[V.RepositorySyncStartResult](_take(_start_(newproposal)))
+        val actualid = started.sessionId
         var current = Option.empty[InstanceRecord]
-        prepare(setup => setup.currentC(InstanceIdentity(actualId)).map(value => { current = Some(value); () }))
+        prepare(setup => setup.currentC(InstanceIdentity(actualid)).map(value => { current = Some(value); () }))
 
         Then("the actual execution is Active at native Start and claims no fetch, push or completed result")
-        actualId should not be empty
-        actualId should not be failedProposal
+        actualid should not be empty
+        actualid should not be failedproposal
         started.outcome shouldBe "started"
         started.message shouldBe "Started repository synchronization for " + input.repositoryIdentity + " on " +
           input.localBranch + ". Advance owns the next Git assessment; no fetch or push is claimed."
-        current.get.identity shouldBe InstanceIdentity(actualId)
+        current.get.identity shouldBe InstanceIdentity(actualid)
         current.get.lifecycle shouldBe Lifecycle.Active
         current.get.currentProgression shouldBe Some(ProgressionReference("sync.BoundaryAssessment"))
         current.get.correlation.value shouldBe "specification-repository-invocation"

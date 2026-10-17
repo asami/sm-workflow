@@ -64,16 +64,16 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       val stored = take(J.encodeTemplateC(template))
       val original = json(stored)
       val annotated = original.mapObject(_.add("admitted", Json.True))
-      val malformedUnused = mapPayload(annotated)(o => o.add("owner", o("owner").get.mapObject { owner =>
+      val malformedunused = mapPayload(annotated)(o => o.add("owner", o("owner").get.mapObject { owner =>
         Vector("handle", "instanceRevision", "configuration", "start", "continuation", "completion")
           .foldLeft(owner)((value, field) => value.add(field, Json.fromBoolean(false)))
       }).add("prepared", Json.True))
-      val decoded = Vector(original, annotated, malformedUnused).map(value =>
+      val decoded = Vector(original, annotated, malformedunused).map(value =>
         take(J.decodeTemplateC(template.reference, raw(value))))
       Then("only the passive typed projection survives and the full retained decoder still requires its execution owner")
       decoded.foreach(_ shouldBe template)
       J.decodeC(template.reference, stored).isSuccess shouldBe false
-      J.decodeC(template.reference, raw(malformedUnused)).isSuccess shouldBe false
+      J.decodeC(template.reference, raw(malformedunused)).isSuccess shouldBe false
     }
 
     "E7 refuse missing or mistyped consumed fields and foreign references or schemas" in {
@@ -81,12 +81,12 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       val template = C.Template(record.reference,
         C.TemplateOwner(record.owner.requirement, record.owner.presentation), facts)
       val original = json(take(J.encodeTemplateC(template)))
-      val payloadFields = Vector("reference", "owner", "facts")
-      val ownerFields = Vector("requirement", "presentation")
-      val malformed = payloadFields.flatMap(field => Vector(
+      val payloadfields = Vector("reference", "owner", "facts")
+      val ownerfields = Vector("requirement", "presentation")
+      val malformed = payloadfields.flatMap(field => Vector(
         mapPayload(original)(_.remove(field)),
         mapPayload(original)(_.add(field, Json.fromString("wrong type"))))) ++
-        ownerFields.flatMap(field => Vector(
+        ownerfields.flatMap(field => Vector(
           mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove(field)))),
           mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.add(field, Json.True)))))) ++
         Vector(original.mapObject(_.remove("schemaVersion")),
@@ -110,12 +110,12 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
         C.TemplateOwner(record.owner.requirement, record.owner.presentation.copy(currentSituation = "語")), facts)
       val stored = take(J.encodeTemplateC(template))
       val bytes = stored.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-      val atLimit = stored + (" " * (J.maximumPayloadBytes - bytes))
+      val atlimit = stored + (" " * (J.maximumPayloadBytes - bytes))
       val huge = template.copy(owner = template.owner.copy(presentation = template.owner.presentation.copy(
         currentSituation = "語" * (J.maximumPayloadBytes / 3 + 1))))
       When("the exact boundary, one extra byte and oversized typed presentation reach the codecs")
-      val decoded = take(J.decodeTemplateC(template.reference, atLimit))
-      val oversized = J.decodeTemplateC(template.reference, atLimit + " ")
+      val decoded = take(J.decodeTemplateC(template.reference, atlimit))
+      val oversized = J.decodeTemplateC(template.reference, atlimit + " ")
       val encoded = J.encodeTemplateC(huge)
       Then("the exact UTF-8 bound succeeds and excess bytes are refused for both directions")
       decoded shouldBe template

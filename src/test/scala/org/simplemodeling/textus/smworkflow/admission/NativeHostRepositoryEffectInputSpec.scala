@@ -87,11 +87,11 @@ final class NativeHostRepositoryEffectInputSpec extends AnyWordSpec with Matcher
           args.updated("collection", "entity:smworkflow.cli.host-evidence"),
           args.updated("collection", "entity:1workflow.cli.host_evidence"),
           args.updated("collection", "entity:smworkflow.cli.host_evidence.extra")) ++ Vector(args.updated("effect", "push"), args.updated("effect", "All"))
-        val targetJson = json(targetRow())
-        val badTargets = targetJson.asObject.get.keys.toVector.flatMap(field => Vector(
-          targetJson.mapObject(_.remove(field)), targetJson.mapObject(_.add(field, Json.True)), targetJson.mapObject(_.add(field, Json.Null)))) ++
+        val targetjson = json(targetRow())
+        val badtargets = targetjson.asObject.get.keys.toVector.flatMap(field => Vector(
+          targetjson.mapObject(_.remove(field)), targetjson.mapObject(_.add(field, Json.True)), targetjson.mapObject(_.add(field, Json.Null)))) ++
           Vector(json(targetRow(target.copy(root = "relative"))), json(targetRow(target.copy(root = "/specification/../repository"))))
-        val badSelections = Vector(org.goldenport.record.Record.empty, org.goldenport.record.Record.data("selectionPayload" -> true),
+        val badselections = Vector(org.goldenport.record.Record.empty, org.goldenport.record.Record.data("selectionPayload" -> true),
           org.goldenport.record.Record.data("selectionPayload" -> "unsupported:"),
           changeSelection(_.mapObject(_.add("schemaVersion", Json.fromString("unsupported")))),
           changeSelection(_.mapObject(_.remove("startOperation"))),
@@ -102,14 +102,14 @@ final class NativeHostRepositoryEffectInputSpec extends AnyWordSpec with Matcher
             _.mapObject(_.add("typeIdentity", Json.fromString("GoalPhaseStartInput"))))),
           changeSelection(original => NativeHostHumanEvidenceFixture.alter(original, Vector("selectedInput", "value"))(
             _.mapObject(_.add("repositoryIdentity", Json.True)))))
-        val badFiles = files.keys.toVector.map(files - _) ++ Vector(files.updated("selection.json", "not-json"),
+        val badfiles = files.keys.toVector.map(files - _) ++ Vector(files.updated("selection.json", "not-json"),
           files.updated("target.json", "[]"), files.updated("reference.json", "{}"),
           files.updated("reference.json", "{\"identity\":null,\"revision\":\"1\"}"),
           files.updated("reference.json", "{\"identity\":\"reference\",\"revision\":null}")) ++
-          badTargets.map(value => files.updated("target.json", value.noSpaces)) ++
-          badSelections.map(value => files.updated("selection.json", take(value.toJsonStringC)))
+          badtargets.map(value => files.updated("target.json", value.noSpaces)) ++
+          badselections.map(value => files.updated("selection.json", take(value.toJsonStringC)))
         When("the finite tool consumes each malformed supplied argument or file set")
-        val failures = malformed.map(Main.prepareC(_, _read(files))) ++ badFiles.map(input => Main.prepareC(args, _read(input)))
+        val failures = malformed.map(Main.prepareC(_, _read(files))) ++ badfiles.map(input => Main.prepareC(args, _read(input)))
         Then("every invalid input fails without any successful importer result")
         failures.foreach(_.isSuccess shouldBe false)
         Consequence.unit

@@ -1,6 +1,6 @@
 # Phase 6: Typed Thinking Modes and Real Skill/Client Completion
 
-status=in-progress
+status=closed
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
 split_validation_bootstrap=none
@@ -10,8 +10,11 @@ aggregate_validation_sequence=["PHASE-6","PHASE-6.1","PHASE-6.2","PHASE-6.3"]
 depends_on=phase-5.3.md
 Planned: 2026-10-03; scope partition applied 2026-10-13.
 Owner: sm-workflow. Successor: [Phase 6.1](phase-6.1.md).
-Current status: in progress; S6-01 has passed its protected independent Step
-review. Step acceptance commits and the sole Phase review/release remain pending.
+Current status: closed; S6-01 has passed its protected independent Step
+review and its five repository-local acceptance commits are complete. The sole
+Phase review and its naming repair are accepted. This final local release
+projection includes the accepted shared aggregate release tooling correction;
+its formal closure is established by the native release commit and readback.
 Update rule: the Phase owner updates this projection at accepted work boundaries;
 keep the original Goal/history and reconcile the shared checklist with actual
 validation and independent acceptance before closing an item.
@@ -22,8 +25,11 @@ rows prevent Phase completion.
 Current acceptance projection (2026-10-17): the complete S6-01 accumulator and
 all 24 original independent repair obligations are accepted at Step scope.
 Repair79/streak0, the original Goal/start/binding/bases and epoch1 are retained;
-no Phase full review has been consumed. The Phase 6 owned checklist rows are
-accepted. Earlier intermediate pending statements below retain their historical
+the sole Phase full review is consumed and its 268 private/local naming issues
+are resolved by an M0 amendment, with normal `Test / compile` successful.
+Consumed Phase repair1/streak0 and three nonblocking Hygiene records are
+retained. The Phase 6 owned checklist rows are accepted. Earlier intermediate
+pending statements below retain their historical
 scope; they do not override this current projection. Local evidence remains in
 the active private workflow storage; it is not a repository evidence package.
 

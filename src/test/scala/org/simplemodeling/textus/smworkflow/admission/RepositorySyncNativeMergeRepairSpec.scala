@@ -52,10 +52,10 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
   ) {
     "retain nested review, findings, files and replacements from camel and snake JSON Records" in {
       Given("specification-owned affected text proposals and normal camel/snake business JSON, without an issued native action")
-      val requestBody = _body(M.inputCodec.encode(_request))
-      val resultBody = _body(M.resultCodec.encode(_result))
-      val inputs = Vector(requestBody, _snake(requestBody))
-      val outputs = Vector(resultBody, _snake(resultBody))
+      val requestbody = _body(M.inputCodec.encode(_request))
+      val resultbody = _body(M.resultCodec.encode(_result))
+      val inputs = Vector(requestbody, _snake(requestbody))
+      val outputs = Vector(resultbody, _snake(resultbody))
 
       When("RecordDecoder and the compiled generated createC readers consume each business Record")
       val requests = inputs.map(json => _take(B.RepositorySyncNativeMergeRepairRequest.createC(
@@ -97,13 +97,13 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
   ) {
     "admit actual complete in-policy replacements including an empty ordinary file" in {
       Given("meaningful findings whose sorted union covers two explicit reviewed text paths")
-      val emptyInput = _request.copy(files = _files.updated(0, M.File(_paths(0), "")))
-      val emptyReplacement = _result.copy(replacements = _files.updated(0, M.File(_paths(0), "")))
+      val emptyinput = _request.copy(files = _files.updated(0, M.File(_paths(0), "")))
+      val emptyreplacement = _result.copy(replacements = _files.updated(0, M.File(_paths(0), "")))
 
       When("pure request and repaired-result admission consume the text proposals")
-      val requests = Vector(_request, emptyInput).map(M.admitRequestC(_, _policy))
-      val results = Vector(M.admitC(_request, _result, _policy), M.admitC(emptyInput, _result, _policy),
-        M.admitC(_request, emptyReplacement, _policy))
+      val requests = Vector(_request, emptyinput).map(M.admitRequestC(_, _policy))
+      val results = Vector(M.admitC(_request, _result, _policy), M.admitC(emptyinput, _result, _policy),
+        M.admitC(_request, emptyreplacement, _policy))
 
       Then("complete changed text is admitted and empty text is an ordinary file value")
       requests.foreach(_take(_) shouldBe ())
@@ -171,16 +171,16 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
     }
     "refuse incomplete findings, invalid or duplicated identities and incomplete file coverage" in {
       Given("empty or malformed findings and omitted, repeated, reordered or foreign assigned files")
-      val badFindings = Vector(Vector.empty[R.Finding], Vector(null),
+      val badfindings = Vector(Vector.empty[R.Finding], Vector(null),
         Vector(_findings.head.copy(identity = "bad identity")), Vector(_findings.head.copy(identity = "x" * 129)),
         Vector(_findings.head, _findings.head), Vector(_findings.head.copy(affectedPaths = Vector.empty)),
         Vector(_findings.head.copy(affectedPaths = Vector(_paths(0), _paths(0)))))
-      val badFiles = Vector(Vector.empty[M.File], _files.take(1), _files.reverse, _files :+ _files.head,
+      val badfiles = Vector(Vector.empty[M.File], _files.take(1), _files.reverse, _files :+ _files.head,
         _files.updated(1, M.File("foreign.md", "Foreign")))
 
       When("request admission consumes all incomplete finding and file candidates")
-      val actual = badFindings.map(f => M.admitRequestC(_request.copy(findings = f), _policy)) ++
-        badFiles.map(f => M.admitRequestC(_request.copy(files = f), _policy)) :+
+      val actual = badfindings.map(f => M.admitRequestC(_request.copy(findings = f), _policy)) ++
+        badfiles.map(f => M.admitRequestC(_request.copy(files = f), _policy)) :+
         M.admitRequestC(_request, _policy.copy(maximumConflicts = 1))
 
       Then("only exact bounded sorted affected-file coverage can be admitted")
@@ -288,12 +288,12 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       val result = _annotate(M.resultCodec.encode(_result))
 
       When("the current request and result codecs consume annotated wire values")
-      val decodedInput = M.inputCodec.decode(input)
-      val decodedResult = M.resultCodec.decode(result)
+      val decodedinput = M.inputCodec.decode(input)
+      val decodedresult = M.resultCodec.decode(result)
 
       Then("all actual typed semantic fields survive without annotations becoming authority")
-      decodedInput shouldBe Right(_request)
-      decodedResult shouldBe Right(_result)
+      decodedinput shouldBe Right(_request)
+      decodedresult shouldBe Right(_result)
     }
     "refuse missing or mistyped consumed request fields and unsupported request schema" in {
       Given("wire requests with missing or mistyped root and nested consumed business fields")

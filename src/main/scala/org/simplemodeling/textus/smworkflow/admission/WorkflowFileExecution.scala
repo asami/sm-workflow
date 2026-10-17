@@ -14,13 +14,13 @@ import org.goldenport.protocol.operation.OperationResponse
 private[smworkflow] object WorkflowFileExecution {
   def readTextC(core: ActionCall.Core, target: FileTarget,
     path: WorkspaceFilePath): Consequence[FileReadTextResult] =
-    owningC(core).flatMap(_.readC(target, path))
+    _owning_c(core).flatMap(_.readC(target, path))
 
   def writeTextC(core: ActionCall.Core, target: FileTarget, path: WorkspaceFilePath,
     text: String, mode: FileWriteMode): Consequence[FileWriteTextResult] =
-    owningC(core).flatMap(_.writeC(target, path, text, mode))
+    _owning_c(core).flatMap(_.writeC(target, path, text, mode))
 
-  private def owningC(core: ActionCall.Core): Consequence[Execution] =
+  private def _owning_c(core: ActionCall.Core): Consequence[Execution] =
     if (core == null || core.executionContext == null)
       Consequence.stateConflict("Workflow File requires its actual owning call")
     else Consequence.success(new Execution(core))

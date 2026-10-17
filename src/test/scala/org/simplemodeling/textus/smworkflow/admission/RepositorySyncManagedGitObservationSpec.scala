@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
-  private def fresh(): Path = Files.createTempDirectory(Files.createDirectories(
+  private def _fresh(): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/repository-git").toAbsolutePath.normalize), "episode-")
   private def target(root: Path) = Programs.Target(root.resolve("repository"), "main", "origin", "main",
     root.resolve("upstream.git").toString)
@@ -53,15 +53,15 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
       Vector("-C", peer.toString, "push", endpoint, "HEAD:refs/heads/main"))
     commands
   }
-  private def valueC[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[A] =
+  private def _value_c[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[A] =
     E.executeGitC(core, operation).flatMap(_.valueC)
   private def oid(value: String): GitObjectId = take(GitObjectId.parseC(value))
-  private def mainBranch: GitBranchName = take(GitBranchName.parseC("main"))
+  private def _main_branch: GitBranchName = take(GitBranchName.parseC("main"))
 
   "Typed managed Git observations and application history policy" should {
     "preserve literal dirty paths through fetch and a normal host reopen" in {
       Given("owned local/peer/bare inputs and a normal V3 host with actual component grants")
-      val root = fresh()
+      val root = _fresh()
       var retained = Option.empty[G.Observed]
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(4))
@@ -74,7 +74,7 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
         When("the owning component obtains typed facts before and after fixed Fetch")
         prepare(call => for {
           before <- G.observeC(call.core)
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           equal <- G.observeC(call.core)
           _ = {
             Then("tracking becomes equal while HEAD tree and exact dirty filenames remain")
@@ -89,7 +89,7 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
             equal.dirty.map(_.path) should contain("staged name\nwith newline")
           }
           _ <- call.setupC(7, startIndex = 4)
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           remote <- G.observeC(call.core)
           _ = {
             Then("actual remote-ahead history preserves dirty local contents")
@@ -125,12 +125,12 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "map real local-ahead and diverged history through their retained common ancestor" in {
       Given("owned repositories with the same actual initial commit")
-      val root = fresh()
+      val root = _fresh()
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(4))
         When("local and remote fixture inputs advance independently and typed Fetch observes the remote")
         prepare(call => for {
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           initial <- G.observeC(call.core)
           _ <- call.setupC(9, startIndex = 8)
           ahead <- G.observeC(call.core)
@@ -140,7 +140,7 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
             ahead.mergeBase shouldBe Some(initial.head)
           }
           _ <- call.setupC(7, startIndex = 4)
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           diverged <- G.observeC(call.core)
           _ = {
             Then("both descendants remain and application relation mapping reports divergence")
@@ -154,14 +154,14 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "refuse actual unrelated histories without changing the local tip" in {
       Given("independently initialized owned roots and a fixed nonforce remote")
-      val root = fresh()
+      val root = _fresh()
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(3).flatMap(_ => call.setupC(12, startIndex = 9)))
         When("typed Fetch obtains the unrelated root and application ancestry policy evaluates it")
         prepare(call => for {
           before <- G.observeC(call.core)
-          _ <- valueC(call.core, GitOperation.Fetch)
-          head <- valueC(call.core, GitOperation.Head)
+          _ <- _value_c(call.core, GitOperation.Fetch)
+          head <- _value_c(call.core, GitOperation.Head)
           _ = {
             Then("automatic integration is refused and the original HEAD stays intact")
             G.observeC(call.core).isSuccess shouldBe false
@@ -174,17 +174,17 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "fast-forward only the observed typed commit and preserve it after reopen" in {
       Given("an actual remote-ahead graph under a normal current-UoW host")
-      val root = fresh()
+      val root = _fresh()
       var selected = ""
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(7))
         When("typed FastForward consumes the exact fetched commit")
         prepare(call => for {
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           before <- G.observeC(call.core)
           _ = before.counts shouldBe Some(G.Counts(0, 1))
           tip <- GitObjectId.parseC(before.trackingTip.get)
-          _ <- valueC(call.core, GitOperation.FastForward(tip))
+          _ <- _value_c(call.core, GitOperation.FastForward(tip))
           after <- G.observeC(call.core)
           _ = {
             Then("HEAD is the selected commit with no pending merge or dirty state")
@@ -210,17 +210,17 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "prepare then commit a clean pending merge using only the fixed host identity" in {
       Given("actual divergent descendants and a host-selected commit identity")
-      val root = fresh()
+      val root = _fresh()
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(7).flatMap(_ => call.setupC(9, startIndex = 8)))
         When("typed PendingMerge and CommitPending execute in order")
         prepare(call => for {
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           before <- G.observeC(call.core)
-          _ <- valueC(call.core, GitOperation.PendingMerge(oid(before.trackingTip.get)))
+          _ <- _value_c(call.core, GitOperation.PendingMerge(oid(before.trackingTip.get)))
           pending <- G.inspectC(call.core)
           _ = pending.mergeHead shouldBe before.trackingTip
-          _ <- valueC(call.core, GitOperation.CommitPending)
+          _ <- _value_c(call.core, GitOperation.CommitPending)
           after <- G.observeC(call.core)
           commit <- G.commitC(call.core, after.head)
           _ = {
@@ -250,15 +250,15 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "push only the fixed destination and retain a real nonforce refusal" in {
       Given("owned local-ahead history with an independently granted fixed remote destination")
-      val root = fresh()
+      val root = _fresh()
       _with_runtime_(root, "Observation") { (_, _, _, prepare) =>
         prepare(call => call.setupC(4))
         When("typed Push publishes the selected local descendant")
         prepare(call => for {
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           _ <- call.setupC(9, startIndex = 8)
           local <- G.observeC(call.core)
-          _ <- valueC(call.core, GitOperation.Push(oid(local.head), mainBranch))
+          _ <- _value_c(call.core, GitOperation.Push(oid(local.head), _main_branch))
           remote <- G.remoteTipC(call.core, "main")
           _ = {
             Then("the actual fixed remote receives that exact commit")
@@ -268,10 +268,10 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
           _ <- call.setupC(7, startIndex = 4)
           advanced <- G.remoteTipC(call.core, "main")
           _ <- call.setupC(9, startIndex = 8)
-          _ <- valueC(call.core, GitOperation.Fetch)
+          _ <- _value_c(call.core, GitOperation.Fetch)
           retained <- G.observeC(call.core)
           _ = When("a nonforce push meets actual divergence or names a different destination")
-          refused <- E.executeGitC(call.core, GitOperation.Push(oid(retained.head), mainBranch))
+          refused <- E.executeGitC(call.core, GitOperation.Push(oid(retained.head), _main_branch))
           crossed = E.executeGitC(call.core, GitOperation.Push(oid(retained.head), take(GitBranchName.parseC("another"))))
           unchanged <- G.remoteTipC(call.core, "main")
           after <- G.observeC(call.core)
@@ -307,7 +307,7 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
 
     "refuse absent current component grants and invalid business selections before execution" in {
       Given("a normal V3 host with workspace authority but no current Head process grant")
-      val root = fresh()
+      val root = _fresh()
       _with_runtime_(root, "NoGrant") { (_, _, _, prepare) =>
         When("the component requests typed Head and out-of-bound semantic ordinals")
         prepare(call => {

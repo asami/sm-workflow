@@ -198,29 +198,29 @@ final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matche
       Given("a request prepared with A's selected snapshot and a separate B source containing exact-cap Unicode text")
       val a = fixture()
       val b = fixture()
-      val aBefore = a.contents
-      val bText = Files.readString(b.source, UTF_8)
-      val cap = bText.getBytes(UTF_8).length
-      val bMapping = Map(F.repositoryKey -> Json.fromString("repo"), F.workspaceKey -> Json.fromString("documents-b"))
-      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = cap, mapping = bMapping) { core =>
+      val abefore = a.contents
+      val btext = Files.readString(b.source, UTF_8)
+      val cap = btext.getBytes(UTF_8).length
+      val bmapping = Map(F.repositoryKey -> Json.fromString("repo"), F.workspaceKey -> Json.fromString("documents-b"))
+      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = cap, mapping = bmapping) { core =>
         When("B observes A's business request in its own current owning UoW")
         val observed = take(F.observeC(core, a.request))
         Then("B accepts its exact-cap actual source while neither root changes")
         observed.status shouldBe Status.Ready
-        a.contents shouldBe aBefore
-        Files.readString(b.source, UTF_8) shouldBe bText
+        a.contents shouldBe abefore
+        Files.readString(b.source, UTF_8) shouldBe btext
       }
-      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = cap - 1, mapping = bMapping) { core =>
+      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = cap - 1, mapping = bmapping) { core =>
         When("the same request is interpreted under B's lower current cap")
         val denied = F.observeC(core, a.request)
         Then("B's cap refuses complete acquisition and A's configuration grants no fallback")
         denied.isFaillure shouldBe true
-        a.contents shouldBe aBefore
-        Files.readString(b.source, UTF_8) shouldBe bText
+        a.contents shouldBe abefore
+        Files.readString(b.source, UTF_8) shouldBe btext
       }
       Files.writeString(a.root.resolve("unicode.txt"), "A", UTF_8)
       Files.writeString(b.root.resolve("unicode.txt"), "B", UTF_8)
-      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = 4, mapping = bMapping) { core =>
+      WorkflowFileRuntimeFixture.withCore(b.root, workspace = "documents-b", cap = 4, mapping = bmapping) { core =>
         val target = FileTarget(take(WorkspaceId.parseC("documents-b")))
         val path = take(WorkspaceFilePath.parseC("unicode.txt"))
         When("the same narrow owning bridge writes non-ASCII text at B's exact four-byte cap")

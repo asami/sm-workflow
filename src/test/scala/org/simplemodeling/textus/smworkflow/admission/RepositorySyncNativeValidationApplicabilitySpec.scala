@@ -143,14 +143,14 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       val remote = clean.copy(identity = "index-remote", exitCode = Some(2), stdout = "other.scala:8: whitespace\n")
       val product = V.Receipt("focused", "exited", Some(0), "Actual product output", "")
       When("the unchanged application policy compares CNCF-decoded parent finding sets")
-      val cleanMerge = V.successful(Vector(clean, clean.copy(identity = "index-remote"), product))
+      val cleanmerge = V.successful(Vector(clean, clean.copy(identity = "index-remote"), product))
       val single = V.successful(Vector(local))
       val nonmerge = V.successful(Vector(local, product), merge = false)
       val inherited = V.successful(Vector(local, clean.copy(identity = "index-remote"), product))
       val independent = V.successful(Vector(local, remote, product))
       val shared = V.successful(Vector(local, remote.copy(stdout = local.stdout), product))
       Then("a single structural sample retains its old acceptance and only shared parent findings block a merge")
-      cleanMerge shouldBe true
+      cleanmerge shouldBe true
       single shouldBe true
       nonmerge shouldBe true
       inherited shouldBe true
@@ -179,25 +179,25 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
 
     "retain admitted actual negative captures and leave malformed captures uncertain" in {
       Given("R4: complete raw results from an ordinary failed or indeterminate selected check")
-      def capture(text: String): ProcessExecutionCapture = {
+      def _capture_(text: String): ProcessExecutionCapture = {
         val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
         ProcessExecutionCapture(bytes, bytes.size.toLong, false)
       }
-      val failed = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), capture("actual failure\n"),
-        capture("diagnostic\n"), Vector.empty, 1L, "selected-check")
+      val failed = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), _capture_("actual failure\n"),
+        _capture_("diagnostic\n"), Vector.empty, 1L, "selected-check")
       val unknown = failed.copy(termination = ProcessExecutionTermination.TimedOut)
       When("the existing receipt admission stores only complete bounded strict actual text")
-      val failedReceipt = take(V.receiptC("index-local", failed))
-      val unknownReceipt = take(V.receiptC("index-local", unknown))
+      val failedreceipt = take(V.receiptC("index-local", failed))
+      val unknownreceipt = take(V.receiptC("index-local", unknown))
       val malformed = Vector(failed.copy(stdout = failed.stdout.copy(truncated = true)),
         failed.copy(stdout = failed.stdout.copy(byteCount = 0L)),
-        failed.copy(stdout = capture("x" * 65537)), failed.copy(stdout = capture("\u0000")),
+        failed.copy(stdout = _capture_("x" * 65537)), failed.copy(stdout = _capture_("\u0000")),
         failed.copy(stdout = ProcessExecutionCapture(Vector(0xff.toByte), 1L, false)))
       Then("negative results keep their real receipt while refused capture supplies no fabricated result for replay")
-      failedReceipt shouldBe V.Receipt("index-local", "exited", Some(7), "actual failure\n", "diagnostic\n")
-      unknownReceipt shouldBe V.Receipt("index-local", "indeterminate", None, "actual failure\n", "diagnostic\n")
-      V.successful(Vector(failedReceipt)) shouldBe false
-      V.successful(Vector(unknownReceipt)) shouldBe false
+      failedreceipt shouldBe V.Receipt("index-local", "exited", Some(7), "actual failure\n", "diagnostic\n")
+      unknownreceipt shouldBe V.Receipt("index-local", "indeterminate", None, "actual failure\n", "diagnostic\n")
+      V.successful(Vector(failedreceipt)) shouldBe false
+      V.successful(Vector(unknownreceipt)) shouldBe false
       malformed.foreach(result => V.receiptC("index-local", result).isSuccess shouldBe false)
     }
   }

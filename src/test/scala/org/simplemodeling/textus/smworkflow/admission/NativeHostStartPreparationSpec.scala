@@ -116,18 +116,18 @@ final class NativeHostStartPreparationSpec extends AnyWordSpec with Matchers wit
         val s = sourceRow(start)
         val af = SplitPhaseTypedStartJsonV1.storageField
         val sf = SplitPhaseExplicitPlanningInputJsonV1.storageField
-        def prepare(allocation: Record = a, source: Record = s) = Preparation.splitC(owner, selected, allocation, source,
+        def _prepare_(allocation: Record = a, source: Record = s) = Preparation.splitC(owner, selected, allocation, source,
           reference, participant, issuer, now)
-        val malformedAllocations = Vector(null, Record.empty, Record.data(af -> true), Record.data(af -> "unsupported:"),
+        val malformedallocations = Vector(null, Record.empty, Record.data(af -> true), Record.data(af -> "unsupported:"),
           changePayload(a, af, SplitPhaseTypedStartJsonV1.allocationSchema)(_.mapObject(_.remove("input"))),
           changePayload(a, af, SplitPhaseTypedStartJsonV1.allocationSchema)(_.mapObject(_.add("participantIdentity", Json.True))),
           changePayload(a, af, SplitPhaseTypedStartJsonV1.allocationSchema)(_.mapObject(_.add("source", Json.Null))))
-        val malformedSources = Vector(null, Record.empty, Record.data(sf -> true), Record.data(sf -> "unsupported:"),
+        val malformedsources = Vector(null, Record.empty, Record.data(sf -> true), Record.data(sf -> "unsupported:"),
           sourceRow(start.copy(source = start.source.copy(reference = start.source.reference.copy(identity = "foreign-source")))),
           changePayload(s, sf, SplitPhaseExplicitPlanningInputJsonV1.schema)(_.mapObject(_.add("phase", Json.True))),
           changePayload(s, sf, SplitPhaseExplicitPlanningInputJsonV1.schema)(_.mapObject(_.add("authority", Json.Null))))
         When("the producer receives absent payloads invalid types addresses metadata or null supplied scope targets")
-        val failures = malformedAllocations.map(value => prepare(allocation = value)) ++ malformedSources.map(value => prepare(source = value)) ++ Vector(
+        val failures = malformedallocations.map(value => _prepare_(allocation = value)) ++ malformedsources.map(value => _prepare_(source = value)) ++ Vector(
           Preparation.splitC(null, selected, a, s, reference, participant, issuer, now),
           Preparation.splitC(" owner", selected, a, s, reference, participant, issuer, now),
           Preparation.splitC(owner, null, a, s, reference, participant, issuer, now),
@@ -141,7 +141,7 @@ final class NativeHostStartPreparationSpec extends AnyWordSpec with Matchers wit
           Preparation.splitC(owner, selected, a, s, reference, participant, null, now),
           Preparation.splitC(owner, selected, a, s, reference, participant, "", now),
           Preparation.splitC(owner, selected, a, s, reference, participant, issuer, null))
-        val scopeFailures = Vector(
+        val scopefailures = Vector(
           NativeHostSplitStartScope.bindingFromInputsC(null, start.participantIdentity, start.input, start.source, None),
           NativeHostSplitStartScope.bindingFromInputsC(owner, null, start.input, start.source, None),
           NativeHostSplitStartScope.bindingFromInputsC(owner, start.participantIdentity, null, start.source, None),
@@ -151,15 +151,15 @@ final class NativeHostStartPreparationSpec extends AnyWordSpec with Matchers wit
           NativeHostSplitStartScope.bindingFromInputsC(owner, start.participantIdentity, start.input, start.source.copy(authority = null), None),
           NativeHostSplitStartScope.bindingFromInputsC(owner, start.participantIdentity, start.input, start.source, null),
           NativeHostSplitStartScope.bindingFromInputsC(owner, start.participantIdentity, start.input, start.source, Some(null)))
-        val annotated = take(prepare(record(json(a).mapObject(_.add("commandGrant", Json.True))),
+        val annotated = take(_prepare_(record(json(a).mapObject(_.add("commandGrant", Json.True))),
           record(json(s).mapObject(_.add("operatorApproved", Json.True)))))
         val mismatched = start.copy(input = start.input.copy(sourcePhaseIdentity = "phase-foreign"),
           proposal = start.proposal.map(p => p.copy(reference = p.reference.copy(identity = "selected-other-proposal"))))
         val semantic = prepareC(owner, mismatched)
         Then("consumed failures refuse while annotations give no authority and semantic relationships are not re-admitted")
         failures.foreach(_.isSuccess shouldBe false)
-        scopeFailures.foreach(_.isSuccess shouldBe false)
-        evidence(annotated).binding shouldBe evidence(take(prepare())).binding
+        scopefailures.foreach(_.isSuccess shouldBe false)
+        evidence(annotated).binding shouldBe evidence(take(_prepare_())).binding
         semantic.isSuccess shouldBe true
         evidence(take(semantic)).binding.hcursor.downField("startAttestation").downField("input")
           .get[String]("sourcePhaseIdentity").toOption shouldBe Some("phase-foreign")
@@ -176,22 +176,22 @@ final class NativeHostStartPreparationSpec extends AnyWordSpec with Matchers wit
         val prepared = take(prepareC(call.core.component.get.core.instanceId.canonicalKey, start))
         val value = evidence(prepared)
         val target = value.binding
-        def observe(value: Evidence, binding: Json = target) = NativeHostEvidence.observeC(value, _declared,
+        def _observe_(value: Evidence, binding: Json = target) = NativeHostEvidence.observeC(value, _declared,
           Purpose.SplitStart, startLookup(start), binding, now)
-        def alter(value: Json, path: Vector[String])(change: Json => Json): Json = {
+        def _alter_(value: Json, path: Vector[String])(change: Json => Json): Json = {
           NativeHostHumanEvidenceFixture.alter(value, path)(change)
         }
         val targets = Vector(target.mapObject(_.add("componentInstance", Json.fromString("foreign-owner"))),
-          alter(target, Vector("startAttestation", "source", "authority"))(_.mapObject(_.add("revision", Json.fromString("foreign")))),
-          alter(target, Vector("startAttestation"))(_.mapObject(_.add("participantIdentity", Json.fromString("foreign")))),
-          alter(target, Vector("startAttestation", "input"))(_.mapObject(_.add("invocationMode", Json.fromString("APPLY")))),
-          alter(target, Vector("startAttestation", "proposal"))(_.mapObject(_.add("identity", Json.fromString("foreign")))))
+          _alter_(target, Vector("startAttestation", "source", "authority"))(_.mapObject(_.add("revision", Json.fromString("foreign")))),
+          _alter_(target, Vector("startAttestation"))(_.mapObject(_.add("participantIdentity", Json.fromString("foreign")))),
+          _alter_(target, Vector("startAttestation", "input"))(_.mapObject(_.add("invocationMode", Json.fromString("APPLY")))),
+          _alter_(target, Vector("startAttestation", "proposal"))(_.mapObject(_.add("identity", Json.fromString("foreign")))))
         When("current consent is compared to foreign owner authority participant mode proposal lookup issuer purpose and time")
-        val crossed = targets.map(binding => observe(value, binding)) ++ Vector(
-          observe(value.copy(lookupIdentity = "foreign")), observe(value.copy(issuer = "foreign")),
-          observe(value.copy(purpose = Purpose.SplitAnswer.identity)), observe(value.copy(occurredAt = now.plusSeconds(1).toString)))
-        val accepted = observe(value)
-        val metadata = observe(value.copy(reference = "other-explicit-consent", revision = "2", participant = "other-operator"))
+        val crossed = targets.map(binding => _observe_(value, binding)) ++ Vector(
+          _observe_(value.copy(lookupIdentity = "foreign")), _observe_(value.copy(issuer = "foreign")),
+          _observe_(value.copy(purpose = Purpose.SplitAnswer.identity)), _observe_(value.copy(occurredAt = now.plusSeconds(1).toString)))
+        val accepted = _observe_(value)
+        val metadata = _observe_(value.copy(reference = "other-explicit-consent", revision = "2", participant = "other-operator"))
         Then("only applicable consent is accepted and passive metadata need not equal the selected allocation participant")
         accepted.isSuccess shouldBe true
         crossed.foreach(_.isSuccess shouldBe false)
@@ -223,22 +223,22 @@ final class NativeHostStartPreparationSpec extends AnyWordSpec with Matchers wit
         }
         Given("the specification explicitly provisions the returned input using normal managed Create")
         take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
-        val foreignHost = ResolvedConfiguration(HostConfiguration(host.configuration.values.updated(
+        val foreignhost = ResolvedConfiguration(HostConfiguration(host.configuration.values.updated(
           NativeHostEvidence.prefix + "record-collection", ConfigurationValue.StringValue(
             EntityCollectionId("smworkflow", "cli", "foreign_evidence").print))), ConfigurationTrace.empty)
-        val foreignReader = take(NativeHostEvidence.bindC(foreignHost, persistence))
+        val foreignreader = take(NativeHostEvidence.bindC(foreignhost, persistence))
         When("current managed reading consumes the matching row or an ungranted configured destination")
         val accepted = take(reader.loadC(call.core, Purpose.SplitStart, startLookup(start), target))
-        val denied = foreignReader.loadC(call.core, Purpose.SplitStart, startLookup(start), target)
-        val foreignTarget = reader.loadC(call.core, Purpose.SplitStart, startLookup(start),
+        val denied = foreignreader.loadC(call.core, Purpose.SplitStart, startLookup(start), target)
+        val foreigntarget = reader.loadC(call.core, Purpose.SplitStart, startLookup(start),
           target.mapObject(_.add("componentInstance", Json.fromString("foreign-owner"))))
-        val foreignLookup = take(reader.loadC(call.core, Purpose.SplitStart, "foreign", target))
+        val foreignlookup = take(reader.loadC(call.core, Purpose.SplitStart, "foreign", target))
         val contextfree = reader.loadC(call.core.copy(component = None), Purpose.SplitStart, startLookup(start), target)
         Then("only matching current granted reads succeed; neither the codec nor metadata supplies access")
         accepted.nonEmpty shouldBe true
         denied.isSuccess shouldBe false
-        foreignTarget.isSuccess shouldBe false
-        foreignLookup shouldBe None
+        foreigntarget.isSuccess shouldBe false
+        foreignlookup shouldBe None
         contextfree.isSuccess shouldBe false
         retained = Some((reader, call.core, target))
         Consequence.unit

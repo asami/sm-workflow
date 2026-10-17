@@ -36,7 +36,7 @@ private[admission] object TypedSbtHostPlanFixture {
       "stderrBytes" -> 16384L, "argumentCount" -> 16L, "argumentBytes" -> 131072L,
       "artifactCount" -> 1L, "artifactBytes" -> 131072L, "workAreaBytes" -> 4194304L)
       .map { case (name, value) => name -> Json.fromLong(value) }*)
-    val sbtPlan = Json.obj("schema" -> Json.fromString("cncf.runtime-process-execution.v2"), "programs" -> Json.arr(),
+    val sbtplan = Json.obj("schema" -> Json.fromString("cncf.runtime-process-execution.v2"), "programs" -> Json.arr(),
       "grants" -> Json.arr(Json.obj("componentId" -> owner,
         "capabilities" -> Json.fromValues(targets.map(Json.fromString)))),
       "workspaces" -> Json.fromValues(targets.map(target => Json.obj("identity" -> Json.fromString(target),
@@ -47,15 +47,15 @@ private[admission] object TypedSbtHostPlanFixture {
         "operation" -> Json.fromString("test"), "capability" -> Json.fromString(target), "identity" -> Json.fromString(target),
         "sbtExecutable" -> Json.fromString(executable.toString), "limits" -> limits,
         "environment" -> Json.obj(environment.toVector.map { case (name, value) => name -> Json.fromString(value) }*)))))
-    gitPlan.fold(sbtPlan) { git =>
-      def array(plan: Json, name: String): Vector[Json] = plan.hcursor.downField(name).focus.get.asArray.get.toVector
-      require(array(git, "programs").isEmpty, "Combined typed Git/SBT plans admit no generic programs")
-      val capabilities = (array(git, "gitPrograms") ++ array(sbtPlan, "sbtPrograms"))
+    gitPlan.fold(sbtplan) { git =>
+      def _array_(plan: Json, name: String): Vector[Json] = plan.hcursor.downField(name).focus.get.asArray.get.toVector
+      require(_array_(git, "programs").isEmpty, "Combined typed Git/SBT plans admit no generic programs")
+      val capabilities = (_array_(git, "gitPrograms") ++ _array_(sbtplan, "sbtPrograms"))
         .map(_.hcursor.downField("capability").focus.get)
-      sbtPlan.mapObject(_.add("schema", Json.fromString("cncf.runtime-process-execution.v3"))
+      sbtplan.mapObject(_.add("schema", Json.fromString("cncf.runtime-process-execution.v3"))
         .add("gitPrograms", git.hcursor.downField("gitPrograms").focus.get)
-        .add("workspaces", Json.fromValues(array(git, "workspaces") ++ array(sbtPlan, "workspaces")))
-        .add("workspaceGrants", Json.fromValues(array(git, "workspaceGrants") ++ array(sbtPlan, "workspaceGrants")))
+        .add("workspaces", Json.fromValues(_array_(git, "workspaces") ++ _array_(sbtplan, "workspaces")))
+        .add("workspaceGrants", Json.fromValues(_array_(git, "workspaceGrants") ++ _array_(sbtplan, "workspaceGrants")))
         .add("grants", Json.arr(Json.obj("componentId" -> owner, "capabilities" -> Json.fromValues(capabilities)))))
     }
   }

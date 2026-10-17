@@ -37,8 +37,8 @@ final class NativeWorkflowIssuedWorkContextSpec extends AnyWordSpec with Matcher
   private val requirement = ExecutionRequirement(Vector(CapabilityRequirement("fixture-capability")), RiskLevel("bounded"),
     ReasoningLevel.Deep, reviewRequired = true)
   private val presentation = MinimalPresentation("Private presentation", "Private situation")
-  private val order = WorkflowContinuation.WorkOrder(request, requirement, presentation)
-  private val issued = WorkflowInteraction[String, Nothing](handle, order)
+  private val _order = WorkflowContinuation.WorkOrder(request, requirement, presentation)
+  private val issued = WorkflowInteraction[String, Nothing](handle, _order)
   private def _take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result
     case other => fail("Issued context rejected: " + other)
@@ -92,7 +92,7 @@ final class NativeWorkflowIssuedWorkContextSpec extends AnyWordSpec with Matcher
       } yield requirement.copy(reasoning = level, reasoningClass = semanticClass, disposition = disposition)
       When("the actual WorkOrders project their unchanged native execution requirements under analysis")
       val views = requirements.map(value => value -> _take(P.fromIssuedC(
-        issued.copy(current = order.copy(requirement = value)), P.Mode.Analysis, codec)))
+        issued.copy(current = _order.copy(requirement = value)), P.Mode.Analysis, codec)))
       Then("semantic mode stays analysis and native requirement fields retain their supplied meanings and omissions")
       views.foreach { (expected, view) =>
         view.thinkingMode shouldBe "analysis"
@@ -138,16 +138,16 @@ final class NativeWorkflowIssuedWorkContextSpec extends AnyWordSpec with Matcher
     "reject unavailable, non-WorkOrder and incompatible canonical values as Consequence failures" in {
       Given("absent inputs, non-WorkOrder continuations and WorkOrders missing consumed handle, snapshot or contracts")
       val invalid = Vector[WorkflowInteraction[String, Nothing]](null, issued.copy(handle = null), issued.copy(current = null),
-        issued.copy(current = order.copy(request = null)),
+        issued.copy(current = _order.copy(request = null)),
         issued.copy(current = WorkflowContinuation.Decision(request, presentation)),
         issued.copy(current = WorkflowContinuation.Wait(request.expectedRevision, context.snapshot, presentation)),
         issued.copy(current = WorkflowContinuation.Terminal[Nothing](null, presentation)),
-        issued.copy(current = order.copy(request = request.copy(input = null))),
-        issued.copy(current = order.copy(request = request.copy(context = null))),
-        issued.copy(current = order.copy(request = request.copy(context = context.copy(snapshot = null)))),
-        issued.copy(current = order.copy(request = request.copy(completion = null))),
-        issued.copy(current = order.copy(request = request.copy(evidence = null))),
-        issued.copy(current = order.copy(request = request.copy(input = Some(TypedValue("WrongInput", "private"))))))
+        issued.copy(current = _order.copy(request = request.copy(input = null))),
+        issued.copy(current = _order.copy(request = request.copy(context = null))),
+        issued.copy(current = _order.copy(request = request.copy(context = context.copy(snapshot = null)))),
+        issued.copy(current = _order.copy(request = request.copy(completion = null))),
+        issued.copy(current = _order.copy(request = request.copy(evidence = null))),
+        issued.copy(current = _order.copy(request = request.copy(input = Some(TypedValue("WrongInput", "private"))))))
       val throwing = new WorkflowResultJsonV1.PayloadCodec[String] {
         val typeIdentity = codec.typeIdentity
         def encode(value: String): Json = throw new IllegalArgumentException("Fixture incompatible encoding")
@@ -168,11 +168,11 @@ final class NativeWorkflowIssuedWorkContextSpec extends AnyWordSpec with Matcher
     "retain each actual route, repeat one pending issue unchanged and leave native optional types absent" in {
       Given("a different actual instance, continuation, expected revision, result route and a canonical issue with no optional types")
       val next = issued.copy(handle = handle.copy(instanceIdentity = InstanceIdentity("instance-2")),
-        current = order.copy(request = request.copy(runId = StateMachineRunIdentity("run-2"),
+        current = _order.copy(request = request.copy(runId = StateMachineRunIdentity("run-2"),
           continuationId = ContinuationIdentity("continuation-3"), expectedRevision = StateMachineRevision("8"),
           resultType = Some(StateMachineResultTypeReference("OtherResult")),
           completionOperation = StateMachineOperationIdentity("OtherService", "submitOther"))))
-      val untyped = issued.copy(current = order.copy(request = request.copy[String](input = None, resultType = None)))
+      val untyped = issued.copy(current = _order.copy(request = request.copy[String](input = None, resultType = None)))
       When("the projection consumes these actual issues and redisplays the original pending issue")
       val first = _take(P.fromIssuedC(issued, P.Mode.Implementation, codec))
       val second = _take(P.fromIssuedC(next, P.Mode.Implementation, codec))

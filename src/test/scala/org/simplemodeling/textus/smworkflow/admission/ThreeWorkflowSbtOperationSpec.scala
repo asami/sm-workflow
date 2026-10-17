@@ -46,13 +46,13 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
     val isolated = Set("NormalSbtSuccess", "NormalSbtFailure", "NormalSbtUnknown")(scenario)
     require(isolated || Set("Equal", "Goal")(scenario), "Only the selected normal SBT episodes are admitted")
-    val gitPlan = if (isolated) None else Some(TypedGitHostPlanFixture.plan(
+    val gitplan = if (isolated) None else Some(TypedGitHostPlanFixture.plan(
       Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
       goalPaths = if (scenario == "Goal") goal.candidatePaths else Vector.empty,
       goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty))
     val ordinals = if (isolated || scenario != "Goal") Vector(1) else
       (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal).distinct
-    TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitPlan)
+    TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan)
   }
   private def _build(root: Path, successful: Boolean): Unit = TypedSbtHostPlanFixture.build(root, successful)
   private def _same_native(actual: InstanceRecord, expected: InstanceRecord): Unit = {
@@ -203,10 +203,10 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
         val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
         val selection = _repository_selection_(input, "selected-repository", "direct-sbt-start")
         var execution = Option.empty[InstanceIdentity]
-        var retainedResult = Option.empty[V.RepositorySyncAdvanceResult]
-        var retainedNative = Option.empty[InstanceRecord]
-        var retainedValidation = Option.empty[RepositorySyncNativeMergeValidation.State]
-        var retainedObservation = Option.empty[RepositorySyncManagedGitObservation.Observed]
+        var retainedresult = Option.empty[V.RepositorySyncAdvanceResult]
+        var retainednative = Option.empty[InstanceRecord]
+        var retainedvalidation = Option.empty[RepositorySyncNativeMergeValidation.State]
+        var retainedobservation = Option.empty[RepositorySyncManagedGitObservation.Observed]
         def identity: InstanceIdentity = execution.get
         def advance: List[Property] = NativeWorkflowOperationInputFixture.advance(identity.value)
         for (session <- Vector("execute")) _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
@@ -249,13 +249,13 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           val actual = Files.readString(root.resolve("sbt-executions.txt"))
           actual.linesIterator.size shouldBe 1
           actual.trim.toLong should not be ProcessHandle.current().pid()
-          retainedResult = Some(result)
-          retainedNative = current
-          retainedValidation = validation
-          retainedObservation = observed
+          retainedresult = Some(result)
+          retainednative = current
+          retainedvalidation = validation
+          retainedobservation = observed
         }
         Given("the original repository runtime is closed with its actual selected check result and native history retained")
-        val originalExecution = Files.readString(root.resolve("sbt-executions.txt"))
+        val originalexecution = Files.readString(root.resolve("sbt-executions.txt"))
         _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
           When("public Advance observes the same RepositorySync in a fresh runtime without setup or another check")
           val reopened = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(
@@ -270,14 +270,14 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             git <- call.observeC()
           } yield { current = Some(native); validation = Some(checked); observed = Some(git) })
           Then("the original Terminal or failed Wait, receipt, native revision and history survive with exactly one ProductCheck process")
-          reopened shouldBe retainedResult.get
+          reopened shouldBe retainedresult.get
           reopened.kind shouldBe (if (successful) "Terminal" else "Wait")
           current.get.lifecycle shouldBe (if (successful) Lifecycle.Completed else Lifecycle.Active)
-          _same_native(current.get, retainedNative.get)
-          validation shouldBe retainedValidation
-          observed shouldBe retainedObservation
-          Files.readString(root.resolve("sbt-executions.txt")) shouldBe originalExecution
-          originalExecution.linesIterator.size shouldBe 1
+          _same_native(current.get, retainednative.get)
+          validation shouldBe retainedvalidation
+          observed shouldBe retainedobservation
+          Files.readString(root.resolve("sbt-executions.txt")) shouldBe originalexecution
+          originalexecution.linesIterator.size shouldBe 1
         }
       }
     }
@@ -304,18 +304,18 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       var assigned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
       var base = Option.empty[O.Snapshot]
       var phaseReviewReference = Option.empty[ContextReference]
-      var retainedGoal = Option.empty[V.GoalPhaseAdvanceResult]
-      var retainedGoalNative = Option.empty[InstanceRecord]
-      var retainedChild = Option.empty[InstanceIdentity]
-      var retainedChildNative = Option.empty[InstanceRecord]
-      var retainedChildValidation = Option.empty[RepositorySyncNativeMergeValidation.State]
-      var retainedObservation = Option.empty[RepositorySyncManagedGitObservation.Observed]
-      var closureSourceRevision = Option.empty[String]
-      var completionAcknowledgements = 0
+      var retainedgoal = Option.empty[V.GoalPhaseAdvanceResult]
+      var retainedgoalnative = Option.empty[InstanceRecord]
+      var retainedchild = Option.empty[InstanceIdentity]
+      var retainedchildnative = Option.empty[InstanceRecord]
+      var retainedchildvalidation = Option.empty[RepositorySyncNativeMergeValidation.State]
+      var retainedobservation = Option.empty[RepositorySyncManagedGitObservation.Observed]
+      var closuresourcerevision = Option.empty[String]
+      var completionacknowledgements = 0
       val acknowledge: String => Consequence[Unit] = point => {
         if (point == "goal-repository-completed") {
-          completionAcknowledgements += 1
-          if (completionAcknowledgements == 1) Consequence.stateConflict("Specification lost post-append Goal acknowledgement")
+          completionacknowledgements += 1
+          if (completionacknowledgements == 1) Consequence.stateConflict("Specification lost post-append Goal acknowledgement")
           else Consequence.unit
         } else Consequence.unit
       }
@@ -380,7 +380,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             val invocation = identity.value + ":repository-closure:" + pending.revision.value
             val closure = GoalPhaseNativeRepositoryClosure.Input(identity.value, pending.revision.value.toString,
               plan, input().originalBase, input().completed, input().candidate.get, phaseReviewReference.get.identity, invocation)
-            closureSourceRevision = Some(closure.sourceRevision)
+            closuresourcerevision = Some(closure.sourceRevision)
             val child = _repository_selection_(host.repository.input, "goal-sbt-child-host-entry", invocation)
             prepare(call => call.evidenceC(NativeHostEvidence.Purpose.PhaseClosure,
               ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-phase-authority", "1"),
@@ -397,16 +397,16 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
               val committed = current()
               committed.lifecycle shouldBe Lifecycle.Completed
               committed.currentProgression shouldBe None
-              completionAcknowledgements shouldBe 1
+              completionacknowledgements shouldBe 1
               executions().size shouldBe 3
-              val committedExecutions = executions()
+              val committedexecutions = executions()
               When("a normal public retry consumes the owning committed completion in the same runtime")
               val retry = invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
               Then("the actual typed Terminal has no second append, acknowledgement or fourth product check")
               retry.kind shouldBe "Terminal"
               _same_native(current(), committed)
-              completionAcknowledgements shouldBe 1
-              executions() shouldBe committedExecutions
+              completionacknowledgements shouldBe 1
+              executions() shouldBe committedexecutions
               retry
             } else invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
             outcome.kind shouldBe "Terminal"
@@ -417,10 +417,10 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             }))
             var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
             var checked = Option.empty[RepositorySyncNativeMergeValidation.State]
-            var childCurrent = Option.empty[InstanceRecord]
+            var childcurrent = Option.empty[InstanceRecord]
             prepare(call => call.observeC().flatMap(value => { observed = Some(value)
               call.validationC(host.repository.input, childsession.get, root).flatMap(value => { checked = Some(value)
-                call.currentC(childsession.get).map(value => { childCurrent = Some(value); () }) }) }))
+                call.currentC(childsession.get).map(value => { childcurrent = Some(value); () }) }) }))
             Then("the whole selected Phase retains its actual Step commit, converged repository and third real test receipt")
             actual.selectedPlan.identity shouldBe plan.identity
             actual.selectedPlan.steps.map(_.identity) shouldBe plan.steps.map(_.identity)
@@ -440,36 +440,36 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             executions() should not contain ProcessHandle.current().pid()
             val completed = current()
             completed.lifecycle shouldBe Lifecycle.Completed
-            childCurrent.get.lifecycle shouldBe Lifecycle.Completed
-            retainedGoal = Some(outcome)
-            retainedGoalNative = Some(completed)
-            retainedChild = childsession
-            retainedChildNative = childCurrent
-            retainedChildValidation = checked
-            retainedObservation = observed
+            childcurrent.get.lifecycle shouldBe Lifecycle.Completed
+            retainedgoal = Some(outcome)
+            retainedgoalnative = Some(completed)
+            retainedchild = childsession
+            retainedchildnative = childcurrent
+            retainedchildvalidation = checked
+            retainedobservation = observed
             Given("the actual completed Goal, child convergence, Step commit and three check receipts in this runtime")
-            val completedExecutions = executions()
+            val completedexecutions = executions()
             for (_ <- 1 to 2) {
               When("public Goal Advance rereads the selected completed result in the same runtime")
               val repeated = invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
-              var repeatedChild = Option.empty[InstanceRecord]
-              var repeatedValidation = Option.empty[RepositorySyncNativeMergeValidation.State]
-              var repeatedGit = Option.empty[RepositorySyncManagedGitObservation.Observed]
+              var repeatedchild = Option.empty[InstanceRecord]
+              var repeatedvalidation = Option.empty[RepositorySyncNativeMergeValidation.State]
+              var repeatedgit = Option.empty[RepositorySyncManagedGitObservation.Observed]
               prepare(call => for {
                 child <- call.currentC(childsession.get)
                 validation <- call.validationC(host.repository.input, childsession.get, root)
                 git <- call.observeC()
-              } yield { repeatedChild = Some(child); repeatedValidation = Some(validation); repeatedGit = Some(git) })
+              } yield { repeatedchild = Some(child); repeatedvalidation = Some(validation); repeatedgit = Some(git) })
               Then("the identical typed completion and native frontiers retain the original Step commit, tips and receipts without another effect")
               repeated shouldBe outcome
               repeated.completion.get.completed.head.commit shouldBe actual.completed.head.commit
               _same_native(current(), completed)
-              _same_native(repeatedChild.get, childCurrent.get)
-              repeatedValidation shouldBe checked
-              repeatedGit shouldBe observed
-              executions() shouldBe completedExecutions
+              _same_native(repeatedchild.get, childcurrent.get)
+              repeatedvalidation shouldBe checked
+              repeatedgit shouldBe observed
+              executions() shouldBe completedexecutions
               executions().size shouldBe 3
-              completionAcknowledgements shouldBe (if (lostAcknowledgement) 1 else 0)
+              completionacknowledgements shouldBe (if (lostAcknowledgement) 1 else 0)
             }
           } else {
             When("a freshly opened runtime supplies the assigned task for its semantic result")
@@ -524,21 +524,21 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           }
         }
       Given("the completed Goal and its actual RepositorySync child have closed their runtimes with three real ProductCheck results")
-      val originalExecutions = executions()
+      val originalexecutions = executions()
       _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
         When("fresh public Goal and child Repository Advances observe the retained whole-Phase completion")
-        val reopenedGoal = read_value[V.GoalPhaseAdvanceResult](take(owner.executeOperationResponseInContext(
+        val reopenedgoal = read_value[V.GoalPhaseAdvanceResult](take(owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "GoalPhaseService", operation = "advanceGoalPhase",
             properties = advance), actor)))
         var childsession = Option.empty[InstanceIdentity]
-        prepare(call => call.goalChildSessionC(identity, closureSourceRevision.get).map(value => {
+        prepare(call => call.goalChildSessionC(identity, closuresourcerevision.get).map(value => {
           childsession = Some(InstanceIdentity(value)); ()
         }))
-        val reopenedChild = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(
+        val reopenedchild = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "RepositorySyncService", operation = "advanceRepositorySync",
             properties = NativeWorkflowOperationInputFixture.advance(childsession.get.value)), actor)))
-        var goalCurrent = Option.empty[InstanceRecord]
-        var childCurrent = Option.empty[InstanceRecord]
+        var goalcurrent = Option.empty[InstanceRecord]
+        var childcurrent = Option.empty[InstanceRecord]
         var checked = Option.empty[RepositorySyncNativeMergeValidation.State]
         var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
         prepare(call => for {
@@ -546,24 +546,24 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           child <- call.currentC(childsession.get)
           validation <- call.validationC(host.repository.input, childsession.get, root)
           git <- call.observeC()
-        } yield { goalCurrent = Some(goal); childCurrent = Some(child); checked = Some(validation); observed = Some(git) })
+        } yield { goalcurrent = Some(goal); childcurrent = Some(child); checked = Some(validation); observed = Some(git) })
         Then("the same whole-Phase result, child convergence and receipt, native revisions and histories survive without a fourth check")
-        reopenedGoal shouldBe retainedGoal.get
-        reopenedGoal.kind shouldBe "Terminal"
-        reopenedChild.kind shouldBe "Terminal"
-        childsession shouldBe retainedChild
-        reopenedChild.convergence shouldBe retainedGoal.get.completion.map(_.repository)
-        goalCurrent.get.lifecycle shouldBe Lifecycle.Completed
-        childCurrent.get.lifecycle shouldBe Lifecycle.Completed
-        _same_native(goalCurrent.get, retainedGoalNative.get)
-        _same_native(childCurrent.get, retainedChildNative.get)
-        checked shouldBe retainedChildValidation
-        observed shouldBe retainedObservation
-        executions() shouldBe originalExecutions
+        reopenedgoal shouldBe retainedgoal.get
+        reopenedgoal.kind shouldBe "Terminal"
+        reopenedchild.kind shouldBe "Terminal"
+        childsession shouldBe retainedchild
+        reopenedchild.convergence shouldBe retainedgoal.get.completion.map(_.repository)
+        goalcurrent.get.lifecycle shouldBe Lifecycle.Completed
+        childcurrent.get.lifecycle shouldBe Lifecycle.Completed
+        _same_native(goalcurrent.get, retainedgoalnative.get)
+        _same_native(childcurrent.get, retainedchildnative.get)
+        checked shouldBe retainedchildvalidation
+        observed shouldBe retainedobservation
+        executions() shouldBe originalexecutions
         executions().size shouldBe 3
         executions().distinct.size shouldBe 3
         executions() should not contain ProcessHandle.current().pid()
-        completionAcknowledgements shouldBe (if (lostAcknowledgement) 1 else 0)
+        completionacknowledgements shouldBe (if (lostAcknowledgement) 1 else 0)
       }
     }
     }

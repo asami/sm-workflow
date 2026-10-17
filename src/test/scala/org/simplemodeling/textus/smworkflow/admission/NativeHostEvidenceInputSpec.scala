@@ -142,15 +142,15 @@ final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with G
         val forwarded = take(_tool.prepareRecord("GoalPhase", "human", child, repositoryAnswer))
         val prepared = take(NativeHostHumanPreparation.goalC(goal.human.get.hostContext.get, goalAnswer,
           reference, execution, participant, issuer, now.minusSeconds(60)))
-        val selectedFiles = _tool.files(goal, goalAnswer)
-        val absentParticipant = Main.prepareC(_tool.arguments("GoalPhase", "human") - "participant", path =>
-          Consequence.success(selectedFiles(path)))
+        val selectedfiles = _tool.files(goal, goalAnswer)
+        val absentparticipant = Main.prepareC(_tool.arguments("GoalPhase", "human") - "participant", path =>
+          Consequence.success(selectedfiles(path)))
         Then("only the supplied choices enter purpose-specific current-v7 rows; no participant is inferred or review effect issued")
         _tool.row(own).hcursor.get[String](NativeHostEvidence.storageField).toOption shouldBe prepared.record.getString(NativeHostEvidence.storageField)
         _tool.evidence(own).purpose shouldBe Purpose.GoalHuman.identity
         _tool.evidence(direct).purpose shouldBe Purpose.RepositoryHuman.identity
         _tool.row(forwarded) shouldBe _tool.row(direct)
-        absentParticipant.isSuccess shouldBe false
+        absentparticipant.isSuccess shouldBe false
         Consequence.unit
       }
     }
@@ -176,28 +176,28 @@ final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with G
       withCore { call =>
         val goal = take(NativeWorkflowOperationOutput.goalHumanC(NativeHostHumanEvidenceFixture.goalQuestion, call.core))
         val repository = take(NativeWorkflowOperationOutput.repositoryHumanC(NativeHostHumanEvidenceFixture.repositoryQuestion, call.core))
-        val selectedFiles = _tool.files(goal, goalAnswer)
+        val selectedfiles = _tool.files(goal, goalAnswer)
         val args = _tool.arguments("GoalPhase", "human")
-        def replace(key: String, value: String): Map[String, String] = args.updated(key, value)
-        def read(files: Map[String, String])(path: String): Consequence[String] = files.get(path)
+        def _replace_(key: String, value: String): Map[String, String] = args.updated(key, value)
+        def _read_(files: Map[String, String])(path: String): Consequence[String] = files.get(path)
           .map(Consequence.success).getOrElse(Consequence.stateConflict("Specification file absent"))
-        val argumentVariants = Vector(args.updated("unknown", "value"), args - "family", args - "participant",
-          replace("participant", ""), replace("issuer", ""), replace("occurred-at", "invalid-time"),
-          replace("collection", "smworkflow.cli.host_evidence"), replace("collection", "entity:"),
-          replace("family", "Unknown"), replace("kind", "Unknown"),
+        val argumentvariants = Vector(args.updated("unknown", "value"), args - "family", args - "participant",
+          _replace_("participant", ""), _replace_("issuer", ""), _replace_("occurred-at", "invalid-time"),
+          _replace_("collection", "smworkflow.cli.host_evidence"), _replace_("collection", "entity:"),
+          _replace_("family", "Unknown"), _replace_("kind", "Unknown"),
           _tool.arguments("GoalPhase", "review").updated("participant", participant))
-        val missingWorker = execution.copy(workerIdentity = None)
-        val fileVariants = Vector(selectedFiles - "request.json", selectedFiles.updated("request.json", "not-json"),
-          selectedFiles.updated("reference.json", "{}"), selectedFiles.updated("execution.json", take(missingWorker.toRecord().toJsonStringC)),
-          selectedFiles.updated("reference.json", take(reference.copy(identity = "").toRecord().toJsonStringC)),
-          selectedFiles.updated("result.json", "{\"choice\":true,\"rationale\":\"unused\"}"))
+        val missingworker = execution.copy(workerIdentity = None)
+        val filevariants = Vector(selectedfiles - "request.json", selectedfiles.updated("request.json", "not-json"),
+          selectedfiles.updated("reference.json", "{}"), selectedfiles.updated("execution.json", take(missingworker.toRecord().toJsonStringC)),
+          selectedfiles.updated("reference.json", take(reference.copy(identity = "").toRecord().toJsonStringC)),
+          selectedfiles.updated("result.json", "{\"choice\":true,\"rationale\":\"unused\"}"))
         val contexts = goal.human.get.hostContext.get
         val crossed = goal.copy(human = Some(goal.human.get.copy(hostContext = Some(contexts.copy(purpose = Purpose.RepositoryHuman.identity)))))
         val requests = Vector(goal.copy(kind = "Wait"), goal.copy(kind = "Terminal"), goal.copy(human = None),
           goal.copy(human = Some(goal.human.get.copy(hostContext = None))), crossed,
           goal.copy(resultType = Some("RepositorySyncHumanConflictAnswer")), goal.copy(repositoryHuman = repository.human))
         When("the finite adapter receives every explicit invalid argument, file or selected output variant")
-        val failures = argumentVariants.map(Main.prepareC(_, read(selectedFiles))) ++ fileVariants.map(files => Main.prepareC(args, read(files))) ++
+        val failures = argumentvariants.map(Main.prepareC(_, _read_(selectedfiles))) ++ filevariants.map(files => Main.prepareC(args, _read_(files))) ++
           requests.map(_tool.prepareRecord("GoalPhase", "human", _, goalAnswer))
         Then("each returns failure without a successful bootstrap row or guessed answer")
         failures.foreach(_.isSuccess shouldBe false)
@@ -222,7 +222,7 @@ final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with G
         }
         val canonical = cases.map { (family, output, answer) => take(_tool.prepare(family, "human", output, answer)) }
         val context = goal.human.get.hostContext.get
-        val badQuestions = Vector("inputType", "resultType").map(key => context.copy(question = record(
+        val badquestions = Vector("inputType", "resultType").map(key => context.copy(question = record(
           json(context.question).mapObject(_.add(key, Json.fromString("foreign-type"))))))
         val invalid = Vector(goal.copy(kind = "Wait"), goal.copy(human = None),
           goal.copy(human = Some(goal.human.get.copy(hostContext = None))),
@@ -230,10 +230,10 @@ final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with G
           goal.copy(repositoryHuman = repository.human),
           goal.copy(human = Some(goal.human.get.copy(hostContext = Some(context.copy(componentInstance = ""))))),
           goal.copy(human = Some(goal.human.get.copy(hostContext = Some(context.copy(purpose = Purpose.RepositoryHuman.identity)))))) ++
-          badQuestions.map(c => goal.copy(human = Some(goal.human.get.copy(hostContext = Some(c)))))
+          badquestions.map(c => goal.copy(human = Some(goal.human.get.copy(hostContext = Some(c)))))
         val failures = invalid.map(_tool.prepareNormalCommand("GoalPhase", "human", _, goalAnswer))
         val selected = _tool.files(goal, goalAnswer).updated("request.json", _tool.normalCommandJson(goal))
-        val missingParticipant = Main.prepareC(_tool.arguments("GoalPhase", "human") - "participant",
+        val missingparticipant = Main.prepareC(_tool.arguments("GoalPhase", "human") - "participant",
           path => Consequence.success(selected(path)))
         Then("normal wire rows equal canonical native payloads and crossed owner type or ambiguous and missing contexts fail")
         seeds.zip(canonical).foreach { (actual, expected) => _tool.row(actual) shouldBe _tool.row(expected) }
@@ -241,7 +241,7 @@ final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with G
         seeds.map(_tool.evidence(_).purpose) shouldBe Vector(Purpose.GoalHuman.identity,
           Purpose.RepositoryHuman.identity, Purpose.RepositoryHuman.identity)
         failures.foreach(_.isSuccess shouldBe false)
-        missingParticipant.isSuccess shouldBe false
+        missingparticipant.isSuccess shouldBe false
         Consequence.unit
       }
     }

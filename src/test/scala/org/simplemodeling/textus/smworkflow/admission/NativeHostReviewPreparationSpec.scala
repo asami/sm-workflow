@@ -58,14 +58,14 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
   }
 
   // Explicit specification issuance, not a production issuer or stored history.
-  private def _work[A](workflow: String, input: A, inputType: String, resultType: String,
+  private def _work[A](workflow: String, input: A, inputtype: String, resulttype: String,
     completion: StateMachineOperationIdentity): WorkflowInteraction[A, Nothing] = {
     val handle = WorkflowHandle(SmWorkflowComponent.componentId, WorkflowDefinitionIdentity(workflow),
       WorkflowDefinitionRevision("specification-executable"), InstanceIdentity("instance"))
     val request = ContinuationRequest(StateMachineRunIdentity("specification-run"), ContinuationIdentity("specification-review-slot"),
       StateMachineRevision("8"), StateMachineRequiredOperationIdentity("specification-review-capability"),
-      StateMachineOperationIdentity("SpecificationReview", "review"), Some(TypedValue(inputType, input)),
-      Some(StateMachineResultTypeReference(resultType)), ContextBundle("Specification input", Vector.empty, Vector.empty,
+      StateMachineOperationIdentity("SpecificationReview", "review"), Some(TypedValue(inputtype, input)),
+      Some(StateMachineResultTypeReference(resulttype)), ContextBundle("Specification input", Vector.empty, Vector.empty,
         ContextSnapshot(handle.workflowRevision.value)), CompletionContract("specification-completion", Vector.empty),
       EvidenceContract("specification-evidence", Vector.empty), completion)
     WorkflowInteraction[A, Nothing](handle, WorkflowContinuation.WorkOrder(request,
@@ -80,11 +80,11 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
   private def _typed_repository_work = _work("RepositorySyncWorkflow", _typed_repository_input,
     RepositorySyncNativeMergeReview.inputCodec.typeIdentity, RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
     RepositorySyncNativeMergeReviewContinuation.completionOperation)
-  private def _submitted[W, A](work: WorkflowInteraction[W, Nothing], value: A, typeIdentity: String): ContinuationResult[A] = {
+  private def _submitted[W, A](work: WorkflowInteraction[W, Nothing], value: A, typeidentity: String): ContinuationResult[A] = {
     val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[W]].request
     val reference = ContextReference(_reference.identity, _reference.revision)
     ContinuationResult(work.handle, request.runId, request.continuationId, request.expectedRevision, request.context.snapshot,
-      TypedValue(typeIdentity, value), reference, Vector.empty, ExecutionEvidence(Vector(reference), _execution.workerIdentity))
+      TypedValue(typeidentity, value), reference, Vector.empty, ExecutionEvidence(Vector(reference), _execution.workerIdentity))
   }
   private def _wire(record: Record): Record = take(new RecordDecoder().json(take(record.toJsonStringC)))
   private def _json(record: Record): Json = io.circe.parser.parse(take(record.toJsonStringC)).toOption.get
@@ -143,14 +143,14 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         target.hcursor.downField("test_checks").downArray.downField("sbt").focus
           .orElse(target.hcursor.downField("testChecks").downArray.downField("sbt").focus) should not be empty
         val effective = plan.effectiveAcceptance.get.asJson
-        def contextWith(value: Json) = context.copy(target = _record(value))
+        def _context_with_(value: Json) = context.copy(target = _record(value))
         val canonical = target.mapObject(_.remove("effective_acceptance").add("effectiveAcceptance", effective))
         val alternatives = Vector(canonical, canonical.mapObject(_.remove("effectiveAcceptance").add("effective_acceptance", effective)),
           canonical.mapObject(_.add("effective_acceptance", effective)))
         alternatives.foreach { target =>
           Given("declaration-only, wire-only or agreeing effectiveAcceptance/effective_acceptance spellings")
           When("passive preparation consumes the fixed aliases")
-          val actual = take(Preparation.goalC(contextWith(target), supplied, _reference, _execution, _declared.issuer, _now))
+          val actual = take(Preparation.goalC(_context_with_(target), supplied, _reference, _execution, _declared.issuer, _now))
           Then("the exact selected quality and typed SBT binding remains the same")
           _evidence(actual).binding shouldBe evidence.binding
         }
@@ -159,7 +159,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         Vector(conflicting, Json.True).foreach { different =>
           Given("contradictory effectiveAcceptance and effective_acceptance values")
           When("the fixed alias intake receives both spellings")
-          val failed = Preparation.goalC(contextWith(canonical.mapObject(_.add("effective_acceptance", different))),
+          val failed = Preparation.goalC(_context_with_(canonical.mapObject(_.add("effective_acceptance", different))),
             supplied, _reference, _execution, _declared.issuer, _now)
           Then("neither spelling wins over contradictory quality meaning")
           failed.isSuccess shouldBe false
@@ -475,8 +475,8 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         groups.foreach { (label, context, names, path) =>
           val ishandle = label.endsWith("handle")
           val original = _json(if (ishandle) context.completion.handle else context.target)
-          def selected(value: Json): Json = if (path.isEmpty) value else value.hcursor.downField("checks").downArray.focus.get
-          def replace(value: Json): V.WorkflowHostReviewContext = {
+          def _selected_(value: Json): Json = if (path.isEmpty) value else value.hcursor.downField("checks").downArray.focus.get
+          def _replace_(value: Json): V.WorkflowHostReviewContext = {
             val updated = if (path.isEmpty) value else original.mapObject(_.add("checks", Json.fromValues(
               original.hcursor.downField("checks").focus.get.asArray.get.updated(0, value))))
             if (ishandle) context.copy(completion = context.completion.copy(handle = _record(updated)))
@@ -484,10 +484,10 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           }
           names.foreach { (declaration, wire) =>
             Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R1,R2,R4,R6; Example: E8; " + label + " pair " + declaration + "/" + wire)
-            val fields = selected(original).asObject.get
+            val fields = _selected_(original).asObject.get
             val value = fields(declaration).get
-            val matching = replace(Json.fromJsonObject(fields.add(wire, value)))
-            val snake = replace(Json.fromJsonObject(fields.remove(declaration).add(wire, value)))
+            val matching = _replace_(Json.fromJsonObject(fields.add(wire, value)))
+            val snake = _replace_(Json.fromJsonObject(fields.remove(declaration).add(wire, value)))
             val different = value.asString.map(s => Json.fromString(s + "-conflict"))
               .orElse(value.asArray.map(a => Json.fromValues(a :+ Json.fromString("conflict"))))
               .getOrElse(Json.fromInt(1))
@@ -517,7 +517,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
             invalid.foreach { (condition, alternative) =>
               Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R1,R2,R4,R6; Example: E8; " + label + " " + declaration + " with " + condition)
               When("passive preparation receives that consumed name alternative")
-              val refused = _prepare(replace(Json.fromJsonObject(alternative)))
+              val refused = _prepare(_replace_(Json.fromJsonObject(alternative)))
               Then("the " + condition + " alternative fails without a preferred spelling or manufactured value")
               refused.isSuccess shouldBe false
             }
@@ -586,9 +586,9 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           val prepared = take(_prepare(context))
           val evidence = _evidence(prepared)
           val raw = prepared.record.getString(NativeHostEvidence.storageField).get
-          val checksKey = if (purpose == Purpose.GoalReview) "testChecks" else "checks"
+          val checkskey = if (purpose == Purpose.GoalReview) "testChecks" else "checks"
           val stored = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
-            .hcursor.downField("binding").downField("attestation").downField("target").downField(checksKey).downArray.downField("sbt")
+            .hcursor.downField("binding").downField("attestation").downField("target").downField(checkskey).downArray.downField("sbt")
           Then("raw canonical storage retains each explicit fact and the original owner completion and selected meaning")
           stored.get[String]("kind") shouldBe Right("test-only")
           stored.get[String]("outcome") shouldBe Right("succeeded")
@@ -604,7 +604,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           When("the live managed Reader loads the row against original and changed valid selected test counts")
           val accepted = take(reader.loadC(call.core, purpose, _key, expected))
           val changed = NativeHostHumanEvidenceFixture.alter(expected,
-            Vector("attestation", "target", checksKey))(checks => Json.fromValues(checks.asArray.get.map(check =>
+            Vector("attestation", "target", checkskey))(checks => Json.fromValues(checks.asArray.get.map(check =>
               NativeHostHumanEvidenceFixture.alter(check, Vector("sbt", "selection"))(
           _.mapObject(_.add("testsRun", Json.fromLong(26L)))))))
           Then("the actual native binding is observed and a different selected count cannot reuse the stored review")
@@ -620,14 +620,14 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
       _with_core { call =>
         val contexts = Vector(take(NativeHostReviewContext.goalC(call.core, _goal_work(_typed_goal_input))).get,
           take(NativeHostReviewContext.repositoryC(call.core, _typed_repository_work)))
-        val selectionNames = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites", "testsRun" -> "tests_run")
+        val selectionnames = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites", "testsRun" -> "tests_run")
         // Adversarial supplied Records retain explicit nulls at passive intake;
         // the ordinary JSON decoder drops null object fields.
-        def suppliedValue(value: Json): Any = value.fold[Any](null, boolean => boolean,
-          number => number.toBigDecimal.get, string => string, array => array.map(suppliedValue),
-          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> suppliedValue(field) }))
-        def suppliedRecord(value: Json): Record = {
-          val record = suppliedValue(value).asInstanceOf[Record]
+        def _supplied_value_(value: Json): Any = value.fold[Any](null, boolean => boolean,
+          number => number.toBigDecimal.get, string => string, array => array.map(_supplied_value_),
+          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> _supplied_value_(field) }))
+        def _supplied_record_(value: Json): Record = {
+          val record = _supplied_value_(value).asInstanceOf[Record]
           _json(record) shouldBe value
           record
         }
@@ -638,18 +638,18 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           val check = target.hcursor.downField(key).downArray.focus.get
           val facts = check.hcursor.downField("sbt").focus.get
           val selection = facts.hcursor.downField("selection").focus.get
-          def selected(check: Json): V.WorkflowHostReviewContext = context.copy(target = _record(target.mapObject(_.add(key, Json.arr(check)))))
-          def selectedPresent(check: Json): V.WorkflowHostReviewContext = context.copy(target = suppliedRecord(target.mapObject(_.add(key, Json.arr(check)))))
-          def withSelection(value: Json): Json = check.mapObject(_.add("sbt", facts.mapObject(_.add("selection", value))))
+          def _selected_(check: Json): V.WorkflowHostReviewContext = context.copy(target = _record(target.mapObject(_.add(key, Json.arr(check)))))
+          def _selected_present_(check: Json): V.WorkflowHostReviewContext = context.copy(target = _supplied_record_(target.mapObject(_.add(key, Json.arr(check)))))
+          def _with_selection_(value: Json): Json = check.mapObject(_.add("sbt", facts.mapObject(_.add("selection", value))))
           val canonical = _evidence(take(_prepare(context)))
-          selectionNames.foreach { (declaration, wire) =>
+          selectionnames.foreach { (declaration, wire) =>
             val fields = selection.asObject.get
             val value = fields(declaration).get
             val alternatives = Vector(fields, fields.remove(declaration).add(wire, value), fields.add(wire, value))
             alternatives.foreach { alternative =>
               Given("the typed " + key + " selection with declaration-only snake-only or agreeing " + declaration + " aliases")
               When("passive preparation canonicalizes that bounded nested selection")
-              val prepared = take(_prepare(selected(withSelection(Json.fromJsonObject(alternative)))))
+              val prepared = take(_prepare(_selected_(_with_selection_(Json.fromJsonObject(alternative)))))
               Then("the selected binding preserves the explicit typed facts")
               _evidence(prepared).binding shouldBe canonical.binding
             }
@@ -662,12 +662,12 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
             invalid.foreach { alternative =>
               Given("a missing malformed or contradictory consumed nested " + declaration + " alias")
               When("passive preparation consumes both supplied spellings")
-              val refused = _prepare(selectedPresent(withSelection(Json.fromJsonObject(alternative))))
+              val refused = _prepare(_selected_present_(_with_selection_(Json.fromJsonObject(alternative))))
               Then("neither alias overrides malformed or contradictory presence")
               refused.isSuccess shouldBe false
             }
           }
-          val invalidSelections = Vector(
+          val invalidselections = Vector(
             selection.mapObject(_.add("completedSuites", Json.fromBigDecimal(BigDecimal("2.5")))),
             selection.mapObject(_.add("completedSuites", Json.fromLong(Int.MaxValue.toLong + 1))),
             selection.mapObject(_.add("testsRun", Json.fromBigDecimal(BigDecimal("25.5")))),
@@ -675,30 +675,30 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
             selection.mapObject(_.add("testsRun", Json.fromInt(0))),
             selection.mapObject(_.add("completedSuites", Json.fromInt(1))),
             selection.mapObject(_.add("testClasses", Json.arr(Json.fromString("invalid")))), Json.Null, Json.True)
-          val invalidFacts = Vector(Json.Null, Json.True, Json.obj(), facts.mapObject(_.add("kind", Json.fromString("unknown"))),
+          val invalidfacts = Vector(Json.Null, Json.True, Json.obj(), facts.mapObject(_.add("kind", Json.fromString("unknown"))),
             facts.mapObject(_.add("outcome", Json.fromString("unknown")))) ++
-            invalidSelections.map(value => facts.mapObject(_.add("selection", value)))
-          invalidFacts.foreach { malformed =>
+            invalidselections.map(value => facts.mapObject(_.add("selection", value)))
+          invalidfacts.foreach { malformed =>
             Given("present malformed sbt or selected classes suite count or test count in " + key)
             When("passive preparation delegates normalized facts to the existing Facts decoder")
-            val refused = _prepare(selectedPresent(check.mapObject(_.add("sbt", malformed))))
+            val refused = _prepare(_selected_present_(check.mapObject(_.add("sbt", malformed))))
             Then("invalid presence is refused without historical defaults or relaxed integer rules")
             refused.isSuccess shouldBe false
           }
           Given("historical absent sbt and an explicit empty check array in " + key)
           When("passive preparation encodes those absence shapes")
-          val historical = _evidence(take(_prepare(selected(check.mapObject(_.remove("sbt"))))))
+          val historical = _evidence(take(_prepare(_selected_(check.mapObject(_.remove("sbt"))))))
           val empty = _evidence(take(_prepare(context.copy(target = _record(target.mapObject(_.add(key, Json.arr())))))))
           Then("no typed facts are manufactured and an explicitly empty array remains explicit")
           historical.binding.hcursor.downField("attestation").downField("target").downField(key).downArray.downField("sbt").focus shouldBe None
           empty.binding.hcursor.downField("attestation").downField("target").get[Vector[Json]](key) shouldBe Right(Vector.empty)
           if (goal) {
-            val snakeSelection = selectionNames.foldLeft(selection.asObject.get) { case (fields, (declaration, wire)) =>
+            val snakeselection = selectionnames.foldLeft(selection.asObject.get) { case (fields, (declaration, wire)) =>
               fields.remove(declaration).add(wire, fields(declaration).get)
             }
-            val snakeCheck = withSelection(Json.fromJsonObject(snakeSelection)).mapObject(
+            val snakecheck = _with_selection_(Json.fromJsonObject(snakeselection)).mapObject(
               fields => fields.remove("exitCode").add("exit_code", fields("exitCode").get).add("annotation", Json.True))
-            val snake = Json.arr(snakeCheck)
+            val snake = Json.arr(snakecheck)
             Vector(target.asObject.get.remove("testChecks").add("test_checks", snake),
               target.asObject.get.add("test_checks", snake)).foreach { fields =>
               Given("Goal test_checks uses snake nested fields while testChecks is absent or agrees semantically")
@@ -707,12 +707,12 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
               Then("different spellings and inert check annotations retain one canonical selected meaning")
               prepared.binding shouldBe canonical.binding
             }
-            val malformedArrays = Vector(Json.Null, Json.True, Json.arr(Json.Null), Json.arr(Json.True), Json.arr(),
-              Json.arr(withSelection(selection.mapObject(_.add("testsRun", Json.fromInt(26))))))
-            malformedArrays.foreach { value =>
+            val malformedarrays = Vector(Json.Null, Json.True, Json.arr(Json.Null), Json.arr(Json.True), Json.arr(),
+              Json.arr(_with_selection_(selection.mapObject(_.add("testsRun", Json.fromInt(26))))))
+            malformedarrays.foreach { value =>
               Given("testChecks and test_checks have malformed or contradictory selected arrays")
               When("passive preparation consumes the structured Goal aliases")
-              val refused = _prepare(context.copy(target = suppliedRecord(target.mapObject(_.add("test_checks", value)))))
+              val refused = _prepare(context.copy(target = _supplied_record_(target.mapObject(_.add("test_checks", value)))))
               Then("the alternate spelling cannot conceal malformed presence or different selected checks")
               refused.isSuccess shouldBe false
             }

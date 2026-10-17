@@ -128,14 +128,14 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
       }
       Given("missing or wrong project schema, invalid JSON and invalid typed option containers")
       val json = _project_json(_project)
-      val duplicateConfig = _project_json(B.Project(Vector(_behavior, _behavior.copy(required = false))))
-      val unknownScopeConfig = _project_json(B.Project(Vector(_behavior.copy(scope = "unknown"))))
+      val duplicateconfig = _project_json(B.Project(Vector(_behavior, _behavior.copy(required = false))))
+      val unknownscopeconfig = _project_json(B.Project(Vector(_behavior.copy(scope = "unknown"))))
       When("the existing decoder and typed Plan admission consume those values")
       val failures = Vector(_resolve(Some(ConfigurationValue.StringValue("not-json"))),
         _resolve(Some(_configuration(json.mapObject(_.remove("schemaVersion"))))),
         _resolve(Some(_configuration(json.mapObject(_.add("schemaVersion", Json.fromString("other")))))),
         _resolve(Some(ConfigurationValue.BooleanValue(true))), B.decodeProjectC(null), B.resolveProjectC(null),
-        _resolve(Some(_configuration(duplicateConfig))), _resolve(Some(_configuration(unknownScopeConfig))),
+        _resolve(Some(_configuration(duplicateconfig))), _resolve(Some(_configuration(unknownscopeconfig))),
         B.captureC(null, _plain), B.captureC(None, _plain.copy(acceptance = null)),
         B.captureC(None, _plain.copy(effectiveAcceptance = null)), B.captureC(None, _plan),
         B.validateEffectiveC(B.Effective(None, Vector(B.EffectiveCondition("valid", "all", true, "Valid", "unknown")))))
@@ -203,10 +203,10 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
       roundtrip shouldBe invalid
       B.validateReportC(roundtrip.get).isSuccess shouldBe false
       B.publicReport(null) shouldBe null
-      val invalidAdoption = Some(B.Adoption(null, Vector(null)))
-      val invalidEffective = Some(B.Effective(null, Vector(null)))
-      B.internalAdoption(B.publicAdoption(invalidAdoption)) shouldBe invalidAdoption
-      B.internalEffective(B.publicEffective(invalidEffective)) shouldBe invalidEffective
+      val invalidadoption = Some(B.Adoption(null, Vector(null)))
+      val invalideffective = Some(B.Effective(null, Vector(null)))
+      B.internalAdoption(B.publicAdoption(invalidadoption)) shouldBe invalidadoption
+      B.internalEffective(B.publicEffective(invalideffective)) shouldBe invalideffective
     }
   }
 

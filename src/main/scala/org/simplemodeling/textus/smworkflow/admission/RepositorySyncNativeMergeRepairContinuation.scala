@@ -181,10 +181,10 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
               ActionExecution.Completed(StateMachineOperationResult(closingType, submitted.resultReference))), Some(next))
         }
       }
-      val actualInstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
+      val actualinstances = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
       val generated = SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation.specification
       WorkflowCompletionServiceOperation.bindC(provided, operation.get, generated.request, generated.response,
-        codec, ContinuationRuntime.empty, issued, actualInstances, declaration.configuration,
+        codec, ContinuationRuntime.empty, issued, actualinstances, declaration.configuration,
         () => throw new IllegalStateException("Repair completion requires canonical managed UoW"), Some(closing), Some(native),
         descriptiveAttributes = generated.content.descriptiveAttributes)
     }

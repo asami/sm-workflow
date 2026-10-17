@@ -1,10 +1,15 @@
 # Managed Test Suites: Phase 5/5.1/6–6.3/7 delivery and acceptance
 
 Date: 2026-10-06
-Status: planned; implementation/executable acceptance not performed by this update
-Current status: the Phase 6 owned rows are accepted through the original S6-01
-protected independent Step review. Its Step commits and Phase review/release
-remain pending; all other Phase ownership and completion states are preserved.
+Status: closed; PHASE-6 acceptance scope only
+Phase acceptance scope: PHASE-6
+Current status: closed; the Phase 6 owned rows are accepted through the original S6-01
+protected independent Step review and its five repository-local acceptance
+commits are complete. The sole Phase review and its M0 naming repair are
+accepted. This final local release projection includes the accepted shared
+aggregate tooling correction; formal closure requires the native release
+commit and readback.
+All other Phase ownership and completion states are preserved.
 Owner: each row's declared Phase owner; the Phase 6 family shares this checklist.
 Update rule: update a row from actual evidence and its owning Phase's existing
 acceptance decision; preserve historical allocations and other Phase ownership.

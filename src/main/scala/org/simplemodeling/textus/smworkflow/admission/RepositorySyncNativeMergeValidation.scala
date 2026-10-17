@@ -248,7 +248,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def productSuccessful(receipt: Receipt,
     expectedKind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Boolean =
     _receipt_kind(receipt, expectedKind) && receipt.termination == "exited" && receipt.exitCode != null &&
-      receipt.exitCode.contains(0) && storedText(receipt.stdout) && storedText(receipt.stderr) &&
+      receipt.exitCode.contains(0) && _stored_text(receipt.stdout) && _stored_text(receipt.stderr) &&
       receipt.sbt.forall(_.outcome == WorkflowSbtValidation.Outcome.Succeeded)
 
   /** Structural failures newly common to both parents block. Findings inherited
@@ -257,7 +257,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def successful(receipts: Vector[Receipt], merge: Boolean = true, selected: Vector[Check] = Vector.empty): Boolean = {
     def structural(r: Receipt): Option[GitIndexCheck] =
       if (r == null || r.termination != "exited" || r.exitCode == null || r.exitCode.isEmpty ||
-          !storedText(r.stdout) || !storedText(r.stderr)) None
+          !_stored_text(r.stdout) || !_stored_text(r.stderr)) None
       else GitIndexCheck.parseStoredC(r.exitCode.get, r.stdout, r.stderr).toOption
     val count = if (merge) 2 else 1
     val first = receipts.take(count)
@@ -270,7 +270,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
           productSuccessful(receipt, check.kind))
       }
   }
-  private def storedText(text: String): Boolean = text != null && !text.contains('\u0000') &&
+  private def _stored_text(text: String): Boolean = text != null && !text.contains('\u0000') &&
     StandardCharsets.UTF_8.newEncoder().canEncode(text) && text.getBytes(StandardCharsets.UTF_8).length <= 65536
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

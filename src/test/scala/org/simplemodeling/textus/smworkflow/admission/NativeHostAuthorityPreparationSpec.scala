@@ -228,28 +228,28 @@ final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers
       withCore { call =>
         val step = take(contextC(call.core, Purpose.StepClosure))
         val phase = take(contextC(call.core, Purpose.PhaseClosure))
-        val stepJson = json(step.scope)
-        val phaseJson = json(phase.scope)
-        val wrongStepStrings = Vector("instance", "sourceRevision", "plan", "planRevision", "step", "reviewEvidence").flatMap { field =>
-          Vector(stepJson.mapObject(_.remove(field)), stepJson.mapObject(_.add(field, Json.True)))
+        val stepjson = json(step.scope)
+        val phasejson = json(phase.scope)
+        val wrongstepstrings = Vector("instance", "sourceRevision", "plan", "planRevision", "step", "reviewEvidence").flatMap { field =>
+          Vector(stepjson.mapObject(_.remove(field)), stepjson.mapObject(_.add(field, Json.True)))
         }
-        val wrongPhaseStrings = Vector("instance", "sourceRevision", "review", "childInvocation").flatMap { field =>
-          Vector(phaseJson.mapObject(_.remove(field)), phaseJson.mapObject(_.add(field, Json.True)))
+        val wrongphasestrings = Vector("instance", "sourceRevision", "review", "childInvocation").flatMap { field =>
+          Vector(phasejson.mapObject(_.remove(field)), phasejson.mapObject(_.add(field, Json.True)))
         }
-        val wrongStep = wrongStepStrings ++ Vector(
-          stepJson.mapObject(_.add("generation", Json.True)), stepJson.mapObject(_.add("generation", Json.fromDoubleOrNull(1.5))),
-          stepJson.mapObject(_.remove("generation")), stepJson.mapObject(_.add("generation", Json.fromString("1"))),
-          stepJson.mapObject(_.remove("candidate")), stepJson.mapObject(_.add("parent", Json.True)),
-          stepJson.mapObject(_.add("parent", Json.obj("head" -> Json.True, "tree" -> Json.fromString(base.tree)))))
-        val wrongPhase = wrongPhaseStrings ++ Vector(phaseJson.mapObject(_.add("completed", Json.True)), phaseJson.mapObject(_.remove("completed")),
-          phaseJson.mapObject(_.add("completed", Json.arr(Json.obj("step" -> Json.True, "commit" -> Json.True)))),
-          phaseJson.mapObject(_.add("completed", Json.arr(Json.obj("step" -> Json.fromString("step-1"), "commit" -> Json.obj(
+        val wrongstep = wrongstepstrings ++ Vector(
+          stepjson.mapObject(_.add("generation", Json.True)), stepjson.mapObject(_.add("generation", Json.fromDoubleOrNull(1.5))),
+          stepjson.mapObject(_.remove("generation")), stepjson.mapObject(_.add("generation", Json.fromString("1"))),
+          stepjson.mapObject(_.remove("candidate")), stepjson.mapObject(_.add("parent", Json.True)),
+          stepjson.mapObject(_.add("parent", Json.obj("head" -> Json.True, "tree" -> Json.fromString(base.tree)))))
+        val wrongphase = wrongphasestrings ++ Vector(phasejson.mapObject(_.add("completed", Json.True)), phasejson.mapObject(_.remove("completed")),
+          phasejson.mapObject(_.add("completed", Json.arr(Json.obj("step" -> Json.True, "commit" -> Json.True)))),
+          phasejson.mapObject(_.add("completed", Json.arr(Json.obj("step" -> Json.fromString("step-1"), "commit" -> Json.obj(
             "identity" -> Json.fromString(first.identity), "parent" -> Json.True, "tree" -> Json.fromString(first.tree)))))),
-          phaseJson.mapObject(_.add("base", Json.obj("head" -> Json.fromString(base.head), "tree" -> Json.True))),
-          phaseJson.mapObject(_.add("plan", Json.Null)))
+          phasejson.mapObject(_.add("base", Json.obj("head" -> Json.fromString(base.head), "tree" -> Json.True))),
+          phasejson.mapObject(_.add("plan", Json.Null)))
         val unsupported = Purpose.values.toVector.filterNot(purposes.contains).map(p => step.copy(purpose = p.identity))
         val contexts = Vector(null, step.copy(componentInstance = ""), step.copy(scope = null), step.copy(purpose = null)) ++
-          wrongStep.map(value => step.copy(scope = record(value))) ++ wrongPhase.map(value => phase.copy(scope = record(value))) ++ unsupported
+          wrongstep.map(value => step.copy(scope = record(value))) ++ wrongphase.map(value => phase.copy(scope = record(value))) ++ unsupported
         When("passive preparation consumes malformed metadata or selected scope and then an annotated equivalent target")
         val failures = contexts.map(Preparation.goalC(_, reference, participant, issuer, now)) ++ Vector(
           Preparation.goalC(step, null, participant, issuer, now),
@@ -258,17 +258,17 @@ final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers
           Preparation.goalC(step, reference, null, issuer, now), Preparation.goalC(step, reference, "", issuer, now),
           Preparation.goalC(step, reference, participant, null, now), Preparation.goalC(step, reference, participant, "", now),
           Preparation.goalC(step, reference, participant, issuer, null))
-        val annotatedStep = step.copy(scope = record(stepJson.mapObject(_.add("commandGrant", Json.True).add("diagnostic", Json.Null))))
-        val annotatedPhase = phase.copy(scope = record(phaseJson.mapObject(_.add("grant", Json.True).add("plan",
-          phaseJson.hcursor.downField("plan").focus.get.mapObject(_.add("steps", Json.True).add("repairLimit", Json.Null))))))
+        val annotatedstep = step.copy(scope = record(stepjson.mapObject(_.add("commandGrant", Json.True).add("diagnostic", Json.Null))))
+        val annotatedphase = phase.copy(scope = record(phasejson.mapObject(_.add("grant", Json.True).add("plan",
+          phasejson.hcursor.downField("plan").focus.get.mapObject(_.add("steps", Json.True).add("repairLimit", Json.Null))))))
         val originals = Vector(_prepare(step), _prepare(phase))
-        val annotated = Vector(_prepare(annotatedStep), _prepare(annotatedPhase))
-        val missingOwners = Vector(NativeHostAuthorityContext.stepC(call.core.copy(component = None), stepInput),
+        val annotated = Vector(_prepare(annotatedstep), _prepare(annotatedphase))
+        val missingowners = Vector(NativeHostAuthorityContext.stepC(call.core.copy(component = None), stepInput),
           NativeHostAuthorityContext.phaseC(call.core.copy(component = None), phaseInput),
           NativeHostAuthorityContext.stepC(call.core, null), NativeHostAuthorityContext.phaseC(call.core, null))
         Then("all consumed failures refuse and annotations create no authority or body certificate")
         failures.foreach(_.isSuccess shouldBe false)
-        missingOwners.foreach(_.isSuccess shouldBe false)
+        missingowners.foreach(_.isSuccess shouldBe false)
         annotated.map(_.record.getString(NativeHostEvidence.storageField)) shouldBe originals.map(_.record.getString(NativeHostEvidence.storageField))
         annotated.foreach(value => evidence(value).binding.noSpaces should not include "grant")
         Consequence.unit
@@ -302,11 +302,11 @@ final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers
         val accepted = entries.map { (purpose, _, target) => take(reader.loadC(call.core, purpose, authorityKey(purpose), target)) }
         val crossed = entries.flatMap { (purpose, prepared, target) =>
           val value = evidence(prepared)
-          val foreignOwner = target.mapObject(_.add("componentInstance", Json.fromString("foreign-owner")))
-          val foreignScope = NativeHostHumanEvidenceFixture.alter(target, Vector("scope", "candidate"))(
+          val foreignowner = target.mapObject(_.add("componentInstance", Json.fromString("foreign-owner")))
+          val foreignscope = NativeHostHumanEvidenceFixture.alter(target, Vector("scope", "candidate"))(
             _.mapObject(_.add("tree", Json.fromString("9" * 40))))
-          Vector(reader.loadC(call.core, purpose, authorityKey(purpose), foreignOwner),
-            reader.loadC(call.core, purpose, authorityKey(purpose), foreignScope),
+          Vector(reader.loadC(call.core, purpose, authorityKey(purpose), foreignowner),
+            reader.loadC(call.core, purpose, authorityKey(purpose), foreignscope),
             _observe(value.copy(lookupIdentity = "foreign-lookup"), purpose, target),
             _observe(value.copy(issuer = "foreign-issuer"), purpose, target),
             _observe(value.copy(purpose = Purpose.RepositoryEffect.identity), purpose, target),
@@ -315,13 +315,13 @@ final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers
         val metadata = entries.map { (purpose, prepared, target) =>
           _observe(evidence(prepared).copy(reference = "another-explicit-reference", revision = "2", participant = "another-explicit-operator"), purpose, target)
         }
-        val absentLookup = entries.map { (purpose, _, target) => take(reader.loadC(call.core, purpose, "foreign-lookup", target)) }
+        val absentlookup = entries.map { (purpose, _, target) => take(reader.loadC(call.core, purpose, "foreign-lookup", target)) }
         val contextfree = entries.map { (purpose, _, target) => reader.loadC(null, purpose, authorityKey(purpose), target) }
         Then("only matching physical rows are admitted; valid reference and participant metadata is preserved without target correlation")
         accepted.map(_.nonEmpty) shouldBe Vector(true, true)
         crossed.foreach(_.isSuccess shouldBe false)
         metadata.foreach(_.isSuccess shouldBe true)
-        absentLookup shouldBe Vector(None, None)
+        absentlookup shouldBe Vector(None, None)
         contextfree.foreach(_.isSuccess shouldBe false)
         retained = Some((reader, call.core, entries.head._1, entries.head._3))
         Consequence.unit

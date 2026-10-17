@@ -76,7 +76,7 @@ final class NativeHostSplitStartInputSpec extends AnyWordSpec with Matchers with
       withCore { call =>
         val args = _arguments(call.core.component.get.core.instanceId.canonicalKey)
         val files = _files(F.record)
-        val badArguments: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
+        val badarguments: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
           args.updated("unknown", "value"), args.updated("command", "start")) ++
           args.keys.toVector.map(args - _) ++ args.keys.toVector.flatMap(key =>
             Vector[String](null, "", " ", " leading", "control\nvalue").map(value => args.updated(key, value))) ++ Vector(
@@ -88,7 +88,7 @@ final class NativeHostSplitStartInputSpec extends AnyWordSpec with Matchers with
           args.updated("collection", "entity:smworkflow.cli.host_evidence.extra"))
         val af = SplitPhaseTypedStartJsonV1.storageField
         val sf = SplitPhaseExplicitPlanningInputJsonV1.storageField
-        val badFiles = files.keys.toVector.map(files - _) ++ Vector(files.updated("allocation.json", "not-json"),
+        val badfiles = files.keys.toVector.map(files - _) ++ Vector(files.updated("allocation.json", "not-json"),
           files.updated("source.json", "{}"), files.updated("allocation-reference.json", "{}"),
           files.updated("reference.json", "{\"identity\":null,\"revision\":\"1\"}"),
           files.updated("allocation-reference.json", "{\"identity\":\"selected\",\"revision\":null}"),
@@ -97,7 +97,7 @@ final class NativeHostSplitStartInputSpec extends AnyWordSpec with Matchers with
           files.updated("source.json", take(sourceRow(F.record.copy(source = F.source.copy(
             reference = F.source.reference.copy(identity = "foreign-source")))).toJsonStringC)))
         When("ordinary argument and typed file readers receive the malformed supplied values")
-        val failures = badArguments.map(Main.prepareC(_, _read(files))) ++ badFiles.map(input => Main.prepareC(args, _read(input)))
+        val failures = badarguments.map(Main.prepareC(_, _read(files))) ++ badfiles.map(input => Main.prepareC(args, _read(input)))
         Then("every invalid case refuses without a successful importer result")
         failures.foreach(_.isSuccess shouldBe false)
         Consequence.unit
@@ -123,8 +123,8 @@ final class NativeHostSplitStartInputSpec extends AnyWordSpec with Matchers with
         }))
         val original = take(Main.prepareC(args, _read(files)))
         val unsupported = Main.prepareC(_replace(args, "collection", "ENTITY:Major_1.Minor_2.Host_3"), _read(files))
-        val booleanReferenceFiles = files.updated("reference.json", "{\"identity\":true,\"revision\":\"1\"}")
-        val converted = take(Main.prepareC(args, _read(booleanReferenceFiles)))
+        val booleanreferencefiles = files.updated("reference.json", "{\"identity\":true,\"revision\":\"1\"}")
+        val converted = take(Main.prepareC(args, _read(booleanreferencefiles)))
         Then("only named reads occur and the existing generated String conversion and native selected target remain unchanged")
         reads shouldBe Vector("allocation-reference.json", "allocation.json", "source.json", "reference.json")
         _json(seed).hcursor.downField("datastore").downArray.get[String]("collection").toOption shouldBe

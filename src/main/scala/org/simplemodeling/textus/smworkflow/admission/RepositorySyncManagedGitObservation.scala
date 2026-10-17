@@ -39,22 +39,22 @@ private[smworkflow] object RepositorySyncManagedGitObservation {
 
   def inspectC(core: ActionCall.Core): Consequence[Native] = for {
     branch <- branchC(core)
-    head <- valueC(core, GitOperation.Head)
-    tree <- valueC(core, GitOperation.Tree)
-    shallow <- valueC(core, GitOperation.Shallow)
+    head <- _value_c(core, GitOperation.Head)
+    tree <- _value_c(core, GitOperation.Tree)
+    shallow <- _value_c(core, GitOperation.Shallow)
     _ <- if (!shallow) Consequence.unit else invalid("shallow history cannot establish convergence")
-    replacements <- valueC(core, GitOperation.Replacements)
+    replacements <- _value_c(core, GitOperation.Replacements)
     _ <- if (replacements.isEmpty) Consequence.unit else invalid("replacement history cannot establish convergence")
-    merge <- valueC(core, GitOperation.MergeHead)
-    dirty <- valueC(core, GitOperation.Status)
-    tracking <- valueC(core, GitOperation.TrackingTip)
+    merge <- _value_c(core, GitOperation.MergeHead)
+    dirty <- _value_c(core, GitOperation.Status)
+    tracking <- _value_c(core, GitOperation.TrackingTip)
     counts <- tracking match {
       case None => Consequence.success(Option.empty[Counts])
-      case Some(_) => valueC(core, GitOperation.Relation).map(x => Some(Counts(x.localAhead, x.remoteAhead)))
+      case Some(_) => _value_c(core, GitOperation.Relation).map(x => Some(Counts(x.localAhead, x.remoteAhead)))
     }
     mergebase <- tracking match {
       case None => Consequence.success(Option.empty[GitObjectId])
-      case Some(_) => valueC(core, GitOperation.MergeBase)
+      case Some(_) => _value_c(core, GitOperation.MergeBase)
     }
     _ <- if (tracking.isEmpty || mergebase.nonEmpty) Consequence.unit
       else invalid("selected histories have no common ancestor; automatic integration is not authorized")
@@ -62,23 +62,23 @@ private[smworkflow] object RepositorySyncManagedGitObservation {
     DirtyPath(d.indexCode, d.worktreeCode, d.path.value, d.renamedFrom.map(_.value))),
     tracking.map(_.value), counts, mergebase.map(_.value)), merge.map(_.value))
 
-  def indexTreeC(core: ActionCall.Core): Consequence[String] = valueC(core, GitOperation.IndexTree).map(_.value)
+  def indexTreeC(core: ActionCall.Core): Consequence[String] = _value_c(core, GitOperation.IndexTree).map(_.value)
 
   def commitC(core: ActionCall.Core, identity: String): Consequence[Commit] = for {
     oid <- GitObjectId.parseC(identity)
-    observed <- valueC(core, GitOperation.CommitMetadata(oid))
+    observed <- _value_c(core, GitOperation.CommitMetadata(oid))
     _ <- if (observed.commit == oid) Consequence.unit else invalid("observed commit differs from the selected object")
   } yield Commit(observed.commit.value, observed.tree.value, observed.parents.map(_.value))
 
-  def rootC(core: ActionCall.Core): Consequence[String] = valueC(core, GitOperation.Root)
-  def branchC(core: ActionCall.Core): Consequence[String] = valueC(core, GitOperation.Branch)
+  def rootC(core: ActionCall.Core): Consequence[String] = _value_c(core, GitOperation.Root)
+  def branchC(core: ActionCall.Core): Consequence[String] = _value_c(core, GitOperation.Branch)
   def remoteTipC(core: ActionCall.Core, branch: String): Consequence[String] = for {
     selected <- GitBranchName.parseC(branch)
-    observed <- valueC(core, GitOperation.RemoteTip)
+    observed <- _value_c(core, GitOperation.RemoteTip)
     _ <- if (observed.branch == selected) Consequence.unit else invalid("advertised tip differs from the selected upstream branch")
   } yield observed.tip.value
 
-  private def valueC[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[A] =
+  private def _value_c[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[A] =
     E.executeGitC(core, operation).flatMap(_.valueC)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync Git observation " + reason)
 }

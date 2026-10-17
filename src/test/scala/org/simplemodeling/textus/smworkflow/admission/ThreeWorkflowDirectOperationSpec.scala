@@ -358,14 +358,14 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       (Purpose.PartitionPolicy, facts.partition.policy.reference.identity, take(J.encodePartitionPolicyC(facts.partition.policy))),
       (Purpose.Planning, facts.planning.reference.identity, take(J.encodePlanningC(facts.planning))))
     val selected = F.selectionFor(start.input, start.reference.identity, start.participantIdentity)
-    val allocationRow = Record.data(SplitPhaseTypedStartJsonV1.storageField ->
+    val allocationrow = Record.data(SplitPhaseTypedStartJsonV1.storageField ->
       take(SplitPhaseTypedStartJsonV1.encodeAllocationC(F.allocationFor(start))))
-    val sourceRow = Record.data(J.storageField -> inputs.head._3)
-    val prepared = take(_prepare_start_c(call, start, allocationRow, sourceRow))
+    val sourcerow = Record.data(J.storageField -> inputs.head._3)
+    val prepared = take(_prepare_start_c(call, start, allocationrow, sourcerow))
     val rows = inputs.map((purpose, id, text) => (collection("split_" + purpose.toString.toLowerCase), id,
-      if (purpose == Purpose.Source) sourceRow else Record.data(J.storageField -> text))) ++ Vector(
+      if (purpose == Purpose.Source) sourcerow else Record.data(J.storageField -> text))) ++ Vector(
       (collection("split_starts"), start.reference.identity,
-        allocationRow),
+        allocationrow),
       (collection("split_contexts"), F.original.record.reference.identity,
         Record.data(SplitPhaseExplicitPartitionContextJsonV1.storageField -> take(SplitPhaseExplicitPartitionContextJsonV1.encodeTemplateC(
           SplitPhaseExplicitPartitionContext.Template(F.original.record.reference,
@@ -1167,8 +1167,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       var changed = 0
       var issuedcontext = Option.empty[V.WorkflowIssuedWorkContext]
       var retained = Option.empty[WorkflowExecutionHarness.Session]
-      val initialParameters = if (mapped) SplitExecutionFixture.parameters() else Map.empty[String, String]
-      val changedParameters = if (mapped) SplitExecutionFixture.parameters(replacement = true) else Map.empty[String, String]
+      val initialparameters = if (mapped) SplitExecutionFixture.parameters() else Map.empty[String, String]
+      val changedparameters = if (mapped) SplitExecutionFixture.parameters(replacement = true) else Map.empty[String, String]
       def request(component: org.goldenport.cncf.component.Component, operation: String,
         properties: List[Property]): Request = Request.of(component = component.name,
           service = "SplitPhaseService", operation = operation, properties = properties)
@@ -1177,7 +1177,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           _.mapObject(json => json.add("payload", json("payload").get.mapObject(payload =>
             payload.add("owner", payload("owner").get.mapObject(owner => owner.add("presentation",
               owner("presentation").get.mapObject(_.add("title", Json.fromString(title))))))))))
-      withRuntime(root, executionParameters = initialParameters) { (owner, component, actor, prepare) =>
+      withRuntime(root, executionParameters = initialparameters) { (owner, component, actor, prepare) =>
         prepare(call => prepareInputsWithFacts(call, facts))
         val started = _business_value[V.SplitPhaseStartResult](take(owner.executeOperationResponseInContext(
           request(component, "startSplitPhase", startWire), actor)))
@@ -1236,7 +1236,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         changed += 1
         Consequence.unit
       }
-      withRuntime(root, completionobservation = Some(changeDisplay), executionParameters = changedParameters) { (owner, component, actor, prepare) =>
+      withRuntime(root, completionobservation = Some(changeDisplay), executionParameters = changedparameters) { (owner, component, actor, prepare) =>
         Given("Split execution E5/R4,R6: a reopened host with valid changed configuration omitting original DesignStandard")
         When("normal Advance redisplays pending partition work under the changed host")
         val repeated = _business_value[V.SplitPhaseAdvanceResult](take(owner.executeOperationResponseInContext(
@@ -1294,7 +1294,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         completionstate.get.revision shouldBe pendingstate.get.revision.next
         completionstate.get.suspension shouldBe empty
       }
-      withRuntime(root, executionParameters = changedParameters) { (owner, component, actor, prepare) =>
+      withRuntime(root, executionParameters = changedparameters) { (owner, component, actor, prepare) =>
         Given("the completed business result and compatible changed stored presentation")
         When("Advance consumes that result without restoring an old presentation copy")
         val preview = _business_value[V.SplitPhaseAdvanceResult](take(owner.executeOperationResponseInContext(

@@ -27,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeHostPreparationOperationFixture {
-  private def response(value: Consequence[OperationResponse]): Record = take(value) match {
+  private def _response(value: Consequence[OperationResponse]): Record = take(value) match {
     case OperationResponse.Json(result) =>
       result.asObject.map(_.keys.toSet) shouldBe Some(Set("datastore"))
       take(new RecordDecoder().json(result.noSpaces))
@@ -35,8 +35,8 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
   }
   private def field(input: Record, key: String, value: String): Record =
     input.removeKeys(Set(key)) ++ Record.data(key -> value)
-  private def entries(value: Record): Vector[Json] = json(value).hcursor.get[Vector[Json]]("datastore").toOption.get
-  private def rows(value: Record): Vector[Json] = entries(value).flatMap(_.hcursor.get[Vector[Json]]("records").toOption.get)
+  private def _entries(value: Record): Vector[Json] = json(value).hcursor.get[Vector[Json]]("datastore").toOption.get
+  private def rows(value: Record): Vector[Json] = _entries(value).flatMap(_.hcursor.get[Vector[Json]]("records").toOption.get)
 
   "P1 Normal typed passive preparation" should afterWord(
     "in spec:normal-host-preparation-operations, example:P1, rules:R1,R2,R3,R4,R5, phase:6") {
@@ -51,7 +51,7 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
           selected should not be empty
           selected.foreach { sample =>
             When("the actual current Operation executes " + sample.label + " through its generated named input")
-            val actual = response(episode.invoke(operation, sample.input))
+            val actual = _response(episode.invoke(operation, sample.input))
             Then("the structured collections, identities and payloads equal the unchanged business owners and decode with existing storage codecs")
             bound.specification.request shouldBe declared.specification.request
             bound.specification.response shouldBe declared.specification.response
@@ -118,9 +118,9 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
             } else (issued.work.get.review.get.hostContext.get, NativeHostEvidence.Purpose.GoalReview, issued.sessionId, issued.submitSessionId)
           }
           When("the real prepareEvidence Operation reads the selected request result reference and execution files for " + sample.label)
-          val actual = response(episode.invoke("prepareEvidence", sample.input))
-          val outputRows = rows(actual)
-          val raw = outputRows.head.hcursor.get[String](NativeHostEvidence.storageField).toOption.get
+          val actual = _response(episode.invoke("prepareEvidence", sample.input))
+          val outputrows = rows(actual)
+          val raw = outputrows.head.hcursor.get[String](NativeHostEvidence.storageField).toOption.get
           val decoded = take(NativeHostEvidence.decodeStorageC(raw))
           val stored = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
           val target = stored.hcursor.downField("binding").downField("attestation").downField("target")
@@ -128,9 +128,9 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
             .downArray.downField("sbt")
           val result = stored.hcursor.downField("binding").downField("attestation").downField("result")
           Then("the raw importer payload explicitly retains kind outcome classes counts and its actual native owner and completion")
-          outputRows.size shouldBe 1
+          outputrows.size shouldBe 1
           actual.keySet shouldBe Set("datastore")
-          outputRows.head.asObject.get.keys.toSet shouldBe Set("id", NativeHostEvidence.storageField)
+          outputrows.head.asObject.get.keys.toSet shouldBe Set("id", NativeHostEvidence.storageField)
           sbt.get[String]("kind") shouldBe Right("test-only")
           sbt.get[String]("outcome") shouldBe Right("succeeded")
           sbt.downField("selection").get[Vector[String]]("testClasses") shouldBe Right(Vector("example.FirstSpec", "example.SecondSpec"))
@@ -150,7 +150,7 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
           Given("only passive importer output has returned for " + sample.label + " without explicit provisioning or workflow progression")
           episode.project { call =>
             When("the normal managed store reads the exact returned evidence identity")
-            val identity = outputRows.head.hcursor.get[String]("id").toOption.get
+            val identity = outputrows.head.hcursor.get[String]("id").toOption.get
             val saved = take(ComponentRecordStorage.bindForCallC(call.core, "workflow",
               DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", "host_evidence")),
               DataStore.StringEntryId(identity)).flatMap(_.loadC()))
@@ -201,25 +201,25 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
         val evidence = episode.cases("prepareEvidence").find(_.label == "GoalHuman").get
         val missing = episode.root.resolve("存在しない.json").toUri.toASCIIString
         val malformed = field(field(authority.input, "request", missing), "collection", "entity:invalid")
-        val badTime = field(field(authority.input, "request", missing), "occurredAt", "invalid-time")
+        val badtime = field(field(authority.input, "request", missing), "occurredAt", "invalid-time")
         val unsupported = field(field(evidence.input, "request", missing), "family", "Unknown")
-        val splitReview = field(field(field(evidence.input, "request", missing), "family", "SplitPhase"), "kind", "review")
-        val requestPath = Path.of(URI.create(evidence.input.getString("request").get))
-        val original = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(Files.readString(requestPath, UTF_8)))))
+        val splitreview = field(field(field(evidence.input, "request", missing), "family", "SplitPhase"), "kind", "review")
+        val requestpath = Path.of(URI.create(evidence.input.getString("request").get))
+        val original = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(Files.readString(requestpath, UTF_8)))))
         val context = original.human.get.hostContext.get
         val crossed = original.copy(human = Some(original.human.get.copy(hostContext = Some(
           context.copy(purpose = NativeHostEvidence.Purpose.RepositoryHuman.identity)))))
-        val crossedInput = field(evidence.input, "request", episode.saveValue("crossed-human", crossed))
+        val crossedinput = field(evidence.input, "request", episode.saveValue("crossed-human", crossed))
         When("the actual normal Operations validate each selected typed input")
-        val collectionFailure = episode.invoke("prepareAuthority", malformed)
-        val timeFailure = episode.invoke("prepareAuthority", badTime)
-        val failures = Vector(episode.invoke("prepareEvidence", unsupported), episode.invoke("prepareEvidence", splitReview),
-          episode.invoke("prepareEvidence", evidence.input.removeKeys(Set("participant"))), episode.invoke("prepareEvidence", crossedInput))
+        val collectionfailure = episode.invoke("prepareAuthority", malformed)
+        val timefailure = episode.invoke("prepareAuthority", badtime)
+        val failures = Vector(episode.invoke("prepareEvidence", unsupported), episode.invoke("prepareEvidence", splitreview),
+          episode.invoke("prepareEvidence", evidence.input.removeKeys(Set("participant"))), episode.invoke("prepareEvidence", crossedinput))
         Then("metadata errors precede the missing-resource error and every invalid assignment returns no successful importer")
-        collectionFailure.isSuccess shouldBe false
-        collectionFailure.toString should include("collection")
-        timeFailure.isSuccess shouldBe false
-        timeFailure.toString should include("ISO Instant")
+        collectionfailure.isSuccess shouldBe false
+        collectionfailure.toString should include("collection")
+        timefailure.isSuccess shouldBe false
+        timefailure.toString should include("ISO Instant")
         failures.foreach(_.isSuccess shouldBe false)
       }
     }
@@ -274,8 +274,8 @@ final class NativeHostPreparationOperationSpec extends AnyWordSpec with Matchers
           }
           Given("a selected command input with malformed finite metadata")
           When("the same standard command receives an invalid collection")
-          val collectionKey = if (Set("prepareGoalStart", "prepareRepositoryStart")(operation)) "selectionCollection" else "collection"
-          val refused = cli.prepareHostInput(operation, field(selected.head.input, collectionKey, "entity:invalid"))
+          val collectionkey = if (Set("prepareGoalStart", "prepareRepositoryStart")(operation)) "selectionCollection" else "collection"
+          val refused = cli.prepareHostInput(operation, field(selected.head.input, collectionkey, "entity:invalid"))
           Then("the normal command returns failure without a successful datastore object")
           refused.exitCode should not be 0
           io.circe.parser.parse(Files.readString(refused.invocation.stdout, UTF_8)).toOption

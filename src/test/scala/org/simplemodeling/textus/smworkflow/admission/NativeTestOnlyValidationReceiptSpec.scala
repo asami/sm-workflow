@@ -206,16 +206,16 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val variants = Vector(_receipt(tests = 4L), _receipt(classes = Vector("example.OtherSpec")),
         _receipt(selection = false), _actual.copy(sbt = Some(Facts(Kind.Test, Outcome.Succeeded, None, None))))
       Vector(Purpose.GoalReview, Purpose.RepositoryReview).foreach { purpose =>
-        val checksKey = if (purpose == Purpose.GoalReview) "testChecks" else "checks"
-        def target(receipt: V.Receipt): Json = if (purpose == Purpose.GoalReview)
+        val checkskey = if (purpose == Purpose.GoalReview) "testChecks" else "checks"
+        def _target_(receipt: V.Receipt): Json = if (purpose == Purpose.GoalReview)
           ThreeWorkflowHostEvidencePorts.goalReviewTarget(_work.copy(review = _work.review.map(_.copy(checks = Vector(receipt)))))
         else ThreeWorkflowHostEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(receipt)))
-        def binding(selected: Json): Json = ThreeWorkflowHostEvidencePorts.reviewBinding("specification-owner",
+        def _binding_(selected: Json): Json = ThreeWorkflowHostEvidencePorts.reviewBinding("specification-owner",
           if (purpose == Purpose.GoalReview) "goal-review" else "repository-review", selected, completion,
           reference, Json.fromString("specification-reviewer"), if (purpose == Purpose.GoalReview)
             ThreeWorkflowHostEvidencePorts.goalReviewVerdict(W.Result("accept", "diagnostic", Vector.empty))
           else ThreeWorkflowHostEvidencePorts.repositoryReviewVerdict(R.Result("accept", "diagnostic", Vector.empty)))
-        val actual = binding(target(_actual))
+        val actual = _binding_(_target_(_actual))
         val evidence = Evidence(NativeHostEvidence.schema, purpose.identity, lookup, "specification-result", "1",
           declared.issuer, "specification-reviewer", actual, now.toString)
         When("the real v7 encoder and decoder select the target and observation compares its actual binding for " + purpose)
@@ -223,7 +223,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         val decoded = take(NativeHostEvidence.decodeStorageC(raw))
         val stored = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
           .hcursor.downField("binding").downField("attestation").downField("target")
-          .downField(checksKey).downArray.downField("sbt")
+          .downField(checkskey).downArray.downField("sbt")
         Then("explicit kind outcome classes and counts survive storage and the matching actual binding is admitted")
         stored.get[String]("kind") shouldBe Right("test-only")
         stored.get[String]("outcome") shouldBe Right("succeeded")
@@ -234,16 +234,16 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         variants.foreach { receipt =>
           Given("the same issued review with a valid changed class count outcome or kind for " + purpose)
           When("the original stored evidence is observed against those changed selected facts")
-          val crossed = NativeHostEvidence.observeC(decoded, declared, purpose, lookup, binding(target(receipt)), now)
+          val crossed = NativeHostEvidence.observeC(decoded, declared, purpose, lookup, _binding_(_target_(receipt)), now)
           Then("that changed selected meaning cannot reuse the original evidence")
           crossed.isSuccess shouldBe false
         }
         Given("the historical target without sbt and a typed target annotated with unused logs")
-        val historical = binding(target(_actual.copy(sbt = None)))
+        val historical = _binding_(_target_(_actual.copy(sbt = None)))
         When("historical storage is reopened and typed evidence is compared with stripped or annotated targets")
         val legacy = take(NativeHostEvidence.decodeStorageC(take(NativeHostEvidence.encodeStorageC(evidence.copy(binding = historical)))))
-        val annotated = binding(target(_actual).mapObject(_.add(checksKey, Json.arr(
-          target(_actual).hcursor.downField(checksKey).downArray.focus.get.mapObject(
+        val annotated = _binding_(_target_(_actual).mapObject(_.add(checkskey, Json.arr(
+          _target_(_actual).hcursor.downField(checkskey).downArray.focus.get.mapObject(
             _.add("stdout", Json.fromString("inert log")).add("grant", Json.True))))))
         Then("absence retains its exact historical shape and cannot stand for typed facts while annotations remain inert")
         NativeHostEvidence.observeC(decoded, declared, purpose, lookup, historical, now).isSuccess shouldBe false
@@ -257,14 +257,14 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         Vector(Json.Null, Json.True, Json.obj(), _actual.sbt.get.asJson.mapObject(_.add("kind", Json.fromString("unknown"))))
           .foreach { malformed =>
             Given("present malformed sbt in a selected " + purpose + " review check")
-            val invalid = binding(target(_actual).mapObject(_.add(checksKey, Json.arr(
-              target(_actual).hcursor.downField(checksKey).downArray.focus.get.mapObject(_.add("sbt", malformed))))))
+            val invalid = _binding_(_target_(_actual).mapObject(_.add(checkskey, Json.arr(
+              _target_(_actual).hcursor.downField(checkskey).downArray.focus.get.mapObject(_.add("sbt", malformed))))))
             When("the real storage encoder or decoder consumes that malformed selected fact")
-            val invalidRaw = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
+            val invalidraw = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
               .mapObject(_.add("binding", invalid))
             Then("both storage directions reject it instead of treating presence as historical absence")
             NativeHostEvidence.encodeStorageC(evidence.copy(binding = invalid)).isSuccess shouldBe false
-            NativeHostEvidence.decodeStorageC(NativeHostEvidence.schema + ":" + invalidRaw.noSpaces).isSuccess shouldBe false
+            NativeHostEvidence.decodeStorageC(NativeHostEvidence.schema + ":" + invalidraw.noSpaces).isSuccess shouldBe false
           }
       }
     }

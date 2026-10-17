@@ -248,10 +248,10 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       val selected = if (root.isEmpty && scenario == "Diverged") fixtureScenario else scenario
       val commands = _setup_commands_(directory, selected)
       if (startIndex == 0) _prepare_sbt_build_(directory, selected)
-      val firstCommit = commands.indexWhere(_.contains("commit"))
+      val firstcommit = commands.indexWhere(_.contains("commit"))
       (startIndex until count).foldLeft(Consequence.unit) { (prior, index) => prior.flatMap { _ =>
         _setup_files_(directory, selected, index)
-        val staged = if (index != firstCommit) Consequence.unit else _run_setup_command_(
+        val staged = if (index != firstcommit) Consequence.unit else _run_setup_command_(
           Vector("-C", directory.resolve("repository").toString, "--literal-pathspecs", "add", "--",
             ".gitignore", "build.sbt", "project/build.properties", "src/test/scala/ProductCheck.scala", "value.txt"))
         staged.flatMap(_ => _run_setup_command_(commands(index)))
@@ -444,16 +444,16 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     provisionEffects: Boolean = true): Consequence[Unit] = {
     val target = NativeHostRepositoryEffectPreparation.Target(root.resolve("repository").toString,
       "main", "origin", "main", root.resolve("upstream.git").toString)
-    val selectionRow = Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selection)))
+    val selectionrow = Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selection)))
     val now = call.executionContext.clock.instant()
     val effects = if (!provisionEffects) Vector.empty else
       (if (merged) Vector(RepositorySyncNativeConvergence.Effect.CommitPending) else Vector.empty) ++
         Vector(RepositorySyncNativeConvergence.Effect.Push, RepositorySyncNativeConvergence.Effect.FinalFetch)
     call.createC("repository_selections", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Repository(input.repositoryIdentity,
       input.localBranch, input.trackingRemote, input.trackingBranch, input.remoteEndpointIdentity, input.syncMode),
-      selection.participantIdentity), selectionRow).flatMap { _ => effects.foldLeft(Consequence.unit) { (prior, effect) =>
+      selection.participantIdentity), selectionrow).flatMap { _ => effects.foldLeft(Consequence.unit) { (prior, effect) =>
       prior.flatMap(_ => NativeHostRepositoryEffectPreparation.repositoryC(call.core.component.get.core.instanceId.canonicalKey,
-        selectionRow, target, effect.toString, V.WorkflowArtifactReference("specification-effect-" + effect.toString, "1"),
+        selectionrow, target, effect.toString, V.WorkflowArtifactReference("specification-effect-" + effect.toString, "1"),
         selection.participantIdentity, "normal-development-host", now.minusSeconds(60)).flatMap(prepared =>
           call.createC("host_evidence", prepared.recordIdentity, prepared.record)))
     } }
@@ -471,7 +471,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
       val selection = _repository_selection_(input, "spec-mapped-repository-selection", "spec-mapped-repository-start")
       var identity = Option.empty[InstanceIdentity]
       var saved = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
-      var originalContext = Option.empty[V.WorkflowIssuedWorkContext]
+      var originalcontext = Option.empty[V.WorkflowIssuedWorkContext]
       var retained = Option.empty[WorkflowExecutionHarness.Session]
       var pending = Option.empty[InstanceRecord]
       for (reopened <- Vector(false, true)) _with_runtime_(root, "Diverged",
@@ -524,14 +524,14 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           prepared.session.mappingRevision shouldBe mapping.revision
           prepared.session.origin shouldBe origin
           saved = Some(work)
-          originalContext = response.issuedWorkContext
+          originalcontext = response.issuedWorkContext
           retained = Some(prepared.session)
           pending = Some(_current())
         } else {
           Then("reopen preserves the original assignment and revision despite the later classification mapping and origin")
           order.requirement shouldBe saved.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].requirement
           order.request shouldBe saved.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request
-          response.issuedWorkContext shouldBe originalContext
+          response.issuedWorkContext shouldBe originalcontext
           _current().revision shouldBe pending.get.revision
           When("the host restores its original serialized Session against that public issue and records a separately scoped specification reviewer")
           val restored = take(NativeWorkflowHostExecution.restoreC(response.issuedWorkContext.get,
@@ -564,9 +564,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
             _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
           } yield ())
-          val noObservation = result.copy(evidence = evidence.copy(execution = None))
+          val noobservation = result.copy(evidence = evidence.copy(execution = None))
           val mismatched = result.copy(evidence = evidence.copy(execution = evidence.execution.map(_.copy(originContextIdentity = "foreign-origin"))))
-          val refused = Vector(noObservation, mismatched).map(value => _call("submitNativeMergeReview",
+          val refused = Vector(noobservation, mismatched).map(value => _call("submitNativeMergeReview",
             take(NativeWorkflowOperationInputFixture.submissionC(value))))
           Then("missing or crossed generic observations reject even with separately prepared reviewer evidence")
           refused.foreach(_.isSuccess shouldBe false)
@@ -650,9 +650,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
       val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
       val selection = _repository_selection_(input, "specification-absent-effect-selection", "specification-effect-invocation")
       _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
-        def call(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
+        def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
           Request.of(component = component.name, service = "RepositorySyncService", operation = operation, properties = properties), actor)
-        def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(call(operation, properties)))
+        def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(_call_(operation, properties)))
         def current(id: String): InstanceRecord = {
           var state = Option.empty[InstanceRecord]
           prepare(setup => setup.currentC(InstanceIdentity(id)).map(value => { state = Some(value); () }))
@@ -666,7 +666,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         first.sessionId should not be empty
         current(first.sessionId).lifecycle should not be Lifecycle.Completed
         When("the caller separately Advances that execution without Push authority")
-        val refused = call("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(first.sessionId))
+        val refused = _call_("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(first.sessionId))
         Then("the native effect boundary refuses and no successful Terminal is claimed")
         refused.isSuccess shouldBe false
         refused.toString should include("no independently issued host authorization")
@@ -848,18 +848,18 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           val selection = _repository_selection_(input, "typed-file-selection", "typed-file-start")
           val replacement = "resolved 日本語 é🚀\n"
           Files.createDirectories(root.resolve("repository"))
-          val gitOnly = Map("textus.subsystem.process-execution.plan" -> TypedGitHostPlanFixture.plan(
+          val gitonly = Map("textus.subsystem.process-execution.plan" -> TypedGitHostPlanFixture.plan(
             Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
             conflictPaths = Set(path)).noSpaces)
           var identity = Option.empty[InstanceIdentity]
           var pending = Option.empty[RepositorySyncNativeProgressStore.Stage]
           var intent = Option.empty[RepositorySyncNativeProgressStore.Stage]
-          var checkIntent = Option.empty[RepositorySyncNativeProgressStore.Stage]
+          var checkintent = Option.empty[RepositorySyncNativeProgressStore.Stage]
           var current = Option.empty[InstanceRecord]
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           var proposal = Option.empty[InstanceRecord]
-          var actualInput = Option.empty[RepositorySyncNativeConflictInput.Request]
-          _with_runtime_(root, scenario, hostParameters = gitOnly) { (owner, component, actor, prepare) =>
+          var actualinput = Option.empty[RepositorySyncNativeConflictInput.Request]
+          _with_runtime_(root, scenario, hostParameters = gitonly) { (owner, component, actor, prepare) =>
             def invoke(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
               Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
                 properties = properties), actor)
@@ -875,26 +875,26 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             prepare(call => call.repositoryWorkC(identity.get, RepositorySyncNativeConflictContinuation.completionOperation,
               RepositorySyncConflictSemantic.inputCodec).map(value => { issued = Some(value); () }))
             val order = issued.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request
-            actualInput = Some(order.input.get.value)
+            actualinput = Some(order.input.get.value)
             val captured = Files.readString(root.resolve("repository").resolve(path))
             Then("typed captured facts return to that same native instance with exact ordered path and original texts")
             request.kind shouldBe "Request"
             request.conflict.get.conflicts.map(_.path) shouldBe Vector(path)
             _assert_issued_context(request.issuedWorkContext, issued.get, "implementation", RepositorySyncConflictSemantic.inputCodec)
-            actualInput.get.instanceIdentity shouldBe identity.get.value
-            actualInput.get.conflicts.map(_.path) shouldBe Vector(path)
-            actualInput.get.conflicts.head.base.text shouldBe "original shared line\n"
-            actualInput.get.conflicts.head.local.text shouldBe "local shared line\n"
-            actualInput.get.conflicts.head.remote.text shouldBe "remote shared line\n"
-            actualInput.get.conflicts.head.worktree shouldBe captured
+            actualinput.get.instanceIdentity shouldBe identity.get.value
+            actualinput.get.conflicts.map(_.path) shouldBe Vector(path)
+            actualinput.get.conflicts.head.base.text shouldBe "original shared line\n"
+            actualinput.get.conflicts.head.local.text shouldBe "local shared line\n"
+            actualinput.get.conflicts.head.remote.text shouldBe "remote shared line\n"
+            actualinput.get.conflicts.head.worktree shouldBe captured
             captured should include("<<<<<<<")
             Files.exists(root.resolve("repository/.git/sm-workflow-conflict-files.lock")) shouldBe false
 
             Given("the actual current conflict WorkOrder and its exact selected Unicode resolution")
-            val reference = ContextReference("typed-file-resolution", actualInput.get.conflictRevision)
+            val reference = ContextReference("typed-file-resolution", actualinput.get.conflictRevision)
             val result = ContinuationResult(issued.get.handle, order.runId, order.continuationId, order.expectedRevision,
               order.context.snapshot, TypedValue(RepositorySyncConflictSemantic.resultCodec.typeIdentity,
-                RepositorySyncConflictSemantic.Result("resolved", actualInput.get.conflicts.map(c =>
+                RepositorySyncConflictSemantic.Result("resolved", actualinput.get.conflicts.map(c =>
                   RepositorySyncConflictSemantic.Resolution(c.identity, replacement)), "Assigned typed File resolution")),
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-worker")))
             When("public Submit admits only that paired semantic proposal")
@@ -947,17 +947,17 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
                 state.lifecycle shouldBe Lifecycle.Active
                 pending = savedPending
                 intent = savedIntent
-                checkIntent = savedCheck
+                checkintent = savedCheck
                 current = Some(state)
                 observed = Some(native)
               }
             } yield ())
           }
           val leaf = root.resolve("repository").resolve(path)
-          val unchangedTime = java.nio.file.attribute.FileTime.fromMillis(946684800000L)
-          Files.setLastModifiedTime(leaf, unchangedTime)
+          val unchangedtime = java.nio.file.attribute.FileTime.fromMillis(946684800000L)
+          Files.setLastModifiedTime(leaf, unchangedtime)
           Given("the normal runtime has physically closed with original materialization and pending-check intents retained")
-          _with_runtime_(root, scenario, hostParameters = gitOnly) { (owner, component, actor, prepare) =>
+          _with_runtime_(root, scenario, hostParameters = gitonly) { (owner, component, actor, prepare) =>
             When("public Advance reopens the same SQLite execution without preparing another proposal or replaying File apply")
             val wait = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(
               Request.of(component = component.name, service = "RepositorySyncService", operation = "advanceRepositorySync",
@@ -967,7 +967,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             wait.convergence shouldBe None
             wait.review shouldBe None
             Files.readString(leaf) shouldBe replacement
-            Files.getLastModifiedTime(leaf) shouldBe unchangedTime
+            Files.getLastModifiedTime(leaf) shouldBe unchangedtime
             Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
             Files.exists(root.resolve("repository/.git/sm-workflow-conflict-files.lock")) shouldBe false
             prepare(call => for {
@@ -984,8 +984,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
                 savedPending.get.record.history shouldBe pending.get.record.history
                 savedIntent.get.payload shouldBe intent.get.payload
                 savedIntent.get.record.history shouldBe intent.get.record.history
-                savedCheck.get.payload shouldBe checkIntent.get.payload
-                savedCheck.get.record.history shouldBe checkIntent.get.record.history
+                savedCheck.get.payload shouldBe checkintent.get.payload
+                savedCheck.get.record.history shouldBe checkintent.get.record.history
                 state.copy(definition = current.get.definition) shouldBe current.get
                 native shouldBe observed.get
                 checkResult shouldBe None
@@ -1001,8 +1001,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
     "Public Repository Human preparation" should afterWord("in spec:native-host-human-preparation, example:E6, rules:R1,R2,R3,R4,R5, phase:6") {
     for ((decision, scenario, mapped) <- Vector(("resolved", "Conflict", false), ("decision-needed", "Conflict", false),
         ("resolved", "ConflictLiteral", false), ("resolved", "Conflict", true), ("decision-needed", "Conflict", true))) {
-      val executionName = if (mapped) " with mapped conflict execution" else ""
-      s"resolve an actual $scenario conflict through assigned $decision results before independent review and convergence$executionName" in {
+      val executionname = if (mapped) " with mapped conflict execution" else ""
+      s"resolve an actual $scenario conflict through assigned $decision results before independent review and convergence$executionname" in {
         if (mapped) Given("Spec: docs/spec/repository-sync-native-execution.md; Example: E8; Rules: R1,R2,R3,R4,R5; actual mapped conflict execution")
         Given("a tracked normal SBT build and an owned shared text file with conflicting committed local and remote changes")
         val work = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
@@ -1017,10 +1017,10 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
         var humancontext = Option.empty[V.WorkflowHostHumanContext]
         var question = Option.empty[WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]]
         var review = Option.empty[WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]]
-        var conflictContext = Option.empty[V.WorkflowIssuedWorkContext]
-        var conflictSession = Option.empty[WorkflowExecutionHarness.Session]
-        var reviewContext = Option.empty[V.WorkflowIssuedWorkContext]
-        var reviewSession = Option.empty[WorkflowExecutionHarness.Session]
+        var conflictcontext = Option.empty[V.WorkflowIssuedWorkContext]
+        var conflictsession = Option.empty[WorkflowExecutionHarness.Session]
+        var reviewcontext = Option.empty[V.WorkflowIssuedWorkContext]
+        var reviewsession = Option.empty[WorkflowExecutionHarness.Session]
         var saved = Option.empty[InstanceRecord]
         val sessions = Vector("issue", "semantic") ++ (if (decision == "decision-needed") Vector("human") else Vector.empty) ++
           Vector("review", "converge")
@@ -1069,8 +1069,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               val origin = take(GoalPhaseNativeExecution.resolveOriginC(component.initializationParameters)).get.current
               val order = review.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]]
               val prepared = take(NativeWorkflowHostExecution.prepareC(response.issuedWorkContext.get, mapping, origin))
-              reviewContext = response.issuedWorkContext
-              reviewSession = Some(prepared.session)
+              reviewcontext = response.issuedWorkContext
+              reviewsession = Some(prepared.session)
               Then("ReviewCritical requires its own DELEGATED independent executor under the later origin and mapping")
               order.requirement.reasoningClass shouldBe Some(ReasoningClassReference("ReviewCritical"))
               order.requirement.reviewRequired shouldBe true
@@ -1080,8 +1080,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               prepared.session.mappingIdentity shouldBe mapping.identity
               prepared.session.mappingRevision shouldBe mapping.revision
               prepared.session.origin shouldBe origin
-              prepared.session.origin should not be conflictSession.get.origin
-              prepared.session.workReference should not be conflictSession.get.workReference
+              prepared.session.origin should not be conflictsession.get.origin
+              prepared.session.workReference should not be conflictsession.get.workReference
               mapping.resolveClassC(ReasoningClassReference("CodingProgrammingStandard")).isSuccess shouldBe false
             }
             saved = Some(_current_())
@@ -1114,8 +1114,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               val mapping = take(WorkflowExecutionProfileParameters.resolveC(component.initializationParameters)).get
               val origin = take(GoalPhaseNativeExecution.resolveOriginC(component.initializationParameters)).get.current
               val prepared = take(NativeWorkflowHostExecution.prepareC(response.issuedWorkContext.get, mapping, origin))
-              conflictContext = response.issuedWorkContext
-              conflictSession = Some(prepared.session)
+              conflictcontext = response.issuedWorkContext
+              conflictsession = Some(prepared.session)
               Then("the original implementation issue preserves conflict risk capabilities and false review obligation with canonical INLINE OPTIONAL selection")
               response.issuedWorkContext.get.thinkingMode shouldBe "implementation"
               order.requirement.reasoning shouldBe ReasoningLevel.Standard
@@ -1142,14 +1142,14 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               replacement.resolveClassC(ReasoningClassReference("ReviewCritical")).isSuccess shouldBe true
               val later = take(RepositorySyncNativeExecution.resolveC(component.initializationParameters)).get
               later.conflict.get.complexity shouldBe GoalPhaseWorkClassification.Complexity.COMPLEX
-              origin should not be conflictSession.get.origin
+              origin should not be conflictsession.get.origin
               Vector.fill(2)(()).foreach { _ =>
                 val response = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
                 val actual = _load_conflict_()
                 Then("pending redisplay retains the exact original public context requirement revision history suspension and continuation")
                 response.kind shouldBe "Request"
                 _assert_issued_context(response.issuedWorkContext, actual, "implementation", RepositorySyncConflictSemantic.inputCodec)
-                response.issuedWorkContext shouldBe conflictContext
+                response.issuedWorkContext shouldBe conflictcontext
                 actual shouldBe conflict.get
                 val current = _current_()
                 current.revision shouldBe saved.get.revision
@@ -1159,13 +1159,13 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               When("the host canonically encodes and decodes its retained original Session and restores against the pending public context")
               val response = _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", advance)
               val prepared = take(NativeWorkflowHostExecution.restoreC(response.issuedWorkContext.get,
-                take(WorkflowExecutionHarness.decodeC(take(WorkflowExecutionHarness.encodeC(conflictSession.get))))))
+                take(WorkflowExecutionHarness.decodeC(take(WorkflowExecutionHarness.encodeC(conflictsession.get))))))
               Then("restoration uses the original selection and origin without resolving the missing old class from replacement configuration")
-              prepared.session.workReference shouldBe conflictSession.get.workReference
-              prepared.session.mappingIdentity shouldBe conflictSession.get.mappingIdentity
-              prepared.session.mappingRevision shouldBe conflictSession.get.mappingRevision
-              prepared.session.origin shouldBe conflictSession.get.origin
-              prepared.session.nextSelection shouldBe conflictSession.get.nextSelection
+              prepared.session.workReference shouldBe conflictsession.get.workReference
+              prepared.session.mappingIdentity shouldBe conflictsession.get.mappingIdentity
+              prepared.session.mappingRevision shouldBe conflictsession.get.mappingRevision
+              prepared.session.origin shouldBe conflictsession.get.origin
+              prepared.session.nextSelection shouldBe conflictsession.get.nextSelection
               prepared.session.requirement shouldBe conflict.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].requirement
               Some(prepared)
             }
@@ -1185,8 +1185,8 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             val before = Files.readString(root.resolve("repository").resolve(path))
             if (mapped) {
               Then("the completed conflict observation still belongs to the original INLINE executor and scope")
-              evidence.execution.get.originContextIdentity shouldBe conflictSession.get.origin.contextIdentity
-              evidence.execution.get.executorContextIdentity shouldBe conflictSession.get.origin.contextIdentity
+              evidence.execution.get.originContextIdentity shouldBe conflictsession.get.origin.contextIdentity
+              evidence.execution.get.executorContextIdentity shouldBe conflictsession.get.origin.contextIdentity
               Given("the actual pending conflict and semantic result before any valid normal Submit")
               When("Submit receives a missing observation or a crossed original origin with otherwise completed evidence")
               val missing = result.copy(evidence = evidence.copy(execution = None))
@@ -1258,9 +1258,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             } :+ Property("grant", true, None)
             val before = Files.readString(root.resolve("repository").resolve(path))
             When("the genuinely current Human answer has no separately prepared host evidence")
-            val refusedHuman = _call_("submitRepositoryConflictDecision", wire)
+            val refusedhuman = _call_("submitRepositoryConflictDecision", wire)
             Then("an answer without host evidence cannot change the pending question or files")
-            refusedHuman.isSuccess shouldBe false
+            refusedhuman.isSuccess shouldBe false
             _current_().revision shouldBe saved.get.revision
             Files.readString(root.resolve("repository").resolve(path)) shouldBe before
             Given("explicit specification-owned Human evidence bound to the exact question and answer")
@@ -1290,14 +1290,14 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             val evidence = if (!mapped) ExecutionEvidence(Vector(reference), Some("specification-reviewer")) else {
               Given("the independently retained review Session and its original first public context, separate from conflict execution and Human evidence")
               When("the host restores this review Session and records a separately scoped completed specification reviewer")
-              val prepared = take(NativeWorkflowHostExecution.restoreC(reviewContext.get,
-                take(WorkflowExecutionHarness.decodeC(take(WorkflowExecutionHarness.encodeC(reviewSession.get))))))
+              val prepared = take(NativeWorkflowHostExecution.restoreC(reviewcontext.get,
+                take(WorkflowExecutionHarness.decodeC(take(WorkflowExecutionHarness.encodeC(reviewsession.get))))))
               val observed = RepositoryExecutionFixture.evidence(prepared, reference, "specification-independent-conflict-reviewer")
               Then("the review observation uses its own later origin and genuinely separate executor context")
               observed.execution.get.placement shouldBe ExecutionPlacement.Delegated
-              observed.execution.get.originContextIdentity shouldBe reviewSession.get.origin.contextIdentity
-              observed.execution.get.executorContextIdentity should not be reviewSession.get.origin.contextIdentity
-              observed.execution.get.executorContextIdentity should not be conflictSession.get.origin.contextIdentity
+              observed.execution.get.originContextIdentity shouldBe reviewsession.get.origin.contextIdentity
+              observed.execution.get.executorContextIdentity should not be reviewsession.get.origin.contextIdentity
+              observed.execution.get.executorContextIdentity should not be conflictsession.get.origin.contextIdentity
               observed.workerIdentity shouldBe Some("specification-independent-conflict-reviewer")
               prepared.session.requirement shouldBe work.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].requirement
               observed
@@ -1418,9 +1418,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-reviewer")))
             val wire = take(NativeWorkflowOperationInputFixture.submissionC(result))
             When("the semantic result has no separately prepared host review evidence")
-            val refusedReview = _call_("submitNativeMergeReview", wire)
+            val refusedreview = _call_("submitNativeMergeReview", wire)
             Then("the public completion refuses it without appending a native transition")
-            refusedReview.isSuccess shouldBe false
+            refusedreview.isSuccess shouldBe false
             _current_().revision shouldBe pending.get.revision
             Given("explicit specification-owned host evidence bound to the original assigned review and exact result")
             When("public passive preparation supplies only a row that the specification provisions through existing managed Create")

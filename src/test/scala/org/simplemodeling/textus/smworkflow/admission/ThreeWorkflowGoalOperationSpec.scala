@@ -155,10 +155,10 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         B.Condition("phase-closure", "phase", true, "Review complete ordered Phase closure")))
       val adoption = B.Adoption("Implement the selected behavior; extra robustness is excluded from this task",
         Vector(B.Condition("extra-robustness", "all", false, "Keep extra robustness advisory")))
-      val selectedPlan = O.Plan("selected-two-step-plan", "1", original.goal.input.phaseIdentity,
+      val selectedplan = O.Plan("selected-two-step-plan", "1", original.goal.input.phaseIdentity,
         original.goal.input.repositoryIdentity, steps, Vector("test"), repairLimit = 1,
         phaseReviewClassification = Some(phaseClassification), acceptance = if (boundary) Some(adoption) else None)
-      val plan = take(B.captureC(if (boundary) Some(project) else None, selectedPlan))
+      val plan = take(B.captureC(if (boundary) Some(project) else None, selectedplan))
       val host = original.copy(goal = original.goal.copy(candidatePaths = paths,
         closure = original.goal.closure.copy(programs = Vector(
           GoalPhaseNativeClosure.StepProgram("step-1", 1), GoalPhaseNativeClosure.StepProgram("step-2", 2)))))
@@ -184,19 +184,19 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
       val review = routine1.copy(identity = "spec-review", model = "spec-review-model")
       val reviewalternate = review.copy(identity = "spec-review-alternate", model = "spec-review-alternate-model")
       val critical = routine1.copy(identity = "spec-critical", model = "spec-critical-model")
-      def profileJson(p: WorkflowConcreteExecutionProfile): io.circe.Json = io.circe.Json.obj(
+      def _profile_json_(p: WorkflowConcreteExecutionProfile): io.circe.Json = io.circe.Json.obj(
         "identity" -> io.circe.Json.fromString(p.identity), "provider" -> io.circe.Json.fromString(p.provider),
         "model" -> io.circe.Json.fromString(p.model),
         "controls" -> io.circe.Json.obj(p.controls.toVector.map((key, value) => key -> io.circe.Json.fromString(value))*))
-      def episodeParameters(session: String): Map[String, String] = if (!mapped) Map.empty else {
+      def _episode_parameters_(session: String): Map[String, String] = if (!mapped) Map.empty else {
         val first = session == "issue"
-        val omitRoutine = Set("pending-replacement", "review-repair")(session)
+        val omitroutine = Set("pending-replacement", "review-repair")(session)
         val routine = if (first) routine1 else routine2
         val classes = Vector("CodingProgrammingDeep" -> deep.identity, "ReviewStandard" -> review.identity,
-          "ReviewCritical" -> critical.identity) ++ (if (omitRoutine) Vector.empty else Vector("CodingProgrammingRoutine" -> routine.identity))
+          "ReviewCritical" -> critical.identity) ++ (if (omitroutine) Vector.empty else Vector("CodingProgrammingRoutine" -> routine.identity))
         val profiles = io.circe.Json.obj("schemaVersion" -> io.circe.Json.fromString(WorkflowExecutionProfileParameters.schemaVersion),
           "identity" -> io.circe.Json.fromString("spec-goal-mapping"), "revision" -> io.circe.Json.fromString(if (first) "1" else "2"),
-          "profiles" -> io.circe.Json.fromValues(Vector(routine, deep, review, critical, reviewalternate).map(profileJson)),
+          "profiles" -> io.circe.Json.fromValues(Vector(routine, deep, review, critical, reviewalternate).map(_profile_json_)),
           "classes" -> io.circe.Json.fromValues(classes.map((name, profile) => io.circe.Json.obj(
             "reasoningClass" -> io.circe.Json.fromString(name), "profile" -> io.circe.Json.fromString(profile)))),
           "fallbacks" -> io.circe.Json.fromValues(if (!boundary) Vector.empty else Vector(io.circe.Json.obj(
@@ -204,7 +204,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             "profile" -> io.circe.Json.fromString(reviewalternate.identity)))))
         val origin = io.circe.Json.obj("schemaVersion" -> io.circe.Json.fromString(GoalPhaseNativeExecution.schemaVersion),
           "current" -> io.circe.Json.obj("contextIdentity" -> io.circe.Json.fromString(if (first) "spec-origin-1" else "spec-origin-2"),
-            "profile" -> profileJson(if (first) routine1 else current2)),
+            "profile" -> _profile_json_(if (first) routine1 else current2)),
           "preference" -> io.circe.Json.obj("forceInline" -> io.circe.Json.False, "isolateContext" -> io.circe.Json.False))
         val parameters = Map(WorkflowExecutionProfileParameters.declaration.name -> profiles.noSpaces,
           GoalPhaseNativeExecution.declaration.name -> origin.noSpaces)
@@ -214,12 +214,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           parameters.updated(B.declaration.name, current.asJson.mapObject(_.add("schemaVersion", io.circe.Json.fromString(B.schemaVersion))).noSpaces)
         }
       }
-      var expectedIssues = Map.empty[String, (ExecutionDisposition, String)]
+      var expectedissues = Map.empty[String, (ExecutionDisposition, String)]
       var hostsessions = Map.empty[String, NativeWorkflowHostExecution.Prepared]
       var usedreviewalternate = false
       val sessions = Vector("issue") ++ (if (mapped) Vector("pending-replacement") else Vector.empty) ++
         Vector("implement-1", "review-repair", "repair", "review-1", "implement-2", "review-2", "phase-review", "repository-close")
-      for (session <- sessions) _with_runtime_(root, "Goal", Some(host), episodeParameters(session)) { (owner, component, actor, prepare) =>
+      for (session <- sessions) _with_runtime_(root, "Goal", Some(host), _episode_parameters_(session)) { (owner, component, actor, prepare) =>
         val invocationcontext = actor
         Given("every normal episode uses the actual invocation session across managed SQLite runtimes")
         def _call_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -470,7 +470,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           order.requirement.reasoningClass shouldBe Some(ReasoningClassReference(semanticClass))
           order.requirement.reviewRequired shouldBe reviewRequired
           if (mapped) {
-            val expected = expectedIssues.getOrElse(order.request.continuationId.value, {
+            val expected = expectedissues.getOrElse(order.request.continuationId.value, {
               val first = session == "issue"
               val placement = if (first && semanticClass == "CodingProgrammingRoutine") ExecutionPlacement.Inline else ExecutionPlacement.Delegated
               val independence = if (reviewRequired) ExecutionIndependence.Required else ExecutionIndependence.Optional
@@ -484,7 +484,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             })
             order.requirement.disposition shouldBe Some(expected._1)
             hostsessions(order.request.continuationId.value).session.primary.identity shouldBe expected._2
-            expectedIssues = expectedIssues.updated(order.request.continuationId.value, expected)
+            expectedissues = expectedissues.updated(order.request.continuationId.value, expected)
           } else order.requirement.disposition shouldBe None
           assigned = Some(next)
           saved = Some(_current_())
@@ -593,7 +593,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               take(ProfileSelectionJsonV1.encodeStorageC(selection))))
             _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
               take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(
-                selection.selectionId, selection.participantIdentity, selectedPlan)))))
+                selection.selectionId, selection.participantIdentity, selectedplan)))))
           } yield ())
           When("public Start saves the complete selected plan and captures the actual clean base")
           val started = _invoke_[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(host.goal.input))

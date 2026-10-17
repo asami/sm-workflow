@@ -46,7 +46,7 @@ private[admission] trait NativeHostPreparationOperationFixture extends ThreeWork
     def saveValue(name: String, value: Record): String = save(name, take(value.toJsonStringC))
     def cases(operation: String): Vector[PreparedCase] = {
       var result = Vector.empty[PreparedCase]
-      project { call => result = selectedCases(this, operation, call.core); Consequence.unit }
+      project { call => result = _selected_cases(this, operation, call.core); Consequence.unit }
       result
     }
   }
@@ -66,7 +66,7 @@ private[admission] trait NativeHostPreparationOperationFixture extends ThreeWork
   protected def nativeRow(identity: String, record: Record): Record = Record.data("id" -> identity,
     NativeHostEvidence.storageField -> record.getString(NativeHostEvidence.storageField).get)
 
-  private def selectedCases(episode: PreparationEpisode, operation: String, core: ActionCall.Core): Vector[PreparedCase] = {
+  private def _selected_cases(episode: PreparationEpisode, operation: String, core: ActionCall.Core): Vector[PreparedCase] = {
     val owner = core.component.get.core.instanceId.canonicalKey
     operation match {
       case "prepareGoalStart" =>
@@ -77,15 +77,15 @@ private[admission] trait NativeHostPreparationOperationFixture extends ThreeWork
         val selection = ProfileStartAdmission.Selection("明示-goal", GoalPhaseNativeRun.startOperation,
           definition.workflowIdentity, definition.workflowRevision, "明示参加者", ProfileStartAdmission.SelectionOrigin.ExplicitHuman,
           "明示-key", None, Some(TypedValue(NativeWorkflowStartInput.Kind.GoalPhase.inputType, input.asJson)))
-        val selectionRow = Record.data("id" -> NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input), "明示参加者"),
+        val selectionrow = Record.data("id" -> NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input), "明示参加者"),
           ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(selection)))
-        val planRow = Record.data("id" -> selection.selectionId, GoalPhaseSelectedPlanJsonV1.storageField ->
+        val planrow = Record.data("id" -> selection.selectionId, GoalPhaseSelectedPlanJsonV1.storageField ->
           take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId, "明示参加者", plan))))
         Vector(PreparedCase("Goal two selected rows", V.WorkflowGoalStartPreparationInput(
           episode.save("goal-input", input.asJson.noSpaces), episode.save("goal-plan", plan.asJson.noSpaces),
           selection.selectionId, "明示参加者", "ExplicitHuman", "明示-key", "entity:smworkflow.cli.goal_selection",
           "entity:smworkflow.cli.goal_plans").toRecord(),
-          importRows("entity:smworkflow.cli.goal_selection" -> Vector(selectionRow), "entity:smworkflow.cli.goal_plans" -> Vector(planRow))))
+          importRows("entity:smworkflow.cli.goal_selection" -> Vector(selectionrow), "entity:smworkflow.cli.goal_plans" -> Vector(planrow))))
       case "prepareRepositoryStart" =>
         val input = ThreeWorkflowNormalHostFixture.definition(episode.root).repository.input
         val definition = take(RepositorySyncDefinitionBinding.bindC)
@@ -132,15 +132,15 @@ private[admission] trait NativeHostPreparationOperationFixture extends ThreeWork
             f.participant, f.issuer, f.now.minusSeconds(60).toString, evidenceCollection).toRecord(),
             importRows(evidenceCollection -> Vector(nativeRow(expected.recordIdentity, expected.record))))
         }
-      case "prepareEvidence" => evidenceCases(episode, core)
+      case "prepareEvidence" => _evidence_cases(episode, core)
       case _ => throw new IllegalArgumentException("Specification selected an undeclared preparation Operation")
     }
   }
 
-  private def evidenceCases(episode: PreparationEpisode, core: ActionCall.Core): Vector[PreparedCase] = {
+  private def _evidence_cases(episode: PreparationEpisode, core: ActionCall.Core): Vector[PreparedCase] = {
     import NativeHostPreparationFixture.*
-    val goalResult = V.GoalPhaseWorkResult("accept", "明示レビュー", Vector.empty, None)
-    val repositoryResult = V.RepositorySyncNativeMergeReviewResult("accept", "明示レビュー", Vector.empty)
+    val goalresult = V.GoalPhaseWorkResult("accept", "明示レビュー", Vector.empty, None)
+    val repositoryresult = V.RepositorySyncNativeMergeReviewResult("accept", "明示レビュー", Vector.empty)
     def entry(label: String, family: String, kind: String, request: RecordPresentable, result: RecordPresentable,
       identity: String, payload: Record): PreparedCase = PreparedCase(label,
       V.WorkflowEvidencePreparationInput(family, kind,
@@ -152,52 +152,52 @@ private[admission] trait NativeHostPreparationOperationFixture extends ThreeWork
     val goals = Vector("ReviewStep", "ReviewPhase").map { kind =>
       val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(goalWork(kind), core))
       val expected = take(NativeHostReviewPreparation.goalC(output.work.get.review.get.hostContext.get,
-        goalResult, reference, execution, issuer, now.minusSeconds(60)))
-      entry(kind, "GoalPhase", "review", output, goalResult, expected.recordIdentity, expected.record)
+        goalresult, reference, execution, issuer, now.minusSeconds(60)))
+      entry(kind, "GoalPhase", "review", output, goalresult, expected.recordIdentity, expected.record)
     }
     val repository = take(NativeWorkflowOperationOutput.repositoryReviewRequestC(repositoryWork, core))
     val review = take(NativeHostReviewPreparation.repositoryC(repository.review.get.hostContext.get,
-      repositoryResult, reference, execution, issuer, now.minusSeconds(60)))
-    val typedReceipt = receipt.copy(sbt = Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly,
+      repositoryresult, reference, execution, issuer, now.minusSeconds(60)))
+    val typedreceipt = receipt.copy(sbt = Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly,
       WorkflowSbtValidation.Outcome.Succeeded,
       Some(WorkflowSbtValidation.Selection(Vector("example.FirstSpec", "example.SecondSpec"), 2, 25L)), None)))
-    val typedGoals = Vector("ReviewStep", "ReviewPhase").map { kind =>
+    val typedgoals = Vector("ReviewStep", "ReviewPhase").map { kind =>
       val input = NativeHostHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = kind,
         candidate = Some(NativeHostHumanEvidenceFixture.snapshot), checksReceipt = Some("focused"),
-        review = Some(GoalPhaseNativeReview.Context(Vector("one.scala"), "fixture typed diff", Vector(typedReceipt))))
+        review = Some(GoalPhaseNativeReview.Context(Vector("one.scala"), "fixture typed diff", Vector(typedreceipt))))
       val issued = work("GoalPhaseWorkflow", input, GoalPhaseNativeWork.inputCodec.typeIdentity,
         GoalPhaseNativeWork.resultCodec.typeIdentity, GoalPhaseNativeRun.completionOperation)
       val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(issued, core))
       val expected = take(NativeHostReviewPreparation.goalC(output.work.get.review.get.hostContext.get,
-        goalResult, reference, execution, issuer, now.minusSeconds(60)))
-      entry("Typed" + kind, "GoalPhase", "review", output, goalResult, expected.recordIdentity, expected.record)
+        goalresult, reference, execution, issuer, now.minusSeconds(60)))
+      entry("Typed" + kind, "GoalPhase", "review", output, goalresult, expected.recordIdentity, expected.record)
     }
-    val typedRepositoryInput = RepositorySyncNativeMergeReview.Request("instance", "7", "a" * 40,
+    val typedrepositoryinput = RepositorySyncNativeMergeReview.Request("instance", "7", "a" * 40,
       "c" * 40, "b" * 40, Vector("one.scala"), "fixture typed local diff", "fixture typed remote diff", "required", "focused",
-      Vector("focused"), Vector(typedReceipt))
-    val typedRepositoryWork = work("RepositorySyncWorkflow", typedRepositoryInput,
+      Vector("focused"), Vector(typedreceipt))
+    val typedrepositorywork = work("RepositorySyncWorkflow", typedrepositoryinput,
       RepositorySyncNativeMergeReview.inputCodec.typeIdentity, RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
       RepositorySyncNativeMergeReviewContinuation.completionOperation)
-    val typedRepository = take(NativeWorkflowOperationOutput.repositoryReviewRequestC(typedRepositoryWork, core))
-    val typedReview = take(NativeHostReviewPreparation.repositoryC(typedRepository.review.get.hostContext.get,
-      repositoryResult, reference, execution, issuer, now.minusSeconds(60)))
-    val goalHuman = take(NativeWorkflowOperationOutput.goalHumanC(NativeHostHumanEvidenceFixture.goalQuestion, core))
-    val own = take(NativeHostHumanPreparation.goalC(goalHuman.human.get.hostContext.get, goalAnswer,
+    val typedrepository = take(NativeWorkflowOperationOutput.repositoryReviewRequestC(typedrepositorywork, core))
+    val typedreview = take(NativeHostReviewPreparation.repositoryC(typedrepository.review.get.hostContext.get,
+      repositoryresult, reference, execution, issuer, now.minusSeconds(60)))
+    val goalhuman = take(NativeWorkflowOperationOutput.goalHumanC(NativeHostHumanEvidenceFixture.goalQuestion, core))
+    val own = take(NativeHostHumanPreparation.goalC(goalhuman.human.get.hostContext.get, goalAnswer,
       reference, execution, participant, issuer, now.minusSeconds(60)))
-    val repositoryHuman = take(NativeWorkflowOperationOutput.repositoryHumanC(NativeHostHumanEvidenceFixture.repositoryQuestion, core))
-    val human = take(NativeHostHumanPreparation.repositoryC(repositoryHuman.human.get.hostContext.get, repositoryAnswer,
+    val repositoryhuman = take(NativeWorkflowOperationOutput.repositoryHumanC(NativeHostHumanEvidenceFixture.repositoryQuestion, core))
+    val human = take(NativeHostHumanPreparation.repositoryC(repositoryhuman.human.get.hostContext.get, repositoryAnswer,
       reference, execution, participant, issuer, now.minusSeconds(60)))
-    goals ++ typedGoals ++ Vector(
-      entry("TypedDirectRepositoryReview", "RepositorySync", "review", typedRepository, repositoryResult,
-        typedReview.recordIdentity, typedReview.record),
-      entry("TypedForwardedRepositoryReview", "GoalPhase", "review", NativeWorkflowOperationOutput.goalChild("outer-goal", typedRepository),
-        repositoryResult, typedReview.recordIdentity, typedReview.record),
-      entry("DirectRepositoryReview", "RepositorySync", "review", repository, repositoryResult, review.recordIdentity, review.record),
+    goals ++ typedgoals ++ Vector(
+      entry("TypedDirectRepositoryReview", "RepositorySync", "review", typedrepository, repositoryresult,
+        typedreview.recordIdentity, typedreview.record),
+      entry("TypedForwardedRepositoryReview", "GoalPhase", "review", NativeWorkflowOperationOutput.goalChild("outer-goal", typedrepository),
+        repositoryresult, typedreview.recordIdentity, typedreview.record),
+      entry("DirectRepositoryReview", "RepositorySync", "review", repository, repositoryresult, review.recordIdentity, review.record),
       entry("ForwardedRepositoryReview", "GoalPhase", "review", NativeWorkflowOperationOutput.goalChild("outer-goal", repository),
-        repositoryResult, review.recordIdentity, review.record),
-      entry("GoalHuman", "GoalPhase", "human", goalHuman, goalAnswer, own.recordIdentity, own.record),
-      entry("DirectRepositoryHuman", "RepositorySync", "human", repositoryHuman, repositoryAnswer, human.recordIdentity, human.record),
-      entry("ForwardedRepositoryHuman", "GoalPhase", "human", NativeWorkflowOperationOutput.goalChild("outer-goal", repositoryHuman),
+        repositoryresult, review.recordIdentity, review.record),
+      entry("GoalHuman", "GoalPhase", "human", goalhuman, goalAnswer, own.recordIdentity, own.record),
+      entry("DirectRepositoryHuman", "RepositorySync", "human", repositoryhuman, repositoryAnswer, human.recordIdentity, human.record),
+      entry("ForwardedRepositoryHuman", "GoalPhase", "human", NativeWorkflowOperationOutput.goalChild("outer-goal", repositoryhuman),
         repositoryAnswer, human.recordIdentity, human.record))
   }
 }

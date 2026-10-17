@@ -68,7 +68,7 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
       When("the passive tool prepares the files using an independent ordering of finite fields")
       val entries = _entries(_take(Main.prepareC(args, reader)))
       val selection = _selection(entries)
-      val selectedPlan = _selected_plan(entries)
+      val selectedplan = _selected_plan(entries)
 
       Then("only the selected input and Plan collections contain one canonical-owner encoded row each")
       reads shouldBe Vector("input.json", "plan.json")
@@ -94,9 +94,9 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
       selection.selectedInput.get.typeIdentity shouldBe NativeWorkflowStartInput.Kind.GoalPhase.inputType
       selection.selectedInput.get.value.as[V.GoalPhaseStartInput].toOption shouldBe Some(_input)
       selection.selectedInput.get.value.asObject.get.keys.toSet shouldBe Set("phaseIdentity", "repositoryIdentity")
-      selectedPlan.selectionIdentity shouldBe selection.selectionId
-      selectedPlan.participantIdentity shouldBe selection.participantIdentity
-      selectedPlan.plan shouldBe _plan
+      selectedplan.selectionIdentity shouldBe selection.selectionId
+      selectedplan.participantIdentity shouldBe selection.participantIdentity
+      selectedplan.plan shouldBe _plan
     }
   }
 
@@ -128,18 +128,18 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
 
     "return failure for business fields rejected by the generated reader and structurally invalid Plan JSON" in {
       Given("missing or null required business fields, malformed JSON, and Plan fields with incompatible structural types")
-      val inputVariants = Vector("{}", "null", "[]", "{",
+      val inputvariants = Vector("{}", "null", "[]", "{",
         "{\"phaseIdentity\":null,\"repositoryIdentity\":\"sm-workflow\"}",
         "{\"phaseIdentity\":\"phase-6\"}")
-      val planVariants = Vector("{}", "null", "[]", "{",
+      val planvariants = Vector("{}", "null", "[]", "{",
         _plan.asJson.mapObject(_.add("steps", Json.fromString("invalid"))).noSpaces,
         _plan.asJson.mapObject(_.add("repairLimit", Json.fromString("invalid"))).noSpaces,
         _plan.asJson.mapObject(_.add("phaseChecks", Json.True)).noSpaces)
       val baseline = _files()
 
       When("the passive tool reads each rejected business or Plan file instead of the selected valid file")
-      val results = inputVariants.map(raw => Main.prepareC(_args, _read(baseline.updated("input.json", raw)))) ++
-        planVariants.map(raw => Main.prepareC(_args, _read(baseline.updated("plan.json", raw))))
+      val results = inputvariants.map(raw => Main.prepareC(_args, _read(baseline.updated("input.json", raw)))) ++
+        planvariants.map(raw => Main.prepareC(_args, _read(baseline.updated("plan.json", raw))))
 
       Then("each canonical decoding failure returns an error without successful importer output")
       results.foreach(_.toOption shouldBe None)
@@ -164,7 +164,7 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
     "in spec:native-host-goal-start-preparation, example:E3, rules:R1,R2,R4,R5, phase:6") {
     "reject omitted unknown null empty inexact origin and collection metadata before reading files" in {
       Given("the eight required finite fields and bounded variants that omit, duplicate, replace or corrupt selected metadata")
-      val invalidArgs: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
+      val invalidargs: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
         _args.updated("permission", "granted"), _args.updated("help", "true")) ++
         _args.keys.toVector.map(_args - _) ++ _args.keys.toVector.flatMap(key =>
           Vector[String](null, "", " ", " trimmed", "trailing ", "control\nvalue").map(value => _args.updated(key, value))) ++
@@ -178,7 +178,7 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
       val reader: String => Consequence[String] = _ => { reads += 1; Consequence.stateConflict("No input should be read") }
 
       When("each invalid explicit argument set is passed to the converter")
-      val results = invalidArgs.map(Main.prepareC(_, reader))
+      val results = invalidargs.map(Main.prepareC(_, reader))
 
       Then("each call returns an error and neither selected file has been read")
       results.foreach(_.toOption shouldBe None)
@@ -188,12 +188,12 @@ final class NativeHostGoalStartInputSpec extends AnyWordSpec with Matchers with 
     "contain absent failing and throwing file callbacks as Consequence errors" in {
       Given("valid explicit arguments and absent, failed, null-result or throwing readers with no successful file input")
       val failed: String => Consequence[String] = _ => Consequence.stateConflict("Explicit file unavailable")
-      val nullResult: String => Consequence[String] = _ => null
+      val nullresult: String => Consequence[String] = _ => null
       val throwing: String => Consequence[String] = _ => throw new IllegalArgumentException("Invalid selected file")
 
       When("preparation receives each unavailable reader including a null reader on an empty field set")
       val results = Vector(Main.prepareC(_args, null), Main.prepareC(Map.empty[String, String], null),
-        Main.prepareC(_args, failed), Main.prepareC(_args, nullResult), Main.prepareC(_args, throwing))
+        Main.prepareC(_args, failed), Main.prepareC(_args, nullresult), Main.prepareC(_args, throwing))
 
       Then("no callback failure escapes as an unchecked exception or successful importer JSON")
       results.foreach(_.toOption shouldBe None)

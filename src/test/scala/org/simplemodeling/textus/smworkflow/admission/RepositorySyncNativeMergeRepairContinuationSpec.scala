@@ -30,13 +30,13 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
     with ThreeWorkflowManagedRepositoryFixture {
   private val _replacement = "repaired shared line\n"
 
-  private def _repair_mode_(root: Path): String =
+  private def _repair_mode(root: Path): String =
     Vector("failed", "indeterminate", "intent-only").find(mode => root.getFileName.toString.startsWith(mode + "-"))
       .getOrElse("connected")
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit =
-    if (!Files.exists(root.resolve("repository/build.sbt"))) TypedSbtHostPlanFixture.buildRepair(root, _repair_mode_(root))
+    if (!Files.exists(root.resolve("repository/build.sbt"))) TypedSbtHostPlanFixture.buildRepair(root, _repair_mode(root))
   override protected def _sbt_execution_timeout_millis_(root: Path, scenario: String): Long =
-    if (_repair_mode_(root) == "indeterminate") 90000L else 180000L
+    if (_repair_mode(root) == "indeterminate") 90000L else 180000L
 
   private final class Episode(val root: Path, val input: V.RepositorySyncStartInput,
     call: (String, List[Property]) => Consequence[OperationResponse], prepare: (Setup => Consequence[Unit]) => Unit,
@@ -126,8 +126,8 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         .flatMap(_ => _prepare_input_(call, input, selection, root, merged = true, provisionEffects = false)))
       val started = invoke[V.RepositorySyncStartResult]("startRepositorySync", NativeWorkflowOperationInputFixture.repository(input))
       _identity = Some(InstanceIdentity(started.sessionId))
-      val conflictResponse = advance()
-      conflictResponse.kind shouldBe "Request"
+      val conflictresponse = advance()
+      conflictresponse.kind shouldBe "Request"
       val conflict = work(RepositorySyncNativeConflictContinuation.completionOperation, RepositorySyncConflictSemantic.inputCodec)
       val selected = conflict.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request.input.get.value
       val resolved = result(conflict, RepositorySyncConflictSemantic.Result("resolved", selected.conflicts.map(c =>
@@ -159,14 +159,14 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
     }
   }
 
-  private def _with_episode(mode: String = "connected", hostParameters: Map[String, String] = Map.empty)(task: Episode => Unit): Unit = {
+  private def _with_episode(mode: String = "connected", hostparameters: Map[String, String] = Map.empty)(task: Episode => Unit): Unit = {
     val owned = Files.createDirectories(Path.of("target/sm-workflow/work/native-merge-repair").toAbsolutePath.normalize)
     val root = Files.createTempDirectory(owned, mode + "-")
     val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
-    _with_runtime_(root, "Conflict", hostParameters = hostParameters) { (owner, component, actor, prepare) =>
+    _with_runtime_(root, "Conflict", hostParameters = hostparameters) { (owner, component, actor, prepare) =>
       val call = (operation: String, fields: List[Property]) => owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = "RepositorySyncService", operation = operation, properties = fields), actor)
-      val execution = if (!hostParameters.contains(RepositorySyncNativeExecution.declaration.name)) None else Some((
+      val execution = if (!hostparameters.contains(RepositorySyncNativeExecution.declaration.name)) None else Some((
         take(WorkflowExecutionProfileParameters.resolveC(component.initializationParameters)).get,
         take(GoalPhaseNativeExecution.resolveOriginC(component.initializationParameters)).get))
       task(new Episode(root, input, call, prepare, execution = execution))
@@ -176,18 +176,18 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
   "Mapped Repository repair" should afterWord("in spec:repository-sync-native-execution, example:E6, rules:R1,R2,R3,R4,R5") {
     "complete mapped repository execution repair through separate Submit Advance fresh SBT and newly mapped review" in {
       Given("an owned real conflict, normal SQLite Operations, paired classifications and specification-owned canonical execution observations")
-      _with_episode(hostParameters = RepositoryExecutionFixture.parameters()) { episode =>
+      _with_episode(hostparameters = RepositoryExecutionFixture.parameters()) { episode =>
         When("normal Start conflict completion and owning Advance build and actually SBT-validate the original resolved candidate")
         val original = episode.originalReview()
-        val oldOrder = original.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
-        val oldInput = oldOrder.request.input.get.value
-        val oldValidated = episode.stage("merge-validated").get
+        val oldorder = original.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
+        val oldinput = oldorder.request.input.get.value
+        val oldvalidated = episode.stage("merge-validated").get
         Then("the actual first review is ReviewStandard with required separately scoped execution")
-        oldOrder.requirement.reasoningClass shouldBe Some(ReasoningClassReference("ReviewStandard"))
-        oldOrder.requirement.disposition shouldBe Some(ExecutionDisposition(ExecutionPlacement.Delegated, ExecutionIndependence.Required,
+        oldorder.requirement.reasoningClass shouldBe Some(ReasoningClassReference("ReviewStandard"))
+        oldorder.requirement.disposition shouldBe Some(ExecutionDisposition(ExecutionPlacement.Delegated, ExecutionIndependence.Required,
           RepositoryExecutionFixture.origin.current.contextIdentity))
         When("the actual independently evidenced mapped review is submitted with a repair finding")
-        val reviewResult = episode.completeRepairReview(original)
+        val reviewresult = episode.completeRepairReview(original)
         val reviewed = episode.current()
         val namespace = "repair-" + reviewed.revision.value
         Then("only the original review completion is saved before repair issuance")
@@ -208,7 +208,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         order.requirement.reasoningClass shouldBe Some(ReasoningClassReference("CodingProgrammingStandard"))
         order.requirement.disposition shouldBe Some(ExecutionDisposition(ExecutionPlacement.Inline, ExecutionIndependence.Optional,
           RepositoryExecutionFixture.origin.current.contextIdentity))
-        order.request.input.get.value.findings shouldBe reviewResult.result.value.findings
+        order.request.input.get.value.findings shouldBe reviewresult.result.value.findings
         order.request.input.get.value.files.map(_.text) shouldBe Vector("resolved shared line\n")
         pending.issuedWorkContext shouldBe response.issuedWorkContext
         episode.repairWork().current.asInstanceOf[WorkflowContinuation.WorkOrder[M.Request]].requirement shouldBe order.requirement
@@ -232,33 +232,33 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         episode.stage(N.candidateKey(namespace, "pending-merge")) shouldBe None
         Files.readString(episode.root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 1
         When("a separate owning Advance applies stages and freshly SBT-validates the candidate before issuing another independent review")
-        val responseFresh = episode.advance()
+        val responsefresh = episode.advance()
         val fresh = episode.work(RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec)
-        val freshOrder = fresh.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
-        val freshInput = freshOrder.request.input.get.value
+        val freshorder = fresh.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
+        val freshinput = freshorder.request.input.get.value
         val candidate = episode.stage(N.candidateKey(namespace, "pending-merge")).get
         val validated = episode.stage(N.candidateKey(namespace, "merge-validated")).get
         Then("the new full ReviewStandard belongs to the changed index and real fresh check while original issue and completion records remain readable")
         episode.text shouldBe _replacement
-        responseFresh.kind shouldBe "Request"
-        responseFresh.repair shouldBe None
-        responseFresh.issuedWorkContext.get.thinkingMode shouldBe "review"
-        responseFresh.issuedWorkContext.get.executionRequirement.getString("reasoningClass") shouldBe Some("ReviewStandard")
-        freshOrder.requirement.reasoningClass shouldBe Some(ReasoningClassReference("ReviewStandard"))
-        freshOrder.requirement.disposition shouldBe oldOrder.requirement.disposition
-        freshOrder.request.continuationId should not be oldOrder.request.continuationId
-        freshInput.indexTree should not be oldInput.indexTree
-        freshInput.indexTree shouldBe candidate.payload.indexTree.get
-        freshInput.validatedRevision shouldBe validated.record.revision.value.toString
-        freshInput.localDiff should include(_replacement.trim)
-        freshInput.remoteDiff should include(_replacement.trim)
+        responsefresh.kind shouldBe "Request"
+        responsefresh.repair shouldBe None
+        responsefresh.issuedWorkContext.get.thinkingMode shouldBe "review"
+        responsefresh.issuedWorkContext.get.executionRequirement.getString("reasoningClass") shouldBe Some("ReviewStandard")
+        freshorder.requirement.reasoningClass shouldBe Some(ReasoningClassReference("ReviewStandard"))
+        freshorder.requirement.disposition shouldBe oldorder.requirement.disposition
+        freshorder.request.continuationId should not be oldorder.request.continuationId
+        freshinput.indexTree should not be oldinput.indexTree
+        freshinput.indexTree shouldBe candidate.payload.indexTree.get
+        freshinput.validatedRevision shouldBe validated.record.revision.value.toString
+        freshinput.localDiff should include(_replacement.trim)
+        freshinput.remoteDiff should include(_replacement.trim)
         validated.payload.validation.get.sourceRevision shouldBe candidate.record.revision.value.toString
         validated.payload.validation.get.receipts.map(_.identity) shouldBe Vector("index-local", "index-remote", "test")
         _assert_product_check_(episode.root, validated.payload.validation.get.receipts.last.stdout)
         Files.readString(episode.root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 2
-        episode.stage("merge-validated").get.record.revision shouldBe oldValidated.record.revision
+        episode.stage("merge-validated").get.record.revision shouldBe oldvalidated.record.revision
         episode.savedWork(original, RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec).get
-          .current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].requirement shouldBe oldOrder.requirement
+          .current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].requirement shouldBe oldorder.requirement
         episode.savedWork(assigned, RepositorySyncNativeMergeRepairContinuation.completionOperation, M.inputCodec).get
           .current.asInstanceOf[WorkflowContinuation.WorkOrder[M.Request]].requirement shouldBe order.requirement
         episode.savedCompletion(original, RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec,
@@ -276,9 +276,9 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
       Given("a production normal host, SQLite, real owned conflict and specification-owned independent review evidence")
       _with_episode() { episode =>
         val original = episode.originalReview()
-        val oldInput = original.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request.input.get.value
-        val oldValidated = episode.stage("merge-validated").get
-        val reviewResult = episode.completeRepairReview(original)
+        val oldinput = original.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request.input.get.value
+        val oldvalidated = episode.stage("merge-validated").get
+        val reviewresult = episode.completeRepairReview(original)
         val completed = episode.current()
         val namespace = "repair-" + completed.revision.value
         When("normal Advance issues the affected repair from that actual paired review completion")
@@ -290,7 +290,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         response.kind shouldBe "Request"
         response.resultType shouldBe Some("RepositorySyncNativeMergeRepairResult")
         response.repair.get.files.map(_.path) shouldBe Vector("shared.txt")
-        input.findings shouldBe reviewResult.result.value.findings
+        input.findings shouldBe reviewresult.result.value.findings
         input.files.map(_.text) shouldBe Vector("resolved shared line\n")
         order.request.continuationId.value shouldBe episode.identity.value + ":native-repair:" + completed.revision.value
         order.requirement.reviewRequired shouldBe false
@@ -316,28 +316,28 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         val fresh = episode.advance()
         val pending = episode.stage(N.candidateKey(namespace, "pending-merge")).get
         val validated = episode.stage(N.candidateKey(namespace, "merge-validated")).get
-        val newReview = episode.work(RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec)
-        val newOrder = newReview.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
-        val newInput = newOrder.request.input.get.value
+        val newreview = episode.work(RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec)
+        val neworder = newreview.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]
+        val newinput = neworder.request.input.get.value
         Then("the current full review belongs to the changed index and actual new SBT cwd/pass/PID while original records remain readable")
         episode.text shouldBe _replacement
         fresh.kind shouldBe "Request"
         fresh.repair shouldBe None
-        newInput.indexTree should not be oldInput.indexTree
-        newInput.indexTree shouldBe pending.payload.indexTree.get
-        newInput.localDiff should include(_replacement.trim)
-        newInput.remoteDiff should include(_replacement.trim)
-        newInput.validatedRevision shouldBe validated.record.revision.value.toString
+        newinput.indexTree should not be oldinput.indexTree
+        newinput.indexTree shouldBe pending.payload.indexTree.get
+        newinput.localDiff should include(_replacement.trim)
+        newinput.remoteDiff should include(_replacement.trim)
+        newinput.validatedRevision shouldBe validated.record.revision.value.toString
         validated.payload.validation.get.sourceRevision shouldBe pending.record.revision.value.toString
         validated.payload.validation.get.receipts.map(_.identity) shouldBe Vector("index-local", "index-remote", "test")
         _assert_product_check_(episode.root, validated.payload.validation.get.receipts.last.stdout)
         Files.readString(episode.root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 2
         Files.exists(episode.root.resolve("repaired-check-entered.txt")) shouldBe false
-        newOrder.request.continuationId.value shouldBe episode.identity.value + ":native-review:" + validated.record.revision.value
-        newOrder.requirement.reviewRequired shouldBe true
-        episode.stage("merge-validated").get.record.revision shouldBe oldValidated.record.revision
+        neworder.request.continuationId.value shouldBe episode.identity.value + ":native-review:" + validated.record.revision.value
+        neworder.requirement.reviewRequired shouldBe true
+        episode.stage("merge-validated").get.record.revision shouldBe oldvalidated.record.revision
         episode.savedWork(original, RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec).get
-          .current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request.input.get.value.indexTree shouldBe oldInput.indexTree
+          .current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request.input.get.value.indexTree shouldBe oldinput.indexTree
         episode.savedCompletion(original, RepositorySyncNativeMergeReviewContinuation.completionOperation, R.inputCodec,
           R.resultCodec, RepositorySyncNativeMergeReviewContinuation.closingType).get.result.result.value.decision shouldBe "repair"
         episode.savedCompletion(assigned, RepositorySyncNativeMergeRepairContinuation.completionOperation, M.inputCodec,
@@ -354,7 +354,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
       Given("an original full review followed by its genuine affected-file repair issue")
       _with_episode() { episode =>
         val review = episode.originalReview()
-        val originalOrder = review.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request
+        val originalorder = review.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].request
         val unissued = episode.result(review, M.Result("repaired", "No repair assignment", Vector(M.File("shared.txt", _replacement))), "unissued")
         When("repair Submit is attempted against the pending review instead of a repair assignment")
         val refused = episode.submitC("submitNativeMergeRepair", unissued)
@@ -481,7 +481,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
       Given("a genuine repaired candidate whose original review evidence is retained separately")
       _with_episode() { episode =>
         val original = episode.originalReview()
-        val originalResult = episode.completeRepairReview(original)
+        val originalresult = episode.completeRepairReview(original)
         episode.advance()
         episode.submitRepair(episode.repaired(episode.repairWork()))
         episode.advance()
@@ -491,8 +491,8 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         val before = episode.current().revision
         When("the new review attempts acceptance with missing evidence and then the old review's evidence reference")
         val missing = episode.submitC("submitNativeMergeReview", accepted)
-        val old = episode.submitC("submitNativeMergeReview", accepted.copy(resultReference = originalResult.resultReference,
-          evidence = originalResult.evidence))
+        val old = episode.submitC("submitNativeMergeReview", accepted.copy(resultReference = originalresult.resultReference,
+          evidence = originalresult.evidence))
         Then("neither evidence source accepts the new candidate or appends its result")
         missing.isSuccess shouldBe false
         old.isSuccess shouldBe false
@@ -502,12 +502,12 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         read_value[V.RepositorySyncNativeMergeReviewSubmissionResult](take(episode.submitC("submitNativeMergeReview", accepted))).accepted shouldBe true
         Then("fresh acceptance remains before current separately authorized convergence effects")
         episode.current().currentProgression shouldBe Some(ProgressionReference("sync.ReviewAccepted"))
-        val beforeAdvance = episode.current().revision
+        val beforeadvance = episode.current().revision
         When("Advance attempts convergence without any specification effect grant")
         val response = episode.advanceC()
         Then("no commit/push or Terminal is inferred from review acceptance")
         response.isSuccess shouldBe false
-        episode.current().revision shouldBe beforeAdvance
+        episode.current().revision shouldBe beforeadvance
         episode.stage("commit-intent") shouldBe None
         episode.text shouldBe _replacement
       }
@@ -541,8 +541,8 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
             pid should be > 0L
             pid should not be ProcessHandle.current().pid()
           }
-          val checkIntent = episode.stage(N.candidateKey(namespace, "validation-intent-2")).get
-          checkIntent.payload.validation.get.receipts.map(_.identity) shouldBe Vector("index-local", "index-remote")
+          val checkintent = episode.stage(N.candidateKey(namespace, "validation-intent-2")).get
+          checkintent.payload.validation.get.receipts.map(_.identity) shouldBe Vector("index-local", "index-remote")
           if (mode == "intent-only") {
             actual.isSuccess shouldBe false
             actual.toString should include("validation capture is not ordinary text")

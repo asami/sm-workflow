@@ -99,43 +99,43 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
       Given("existing native Goal Repository Scope and Reasoning fixture Decisions and supplied typed answers")
       withCore { call =>
         val decision = _goal.repositoryQuestion.current.asInstanceOf[WorkflowContinuation.Decision[RepositorySyncHumanConflict.Input]]
-        val repositoryInput = decision.request.input.get.value
-        val repositoryQuestion = _goal.repositoryQuestion.copy(current = decision.copy(request = decision.request.copy(input = Some(
-          TypedValue(RepositorySyncHumanConflict.inputCodec.typeIdentity, repositoryInput.copy(conflict = repositoryInput.conflict.copy(
-            conflicts = repositoryInput.conflict.conflicts.map(_.copy(path = "literal\npath.scala")))))))))
+        val repositoryinput = decision.request.input.get.value
+        val repositoryquestion = _goal.repositoryQuestion.copy(current = decision.copy(request = decision.request.copy(input = Some(
+          TypedValue(RepositorySyncHumanConflict.inputCodec.typeIdentity, repositoryinput.copy(conflict = repositoryinput.conflict.copy(
+            conflicts = repositoryinput.conflict.conflicts.map(_.copy(path = "literal\npath.scala")))))))))
         val contexts = Vector(take(NativeHostHumanContext.goalC(call.core, _goal.goalQuestion)),
-          take(NativeHostHumanContext.repositoryC(call.core, repositoryQuestion)),
+          take(NativeHostHumanContext.repositoryC(call.core, repositoryquestion)),
           take(NativeHostHumanContext.splitC(call.core, _split.scopeQuestion)),
           take(NativeHostHumanContext.splitC(call.core, _split.reasoningQuestion)))
         val targets = Vector(
           take(ThreeWorkflowHostEvidencePorts.goalHumanBindingC(contexts.head.componentInstance, _goal.goalQuestion, _goal.goalAnswer, participant)),
           take(ThreeWorkflowHostEvidencePorts.repositoryHumanBindingC(RepositorySyncHumanConflict.AnswerContext(
-            call.core.component.get.core.instanceId, repositoryQuestion, _goal.repositoryAnswer, participant)))) ++
+            call.core.component.get.core.instanceId, repositoryquestion, _goal.repositoryAnswer, participant)))) ++
           Vector(_split.scopeQuestion, _split.reasoningQuestion).map(q => take(ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(
             SplitPhaseHumanAnswerVerification.AnswerContext(call.core.component.get.core.instanceId, q, _split.answer(q), participant))))
-        def prepare(context: V.WorkflowHostHumanContext): Consequence[Preparation.Prepared] = context.purpose match {
+        def _prepare_(context: V.WorkflowHostHumanContext): Consequence[Preparation.Prepared] = context.purpose match {
           case purpose if purpose == Purpose.GoalHuman.identity =>
             Preparation.goalC(context, goalAnswer, reference, execution, participant, issuer, now.minusSeconds(60))
           case purpose if purpose == Purpose.RepositoryHuman.identity =>
             Preparation.repositoryC(context, repositoryAnswer, reference, execution, participant, issuer, now.minusSeconds(60))
           case _ => Preparation.splitC(context, splitAnswer(), reference, execution, participant, issuer, now.minusSeconds(60))
         }
-        def replaceAt(value: Json, path: List[String], replacement: Json): Json = path match {
+        def _replace_at_(value: Json, path: List[String], replacement: Json): Json = path match {
           case key :: Nil => value.mapObject(_.add(key, replacement))
-          case key :: rest => value.mapObject(fields => fields.add(key, replaceAt(fields(key).get, rest, replacement)))
+          case key :: rest => value.mapObject(fields => fields.add(key, _replace_at_(fields(key).get, rest, replacement)))
           case Nil => replacement
         }
         // E7 supplies an actual Record with present nulls. The ordinary decoder
         // used by record()/wire() deliberately keeps its existing behavior.
-        def questionValue(value: Json): Any = value.fold[Any](null, boolean => boolean,
-          number => number.toBigDecimal.get, string => string, array => array.map(questionValue),
-          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> questionValue(field) }))
-        def questionRecord(value: Json): Record = questionValue(value).asInstanceOf[Record]
+        def _question_value_(value: Json): Any = value.fold[Any](null, boolean => boolean,
+          number => number.toBigDecimal.get, string => string, array => array.map(_question_value_),
+          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> _question_value_(field) }))
+        def _question_record_(value: Json): Record = _question_value_(value).asInstanceOf[Record]
         contexts.zip(targets).foreach { (context, target) =>
           val purpose = if (context.purpose == Purpose.GoalHuman.identity) Purpose.GoalHuman
             else if (context.purpose == Purpose.RepositoryHuman.identity) Purpose.RepositoryHuman else Purpose.SplitAnswer
           val raw = json(context.question)
-          val canonical = take(prepare(context))
+          val canonical = take(_prepare_(context))
           val snake = PropertyNameContext.default.transformRecord(context.question)
           val kebab = PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase).transformRecord(context.question)
           val annotation = Json.obj("input_type" -> Json.fromString("inert\nvalue"), "source-revision" -> Json.True,
@@ -145,7 +145,7 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
           val differing = raw.mapObject(_.add("input_type", Json.fromString("foreign-type")))
           When("the " + context.purpose + " consumed question uses canonical snake kebab or duplicate declared names")
           val equivalent = Vector(context.question, snake, kebab, record(matching), record(differing), record(annotated))
-            .map(q => take(prepare(context.copy(question = q))))
+            .map(q => take(_prepare_(context.copy(question = q))))
           Then("the unchanged native row and v7 payload agree exactly and inert annotations keep their literal values")
           equivalent.foreach { prepared =>
             prepared.recordIdentity shouldBe canonical.recordIdentity
@@ -155,17 +155,17 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
           org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire.normalize(annotated, purpose)
             .hcursor.downField("annotations").focus shouldBe Some(annotation)
           Given("the " + context.purpose + " supplied Record retains malformed canonical values even beside valid aliases")
-          val protectedNames = Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType")
+          val protectednames = Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType")
           When("the scenario constructs null-preserving question Records rather than passing them through the ordinary decoder")
-          val presentInvalid = protectedNames.flatMap { key =>
+          val presentinvalid = protectednames.flatMap { key =>
             val alias = PropertyNameContext.default.aliases(key)(1)
             Vector(Json.Null, Json.True, Json.fromString("")).map { invalid =>
               val supplied = raw.mapObject(_.add(alias, raw.hcursor.downField(key).focus.get).add(key, invalid))
-              (key, invalid, supplied, questionRecord(supplied))
+              (key, invalid, supplied, _question_record_(supplied))
             }
           }
           Then("every canonical null is still present in the supplied Record, its JSON and the finite question normalizer")
-          presentInvalid.filter(_._2.isNull).foreach { (key, _, supplied, question) =>
+          presentinvalid.filter(_._2.isNull).foreach { (key, _, supplied, question) =>
             withClue(context.purpose + " canonical null " + key + ": ") {
               val field = question.fields.find(_.key == key)
               field.isDefined shouldBe true
@@ -175,25 +175,25 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
                 .hcursor.downField(key).focus shouldBe Some(Json.Null)
             }
           }
-          def malformed(path: List[String], invalid: Json): (String, Record) =
-            (path.mkString(".") + "=" + invalid.noSpaces, questionRecord(replaceAt(raw, path, invalid)))
-          val nested = Vector(malformed(List("handle", "workflowIdentity"), Json.Null),
-            malformed(List("handle", "instanceIdentity"), Json.True),
-            malformed(List("source"), Json.True)) ++ (purpose match {
+          def _malformed_(path: List[String], invalid: Json): (String, Record) =
+            (path.mkString(".") + "=" + invalid.noSpaces, _question_record_(_replace_at_(raw, path, invalid)))
+          val nested = Vector(_malformed_(List("handle", "workflowIdentity"), Json.Null),
+            _malformed_(List("handle", "instanceIdentity"), Json.True),
+            _malformed_(List("source"), Json.True)) ++ (purpose match {
             case Purpose.GoalHuman => Vector(
-              malformed(List("source", "requestingResult", "identity"), Json.Null),
-              malformed(List("source", "assignment", "sourceRevision"), Json.True),
-              malformed(List("source", "assignment", "selectedPlan"), Json.Null))
+              _malformed_(List("source", "requestingResult", "identity"), Json.Null),
+              _malformed_(List("source", "assignment", "sourceRevision"), Json.True),
+              _malformed_(List("source", "assignment", "selectedPlan"), Json.Null))
             case Purpose.RepositoryHuman => Vector(
-              malformed(List("source", "requestingResult", "identity"), Json.Null),
-              malformed(List("source", "conflict", "conflictRevision"), Json.True))
-            case _ => Vector(malformed(List("source", "context", "identity"), Json.Null))
+              _malformed_(List("source", "requestingResult", "identity"), Json.Null),
+              _malformed_(List("source", "conflict", "conflictRevision"), Json.True))
+            case _ => Vector(_malformed_(List("source", "context", "identity"), Json.Null))
           })
           When("present malformed canonical fields have valid aliases or nested required fields and input/result codecs are crossed")
-          val malformedQuestions = presentInvalid.map { (key, invalid, _, question) =>
+          val malformedquestions = presentinvalid.map { (key, invalid, _, question) =>
             (key + "=" + invalid.noSpaces + " beside valid alias", question)
-          } ++ nested ++ Vector("inputType", "resultType").map(key => malformed(List(key), Json.fromString("foreign-type")))
-          val failures = malformedQuestions.map { (field, question) => (field, prepare(context.copy(question = question))) }
+          } ++ nested ++ Vector("inputType", "resultType").map(key => _malformed_(List(key), Json.fromString("foreign-type")))
+          val failures = malformedquestions.map { (field, question) => (field, _prepare_(context.copy(question = question))) }
           Then("strict native selection refuses every malformed consumed value without alias rescue")
           failures.foreach { (field, result) => withClue(context.purpose + " " + field + ": ") {
             result.isSuccess shouldBe false
@@ -201,10 +201,10 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
           Given("a structurally valid supplied question with a different run identity")
           val changed = context.copy(question = record(raw.mapObject(_.add("runId", Json.fromString("different-supplied-run")))))
           When("passive preparation encodes those supplied facts and the original native target observes them")
-          val changedRow = take(prepare(changed))
+          val changedrow = take(_prepare_(changed))
           Then("preparation preserves the supplied identity while native observation refuses the original target")
-          evidence(changedRow).binding should not be evidence(canonical).binding
-          observe(evidence(changedRow), purpose, target).isSuccess shouldBe false
+          evidence(changedrow).binding should not be evidence(canonical).binding
+          observe(evidence(changedrow), purpose, target).isSuccess shouldBe false
           if (purpose == Purpose.RepositoryHuman) {
             evidence(canonical).binding.hcursor.downField("humanAttestation").downField("question").downField("source")
               .downField("conflict").downField("conflicts").downArray.get[String]("path").toOption shouldBe Some("literal\npath.scala")
@@ -302,14 +302,14 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
         val splits = SplitPhaseHumanDirectionAnswerContract.choices.map(choice => evidence(take(Preparation.splitC(split,
           splitAnswer(choice).copy(resolution = if (choice == "ProvideResolution") splitAnswer().resolution else
             Some(V.SplitPhasePartitionContextReference(null, null))), reference, execution, participant, issuer, now))))
-        val inertNulls = Vector("Defer", "Cancel").map(choice => evidence(take(Preparation.splitC(split,
+        val inertnulls = Vector("Defer", "Cancel").map(choice => evidence(take(Preparation.splitC(split,
           splitAnswer(choice).copy(resolution = null), reference, execution, participant, issuer, now))))
         Then("all declared choices survive and nonconsumed rationale or resolution bodies, including absent optional containers, remain inert")
         goals.map(_.binding.hcursor.downField("humanAttestation").downField("answer").get[String]("choice").toOption.get) shouldBe GoalPhaseOrderedHumanDecision.choices
         repositories.map(_.binding.hcursor.downField("humanAttestation").downField("answer").get[String]("choice").toOption.get) shouldBe RepositorySyncHumanConflict.choices
         splits.map(_.binding.hcursor.downField("splitAnswerAttestation").downField("answer").get[String]("choice").toOption.get) shouldBe SplitPhaseHumanDirectionAnswerContract.choices
         repositories.tail.foreach(_.binding.hcursor.downField("humanAttestation").downField("answer").downField("resolutions").focus shouldBe Some(Json.arr()))
-        inertNulls.map(_.binding) shouldBe splits.tail.map(_.binding)
+        inertnulls.map(_.binding) shouldBe splits.tail.map(_.binding)
         splits.tail.foreach(_.binding.hcursor.downField("splitAnswerAttestation").downField("answer").downField("resolution").focus shouldBe Some(Json.Null))
         Consequence.unit
       }

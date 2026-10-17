@@ -197,15 +197,15 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
       val operation = Record.data("service" -> "FixtureService", "operation" -> "perform")
       val completion = Record.data("identity" -> "wire-completion", "requiredFacts" -> Vector(reference))
       val evidence = Record.data("identity" -> "wire-evidence", "requiredEvidence" -> Vector(reference))
-      val completionOperation = Record.data("service" -> "FixtureService", "operation" -> "submit")
+      val completionoperation = Record.data("service" -> "FixtureService", "operation" -> "submit")
       val requirement = Record.data("capabilities" -> Vector("fixture-capability"), "risk" -> "bounded",
         "reasoning" -> "DEEP", "reviewRequired" -> true,
         "disposition" -> Record.data("placement" -> "DELEGATED", "independence" -> "REQUIRED",
           "originContextIdentity" -> "fixture-origin"), "reasoningClass" -> "FixtureSemanticClass")
       val view = V.WorkflowIssuedWorkContext("review", "cncf.workflow-protocol.v1", handle, "wire-run",
         "wire-continuation", "7", "fixture-capability", operation, Some("FixtureInput"), Some("FixtureResult"),
-        context, completion, evidence, completionOperation, requirement)
-      def wire(value: Record): Record = _take(new RecordDecoder().json(_take(Record.data(
+        context, completion, evidence, completionoperation, requirement)
+      def _wire_(value: Record): Record = _take(new RecordDecoder().json(_take(Record.data(
         "session_id" -> "wire-instance", "kind" -> "Request", "message" -> "Assigned",
         "issued_work_context" -> value).toJsonStringC)))
       val nested = _take(new RecordDecoder().json(_take(view.toRecord().toJsonStringC)))
@@ -214,12 +214,12 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
       }
 
       When("the three generated AdvanceResult readers consume the strict nested wire and incomplete candidates")
-      val supplied = wire(nested)
+      val supplied = _wire_(nested)
       val actual = Vector(_take(V.GoalPhaseAdvanceResult.createC(supplied)).issuedWorkContext,
         _take(V.RepositorySyncAdvanceResult.createC(supplied)).issuedWorkContext,
         _take(V.SplitPhaseAdvanceResult.createC(supplied)).issuedWorkContext)
-      val failures = missing.flatMap(value => Vector(V.GoalPhaseAdvanceResult.createC(wire(value)),
-        V.RepositorySyncAdvanceResult.createC(wire(value)), V.SplitPhaseAdvanceResult.createC(wire(value))))
+      val failures = missing.flatMap(value => Vector(V.GoalPhaseAdvanceResult.createC(_wire_(value)),
+        V.RepositorySyncAdvanceResult.createC(_wire_(value)), V.SplitPhaseAdvanceResult.createC(_wire_(value))))
 
       Then("the generated view retains each selected contract and required missing/null fields fail at intake")
       actual.foreach { value =>

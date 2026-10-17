@@ -28,18 +28,18 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   /** Ordinals select host-bound paths and never carry filenames. */
   def stageConflictC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- ordinalC(ordinal, 128)
+    _ <- _ordinal_c(ordinal, 128)
     selection <- GitSelectionId.parseC("conflict-" + ordinal)
     result <- executeGitC(core, GitOperation.StageSelected(selection))
   } yield result
 
   def stageGoalCandidateC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- ordinalC(ordinal, 256)
+    _ <- _ordinal_c(ordinal, 256)
     selection <- GitSelectionId.parseC("goal-path-" + ordinal)
     result <- executeGitC(core, GitOperation.StageSelectedAll(selection))
   } yield result
 
-  private def ordinalC(ordinal: Int, maximum: Int): Consequence[Unit] =
+  private def _ordinal_c(ordinal: Int, maximum: Int): Consequence[Unit] =
     if (ordinal > 0 && ordinal <= maximum) Consequence.unit
     else Consequence.stateConflict("Workflow Git semantic selection exceeds its host ordinal bounds")
 
@@ -57,7 +57,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   /** The host fixes the selected Step's message and commit identity. */
   def commitGoalStepC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- ordinalC(ordinal, 64)
+    _ <- _ordinal_c(ordinal, 64)
     selection <- GitSelectionId.parseC("goal-step-" + ordinal)
     result <- executeGitC(core, GitOperation.CommitSelected(selection))
   } yield result

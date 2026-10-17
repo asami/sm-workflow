@@ -34,7 +34,7 @@ private[smworkflow] object NativeHostReviewScope {
     paths <- stringArray(input, "changedPaths")
     checks <- input("testChecks") match {
       case None => Right(None)
-      case Some(value) => checkArray(value).map(Some(_))
+      case Some(value) => _check_array(value).map(Some(_))
     }
     acceptance <- _effective(input)
     selected = fields.add("step", step.map(Json.fromString).getOrElse(Json.Null))
@@ -47,15 +47,15 @@ private[smworkflow] object NativeHostReviewScope {
     fields <- strings(input, Vector("instance", "validatedRevision", "localTip", "remoteTip", "indexTree", "validationMode"))
     paths <- stringArray(input, "changedPaths")
     selected <- stringArray(input, "selectedChecks")
-    facts <- input("checks").toRight("Review requires checks").flatMap(checkArray)
+    facts <- input("checks").toRight("Review requires checks").flatMap(_check_array)
   } yield Json.fromJsonObject(fields.add("changedPaths", Json.fromValues(paths.map(Json.fromString)))
     .add("selectedChecks", Json.fromValues(selected.map(Json.fromString))).add("checks", facts))
 
-  private def checkArray(value: Json): Either[String, Json] =
+  private def _check_array(value: Json): Either[String, Json] =
     value.asArray.toRight("Review checks must be an array").flatMap(_.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty))(
-      (prior, value) => for { values <- prior; receipt <- check(value) } yield values :+ receipt)).map(Json.fromValues)
+      (prior, value) => for { values <- prior; receipt <- _check(value) } yield values :+ receipt)).map(Json.fromValues)
 
-  private def check(value: Json): Either[String, Json] = for {
+  private def _check(value: Json): Either[String, Json] = for {
     receipt <- obj(value)
     fields <- strings(receipt, Vector("identity", "termination"))
     exit <- receipt("exitCode").flatMap(_.asNumber).flatMap(_.toInt).toRight("Review exitCode must be an integer")

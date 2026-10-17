@@ -131,14 +131,14 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
       withCore { call =>
         val owner = call.core.component.get.core.instanceId.canonicalKey
         val row = selectionRow()
-        def prepare(selected: Record = row, physical: Preparation.Target = target, effect: String = "Push",
+        def _prepare_(selected: Record = row, physical: Preparation.Target = target, effect: String = "Push",
           component: String = owner, ref: V.WorkflowArtifactReference = reference, operator: String = participant,
           source: String = issuer, occurred: Instant = now) = {
           Preparation.repositoryC(component, selected, physical, effect, ref, operator, source, occurred)
         }
-        val wrongBusiness = business.asObject.get.keys.toVector.flatMap(field => Vector(
+        val wrongbusiness = business.asObject.get.keys.toVector.flatMap(field => Vector(
           business.mapObject(_.remove(field)), business.mapObject(_.add(field, Json.True)), business.mapObject(_.add(field, Json.Null))))
-        val wrongRows = Vector(null, Record.empty, Record.data("selectionPayload" -> null), Record.data("selectionPayload" -> true),
+        val wrongrows = Vector(null, Record.empty, Record.data("selectionPayload" -> null), Record.data("selectionPayload" -> true),
           Record.data("selectionPayload" -> "unsupported:"),
           changeSelection(_.mapObject(_.remove("startOperation"))), changeSelection(_.mapObject(_.add("startOperation", Json.Null))),
           changeSelection(_.mapObject(_.remove("selectedInput"))), changeSelection(_.mapObject(_.add("selectedInput", Json.Null))),
@@ -147,41 +147,41 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
             "operation" -> Json.fromString("startGoalPhase"))))),
           changeSelection(value => NativeHostHumanEvidenceFixture.alter(value, Vector("selectedInput"))(
             _.mapObject(_.add("typeIdentity", Json.fromString("GoalPhaseStartInput")))))) ++
-          wrongBusiness.map(value => changeSelection(original => NativeHostHumanEvidenceFixture.alter(original, Vector("selectedInput"))(
+          wrongbusiness.map(value => changeSelection(original => NativeHostHumanEvidenceFixture.alter(original, Vector("selectedInput"))(
             _.mapObject(_.add("value", value)))))
-        val wrongTargets = Vector(null, target.copy(root = null), target.copy(root = "relative/repository"),
+        val wrongtargets = Vector(null, target.copy(root = null), target.copy(root = "relative/repository"),
           target.copy(root = "/specification/../repository"), target.copy(root = "/specification/./repository"),
           target.copy(root = "\u0000"), target.copy(localBranch = ""), target.copy(remote = null),
           target.copy(remoteBranch = " main"), target.copy(endpoint = "endpoint\n"))
         val current = context()
         val physical = nativeTarget()
-        val wrongContexts = Vector(null, current.copy(selectionIdentity = null), current.copy(invocationIdentity = null),
+        val wrongcontexts = Vector(null, current.copy(selectionIdentity = null), current.copy(invocationIdentity = null),
           current.copy(participantIdentity = null), current.copy(repositoryIdentity = null),
           current.copy(remoteEndpointIdentity = null), current.copy(syncMode = null))
-        val wrongNativeTargets = Vector(null, physical.copy(root = null), physical.copy(localBranch = null),
+        val wrongnativetargets = Vector(null, physical.copy(root = null), physical.copy(localBranch = null),
           physical.copy(remote = null), physical.copy(remoteBranch = null), physical.copy(endpoint = null))
         When("the passive producer and shared projection receive malformed inputs and annotated valid selections")
-        val failures = wrongRows.map(value => prepare(selected = value)) ++ wrongTargets.map(value => prepare(physical = value)) ++
-          Vector(null, "", "push", "All", " Push").map(value => prepare(effect = value)) ++ Vector(
-          prepare(component = null), prepare(component = " owner"), prepare(ref = null), prepare(ref = reference.copy(identity = "")),
-          prepare(ref = reference.copy(revision = null)), prepare(operator = null), prepare(operator = ""),
-          prepare(source = null), prepare(source = "issuer\n"), prepare(occurred = null))
-        val scopeFailures = wrongContexts.map(value => NativeHostRepositoryEffectScope.bindingFromInputsC(owner, value, physical, Effect.Push)) ++
-          wrongNativeTargets.map(value => NativeHostRepositoryEffectScope.bindingFromInputsC(owner, current, value, Effect.Push)) ++ Vector(
+        val failures = wrongrows.map(value => _prepare_(selected = value)) ++ wrongtargets.map(value => _prepare_(physical = value)) ++
+          Vector(null, "", "push", "All", " Push").map(value => _prepare_(effect = value)) ++ Vector(
+          _prepare_(component = null), _prepare_(component = " owner"), _prepare_(ref = null), _prepare_(ref = reference.copy(identity = "")),
+          _prepare_(ref = reference.copy(revision = null)), _prepare_(operator = null), _prepare_(operator = ""),
+          _prepare_(source = null), _prepare_(source = "issuer\n"), _prepare_(occurred = null))
+        val scopefailures = wrongcontexts.map(value => NativeHostRepositoryEffectScope.bindingFromInputsC(owner, value, physical, Effect.Push)) ++
+          wrongnativetargets.map(value => NativeHostRepositoryEffectScope.bindingFromInputsC(owner, current, value, Effect.Push)) ++ Vector(
           NativeHostRepositoryEffectScope.bindingFromInputsC(null, current, physical, Effect.Push),
           NativeHostRepositoryEffectScope.bindingFromInputsC(owner, current, physical, null),
           ThreeWorkflowHostEvidencePorts.repositoryEffectBindingC(call.core.copy(component = None), current, physical, Effect.Push))
-        val annotated = prepare(selected = record(json(row).mapObject(_.add("grant", Json.True))))
-        val origins = ProfileStartAdmission.SelectionOrigin.values.toVector.map(origin => prepare(selected = selectionRow(selection.copy(
+        val annotated = _prepare_(selected = record(json(row).mapObject(_.add("grant", Json.True))))
+        val origins = ProfileStartAdmission.SelectionOrigin.values.toVector.map(origin => _prepare_(selected = selectionRow(selection.copy(
           origin = origin, recommendationReference = Some("inert-recommendation")))))
         val spaced = selection.copy(selectedInput = Some(TypedValue("RepositorySyncStartInput",
           business.mapObject(_.add("syncMode", Json.fromString(" sync "))))))
-        val semantics = prepare(selected = selectionRow(spaced), physical = target.copy(localBranch = "other-physical-branch"))
+        val semantics = _prepare_(selected = selectionRow(spaced), physical = target.copy(localBranch = "other-physical-branch"))
         Then("consumed failures refuse, annotations and origins grant nothing, and current business decoding adds no semantic admission")
         failures.foreach(_.isSuccess shouldBe false)
-        scopeFailures.foreach(_.isSuccess shouldBe false)
-        evidence(take(annotated)).binding shouldBe evidence(take(prepare())).binding
-        origins.foreach(value => evidence(take(value)).binding shouldBe evidence(take(prepare())).binding)
+        scopefailures.foreach(_.isSuccess shouldBe false)
+        evidence(take(annotated)).binding shouldBe evidence(take(_prepare_())).binding
+        origins.foreach(value => evidence(take(value)).binding shouldBe evidence(take(_prepare_())).binding)
         semantics.isSuccess shouldBe true
         evidence(take(semantics)).binding.hcursor.downField("scope").get[String]("mode").toOption shouldBe Some(" sync ")
         evidence(take(semantics)).binding.hcursor.downField("scope").downField("target").get[String]("localBranch").toOption shouldBe
@@ -199,7 +199,7 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
         val prepared = take(prepareC(owner, Effect.Push))
         val value = evidence(prepared)
         val binding = value.binding
-        def observe(entry: Evidence = value, target: Json = binding) =
+        def _observe_(entry: Evidence = value, target: Json = binding) =
           NativeHostEvidence.observeC(entry, _declared, Purpose.RepositoryEffect, effectLookup(Effect.Push), target, now)
         val fields = Vector("selection", "invocation", "participant", "repository", "endpointIdentity", "mode", "effect")
         val physical = Vector("root", "localBranch", "remote", "remoteBranch", "endpoint")
@@ -207,17 +207,17 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
           fields.map(field => NativeHostHumanEvidenceFixture.alter(binding, Vector("scope"))(_.mapObject(_.add(field, Json.fromString("foreign"))))) ++
           physical.map(field => NativeHostHumanEvidenceFixture.alter(binding, Vector("scope", "target"))(_.mapObject(_.add(field, Json.fromString("foreign")))))
         When("the observer compares each target field, lookup, issuer, purpose, occurrence and explicit operator correlation")
-        val crossed = targets.map(target => observe(target = target)) ++ Vector(observe(value.copy(lookupIdentity = "foreign")),
-          observe(value.copy(issuer = "foreign")), observe(value.copy(occurredAt = now.plusSeconds(1).toString))) ++
-          Vector(Purpose.RepositoryReview, Purpose.SplitStart, Purpose.StepClosure, Purpose.PhaseClosure).map(p => observe(value.copy(purpose = p.identity)))
+        val crossed = targets.map(target => _observe_(target = target)) ++ Vector(_observe_(value.copy(lookupIdentity = "foreign")),
+          _observe_(value.copy(issuer = "foreign")), _observe_(value.copy(occurredAt = now.plusSeconds(1).toString))) ++
+          Vector(Purpose.RepositoryReview, Purpose.SplitStart, Purpose.StepClosure, Purpose.PhaseClosure).map(p => _observe_(value.copy(purpose = p.identity)))
         val mismatched = take(Preparation.repositoryC(owner, selectionRow(), target, "Push", reference, "other-operator", issuer, now))
-        val mismatchedObservation = observe(evidence(mismatched))
-        val accepted = observe()
-        val metadata = observe(value.copy(reference = "another-explicit-reference", revision = "2"))
+        val mismatchedobservation = _observe_(evidence(mismatched))
+        val accepted = _observe_()
+        val metadata = _observe_(value.copy(reference = "another-explicit-reference", revision = "2"))
         Then("only exact current effect authority is accepted and preparing a different operator cannot authorize it")
         crossed.foreach(_.isSuccess shouldBe false)
-        mismatchedObservation.isSuccess shouldBe false
-        mismatchedObservation.toString should include("another selected participant")
+        mismatchedobservation.isSuccess shouldBe false
+        mismatchedobservation.toString should include("another selected participant")
         accepted.isSuccess shouldBe true
         accepted.toOption.get.evidence.participant shouldBe participant
         metadata.isSuccess shouldBe true
@@ -244,22 +244,22 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
         absent shouldBe None
         Given("the specification separately provisions that row with the existing managed Create grant")
         take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
-        val foreignHost = ResolvedConfiguration(HostConfiguration(host.configuration.values.updated(
+        val foreignhost = ResolvedConfiguration(HostConfiguration(host.configuration.values.updated(
           NativeHostEvidence.prefix + "record-collection", ConfigurationValue.StringValue(
             EntityCollectionId("smworkflow", "cli", "foreign_evidence").print))), ConfigurationTrace.empty)
-        val foreignReader = take(NativeHostEvidence.bindC(foreignHost, persistence))
+        val foreignreader = take(NativeHostEvidence.bindC(foreignhost, persistence))
         When("the current Reader attempts exact, foreign, ungranted and component-free reads")
         val accepted = take(reader.loadC(call.core, Purpose.RepositoryEffect, effectLookup(Effect.Push), binding))
-        val denied = foreignReader.loadC(call.core, Purpose.RepositoryEffect, effectLookup(Effect.Push), binding)
+        val denied = foreignreader.loadC(call.core, Purpose.RepositoryEffect, effectLookup(Effect.Push), binding)
         val crossed = reader.loadC(call.core, Purpose.RepositoryEffect, effectLookup(Effect.Push),
           binding.mapObject(_.add("componentInstance", Json.fromString("foreign-owner"))))
-        val foreignLookup = take(reader.loadC(call.core, Purpose.RepositoryEffect, "foreign", binding))
+        val foreignlookup = take(reader.loadC(call.core, Purpose.RepositoryEffect, "foreign", binding))
         val contextfree = reader.loadC(call.core.copy(component = None), Purpose.RepositoryEffect, effectLookup(Effect.Push), binding)
         Then("only the exact matching current granted read is admitted")
         accepted.nonEmpty shouldBe true
         denied.isSuccess shouldBe false
         crossed.isSuccess shouldBe false
-        foreignLookup shouldBe None
+        foreignlookup shouldBe None
         contextfree.isSuccess shouldBe false
         retained = Some((reader, call.core, binding))
         Consequence.unit
@@ -291,12 +291,12 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
           When("native admission checks that effect and a crossed physical target")
           val exact = authority.admitC(call.core, context(), nativeTarget(), effect)
           val crossed = authority.admitC(call.core, context(), nativeTarget().copy(remoteBranch = "foreign"), effect)
-          val notProvisioned = effects.filterNot(e => effects.indexOf(e) <= effects.indexOf(effect))
+          val notprovisioned = effects.filterNot(e => effects.indexOf(e) <= effects.indexOf(effect))
             .map(e => authority.admitC(call.core, context(), nativeTarget(), e))
           Then("only independently provisioned matching effects are admitted and no Git action is performed by admission")
           exact.isSuccess shouldBe true
           crossed.isSuccess shouldBe false
-          notProvisioned.foreach(_.isSuccess shouldBe false)
+          notprovisioned.foreach(_.isSuccess shouldBe false)
         }
         Given("a separately addressed current selection and public prepared metadata belonging to another operator")
         val other = selection.copy(selectionId = "specification-mismatched-effect")
@@ -308,14 +308,14 @@ final class NativeHostRepositoryEffectPreparationSpec extends AnyWordSpec with M
         rejected.isSuccess shouldBe false
         rejected.toString should include("another selected participant")
         Given("a public Push row separately provisioned at a FinalFetch address for another specification selection")
-        val crossedSelection = selection.copy(selectionId = "specification-crossed-effect")
-        val push = take(prepareC(owner, Effect.Push, crossedSelection))
+        val crossedselection = selection.copy(selectionId = "specification-crossed-effect")
+        val push = take(prepareC(owner, Effect.Push, crossedselection))
         take(call.createC("host_evidence", NativeHostEvidence.recordIdentity(Purpose.RepositoryEffect,
-          effectLookup(Effect.FinalFetch, crossedSelection)), push.record))
+          effectLookup(Effect.FinalFetch, crossedselection)), push.record))
         When("native FinalFetch admission reads that crossed-effect input")
-        val crossedEffect = authority.admitC(call.core, context(crossedSelection), nativeTarget(), Effect.FinalFetch)
+        val crossedeffect = authority.admitC(call.core, context(crossedselection), nativeTarget(), Effect.FinalFetch)
         Then("separate provisioning cannot turn a different effect payload into the selected effect grant")
-        crossedEffect.isSuccess shouldBe false
+        crossedeffect.isSuccess shouldBe false
         Consequence.unit
       }
     }

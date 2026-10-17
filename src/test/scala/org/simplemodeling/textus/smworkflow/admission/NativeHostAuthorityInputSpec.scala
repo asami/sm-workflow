@@ -77,7 +77,7 @@ final class NativeHostAuthorityInputSpec extends AnyWordSpec with Matchers with 
       withCore { call =>
         val output = take(outputC(call.core, Purpose.StepClosure))
         val files = _files(output)
-        val malformedArguments: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
+        val malformedarguments: Vector[Map[String, String]] = Vector(null, Map.empty[String, String],
           _arguments.updated("unknown", "value"), _arguments.updated("command", "start")) ++
           _arguments.keys.toVector.map(_arguments - _) ++ _arguments.keys.toVector.flatMap(key =>
             Vector[String](null, "", " ", " leading", "control\nvalue").map(value => _arguments.updated(key, value))) ++ Vector(
@@ -87,13 +87,13 @@ final class NativeHostAuthorityInputSpec extends AnyWordSpec with Matchers with 
           _arguments.updated("collection", "entity:smworkflow.cli.host-evidence"),
           _arguments.updated("collection", "entity:1workflow.cli.host_evidence"),
           _arguments.updated("collection", "entity:smworkflow.cli.host_evidence.extra"))
-        val malformedFiles = Vector(files - "request.json", files - "reference.json", files.updated("request.json", "not-json"),
+        val malformedfiles = Vector(files - "request.json", files - "reference.json", files.updated("request.json", "not-json"),
           files.updated("request.json", "{}"), files.updated("reference.json", "{}"),
           files.updated("reference.json", "{\"identity\":null,\"revision\":\"1\"}"),
           files.updated("reference.json", take(reference.copy(identity = "").toRecord().toJsonStringC)),
           files.updated("reference.json", take(reference.copy(revision = "").toRecord().toJsonStringC)))
         val context = output.authorityContext.get
-        val malformedOutputs = Vector(output.copy(kind = "Request"), output.copy(kind = "Human"), output.copy(kind = "Terminal"),
+        val malformedoutputs = Vector(output.copy(kind = "Request"), output.copy(kind = "Human"), output.copy(kind = "Terminal"),
           output.copy(authorityContext = None), output.copy(authorityContext = Some(context.copy(componentInstance = ""))),
           output.copy(authorityContext = Some(context.copy(scope = _invalid_generation(context.scope)))),
           output.copy(authorityContext = Some(context.copy(purpose = Purpose.RepositoryEffect.identity))),
@@ -101,9 +101,9 @@ final class NativeHostAuthorityInputSpec extends AnyWordSpec with Matchers with 
           output.copy(authorityContext = Some(context.copy(purpose = Purpose.GoalReview.identity))),
           output.copy(authorityContext = Some(context.copy(purpose = Purpose.GoalHuman.identity))))
         When("the finite adapter receives each explicit failure through the ordinary typed readers")
-        val failures = malformedArguments.map(Main.prepareC(_, _read(files))) ++
-          malformedFiles.map(inputs => Main.prepareC(_arguments, _read(inputs))) ++
-          malformedOutputs.map(value => Main.prepareC(_arguments, _read(_files(value))))
+        val failures = malformedarguments.map(Main.prepareC(_, _read(files))) ++
+          malformedfiles.map(inputs => Main.prepareC(_arguments, _read(inputs))) ++
+          malformedoutputs.map(value => Main.prepareC(_arguments, _read(_files(value))))
         Then("every case returns a failure and no successful bootstrap input")
         failures.foreach(_.isSuccess shouldBe false)
         Consequence.unit
