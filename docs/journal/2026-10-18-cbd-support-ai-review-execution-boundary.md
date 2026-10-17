@@ -35,3 +35,18 @@ This also makes the same review request suitable for local-LLM evaluation, decli
 - sm-workflow: orchestration, execution-engine selection, escalation, evidence/history, and admission/continuation decisions.
 
 Review depth can vary by workflow timing (step-end, phase review, phase final review) while retaining the same execution boundary.
+
+## Same-Context Review Principle
+
+For the sm-workflow route, semantic review should by default be executed by the same Codex worker that already holds the implementation/work context. This is not merely a token/cost optimization; it is a context-quality requirement.
+
+During implementation the worker accumulates context that is expensive or impossible to reconstruct perfectly from repository files alone: the goal and phase intent, reasons for design choices, alternatives already rejected, source/specification relationships already inspected, recent test results, and the history of attempts and corrections. Starting a separate AI inside cbd-support would force context reconstruction and can lose this working context, producing lower-quality or generic review conclusions.
+
+Therefore:
+
+- **Default:** same-context review. cbd-support supplies the ReviewRequest/review policy; the active Codex worker performs the semantic review.
+- **Exception:** independent-context review is explicit and intentional, for example a second opinion, phase-final independent verification, A/B evaluation, or a case where the worker's own judgment needs independent challenge.
+- cbd-support must not silently create a new AI session when invoked through the sm-workflow orchestration route.
+- sm-workflow owns any deliberate transition from same-context to independent-context/model execution and records that choice as review evidence.
+
+This principle also reduces the risk that a fresh model, lacking the development history and design intent, reintroduces generic defensive recommendations or previously rejected approaches merely because it reconstructed the task from source files alone.
