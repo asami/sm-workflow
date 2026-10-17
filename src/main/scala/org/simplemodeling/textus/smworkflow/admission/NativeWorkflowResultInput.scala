@@ -20,14 +20,16 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
   type Value = GoalPhaseNativeWork.Result | GoalPhaseOrderedHumanDecision.Answer |
     SplitPhaseExplicitPartitionSemantic.Judgment | SplitPhaseScopeSemantic.Judgment |
     SplitPhaseExplicitReasoningSemantic.Judgment | SplitPhaseHumanDirectionAnswerContract.Answer |
     RepositorySyncConflictSemantic.Result | RepositorySyncNativeMergeReview.Result |
-    RepositorySyncHumanConflict.Answer
+    RepositorySyncHumanConflict.Answer | RepositorySyncNativeMergeRepair.Result
 
 
   trait Receiver extends spec.OperationDefinition {
@@ -76,7 +78,8 @@ private[smworkflow] object NativeWorkflowResultInput {
       Vector(
         _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result").map[Value](value =>
-            GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings))),
+            GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
+              GoalPhaseAcceptanceBoundary.internalReport(value.acceptance)))),
         _decision(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseOrderedDecisionAnswer](request, "answer").map[Value](value =>
             GoalPhaseOrderedHumanDecision.Answer(value.choice, value.rationale)))))
@@ -92,6 +95,10 @@ private[smworkflow] object NativeWorkflowResultInput {
           NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeReviewResult](request, "result").map[Value](value =>
             RepositorySyncNativeMergeReview.Result(value.decision, value.rationale, value.findings.map(f =>
               RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale))))),
+        _work(RepositorySyncNativeMergeRepairContinuation.completionOperation, RepositorySyncNativeMergeRepair.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeRepairResult](request, "result").map[Value](value =>
+            RepositorySyncNativeMergeRepair.Result(value.decision, value.rationale, value.replacements.map(file =>
+              RepositorySyncNativeMergeRepair.File(file.path, file.text))))),
         _decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncHumanConflictAnswer](request, "answer").map[Value](value =>
             RepositorySyncHumanConflict.Answer(value.choice, value.resolutions.map(_resolution), value.rationale)))))

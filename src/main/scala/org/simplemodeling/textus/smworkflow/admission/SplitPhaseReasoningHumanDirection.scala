@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
 /** Separate reasoning Decision; native readers, not decoded payloads, establish
   * the saved AI completion and its original whole planning frontier.
   * @since Oct. 7, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object SplitPhaseReasoningHumanDirection {
   final case class Input(workIdentity: ContinuationIdentity, request: S.Request,
@@ -154,7 +154,7 @@ private[smworkflow] object SplitPhaseReasoningHumanDirection {
           case _ => _uncertain("question commit is not established; observe later without reissuing")
         }
     }
-    wire <- NativeWorkflowOperationOutput.splitReasoningHumanC(question)
+    wire <- NativeWorkflowOperationOutput.splitReasoningHumanC(question, core)
   } yield wire
 
   def storageC(declaration: SplitPhaseManagedStartAssembly.Declaration,

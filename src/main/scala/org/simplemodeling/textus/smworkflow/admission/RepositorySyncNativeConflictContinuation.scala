@@ -20,7 +20,9 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 12, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictContinuation {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositorySyncWorkResult")
@@ -54,8 +56,10 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
         case None => for {
           input <- I.captureC(source.store, source.conflicted, policy)
           selected <- prepareC(source, input)
-          saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
-        } yield selected
+          bound <- RepositorySyncNativeExecution.bindIssuedC(selected.work, RepositorySyncNativeExecution.Work.Conflict,
+            declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
+          saved <- native.suspendC(selected.intent, bound)(using core.executionContext)
+        } yield selected.copy(work = bound)
       }
       completion <- nativeCompletionC(source.session.storage)
       retained <- completion.loadRetainedC(continuationId(source.conflicted))(using core.executionContext)

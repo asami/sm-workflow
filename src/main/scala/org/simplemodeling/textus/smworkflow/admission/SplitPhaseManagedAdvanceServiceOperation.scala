@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
   * Binding retains metadata only; every effect borrows the actual owning Core.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 13, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
   def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -213,13 +213,13 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
           reader <- storage.bindDecisionC(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseNativeHumanDirection.inputCodec)
           question <- reader.loadC(identity)(using core.executionContext).flatMap(_.map(Consequence.success).getOrElse(
             Consequence.stateConflict("Split Human question is absent")))
-          wire <- NativeWorkflowOperationOutput.splitScopeHumanC(question)
+          wire <- NativeWorkflowOperationOutput.splitScopeHumanC(question, core)
         } yield wire
         case value if value == reasoninghuman.metadata.completionContract.identity => for {
           reader <- storage.bindDecisionC(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseReasoningHumanDirection.inputCodec)
           question <- reader.loadC(identity)(using core.executionContext).flatMap(_.map(Consequence.success).getOrElse(
             Consequence.stateConflict("Split reasoning Human question is absent")))
-          wire <- NativeWorkflowOperationOutput.splitReasoningHumanC(question)
+          wire <- NativeWorkflowOperationOutput.splitReasoningHumanC(question, core)
         } yield wire
         case _ => Consequence.stateConflict("Split pending assignment has no declared handler")
       }
@@ -329,7 +329,7 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     human <- SplitPhaseManagedHumanDirection.bindC(params, declaration, catalog)
     question <- human.advanceForCallC(command, core)
     wire <- question match {
-      case Some(actual) => NativeWorkflowOperationOutput.splitScopeHumanC(actual)
+      case Some(actual) => NativeWorkflowOperationOutput.splitScopeHumanC(actual, core)
       case None => for {
         reader <- SplitPhaseManagedScopePlanningCheckpoint.bindC(params.configuration, declaration, catalog)
         saved <- reader.executeForCallC(command, core)

@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
  * Execution-specific Start records and current business reads. Storage is
  * borrowed inside the actual call; no pool, lease or Human consent is retained.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admission] (
   declaration: SplitPhaseTypedStartReadPolicy.Declaration,
@@ -50,7 +50,7 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
             session <- core.executionContext.security.session.flatMap(_.sessionId).map(Consequence.success)
               .getOrElse(Consequence.stateConflict("SplitPhase Start requires its allocated routing session"))
             prepared <- _prepare_allocation_c(allocation, T.Reference("split-start:" + session, "1"), InstanceIdentity(session), core)
-            template <- contexts.loadRecordForCallC(allocation.planningContext, core).flatMap {
+            template <- contexts.loadTemplateForCallC(allocation.planningContext, core).flatMap {
               case Some(value) => Consequence.success(value)
               case None => Consequence.stateConflict("SplitPhase host planning template is absent")
             }

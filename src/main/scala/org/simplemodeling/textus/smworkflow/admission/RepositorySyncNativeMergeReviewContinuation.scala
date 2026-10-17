@@ -20,11 +20,15 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitNativeMergeReview")
   val closingType = StateMachineResultTypeReference("RepositorySyncNativeMergeReviewSubmissionResult")
+  final case class SavedReview(validated: N.Stage, work: WorkflowInteraction[I.Request, Nothing],
+    input: I.Request, result: ContinuationResult[S.Result], next: InstanceRecord, current: InstanceRecord)
   private final case class Source(session: F.Session, store: N.Store, validated: N.Stage, current: InstanceRecord)
   private final case class Plan(source: Source, input: I.Request,
     intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, next: InstanceRecord,
@@ -38,23 +42,23 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       source <- sourceC(identity, core)
       native <- source.session.storage.bindIssuedC(completionOperation, S.inputCodec)
       existing <- native.loadC(continuationId(source.validated))(using core.executionContext)
-      plan <- existing match {
-        case Some(work) => for {
-          input <- inputC(work)
-          selected <- prepareC(source, input)
-        } yield selected.copy(work = work)
+      work <- existing match {
+        case Some(work) => Consequence.success(work)
         case None => for {
           input <- I.captureC(source.store, source.validated, policy)
-          selected <- prepareC(source, input)
+          projected <- prepareC(source, input)
+          selectedWork <- RepositorySyncNativeExecution.bindIssuedC(projected.work, RepositorySyncNativeExecution.Work.Review,
+            declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
+          selected = projected.copy(work = selectedWork)
           saved <- native.suspendC(selected.intent, selected.work)(using core.executionContext)
-        } yield selected
+        } yield selected.work
       }
       completion <- nativeCompletionC(source.session.storage)
       retained <- completion.loadRetainedC(continuationId(source.validated))(using core.executionContext)
       wire <- retained match {
-        case None => NativeWorkflowOperationOutput.repositoryReviewRequestC(plan.work)
+        case None => NativeWorkflowOperationOutput.repositoryReviewRequestC(work, core)
         case Some(value) => for {
-          next <- completedC(plan, value.completion.result, policy)
+          next <- _retained_next_c(source.current, value.completion)
           wire <- waitC(next, value.completion.result)
         } yield wire
       }
@@ -65,10 +69,15 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       * Capture consumes native review context; current Git effects belong to
       * the convergence owner, not an eager completion/readback precheck.
       */
-    def acceptedC(identity: String, core: ActionCall.Core): Consequence[Option[N.Stage]] = for {
+    def savedReviewC(identity: String, core: ActionCall.Core): Consequence[Option[SavedReview]] = for {
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      validated <- store.loadC("merge-validated")
+      candidate <- if (session.started.current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
+        store.currentMergeCandidateC(session.started.current).map(Some(_)) else Consequence.success(None)
+      validated <- candidate match {
+        case Some(value) => store.loadC(N.candidateKey(value.namespace, "merge-validated"))
+        case None => Consequence.success(None)
+      }
       selected <- validated match {
         case None => Consequence.success(None)
         case Some(value) => for {
@@ -78,22 +87,26 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           completion <- nativeCompletionC(source.session.storage)
           retained <- completion.loadRetainedC(continuationId(source.validated))(using core.executionContext)
           result <- retained match {
-            case Some(value) if value.completion.result.result.value.decision == "accept" => for {
-              input <- work.map(inputC).getOrElse(invalid("accepted review has no actual paired issue"))
-              projected <- prepareC(source, input)
-              plan = projected.copy(work = work.get)
-              next <- completedC(plan, value.completion.result, policy)
-            } yield Some(N.Stage(next, source.validated.payload.copy(stage = "ReviewAccepted")))
+            case Some(value) => for {
+              actual <- work.map(Consequence.success).getOrElse(invalid("completed review has no actual paired issue"))
+              input <- inputC(actual)
+              next <- _retained_next_c(source.current, value.completion)
+            } yield Some(SavedReview(source.validated, actual, input, value.completion.result, next, source.current))
             case _ => Consequence.success(None)
           }
         } yield result
       }
     } yield selected
 
+    def acceptedC(identity: String, core: ActionCall.Core): Consequence[Option[N.Stage]] =
+      savedReviewC(identity, core).map(_.filter(_.result.result.value.decision == "accept")
+        .map(value => N.Stage(value.next, value.validated.payload.copy(stage = "ReviewAccepted"))))
+
     private def sourceC(identity: String, core: ActionCall.Core): Consequence[Source] = for {
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      validated <- store.loadC("merge-validated").flatMap {
+      candidate <- store.currentMergeCandidateC(session.started.current)
+      validated <- store.loadC(N.candidateKey(candidate.namespace, "merge-validated")).flatMap {
         case Some(value) => Consequence.success(value)
         case _ => invalid("semantic review selection has no genuine native review")
       }
@@ -104,7 +117,8 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       core: ActionCall.Core): Consequence[Source] = for {
       _ <- if (core != null && core.action != null && core.action.request != null &&
           core.action.request.service.contains(completionOperation.service) &&
-          Set(F.advanceOperation.operation, completionOperation.operation)(core.action.request.operation)) Consequence.unit
+          Set(F.advanceOperation.operation, completionOperation.operation,
+            RepositorySyncNativeMergeRepairContinuation.completionOperation.operation)(core.action.request.operation)) Consequence.unit
         else invalid("review continuation requires its actual owning Operation")
       _ <- if (validated.payload.stage == "MergeValidated") Consequence.unit
         else invalid("semantic review selection has no genuine native review")
@@ -226,6 +240,16 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
   } yield next
   private def nativeCompletionC(storage: WorkflowComponentStorage) = storage.bindCompletionC(completionOperation,
     S.inputCodec, S.resultCodec, closingType, (_, _) => Consequence.success(Vector.empty))
+  private def _retained_next_c(current: InstanceRecord, completion: WorkflowCompletionRecordJsonV1.Record[S.Result]): Consequence[InstanceRecord] = {
+    val stage = completion.result.result.value.decision match {
+      case "accept" => "ReviewAccepted"
+      case "repair" => "ReviewRepairRequired"
+      case "decision-needed" => "ReviewDecisionRequired"
+      case "reject" => "ReviewRejected"
+      case _ => return invalid("retained review decision is unknown")
+    }
+    N.completionNextC(current, completion.instanceRevision, completion.result.resultReference, stage)
+  }
   private def inputC(work: WorkflowInteraction[I.Request, Nothing]): Consequence[I.Request] = work.current match {
     case order: WorkflowContinuation.WorkOrder[I.Request] =>
       order.request.input.map(value => Consequence.success(value.value))

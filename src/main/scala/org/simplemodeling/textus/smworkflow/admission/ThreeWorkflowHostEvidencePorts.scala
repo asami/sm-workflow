@@ -14,7 +14,9 @@ import NativeHostEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHostEvidence.Reader) {
   import ThreeWorkflowHostEvidencePorts.*
@@ -108,93 +110,148 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
       "completed" -> Json.fromValues(input.completed.map(step => Json.obj("step" -> Json.fromString(step.step), "commit" -> step.commit.asJson))),
       "review" -> Json.fromString(input.review), "childInvocation" -> Json.fromString(input.childInvocation))))
   def repositoryEffectBindingC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext,
-    target: RepositoryGitRuntimePrograms.Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Json] =
-    Consequence.success(scopeBinding(core, Json.obj("kind" -> Json.fromString("repository-effect"),
-      "selection" -> Json.fromString(context.selectionIdentity), "invocation" -> Json.fromString(context.invocationIdentity),
-      "participant" -> Json.fromString(context.participantIdentity), "repository" -> Json.fromString(context.repositoryIdentity),
-      "endpointIdentity" -> Json.fromString(context.remoteEndpointIdentity), "mode" -> Json.fromString(context.syncMode),
-      "effect" -> Json.fromString(effect.toString), "target" -> Json.obj(
-        "root" -> Json.fromString(target.root.toString), "localBranch" -> Json.fromString(target.localBranch),
-        "remote" -> Json.fromString(target.remote), "remoteBranch" -> Json.fromString(target.remoteBranch),
-        "endpoint" -> Json.fromString(target.endpoint)))))
+    target: RepositoryGitRuntimePrograms.Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Json] = {
+    if (core == null || core.component == null || core.component.isEmpty || core.component.get == null ||
+        core.component.get.core == null || core.component.get.core.instanceId == null) {
+      Consequence.stateConflict("Repository effect owning component is absent")
+    } else NativeHostRepositoryEffectScope.bindingFromInputsC(core.component.get.core.instanceId.canonicalKey,
+      context, target, effect)
+  }
   def splitStartBindingC(value: SplitPhaseTypedStartHumanVerification.StartContext): Consequence[Json] =
     NativeHostSplitStartScope.bindingC(value)
   def splitAnswerBindingC(value: SplitPhaseHumanAnswerVerification.AnswerContext): Consequence[Json] =
     NativeHostSplitAnswerScope.bindingC(value)
-  def repositoryHumanBindingC(value: RepositorySyncHumanConflict.AnswerContext): Consequence[Json] =
-    if (value == null || value.componentInstance == null || value.question == null || value.result == null ||
-        value.result.result == null || value.result.result.value == null) Consequence.stateConflict("Repository Human target is absent")
-    else value.question.current match {
+  def repositoryHumanSourceC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]): Consequence[Json] = {
+    if (question == null) return Consequence.stateConflict("Repository Human question is absent")
+    question.current match {
       case decision: WorkflowContinuation.Decision[RepositorySyncHumanConflict.Input] if decision.request != null &&
-          decision.request.input.exists(v => v != null && v.value != null && v.value.conflict != null) =>
+          decision.request.input != null && decision.request.input.exists(v => v != null && v.value != null && v.value.conflict != null) =>
         val input = decision.request.input.get.value
         val c = input.conflict
-        val answer = value.result.result.value
-        NativeHostHumanScope.bindingC(value.componentInstance.canonicalKey, Purpose.RepositoryHuman, value.question, value.result,
-          value.submittingParticipant, Json.obj("requestingResult" -> Json.obj("identity" -> Json.fromString(input.requestingResultIdentity),
-            "revision" -> Json.fromString(input.requestingResultRevision)), "conflict" -> Json.obj(
-            "instanceIdentity" -> Json.fromString(c.instanceIdentity), "conflictRevision" -> Json.fromString(c.conflictRevision),
-            "localTip" -> Json.fromString(c.localTip), "remoteTip" -> Json.fromString(c.remoteTip), "conflicts" -> Json.fromValues(c.conflicts.map(e =>
-              Json.obj("identity" -> Json.fromString(e.identity), "path" -> Json.fromString(e.path), "base" -> Json.fromString(e.base.identity),
-                "local" -> Json.fromString(e.local.identity), "remote" -> Json.fromString(e.remote.identity), "mode" -> Json.fromString(e.mode)))))),
-          Json.obj("choice" -> Json.fromString(answer.choice), "resolutions" -> Json.fromValues(answer.resolutions.map(r =>
-            Json.obj("conflictIdentity" -> Json.fromString(r.conflictIdentity), "text" -> Json.fromString(r.text))))))
+        if (c.conflicts == null || c.conflicts.exists(e => e == null || e.base == null || e.local == null || e.remote == null ||
+              Vector(e.identity, e.path, e.base.identity, e.local.identity, e.remote.identity, e.mode).exists(_ == null)) ||
+            Vector(input.requestingResultIdentity, input.requestingResultRevision, c.instanceIdentity, c.conflictRevision, c.localTip, c.remoteTip).exists(_ == null)) {
+          Consequence.stateConflict("Repository Human selected conflict is absent")
+        } else Consequence.success(Json.obj("requestingResult" -> Json.obj("identity" -> Json.fromString(input.requestingResultIdentity),
+          "revision" -> Json.fromString(input.requestingResultRevision)), "conflict" -> Json.obj(
+          "instanceIdentity" -> Json.fromString(c.instanceIdentity), "conflictRevision" -> Json.fromString(c.conflictRevision),
+          "localTip" -> Json.fromString(c.localTip), "remoteTip" -> Json.fromString(c.remoteTip), "conflicts" -> Json.fromValues(c.conflicts.map(e =>
+            Json.obj("identity" -> Json.fromString(e.identity), "path" -> Json.fromString(e.path), "base" -> Json.fromString(e.base.identity),
+              "local" -> Json.fromString(e.local.identity), "remote" -> Json.fromString(e.remote.identity), "mode" -> Json.fromString(e.mode)))))))
       case _ => Consequence.stateConflict("Repository Human evidence has no actual conflict question")
     }
-  def goalHumanBindingC(componentInstance: String,
-    question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing],
-    submitted: ContinuationResult[GoalPhaseOrderedHumanDecision.Answer], participant: String): Consequence[Json] =
-    if (question == null || submitted == null || submitted.result == null || submitted.result.value == null)
-      Consequence.stateConflict("Ordered Human target is absent")
-    else question.current match {
+  }
+
+  def goalHumanSourceC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]): Consequence[Json] = {
+    if (question == null) return Consequence.stateConflict("Ordered Human question is absent")
+    question.current match {
       case decision: WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input] if decision.request != null &&
-          decision.request.input.exists(v => v != null && v.value != null && v.value.work != null) =>
+          decision.request.input != null && decision.request.input.exists(v => v != null && v.value != null && v.value.work != null) =>
         val input = decision.request.input.get.value
         val work = input.work
-        NativeHostHumanScope.bindingC(componentInstance, Purpose.GoalHuman, question, submitted, participant,
-          Json.obj("requestingResult" -> Json.obj("identity" -> Json.fromString(input.requestingResult.identity),
-            "revision" -> Json.fromString(input.requestingResult.revision)), "assignment" -> Json.obj(
-            "instanceIdentity" -> Json.fromString(work.instanceIdentity), "sourceRevision" -> Json.fromString(work.sourceRevision),
-            "kind" -> Json.fromString(work.kind), "stepIdentity" -> work.stepIdentity.asJson, "generation" -> Json.fromLong(work.generation),
-            "selectedPlan" -> Json.obj("identity" -> Json.fromString(work.selectedPlan.identity), "revision" -> Json.fromString(work.selectedPlan.revision),
-              "phase" -> Json.fromString(work.selectedPlan.phase), "repository" -> Json.fromString(work.selectedPlan.repository)),
-            "originalBase" -> work.originalBase.asJson, "candidate" -> work.candidate.asJson, "checksReceipt" -> work.checksReceipt.asJson)),
-          Json.obj("choice" -> Json.fromString(submitted.result.value.choice)))
+        if (input.requestingResult == null || work.selectedPlan == null || work.originalBase == null ||
+            work.stepIdentity == null || work.stepIdentity.exists(_ == null) || work.candidate == null ||
+            work.candidate.exists(c => c == null || c.head == null || c.tree == null) || work.checksReceipt == null ||
+            work.checksReceipt.exists(_ == null) || Vector(input.requestingResult.identity, input.requestingResult.revision,
+              work.instanceIdentity, work.sourceRevision, work.kind, work.selectedPlan.identity, work.selectedPlan.revision,
+              work.selectedPlan.phase, work.selectedPlan.repository, work.originalBase.head, work.originalBase.tree).exists(_ == null)) {
+          Consequence.stateConflict("Ordered Human selected assignment is absent")
+        } else Consequence.success(Json.obj("requestingResult" -> Json.obj("identity" -> Json.fromString(input.requestingResult.identity),
+          "revision" -> Json.fromString(input.requestingResult.revision)), "assignment" -> Json.obj(
+          "instanceIdentity" -> Json.fromString(work.instanceIdentity), "sourceRevision" -> Json.fromString(work.sourceRevision),
+          "kind" -> Json.fromString(work.kind), "stepIdentity" -> work.stepIdentity.asJson, "generation" -> Json.fromLong(work.generation),
+          "selectedPlan" -> Json.obj("identity" -> Json.fromString(work.selectedPlan.identity), "revision" -> Json.fromString(work.selectedPlan.revision),
+            "phase" -> Json.fromString(work.selectedPlan.phase), "repository" -> Json.fromString(work.selectedPlan.repository)),
+          "originalBase" -> work.originalBase.asJson, "candidate" -> work.candidate.asJson, "checksReceipt" -> work.checksReceipt.asJson)))
       case _ => Consequence.stateConflict("Ordered Human evidence has no actual assigned-work question")
     }
+  }
+
+  def repositoryHumanBindingC(value: RepositorySyncHumanConflict.AnswerContext): Consequence[Json] = {
+    if (value == null || value.componentInstance == null || value.result == null || value.result.result == null ||
+        value.result.result.value == null) return Consequence.stateConflict("Repository Human target is absent")
+    val answer = value.result.result.value
+    if (answer.choice == "ProvideResolution" && (answer.resolutions == null || answer.resolutions.exists(_ == null))) {
+      Consequence.stateConflict("Repository Human resolution is absent")
+    } else for {
+      source <- repositoryHumanSourceC(value.question)
+      binding <- NativeHostHumanScope.bindingC(value.componentInstance.canonicalKey, Purpose.RepositoryHuman, value.question, value.result,
+        value.submittingParticipant, source, Json.obj("choice" -> Json.fromString(answer.choice), "resolutions" ->
+          Json.fromValues(if (answer.choice == "ProvideResolution") answer.resolutions.map(r =>
+            Json.obj("conflictIdentity" -> Json.fromString(r.conflictIdentity), "text" -> Json.fromString(r.text))) else Vector.empty)))
+    } yield binding
+  }
+
+  def goalHumanBindingC(componentInstance: String, question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing],
+    submitted: ContinuationResult[GoalPhaseOrderedHumanDecision.Answer], participant: String): Consequence[Json] = {
+    if (submitted == null || submitted.result == null || submitted.result.value == null) {
+      Consequence.stateConflict("Ordered Human target is absent")
+    } else for {
+      source <- goalHumanSourceC(question)
+      binding <- NativeHostHumanScope.bindingC(componentInstance, Purpose.GoalHuman, question, submitted, participant,
+        source, Json.obj("choice" -> Json.fromString(submitted.result.value.choice)))
+    } yield binding
+  }
   def goalReviewBindingC(core: ActionCall.Core, input: GoalPhaseNativeWork.Request,
-    submitted: ContinuationResult[GoalPhaseNativeWork.Result]): Consequence[Json] = {
-    val result = submitted.result.value
-    val target = Json.obj("instance" -> Json.fromString(input.instanceIdentity), "sourceRevision" -> Json.fromString(input.sourceRevision),
+    submitted: ContinuationResult[GoalPhaseNativeWork.Result]): Consequence[Json] =
+    if (input == null || submitted == null || submitted.result == null || submitted.result.value == null)
+      Consequence.stateConflict("Goal review target or result is absent")
+    else for {
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(input.selectedPlan)
+      report = submitted.result.value.acceptance
+      _ <- if (report == null) Consequence.stateConflict("Goal review report option is absent")
+        else report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC)
+    } yield _review_target(core, "goal-review", goalReviewTarget(input), submitted,
+      goalReviewVerdict(submitted.result.value))
+  def goalReviewTarget(input: GoalPhaseNativeWork.Request): Json =
+    Json.obj("instance" -> Json.fromString(input.instanceIdentity), "sourceRevision" -> Json.fromString(input.sourceRevision),
       "workKind" -> Json.fromString(input.kind), "step" -> input.stepIdentity.asJson, "generation" -> Json.fromLong(input.generation),
       "plan" -> Json.obj("identity" -> Json.fromString(input.selectedPlan.identity), "revision" -> Json.fromString(input.selectedPlan.revision),
         "phase" -> Json.fromString(input.selectedPlan.phase), "repository" -> Json.fromString(input.selectedPlan.repository)),
       "base" -> input.originalBase.asJson, "candidate" -> input.candidate.asJson, "checksReceipt" -> input.checksReceipt.asJson,
-      "changedPaths" -> input.review.map(_.changedPaths).getOrElse(Vector.empty).asJson)
-    val verdict = Json.obj("outcome" -> Json.fromString(result.outcome), "findings" -> result.findings.asJson,
+      "changedPaths" -> input.review.map(_.changedPaths).getOrElse(Vector.empty).asJson).mapObject { fields =>
+        val checks = input.review.toVector.flatMap(_.checks).filter(_.sbt.nonEmpty)
+        val target = input.selectedPlan.effectiveAcceptance.fold(fields)(value => fields.add("effectiveAcceptance", value.asJson))
+        if (checks.isEmpty) target else target.add("testChecks", Json.fromValues(checks.map(_check_target)))
+      }
+  def goalReviewVerdict(result: GoalPhaseNativeWork.Result): Json =
+    Json.obj("outcome" -> Json.fromString(result.outcome), "findings" -> result.findings.asJson,
       "repairSummary" -> (if (result.outcome == "repair") Json.fromString(result.summary) else Json.Null))
-    Consequence.success(reviewTarget(core, "goal-review", target, submitted, verdict))
-  }
+      .mapObject(fields => result.acceptance.fold(fields)(value => fields.add("acceptance", value.asJson)))
   def repositoryReviewBindingC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
     submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] = {
-    val result = submitted.result.value
-    val target = Json.obj("instance" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
+    Consequence.success(_review_target(core, "repository-review", repositoryReviewTarget(input), submitted,
+      repositoryReviewVerdict(submitted.result.value)))
+  }
+  def repositoryReviewTarget(input: RepositorySyncNativeMergeReview.Request): Json =
+    Json.obj("instance" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
       "localTip" -> Json.fromString(input.localTip), "remoteTip" -> Json.fromString(input.remoteTip), "indexTree" -> Json.fromString(input.indexTree),
       "changedPaths" -> input.changedPaths.asJson, "validationMode" -> Json.fromString(input.validationMode), "selectedChecks" -> input.selectedChecks.asJson,
-      "checks" -> Json.fromValues(input.checks.map(r => Json.obj("identity" -> Json.fromString(r.identity),
-        "termination" -> Json.fromString(r.termination), "exitCode" -> r.exitCode.asJson))))
-    val verdict = Json.obj("decision" -> Json.fromString(result.decision), "findings" -> Json.fromValues(result.findings.map(f => Json.obj(
+      "checks" -> Json.fromValues(input.checks.map(_check_target)))
+  private def _check_target(receipt: RepositorySyncNativeMergeValidation.Receipt): Json = {
+    val fields = Json.obj("identity" -> Json.fromString(receipt.identity),
+      "termination" -> Json.fromString(receipt.termination), "exitCode" -> receipt.exitCode.asJson)
+    receipt.sbt.fold(fields)(facts => fields.mapObject(_.add("sbt", facts.asJson)))
+  }
+  def repositoryReviewVerdict(result: RepositorySyncNativeMergeReview.Result): Json =
+    Json.obj("decision" -> Json.fromString(result.decision), "findings" -> Json.fromValues(result.findings.map(f => Json.obj(
       "identity" -> Json.fromString(f.identity), "affectedPaths" -> f.affectedPaths.asJson,
       "repairRationale" -> (if (result.decision == "repair") Json.fromString(f.rationale) else Json.Null)))))
-    Consequence.success(reviewTarget(core, "repository-review", target, submitted, verdict))
-  }
-  private def reviewTarget[A](core: ActionCall.Core, kind: String, target: Json,
-    value: ContinuationResult[A], verdict: Json): Json = Json.obj(
-    "componentInstance" -> Json.fromString(core.component.get.core.instanceId.canonicalKey), "attestation" -> Json.obj(
+  private def _review_target[A](core: ActionCall.Core, kind: String, target: Json,
+    value: ContinuationResult[A], verdict: Json): Json = reviewBinding(core.component.get.core.instanceId.canonicalKey,
+      kind, target, Json.obj("handle" -> NativeHostHumanScope.handleJson(value.handle),
+        "runId" -> Json.fromString(value.runId.value), "continuationId" -> Json.fromString(value.continuationId.value),
+        "typeIdentity" -> Json.fromString(value.result.typeIdentity)),
+      Json.obj("identity" -> Json.fromString(value.resultReference.identity), "revision" -> Json.fromString(value.resultReference.revision)),
+      Json.fromString(value.evidence.workerIdentity.get), verdict)
+
+  def reviewBinding(componentInstance: String, kind: String, target: Json, completion: Json,
+    reference: Json, worker: Json, verdict: Json): Json = Json.obj(
+    "componentInstance" -> Json.fromString(componentInstance), "attestation" -> Json.obj(
       "kind" -> Json.fromString(kind), "target" -> target, "result" -> Json.obj(
-        "handle" -> NativeHostHumanScope.handleJson(value.handle), "runId" -> Json.fromString(value.runId.value),
-        "continuationId" -> Json.fromString(value.continuationId.value),
-        "reference" -> Json.obj("identity" -> Json.fromString(value.resultReference.identity), "revision" -> Json.fromString(value.resultReference.revision)),
-        "typeIdentity" -> Json.fromString(value.result.typeIdentity), "worker" -> Json.fromString(value.evidence.workerIdentity.get),
+        "handle" -> completion.hcursor.downField("handle").focus.getOrElse(Json.Null),
+        "runId" -> completion.hcursor.downField("runId").focus.getOrElse(Json.Null),
+        "continuationId" -> completion.hcursor.downField("continuationId").focus.getOrElse(Json.Null),
+        "reference" -> reference, "typeIdentity" -> completion.hcursor.downField("typeIdentity").focus.getOrElse(Json.Null), "worker" -> worker,
         "verdict" -> verdict)))
 }

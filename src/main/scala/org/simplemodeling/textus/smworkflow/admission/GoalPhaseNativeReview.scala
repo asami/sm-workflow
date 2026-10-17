@@ -10,7 +10,9 @@ import GoalPhaseOrderedProgression as O
 /** Actual selected semantic review context and independent host admission.
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
   final case class Context(changedPaths: Vector[String],
@@ -43,6 +45,7 @@ private[smworkflow] object GoalPhaseNativeReview {
           value.key.kind == O.WorkKind.ReviewPhase => Consequence.success(value)
       case _ => F.invalid("review result has no assigned semantic frontier")
     }
+    _ <- GoalPhaseAcceptanceBoundary.admitC(controller.plan, work.key.kind.toString, result)
     outcome = result.outcome match {
       case "accept" => O.ReviewOutcome.Accept
       case "repair" => O.ReviewOutcome.Repair

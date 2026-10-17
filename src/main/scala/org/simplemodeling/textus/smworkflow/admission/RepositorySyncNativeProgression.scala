@@ -2,8 +2,9 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.processexecution.GitObjectId
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.DefinitionBinding
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, Lifecycle}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import RepositorySyncManagedFetch as Fetch
@@ -12,7 +13,8 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
   def advanceC(identity: String, declaration: Fetch.Declaration, definition: DefinitionBinding,
@@ -21,14 +23,64 @@ private[smworkflow] object RepositorySyncNativeProgression {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port] = None,
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
-    output <- session.started.current.suspension match {
+    output <- if (session.started.current.lifecycle == Lifecycle.Completed)
+      _retained_terminal_c(session, declaration, core, acknowledgement)
+      else session.started.current.suspension match {
       case Some(boundary) => _pending_c(session, boundary, core)
+      case None if session.started.current.currentProgression.contains(WorkflowInstancePersistence.ProgressionReference("sync.RepairDecisionRequired")) =>
+        Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
+          "Actual Human handling is required for the retained repair decision; no effects or consent are inferred.", "RepairDecisionRequired"))
+      case None if session.started.current.currentProgression.exists(p =>
+          Set("sync.ReviewRepairRequired", "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value)) =>
+        repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
+          "The current native repair requires its installed fixed policy and paired continuation.", "native-repair-unavailable")))
+      case None if session.started.current.history.exists(_.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.PendingMergePrepared"))) => for {
+        store <- bindC(session, declaration, core, acknowledgement)
+        candidate <- store.currentMergeCandidateC(session.started.current)
+        accepted <- review.fold(Consequence.success(Option.empty[Stage]))(_.acceptedC(identity, core))
+        output <- (accepted, convergence) match {
+          case (Some(value), Some(authority)) => RepositorySyncNativeConvergence.advanceC(store, value, authority)
+          case _ => RepositorySyncNativeMergeValidation.waitC(store, candidate.pending, validationPolicy, review, candidate.namespace)
+        }
+      } yield output
       case None => _advance_session_c(session, declaration, definition, core, fetchAcknowledgement, acknowledgement,
         conflicts, validationPolicy, review, convergence)
     }
   } yield output
+
+  /** Project only the saved convergence immediately preceding native closure.
+    * Reading a completed result admits no new effects or transitions. */
+  private def _retained_terminal_c(session: Fetch.Session, declaration: Fetch.Declaration,
+    core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    store <- bindC(session, declaration, core, acknowledgement)
+    current = session.started.current
+    _ <- if (current.lifecycle == Lifecycle.Completed && current.suspension.isEmpty &&
+        current.currentProgression.isEmpty && current.identity.value == store.identity &&
+        current.causation.value == "native-repository-completed:" + store.identity) Consequence.unit
+      else invalid("retained terminal has no actual native completion")
+    saved <- store.loadC("converged").flatMap {
+      case Some(value) if value.payload.stage == "Converged" => Consequence.success(value)
+      case _ => invalid("retained terminal has no saved convergence")
+    }
+    _ <- if (current.identity == saved.record.identity && current.revision == saved.record.revision.next &&
+        current.history.dropRight(1) == saved.record.history) Consequence.unit
+      else invalid("retained terminal does not immediately follow its saved convergence")
+    tip <- saved.payload.finalTip.map(Consequence.success).getOrElse(invalid("saved convergence has no final tip"))
+    tree <- saved.payload.indexTree.map(Consequence.success).getOrElse(invalid("saved convergence has no index tree"))
+    _ <- GitObjectId.parseC(tip)
+    _ <- GitObjectId.parseC(tree)
+    after <- saved.payload.after.map(Consequence.success).getOrElse(invalid("saved convergence has no final observation"))
+    _ <- if (after.head == tip && after.tree == tree && after.dirty.isEmpty &&
+        after.counts.contains(RepositorySyncManagedGitObservation.Counts(0, 0)) &&
+        after.trackingTip.contains(tip) && after.mergeBase.contains(tip)) Consequence.unit
+      else invalid("saved convergence contradicts its final tip, tree or clean equal observation")
+    result = RepositorySyncNativeConvergence.Result(current.identity.value, saved.payload.root,
+      session.context.localBranch, session.context.trackingRemote, session.context.trackingBranch, tip, tree)
+  } yield NativeWorkflowOperationOutput.repositoryComplete(current.identity.value, result)
 
   /** The native suspension is the already selected assignment. Fetch and
     * completed-stage discovery do not run merely to display pending work. */
@@ -36,25 +88,33 @@ private[smworkflow] object RepositorySyncNativeProgression {
     core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     human <- RepositorySyncDefinitionBinding.humanConflictOperationC
     review <- RepositorySyncDefinitionBinding.nativeReviewOperationC
+    repair <- RepositorySyncDefinitionBinding.nativeRepairOperationC
+    conflict <- RepositorySyncDefinitionBinding.conflictOperationC
     identity = ContinuationIdentity(boundary.continuationIdentity.value)
     output <- if (boundary.completion.value == human.metadata.completionContract.identity) for {
       reader <- session.storage.bindDecisionC(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)
       question <- reader.loadC(identity)(using core.executionContext).flatMap(
         _.map(Consequence.success).getOrElse(invalid("pending repository Human question is absent")))
-      output <- NativeWorkflowOperationOutput.repositoryHumanC(question)
+      output <- NativeWorkflowOperationOutput.repositoryHumanC(question, core)
     } yield output else if (boundary.completion.value == review.metadata.completionContract.identity) for {
       reader <- session.storage.bindIssuedC(RepositorySyncNativeMergeReviewContinuation.completionOperation,
         RepositorySyncNativeMergeReview.inputCodec)
       work <- reader.loadC(identity)(using core.executionContext).flatMap(
         _.map(Consequence.success).getOrElse(invalid("pending repository review is absent")))
-      output <- NativeWorkflowOperationOutput.repositoryReviewRequestC(work)
-    } yield output else for {
+      output <- NativeWorkflowOperationOutput.repositoryReviewRequestC(work, core)
+    } yield output else if (boundary.completion.value == repair.metadata.completionContract.identity) for {
+      reader <- session.storage.bindIssuedC(RepositorySyncNativeMergeRepairContinuation.completionOperation,
+        RepositorySyncNativeMergeRepair.inputCodec)
+      work <- reader.loadC(identity)(using core.executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(invalid("pending repository repair is absent")))
+      output <- NativeWorkflowOperationOutput.repositoryRepairRequestC(work)
+    } yield output else if (boundary.completion.value == conflict.metadata.completionContract.identity) for {
       reader <- session.storage.bindIssuedC(RepositorySyncNativeConflictContinuation.completionOperation,
         RepositorySyncConflictSemantic.inputCodec)
       work <- reader.loadC(identity)(using core.executionContext).flatMap(
         _.map(Consequence.success).getOrElse(invalid("pending repository conflict work is absent")))
       output <- NativeWorkflowOperationOutput.repositoryConflictRequestC(work)
-    } yield output
+    } yield output else invalid("pending repository suspension has an unknown completion contract")
   } yield output
 
   private def _advance_session_c(session: Fetch.Session, declaration: Fetch.Declaration, definition: DefinitionBinding,

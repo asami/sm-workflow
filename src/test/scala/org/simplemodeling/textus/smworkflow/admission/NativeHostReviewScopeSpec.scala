@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.time.Instant
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.WorkflowProtocolV1
@@ -46,7 +47,9 @@ private[admission] object NativeHostReviewEvidenceFixture {
 
 /** Real target/disposition selection, not whole input or transport certification.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeHostReviewEvidenceFixture.*
@@ -58,6 +61,53 @@ final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with Giv
   private def observe(value: Evidence, purpose: Purpose, binding: Json) = observeC(value, declared, purpose, "result-at-1", binding, now)
 
   "Independent review attestation" should {
+    "retain actual effective conditions and report meaning while refusing contradictory quality targets or dispositions" in {
+      Given("spec:goal-phase-acceptance-boundary E5 R6; actual selected effective quality and report values in a fixture independent review")
+      val boundary = GoalPhaseAcceptanceBoundary.Effective(Some("Explicit selected usage"), Vector(
+        GoalPhaseAcceptanceBoundary.EffectiveCondition("behavior", "all", true, "Selected behavior", "project"),
+        GoalPhaseAcceptanceBoundary.EffectiveCondition("extra", "step", false, "Excluded robustness", "adopted")))
+      val report = GoalPhaseAcceptanceBoundary.Report(Vector(
+        GoalPhaseAcceptanceBoundary.Observation("behavior", "satisfied", "Observed selected behavior"),
+        GoalPhaseAcceptanceBoundary.Observation("extra", "unsatisfied", "Excluded suggestion")), Vector("Consider extra later"))
+      val target = goalInput.mapObject(_.add("effectiveAcceptance", boundary.asJson))
+      val verdict = Json.obj("outcome" -> Json.fromString("accept"), "findings" -> Json.arr(), "acceptance" -> report.asJson)
+      When("normal evidence storage selects the actual typed boundary and report")
+      val saved = read(Purpose.GoalReview, binding(Purpose.GoalReview, Some(target), Some(verdict)))
+      Then("complete condition scope, required false, source, observations and advisories survive without a custody certificate")
+      saved.binding.hcursor.downField("attestation").downField("target").downField("effectiveAcceptance").focus shouldBe Some(boundary.asJson)
+      saved.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("acceptance").focus shouldBe Some(report.asJson)
+      observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(target), Some(verdict))).isSuccess shouldBe true
+      saved.binding.noSpaces should not include "contextSnapshot"
+      val replacements = Vector(boundary.conditions.head.copy(scope = "phase"),
+        boundary.conditions.head.copy(required = false), boundary.conditions.head.copy(source = "adopted"),
+        boundary.conditions.head.copy(description = "Different quality meaning"))
+      replacements.foreach { replacement =>
+        Given("the same independent result reference with a different meaningful effective condition")
+        When("review applicability compares scope, requirement, source or description")
+        val changed = target.mapObject(_.add("effectiveAcceptance", boundary.copy(
+          conditions = boundary.conditions.updated(0, replacement)).asJson))
+        val result = observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(changed), Some(verdict)))
+        Then("a review for the original selected conditions cannot attest the changed target")
+        result.isSuccess shouldBe false
+      }
+      val reports = Vector(report.copy(conditions = report.conditions.updated(0, report.conditions.head.copy(status = "unsatisfied"))),
+        report.copy(conditions = report.conditions.updated(1, report.conditions(1).copy(detail = "Different excluded observation"))),
+        report.copy(advisories = Vector("Different advisory")))
+      reports.foreach { changed =>
+        Given("a different observation status, detail or advisory at the same independently attested result slot")
+        When("the existing independent review reader selects the submitted report")
+        val result = observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(target),
+          Some(verdict.mapObject(_.add("acceptance", changed.asJson)))))
+        Then("the unrelated report cannot reuse the original review attestation")
+        result.isSuccess shouldBe false
+      }
+      Given("a selected report with an unknown observation status")
+      When("the existing storage encoder validates the typed report")
+      val invalid = verdict.mapObject(_.add("acceptance", report.copy(conditions = Vector(
+        report.conditions.head.copy(status = "unknown"))).asJson))
+      Then("invalid typed presence fails rather than being omitted")
+      encodeStorageC(record(Purpose.GoalReview, binding(Purpose.GoalReview, Some(target), Some(invalid)))).isSuccess shouldBe false
+    }
     "select actual Goal review targets without Plan policy diff log or Workspace body certificates" in {
       Given("Spec: docs/spec/native-host-review-applicability.md; Rule: R1; Example: E1; independently issued actual review scope")
       val saved = read(Purpose.GoalReview, binding(Purpose.GoalReview))

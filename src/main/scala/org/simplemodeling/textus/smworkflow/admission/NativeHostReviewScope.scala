@@ -1,11 +1,13 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Json, JsonObject}
+import io.circe.syntax.*
 import NativeHostEvidence.Purpose
 
 /** Selected independent review targets; native completion owns result validity.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHostReviewScope {
   def supports(purpose: Purpose): Boolean = Set(Purpose.GoalReview, Purpose.RepositoryReview)(purpose)
@@ -30,23 +32,39 @@ private[smworkflow] object NativeHostReviewScope {
     base <- at(input, "base").flatMap(snapshot)
     candidate <- at(input, "candidate").flatMap(snapshot)
     paths <- stringArray(input, "changedPaths")
-  } yield Json.fromJsonObject(fields.add("step", step.map(Json.fromString).getOrElse(Json.Null))
+    checks <- input("testChecks") match {
+      case None => Right(None)
+      case Some(value) => checkArray(value).map(Some(_))
+    }
+    acceptance <- _effective(input)
+    selected = fields.add("step", step.map(Json.fromString).getOrElse(Json.Null))
     .add("generation", Json.fromLong(generation)).add("plan", Json.fromJsonObject(plan)).add("base", base)
-    .add("candidate", candidate).add("changedPaths", Json.fromValues(paths.map(Json.fromString))))
+    .add("candidate", candidate).add("changedPaths", Json.fromValues(paths.map(Json.fromString)))
+    checked = checks.fold(selected)(value => selected.add("testChecks", value))
+  } yield Json.fromJsonObject(acceptance.fold(checked)(value => checked.add("effectiveAcceptance", value)))
 
   private def repository(input: JsonObject): Either[String, Json] = for {
     fields <- strings(input, Vector("instance", "validatedRevision", "localTip", "remoteTip", "indexTree", "validationMode"))
     paths <- stringArray(input, "changedPaths")
     selected <- stringArray(input, "selectedChecks")
-    checks <- input("checks").flatMap(_.asArray).toRight("Review checks must be an array")
-    facts <- checks.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty))((prior, value) => for {
-      values <- prior
-      receipt <- obj(value)
-      fields <- strings(receipt, Vector("identity", "termination"))
-      exit <- receipt("exitCode").flatMap(_.asNumber).flatMap(_.toInt).toRight("Review exitCode must be an integer")
-    } yield values :+ Json.fromJsonObject(fields.add("exitCode", Json.fromInt(exit))))
+    facts <- input("checks").toRight("Review requires checks").flatMap(checkArray)
   } yield Json.fromJsonObject(fields.add("changedPaths", Json.fromValues(paths.map(Json.fromString)))
-    .add("selectedChecks", Json.fromValues(selected.map(Json.fromString))).add("checks", Json.fromValues(facts)))
+    .add("selectedChecks", Json.fromValues(selected.map(Json.fromString))).add("checks", facts))
+
+  private def checkArray(value: Json): Either[String, Json] =
+    value.asArray.toRight("Review checks must be an array").flatMap(_.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty))(
+      (prior, value) => for { values <- prior; receipt <- check(value) } yield values :+ receipt)).map(Json.fromValues)
+
+  private def check(value: Json): Either[String, Json] = for {
+    receipt <- obj(value)
+    fields <- strings(receipt, Vector("identity", "termination"))
+    exit <- receipt("exitCode").flatMap(_.asNumber).flatMap(_.toInt).toRight("Review exitCode must be an integer")
+    sbt <- receipt("sbt") match {
+      case None => Right(None)
+      case Some(value) => value.as[WorkflowSbtValidation.Facts].left.map(_.message).map(facts => Some(facts.asJson))
+    }
+    selected = fields.add("exitCode", Json.fromInt(exit))
+  } yield Json.fromJsonObject(sbt.fold(selected)(facts => selected.add("sbt", facts)))
 
   private def resultTarget(input: JsonObject, purpose: Purpose): Either[String, Json] = for {
     fields <- strings(input, Vector("runId", "continuationId", "typeIdentity", "worker"))
@@ -60,7 +78,24 @@ private[smworkflow] object NativeHostReviewScope {
     outcome <- text(input, "outcome")
     findings <- stringArray(input, "findings")
     summary <- if (outcome == "repair") text(input, "repairSummary").map(Json.fromString) else Right(Json.Null)
-  } yield Json.obj("outcome" -> Json.fromString(outcome), "findings" -> Json.fromValues(findings.map(Json.fromString)), "repairSummary" -> summary)
+    acceptance <- _report(input)
+    selected = Json.obj("outcome" -> Json.fromString(outcome), "findings" -> Json.fromValues(findings.map(Json.fromString)), "repairSummary" -> summary)
+  } yield acceptance.fold(selected)(value => selected.mapObject(_.add("acceptance", value)))
+
+  private def _effective(input: JsonObject): Either[String, Option[Json]] = input("effectiveAcceptance").filterNot(_.isNull) match {
+    case None => Right(None)
+    case Some(value) => for {
+      parsed <- value.as[GoalPhaseAcceptanceBoundary.Effective].left.map(_.message)
+      _ <- Either.cond(GoalPhaseAcceptanceBoundary.validateEffectiveC(parsed).isSuccess, (), "Review effective acceptance is invalid")
+    } yield Some(parsed.asJson)
+  }
+  private def _report(input: JsonObject): Either[String, Option[Json]] = input("acceptance").filterNot(_.isNull) match {
+    case None => Right(None)
+    case Some(value) => for {
+      parsed <- value.as[GoalPhaseAcceptanceBoundary.Report].left.map(_.message)
+      _ <- Either.cond(GoalPhaseAcceptanceBoundary.validateReportC(parsed).isSuccess, (), "Review acceptance report is invalid")
+    } yield Some(parsed.asJson)
+  }
 
   private def repositoryVerdict(input: JsonObject): Either[String, Json] = for {
     decision <- text(input, "decision")

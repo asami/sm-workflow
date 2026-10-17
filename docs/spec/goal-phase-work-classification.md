@@ -50,6 +50,19 @@ Step/Phase closure.
 
 ## R5 — Normal native frontier connection
 
+The [native Goal execution contract](goal-phase-native-execution.md) now connects
+the semantic requirement to optional operational mapping only in fresh issuance
+after the owning issued-row lookup returns absent. Saved pending/completed/Human
+issues retain their original disposition without requiring their class in a
+later mapping. One additional mapped normal whole-Phase specification supplies
+explicit fixture configuration and execution observations across mapping
+replacement, repair and Human resumption. It asserts mapped native observation
+admission and public context; it establishes no genuine executor/provider,
+permission, installed task or real Step/Phase acceptance. The two earlier
+unconfigured programs below retain absent disposition and their semantic scope.
+The absent earlier Phase5.2 terminal evidence remains a historical verification
+limitation; the new connection supplies no retrospective evidence for that run.
+
 The two existing normal ThreeWorkflowGoalOperationSpec whole-Phase programs
 now supply classified implementation (Routine), repair (Deep), Step review
 (Standard) and Phase review (Critical). Actual issued WorkOrders retain their
@@ -87,10 +100,23 @@ recorded; this adds native classification/frontier evidence, not actual AI
 executor execution or integrated acceptance. The earlier54-test result does
 not cover E6.
 
+## R6 — Internal Split semantic derivation
+
+`Classification.semanticRequirementC` shares the existing deterministic semantic
+level/class calculation for [Split native execution](split-phase-native-execution.md)
+while preserving every other original requirement member, including assigned
+independent review and disposition. Split DESIGN and ANALYSIS legitimately retain
+`reviewRequired=true`. This helper is internal; Goal and Repository continue to
+call strict `requirementC`, whose `(kind == REVIEW) == reviewRequired` guard and
+failure meaning remain unchanged. Split classification cannot waive independence
+or evidence to obtain INLINE. New E6 helper examples are authored for parent
+validation; they establish no provider or independent review execution.
+
 ## Executable specification coverage
 
 `GoalPhaseWorkClassificationSpec` covers E1 (144 classification combinations),
 E2 (assigned frontier separation), E3 (selected Plan storage), E4 (native Start
-and Work request codecs) and E5 (invalid input). Connected Operation verification
+and Work request codecs), E5 (invalid input) and E6 (internal Split semantic-only derivation with preserved
+independent obligation and unchanged strict refusal). Connected Operation verification
 and runtime execution evidence remain required for the applicable Phase 5 scope;
 helper-level success cannot close the integrated batch or reopen Phase 2.

@@ -19,7 +19,8 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
   final case class StepProgram(step: String, ordinal: Int)
@@ -80,7 +81,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
             _ <- store.ackC("goal-step-commit-prepared:" + store.input.step)
             actual <- E.commitGoalStepC(core, store.ordinal)
             _ <- store.ackC("goal-step-commit-executed:" + store.input.step)
-            _ <- G.requiredTextC(actual).map(_ => ())
+            _ <- actual.valueC
             observed <- G.observeC(core)
             commit <- G.commitC(core, observed.head)
             _ <- if (observed.branch == d.target.localBranch && observed.dirty.isEmpty &&
@@ -102,20 +103,26 @@ private[smworkflow] object GoalPhaseNativeClosure {
     }
   } yield saved
 
-  private def storeC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
+  /** The owning Closing frontier supplies the same target to authority lookup
+    * and the public missing-authority Wait projection. */
+  def inputC(from: InstanceRecord, controller: O.State): Consequence[Input] = for {
     _ <- if (controller.stage == O.Stage.Closing && controller.cursor < controller.plan.steps.size &&
         controller.candidate.nonEmpty && controller.checksReceipt.nonEmpty && controller.reviewEvidence.nonEmpty &&
         from.currentProgression.contains(ProgressionReference("phase.Closing")))
       Consequence.unit else F.invalid("Step closure has no actual accepted review and native Closing frontier")
+    step = controller.plan.steps(controller.cursor)
+  } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
+    step.identity, controller.generation, controller.tipSnapshot, controller.candidate.get, controller.reviewEvidence.get)
+
+  private def storeC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
+    input <- inputC(from, controller)
     installation <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
     _ <- installation.validateC
     step = controller.plan.steps(controller.cursor)
     ordinal <- installation.policy.programs.find(_.step == step.identity).map(p => Consequence.success(p.ordinal))
       .getOrElse(F.invalid("Step has no host-fixed commit program"))
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    input = Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
-      step.identity, controller.generation, controller.tipSnapshot, controller.candidate.get, controller.reviewEvidence.get)
   } yield new Store(adapter, session, d, core, from, controller, installation, ordinal, input, acknowledge)
 
   private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,

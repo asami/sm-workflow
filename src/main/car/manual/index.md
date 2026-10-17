@@ -36,6 +36,21 @@ A generated operation declaration alone does not install a handler. CLI and MCP
 clients must use the operations actually published by their configured host,
 not assume every operation in the CML is callable.
 
+## Passive native host preparation
+
+The normal configured NativeHostPreparationService adds six COMMAND Operations:
+prepareGoalStart, prepareRepositoryStart, prepareSplitStart, prepareRepositoryEffect,
+prepareAuthority and prepareEvidence. Each consumes one distinct typed input with
+explicit absolute local file: URI fields and returns the existing direct structured
+datastore importer Record. Normal CNCF current-call readText owns resource reads,
+limits and release. Preparation grants no provenance or effect and performs no
+import/save/Start/Submit/Advance; trusted StartupImport provisioning is separate.
+The existing workflow services, session behavior and semantic publication remain.
+
+The [canonical normal preparation contract](../../../../docs/spec/normal-host-preparation-operations.md)
+provides all six exact command FQNs, JSON input schemas, output and ownership rules.
+Preparation does not close installed-task or whole-workflow acceptance obligations.
+
 ## Workflow and AI responsibilities
 
 Workflow retains the original input, current instance, issued work, typed result
@@ -84,7 +99,7 @@ preserving the child's own submitSessionId. Do not select internal stages.
 
 Submit takes sessionId, the declared `result` or `answer`, and genuine
 completion/reference/evidence data. Three Split semantic completions obtain the
-assigned result destination internally; the other six completions require
+assigned result destination internally; the other seven completions require
 resultReference. Workflow resolves native work/decision/revision from actual
 issued state. No caller ambiguity selectors or native envelope echoes are used.
 
@@ -99,6 +114,20 @@ on named business parameters. Outputs use existing RecordResponse with the
 generated Values' business Records; typed callers use their ValueReader.
 JSON formatting remains at existing protocol ingress/egress, not a String
 business facade or native WorkOrder/Wait/Terminal response.
+
+Current normal provided Operation sets are GoalPhase 4, SplitPhase 6 and
+RepositorySync 6, for sixteen total. The additive required
+`MergeRepairService.repairNativePendingMerge` and provided
+`RepositorySyncService.submitNativeMergeRepair` retain Repository workflow v12.
+Repair installs only with the existing explicit nonempty conflict text policy,
+validation policy and native independent review port. Its issued implementation
+Request contains actual paired review findings and bounded affected texts;
+Goal forwards the actual child route. Submit admits only the assigned proposal
+without effects or eager Advance. Later explicit Advance owns fixed no-overwrite
+file/stage effects, new candidate checks and full independent review.
+Decision-needed remains nonterminal, and acceptance grants no convergence effect
+authority. See `docs/spec/repository-sync-native-merge-repair.md` for the bounded
+contract. Source and fixtures do not deliver the original live task repair.
 
 Start does not reuse a prior allocation/execution or guarantee intermediate
 recovery. After abandonment use a NEW execution; uncertain previous effects
@@ -145,7 +174,7 @@ configuration string to claim human or command authority.
 The normal connection also requires `sm-workflow.host.definition`, host evidence
 and all selected SplitPhase/RepositorySync read/allocation/checkpoint settings.
 See the repository's `docs/spec/normal-three-workflow-host.md` for the closed
-host-definition and fifteen provided Operation input/response contracts.
+host-definition and sixteen provided Operation input/response contracts.
 
 ## Failure and recovery
 

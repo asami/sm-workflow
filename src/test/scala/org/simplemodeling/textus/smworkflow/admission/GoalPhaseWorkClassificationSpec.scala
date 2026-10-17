@@ -13,7 +13,9 @@ import GoalPhaseOrderedProgression as O
 
 /** Planning/codec evidence only: not execution, consent or Skill integration.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
@@ -141,5 +143,24 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
         missing shouldBe a[Consequence.Failure[?]]
       }
     }
+    "E6 preserve Split independent review in internal semantic-only derivation" must metadata("E6", "R1,R2,R6") {
+      "while strict Goal and Repository classification still reject review-kind contradictions" in {
+        Given("Spec: docs/spec/goal-phase-work-classification.md; Rules: R1,R2,R6; Example: E6; DESIGN and ANALYSIS with assigned independent review")
+        val inputs = Vector(Kind.DESIGN, Kind.ANALYSIS).map(kind => coding.copy(kind = kind))
+        val assigned = base(true).copy(disposition = Some(ExecutionDisposition(ExecutionPlacement.Delegated,
+          ExecutionIndependence.Required, "original-origin")))
+        When("Split consumes the internal semantic helper while strict consumers retain requirementC")
+        val semantic = inputs.map(value => take(value.semanticRequirementC(assigned)))
+        val strict = inputs.map(_.requirementC(assigned))
+        val invalid = Vector(inputs.head.semanticRequirementC(null), inputs.head.copy(domain = null).semanticRequirementC(assigned))
+        Then("semantic fields change alone, independent obligation and disposition survive, and strict or malformed input fails")
+        semantic.zip(Vector("DesignStandard", "AnalysisStandard")).foreach { (value, name) =>
+          value.reasoningClass shouldBe Some(ReasoningClassReference(name))
+          value.copy(reasoningClass = assigned.reasoningClass) shouldBe assigned
+        }
+        (strict ++ invalid).foreach(_.isSuccess shouldBe false)
+      }
+    }
+
   }
 }

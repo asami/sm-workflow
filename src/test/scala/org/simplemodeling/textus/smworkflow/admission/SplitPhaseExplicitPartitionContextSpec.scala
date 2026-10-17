@@ -18,7 +18,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[admission] object SplitPhasePartitionContextFixture {
   val baseData = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
@@ -45,7 +45,7 @@ private[admission] object SplitPhasePartitionContextFixture {
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 16, 2026
  */
 final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePartitionContextFixture.*
@@ -53,6 +53,76 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
   private def raw(value: Json): String = J.schema + ":" + value.noSpaces
   private def mapPayload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
+
+  "Passive pre-Start template storage" should afterWord(
+    "in spec:native-host-start-preparation, examples:E6,E7, rule:R7, phase:6") {
+    "E6 recover consumed business data without an allocated execution owner" in {
+      Given("R7/E6: specification-owned facts, requirement and presentation selected before any native Start")
+      val template = C.Template(record.reference,
+        C.TemplateOwner(record.owner.requirement, record.owner.presentation), facts)
+      When("the minimal current v1 template and inert execution annotations are decoded")
+      val stored = take(J.encodeTemplateC(template))
+      val original = json(stored)
+      val annotated = original.mapObject(_.add("admitted", Json.True))
+      val malformedUnused = mapPayload(annotated)(o => o.add("owner", o("owner").get.mapObject { owner =>
+        Vector("handle", "instanceRevision", "configuration", "start", "continuation", "completion")
+          .foldLeft(owner)((value, field) => value.add(field, Json.fromBoolean(false)))
+      }).add("prepared", Json.True))
+      val decoded = Vector(original, annotated, malformedUnused).map(value =>
+        take(J.decodeTemplateC(template.reference, raw(value))))
+      Then("only the passive typed projection survives and the full retained decoder still requires its execution owner")
+      decoded.foreach(_ shouldBe template)
+      J.decodeC(template.reference, stored).isSuccess shouldBe false
+      J.decodeC(template.reference, raw(malformedUnused)).isSuccess shouldBe false
+    }
+
+    "E7 refuse missing or mistyped consumed fields and foreign references or schemas" in {
+      Given("R7/E7: a current template whose consumed fields must remain typed and selected")
+      val template = C.Template(record.reference,
+        C.TemplateOwner(record.owner.requirement, record.owner.presentation), facts)
+      val original = json(take(J.encodeTemplateC(template)))
+      val payloadFields = Vector("reference", "owner", "facts")
+      val ownerFields = Vector("requirement", "presentation")
+      val malformed = payloadFields.flatMap(field => Vector(
+        mapPayload(original)(_.remove(field)),
+        mapPayload(original)(_.add(field, Json.fromString("wrong type"))))) ++
+        ownerFields.flatMap(field => Vector(
+          mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove(field)))),
+          mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.add(field, Json.True)))))) ++
+        Vector(original.mapObject(_.remove("schemaVersion")),
+          original.mapObject(_.add("schemaVersion", Json.fromString("foreign"))),
+          original.mapObject(_.add("schemaVersion", Json.True)),
+          mapPayload(original)(_.add("reference", Json.obj("identity" -> Json.fromString("incomplete")))),
+          mapPayload(original)(_.add("facts", Json.obj())))
+      When("actual current codecs decode each malformed projection and different selected address")
+      val refused = malformed.map(value => J.decodeTemplateC(template.reference, raw(value)))
+      val foreign = Vector(template.reference.copy(identity = "other"), template.reference.copy(revision = "2"))
+        .map(reference => J.decodeTemplateC(reference, raw(original)))
+      Then("absent or wrong consumed data and foreign selections fail without a full-record fallback")
+      refused.foreach(_.isSuccess shouldBe false)
+      foreign.foreach(_.isSuccess shouldBe false)
+      J.decodeTemplateC(template.reference, "foreign:" + original.noSpaces).isSuccess shouldBe false
+    }
+
+    "E7 apply the current UTF-8 storage limit to template encoding and decoding" in {
+      Given("R7/E7: passive template presentation with multibyte text and the current byte limit")
+      val template = C.Template(record.reference,
+        C.TemplateOwner(record.owner.requirement, record.owner.presentation.copy(currentSituation = "語")), facts)
+      val stored = take(J.encodeTemplateC(template))
+      val bytes = stored.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+      val atLimit = stored + (" " * (J.maximumPayloadBytes - bytes))
+      val huge = template.copy(owner = template.owner.copy(presentation = template.owner.presentation.copy(
+        currentSituation = "語" * (J.maximumPayloadBytes / 3 + 1))))
+      When("the exact boundary, one extra byte and oversized typed presentation reach the codecs")
+      val decoded = take(J.decodeTemplateC(template.reference, atLimit))
+      val oversized = J.decodeTemplateC(template.reference, atLimit + " ")
+      val encoded = J.encodeTemplateC(huge)
+      Then("the exact UTF-8 bound succeeds and excess bytes are refused for both directions")
+      decoded shouldBe template
+      oversized.isSuccess shouldBe false
+      encoded.isSuccess shouldBe false
+    }
+  }
 
   "Typed partition context storage" should {
     "recover raw complete data and reconstruct unknown-only semantic work through owning constructors" in {

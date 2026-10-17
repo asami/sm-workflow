@@ -68,6 +68,28 @@ org.simplemodeling.textus.smworkflow
 
 # VALUE
 
+## WorkflowIssuedWorkContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| thinkingMode | string | 1 |
+| schemaVersion | string | 1 |
+| handle | org.goldenport.record.Record | 1 |
+| runId | string | 1 |
+| continuationId | string | 1 |
+| expectedRevision | string | 1 |
+| requiredOperation | string | 1 |
+| operation | org.goldenport.record.Record | 1 |
+| inputType | string | ? |
+| resultType | string | ? |
+| context | org.goldenport.record.Record | 1 |
+| completion | org.goldenport.record.Record | 1 |
+| evidence | org.goldenport.record.Record | 1 |
+| completionOperation | org.goldenport.record.Record | 1 |
+| executionRequirement | org.goldenport.record.Record | 1 |
+
 ## GoalPhaseAdvanceInput
 
 - input-kind :: COMMAND
@@ -147,6 +169,10 @@ OperationResult
 | repositoryReview | RepositorySyncMergeReviewWorkView | ? |
 | repositoryHuman | RepositorySyncHumanQuestion | ? |
 | completion | GoalPhaseCompletionResult | ? |
+| authorityContext | WorkflowHostAuthorityContext | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| repositoryRepair | RepositorySyncNativeMergeRepairRequest | ? |
+| validation | GoalPhaseNativeValidationView | ? |
 
 ## GoalPhaseOrderedStep
 
@@ -173,6 +199,68 @@ OperationResult
 | steps | GoalPhaseOrderedStep | * |
 | phaseChecks | string | * |
 | repairLimit | int | 1 |
+| acceptance | GoalPhaseAcceptanceAdoption | ? |
+| effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
+
+## GoalPhaseAcceptanceCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| scope | string | 1 |
+| required | boolean | 1 |
+| description | string | 1 |
+
+## GoalPhaseAcceptanceAdoption
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| usage | string | 1 |
+| conditions | GoalPhaseAcceptanceCondition | * |
+
+## GoalPhaseEffectiveAcceptanceCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| scope | string | 1 |
+| required | boolean | 1 |
+| description | string | 1 |
+| source | string | 1 |
+
+## GoalPhaseEffectiveAcceptanceBoundary
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| usage | string | ? |
+| conditions | GoalPhaseEffectiveAcceptanceCondition | * |
+
+## GoalPhaseAcceptanceObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| status | string | 1 |
+| detail | string | 1 |
+
+## GoalPhaseAcceptanceReport
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| conditions | GoalPhaseAcceptanceObservation | * |
+| advisories | string | * |
 
 ## GoalPhaseNativeSnapshot
 
@@ -304,6 +392,50 @@ OperationResult
 | exitCode | int | ? |
 | stdout | string | 1 |
 | stderr | string | 1 |
+| sbt | WorkflowSbtValidationFacts | ? |
+
+## WorkflowSbtTestSelection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| testClasses | string | * |
+| completedSuites | int | 1 |
+| testsRun | long | 1 |
+
+## WorkflowSbtValidationFacts
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| kind | string | 1 |
+| outcome | string | 1 |
+| selection | WorkflowSbtTestSelection | ? |
+| reason | string | ? |
+
+## GoalPhaseNativeValidationCheck
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| kind | string | 1 |
+
+## GoalPhaseNativeValidationView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceRevision | string | 1 |
+| scopeIdentity | string | 1 |
+| candidate | GoalPhaseNativeSnapshot | 1 |
+| selectedChecks | GoalPhaseNativeValidationCheck | * |
+| checks | GoalPhaseNativeCheckReceipt | * |
+| outcome | string | ? |
 
 ## GoalPhaseNativeReviewContext
 
@@ -314,6 +446,7 @@ OperationResult
 | changedPaths | string | * |
 | diff | string | 1 |
 | checks | GoalPhaseNativeCheckReceipt | * |
+| hostContext | WorkflowHostReviewContext | ? |
 
 ## GoalPhaseWorkResult
 
@@ -326,6 +459,7 @@ OperationResult
 | outcome | string | 1 |
 | summary | string | 1 |
 | findings | string | * |
+| acceptance | GoalPhaseAcceptanceReport | ? |
 
 ## GoalPhaseWorkSubmissionResult
 
@@ -419,6 +553,8 @@ OperationResult
 | review | RepositorySyncMergeReviewWorkView | ? |
 | human | RepositorySyncHumanQuestion | ? |
 | convergence | RepositorySyncNativeConvergenceResult | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| repair | RepositorySyncNativeMergeRepairRequest | ? |
 
 ## RepositorySyncConflictBlob
 
@@ -587,6 +723,54 @@ OperationResult
 | decision | string | 1 |
 | rationale | string | 1 |
 | findings | RepositorySyncNativeMergeReviewFinding | * |
+
+## RepositorySyncNativeMergeRepairFile
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| path | string | 1 |
+| text | string | 1 |
+
+## RepositorySyncNativeMergeRepairRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| review | RepositorySyncNativeMergeReviewRequest | 1 |
+| findings | RepositorySyncNativeMergeReviewFinding | * |
+| files | RepositorySyncNativeMergeRepairFile | * |
+
+## RepositorySyncNativeMergeRepairResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| decision | string | 1 |
+| rationale | string | 1 |
+| replacements | RepositorySyncNativeMergeRepairFile | * |
+
+## RepositorySyncNativeMergeRepairSubmissionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
 
 ## RepositorySyncNativeMergeReviewSubmissionResult
 
@@ -2130,6 +2314,12 @@ state-machine = RepositorySyncNativeMergeReviewContext
 subject = pendingNativeMerge
 subject-type = RepositorySyncNativeMergeReviewRequest
 
+##### nativeRepair
+
+state-machine = RepositorySyncNativeMergeRepairContext
+subject = nativeRepair
+subject-type = RepositorySyncNativeMergeRepairRequest
+
 ##### humanConflict
 
 state-machine = RepositorySyncHumanConflictContext
@@ -2182,6 +2372,12 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### ReviewRepairRequired
 
+##### RepairProposalAdmitted
+
+##### RepairDecisionRequired
+
+##### MaterializingRepair
+
 ##### ReviewDecisionRequired
 
 ##### ReviewRejected
@@ -2203,156 +2399,171 @@ subject-type = RepositorySyncHumanConflictRequest
 ##### boundary-pending
 
 state = BoundaryPending
-when = sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### fetch-admitted
 
 state = FetchAdmitted
-when = sync.FetchAdmitted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.FetchAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### fetching
 
 state = Fetching
-when = sync.Fetching, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Fetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### local-state-preserved
 
 state = LocalStatePreserved
-when = sync.LocalStatePreserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.LocalStatePreserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### preserving
 
 state = Preserving
-when = sync.Preserving, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Preserving, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### index-captured
 
 state = IndexCaptured
-when = sync.IndexCaptured, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IndexCaptured, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### checkpoint-creating
 
 state = CheckpointCreating
-when = sync.CheckpointCreating, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointCreating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### checkpoint-created
 
 state = CheckpointCreated
-when = sync.CheckpointCreated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointCreated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### checkpoint-installing
 
 state = CheckpointInstalling
-when = sync.CheckpointInstalling, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.CheckpointInstalling, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### integrating
 
 state = Integrating
-when = sync.Integrating, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Integrating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### integrated
 
 state = Integrated
-when = sync.Integrated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Integrated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### integration-validation-checking
 
 state = IntegrationValidationChecking
-when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### integration-validated
 
 state = IntegrationValidated
-when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### merge-conflicted
 
 state = MergeConflicted
-when = sync.MergeConflicted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeConflicted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### merge-resolution-admitted
 
 state = MergeResolutionAdmitted
-when = sync.MergeResolutionAdmitted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeResolutionAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### materializing-conflict
 
 state = MaterializingConflict
-when = sync.MaterializingConflict, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MaterializingConflict, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### validation-checking
 
 state = ValidationChecking
-when = sync.ValidationChecking, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### conflict-decision-required
 
 state = ConflictDecisionRequired
-when = sync.ConflictDecisionRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ConflictDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### pending-merge-prepared
 
 state = PendingMergePrepared
-when = sync.PendingMergePrepared, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.PendingMergePrepared, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### merge-validated
 
 state = MergeValidated
-when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### review-accepted
 
 state = ReviewAccepted
-when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### review-repair-required
 
 state = ReviewRepairRequired
-when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### repair-proposal-admitted
+
+state = RepairProposalAdmitted
+when = sync.RepairProposalAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### repair-decision-required
+
+state = RepairDecisionRequired
+when = sync.RepairDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### materializing-repair
+
+state = MaterializingRepair
+when = sync.MaterializingRepair, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### review-decision-required
 
 state = ReviewDecisionRequired
-when = sync.ReviewDecisionRequired, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### review-rejected
 
 state = ReviewRejected
-when = sync.ReviewRejected, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.ReviewRejected, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### native-commit-preparing
 
 state = NativeCommitPreparing
-when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### native-commit-observed
 
 state = NativeCommitObserved
-when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### native-push-preparing
 
 state = NativePushPreparing
-when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### native-push-observed
 
 state = NativePushObserved
-when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### native-final-fetching
 
 state = NativeFinalFetching
-when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### converged
 
 state = Converged
-when = sync.Converged, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+when = sync.Converged, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 #### INITIAL
 
-sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, humanConflict.Retained
+sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 #### ACTION
 
@@ -2418,6 +2629,36 @@ effect = LOCAL
 transaction = REQUIRED
 idempotency = NOT_REQUIRED
 
+##### RepairNativePendingMerge
+
+kind = JUDGMENT
+operation = repairNativePendingMerge
+input = nativeRepair.subject
+goal = repair-only-issued-native-merge-findings
+context = genuine-paired-review-findings-and-captured-affected-texts
+candidate = issued-native-merge-repair
+alternative = repaired
+alternative = decision-needed
+criteria = exact-original-finding-and-ordered-file-coverage
+criteria = preserve-explicit-bounded-text-policy
+criteria = no-command-effect-validation-or-authority-selection
+expected-result = bounded-affected-file-proposal-only
+rationale = repair-rationale
+evidence = actual-paired-repair-review
+evidence-scope = original-affected-path-union
+evidence-freshness = genuine-native-review-completion-revision
+evidence-provenance = actual-assigned-repair-context
+
+##### AdmitNativeMergeRepair
+
+kind = ADMISSION
+operation = admitNativeMergeRepair
+input = nativeRepair.subject
+candidate-action = RepairNativePendingMerge
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
+
 ##### PresentRepositoryConflictDecision
 
 kind = OPERATION
@@ -2433,6 +2674,10 @@ action = ResolveRepositoryMergeConflicts
 #### native-merge-review-capability
 
 action = ReviewNativePendingMerge
+
+#### repair-native-merge-capability
+
+action = RepairNativePendingMerge
 
 #### repository-conflict-human-capability
 
@@ -2456,6 +2701,10 @@ operation = RepositorySyncService.submitRepositorySyncWorkResult
 
 operation = RepositorySyncService.submitNativeMergeReview
 
+#### submitNativeMergeRepair
+
+operation = RepositorySyncService.submitNativeMergeRepair
+
 #### submitRepositoryConflictDecision
 
 operation = RepositorySyncService.submitRepositoryConflictDecision
@@ -2469,6 +2718,12 @@ operation = RepositorySyncService.submitRepositoryConflictDecision
 #### Retained
 
 ## RepositorySyncNativeMergeReviewContext
+
+### STATE
+
+#### Retained
+
+## RepositorySyncNativeMergeRepairContext
 
 ### STATE
 
@@ -2704,6 +2959,42 @@ to = NativeCommitPreparing
 on = native-commit-prepared
 
 #### ReviewRepairRequired
+
+##### TRANSITION
+
+to = RepairProposalAdmitted
+on = native-repair-proposal-admitted
+
+##### TRANSITION
+
+to = RepairDecisionRequired
+on = native-repair-decision-required
+
+#### RepairProposalAdmitted
+
+##### TRANSITION
+
+to = MaterializingRepair
+on = native-repair-materialization-prepared
+
+#### MaterializingRepair
+
+##### TRANSITION
+
+to = MaterializingRepair
+on = native-repair-stage-prepared
+
+##### TRANSITION
+
+to = MaterializingRepair
+on = native-repair-stage-recorded
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-repair-candidate-observed
+
+#### RepairDecisionRequired
 
 #### ReviewDecisionRequired
 
@@ -3238,6 +3529,38 @@ RepositorySyncNativeMergeReviewResult
 
 RepositorySyncNativeMergeReviewSubmissionResult
 
+#### submitNativeMergeRepair
+
+##### DESCRIPTION
+
+Consume only the current assigned native repair result, actual reference and completion evidence. A repaired proposal grants no file, command, validation or convergence authority; Submit never calls Advance. Decision-needed stays nonterminal for separate actual Human handling. Return committed accepted/outcome/message under the owning session.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | RepositorySyncNativeMergeRepairResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairSubmissionResult
+
 #### submitRepositoryConflictDecision
 
 ##### DESCRIPTION
@@ -3507,6 +3830,38 @@ GoalPhaseWorkRequest
 ###### TYPE
 
 GoalPhaseWorkResult
+
+# SERVICE
+
+## MergeRepairService
+
+### DESCRIPTION
+
+Required semantic repair SPI for the genuine saved native review's exact affected files. This declaration installs no worker or effect handler. Return a bounded proposal using the assigned original findings and captured texts; Workflow owns fixed file/stage effects, fresh validation and subsequent independent full review.
+
+### OPERATION
+
+#### repairNativePendingMerge
+
+##### DESCRIPTION
+
+Repair exactly the assigned finding/file scope or return decision-needed with rationale and no replacements. Do not choose commands, repository roots, permissions or validation outcomes. A proposal grants no effect authority and the subsequent reviewer remains independent.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairResult
 
 # SERVICE
 
@@ -4154,6 +4509,7 @@ OperationResult
 | reasoningHuman | SplitPhaseReasoningHumanQuestion | ? |
 | selectedPlan | SplitPhaseSelectedPlanView | ? |
 | stopped | SplitPhaseStoppedResult | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
 
 ## SplitPhaseHumanScopeCheckpointReference
 
@@ -4357,6 +4713,28 @@ RepositorySyncNativeMergeReviewRequest
 RepositorySyncNativeMergeReviewSubmissionResult
 
 
+#### admitNativeMergeRepair
+
+##### DESCRIPTION
+
+Internal admission declaration for the actual paired affected-file repair proposal. The current issued scope and typed completion own admission. This declaration installs no public stage or file/command/validation permission.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncNativeMergeRepairSubmissionResult
+
 # SERVICE
 
 ## GoalPhaseSemanticAdmissionService
@@ -4399,6 +4777,48 @@ GoalPhaseWorkSubmissionResult
 |------+------|--------------|
 | identity | string | 1 |
 | revision | string | 1 |
+
+## WorkflowHostReviewCompletion
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| handle | org.goldenport.record.Record | 1 |
+| runId | string | 1 |
+| continuationId | string | 1 |
+| typeIdentity | string | 1 |
+
+## WorkflowHostReviewContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| purpose | string | 1 |
+| componentInstance | string | 1 |
+| target | org.goldenport.record.Record | 1 |
+| completion | WorkflowHostReviewCompletion | 1 |
+
+## WorkflowHostAuthorityContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| purpose | string | 1 |
+| componentInstance | string | 1 |
+| scope | org.goldenport.record.Record | 1 |
+
+## WorkflowHostHumanContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| purpose | string | 1 |
+| componentInstance | string | 1 |
+| question | org.goldenport.record.Record | 1 |
 
 ## WorkflowExecutionObservation
 
@@ -4450,6 +4870,7 @@ GoalPhaseWorkSubmissionResult
 | requestingResult | GoalPhaseWorkResult | 1 |
 | rationale | string | 1 |
 | choices | string | * |
+| hostContext | WorkflowHostHumanContext | ? |
 
 ## GoalPhaseCompletionResult
 
@@ -4508,6 +4929,7 @@ GoalPhaseWorkSubmissionResult
 | candidates | SplitPhaseHumanCandidate | * |
 | requestedScopes | SplitPhaseUnresolvedHandoffScope | * |
 | submittedJudgment | SplitPhaseScopeSemanticResult | 1 |
+| hostContext | WorkflowHostHumanContext | ? |
 
 ## SplitPhaseReasoningHumanQuestion
 
@@ -4523,6 +4945,7 @@ GoalPhaseWorkSubmissionResult
 | submittedJudgment | SplitPhaseReasoningSemanticResult | 1 |
 | items | SplitPhaseSelectedWorkItem | * |
 | candidates | SplitPhaseHumanCandidate | * |
+| hostContext | WorkflowHostHumanContext | ? |
 
 ## SplitPhaseHumanCandidate
 
@@ -4654,6 +5077,7 @@ GoalPhaseWorkSubmissionResult
 | validationReason | string | 1 |
 | selectedChecks | string | * |
 | checks | RepositorySyncNativeValidationReceipt | * |
+| hostContext | WorkflowHostReviewContext | ? |
 
 ## RepositorySyncHumanQuestion
 
@@ -4664,3 +5088,444 @@ GoalPhaseWorkSubmissionResult
 | conflict | RepositorySyncConflictWorkView | 1 |
 | rationale | string | 1 |
 | choices | string | * |
+| hostContext | WorkflowHostHumanContext | ? |
+
+
+# VALUE
+
+## WorkflowGoalStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| plan | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+| planCollection | string | 1 |
+
+## WorkflowRepositoryStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+## WorkflowSplitStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| componentInstance | string | 1 |
+| allocationReference | string | 1 |
+| allocation | string | 1 |
+| source | string | 1 |
+| reference | string | 1 |
+| participant | string | 1 |
+| issuer | string | 1 |
+| occurredAt | string | 1 |
+| collection | string | 1 |
+
+## WorkflowRepositoryEffectPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| componentInstance | string | 1 |
+| selection | string | 1 |
+| target | string | 1 |
+| effect | string | 1 |
+| reference | string | 1 |
+| participant | string | 1 |
+| issuer | string | 1 |
+| occurredAt | string | 1 |
+| collection | string | 1 |
+
+## WorkflowAuthorityPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| request | string | 1 |
+| reference | string | 1 |
+| participant | string | 1 |
+| issuer | string | 1 |
+| occurredAt | string | 1 |
+| collection | string | 1 |
+
+## WorkflowEvidencePreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit passive preparation metadata and absolute local file: URI references. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| family | string | 1 |
+| kind | string | 1 |
+| request | string | 1 |
+| result | string | 1 |
+| reference | string | 1 |
+| executionEvidence | string | 1 |
+| issuer | string | 1 |
+| occurredAt | string | 1 |
+| collection | string | 1 |
+| participant | string | ? |
+
+## WorkflowPreparedImport
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| datastore | WorkflowPreparedImportCollection | + |
+
+## WorkflowPreparedImportCollection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| collection | string | 1 |
+| records | WorkflowPreparedImportRow | + |
+
+## WorkflowPreparedImportRow
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| id | string | 1 |
+| selectionPayload | string | ? |
+| selectedPlanPayload | string | ? |
+| nativeHostEvidencePayload | string | ? |
+
+## WorkflowHostExecutionPrepareInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Passively convert the actual issuedWorkContext using the original canonical mapping and origin absolute local file: URI references. Supplied descriptors grant no execution permission.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| mapping | string | 1 |
+| origin | string | 1 |
+
+## WorkflowHostExecutionRecordInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Passively record one supplied observation against the explicitly retained session absolute local file: URI. A COMPLETED observation requires one reference URI; other outcomes forbid it.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| session | string | 1 |
+| observation | string | 1 |
+| reference | string | ? |
+
+## WorkflowHostExecutionState
+
+### DESCRIPTION
+
+Opaque canonical session JSON and optional nextSelection JSON strings retain the finite host artifact. Optional structured completionEvidence observes operational completion; normal semantic Submit remains separate.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| session | string | 1 |
+| nextSelection | string | ? |
+| completionEvidence | WorkflowExecutionEvidence | ? |
+
+# SERVICE
+
+## NativeHostPreparationService
+
+### DESCRIPTION
+
+Prepare explicit native host input as a structured datastore importer object through ordinary current-context resource reads. Preparation authenticates no origin, certifies no reviewer or operator, grants no effect and performs no import, save, Start, Submit or Advance. Native storage codecs and admission owners retain identity and payload authority.
+
+Six passive import preparations return datastore rows. Two passive host-execution conversions return typed execution state through the same current-context reads, without provider IO or workflow transitions.
+
+### OPERATION
+
+#### prepareGoalStart
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected GoalStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowGoalStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowGoalStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareRepositoryStart
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected RepositoryStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowRepositoryStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowRepositoryStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareSplitStart
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected SplitStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowSplitStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowSplitStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareRepositoryEffect
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected RepositoryEffect input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowRepositoryEffectPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowRepositoryEffectPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareAuthority
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected Authority input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowAuthorityPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowAuthorityPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareEvidence
+
+##### DESCRIPTION
+
+Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowEvidencePreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowEvidencePreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareExecution
+
+##### DESCRIPTION
+
+Passively prepare the actual issuedWorkContext with original mapping and origin absolute local file: URI references. Return WorkflowHostExecutionState with opaque session and nextSelection JSON strings and no completionEvidence. No provider IO, import, save, Start, Submit or Advance occurs.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowHostExecutionPrepareInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowHostExecutionPrepareInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowHostExecutionState
+
+#### recordExecution
+
+##### DESCRIPTION
+
+Passively record one supplied selected-attempt observation from an absolute local file: URI against the retained session URI and actual issuedWorkContext. COMPLETED requires one artifact reference URI and returns structured completionEvidence; noncompletion grants no success or retry beyond the finite nextSelection. Return WorkflowHostExecutionState with opaque canonical session JSON. No provider IO, import, save, Start, Submit or Advance occurs.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowHostExecutionRecordInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowHostExecutionRecordInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowHostExecutionState

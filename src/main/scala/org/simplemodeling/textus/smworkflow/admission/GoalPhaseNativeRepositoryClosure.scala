@@ -27,7 +27,8 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
   final case class Input(instance: String, sourceRevision: String, plan: O.Plan,
@@ -119,8 +120,11 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
           } yield saved
         }
         response <- prepared match {
-          case None => F.waitC(from, "Whole-Phase repository closure awaits authority",
-            "Review acceptance grants no RepositorySync Start or remote effects; the Phase remains open.")
+          case None => for {
+            context <- NativeHostAuthorityContext.phaseC(core, input)
+            waiting <- F.waitC(from, "Whole-Phase repository closure awaits authority",
+              "Review acceptance grants no RepositorySync Start or remote effects; the Phase remains open.")
+          } yield waiting.copy(authorityContext = Some(context))
           case Some((intent, payload, fresh)) => for {
             _ <- if (fresh) invokeC[V.RepositorySyncStartResult](core, Fetch.startOperation.operation,
               List(Property("input", childStartInput(installation), None),
@@ -153,6 +157,29 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
 
   private def childStartInput(installation: Installation): V.RepositorySyncStartInput =
     installation.declaration.input
+
+  /** Admit only the selected native closure or its already committed completion. */
+  private[admission] def completionEntryC(saved: InstanceRecord, current: InstanceRecord,
+    childSessionId: String): Consequence[Option[HistoryEntry]] = for {
+    _ <- WorkflowInstancePersistence.validateC(saved)
+    _ <- WorkflowInstancePersistence.validateC(current)
+    _ <- if (saved.lifecycle == Lifecycle.Active &&
+        saved.currentProgression.contains(ProgressionReference("phase.Closed")) && saved.suspension.isEmpty &&
+        Option(childSessionId).exists(_.trim.nonEmpty) && saved.identity == current.identity &&
+        saved.definition.workflowIdentity == current.definition.workflowIdentity &&
+        saved.definition.workflowRevision == current.definition.workflowRevision) Consequence.unit
+      else F.invalid("whole-Phase completion does not own the current native closure")
+    entry = F.history(saved, "phase.Closed", "ordered-phase-completed:" + childSessionId)
+      .copy(lifecycle = Lifecycle.Completed, currentProgression = None)
+    next <- saved.appendC(saved.revision, entry)
+    admitted <- if (current.revision == saved.revision && current.lifecycle == Lifecycle.Active &&
+        current.currentProgression.contains(ProgressionReference("phase.Closed")) && current.suspension.isEmpty &&
+        current.history.lastOption == saved.history.lastOption) Consequence.success(Some(entry))
+      else if (current.revision == next.revision && current.lifecycle == Lifecycle.Completed &&
+        current.currentProgression.isEmpty && current.suspension.isEmpty &&
+        current.history.lastOption.contains(entry)) Consequence.success(Option.empty[HistoryEntry])
+      else F.invalid("whole-Phase completion differs from the selected committed native frontier")
+  } yield admitted
 
   /** Invoke the actually installed public Operation with named business
     * parameters. Its after-commit result is consumed directly; no native wire,
@@ -204,11 +231,17 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         saved._1.currentProgression.contains(ProgressionReference("phase.Closed")) &&
         saved._2.result.nonEmpty) Consequence.unit
         else F.invalid("whole-Phase completion has no actual saved repository result")
-      entry = F.history(saved._1, "phase.Closed", "ordered-phase-completed:" + saved._2.childSessionId)
-        .copy(lifecycle = Lifecycle.Completed, currentProgression = None)
       instances <- session.storage.bindInstancesC()(using core.executionContext)
-      completed <- instances.appendC(saved._1.identity, saved._1.revision, entry)(using core.executionContext)
-      _ <- ackC("goal-repository-completed")
+      current <- instances.loadC(saved._1.identity)(using core.executionContext).flatMap(
+        _.map(Consequence.success).getOrElse(F.invalid("whole-Phase completion has no current native instance")))
+      entry <- completionEntryC(saved._1, current, saved._2.childSessionId)
+      completed <- entry match {
+        case None => Consequence.success(current)
+        case Some(value) => for {
+          appended <- instances.appendC(saved._1.identity, saved._1.revision, value)(using core.executionContext)
+          _ <- ackC("goal-repository-completed")
+        } yield appended
+      }
     } yield completed
     def terminalC(saved: (InstanceRecord, Payload)): Consequence[V.GoalPhaseAdvanceResult] = for {
       completed <- closeC(saved)

@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.processexecution.ProcessExecutionTermination
+import org.goldenport.cncf.processexecution.{GitExecutionOutcome, GitObjectId, GitOperation}
 import RepositorySyncManagedGitObservation as Git
 import WorkflowManagedProcessExecution as Effects
 import RepositorySyncNativeProgressStore.*
@@ -9,7 +9,8 @@ import RepositorySyncNativeProgressStore.*
 /** Selected native intent, actual Git result and later uncertain observation.
   * A conflict is retained, never auto-resolved or relabeled as an integration.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeIntegration {
   def integrateC(store: Store, preserved: Stage): Consequence[Stage] = for {
@@ -34,12 +35,14 @@ private[smworkflow] object RepositorySyncNativeIntegration {
           store.payload("Integrating", before).copy(method = Some(method)))
         effected <- if (method == "equal" || method == "local-ahead") Git.inspectC(store.core)
           else {
-            val effect = if (method == "fast-forward") Effects.NativeGitEffect.FastForward(before.trackingTip.get)
-              else Effects.NativeGitEffect.PendingMerge(before.trackingTip.get)
-            Effects.executeNativeGitC(store.core, effect).flatMap { process =>
-              process.termination match {
-                case ProcessExecutionTermination.Exited(0) | ProcessExecutionTermination.Exited(1) => Git.inspectC(store.core)
-                case _ => uncertain("integration termination is unknown")
+            GitObjectId.parseC(before.trackingTip.get).flatMap { tip =>
+              val effect = if (method == "fast-forward") GitOperation.FastForward(tip)
+                else GitOperation.PendingMerge(tip)
+              Effects.executeGitC(store.core, effect).flatMap { result =>
+                result.outcome match {
+                  case GitExecutionOutcome.ConflictObservationRequired if method == "merge" => Git.inspectC(store.core)
+                  case _ => result.valueC.flatMap(_ => Git.inspectC(store.core))
+                }
               }
             }
           }

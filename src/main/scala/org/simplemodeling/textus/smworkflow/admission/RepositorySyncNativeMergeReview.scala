@@ -6,16 +6,17 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.workflow.{WorkflowProtocolV1, WorkflowResultJsonV1}
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as V
-import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
   final case class Policy(identity: String, revision: Int, maximumPaths: Int = 128, maximumDiffBytes: Int = 65536) {
@@ -68,21 +69,18 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       else invalid("review result has unknown decision, missing rationale or out-of-coverage findings")
   } yield ()
 
-  private def diffC(core: ActionCall.Core, parent: String, limit: Int): Consequence[String] =
-    E.executeNativeGitC(core, E.NativeGitEffect.PendingDiff(parent)).flatMap(G.requiredTextC).flatMap(text =>
-      if (bounded(text, limit) && !text.linesIterator.exists(_.startsWith("Binary files "))) Consequence.success(text)
-      else invalid("binary or oversized merge diff requires Human handling"))
-  private def pathsC(core: ActionCall.Core, parent: String): Consequence[Vector[String]] =
-    E.executeNativeGitC(core, E.NativeGitEffect.PendingPaths(parent)).flatMap(G.requiredTextC).flatMap(text =>
-      if (text.isEmpty) Consequence.success(Vector.empty)
-      else if (text.endsWith("\u0000")) {
-        val paths = text.dropRight(1).split("\u0000", -1).toVector
-        if (paths.distinct == paths && paths.forall(RepositorySyncNativeConflictInput.relative)) Consequence.success(paths)
-        else invalid("native changed path capture is incomplete")
-      } else invalid("native changed paths are not NUL terminated"))
+  private def diffC(core: ActionCall.Core, parent: String, limit: Int): Consequence[String] = for {
+    oid <- GitObjectId.parseC(parent)
+    diff <- E.executeGitC(core, GitOperation.PendingDiff(oid)).flatMap(_.valueC)
+    _ <- if (bounded(diff.text, limit) && !diff.isBinary) Consequence.unit
+      else invalid("binary or oversized merge diff requires Human handling")
+  } yield diff.text
 
-  private given Encoder[V.Receipt] = deriveEncoder
-  private given Decoder[V.Receipt] = deriveDecoder
+  private def pathsC(core: ActionCall.Core, parent: String): Consequence[Vector[String]] = for {
+    oid <- GitObjectId.parseC(parent)
+    paths <- E.executeGitC(core, GitOperation.PendingPaths(oid)).flatMap(_.valueC)
+  } yield paths.map(_.value)
+
   private given Encoder[Request] = deriveEncoder
   private given Decoder[Request] = deriveDecoder
   private given Encoder[Finding] = deriveEncoder

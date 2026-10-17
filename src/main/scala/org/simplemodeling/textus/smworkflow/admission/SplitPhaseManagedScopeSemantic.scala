@@ -27,7 +27,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopeSemantic a
   * transitions borrow the owning call's canonical Subsystem storage.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 13, 2026
+  *  version Oct. 13, 2026
+  * @version Oct. 16, 2026
+ * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseManagedScopeSemantic {
   final class Source private[SplitPhaseManagedScopeSemantic] (val record: K.Record,
@@ -73,7 +75,11 @@ private[smworkflow] object SplitPhaseManagedScopeSemantic {
         }
         case None => _with_work_c(core) { (native, _, _) =>
           given ExecutionContext = core.executionContext
-          native.suspendC(plan.intent, plan.work).map(_ => new Pending(plan.work): Route)
+          for {
+            selected <- SplitPhaseNativeExecution.bindIssuedC(plan.work, SplitPhaseNativeExecution.Work.Scope,
+              declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
+            _ <- native.suspendC(plan.intent, selected)
+          } yield new Pending(selected): Route
         }
       }
     } yield routed

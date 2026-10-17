@@ -1,64 +1,84 @@
 # RepositorySync managed native Git observations
 
-Date: 2026-10-06 (Asia/Tokyo)
-Status: supporting effect implementation and Executable Specification;
-additive owning fetch is described separately; normal installation and complete
-RepositorySync progression remain unfinished.
+Date: 2026-10-15 (Asia/Tokyo)
+Status: typed primary consumer migration completed bounded source-level parent
+qualification (66 passing checks in eight suites); independent review pending.
+NativeHost main retirement and complete installed tasks remain open; the typed
+File consumer replacement below has separate pending qualification.
 
 ## Current contract
 
-`RepositoryGitRuntimePrograms` is a trusted runtime assembly definition, not a
-process launcher or grant. The host fixes the absolute repository root, logical
-local/upstream branch, endpoint, Git executable, finite limits and environment.
-Each purpose has its own capability and a complete fixed argument vector; the
-component supplies no argv, path, endpoint, executable or driver. Supplemental
-environment names are limited to PATH, SSH_AUTH_SOCK and TMPDIR; Git target/index/
-configuration redirection variables cannot override the selected repository.
-Runtime definitions do not install themselves in the normal component factory.
+`WorkflowManagedProcessExecution.executeGitC` accepts only a closed CNCF
+`GitOperation[A]` and the fixed logical `GitTarget` workspace
+`sm-workflow-repository`. Its exhaustive adapter calls the protected `git_*`
+methods and executes their typed intent in the actual owning call's current
+UnitOfWork. The DSL constructs intent; CNCF's interpreter admits the actual
+Component, current workspace binding and independent process grant before
+execution. The primary constructs no Git ProcessExecutionRequest, argv,
+executable, driver, context or generic fallback.
 
-`WorkflowManagedProcessExecution` emits the selected ProcessExec through the
-canonical component DSL and ProcedureActionCall interpreter. The runtime owns
-admission, driver, WorkArea and resource disposal. No component ProcessBuilder,
-driver invocation, private database or expanded AI sandbox permission is added.
+The trusted host supplies separate strict `cncf.runtime-process-execution.v3`
+configuration. CNCF normal bootstrap decodes the public JSON, binds the existing
+canonical repository directory, and owns executable, environment, finite
+limits, fixed endpoint/branches, selected paths/messages and process lowering.
+`RepositoryGitRuntimePrograms.Target` retains only business target fields for
+existing scope/authority comparisons. It defines no programs or grants.
+See [normal typed Git workflow](normal-typed-git-workflow.md) for selectors,
+host fields, receipt compatibility and consumer responsibilities.
 
-`RepositorySyncManagedGitObservation` obtains actual branch, HEAD/tree object
-references, porcelain-v1 NUL status, shallow/replacement/merge state, tracking
-tip, left/right history counts and `merge-base --all` native ancestry. Git's native object IDs are state facts, not
-management hashes. A missing tracking tip has no fabricated count or convergence
-receipt. Equal/local-ahead/remote-ahead/diverged classification is deterministic.
-NUL filenames and rename destination/source ordering are retained without trim
-or line splitting. Incomplete capture, invalid UTF-8, unknown termination,
-unsupported history and pending merge/unmerged index are explicit refusals.
-These read commands are not an atomic repository snapshot or an unchanged-file
-certificate. The owning workflow must reobserve its actual effect preconditions
-and compare the observed branch with its selected original authority.
+`RepositorySyncManagedGitObservation` maps CNCF typed branch, root, HEAD/tree,
+status, shallow/replacement/merge state, tracking tip, history counts, common
+ancestor and commit metadata into the existing business values. It does not
+parse process output. Literal filename and rename ordering survive that mapping;
+`GitStatusEntry.unmerged` owns conflict classification. Git object IDs remain
+native repository facts. Persisted business String inputs are converted through
+public `GitObjectId.parseC`/`GitBranchName.parseC` and independently revalidated
+by the interpreter.
 
-Before automatic integration, a present tracking tip requires exactly one
-observed common ancestor. An absent ancestor (unrelated histories), multiple
-ancestors, malformed or incomplete capture are refused; the workflow neither
-adds `--allow-unrelated-histories` nor chooses an arbitrary base. Missing tracking
-state before fetch remains an ordinary absent fact. This is a deterministic
-integration precondition, not AI estimation or an implemented merge/conflict
-resolution route. The new real-history and public refusal examples passed
-in fresh request988; their outcome is separate from historical984.
+Application policy refuses shallow/replacement history, unrelated histories,
+unsupported merge observations and automatic integration of a pending merge or
+unmerged index. CNCF refuses malformed, multiple-base, incomplete and invalid
+text output before it becomes a typed value. Missing tracking state carries no
+invented count or convergence. Separate observations are not an atomic snapshot;
+the owning workflow reobserves its selected physical target and preconditions.
 
-The host also defines one fixed fetch command. Its argument vector names one
-endpoint and one tracking refspec, without force, tags, pruning, FETCH_HEAD,
-submodule recursion, automatic maintenance or commit-graph writes. Caller input
-cannot select another vector. This is managed command admission, not a new OS
-sandbox or a guarantee that arbitrary hostile repository/transport configuration
-has been neutralized. Normal transport/authentication policy needs trusted host
-assembly; this specification uses owned local remotes only.
+Fetch belongs to the saved owning workflow intent, not the observation adapter.
+Its fixed host endpoint and tracking destination preserve local files and do not
+force, prune, write FETCH_HEAD or expand remote authority. Preservation,
+integration and convergence consume typed results. Only the closed pending-merge
+conflict outcome permits subsequent actual typed conflict observation; arbitrary
+nonzero exits do not establish conflict. A negative result creates no confirmed
+stage, and an uncertain saved intent is not automatically replayed.
 
-There is deliberately no production fetch entry in the observation adapter.
-Owning advance must first persist its actual native fetch intent and handle an
-uncertain completion by later observation before permitting a possible rerun.
-Defining or testing the runtime program does not authorize native progression,
-durable completion, remote push, merge, commit or a client stage dispatcher.
-Legacy receipt/hash-backed fixture routes remain unchanged as compatibility;
-actual observations are not adapted into invented legacy digests.
+The normal-bootstrap observation specification covers qualified real dirty/reopen,
+local-ahead/diverged/unrelated/common-ancestor, fast-forward, pending-merge then
+commit, nonforce/wrong-destination and missing-current-grant examples. Fixture
+ProcessBuilder commands create only preselected local repository inputs; subject
+Git calls go through the actual Component and current UoW. Producer decoder and
+security guarantees are reused. Parent qualification passed 61 checks in seven
+suites plus five representative public workflow checks in one suite, with zero
+failed, aborted, canceled, ignored or pending checks. The public
+Equal/LocalAhead/RemoteAhead first-loop and reopen results preserve terminal,
+history and reflog; missing Fetch grant and unknown check intent/reopen without
+replay also passed. This bounded source-level qualification is recorded in
+[normal typed Git workflow](normal-typed-git-workflow.md); product-test assurance
+and genuine installed operator acceptance remain unestablished.
 
-## Current executable evidence after the ancestry addition
+The conflict and repair File consumers now use typed capture/observe/apply in
+`RepositorySyncFileEffect` through the same `sm-workflow-repository` workspace.
+`WorkflowManagedProcessExecution` retains only qualified typed Git/SBT adapters;
+the generic File request/stdout route and both File product mains are retired.
+This consumer source change does not inherit qualification from the earlier
+Git-only checks. See [normal typed File workflow](normal-typed-file-workflow.md)
+for the current File contract and remaining whole-workflow obligations.
+
+## Historical evidence boundary
+
+The following retained reports describe earlier generic ProcessExec source and
+its then-current acceptance boundary. They do not qualify this typed migration,
+normal V3 configuration, File migration or the remaining product launch routes.
+
+## Historical executable evidence after the ancestry addition
 
 Fresh988 passed294/294 in23 completed suites, zero failed/aborted/canceled/
 ignored/pending, SBT0/wrapper0/sharedlockreleased. Parent admitted current typed

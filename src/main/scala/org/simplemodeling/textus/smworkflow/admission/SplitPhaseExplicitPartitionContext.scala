@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 /**
  * Complete storage data, not an issued WorkOrder, grant or human invocation.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] object SplitPhaseExplicitPartitionContext {
   final case class Owner(handle: WorkflowHandle, instanceRevision: InstanceRevision,
@@ -21,6 +21,9 @@ private[smworkflow] object SplitPhaseExplicitPartitionContext {
     requirement: ExecutionRequirement, presentation: MinimalPresentation)
   final case class Facts(proposal: P.Records, boundary: B.Records, partition: E.Records, planning: W.Data)
   final case class Record(reference: S.ContextReference, owner: Owner, facts: Facts)
+  /** Passive pre-Start business data; no native instance or consent capability. */
+  final case class TemplateOwner(requirement: ExecutionRequirement, presentation: MinimalPresentation)
+  final case class Template(reference: S.ContextReference, owner: TemplateOwner, facts: Facts)
   /** Admitted current inputs, not an assertion that semantic work is needed. */
   final class PreparedPlanning private[SplitPhaseExplicitPartitionContext] (val record: Record,
     val selection: W.Selection, val currentInstance: InstanceRecord)

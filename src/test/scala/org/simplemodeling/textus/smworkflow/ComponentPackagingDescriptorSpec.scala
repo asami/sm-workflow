@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 15, 2026
+ * @author  ASAMI, Tomoharu
  */
 final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def readJson(path: String): Json =
@@ -49,7 +50,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
     }
   }
 
-  "The authored ABI manifest" should {
+  "The authored ABI manifest" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
     "describe the minimal participant Operations and genuine capability contracts" in {
       Given("the source-managed schema-v2 ABI used for CAR distribution")
       val abi = readJson("src/main/car/abi-manifest.json")
@@ -67,7 +68,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         operations.find(op => text(op, "service") == service && text(op, "name") == name)
           .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("the distribution identifies this component and exactly the normal four, six and five participant Operations")
+      Then("the distribution identifies this component and exactly the normal four, six and six participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
@@ -80,7 +81,26 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
       names("RepositorySyncService") should contain theSameElementsAs Vector(
         "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
-        "submitNativeMergeReview", "submitRepositoryConflictDecision")
+        "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision")
+
+      And("six passive preparation Operations expose distinct concrete inputs and direct importer output")
+      val preparation = Map("prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
+        "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
+        "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
+        "prepareEvidence" -> "WorkflowEvidencePreparationInput")
+      names("NativeHostPreparationService") should contain theSameElementsAs preparation.keys.toVector
+      preparation.foreach { (name, input) =>
+        text(operation("NativeHostPreparationService", name), "kind") shouldBe "COMMAND"
+        text(operation("NativeHostPreparationService", name), "input") shouldBe input
+        text(operation("NativeHostPreparationService", name), "output") shouldBe "WorkflowPreparedImport"
+      }
+      valueFields("WorkflowPreparedImport") shouldBe Vector("datastore")
+      valueFields("WorkflowPreparedImportCollection") shouldBe Vector("collection", "records")
+      valueFields("WorkflowPreparedImportRow") shouldBe Vector("id", "selectionPayload", "selectedPlanPayload", "nativeHostEvidencePayload")
+      valueFields("WorkflowGoalStartPreparationInput") shouldBe Vector("input", "plan", "selectionId", "participant", "origin",
+        "idempotencyKey", "selectionCollection", "planCollection")
+      valueFields("WorkflowEvidencePreparationInput") shouldBe Vector("family", "kind", "request", "result", "reference",
+        "executionEvidence", "issuer", "occurredAt", "collection", "participant")
 
       And("nominal input types describe the consumed business values, not additional control envelopes")
       val participantServices = Set("GoalPhaseService", "SplitPhaseService", "RepositorySyncService")
@@ -102,6 +122,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "startRepositorySync" -> "RepositorySyncStartInput",
         "submitRepositorySyncWorkResult" -> "RepositorySyncConflictResult",
         "submitNativeMergeReview" -> "RepositorySyncNativeMergeReviewResult",
+        "submitNativeMergeRepair" -> "RepositorySyncNativeMergeRepairResult",
         "submitRepositoryConflictDecision" -> "RepositorySyncHumanConflictAnswer")
           .view.mapValues(value => Some(value)).toMap
       valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity")
@@ -123,6 +144,12 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       text(operation("SplitHumanService", "presentReasoningHumanDirection"), "input") shouldBe "SplitPhaseReasoningHumanDirectionRequest"
       text(operation("RepositoryConflictService", "resolveRepositoryMergeConflicts"), "output") shouldBe "RepositorySyncConflictResult"
       text(operation("RepositorySyncSemanticAdmissionService", "admitNativeMergeReview"), "input") shouldBe "RepositorySyncNativeMergeReviewRequest"
+      text(operation("RepositorySyncSemanticAdmissionService", "admitNativeMergeRepair"), "input") shouldBe "RepositorySyncNativeMergeRepairRequest"
+      text(operation("MergeRepairService", "repairNativePendingMerge"), "output") shouldBe "RepositorySyncNativeMergeRepairResult"
+      text(operation("RepositorySyncService", "submitNativeMergeRepair"), "output") shouldBe "RepositorySyncNativeMergeRepairSubmissionResult"
+      valueFields("RepositorySyncNativeMergeRepairRequest") shouldBe Vector("review", "findings", "files")
+      valueFields("RepositorySyncNativeMergeRepairResult") shouldBe Vector("decision", "rationale", "replacements")
+      valueFields("RepositorySyncNativeMergeRepairFile") shouldBe Vector("path", "text")
       text(operation("GoalPhaseSemanticAdmissionService", "admitOrderedStepReview"), "output") shouldBe "GoalPhaseWorkSubmissionResult"
     }
   }

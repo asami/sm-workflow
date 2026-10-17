@@ -5,9 +5,54 @@ RepositorySync assemblies together. Use the official development CAR/classpath
 and the ordinary CNCF launcher. Factory composition does not start a workflow,
 install initial records, initialize a second pool or grant a process command.
 
-## Current Phase5.3 composition — common business Operation loop
+Optional [native Goal execution disposition](goal-phase-native-execution.md)
+uses the canonical `workflow.execution.profiles` and
+`sm-workflow.execution.origin` Component parameter pair. Both absent retain
+legacy composition; partial or invalid configuration fails. Only fresh native
+issuance binds disposition, while pending/completed/Human predecessors consume
+their actual saved issue even after a new host selects different configuration.
+Trusted origin configuration is no proof of observed execution or permission;
+existing native observation, independent review and closure owners still apply.
 
-The normal factory still installs exactly fifteen provided Operations using
+Optional [Split native execution](split-phase-native-execution.md) consumes
+`sm-workflow.execution.split-work` with explicit partition DESIGN, scope DESIGN
+and reasoning ANALYSIS classifications through the same canonical profile/origin
+pair. Normal declaration binding validates input shape before storage, without
+checking unused mapping classes for other families. Only each owning absent native
+issue branch derives semantics and selects execution. Saved redisplay/completion
+retains original work, independent review and host Session after configuration
+changes. Public modes, Operations, persisted business data and pure completion
+projections are unchanged. Adapter and mapped normal Operation examples are authored;
+parent focused validation and independent acceptance remain pending.
+
+Optional [Repository native execution](repository-sync-native-execution.md)
+uses the existing `sm-workflow.execution.repository-work` key and schema with
+required REVIEW review and CODING repair plus additive optional CODING conflict.
+Old two-field input remains valid. Omitted conflict preserves the original
+unmapped conflict requirement; a fresh mapped conflict requires that explicit
+field and its canonical class mapping. Explicit null/malformed/wrong-kind input
+rejects. No repair-derived default or profile fallback exists. Only the actual
+conflict missing-issued-row branch captures, purely projects, binds and saves
+the selected interaction once. Pending Advance, semantic Submit, retained
+completion and Human reconstruction use the original saved requirement and host
+Session even after configuration changes or omits the old class.
+
+Conflict Submit remains proposal-only. Separate explicit Advance owns actual
+resolution materialization and normal typed UoW SBT or the real separate Human
+question; Human output has no issued work context. Newly issued review uses its
+own later mapping/origin, retained Session, DELEGATED/REQUIRED independent executor
+and separately prepared review evidence. The existing public Human-preparation
+E6 program retains its three original directions and adds two `mapped conflict
+execution` variants covering retained selection, missing/crossed original-origin
+observation refusal, real Human and ordinary convergence. These specification-owned
+executor/Human programs are authored for parent validation and establish no
+installed provider, genuine two-chat or Step/whole-Phase acceptance. Command-primary,
+client-light, actual UoW `git_`/`sbt_` normal binaries/native locks, security,
+minimum Boundary/CBD and existing review/Phase 6.3 aggregate duties remain.
+
+## Current composition — common business Operation loop
+
+The normal factory installs exactly sixteen provided Operations using
 current public CNCF services and the Subsystem-owned storage/process facilities.
 Start receives named typed input and optional proposed sessionId, then returns
 the actual execution ID. Advance receives that sessionId. Submit receives that
@@ -23,12 +68,90 @@ legacy business interface remains. Current native business references resolve
 the execution and pending task; independent executions can share one chat.
 Host selection/permission/effect and actual native transaction owners remain.
 
+The current participant operation sets are GoalPhase 4, SplitPhase 6 and
+RepositorySync 6. Three Split semantic completions obtain their assigned result
+destination internally; the seven other completions require a genuine
+`resultReference`. The additive Repository repair pair retains workflow v12.
+The declarative `MergeRepairService.repairNativePendingMerge` is a required
+semantic capability, and `RepositorySyncService.submitNativeMergeRepair` is its
+normal provided completion. The native connection uses the existing explicitly
+configured nonempty conflict text policy, validation policy and independent
+review port; there is no added host configuration or permissive fallback.
+
+Repair Request carries actual affected texts and an implementation issued
+context; Goal forwards it with its genuine child submit route. Submit records
+only the assigned proposal. Later explicit Advance owns fixed no-overwrite
+application/staging, fresh candidate-specific checks and full independent review.
+Decision-needed remains nonterminal Wait, and fresh review acceptance grants no
+commit/push/final convergence authority. See the
+[repair contract](repository-sync-native-merge-repair.md). These current source
+contracts and specification fixtures do not claim actual task repair delivery.
+
+Actual Request results also carry the declared
+[native issued work context](native-issued-work-context.md): their assigned
+thinking mode and selected canonical WorkOrder identity, requirements and
+completion contracts. Goal forwards an actual child's context while retaining
+the outer session and exact child submission route. Human, Wait and Terminal
+omit this view. Reading it grants no authority or assurance; normal business
+parameters and skill procedures retain their existing owners.
+
 Phase5.2 is formally released at8e87c18647a712be909470224ac05aca52f5d799.
 Phase5.3's actual final repository-full validation passed95 suites/616 tests,
 with independent full/focused closure. Its formal LOCAL acceptance and exact
 scope are recorded in [Phase5.3 closure](../phase/phase-5.3-closure.md), effective
 with the matching verified release commit. No Phase6 client/CLI wiring or
 packaged-publication readiness is claimed.
+
+## Phase 6 issued review context and passive preparation
+
+The actual owning Goal review Request carries
+`work.review.hostContext`; an actual Repository merge review carries
+`review.hostContext`. Pending reviews use their retained WorkOrder. Goal child
+output forwards the actual child's review context. Implementation, repair and
+Human output has no review host context. Start, Advance and typed Submit retain
+their existing Operations and semantic parameters.
+
+The public [native host review preparation](native-host-review-preparation.md)
+API passively prepares the existing v7 managed record input from that selected
+context and caller-supplied review result, reference, worker, issuer and time.
+It performs no review, storage write, permission grant or progression. The
+independent owning host must perform genuine review and provision its row through
+normal managed input/bootstrap; the existing configured Reader and current-call
+permissions own admission. Human and effect authority retain their separate owners.
+
+The executable specifications provision explicit specification inputs with
+existing managed Create. They do not prove genuine independent host issuance or
+installed task completion. Connected host/writer integration, genuine Human and
+effect prerequisites and the real D2 command task loops remain required. The
+dated historical status below retains its original scope.
+
+## Phase 6 closing Wait and passive authority input
+
+Only actual Goal missing Step/Phase authority closing Waits carry optional
+`authorityContext`, projected from their existing native Closing input and owning
+core. Ordinary Wait, Request, Human, Terminal and child forwarding carry none.
+The [closing authority preparation contract](native-host-authority-preparation.md)
+defines the unchanged passive business API and selected v7 scope, now exposed as
+`org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority`
+through the ordinary CncfMain command with one concrete typed input. Full normal saved Goal Wait JSON and actual
+operator reference/participant/issuer/historical time are explicit inputs.
+
+Accepted review grants no commit, repository child Start or remote permission.
+The genuinely responsible operator independently authorizes the target and
+the trusted host provisions successful standard input through configured
+StartupImport save/create. Encoding or flags authenticate no origin; no immutable
+or atomic receipt is promised. Existing Reader scope/owner/lookup/issuer/purpose/
+nonfuture-time and managed read permission control use. Step/Phase reference and
+participant are preserved metadata without a new target-correlation gate.
+Native process permissions, CAS, intent non-replay and actual commit/child
+behavior retain their existing owners. Submit/Advance and skill procedures remain
+unchanged. Real tasks use command with only the light client connectivity smoke.
+
+The authority specifications use explicit specification inputs and actual managed
+Goal Wait consumers; their finite process examples do not establish genuine
+operator issuance or installed task completion. Distinct Split Start consent and
+RepositoryEffect preparation/provisioning, actual all-three-family task loops and
+full Step/Phase closure remain mandatory.
 
 ## Historical Phase 5.2 composition — minimal public Operation contract
 
@@ -153,6 +276,9 @@ existing source admission rules for storage/process plans still apply.
 | `sm-workflow.goal-phase.host-records.*` | Goal selection/association/authorization/decision and native plan read destinations |
 | `sm-workflow.repository-sync.host-records.*` | RepositorySync selected Start read destination |
 | SplitPhase input/context/selection/typed-Start/checkpoint/allocation settings | Existing purpose-specific native read/write/allocation declarations; no legacy entry fallback |
+| `workflow.execution.profiles` / `sm-workflow.execution.origin` | Optional canonical mapping/origin pair; both absent preserve legacy composition; no availability or authority grant |
+| `sm-workflow.execution.split-work` | Optional complete `sm-workflow.split-execution-work.v1` partition DESIGN, scope DESIGN, reasoning ANALYSIS; required for mapped fresh Split work |
+| `sm-workflow.execution.repository-work` | Optional `sm-workflow.repository-execution-work.v1` required REVIEW review/CODING repair and optional CODING conflict; fresh mapped work requires its explicit member and canonical class |
 | `sm-workflow.host.evidence.*` | `store-name`, `record-collection` and trusted `issuer` for separately issued host evidence |
 
 `ThreeWorkflowHostParameters.Definition` is the current typed host-definition
@@ -439,3 +565,152 @@ evidence alone is not positive workflow or Phase acceptance. Follow the
 and [resumption journal](../journal/2026/10/2026-10-07-optimized-plan-resumption.md)
 for historical admitted results. Current Phase 5.2 work is fixed by
 [Phase 5.2](../phase/phase-5.2.md), not the old recovery/replay acceptance lists.
+
+## Current issued Human and finite host input preparation
+
+Normal Goal/Repository Human and Split Scope/Reasoning Human outputs carry the
+selected `WorkflowHostHumanContext` from the actual owning core and Decision;
+pending display retains that issued context. Goal forwards its child's context
+unchanged. [Human preparation](native-host-human-preparation.md) consumes an
+explicitly supplied actual answer, result reference, worker, submitting participant,
+issuer and occurrence through shared current-v7 bindings. It performs no storage
+write or workflow progression and adds no Submit/routing parameter.
+
+The [finite host evidence tool](native-host-evidence-tool.md) reads saved normal
+Request/Human JSON and explicit typed result/metadata files and prints one standard
+bootstrap input row. The independently responsible host obtains genuine review
+or Human direction, saves successful stdout to its trusted configuration-selected
+input, and existing CNCF StartupImport owns mutable save/create provisioning on
+normal startup. Encoding or an issuer flag does not authenticate origin. The row
+is no committed receipt and imports are not promised immutable or atomic.
+
+Current configured Reader, issuer, managed read permission, participant admission
+and native completion/CAS remain authoritative. Human/review/effect/Step/Phase
+semantics remain distinct: normal Submit acknowledges, and the caller separately
+Advances. Skill definitions/procedures and ordinary command/client parameters
+remain unchanged. Actual trusted Start/Step/Phase/Git context
+provisioning and genuine installed task loops for all three families remain
+mandatory later D2 work. Specification inputs and finite tool processes do not
+establish those prerequisites or Phase acceptance.
+
+## Actual selected Split Start consent input
+
+The trusted owning host selects the external allocation reference and its current
+v3 `splitPhaseTypedStartPayload`, the current selected Source row's String
+`splitPhasePlanningInputPayload`, and the actual component instance from normal
+assembly. [Public Start preparation](native-host-start-preparation.md) consumes
+those selected inputs and genuine explicit consent reference/operator/issuer/time.
+The native Start port shares the unchanged v7 selected projection. Allocation
+reference supplies the separate lookup; consent scope contains no fresh Workflow
+instance, Start reference, session or private control-store read.
+
+The normal `org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareSplitStart`
+accepts one WorkflowSplitStartPreparationInput JSON object. Its four selected
+allocation-reference/allocation/Source/evidence-reference fields are absolute local
+file: URIs read by current-call CNCF readText; explicit metadata and one native
+EntityCollection importer row are unchanged. The independently responsible host saves successful stdout
+to its trusted `textus.import.data.file`; normal StartupImport owns mutable
+save/create provisioning. Existing managed provisioning and current Reader,
+native principal/read grant, issuer/lookup/target/time and actual consent remain
+authoritative. Pure preparation leaves no stored record. After actual trusted
+provisioning, a NEW normal Start returns its own session; only separate Advance
+issues work. Human answer, Step/Phase closure and RepositoryEffect remain distinct.
+
+The [adopted security profile](../phase/phase-6-security-review-profile.md) carries
+selected input/target, separate authentication/consent/effect authority,
+least-authority DataStore and explicit file/process attribution into existing
+Step/Phase gates. Actual CAR lint/scoped CBD review evidence stays with Phase
+6.1/P6-SQ01 and existing Step/Phase 6.3 routes; missing required evidence remains
+Admission Gap/Unknown. Imported producer plans establish no availability or PASS,
+and no new policy/scanner/review stage is added. Command remains the actual task
+route with one light normal FQN client Start connectivity smoke. Genuine host
+provenance, RepositoryEffect provisioning, installed all-three task loops,
+modes/providers/Boundary and full closure remain open; primary aggregate full
+validation belongs to PHASE-6.3.
+
+## Actual selected RepositoryEffect input
+
+The trusted host supplies its current String `selectionPayload` ProfileSelection
+Record with the selected RepositorySync business input, actual component instance
+and explicit physical root/branch/remote/remoteBranch/endpoint from its owning Git
+configuration. [RepositoryEffect preparation](native-host-repository-effect-preparation.md)
+shares the unchanged native v7 scope and separate selection/invocation/exact-effect
+lookup. It needs no fabricated session or private Workflow-store read. Origin,
+recommendation and extra annotations grant nothing; semantic Start and physical
+Git correlation remain with current owners.
+
+The host independently obtains genuine effect consent and supplies its explicit
+reference, operator, configured issuer and historical occurrence. RepositoryEffect
+keeps its native equality between metadata participant and selected scope
+participant. A different nonblank participant can be encoded but observation
+refuses it. Review and Start grant no CommitPending, Push or FinalFetch authority.
+
+The normal `org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect`
+accepts one WorkflowRepositoryEffectPreparationInput JSON object with three
+absolute local file: URI selection/target/reference fields and explicit metadata.
+Current-call CNCF readText owns acquisition; the direct structured response retains
+one standard dotted EntityCollection importer row for one exact effect. The host
+saves successful stdout to trusted `textus.import.data.file`; existing StartupImport
+owns mutable save/create provisioning. Pure preparation writes nothing and calls
+no Workflow or Git process. Current Reader/principal/read grants and native
+effect/process/CAS/intent owners remain mandatory. After a refusal, provisioning
+does not authorize replay; a separately chosen NEW normal execution retains its
+own actual session and separate Advance.
+
+The shared managed repository and Goal-child fixture examples use this public
+producer and separate managed Create as specification inputs. They establish no
+genuine consent or task provenance. Actual command execution and one light client
+Start smoke remain unchanged. Relevant selected security evidence stays with
+existing Phase 6.1/6.2/6.3 owners; PLANNED imports prove no provider availability or
+PASS. All-three installed tasks, modes/provider/Boundary requirements and full
+original closure remain open; PHASE-6.3 owns primary aggregate full validation.
+
+## Current normal passive preparation service
+
+The normal configured bundle appends NativeHostPreparationService with exactly six
+COMMAND Operations: prepareGoalStart, prepareRepositoryStart, prepareSplitStart,
+prepareRepositoryEffect, prepareAuthority and prepareEvidence. Each has one distinct
+generated typed input; raw output is the existing structured WorkflowPreparedImport
+datastore Record. See [all six exact FQNs and concrete JSON schemas](normal-host-preparation-operations.md).
+Existing three session-wrapped workflow services and their exact semantic MCP
+publication set remain intact. Passive preparation requires normal host context,
+uses no workflow session and issues no semantic work or stage.
+
+Binding/request creation performs no resource I/O. Only the actual executing
+ProcedureActionCall maps finite fields and borrows current-context ordinary CNCF
+readText with UTF-8 and existing runtime caps/acquisition/release. No new private
+main, process, custom provider or fallback exists. Existing native payload/identity,
+provenance/principal/grants, mutable StartupImport separation, typed Git/SBT UoW
+adapters/native locks and no replay/unknown-result contracts remain unchanged.
+All nine original product mains and launch routes are absent from source and
+the current packaged JAR. Actual188B passed 206 checks in 20 selected suites,
+including all seven normal SBT cases, the preparation matrix and normal/lost
+completion acknowledgement rereads without a fourth check or duplicate completion.
+The common Repository/Goal/Repair fixture now authors clean public typed Git/SBT
+plans and tracks the real initial build before its original commit; actual
+product input selects the repair-negative modes instead of a JVM probe.
+Actual193 qualified this common transition with 139 passing checks across all
+18 concrete shared-fixture consumers (9 direct, 8 via
+`NativeHostPreparationManagedFixture`, 1 via
+`NativeHostPreparationOperationFixture`) plus 3 generated ABI/completion/retention
+guards: 21 selected suites. This is scoped normal-route qualification.
+Explicit Git-only examples and missing-SBT File negatives retain their original
+policy/permission and assert no unsolicited SBT launch across reopen.
+The selected installed host `phase6-command-main-2` replaces its residual
+generic launch definitions with public strict V3: empty `programs` and
+`sbtPrograms`, exactly 21 typed Git declarations and corresponding grants for the
+actual SmWorkflow component, and Manage access to the existing
+`sm-workflow-repository` workspace at the original installed native checkout.
+The original target, selected path/commit message and remote scope are retained.
+Ordinary passive preparation reads are limited to the existing selected task
+root with a 1 MiB resource cap. Storage/import destinations and host definition
+remain unchanged. This is configuration preparation; the actual passive normal
+command is still parent validation, and its output must remain unimported.
+Required validation remains required. The legacy Git diff document check does
+not supply a normal SBT build/test target, so no workflow progression is qualified
+by this host correction. The original malformed captured pending request and
+history remain unchanged; no repaired input or consent is manufactured.
+Preparation and fixture results do not establish full workflow or installed-task
+assurance. Original conflict/repair/Goal task loops, installed command/lightweight
+client, mode/session/provider/results/security/minimum CBD16 and Step/Phase
+closure obligations remain open. PHASE-6.3 owns aggregate validation.

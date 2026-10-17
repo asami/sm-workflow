@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.{WorkflowInstancePersistence, ContextReference}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.{ContinuationResult, WorkflowInteraction, WorkflowContinuation}
 import org.goldenport.protocol.operation.OperationResponse
@@ -11,7 +12,9 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
   import SplitPhaseExplicitProposalPrecheck as P
@@ -22,40 +25,56 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   type SubmissionValue = V.GoalPhaseWorkSubmissionResult | V.GoalPhaseOrderedDecisionSubmissionResult |
     V.SplitPhaseSemanticSubmissionResult | V.SplitPhaseScopeSubmissionResult | V.SplitPhaseReasoningSubmissionResult |
     V.SplitPhaseHumanDirectionSubmissionResult | V.RepositorySyncConflictSubmissionResult |
-    V.RepositorySyncNativeMergeReviewSubmissionResult | V.RepositorySyncHumanConflictSubmissionResult
+    V.RepositorySyncNativeMergeReviewSubmissionResult | V.RepositorySyncHumanConflictSubmissionResult |
+    V.RepositorySyncNativeMergeRepairSubmissionResult
 
   /** Existing structured protocol egress. Domain DTOs are not primitive
     * scalars; carry their declared business record without a String envelope. */
   def response(value: RecordPresentable): OperationResponse =
     OperationResponse.RecordResponse(value.toRecord())
 
-  def goalWork(value: GoalPhaseNativeWork.Request): V.GoalPhaseWorkView =
+  def goalWork(value: GoalPhaseNativeWork.Request, hostContext: Option[V.WorkflowHostReviewContext] = None): V.GoalPhaseWorkView =
     V.GoalPhaseWorkView(value.kind, value.purpose, value.stepIdentity, _goal_plan(value.selectedPlan),
       _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.candidate.map(_goal_snapshot),
       value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
-      value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(c =>
-        V.GoalPhaseNativeCheckReceipt(c.identity, c.termination, c.exitCode, c.stdout, c.stderr)))),
+      value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), hostContext)),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale)))
 
-  def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]): Consequence[V.GoalPhaseAdvanceResult] =
-    workInputC(work).map(value => V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
-      Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
-      None, None, Some(goalWork(value)), None, None, None, None, None))
+  def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView =
+    V.GoalPhaseNativeValidationView(payload.sourceRevision, payload.step, _goal_snapshot(payload.candidate),
+      payload.selected.map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.kind.wire)),
+      payload.receipts.map(_goal_check), payload.outcome)
 
-  def goalHumanC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]): Consequence[V.GoalPhaseAdvanceResult] =
-    decisionInputC(question).map(value => V.GoalPhaseAdvanceResult(question.handle.instanceIdentity.value, "Human", value.reason,
+  def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
+    value <- workInputC(work)
+    mode <- NativeWorkflowIssuedWorkContext.goalModeC(value.kind)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, mode, GoalPhaseNativeWork.inputCodec)
+    hostContext <- NativeHostReviewContext.goalC(core, work)
+  } yield V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
+      Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
+      None, None, Some(goalWork(value, hostContext)), None, None, None, None, None, None, Some(issuedContext), None, None)
+
+  def goalHumanC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing], core: ActionCall.Core):
+    Consequence[V.GoalPhaseAdvanceResult] = for {
+    context <- NativeHostHumanContext.goalC(core, question)
+    value <- decisionInputC(question)
+    _ <- if (value != null && value.work != null && value.result != null && value.work.completed != null &&
+        value.work.review != null && value.work.decisionContext != null && value.work.repairDirective != null) Consequence.unit
+      else Consequence.stateConflict("Issued Goal Human has no business display input")
+  } yield V.GoalPhaseAdvanceResult(question.handle.instanceIdentity.value, "Human", value.reason,
       Some(GoalPhaseOrderedHumanDecision.completionOperation.operation), Some(question.handle.instanceIdentity.value),
       Some("GoalPhaseOrderedDecisionAnswer"), None, None, None,
       Some(V.GoalPhaseHumanQuestion(goalWork(value.work), _goal_result(value.result), value.reason,
-        GoalPhaseOrderedHumanDecision.choices)), None, None, None, None))
+        GoalPhaseOrderedHumanDecision.choices, Some(context))), None, None, None, None, None, None, None, None)
 
   def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,
-      None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, None, None)
 
   def goalChild(session: String, child: V.RepositorySyncAdvanceResult): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, child.kind, child.message, child.submitOperation, child.submitSessionId,
-      child.resultType, child.condition, child.outcome, None, None, child.conflict, child.review, child.human, None)
+      child.resultType, child.condition, child.outcome, None, None, child.conflict, child.review, child.human, None, None,
+      child.issuedWorkContext, child.repair, None)
 
   def goalComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
     completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
@@ -63,7 +82,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseAdvanceResult(session, "Terminal", "The ordered Phase and repository synchronization completed.",
       None, None, None, None, Some("completed"), None, None, None, None, None,
       Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
-        _goal_snapshot(candidate), repository)))
+        _goal_snapshot(candidate), repository)), None, None, None, None)
 
   def repositoryConflict(value: RepositorySyncNativeConflictInput.Request): V.RepositorySyncConflictWorkView =
     V.RepositorySyncConflictWorkView(value.localTip, value.remoteTip, value.conflicts.map(c =>
@@ -72,52 +91,87 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         c.mode, c.worktree)))
 
   def repositoryConflictRequestC(work: WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]):
-    Consequence[V.RepositorySyncAdvanceResult] = workInputC(work).map(value =>
-      V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Resolve only the selected repository conflicts.",
-        Some(RepositorySyncNativeConflictContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-        Some("RepositorySyncConflictResult"), None, None, Some(repositoryConflict(value)), None, None, None))
-
-  def repositoryReviewRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing]):
     Consequence[V.RepositorySyncAdvanceResult] = for {
     value <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Implementation,
+      RepositorySyncConflictSemantic.inputCodec)
+  } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Resolve only the selected repository conflicts.",
+        Some(RepositorySyncNativeConflictContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
+        Some("RepositorySyncConflictResult"), None, None, Some(repositoryConflict(value)), None, None, None, Some(issuedContext), None)
+
+  def repositoryReviewRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing], core: ActionCall.Core):
+    Consequence[V.RepositorySyncAdvanceResult] = for {
+    value <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Review,
+      RepositorySyncNativeMergeReview.inputCodec)
+    hostContext <- NativeHostReviewContext.repositoryC(core, work)
     receipts <- value.checks.foldLeft(Consequence.success(Vector.empty[V.RepositorySyncNativeValidationReceipt])) { (prior, receipt) => for {
       values <- prior
       code <- receipt.exitCode.map(Consequence.success).getOrElse(
         Consequence.stateConflict("Merge review has no completed check exit status"))
     } yield values :+ V.RepositorySyncNativeValidationReceipt(receipt.identity, receipt.termination, code, receipt.stdout, receipt.stderr) }
     view = V.RepositorySyncMergeReviewWorkView(value.localTip, value.remoteTip, value.indexTree, value.changedPaths,
-      value.localDiff, value.remoteDiff, value.validationMode, value.validationReason, value.selectedChecks, receipts)
+      value.localDiff, value.remoteDiff, value.validationMode, value.validationReason, value.selectedChecks, receipts, Some(hostContext))
   } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Independently review the selected merge.",
     Some(RepositorySyncNativeMergeReviewContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-    Some("RepositorySyncNativeMergeReviewResult"), None, None, None, Some(view), None, None)
+    Some("RepositorySyncNativeMergeReviewResult"), None, None, None, Some(view), None, None, Some(issuedContext), None)
 
-  def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing]):
-    Consequence[V.RepositorySyncAdvanceResult] = decisionInputC(question).map(value =>
-      V.RepositorySyncAdvanceResult(question.handle.instanceIdentity.value, "Human", value.rationale,
-        Some(RepositorySyncHumanConflict.completionOperation.operation), Some(question.handle.instanceIdentity.value),
-        Some("RepositorySyncHumanConflictAnswer"), None, None, None, None,
-        Some(V.RepositorySyncHumanQuestion(repositoryConflict(value.conflict), value.rationale, RepositorySyncHumanConflict.choices)), None))
+  def repositoryRepairRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeRepair.Request, Nothing]):
+    Consequence[V.RepositorySyncAdvanceResult] = for {
+    value <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Implementation,
+      RepositorySyncNativeMergeRepair.inputCodec)
+    receipts <- value.review.checks.foldLeft(Consequence.success(Vector.empty[V.RepositorySyncNativeValidationReceipt])) { (prior, receipt) => for {
+      values <- prior
+      code <- receipt.exitCode.map(Consequence.success).getOrElse(Consequence.stateConflict("Repair source has no completed check status"))
+    } yield values :+ V.RepositorySyncNativeValidationReceipt(receipt.identity, receipt.termination, code, receipt.stdout, receipt.stderr) }
+    review = value.review
+    input = V.RepositorySyncNativeMergeRepairRequest(V.RepositorySyncNativeMergeReviewRequest(review.instanceIdentity,
+      review.validatedRevision, review.localTip, review.remoteTip, review.indexTree, review.changedPaths, review.localDiff,
+      review.remoteDiff, review.validationMode, review.validationReason, review.selectedChecks, receipts),
+      value.findings.map(f => V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale)),
+      value.files.map(f => V.RepositorySyncNativeMergeRepairFile(f.path, f.text)))
+  } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Repair only the assigned native merge findings.",
+    Some(RepositorySyncNativeMergeRepairContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
+    Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input))
+
+  def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing], core: ActionCall.Core):
+    Consequence[V.RepositorySyncAdvanceResult] = for {
+    context <- NativeHostHumanContext.repositoryC(core, question)
+    value <- decisionInputC(question)
+  } yield V.RepositorySyncAdvanceResult(question.handle.instanceIdentity.value, "Human", value.rationale,
+      Some(RepositorySyncHumanConflict.completionOperation.operation), Some(question.handle.instanceIdentity.value),
+      Some("RepositorySyncHumanConflictAnswer"), None, None, None, None,
+      Some(V.RepositorySyncHumanQuestion(repositoryConflict(value.conflict), value.rationale,
+        RepositorySyncHumanConflict.choices, Some(context))), None, None, None)
 
   def repositoryWait(session: String, message: String, condition: String): V.RepositorySyncAdvanceResult =
-    V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None)
+    V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None, None, None)
 
   def repositoryConvergence(value: RepositorySyncNativeConvergence.Result): V.RepositorySyncNativeConvergenceResult =
     V.RepositorySyncNativeConvergenceResult(value.repositoryRoot, value.localBranch, value.remote, value.remoteBranch, value.tip, value.tree)
 
   def repositoryComplete(session: String, value: RepositorySyncNativeConvergence.Result): V.RepositorySyncAdvanceResult =
     V.RepositorySyncAdvanceResult(session, "Terminal", "Actual local, tracking and remote tips converged with a clean repository.",
-      None, None, None, None, Some("converged"), None, None, None, Some(repositoryConvergence(value)))
+      None, None, None, None, Some("converged"), None, None, None, Some(repositoryConvergence(value)), None, None)
 
   private def _goal_plan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks)),
-      value.phaseChecks, value.repairLimit)
+      value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
+      GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance))
   private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
     V.GoalPhaseNativeSnapshot(value.head, value.tree)
+  private def _goal_check(value: RepositorySyncNativeMergeValidation.Receipt): V.GoalPhaseNativeCheckReceipt =
+    V.GoalPhaseNativeCheckReceipt(value.identity, value.termination, value.exitCode, value.stdout, value.stderr,
+      value.sbt.map(_sbt_facts))
+  private def _sbt_facts(value: WorkflowSbtValidation.Facts): V.WorkflowSbtValidationFacts =
+    V.WorkflowSbtValidationFacts(value.kind.wire, value.outcome.wire,
+      value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason)
   private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
     V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review)
   private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
-    V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings)
+    V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not
@@ -148,6 +202,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         V.RepositorySyncConflictSubmissionResult(session, true, "accepted", "Accepted conflict " + value.decision + ": " + value.rationale)
       case value: RepositorySyncNativeMergeReview.Result =>
         V.RepositorySyncNativeMergeReviewSubmissionResult(session, true, "accepted", "Accepted merge review " + value.decision + ": " + value.rationale)
+      case value: RepositorySyncNativeMergeRepair.Result =>
+        V.RepositorySyncNativeMergeRepairSubmissionResult(session, true, "accepted", "Accepted merge repair " + value.decision + ": " + value.rationale)
       case value: RepositorySyncHumanConflict.Answer =>
         V.RepositorySyncHumanConflictSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
     }
@@ -175,27 +231,37 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       V.SplitPhaseReasoningDemandReference(value.demand.identity, value.demand.revision), value.items.map(item =>
         V.SplitPhaseReasoningUnknownItem(_item_identity(item.identity), item.reason, _item(item.closure))))
 
-  def splitPartitionRequestC(work: WorkflowInteraction[S.Request, Nothing]): Consequence[V.SplitPhaseAdvanceResult] =
-    workInputC(work).map(value => splitRequest(work.handle.instanceIdentity.value, "submitPartitionSemanticResult",
+  def splitPartitionRequestC(work: WorkflowInteraction[S.Request, Nothing]): Consequence[V.SplitPhaseAdvanceResult] = for {
+    value <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Design,
+      SplitPhaseExplicitPartitionSemanticJson.requestCodec)
+  } yield splitRequest(work.handle.instanceIdentity.value, "submitPartitionSemanticResult",
       "SplitPhasePartitionSemanticResult", "Assess only the unresolved partition work and boundaries.",
-      partition = Some(splitPartition(value))))
+      partition = Some(splitPartition(value)), issuedWorkContext = Some(issuedContext))
 
   def splitScopeRequestC(work: WorkflowInteraction[SplitPhaseScopeSemantic.Request, Nothing]):
     Consequence[V.SplitPhaseAdvanceResult] = for {
     input <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Design,
+      SplitPhaseScopeSemanticJson.requestCodec)
     value <- splitScopeC(input)
   } yield splitRequest(work.handle.instanceIdentity.value, "submitHandoffScopeResult", "SplitPhaseScopeSemanticResult",
-    "Resolve only the requested handoff scopes.", scope = Some(value))
+    "Resolve only the requested handoff scopes.", scope = Some(value), issuedWorkContext = Some(issuedContext))
 
   def splitReasoningRequestC(work: WorkflowInteraction[SplitPhaseExplicitReasoningSemantic.Request, Nothing]):
-    Consequence[V.SplitPhaseAdvanceResult] = workInputC(work).map(value => splitRequest(work.handle.instanceIdentity.value,
+    Consequence[V.SplitPhaseAdvanceResult] = for {
+    value <- workInputC(work)
+    issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Analysis,
+      SplitPhaseExplicitReasoningSemanticJson.requestCodec)
+  } yield splitRequest(work.handle.instanceIdentity.value,
       "submitReasoningResult", "SplitPhaseReasoningSemanticResult", "Classify only the unresolved reasoning items.",
-      reasoning = Some(splitReasoning(value))))
+      reasoning = Some(splitReasoning(value)), issuedWorkContext = Some(issuedContext))
 
   /** The private issued input still owns its saved business frame. Consume it
     * once for the public question; never reissue or consult candidate stores. */
-  def splitScopeHumanC(question: WorkflowInteraction[SplitPhaseNativeHumanDirection.Input, Nothing]):
+  def splitScopeHumanC(question: WorkflowInteraction[SplitPhaseNativeHumanDirection.Input, Nothing], core: ActionCall.Core):
     Consequence[V.SplitPhaseAdvanceResult] = for {
+    context <- NativeHostHumanContext.splitC(core, question)
     input <- decisionInputC(question)
     snapshot = input.frontier
     request <- SplitPhaseScopeSemantic.requestC(snapshot.first)
@@ -205,12 +271,13 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     value = V.SplitPhaseScopeHumanQuestion(snapshot.judgment.rationale, SplitPhaseHumanDirectionAnswerContract.choices,
       source.phase.value, V.WorkflowArtifactReference(source.authority.identity, source.authority.revision),
       snapshot.first.snapshot.selection.boundary.boundary.items.map(_selected_item),
-      _human_candidates(snapshot.first.snapshot), scope.gaps.toVector, judgment)
+      _human_candidates(snapshot.first.snapshot), scope.gaps.toVector, judgment, Some(context))
   } yield splitRequest(question.handle.instanceIdentity.value, "submitSplitHumanDirection", "SplitPhaseHumanDirectionAnswer",
     value.rationale, scopeHuman = Some(value))
 
-  def splitReasoningHumanC(question: WorkflowInteraction[SplitPhaseReasoningHumanDirection.Input, Nothing]):
+  def splitReasoningHumanC(question: WorkflowInteraction[SplitPhaseReasoningHumanDirection.Input, Nothing], core: ActionCall.Core):
     Consequence[V.SplitPhaseAdvanceResult] = for {
+    context <- NativeHostHumanContext.splitC(core, question)
     input <- decisionInputC(question)
     request = input.request
     snapshot = input.frontier
@@ -221,7 +288,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       splitReasoning(request), V.SplitPhaseReasoningSemanticResult(judgment.decision.toString, judgment.rationale,
         judgment.assignments.map(a => V.SplitPhaseReasoningAssignment(_item_identity(a.identity), a.classification.toString,
           a.rationale)), judgment.evidence.map(e => V.SplitPhasePartitionEvidenceReference(e.identity, e.revision))),
-      snapshot.selection.boundary.boundary.items.map(_selected_item), _human_candidates(snapshot))
+      snapshot.selection.boundary.boundary.items.map(_selected_item), _human_candidates(snapshot), Some(context))
   } yield splitRequest(question.handle.instanceIdentity.value, "submitSplitHumanDirection", "SplitPhaseHumanDirectionAnswer",
     value.rationale, reasoningHuman = Some(value))
 
@@ -303,19 +370,20 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     partition: Option[V.SplitPhasePartitionWorkView] = None, scope: Option[V.SplitPhaseScopeWorkView] = None,
     reasoning: Option[V.SplitPhaseReasoningWorkView] = None,
     scopeHuman: Option[V.SplitPhaseScopeHumanQuestion] = None,
-    reasoningHuman: Option[V.SplitPhaseReasoningHumanQuestion] = None): V.SplitPhaseAdvanceResult =
+    reasoningHuman: Option[V.SplitPhaseReasoningHumanQuestion] = None,
+    issuedWorkContext: Option[V.WorkflowIssuedWorkContext] = None): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, if (scopeHuman.nonEmpty || reasoningHuman.nonEmpty) "Human" else "Request",
       message, Some(operation), Some(session), Some(resultType), None, None, partition, scope, reasoning,
-      scopeHuman, reasoningHuman, None, None)
+      scopeHuman, reasoningHuman, None, None, issuedWorkContext)
 
   def splitSelected(session: String, value: V.SplitPhaseSelectedPlanView): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, "Terminal", "Split plan " + value.mode + " completed.", None, None, None,
-      None, Some(if (value.mode == "APPLY") "Applied" else "Previewed"), None, None, None, None, None, Some(value), None)
+      None, Some(if (value.mode == "APPLY") "Applied" else "Previewed"), None, None, None, None, None, Some(value), None, None)
 
   def splitStopped(session: String, outcome: String, answer: ContextReference): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, "Terminal", "The recorded Human direction ended this split run: " + outcome,
       None, None, None, None, Some(outcome), None, None, None, None, None, None,
-      Some(V.SplitPhaseStoppedResult(outcome, V.WorkflowArtifactReference(answer.identity, answer.revision))))
+      Some(V.SplitPhaseStoppedResult(outcome, V.WorkflowArtifactReference(answer.identity, answer.revision))), None)
 
   private def _source(value: P.SourceReference): V.SplitPhasePartitionSourceReference =
     V.SplitPhasePartitionSourceReference(value.identity, value.revision)

@@ -19,7 +19,9 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
   val schema = "sm-workflow.three-workflow-host.v1"
@@ -61,7 +63,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       case _ => Consequence.configurationInvalid("Three-workflow host requires an explicit structured definition")
     })
   val declarations: Vector[ComponentParameterKey[?]] =
-    GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration)
+    GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
+      GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -74,10 +77,15 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Consequence.configurationInvalid("Three-workflow host definition is not configured"))
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
+      executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
+      repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
+      splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
+      _ <- SplitPhaseNativeExecution.validateC(splitclassifications, executionprofiles, executionorigin)
+      projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
-        persistence.continuations, settings.repository.input, target)
+        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications)
       ports = new ThreeWorkflowHostEvidencePorts(evidence)
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,
@@ -88,10 +96,11 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
         Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
-        executionprofiles)
+        executionprofiles, executionorigin, projectacceptance)
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
-      split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations)
+      split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,
+        executionprofiles, executionorigin, splitclassifications)
     } yield ThreeWorkflowLauncherAssembly.Host(goal, split, splitCatalog, ports.splitStart, ports.splitAnswer)
 
   private def targetC(value: Target): Consequence[RepositoryGitRuntimePrograms.Target] =

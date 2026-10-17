@@ -1,16 +1,17 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.processexecution.{GitIndexStage, GitObjectId, GitOperation}
 import RepositorySyncManagedGitObservation as Git
 import WorkflowManagedProcessExecution as E
 
 /** Native conflict facts, not a supplied receipt or a source-integrity seal.
-  * Paths are never passed as process arguments; native blob IDs use one closed
-  * runtime slot. Reading these facts grants no write or resolution authority.
+  * Paths remain assigned business data; native blobs and worktree text arrive
+  * through typed Git/File results. Reading grants no write or resolution authority.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictInput {
   final case class Entry(mode: String, blob: String, stage: Int, path: String)
@@ -57,18 +58,13 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
     }
     // Current conflict text is part of the semantic edit input. Its expected
     // overwrite value is application data, not a management integrity seal.
-    fileRequest = org.simplemodeling.textus.smworkflow.runtime.RepositoryConflictFileProgram.Request(
-      store.identity, source.record.revision.value.toString, conflicts.map(c =>
-        org.simplemodeling.textus.smworkflow.runtime.RepositoryConflictFileProgram.File(c.path, None, c.local.text)))
-    fileResult <- E.executeC(store.core, E.Purpose.CaptureConflictFiles,
-      org.simplemodeling.textus.smworkflow.runtime.RepositoryConflictFileProgram.encode(fileRequest)).flatMap(Git.requiredTextC)
-    files <- io.circe.parser.parse(fileResult).left.map(_.message).flatMap(
-      org.simplemodeling.textus.smworkflow.runtime.RepositoryConflictFileProgram.decodeResult) match {
-        case Right(value) if value.instance == fileRequest.instance && value.revision == fileRequest.revision &&
-            value.status == "captured" && value.files.map(_.copy(expected = None)) == fileRequest.files &&
-            value.files.forall(_.expected.nonEmpty) => Consequence.success(value.files)
-        case _ => invalid("actual semantic conflict file input is incomplete")
-      }
+    fileRequest = RepositorySyncFileEffect.Request(store.identity, source.record.revision.value.toString,
+      conflicts.map(c => RepositorySyncFileEffect.File(c.path, None, c.local.text)))
+    captured <- RepositorySyncFileEffect.captureC(store.core, policy, fileRequest)
+    files <- if (captured.instance == fileRequest.instance && captured.revision == fileRequest.revision &&
+        captured.status == "captured" && captured.files.map(_.copy(expected = None)) == fileRequest.files &&
+        captured.files.forall(_.expected.nonEmpty)) Consequence.success(captured.files)
+      else invalid("actual semantic conflict file input is incomplete")
     after <- Git.inspectC(store.core)
     rowsAfter <- entriesC(store.core)
     _ <- if (after == native && rowsAfter == rows) Consequence.unit
@@ -76,35 +72,24 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
   } yield Request(store.identity, source.record.revision.value.toString, native.observed.head,
     native.mergeHead.get, conflicts.zip(files).map((c, f) => c.copy(worktree = f.expected.get)))
 
-  private def blobC(core: ActionCall.Core, identity: String, limit: Int): Consequence[Blob] =
-    E.executeNativeGitC(core, E.NativeGitEffect.ReadBlob(identity)).flatMap(Git.requiredTextC).flatMap { text =>
-      if (text.getBytes(UTF_8).length <= limit && !text.contains('\u0000')) Consequence.success(Blob(identity, text))
-      else invalid("blob is binary or exceeds the selected finite text budget")
-    }
-  private[admission] def entriesC(core: ActionCall.Core): Consequence[Vector[Entry]] =
-    E.executeC(core, E.Purpose.GitUnmergedIndex, "").flatMap(Git.requiredTextC).flatMap(parseC)
+  private def blobC(core: ActionCall.Core, identity: String, limit: Int): Consequence[Blob] = for {
+    oid <- GitObjectId.parseC(identity)
+    blob <- E.executeGitC(core, GitOperation.BlobContent(oid)).flatMap(_.valueC)
+    text <- blob.text.filter(_ => blob.bytes.size <= limit).map(Consequence.success)
+      .getOrElse(invalid("blob is binary or exceeds the selected finite text budget"))
+  } yield Blob(identity, text)
 
-  private[admission] def parseC(text: String): Consequence[Vector[Entry]] = parseIndexC(text, false)
-  private[admission] def parseAllC(text: String): Consequence[Vector[Entry]] = parseIndexC(text, true)
-  private def parseIndexC(text: String, all: Boolean): Consequence[Vector[Entry]] = {
-    if (text == null || (text.nonEmpty && !text.endsWith("\u0000"))) return invalid("unmerged index capture is incomplete")
-    val fields = if (text.isEmpty) Vector.empty else text.dropRight(1).split("\u0000", -1).toVector
-    val pattern = "([0-7]{6}) ([0-9a-f]{40}|[0-9a-f]{64}) ([0123])\\t(.+)".r
-    val parsed = fields.foldLeft(Consequence.success(Vector.empty[Entry])) { (z, field) => z.flatMap { values =>
-      val tab = field.indexOf('\t')
-      // Match the fixed header separately so newline-containing path names
-      // retain their exact bytes rather than being reduced by regex dot rules.
-      val header = if (tab >= 0) field.take(tab) + "\tx" else field
-      header match {
-        case pattern(mode, blob, stage, _) if (all || stage != "0") && relative(field.drop(tab + 1)) =>
-          Consequence.success(values :+ Entry(mode, blob, stage.toInt, field.drop(tab + 1)))
-        case _ => invalid("unmerged index entry is malformed or outside relative repository paths")
+  private[admission] def entriesC(core: ActionCall.Core): Consequence[Vector[Entry]] =
+    E.executeGitC(core, GitOperation.UnmergedIndex).flatMap(_.valueC).map(_.map { entry =>
+      val stage = entry.stage match {
+        case GitIndexStage.Base => 1
+        case GitIndexStage.Local => 2
+        case GitIndexStage.Remote => 3
+        case GitIndexStage.Merged => 0
       }
-    }}
-    parsed.flatMap(values =>
-      if (values.map(e => e.path -> e.stage).distinct.size == values.size) Consequence.success(values)
-      else invalid("unmerged index contains duplicate path/stage entries"))
-  }
+      Entry(entry.mode, entry.blob.value, stage, entry.path.value)
+    })
+
   private[smworkflow] def relative(path: String): Boolean = path != null && path.nonEmpty &&
     !path.startsWith("/") && !path.contains('\u0000') &&
     path.split("/", -1).forall(p => p.nonEmpty && p != "." && p != ".." && p != ".git")

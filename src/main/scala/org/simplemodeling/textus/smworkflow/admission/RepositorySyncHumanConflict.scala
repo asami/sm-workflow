@@ -24,7 +24,7 @@ import RepositorySyncNativeProgressStore as N
   * the owning conflict port, not a caller-provided snapshot or workflow stage.
   * Answers are native atomic completion; only a subsequent advance runs effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object RepositorySyncHumanConflict {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositoryConflictDecision")
@@ -86,7 +86,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       native <- completionC(source.session.storage)
       retained <- native.loadRetainedC(identity(source))(using source.store.core.executionContext)
       wire <- retained match {
-        case None => NativeWorkflowOperationOutput.repositoryHumanC(plan.question)
+        case None => NativeWorkflowOperationOutput.repositoryHumanC(plan.question, source.store.core)
         case Some(value) => for {
           next <- completedC(plan, value.completion.result)
           answer = value.completion.result.result.value

@@ -14,7 +14,9 @@ import GoalPhaseNativeRun as F
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
   final case class Request(instanceIdentity: String, sourceRevision: String, kind: String,
@@ -23,14 +25,20 @@ private[smworkflow] object GoalPhaseNativeWork {
     checksReceipt: Option[String], repairDirective: Option[O.RepairDirective],
     review: Option[GoalPhaseNativeReview.Context] = None,
     decisionContext: Option[DecisionContext] = None)
-  final case class Result(outcome: String, summary: String, findings: Vector[String])
+  final case class Result(outcome: String, summary: String, findings: Vector[String],
+    acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None)
+  object Result {
+    given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
+      case ("acceptance", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Result] = deriveDecoder
+  }
   final case class DecisionContext(requestingResult: Result, choice: String, rationale: String)
 
   // Derive the nested review payload bottom-up, as for native merge review.
   // The wire fields remain unchanged; whole-Request auto derivation otherwise
   // exceeds Scala's inline depth when reaching the vector of actual receipts.
-  private given Encoder[RepositorySyncNativeMergeValidation.Receipt] = deriveEncoder
-  private given Decoder[RepositorySyncNativeMergeValidation.Receipt] = deriveDecoder
   private given Encoder[GoalPhaseNativeReview.Context] = deriveEncoder
   private given Decoder[GoalPhaseNativeReview.Context] = deriveDecoder
   private given Encoder[DecisionContext] = deriveEncoder
@@ -72,24 +80,28 @@ private[smworkflow] object GoalPhaseNativeWork {
     else F.invalid("initial work differs from actual CML Required SPI")
   }
   def admitInitialResultC(request: Request, result: Result): Consequence[Unit] =
-    if (request == null || result == null || request.kind != "ImplementStep" || request.review.nonEmpty || result.summary == null ||
-        result.summary.trim.isEmpty || result.findings == null ||
-        !result.findings.forall(f => f != null && f.trim.nonEmpty) ||
+    if (request == null || result == null || request.kind != "ImplementStep" || request.review.nonEmpty ||
+        !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
+        !result.findings.forall(_bounded_text) ||
         !Set("completed", "decision-needed")(result.outcome) ||
         (result.outcome == "completed" && result.findings.nonEmpty))
       F.invalid("initial assigned result must report completion or an explicit decision, never review/command/closure")
-    else Consequence.unit
+    else GoalPhaseAcceptanceBoundary.admitC(request.selectedPlan, request.kind, result)
 
   def admitSemanticResultC(request: Request, result: Result): Consequence[Unit] =
-    if (request.kind == "ImplementStep") admitInitialResultC(request, result)
+    if (request == null) F.invalid("assigned request is missing")
+    else if (request.kind == "ImplementStep") admitInitialResultC(request, result)
     else if (request.kind != "RepairStep" || request.repairDirective.isEmpty || request.review.isEmpty ||
         request.candidate.nonEmpty || request.checksReceipt.nonEmpty || result == null ||
-        result.summary == null || result.summary.trim.isEmpty || result.findings == null ||
-        !result.findings.forall(f => f != null && f.trim.nonEmpty) ||
+        !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
+        !result.findings.forall(_bounded_text) ||
         !Set("completed", "decision-needed")(result.outcome) ||
         (result.outcome == "completed" && result.findings.nonEmpty))
       F.invalid("assigned repair must return semantics or a decision, not review, checks, commands or closure")
-    else Consequence.unit
+    else GoalPhaseAcceptanceBoundary.admitC(request.selectedPlan, request.kind, result)
+
+  private def _bounded_text(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    !value.contains('\u0000') && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384
 
   private class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {

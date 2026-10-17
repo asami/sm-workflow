@@ -1,5 +1,32 @@
 # Native independent pending-merge review
 
+## Current Phase 6 repair candidate and fresh review
+
+The installed [native repair connection](repository-sync-native-merge-repair.md)
+consumes only the actual paired current review result with decision `repair`.
+`submitNativeMergeRepair` admits its assigned typed proposal without file/Git
+effects or eager Advance. Later explicit Advance materializes and stages the
+bounded proposal under the existing fixed policy, then records a new pending
+candidate. Decision-needed stays nonterminal Wait for separate Human handling.
+
+Current native history selects the last actual repaired pending-candidate
+transition and its `repair-<actual review completion revision>` namespace.
+Validation and review load that selected candidate's actual receipts; absent or
+malformed selected data fails without old-candidate fallback. The new checks use
+the new source revision, stop on failed/indeterminate results or uncertain
+intents without replay, and precede a full independent review of the actual
+current parent diffs/index/changed paths. Its continuation remains
+`<instance>:native-review:<actual validated revision>`.
+
+Saved review lookup exposes actual issued input and paired completed result,
+using its actual committed completion revision in current native history. It
+does not recapture a historical request, regenerate a completion certificate or
+append that result again. Original validation, work, result and history stay
+separately readable. Only the current candidate's genuine independently admitted
+acceptance can select convergence, which still requires separate current
+commit/push/final-fetch grants. Source and specification-owned evidence do not
+repair the original live task or satisfy its Step/Phase acceptance obligations.
+
 ## Current Phase 5.2 C16 — consume the assigned review and its result
 
 Owning advance chooses assigned work or actual completion by completion presence,

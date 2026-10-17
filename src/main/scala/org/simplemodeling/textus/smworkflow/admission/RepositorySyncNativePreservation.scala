@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.processexecution.ProcessExecutionTermination
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import RepositorySyncManagedGitObservation as Git
 import WorkflowManagedProcessExecution as Effects
@@ -10,7 +10,8 @@ import RepositorySyncNativeProgressStore.*
 /** Workflow-owned FULL_STATE checkpoint, never an old host receipt/digest.
   * Native branch CAS installs a known tree/parent commit without resetting files.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativePreservation {
   def preserveC(store: Store, fetched: InstanceRecord, before: Git.Observed): Consequence[Stage] =
@@ -34,23 +35,21 @@ private[smworkflow] object RepositorySyncNativePreservation {
     _ <- store.scopeC(actual)
     _ <- unchangedHeadC(intent.payload.before, actual)
     _ <- if (fullyStaged(actual.dirty)) Consequence.unit
-      else Effects.executeC(store.core, Effects.Purpose.GitStageFullState, "").flatMap(result =>
-        if (result.termination == ProcessExecutionTermination.Exited(0)) Consequence.unit
-        else uncertain("staging did not establish a complete native index"))
+      else Effects.executeGitC(store.core, GitOperation.StageFullState).flatMap(_.valueC)
     tree <- Git.indexTreeC(store.core)
     indexed <- store.saveC("index-captured", "index-captured", intent.record,
       intent.payload.copy(stage = "IndexCaptured", indexTree = Some(tree)))
     creating <- store.saveC("checkpoint-creating", "checkpoint-creating", indexed.record,
       indexed.payload.copy(stage = "CheckpointCreating"))
-    result <- Effects.executeNativeGitC(store.core, Effects.NativeGitEffect.CreateCheckpoint(tree, actual.head))
-    commit <- Git.requiredTextC(result).flatMap(Git.oidC)
+    treeId <- GitObjectId.parseC(tree)
+    parent <- GitObjectId.parseC(actual.head)
+    commitId <- Effects.executeGitC(store.core, GitOperation.CreateCheckpoint(treeId, parent)).flatMap(_.valueC)
+    commit = commitId.value
     created <- store.saveC("checkpoint-created", "checkpoint-created", creating.record,
       creating.payload.copy(stage = "CheckpointCreated", checkpoint = Some(commit)))
     pending <- store.saveC("checkpoint-installing", "checkpoint-installing", created.record,
       created.payload.copy(stage = "CheckpointInstalling"))
-    installed <- Effects.executeNativeGitC(store.core, Effects.NativeGitEffect.InstallCheckpoint(commit, actual.head))
-    _ <- if (installed.termination == ProcessExecutionTermination.Exited(0)) Consequence.unit
-      else uncertain("checkpoint branch CAS did not establish its effect")
+    _ <- Effects.executeGitC(store.core, GitOperation.InstallCheckpoint(commitId, parent)).flatMap(_.valueC)
     after <- Git.observeC(store.core)
     _ <- store.scopeC(after)
     saved <- store.saveC("preserved", "local-state-preserved", pending.record,

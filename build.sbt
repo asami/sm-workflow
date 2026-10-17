@@ -6,6 +6,7 @@ lazy val projectIdentityEvidence = settingKey[CozyProjectIdentityEvidence]("Admi
 lazy val skillSourceFiles = taskKey[Seq[(File, String)]]("Exact component-owned semantic skill sources")
 lazy val skillBundle = taskKey[File]("Package the semantic skill sources as a standalone ZIP")
 lazy val checkSkillBundleReproducibility = taskKey[File]("Verify skill ZIP bytes despite source timestamp and ordering changes")
+lazy val runtimeTestOnly = inputKey[Unit]("Prepare official runtime artifacts and run the selected executable specifications")
 
 lazy val root = project
   .in(file("."))
@@ -21,11 +22,20 @@ lazy val root = project
     resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/repository/maven",
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
 
-    // CLI/server executable specs consume the official runtime artifacts.
-    // Wire preparation into both test and testOnly via their compile dependency;
-    // packaged catalog specs also need the current component JAR, not a
-    // stale artifact left by a previous manual packageBin invocation.
-    Test / compile := ((Test / compile) dependsOn (cozyPrepareRuntime, Compile / packageBin)).value,
+    // Artifact-dependent selections explicitly prepare the official runtime and
+    // current CAR. Ordinary test/testOnly compilation has no runtime preparation.
+    runtimeTestOnly := Def.inputTaskDyn {
+      val selection = (sbt.complete.DefaultParsers.Space ~> sbt.complete.DefaultParsers.any.*).parsed.mkString
+      cozyPrepareRuntime.value
+      (Compile / packageBin).value
+      (Test / testOnly).toTask(" " + selection)
+    }.evaluated,
+    // Explicit testOnly selection admits this @DoNotDiscover suite.
+    Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
+      if (definition.name == "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec")
+        new TestDefinition(definition.name, definition.fingerprint, true, definition.selectors)
+      else definition
+    },
     Test / fork := false,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
@@ -75,35 +85,4 @@ lazy val root = project
     cozyDelegateProjectDir := None,
     cozyCarName := ProjectYamlBuild.carBaseName(projectIdentityEvidence.value, moduleName.value, version.value),
     cozyManifestMetadata ++= ProjectYamlBuild.manifestMetadata(projectIdentityEvidence.value, cozyProjectMetadata.value)
-  )
-
-// The product is Scala 3, not an sbt plugin. Keep scripted's Scala 2.12 runner
-// in a separate test-only project; never publish this harness or the component
-// merely to execute it. One top-level scripted owns every child build here.
-lazy val runtimeScripted = project.in(file("spec/runtime-scripted"))
-  .enablePlugins(sbt.ScriptedPlugin)
-  .settings(
-    scalaVersion := "2.12.18",
-    publish / skip := true,
-    sbt.ScriptedPlugin.autoImport.scriptedSbt := "1.9.7",
-    sbt.ScriptedPlugin.autoImport.sbtTestDirectory := (root / baseDirectory).value / "src/sbt-test",
-    sbt.ScriptedPlugin.autoImport.scriptedBufferLog := false,
-    sbt.ScriptedPlugin.autoImport.scriptedParallelInstances := 1,
-    sbt.ScriptedPlugin.autoImport.scriptedDependencies := {
-      val classpath = (root / Test / fullClasspath).value.files
-      val selection = new java.util.Properties()
-      selection.setProperty("classpath", classpath.mkString(java.io.File.pathSeparator))
-      selection.setProperty("root", (root / baseDirectory).value.getAbsolutePath)
-      selection.setProperty("launcher", sbt.ScriptedPlugin.autoImport.sbtLauncher.value.getAbsolutePath)
-      selection.setProperty("owner", java.lang.ProcessHandle.current().pid().toString)
-      val file = (root / target).value / "sm-workflow/work/scripted-operation-selection.properties"
-      IO.createDirectory(file.getParentFile)
-      val output = new java.io.FileOutputStream(file)
-      try selection.store(output, "Selected inputs for this scripted invocation; not an integrity seal")
-      finally output.close()
-    },
-    sbt.ScriptedPlugin.autoImport.scriptedLaunchOpts ++= Seq(
-      "-Dsbt.server.autostart=false", "-Dsbt.supershell=false",
-      "-Dsmworkflow.spec.selection=" + ((root / target).value / "sm-workflow/work/scripted-operation-selection.properties").getAbsolutePath
-    )
   )

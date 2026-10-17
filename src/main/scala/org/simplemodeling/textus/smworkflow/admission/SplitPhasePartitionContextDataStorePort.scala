@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Exact raw-data read only. No retained lease, writer or decoded admission.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] final class SplitPhasePartitionContextDataStorePort(
   declaration: SplitPhasePartitionContextReadPolicy.Declaration
@@ -17,13 +17,25 @@ private[smworkflow] final class SplitPhasePartitionContextDataStorePort(
     Consequence.stateConflict("SplitPhase partition context requires its current Operation")
 
   def loadForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Record]] =
+    _load_raw_c(reference, core).flatMap {
+      case None => Consequence.success(None)
+      case Some(raw) => SplitPhaseExplicitPartitionContextJsonV1.decodeC(reference, raw).map(Some(_))
+    }
+
+  def loadTemplateForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Template]] =
+    _load_raw_c(reference, core).flatMap {
+      case None => Consequence.success(None)
+      case Some(raw) => SplitPhaseExplicitPartitionContextJsonV1.decodeTemplateC(reference, raw).map(Some(_))
+    }
+
+  private def _load_raw_c(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[String]] =
     if (declaration == null || reference == null || !name(reference.identity) || !name(reference.revision))
       Consequence.stateConflict("SplitPhase partition context requires an exact reference/revision")
     else ManagedHostRecordRead.loadSplitPartitionContextC(core, declaration.storeName, declaration.collection, reference.identity)
       .flatMap {
         case None => Consequence.success(None)
         case Some(row) => row.getString(SplitPhaseExplicitPartitionContextJsonV1.storageField) match {
-          case Some(raw) => SplitPhaseExplicitPartitionContextJsonV1.decodeC(reference, raw).map(Some(_))
+          case Some(raw) => Consequence.success(Some(raw))
           case None => Consequence.stateConflict("SplitPhase partition context payload is absent")
         }
       }

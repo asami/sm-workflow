@@ -1,28 +1,24 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.nio.ByteBuffer
-import java.nio.charset.{CodingErrorAction, StandardCharsets}
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure
-import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ProcessExecutionTermination}
-import org.simplemodeling.textus.smworkflow.runtime.SelectedPhaseDocumentProgram as Program
-import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseManagedPlanningFrontier as F,
-  WorkflowManagedProcessExecution as E}
+import SplitPhaseManagedPlanningFrontier as F
+import WorkflowSelectedDocumentFiles as Files
 
-/** Connects an actual native selected APPLY source to fixed runtime effects.
+/** Connects an actual native selected APPLY source to current-UoW File effects.
   * This supplies no intent publication or native completion; the owning advance
   * must publish its durable ApplyingDocuments preparation before applyC.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseSelectedDocumentEffect {
   val applyingProgression = "entry.ApplyingDocuments"
   enum Status { case Ready, Partial, Applied, Conflict }
   final case class Observation(status: Status, payload: Json)
   final class Prepared private[SplitPhaseSelectedDocumentEffect] (
-    val source: F.Observed, val input: String, val repository: String,
+    val source: F.Observed, val request: Files.Request, val snapshot: SplitPhasePlanningSnapshot.Record, val repository: String,
     val instance: String, val context: Json, val projection: SplitPhaseSelectedDocuments.Projection)
 
   def prepareC(source: F.Observed, context: String, revision: String): Consequence[Prepared] =
@@ -37,46 +33,17 @@ private[smworkflow] object SplitPhaseSelectedDocumentEffect {
         case Vector(Some(value)) => Consequence.success(value)
         case _ => Consequence.serviceUnavailable("Selected document effect requires one configured repository")
       }
-      input <- Program.requestC(repository, source.current.identity.value, context, revision, source.snapshot)
-    } yield new Prepared(source, input, repository, source.current.identity.value,
+      request = Files.Request(repository, source.current.identity.value, context, revision, source.snapshot)
+      _ <- Files.validateC(request)
+    } yield new Prepared(source, request, source.snapshot, repository, source.current.identity.value,
       Json.obj("identity" -> Json.fromString(context), "revision" -> Json.fromString(revision)), projection)
 
   def observeC(prepared: Prepared, core: ActionCall.Core): Consequence[Observation] =
-    executeC(prepared, core, E.Purpose.ObserveSelectedDocuments)
+    if (prepared == null) Consequence.stateConflict("Selected document effect preparation is absent")
+    else Files.observeC(core, prepared.request)
+
   def applyC(prepared: Prepared, core: ActionCall.Core): Consequence[Observation] =
     if (prepared == null || !prepared.source.current.currentProgression.exists(_.value == applyingProgression))
       Consequence.stateConflict("Selected document application requires its actual native ApplyingDocuments intent")
-    else executeC(prepared, core, E.Purpose.ApplySelectedDocuments)
-
-  private def executeC(prepared: Prepared, core: ActionCall.Core, purpose: E.Purpose): Consequence[Observation] =
-    if (prepared == null) Consequence.stateConflict("Selected document effect preparation is absent")
-    else E.executeC(core, purpose, prepared.input).flatMap(result => decodeC(prepared, result))
-
-  private[admission] def decodeC(prepared: Prepared, result: ProcessExecutionResult): Consequence[Observation] = {
-    if (prepared == null || result == null || result.termination != ProcessExecutionTermination.Exited(0) ||
-        result.stdout.truncated || result.stdout.byteCount != result.stdout.content.size.toLong)
-      DataStoreConditionalTransitionFailure.transactionIndeterminate("Selected document effect is not established; observe on a later call")
-    else try {
-      val text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-        .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(result.stdout.content.toArray)).toString
-      io.circe.parser.parse(text).fold(_ => invalid("invalid result JSON"), payload => validatePayloadC(prepared, payload))
-    } catch { case scala.util.control.NonFatal(_) => invalid("result encoding is invalid") }
-  }
-
-  private[admission] def validatePayloadC(prepared: Prepared, payload: Json): Consequence[Observation] =
-    if (prepared == null || payload == null) invalid("effect preparation/result is absent")
-    else {
-        val c = payload.hcursor
-        val status = c.get[String]("status").toOption.flatMap {
-          case "ready" => Some(Status.Ready)
-          case "partial" => Some(Status.Partial)
-          case "applied" => Some(Status.Applied)
-          case "conflict" => Some(Status.Conflict)
-          case _ => None
-        }
-        status.map(value => Consequence.success(Observation(value, payload)))
-          .getOrElse(invalid("unknown application disposition"))
-    }
-  private def invalid[A](reason: String): Consequence[A] =
-    Consequence.stateConflict("Selected document effect " + reason)
+    else Files.applyC(core, prepared.request)
 }

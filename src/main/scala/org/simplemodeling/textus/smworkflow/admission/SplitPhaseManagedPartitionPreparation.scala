@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Host-only composition, not registration, consent, WorkOrder issue or grant.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] object SplitPhaseManagedPartitionPreparation {
   final class Port private[SplitPhaseManagedPartitionPreparation] (
@@ -21,8 +21,8 @@ private[smworkflow] object SplitPhaseManagedPartitionPreparation {
     instances: CallScopedWorkflowInstances.Port
   ) {
     /** Host template data is passive; Start replaces its execution owner. */
-    def loadRecordForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Record]] =
-      contexts.loadForCallC(reference, core)
+    def loadTemplateForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Template]] =
+      contexts.loadTemplateForCallC(reference, core)
 
     def prepareForCallC(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[C.Prepared]] =
       preparePlanningForCallC(reference, core).flatMap {

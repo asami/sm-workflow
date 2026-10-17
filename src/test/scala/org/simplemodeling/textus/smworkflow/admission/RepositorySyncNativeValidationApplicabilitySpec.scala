@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import org.goldenport.Consequence
+import org.goldenport.cncf.processexecution.{ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
@@ -16,7 +17,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val policy = V.Policy("original-policy", 1, "required", "Original selected rationale", Vector(V.Check("focused", 1)))
@@ -30,6 +32,24 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
   private def replace(value: Json, body: Json) = value.mapObject(_.add("payload", body))
 
   "Native validation facts" should {
+    "refuse replacement of a selected Test binding by TestOnly while preserving old Test receipts" in {
+      Given("a saved current-schema Test selection with an absent kind and five-field product receipt")
+      val restored = V.stateCodec.decode(V.stateCodec.encode(state)).toOption.get
+      val replacement = policy.copy(checks = Vector(V.Check("focused", 1, WorkflowSbtValidation.Kind.TestOnly)))
+      When("current policy resolution consumes identity ordinal and kind against the retained selection")
+      val compatible = V.applies(restored, policy.copy(identity = "other-metadata", revision = 9,
+        checks = policy.checks :+ V.Check("unselected", 2, WorkflowSbtValidation.Kind.TestOnly)))
+      val replaced = V.applies(restored, replacement)
+      Then("metadata and unused bindings are inert, but a changed selected kind cannot promote or replay the old Test")
+      compatible shouldBe true
+      replaced shouldBe false
+      restored shouldBe state
+      V.successful(restored.receipts, selected = restored.selected) shouldBe true
+      V.successful(restored.receipts, selected = replacement.checks) shouldBe false
+      restored.receipts.last.sbt shouldBe None
+      V.productSuccessful(restored.receipts.last, WorkflowSbtValidation.Kind.TestOnly) shouldBe false
+    }
+
     "consume current selected facts and ignore unused annotations without policy extraction" in {
       Given("Spec: docs/spec/repository-sync-native-validation-applicability.md; Rule: R1; Example: E1; an actual selected validation payload")
       val saved = N.Payload("MergeValidated", "/selected/repository", before,
@@ -86,8 +106,99 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
         selected.copy(receipts = selected.receipts.updated(2, selected.receipts(2).copy(exitCode = Some(1))))).foreach { contradicted =>
         V.completedC(result.copy(payload = result.payload.copy(validation = Some(contradicted))), source, policy, merge = true) shouldBe a[Consequence.Failure[?]]
       }
-      take(V.completedC(result.copy(payload = result.payload.copy(validation = Some(selected.copy(sourceRevision = "99")))),
-        source, policy, merge = true)) shouldBe ()
+      Given("Spec: docs/spec/repository-sync-native-merge-repair.md; Rule: R6; Example: C1; existing E9 retained checks belong to another actual candidate source")
+      val crossed = result.copy(payload = result.payload.copy(validation = Some(selected.copy(sourceRevision = "99"))))
+      When("completedC consumes the retained checks against the actual selected source")
+      val completed = V.completedC(crossed, source, policy, merge = true)
+      Then("checks from another candidate source are refused")
+      completed shouldBe a[Consequence.Failure[?]]
+    }
+  }
+
+  "Historical structural Git Receipt compatibility" should {
+    "roundtrip and reuse the exact old State and five-field Receipt schema without execution" in {
+      Given("R1: an ordinary pre-migration validation State with its original structural and product receipts")
+      val old = Json.obj("mode" -> Json.fromString("required"), "reason" -> Json.fromString(policy.reason),
+        "selected" -> Json.arr(Json.obj("identity" -> Json.fromString("focused"), "ordinal" -> Json.fromInt(1))),
+        "sourceRevision" -> Json.fromString("3"), "receipts" -> Json.fromValues(receipts.map(receipt => Json.obj(
+          "identity" -> Json.fromString(receipt.identity), "termination" -> Json.fromString(receipt.termination),
+          "exitCode" -> Json.fromInt(receipt.exitCode.get), "stdout" -> Json.fromString(receipt.stdout),
+          "stderr" -> Json.fromString(receipt.stderr)))))
+      When("the existing codec reads those historical facts and the current acceptance policy reuses them")
+      val restored = V.stateCodec.decode(old).toOption.get
+      val accepted = V.successful(restored.receipts, merge = true)
+      Then("the exact original schema and selected facts survive without a process request or policy version")
+      restored shouldBe state
+      V.stateCodec.encode(restored) shouldBe old
+      accepted shouldBe true
+      V.successful(V.stateCodec.decode(V.stateCodec.encode(restored)).toOption.get.receipts, merge = true) shouldBe true
+      old.hcursor.downField("receipts").focus.get.asArray.get.foreach(receipt =>
+        receipt.asObject.get.keys.toSet shouldBe Set("identity", "termination", "exitCode", "stdout", "stderr"))
+    }
+
+    "preserve clean single and inherited findings while rejecting shared opaque findings" in {
+      Given("R2: clean actual-exit receipts and complete historical exit-two structural findings")
+      val clean = V.Receipt("index-local", "exited", Some(0), "", "")
+      val local = clean.copy(exitCode = Some(2), stdout = "one.scala:7: trailing whitespace\r\n+ context\n")
+      val remote = clean.copy(identity = "index-remote", exitCode = Some(2), stdout = "other.scala:8: whitespace\n")
+      val product = V.Receipt("focused", "exited", Some(0), "Actual product output", "")
+      When("the unchanged application policy compares CNCF-decoded parent finding sets")
+      val cleanMerge = V.successful(Vector(clean, clean.copy(identity = "index-remote"), product))
+      val single = V.successful(Vector(local))
+      val nonmerge = V.successful(Vector(local, product), merge = false)
+      val inherited = V.successful(Vector(local, clean.copy(identity = "index-remote"), product))
+      val independent = V.successful(Vector(local, remote, product))
+      val shared = V.successful(Vector(local, remote.copy(stdout = local.stdout), product))
+      Then("a single structural sample retains its old acceptance and only shared parent findings block a merge")
+      cleanMerge shouldBe true
+      single shouldBe true
+      nonmerge shouldBe true
+      inherited shouldBe true
+      independent shouldBe true
+      shared shouldBe false
+      V.successful(Vector(clean, clean.copy(identity = "index-remote"), product.copy(exitCode = Some(7)))) shouldBe false
+    }
+
+    "refuse unsupported malformed missing and overbound retained structural receipts" in {
+      Given("R3: the historical schema can contain failed indeterminate incomplete or contradictory stored values")
+      val clean = V.Receipt("index-local", "exited", Some(0), "", "")
+      val invalid = Vector(clean.copy(termination = "indeterminate", exitCode = None),
+        clean.copy(exitCode = None), clean.copy(exitCode = null), clean.copy(stdout = null), clean.copy(stderr = null),
+        clean.copy(stdout = "unexpected"), clean.copy(stderr = "unexpected"), clean.copy(stdout = "\u0000"),
+        clean.copy(stdout = "\ud800"), clean.copy(exitCode = Some(2), stdout = "+ source only\n"),
+        clean.copy(exitCode = Some(2)), clean.copy(exitCode = Some(2), stdout = "finding", stderr = "warning"),
+        clean.copy(exitCode = Some(2), stdout = "é" * 32769), clean.copy(stderr = "x" * 65537),
+        clean.copy(exitCode = Some(1)), clean.copy(exitCode = Some(7)), clean.copy(exitCode = Some(128)))
+      When("retained admission checks completion exit UTF-8 byte bounds and NUL before CNCF's pure codec")
+      val accepted = invalid.map(receipt => V.successful(Vector(receipt)))
+      Then("none becomes a usable structural fact and no new execution is requested")
+      accepted shouldBe Vector.fill(invalid.size)(false)
+      V.successful(Vector(null.asInstanceOf[V.Receipt])) shouldBe false
+      V.successful(Vector(clean.copy(exitCode = Some(2), stdout = "x" * 65536))) shouldBe true
+    }
+
+    "retain admitted actual negative captures and leave malformed captures uncertain" in {
+      Given("R4: complete raw results from an ordinary failed or indeterminate selected check")
+      def capture(text: String): ProcessExecutionCapture = {
+        val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+        ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+      }
+      val failed = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), capture("actual failure\n"),
+        capture("diagnostic\n"), Vector.empty, 1L, "selected-check")
+      val unknown = failed.copy(termination = ProcessExecutionTermination.TimedOut)
+      When("the existing receipt admission stores only complete bounded strict actual text")
+      val failedReceipt = take(V.receiptC("index-local", failed))
+      val unknownReceipt = take(V.receiptC("index-local", unknown))
+      val malformed = Vector(failed.copy(stdout = failed.stdout.copy(truncated = true)),
+        failed.copy(stdout = failed.stdout.copy(byteCount = 0L)),
+        failed.copy(stdout = capture("x" * 65537)), failed.copy(stdout = capture("\u0000")),
+        failed.copy(stdout = ProcessExecutionCapture(Vector(0xff.toByte), 1L, false)))
+      Then("negative results keep their real receipt while refused capture supplies no fabricated result for replay")
+      failedReceipt shouldBe V.Receipt("index-local", "exited", Some(7), "actual failure\n", "diagnostic\n")
+      unknownReceipt shouldBe V.Receipt("index-local", "indeterminate", None, "actual failure\n", "diagnostic\n")
+      V.successful(Vector(failedReceipt)) shouldBe false
+      V.successful(Vector(unknownReceipt)) shouldBe false
+      malformed.foreach(result => V.receiptC("index-local", result).isSuccess shouldBe false)
     }
   }
 

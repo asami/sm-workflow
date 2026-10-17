@@ -49,6 +49,9 @@
           "name": "MergeReviewService"
         },
         {
+          "name": "MergeRepairService"
+        },
+        {
           "name": "SplitSemanticService"
         },
         {
@@ -62,6 +65,9 @@
         },
         {
           "name": "GoalPhaseSemanticAdmissionService"
+        },
+        {
+          "name": "NativeHostPreparationService"
         }
       ],
       "operations": [
@@ -172,6 +178,13 @@
         },
         {
           "service": "RepositorySyncService",
+          "name": "submitNativeMergeRepair",
+          "kind": "COMMAND",
+          "output": "RepositorySyncNativeMergeRepairSubmissionResult",
+          "input": "RepositorySyncNativeMergeRepairResult"
+        },
+        {
+          "service": "RepositorySyncService",
           "name": "submitRepositoryConflictDecision",
           "kind": "COMMAND",
           "output": "RepositorySyncHumanConflictSubmissionResult",
@@ -225,6 +238,20 @@
           "kind": "COMMAND",
           "input": "RepositorySyncNativeMergeReviewRequest",
           "output": "RepositorySyncNativeMergeReviewResult"
+        },
+        {
+          "service": "MergeRepairService",
+          "name": "repairNativePendingMerge",
+          "kind": "COMMAND",
+          "input": "RepositorySyncNativeMergeRepairRequest",
+          "output": "RepositorySyncNativeMergeRepairResult"
+        },
+        {
+          "service": "RepositorySyncSemanticAdmissionService",
+          "name": "admitNativeMergeRepair",
+          "kind": "COMMAND",
+          "input": "RepositorySyncNativeMergeRepairRequest",
+          "output": "RepositorySyncNativeMergeRepairSubmissionResult"
         },
         {
           "service": "SplitSemanticService",
@@ -302,6 +329,48 @@
           "kind": "COMMAND",
           "input": "GoalPhaseWorkRequest",
           "output": "GoalPhaseWorkSubmissionResult"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareGoalStart",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowGoalStartPreparationInput"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareRepositoryStart",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowRepositoryStartPreparationInput"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareSplitStart",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowSplitStartPreparationInput"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareRepositoryEffect",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowRepositoryEffectPreparationInput"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareAuthority",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowAuthorityPreparationInput"
+        },
+        {
+          "service": "NativeHostPreparationService",
+          "name": "prepareEvidence",
+          "kind": "COMMAND",
+          "output": "WorkflowPreparedImport",
+          "input": "WorkflowEvidencePreparationInput"
         }
       ],
       "types": [
@@ -779,6 +848,126 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "sbt",
+              "type": "WorkflowSbtValidationFacts",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowSbtTestSelection",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "testClasses",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "completedSuites",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "testsRun",
+              "type": "long",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowSbtValidationFacts",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "WorkflowSbtTestSelection",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeValidationCheck",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseNativeValidationView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scopeIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "candidate",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectedChecks",
+              "type": "GoalPhaseNativeValidationCheck",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "checks",
+              "type": "GoalPhaseNativeCheckReceipt",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -1288,6 +1477,77 @@
         },
         {
           "name": "RepositorySyncNativeMergeReviewSubmissionResult",
+          "kind": "value",
+          "fields": []
+        },
+        {
+          "name": "RepositorySyncNativeMergeRepairFile",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "path",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "text",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeRepairRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "review",
+              "type": "RepositorySyncNativeMergeReviewRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "RepositorySyncNativeMergeReviewFinding",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "files",
+              "type": "RepositorySyncNativeMergeRepairFile",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeRepairResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "decision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "replacements",
+              "type": "RepositorySyncNativeMergeRepairFile",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncNativeMergeRepairSubmissionResult",
           "kind": "value",
           "fields": []
         },
@@ -2312,6 +2572,390 @@
           "name": "RepositorySyncBoundaryLifecycle",
           "kind": "statemachine",
           "fields": []
+        },
+        {
+          "name": "WorkflowGoalStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "plan",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "planCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowRepositoryStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowSplitStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "allocationReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "allocation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "occurredAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "collection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowRepositoryEffectPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "effect",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "occurredAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "collection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowAuthorityPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "request",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "occurredAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "collection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowEvidencePreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "family",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "request",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "result",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "executionEvidence",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "issuer",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "occurredAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "collection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparedImport",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "datastore",
+              "type": "WorkflowPreparedImportCollection",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparedImportCollection",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "collection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "records",
+              "type": "WorkflowPreparedImportRow",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparedImportRow",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionPayload",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "selectedPlanPayload",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "nativeHostEvidencePayload",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
         }
       ],
       "entities": []

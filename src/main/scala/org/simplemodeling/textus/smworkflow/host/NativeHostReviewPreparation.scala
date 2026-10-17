@@ -1,0 +1,158 @@
+package org.simplemodeling.textus.smworkflow.host
+
+import io.circe.Json
+import java.time.Instant
+import org.goldenport.Consequence
+import org.goldenport.record.Record
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseNativeWork, NativeHostEvidence,
+  RepositorySyncNativeMergeReview, ThreeWorkflowHostEvidencePorts, WorkflowSbtValidation}
+import io.circe.syntax.*
+import org.simplemodeling.textus.smworkflow.value as V
+
+/** Passive preparation of managed review input using the existing v7 codec.
+  * The independent host owns the review and provisioning of the returned row.
+  * @since   Oct. 14, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
+  */
+object NativeHostReviewPreparation {
+  final case class Prepared(recordIdentity: String, record: Record)
+
+  private val _handle_names = Vector("componentIdentity" -> "component_identity",
+    "workflowIdentity" -> "workflow_identity", "workflowRevision" -> "workflow_revision",
+    "instanceIdentity" -> "instance_identity", "protocolVersion" -> "protocol_version")
+  private val _goal_names = Vector("sourceRevision" -> "source_revision", "workKind" -> "work_kind",
+    "checksReceipt" -> "checks_receipt", "changedPaths" -> "changed_paths",
+    "effectiveAcceptance" -> "effective_acceptance")
+  private val _repository_names = Vector("validatedRevision" -> "validated_revision", "localTip" -> "local_tip",
+    "remoteTip" -> "remote_tip", "indexTree" -> "index_tree", "validationMode" -> "validation_mode",
+    "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks")
+  private val _check_names = Vector("exitCode" -> "exit_code")
+  private val _selection_names = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites",
+    "testsRun" -> "tests_run")
+
+  def goalC(context: V.WorkflowHostReviewContext, result: V.GoalPhaseWorkResult,
+    resultReference: V.WorkflowArtifactReference, executionEvidence: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant): Consequence[Prepared] =
+    if (result == null || result.outcome == null || result.findings == null ||
+        result.findings.exists(_ == null) || (result.outcome == "repair" && result.summary == null))
+      Consequence.stateConflict("Goal review preparation has no selected semantic result")
+    else if (result.acceptance == null) Consequence.stateConflict("Goal review preparation has no report option")
+    else {
+      val report = GoalPhaseAcceptanceBoundary.internalReport(result.acceptance)
+      report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC).flatMap(_ =>
+        _prepare_c(context, NativeHostEvidence.Purpose.GoalReview, GoalPhaseNativeWork.resultCodec.typeIdentity,
+          resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowHostEvidencePorts.goalReviewVerdict(
+            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report))))
+    }
+
+  def repositoryC(context: V.WorkflowHostReviewContext, result: V.RepositorySyncNativeMergeReviewResult,
+    resultReference: V.WorkflowArtifactReference, executionEvidence: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant): Consequence[Prepared] =
+    if (result == null || result.decision == null || result.findings == null || result.findings.exists(f =>
+        f == null || f.identity == null || f.affectedPaths == null || f.affectedPaths.exists(_ == null) ||
+          (result.decision == "repair" && f.rationale == null)))
+      Consequence.stateConflict("Repository review preparation has no selected semantic result")
+    else _prepare_c(context, NativeHostEvidence.Purpose.RepositoryReview, RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
+      resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowHostEvidencePorts.repositoryReviewVerdict(
+        RepositorySyncNativeMergeReview.Result(result.decision, result.rationale, result.findings.map(f =>
+          RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale)))))
+
+  private def _prepare_c(context: V.WorkflowHostReviewContext, purpose: NativeHostEvidence.Purpose,
+    typeIdentity: String, reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant, verdict: Json): Consequence[Prepared] = for {
+    _ <- if (context != null && context.purpose == purpose.identity && _exact(context.componentInstance) &&
+        context.target != null && context.completion != null && context.completion.handle != null &&
+        context.completion.typeIdentity == typeIdentity && _exact(context.completion.runId) &&
+        _exact(context.completion.continuationId) && reference != null && _exact(reference.identity) &&
+        _exact(reference.revision) && execution != null && execution.workerIdentity != null &&
+        execution.workerIdentity.exists(_exact) && _exact(issuer) && occurredAt != null) Consequence.unit
+      else Consequence.stateConflict("Review preparation requires its actual purpose, owner, completion, result reference, worker, issuer and time")
+    targetJson <- _json_c(context.target)
+    target <- _target_c(targetJson, purpose)
+    handleJson <- _json_c(context.completion.handle)
+    handle <- _project_c(handleJson, _handle_names)
+    _ <- if (handle.asObject.exists(o => Vector("componentIdentity", "workflowIdentity", "workflowRevision",
+        "instanceIdentity", "protocolVersion").forall(k => o(k).flatMap(_.asString).exists(_exact)))) Consequence.unit
+      else Consequence.stateConflict("Review preparation has an incomplete actual handle")
+    completion = Json.obj("handle" -> handle, "runId" -> Json.fromString(context.completion.runId),
+      "continuationId" -> Json.fromString(context.completion.continuationId),
+      "typeIdentity" -> Json.fromString(context.completion.typeIdentity))
+    binding = ThreeWorkflowHostEvidencePorts.reviewBinding(context.componentInstance,
+      if (purpose == NativeHostEvidence.Purpose.GoalReview) "goal-review" else "repository-review", target, completion,
+      Json.obj("identity" -> Json.fromString(reference.identity), "revision" -> Json.fromString(reference.revision)),
+      Json.fromString(execution.workerIdentity.get), verdict)
+    identity = ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision)
+    evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, purpose.identity, identity,
+      reference.identity, reference.revision, issuer, execution.workerIdentity.get, binding, occurredAt.toString)
+    encoded <- NativeHostEvidence.encodeStorageC(evidence)
+  } yield Prepared(NativeHostEvidence.recordIdentity(purpose, identity), Record.data(NativeHostEvidence.storageField -> encoded))
+
+  private def _project_c(value: Json, names: Vector[(String, String)]): Consequence[Json] =
+    value.asObject.map { fields =>
+      names.foldLeft(Consequence.success(fields)) { case (prior, (declaration, wire)) => prior.flatMap { selected =>
+        (selected(declaration), selected(wire)) match {
+          case (Some(left), Some(right)) if left != right =>
+            Consequence.stateConflict("Review preparation has contradictory names for " + declaration)
+          case (_, Some(right)) => Consequence.success(selected.remove(wire).add(declaration, right))
+          case _ => Consequence.success(selected)
+        }
+      }}.map(Json.fromJsonObject)
+    }.getOrElse(Consequence.stateConflict("Review preparation requires a structured object"))
+
+  private def _target_c(value: Json, purpose: NativeHostEvidence.Purpose): Consequence[Json] =
+    if (purpose == NativeHostEvidence.Purpose.GoalReview) for {
+      selected <- _project_c(value, _goal_names)
+      declaration <- selected.hcursor.downField("testChecks").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => _checks_c(value).map(Some(_))
+      }
+      wire <- selected.hcursor.downField("test_checks").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => _checks_c(value).map(Some(_))
+      }
+      _ <- if (declaration.nonEmpty && wire.nonEmpty && declaration != wire)
+        Consequence.stateConflict("Review preparation has contradictory names for testChecks") else Consequence.unit
+    } yield selected.mapObject { fields =>
+      val canonical = fields.remove("test_checks")
+      declaration.orElse(wire).fold(canonical)(checks => canonical.add("testChecks", checks))
+    }
+    else for {
+      selected <- _project_c(value, _repository_names)
+      checks <- selected.hcursor.downField("checks").focus.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Review preparation requires a checks array"))
+      projected <- _checks_c(checks)
+    } yield selected.mapObject(_.add("checks", projected))
+
+  private def _checks_c(value: Json): Consequence[Json] = for {
+    checks <- value.asArray.map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Review preparation requires a checks array"))
+    projected <- checks.foldLeft(Consequence.success(Vector.empty[Json])) { (prior, check) => for {
+        values <- prior
+        receipt <- _project_c(check, _check_names)
+        sbt <- receipt.hcursor.downField("sbt").focus match {
+          case None => Consequence.success(Option.empty[Json])
+          case Some(facts) => _sbt_c(facts).map(Some(_))
+        }
+        selected = receipt.mapObject(fields => io.circe.JsonObject.fromIterable(fields.toVector.filter {
+          case (key, _) => Set("identity", "termination", "exitCode")(key)
+        }))
+      } yield values :+ sbt.fold(selected)(facts => selected.mapObject(_.add("sbt", facts))) }
+  } yield Json.fromValues(projected)
+
+  private def _sbt_c(value: Json): Consequence[Json] = for {
+    fields <- value.asObject.map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Review preparation requires structured sbt facts"))
+    selection <- fields("selection") match {
+      case Some(value) if !value.isNull => _project_c(value, _selection_names).map(Some(_))
+      case value => Consequence.success(value)
+    }
+    normalized = Json.fromJsonObject(selection.fold(fields)(value => fields.add("selection", value)))
+    facts <- normalized.as[WorkflowSbtValidation.Facts].fold(error => Consequence.stateConflict(error.message), Consequence.success)
+  } yield facts.asJson
+
+  private def _json_c(record: Record): Consequence[Json] = record.toJsonStringC.flatMap(text =>
+    io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success))
+  private def _exact(value: String): Boolean =
+    value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
+}

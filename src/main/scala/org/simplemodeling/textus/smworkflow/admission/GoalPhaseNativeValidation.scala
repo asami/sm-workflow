@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
+import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
@@ -19,14 +19,27 @@ import RepositorySyncNativeMergeValidation as V
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
-  final case class Check(identity: String, ordinal: Int)
+  final case class Check(identity: String, ordinal: Int, kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test)
+  object Check {
+    given Encoder[Check] = Encoder.instance(value => {
+      val fields = Json.obj("identity" -> value.identity.asJson, "ordinal" -> value.ordinal.asJson)
+      if (value.kind == WorkflowSbtValidation.Kind.Test) fields else fields.mapObject(_.add("kind", value.kind.asJson))
+    })
+    given Decoder[Check] = Decoder.instance(cursor => for {
+      identity <- cursor.get[String]("identity")
+      ordinal <- cursor.get[Int]("ordinal")
+      kind <- WorkflowSbtValidation.checkKind(cursor)
+    } yield Check(identity, ordinal, kind))
+  }
   final case class Policy(identity: String, revision: Int, checks: Vector[Check]) {
     def validateC: Consequence[Unit] =
       if (id(identity) && revision > 0 && checks != null && checks.nonEmpty && checks.size <= 16 &&
-          checks.forall(c => c != null && id(c.identity) && c.ordinal > 0 && c.ordinal <= 16) &&
+          checks.forall(c => c != null && id(c.identity) && c.kind != null && c.ordinal > 0 && c.ordinal <= 16) &&
           checks.map(_.identity).distinct.size == checks.size && checks.map(_.ordinal).distinct.size == checks.size)
         Consequence.unit else F.invalid("native validation host bindings are incomplete")
   }
@@ -70,7 +83,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case Some("failed") => "Actual failed or indeterminate checks are retained at Decision. No automatic replay or review acceptance."
       case _ => "A native check intent has no recorded result. Observe or request a genuine decision; checks are not automatically replayed."
     })
-  } yield wire
+  } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)))
 
   private def storeC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit]): Consequence[Store] = for {
@@ -96,22 +109,33 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def checksC(store: Store): Consequence[Saved] = {
     val initial = Saved(store.candidate.record, store.initial)
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
-      if (current.payload.receipts.size != index || !successful(current.payload.receipts)) Consequence.success(current)
-      else for {
-        _ <- store.preconditionsC
-        prepared <- store.saveC("check-intent-" + index, current.record, current.payload)
-        _ <- store.acknowledgeC("goal-check-prepared:" + check.identity)
-        actual <- E.repositoryValidationC(store.core, check.ordinal)
-        _ <- store.acknowledgeC("goal-check-executed:" + check.identity)
-        receipt <- V.receiptC(check.identity, actual)
-        saved <- store.saveC("check-result-" + index, prepared.record,
-          current.payload.copy(receipts = current.payload.receipts :+ receipt))
-        _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
-      } yield saved
+      if (current.payload.receipts.size != index || !successful(current.payload.receipts, store.initial.selected)) Consequence.success(current)
+      else store.loadC("check-result-" + index).flatMap {
+        case Some(saved) =>
+          if (store.compatible(saved.payload) && saved.payload.receipts.size == index + 1)
+            Consequence.success(saved)
+          else F.invalid("retained check result crosses its selected candidate or binding")
+        case None => store.loadC("check-intent-" + index).flatMap {
+          case Some(saved) =>
+            if (store.compatible(saved.payload) && saved.payload.receipts.size == index) Consequence.success(saved)
+            else F.invalid("retained check intent crosses its selected candidate or binding")
+          case None => for {
+            _ <- store.preconditionsC
+            prepared <- store.saveC("check-intent-" + index, current.record, current.payload)
+            _ <- store.acknowledgeC("goal-check-prepared:" + check.identity)
+            actual <- E.repositoryValidationC(store.core, check.ordinal, check.kind)
+            _ <- store.acknowledgeC("goal-check-executed:" + check.identity)
+            receipt <- V.sbtReceiptC(check.identity, check.kind, actual)
+            saved <- store.saveC("check-result-" + index, prepared.record,
+              current.payload.copy(receipts = current.payload.receipts :+ receipt))
+            _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
+          } yield saved
+        }
+      }
     }}.flatMap { current =>
-      if (current.payload.receipts.size == store.initial.selected.size || !successful(current.payload.receipts)) for {
+      if (current.payload.receipts.size == store.initial.selected.size || !successful(current.payload.receipts, store.initial.selected)) for {
         _ <- store.preconditionsC
-        passed = successful(current.payload.receipts)
+        passed = successful(current.payload.receipts, store.initial.selected)
         inspected <- store.controller.acceptC(O.CandidateObserved(store.initial.candidate))
         validated <- inspected.acceptC(O.ChecksObserved(store.initial.candidate, store.checks,
           store.reference("validation").identity, passed))
@@ -151,16 +175,23 @@ private[smworkflow] object GoalPhaseNativeValidation {
         F.history(from, "phase." + target, "ordered-validation:" + key), TypedValue(codec.typeIdentity, payload)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield Saved(saved.receipt.next, saved.receipt.payload.value)
+    def compatible(payload: Payload): Boolean =
+      payload.sourceRevision == initial.sourceRevision && payload.step == initial.step &&
+        payload.candidate == initial.candidate && payload.selected == initial.selected &&
+        payload.receipts.size <= payload.selected.size && payload.receipts.zip(payload.selected).forall((receipt, check) =>
+          receipt != null && receipt.identity == check.identity && receipt.sbt != null &&
+            receipt.sbt.fold(check.kind == WorkflowSbtValidation.Kind.Test)(facts =>
+              facts != null && facts.valid && facts.kind == check.kind))
     def completedC(saved: Saved): Consequence[Saved] = {
       val p = saved.payload
       val complete = p.outcome match {
-        case Some("passed") => p.receipts.size == p.selected.size && successful(p.receipts) &&
+        case Some("passed") => p.receipts.size == p.selected.size && successful(p.receipts, initial.selected) &&
           saved.record.currentProgression.contains(ProgressionReference("phase." + reviewStage))
-        case Some("failed") => p.receipts.nonEmpty && !successful(p.receipts) &&
+        case Some("failed") => p.receipts.nonEmpty && !successful(p.receipts, initial.selected) &&
           saved.record.currentProgression.contains(ProgressionReference("phase.Decision"))
         case _ => false
       }
-      if (complete) Consequence.success(saved) else F.invalid("retained check outcome is not its actual native successor")
+      if (complete && compatible(p)) Consequence.success(saved) else F.invalid("retained check outcome is not its actual native successor")
     }
     def preconditionsC: Consequence[Unit] = for {
       actual <- G.observeC(core)
@@ -177,7 +208,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
         "GoalPhase validation acknowledgement interrupted; retained intent is not replayed: " + stage)
     }
   }
-  private def successful(receipts: Vector[V.Receipt]) = receipts.forall(r => r.termination == "exited" && r.exitCode.contains(0))
+  private[admission] def successful(receipts: Vector[V.Receipt], selected: Vector[Check]): Boolean =
+    receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
+      receipt != null && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))
   private def covers(owner: String, path: String): Boolean = path == owner || path.startsWith(owner + "/")
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

@@ -9,7 +9,7 @@ import NativeHostEvidence.Purpose
 /** Selected Human direction, not a question/result copy certificate.
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object NativeHostHumanScope {
   def supports(purpose: Purpose): Boolean = Set(Purpose.GoalHuman, Purpose.RepositoryHuman)(purpose)
@@ -25,6 +25,9 @@ private[smworkflow] object NativeHostHumanScope {
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "humanAttestation" -> Json.obj(
       "kind" -> Json.fromString(if (purpose == Purpose.GoalHuman) "ordered-goal-direction" else "repository-conflict-direction"),
       "submittingParticipant" -> Json.fromString(participant), "question" -> question, "answer" -> answer))
+
+  private[smworkflow] def selectQuestion(question: Json, purpose: Purpose): Either[String, Json] =
+    obj(question).flatMap(questionTarget(_, purpose))
 
   private def questionTarget(input: JsonObject, purpose: Purpose): Either[String, Json] = for {
     fields <- strings(input, Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType"))
@@ -79,27 +82,57 @@ private[smworkflow] object NativeHostHumanScope {
     answer = fields.add("reference", reference)
   } yield Json.fromJsonObject(if (purpose == Purpose.GoalHuman) answer else answer.add("resolutions", Json.fromValues(resolutions)))
 
-  private[admission] def bindingC[W, A](owner: String, purpose: Purpose, question: WorkflowInteraction[W, Nothing],
-    answer: ContinuationResult[A], participant: String, source: Json, direction: Json): Consequence[Json] =
-    if (question == null || question.handle == null || answer == null || answer.result == null ||
-        answer.evidence == null || answer.resultReference == null || answer.evidence.workerIdentity.isEmpty)
-      invalid("actual Human question/answer target is absent")
-    else question.current match {
-      case decision: WorkflowContinuation.Decision[W] if decision.request != null && decision.request.input.nonEmpty &&
-          decision.request.resultType.nonEmpty =>
+  private[smworkflow] def questionBindingC[W](question: WorkflowInteraction[W, Nothing], source: Json): Consequence[Json] = {
+    if (question == null || question.handle == null || source == null) {
+      return invalid("actual Human question target is absent")
+    }
+    question.current match {
+      case decision: WorkflowContinuation.Decision[W] if decision.request != null =>
         val q = decision.request
-        Consequence.success(Json.obj("componentInstance" -> Json.fromString(owner), "humanAttestation" -> Json.obj(
-          "kind" -> Json.fromString(if (purpose == Purpose.GoalHuman) "ordered-goal-direction" else "repository-conflict-direction"),
-          "submittingParticipant" -> Json.fromString(participant), "question" -> Json.obj(
-            "handle" -> handleJson(question.handle), "runId" -> Json.fromString(q.runId.value),
+        if (q.input == null || q.input.isEmpty || q.input.get == null || q.resultType == null ||
+            q.resultType.isEmpty || q.resultType.get == null || q.runId == null || q.continuationId == null ||
+            q.requiredOperation == null || q.operation == null || q.completionOperation == null ||
+            question.handle.componentIdentity == null || question.handle.workflowIdentity == null ||
+            question.handle.workflowRevision == null || question.handle.instanceIdentity == null) {
+          invalid("actual Human question has no typed input/result or completion identity")
+        } else if (!Vector(q.runId.value, q.continuationId.value, q.requiredOperation.capability, q.input.get.typeIdentity,
+            q.resultType.get.value, q.operation.service, q.operation.operation, q.completionOperation.service,
+            q.completionOperation.operation, question.handle.componentIdentity.name, question.handle.workflowIdentity.value,
+            question.handle.workflowRevision.value, question.handle.instanceIdentity.value, question.handle.protocolVersion).forall(_exact)) {
+          invalid("actual Human question has an incomplete selected identity")
+        } else {
+          val selected = Json.obj("handle" -> handleJson(question.handle), "runId" -> Json.fromString(q.runId.value),
             "continuationId" -> Json.fromString(q.continuationId.value), "requiredOperation" -> Json.fromString(q.requiredOperation.capability),
             "operation" -> operationJson(q.operation), "inputType" -> Json.fromString(q.input.get.typeIdentity),
-            "resultType" -> Json.fromString(q.resultType.get.value), "completionOperation" -> operationJson(q.completionOperation),
-            "source" -> source),
-          "answer" -> direction.mapObject(_.add("reference", Json.obj("identity" -> Json.fromString(answer.resultReference.identity),
-            "revision" -> Json.fromString(answer.resultReference.revision))).add("worker", Json.fromString(answer.evidence.workerIdentity.get))))))
+            "resultType" -> Json.fromString(q.resultType.get.value), "completionOperation" -> operationJson(q.completionOperation), "source" -> source)
+          if (selected.asObject.exists(o => Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType")
+              .forall(k => o(k).flatMap(_.asString).exists(_exact))) &&
+              selected.hcursor.downField("handle").focus.flatMap(_.asObject).exists(_.values.forall(_.asString.exists(_exact))) &&
+              Vector(q.operation.service, q.operation.operation, q.completionOperation.service, q.completionOperation.operation).forall(_exact)) {
+            Consequence.success(selected)
+          } else invalid("actual Human question has an incomplete selected identity")
+        }
       case _ => invalid("actual Human question is not a Decision with typed input/result")
     }
+  }
+
+  private[smworkflow] def humanBinding(owner: String, purpose: Purpose, participant: String,
+    questionJson: Json, answerJson: Json): Json = Json.obj("componentInstance" -> Json.fromString(owner),
+    "humanAttestation" -> Json.obj("kind" -> Json.fromString(if (purpose == Purpose.GoalHuman)
+      "ordered-goal-direction" else "repository-conflict-direction"), "submittingParticipant" -> Json.fromString(participant),
+      "question" -> questionJson, "answer" -> answerJson))
+
+  private[admission] def bindingC[W, A](owner: String, purpose: Purpose, question: WorkflowInteraction[W, Nothing],
+    answer: ContinuationResult[A], participant: String, source: Json, direction: Json): Consequence[Json] = {
+    if (answer == null || answer.result == null || answer.evidence == null || answer.resultReference == null ||
+        answer.evidence.workerIdentity == null || answer.evidence.workerIdentity.isEmpty) {
+      invalid("actual Human question/answer target is absent")
+    } else questionBindingC(question, source).map(q => humanBinding(owner, purpose, participant, q,
+      direction.mapObject(_.add("reference", Json.obj("identity" -> Json.fromString(answer.resultReference.identity),
+        "revision" -> Json.fromString(answer.resultReference.revision))).add("worker", Json.fromString(answer.evidence.workerIdentity.get)))))
+  }
+
+  private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
 
   private[admission] def handleJson(value: WorkflowHandle): Json = Json.obj("componentIdentity" -> Json.fromString(value.componentIdentity.name),
     "workflowIdentity" -> Json.fromString(value.workflowIdentity.value), "workflowRevision" -> Json.fromString(value.workflowRevision.value),

@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 15, 2026
+ * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val limitKey = ComponentParameterKey.requiredInt("three-workflow.host.limit")
@@ -36,12 +37,36 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow)
       When("the native launcher publication set is compared with the generated operations")
       val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet
-      Then("all fifteen operations have a generated counterpart and each owning advance has its paired Start")
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 15
+      val expected = Set(
+        "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
+        "GoalPhaseService.submitGoalPhaseOrderedDecision",
+        "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
+        "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
+        "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
+        "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
+        "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
+      Then("exactly the sixteen native operations have generated counterparts and each owning advance has its paired Start")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations shouldBe expected
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 16
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"
+    }
+
+    "bind generated passive preparation signatures without adding semantic MCP publication" in {
+      Given("the six generated preparation declarations and unchanged workflow publication boundary")
+      val declared = SmWorkflowComponent.NativeHostPreparationServiceService
+      When("the normal preparation service binds its actual generated metadata")
+      val bound = NativeHostPreparationServiceAssembly.bind
+      Then("every actual operation retains its concrete input and output contract while publication stays workflow owned")
+      bound.name shouldBe declared.name
+      bound.operations.operations.map(_.name) shouldBe declared.operations.operations.map(_.name)
+      bound.operations.operations.toVector.zip(declared.operations.operations.toVector).foreach { (actual, generated) =>
+        actual.specification.request shouldBe generated.specification.request
+        actual.specification.response shouldBe generated.specification.response
+      }
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations.exists(_.startsWith(bound.name + ".")) shouldBe false
     }
 
     "decode trusted host dependencies once only after canonical parameter resolution and refuse absence" in {

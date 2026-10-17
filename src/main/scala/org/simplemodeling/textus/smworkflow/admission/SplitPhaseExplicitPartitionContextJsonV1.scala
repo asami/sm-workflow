@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Passive storage data. Typed decoding is not executable context admission.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
   val schema = "sm-workflow.split-phase-partition-context.v1"
@@ -27,8 +27,23 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
   private given factsDecoder: Decoder[C.Facts] = deriveDecoder[C.Facts]
   private given recordEncoder: Encoder[C.Record] = deriveEncoder[C.Record]
   private given recordDecoder: Decoder[C.Record] = deriveDecoder[C.Record]
+  private given templateOwnerEncoder: Encoder[C.TemplateOwner] = deriveEncoder[C.TemplateOwner]
+  private given templateOwnerDecoder: Decoder[C.TemplateOwner] = deriveDecoder[C.TemplateOwner]
+  private given templateEncoder: Encoder[C.Template] = deriveEncoder[C.Template]
+  private given templateDecoder: Decoder[C.Template] = deriveDecoder[C.Template]
 
-  def encodeC(value: C.Record): Consequence[String] = _json_c(value).flatMap { json =>
+  def encodeC(value: C.Record): Consequence[String] = _encode_c(value)
+
+  def encodeTemplateC(value: C.Template): Consequence[String] = _encode_c(value)
+
+  /** Decode only the pre-Start consumed projection of the current v1 row. */
+  def decodeTemplateC(reference: S.ContextReference, raw: String): Consequence[C.Template] =
+    _parse_c(raw).flatMap(_decode_json_c[C.Template]).flatMap { value =>
+      if (value.reference == reference) Consequence.success(value)
+      else Consequence.stateConflict("SplitPhase partition context selected reference differs")
+    }
+
+  private def _encode_c[A: Encoder](value: A): Consequence[String] = _json_c(value).flatMap { json =>
     val raw = _prefix + json.noSpaces
     if (_bytes(raw) <= maximumPayloadBytes) Consequence.success(raw)
     else Consequence.stateConflict("SplitPhase partition context exceeds its UTF-8 storage limit")
@@ -40,24 +55,24 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
     }
 
   def decodeC(raw: String): Consequence[C.Record] =
+    _parse_c(raw).flatMap(_decode_json_c[C.Record])
+
+  private def _parse_c(raw: String): Consequence[Json] =
     if (raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(_prefix))
       Consequence.stateConflict("SplitPhase partition context encoding is unsupported")
-    else for {
-      json <- parser.parse(raw.substring(_prefix.length)).fold(
+    else parser.parse(raw.substring(_prefix.length)).fold(
         _ => Consequence.stateConflict("SplitPhase partition context JSON is invalid"), Consequence.success)
-      value <- _decode_json_c(json)
-    } yield value
 
-  private def _decode_json_c(json: Json): Consequence[C.Record] = for {
+  private def _decode_json_c[A: Decoder](json: Json): Consequence[A] = for {
     version <- json.hcursor.get[String]("schemaVersion").fold(
       _ => Consequence.stateConflict("SplitPhase partition context schema is missing"), Consequence.success)
     _ <- if (version == schema) Consequence.unit
       else Consequence.stateConflict("SplitPhase partition context schema differs")
-    value <- json.hcursor.get[C.Record]("payload").fold(
+    value <- json.hcursor.get[A]("payload").fold(
       _ => Consequence.stateConflict("SplitPhase partition context raw data is malformed"), Consequence.success)
   } yield value
 
-  private def _json_c(value: C.Record): Consequence[Json] =
+  private def _json_c[A: Encoder](value: A): Consequence[Json] =
     if (value == null) Consequence.stateConflict("SplitPhase partition context data is absent")
     else try Consequence.success(Json.obj(
       "schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson))

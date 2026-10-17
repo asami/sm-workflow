@@ -20,7 +20,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseRetainedReasoni
   * Public routing and provided completion are distinct required boundaries.
   *
   * @since Oct.  5, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 12, 2026
+  * @version Oct. 16, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseManagedReasoningIssue {
@@ -43,9 +44,11 @@ private[smworkflow] object SplitPhaseManagedReasoningIssue {
             result <- issued match {
               case Some(work) => Consequence.success(work)
               case None => for {
-                _ <- native.suspendC(plan.intent, plan.work)
+                selected <- SplitPhaseNativeExecution.bindIssuedC(plan.work, SplitPhaseNativeExecution.Work.Reasoning,
+                  declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
+                _ <- native.suspendC(plan.intent, selected)
                 _ <- observation()
-              } yield plan.work
+              } yield selected
             }
           } yield result
         }

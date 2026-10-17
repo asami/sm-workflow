@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import NativeHostEvidence.Purpose
-import NativeHostHumanScope.{handleJson, operationJson, handleTarget, operationTarget, referenceTarget}
+import NativeHostHumanScope.{handleTarget, operationTarget, referenceTarget}
 import SplitPhaseHumanAnswerVerification.AnswerContext
 import SplitPhaseHumanDirectionAnswerContract as A
 
@@ -13,51 +13,57 @@ import SplitPhaseHumanDirectionAnswerContract as A
   * question/frontier/Result transport copy certificate. Original issued meaning
   * and resolution interpretation remain owned by their Workflow records.
   * @since   Oct.  8, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object NativeHostSplitAnswerScope {
-  def bindingC(value: AnswerContext): Consequence[Json] = {
-    if (value == null || value.componentInstance == null || value.question == null || value.question.handle == null ||
-        value.result == null || value.result.result == null || value.result.resultReference == null)
-      return invalid("actual question/answer target is absent")
-    value.question.current match {
-      case decision: WorkflowContinuation.Decision[?] if decision.request != null =>
-        val q = decision.request
-        val r = value.result
-        if (q.input == null || q.input.isEmpty || q.input.get == null || q.resultType == null || q.resultType.isEmpty)
-          return invalid("typed question input/result is absent")
-        val source = q.input.get.value match {
-          case input: SplitPhaseNativeHumanDirection.Input if q.input.get.typeIdentity == SplitPhaseNativeHumanDirection.inputCodec.typeIdentity &&
-              input.context != null && input.checkpoint != null && input.scopeCheckpoint != null => Right(Json.obj(
+  def sourceC(question: WorkflowInteraction[?, Nothing]): Consequence[Json] = {
+    if (question == null) return invalid("actual question is absent")
+    question.current match {
+      case decision: WorkflowContinuation.Decision[?] if decision.request != null && decision.request.input != null &&
+          decision.request.input.exists(_ != null) =>
+        val typed = decision.request.input.get
+        val selected = typed.value match {
+          case input: SplitPhaseNativeHumanDirection.Input if typed.typeIdentity == SplitPhaseNativeHumanDirection.inputCodec.typeIdentity &&
+              input.context != null && input.checkpoint != null && input.scopeCheckpoint != null &&
+              Vector(input.context.identity, input.context.revision, input.checkpoint.identity, input.checkpoint.revision,
+                input.scopeCheckpoint.identity, input.scopeCheckpoint.revision).forall(_ != null) => Right(Json.obj(
             "kind" -> Json.fromString("scope"), "context" -> ref(input.context.identity, input.context.revision),
             "checkpoint" -> ref(input.checkpoint.identity, input.checkpoint.revision),
             "scopeCheckpoint" -> ref(input.scopeCheckpoint.identity, input.scopeCheckpoint.revision)))
-          case input: SplitPhaseReasoningHumanDirection.Input if q.input.get.typeIdentity == SplitPhaseReasoningHumanDirection.inputCodec.typeIdentity && input.context != null =>
+          case input: SplitPhaseReasoningHumanDirection.Input if typed.typeIdentity == SplitPhaseReasoningHumanDirection.inputCodec.typeIdentity && input.request != null =>
             reasoningSource(input)
           case _ => Left("Split Human evidence has no actual Scope or Reasoning target")
         }
-        val direction = r.result.value match {
-          case A.Answer.ProvideResolution(reference) if reference != null => Right(Json.obj("choice" -> Json.fromString("ProvideResolution"),
-            "resolution" -> ref(reference.identity, reference.revision)))
-          case A.Answer.Defer => Right(Json.obj("choice" -> Json.fromString("Defer"), "resolution" -> Json.Null))
-          case A.Answer.Cancel => Right(Json.obj("choice" -> Json.fromString("Cancel"), "resolution" -> Json.Null))
-          case _ => Left("Split Human answer has no actual direction")
-        }
-        val selected = for {
-          source <- source
-          answer <- direction
-          raw = Json.obj("componentInstance" -> Json.fromString(value.componentInstance.canonicalKey), "splitAnswerAttestation" -> Json.obj(
-            "submittingParticipant" -> Json.fromString(value.submittingParticipant), "question" -> Json.obj(
-              "handle" -> handleJson(value.question.handle), "runId" -> Json.fromString(q.runId.value),
-              "continuationId" -> Json.fromString(q.continuationId.value),
-              "requiredOperation" -> Json.fromString(q.requiredOperation.capability), "operation" -> operationJson(q.operation),
-              "inputType" -> Json.fromString(q.input.get.typeIdentity), "resultType" -> Json.fromString(q.resultType.get.value),
-              "completionOperation" -> operationJson(q.completionOperation),
-              "source" -> source), "answer" -> answer.mapObject(_.add("reference", ref(r.resultReference.identity, r.resultReference.revision)))))
-        } yield raw
         selected.fold(Consequence.stateConflict(_), Consequence.success)
-      case _ => invalid("actual question is not a Decision")
+      case _ => invalid("actual question is not a typed Decision")
     }
+  }
+
+  def questionBindingC(question: WorkflowInteraction[?, Nothing]): Consequence[Json] = for {
+    source <- sourceC(question)
+    selected <- NativeHostHumanScope.questionBindingC(question, source)
+  } yield selected
+
+  def binding(owner: String, participant: String, questionJson: Json, answerJson: Json): Json =
+    Json.obj("componentInstance" -> Json.fromString(owner), "splitAnswerAttestation" -> Json.obj(
+      "submittingParticipant" -> Json.fromString(participant), "question" -> questionJson, "answer" -> answerJson))
+
+  def bindingC(value: AnswerContext): Consequence[Json] = {
+    if (value == null || value.componentInstance == null || value.result == null || value.result.result == null ||
+        value.result.resultReference == null) return invalid("actual question/answer target is absent")
+    val r = value.result
+    val direction = r.result.value match {
+      case A.Answer.ProvideResolution(reference) if reference != null => Right(Json.obj("choice" -> Json.fromString("ProvideResolution"),
+        "resolution" -> ref(reference.identity, reference.revision)))
+      case A.Answer.Defer => Right(Json.obj("choice" -> Json.fromString("Defer"), "resolution" -> Json.Null))
+      case A.Answer.Cancel => Right(Json.obj("choice" -> Json.fromString("Cancel"), "resolution" -> Json.Null))
+      case _ => Left("Split Human answer has no actual direction")
+    }
+    for {
+      question <- questionBindingC(value.question)
+      answer <- direction.fold(Consequence.stateConflict(_), Consequence.success)
+    } yield binding(value.componentInstance.canonicalKey, value.submittingParticipant, question,
+      answer.mapObject(_.add("reference", ref(r.resultReference.identity, r.resultReference.revision))))
   }
 
   def select(purpose: Purpose, binding: Json): Either[String, Json] =
@@ -77,6 +83,8 @@ private[smworkflow] object NativeHostSplitAnswerScope {
     if (input == null || input.context == null) invalid("reasoning question target is absent")
     else reasoningSource(input)
       .fold(Consequence.stateConflict(_), Consequence.success)
+
+  private[smworkflow] def selectQuestion(question: Json): Either[String, Json] = obj(question).flatMap(questionTarget)
 
   private def questionTarget(input: JsonObject): Either[String, Json] = for {
     fields <- strings(input, Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType"))
@@ -110,7 +118,12 @@ private[smworkflow] object NativeHostSplitAnswerScope {
   } yield selected
 
   private def reasoningSource(input: SplitPhaseReasoningHumanDirection.Input): Either[String, Json] =
-    if (input == null || input.request == null || input.workIdentity == null || input.resultReference == null)
+    if (input == null || input.request == null || input.workIdentity == null || input.resultReference == null || input.request.context == null || input.request.source == null ||
+        input.request.authority == null || input.request.demand == null || input.request.items == null ||
+        input.request.items.exists(item => item == null || item.identity == null || item.identity.value == null) ||
+        Vector(input.request.context.identity, input.request.context.revision, input.request.source.identity, input.request.source.revision,
+          input.request.authority.identity, input.request.authority.revision, input.request.demand.identity, input.request.demand.revision,
+          input.resultReference.identity, input.resultReference.revision, input.workIdentity.value).exists(_ == null))
       Left("Split reasoning question target is absent")
     else {
       val request = input.request

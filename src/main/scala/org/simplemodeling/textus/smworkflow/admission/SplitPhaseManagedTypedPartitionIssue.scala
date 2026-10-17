@@ -17,7 +17,9 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Internal host capability. No public selector, pool, provider or retained call.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ *  version Oct. 12, 2026
+ * @version Oct. 16, 2026
+ * @author ASAMI, Tomoharu
  */
 private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
   final class Port private[SplitPhaseManagedTypedPartitionIssue] (
@@ -27,12 +29,19 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionIssue {
         Consequence.stateConflict("SplitPhase partition issue source is absent")
       else for {
         _ <- actorC(core, Some(binding.start.record.participantIdentity))
-        policy <- SplitPhasePartitionReplyAllocationPolicy.decodeC(core.component.get.subsystem.get.configuration)
-        allocated <- policy.allocateC(binding)
-        plan <- I.prepareC(binding, allocated)
-        issued <- withWorkForCallC(core) { work =>
+        issued <- withWorkForCallC(core) { native =>
           given ExecutionContext = core.executionContext
-          work.suspendC(plan.intent, plan.interaction).map(_ => plan.interaction)
+          native.loadC(binding.context.record.owner.continuation).flatMap {
+            case Some(saved) => Consequence.success(saved)
+            case None => for {
+              policy <- SplitPhasePartitionReplyAllocationPolicy.decodeC(core.component.get.subsystem.get.configuration)
+              allocated <- policy.allocateC(binding)
+              plan <- I.prepareC(binding, allocated)
+              selected <- SplitPhaseNativeExecution.bindIssuedC(plan.interaction, SplitPhaseNativeExecution.Work.Partition,
+                declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
+              _ <- native.suspendC(plan.intent, selected)
+            } yield selected
+          }
         }
       } yield issued
 

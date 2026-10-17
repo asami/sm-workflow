@@ -14,7 +14,7 @@ import RepositorySyncManagedFetch as Fetch
 /** Current trusted-host entry/owning-advance pair with session-resolved inputs.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   /** Normal host-record composition: no injected in-memory selection callback.
@@ -81,11 +81,17 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
       case Some(port) => port.bindHumanCompletionC(params)
       case None => Consequence.success(None)
     }
+    repair <- if (nativeProgression && conflictPolicy.semanticPaths.nonEmpty && validationPolicy.nonEmpty && review.nonEmpty)
+      RepositorySyncNativeMergeRepairContinuation.bindC(declaration, definition, conflictPolicy, validationPolicy.get,
+        review.get, nativeAcknowledgement).map(Some(_)) else Consequence.success(None)
+    repairCompletion <- if (repair.nonEmpty)
+      RepositorySyncNativeMergeRepairContinuation.bindCompletionC(params, declaration, definition, conflictPolicy,
+        validationPolicy.get, review.get).map(Some(_)) else Consequence.success(None)
   } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.RepositorySyncServiceService,
     spec.OperationDefinitionGroup(NonEmptyVector.of(
-    new Operation(true, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence),
-    new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence))
-    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector)))
+    new Operation(true, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair),
+    new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
+    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector)))
 
   private final class Operation(start: Boolean, declaration: Fetch.Declaration, definition: DefinitionBinding,
     acknowledgement: () => Consequence[Unit],
@@ -93,7 +99,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]) extends NativeWorkflowStartInput.Receiver
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]) extends NativeWorkflowStartInput.Receiver
       with NativeWorkflowAdvanceInput.Receiver {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       if (start) SmWorkflowComponent.RepositorySyncServiceService.StartRepositorySyncOperation
@@ -103,14 +110,14 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
       case value: NativeWorkflowStartInput.Repository =>
         Consequence.success(Action(request, Some(value -> selection), None,
           declaration, definition, acknowledgement, nativeProgression,
-          nativeAcknowledgement, conflicts, validationPolicy, review, convergence))
+          nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
       case _ => Consequence.stateConflict("RepositorySync Start requires its own business input")
     }
     def createAdvanceOperationRequestC(request: Request,
       input: NativeWorkflowAdvanceInput.Resolved): Consequence[OperationRequest] = input match {
       case NativeWorkflowAdvanceInput.Repository(identity) => Consequence.success(Action(request, None, Some(identity),
         declaration, definition, acknowledgement, nativeProgression,
-        nativeAcknowledgement, conflicts, validationPolicy, review, convergence))
+        nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
       case _ => Consequence.stateConflict("RepositorySync advance requires its own selected target")
     }
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
@@ -123,7 +130,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]) extends CommandAction {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
@@ -132,7 +140,7 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
           .map(NativeWorkflowOperationOutput.response(_))
         case None =>
           val result = if (nativeProgression) RepositorySyncNativeProgression.advanceC(identity.get, declaration, definition,
-            core, acknowledgement, nativeAcknowledgement, conflicts, validationPolicy, review, convergence)
+            core, acknowledgement, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair)
           else Fetch.advanceC(identity.get, declaration, definition, core, acknowledgement)
           result.map(NativeWorkflowOperationOutput.response(_))
       }

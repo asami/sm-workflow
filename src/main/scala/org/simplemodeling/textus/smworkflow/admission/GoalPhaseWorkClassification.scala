@@ -9,7 +9,9 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
   * neither a model, effort, worker identity nor execution permission is input.
   * The public skill-facing contract remains Phase 6 work.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWorkClassification {
   enum Kind { case PLANNING, ANALYSIS, DESIGN, CODING, REVIEW, JUDGMENT }
@@ -30,6 +32,15 @@ private[smworkflow] object GoalPhaseWorkClassification {
         admitted <- base.validateC
         _ <- if ((kind == Kind.REVIEW) == admitted.reviewRequired) Consequence.unit else
           Consequence.stateConflict("WorkClassification kind contradicts the assigned review boundary")
+        derived <- semanticRequirementC(admitted)
+      } yield derived
+
+    /** Split semantic kind is independent of its inherited review obligation. */
+    private[smworkflow] def semanticRequirementC(base: ExecutionRequirement): Consequence[ExecutionRequirement] =
+      if (base == null) Consequence.stateConflict("WorkClassification has no logical execution requirement")
+      else for {
+        _ <- validateC
+        admitted <- base.validateC
         level = if (kind == Kind.REVIEW) {
           if (complexity == Complexity.COMPLEX || footprint == Footprint.LARGE) ReasoningLevel.Critical
           else ReasoningLevel.Standard

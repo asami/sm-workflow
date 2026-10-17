@@ -8,7 +8,7 @@ import SplitPhaseTypedStartHumanVerification.StartContext
 /** Human consent to the actual Start target, not a stored command/definition
   * or unchanged source-body certificate. No later Apply/command grant follows.
   * @since   Oct.  8, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object NativeHostSplitStartScope {
   def bindingC(value: StartContext): Consequence[Json] = {
@@ -19,14 +19,26 @@ private[smworkflow] object NativeHostSplitStartScope {
         r.source == null || r.source.reference == null || r.source.phase == null ||
         r.source.authority == null || r.proposal == null || r.proposal.exists(p => p == null || p.reference == null))
       return Consequence.stateConflict("Human Start has no actual invocation/source target")
-    Consequence.success(Json.obj("componentInstance" -> Json.fromString(value.componentInstance.canonicalKey),
+    bindingFromInputsC(value.componentInstance.canonicalKey, r.participantIdentity, r.input,
+      r.source, r.proposal.map(_.reference))
+  }
+
+  def bindingFromInputsC(componentInstance: String, participantIdentity: String,
+    input: NativeWorkflowStartInput.Split, source: SplitPhaseExplicitProposalPrecheck.SourceRecord,
+    proposal: Option[SplitPhaseExplicitProposalPrecheck.ProposalReference]): Consequence[Json] = {
+    if (componentInstance == null || participantIdentity == null || input == null ||
+        source == null || source.reference == null || source.phase == null || source.authority == null ||
+        proposal == null || proposal.exists(_ == null)) {
+      return Consequence.stateConflict("Human Start has no actual invocation/source target")
+    }
+    Consequence.success(Json.obj("componentInstance" -> Json.fromString(componentInstance),
       "startAttestation" -> Json.obj(
-        "participantIdentity" -> Json.fromString(r.participantIdentity),
-        "input" -> SplitPhaseTypedStartJsonV1.inputJson(r.input),
-        "source" -> Json.obj("reference" -> reference(r.source.reference.identity, r.source.reference.revision),
-          "phase" -> Json.fromString(r.source.phase.value),
-          "authority" -> reference(r.source.authority.identity, r.source.authority.revision)),
-        "proposal" -> r.proposal.map(p => reference(p.reference.identity, p.reference.revision)).getOrElse(Json.Null))))
+        "participantIdentity" -> Json.fromString(participantIdentity),
+        "input" -> SplitPhaseTypedStartJsonV1.inputJson(input),
+        "source" -> Json.obj("reference" -> reference(source.reference.identity, source.reference.revision),
+          "phase" -> Json.fromString(source.phase.value),
+          "authority" -> reference(source.authority.identity, source.authority.revision)),
+        "proposal" -> proposal.map(p => reference(p.identity, p.revision)).getOrElse(Json.Null))))
   }
 
   def select(purpose: Purpose, binding: Json): Either[String, Json] =

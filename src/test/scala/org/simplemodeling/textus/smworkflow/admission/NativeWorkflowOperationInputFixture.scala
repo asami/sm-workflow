@@ -12,7 +12,9 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
   def selectedGoalInput(input: V.GoalPhaseStartInput): TypedValue[Json] = TypedValue("GoalPhaseStartInput", Json.obj(
@@ -47,7 +49,8 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
 
   private def _business_c(value: NativeWorkflowResultInput.Value): Consequence[(String, RecordPresentable)] = value match {
     case result: GoalPhaseNativeWork.Result => Consequence.success("result" ->
-      V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings))
+      V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
+        GoalPhaseAcceptanceBoundary.publicReport(result.acceptance)))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
       V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
     case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->
@@ -82,6 +85,9 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
     case result: RepositorySyncNativeMergeReview.Result => Consequence.success("result" ->
       V.RepositorySyncNativeMergeReviewResult(result.decision, result.rationale, result.findings.map(f =>
         V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale))))
+    case result: RepositorySyncNativeMergeRepair.Result => Consequence.success("result" ->
+      V.RepositorySyncNativeMergeRepairResult(result.decision, result.rationale,
+        result.replacements.map(file => V.RepositorySyncNativeMergeRepairFile(file.path, file.text))))
     case answer: RepositorySyncHumanConflict.Answer => Consequence.success("answer" ->
       V.RepositorySyncHumanConflictAnswer(answer.choice, answer.resolutions.map(_resolution), answer.rationale))
   }

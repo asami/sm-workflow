@@ -19,7 +19,9 @@ import GoalPhaseOrderedProgression as O
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
   val closingType = StateMachineResultTypeReference("GoalPhaseWorkSubmissionResult")
@@ -41,7 +43,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           plan <- issueAssignedC(draft, source.started.receipt.next, core)
           completed <- completionC(plan, core)
           wire <- completed match {
-            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
             case Some((state, next, result)) => continueAfterSemanticC(source, state, next, result, plan.input, core)
           }
         } yield wire
@@ -58,12 +60,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         reader <- source.storage.bindDecisionC(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec)
         question <- reader.loadC(identity)(using core.executionContext).flatMap(
           _.map(Consequence.success).getOrElse(F.invalid("pending ordered Human question is absent")))
-        output <- NativeWorkflowOperationOutput.goalHumanC(question)
+        output <- NativeWorkflowOperationOutput.goalHumanC(question, core)
       } yield output else for {
         reader <- source.storage.bindIssuedC(F.completionOperation, S.inputCodec)
         work <- reader.loadC(identity)(using core.executionContext).flatMap(
           _.map(Consequence.success).getOrElse(F.invalid("pending ordered work is absent")))
-        output <- NativeWorkflowOperationOutput.goalWorkRequestC(work)
+        output <- NativeWorkflowOperationOutput.goalWorkRequestC(work, core)
       } yield output
     } yield output
 
@@ -75,12 +77,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     private def prepareAssignedC(source: F.Session, input: S.Request, from: InstanceRecord,
       controller: O.State, candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Prepared] = for {
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(input.selectedPlan)
       required <- S.requiredC(input.kind)
       independent = isReview(input)
       requirement <- requirementC(input, required, independent)
-      bundle = ContextBundle(if (independent) "Independently review the actual candidate and selected native check outcomes"
+      bundle = ContextBundle((if (independent) "Independently review the actual candidate and selected native check outcomes"
         else if (input.kind == "RepairStep") "Repair only the assigned Step findings from the retained independent review"
-        else "Implement only the current Step of the complete selected ordered Phase plan",
+        else "Implement only the current Step of the complete selected ordered Phase plan") +
+        GoalPhaseAcceptanceBoundary.instructions(input.selectedPlan),
         Vector(ContextReference(input.selectedPlan.identity, input.selectedPlan.revision)), Vector.empty,
         ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(input.sourceRevision)))
       continuation = Continuation(StateMachineRunIdentity(from.identity.value), assignedId(source, input),
@@ -121,8 +125,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           }}
       classification match {
         // Reconstruct semantic work from its retained selected Plan, never
-        // from a later Component profile mapping. The execution boundary
-        // resolves concrete profiles when invoking work, not during readback.
+        // from a later Component profile mapping. Only fresh issue after an
+        // absent issued-row lookup binds disposition; reconstruction stays semantic.
         case Some(value) => value.requirementC(base)
         case None => Consequence.success(base) // Current Plan classification is optional business input.
       }
@@ -171,7 +175,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             plan <- issueAssignedC(draft, value.record, core)
             completed <- completionC(plan, core)
             response <- completed match {
-              case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+              case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
               case Some((state, next, result)) =>
                 if (state.stage == O.Stage.Repair) continueRepairC(source, state, next, plan.input.review, core)
                 else if (state.stage == O.Stage.Closing && d.closureInstallation.nonEmpty)
@@ -228,8 +232,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Some(work) => consumeIssuedC(plan, work)
         case None => for {
           _ <- plan.candidate.map(GoalPhaseNativeValidation.preconditionsC(plan.source, d, core, _, plan.controller)).getOrElse(Consequence.unit)
-          saved <- issued.suspendC(plan.intent, plan.work)(using core.executionContext)
-        } yield plan
+          work <- GoalPhaseNativeExecution.bindIssuedC(plan.work, d.executionProfiles, d.executionOrigin)
+          saved <- issued.suspendC(plan.intent, work)(using core.executionContext)
+        } yield plan.copy(work = work)
       }
     } yield selected
 
@@ -271,7 +276,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       plan <- issueAssignedC(draft, from, core)
       completed <- completionC(plan, core)
       wire <- completed match {
-        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
         case Some((state, next, result)) => continueAfterSemanticC(source, state, next, result, plan.input, core)
       }
     } yield wire
@@ -289,14 +294,18 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       closed <- GoalPhaseNativeClosure.advanceC(source, d, core, from, controller, acknowledgement)
       current <- F.sessionC(source.current.identity.value, d, definition, core)
       wire <- closed match {
-        case None => F.waitC(current.current, "Ordered Step commit remains open",
-          "Actual Step commit authority is unavailable or the prepared commit has no recorded result. No automatic replay; the current Step and Phase remain open.")
+        case None => for {
+          input <- GoalPhaseNativeClosure.inputC(from, controller)
+          context <- NativeHostAuthorityContext.stepC(core, input)
+          waiting <- F.waitC(current.current, "Ordered Step commit remains open",
+            "Actual Step commit authority is unavailable or the prepared commit has no recorded result. No automatic replay; the current Step and Phase remain open.")
+        } yield waiting.copy(authorityContext = Some(context))
         case Some(value) if value.controller.stage == O.Stage.Implementation => for {
           draft <- prepareNextImplementationC(current, value.controller, value.record)
           plan <- issueAssignedC(draft, value.record, core)
           completed <- completionC(plan, core)
           response <- completed match {
-            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+            case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
             case Some((state, next, result)) => continueAfterSemanticC(current, state, next, result, plan.input, core)
           }
         } yield response
@@ -338,7 +347,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       plan <- issueAssignedC(draft, from, core)
       completed <- completionC(plan, core)
       wire <- completed match {
-        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work)
+        case None => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
         case Some((nextState, next, result)) => if (isReview(plan.input)) {
           if (nextState.stage == O.Stage.Repair) continueRepairC(source.session, nextState, next, plan.input.review, core)
           else if (nextState.stage == O.Stage.Closing && d.closureInstallation.nonEmpty)

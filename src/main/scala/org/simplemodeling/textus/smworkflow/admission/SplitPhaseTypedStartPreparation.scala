@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 /**
  * Host data and private construction only, not actual human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 16, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartPreparation {
   final case class Reference(identity: String, revision: String)
@@ -18,7 +18,7 @@ private[smworkflow] object SplitPhaseTypedStartPreparation {
   final case class Allocation(reference: Reference, input: NativeWorkflowStartInput.Split,
     participantIdentity: String, source: P.SourceReference, proposal: Option[P.ProposalReference],
     planningContext: SplitPhaseExplicitPartitionSemantic.ContextReference)
-  final case class Invocation(prepared: Prepared, allocation: Reference, template: C.Record)
+  final case class Invocation(prepared: Prepared, allocation: Reference, template: C.Template)
   final case class Record(reference: Reference, instanceIdentity: InstanceIdentity,
     configuration: Configuration, input: NativeWorkflowStartInput.Split, participantIdentity: String,
     source: P.SourceRecord, proposal: Option[P.ProposalRecord]) {

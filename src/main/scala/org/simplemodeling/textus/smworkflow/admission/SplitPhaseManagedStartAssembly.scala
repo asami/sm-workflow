@@ -4,18 +4,23 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowInstancePersistence}
+import org.goldenport.cncf.workflow.{WorkflowComponentStorage, WorkflowInstancePersistence, WorkflowExecutionProfileMapping}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /**
  * Host-only composition on canonical Subsystem storage; owns neither pool nor provider.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ *  version Oct. 12, 2026
+ * @version Oct. 16, 2026
+ * @author ASAMI, Tomoharu
  */
 private[smworkflow] object SplitPhaseManagedStartAssembly {
   final case class Declaration(configuration: Configuration,
-    instances: DataStore.CollectionId, continuations: DataStore.CollectionId)
+    instances: DataStore.CollectionId, continuations: DataStore.CollectionId,
+    executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
+    executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
+    executionClassifications: Option[SplitPhaseNativeExecution.Classifications] = None)
 
   final case class PersistenceBinding(definition: DefinitionBinding,
     configuration: Configuration, instances: WorkflowInstancePersistence, storage: WorkflowComponentStorage)
@@ -28,6 +33,8 @@ private[smworkflow] object SplitPhaseManagedStartAssembly {
         declaration.configuration == null || declaration.instances == null || declaration.continuations == null)
       Consequence.configurationInvalid("SplitPhase managed persistence assembly is incomplete")
     else for {
+      _ <- SplitPhaseNativeExecution.validateC(declaration.executionClassifications,
+        declaration.executionProfiles, declaration.executionOrigin)
       definition <- catalog.definition.validateC
       storage <- WorkflowComponentStorage.bindC(params, SmWorkflowComponent.componentId,
         declaration.configuration, Vector(definition), declaration.instances, declaration.continuations)

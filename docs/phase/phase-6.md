@@ -1,940 +1,940 @@
-# Phase 6: Abstract Thinking Modes, Skill Integration and Execution Requirements
+# Phase 6: Typed Thinking Modes and Real Skill/Client Completion
 
-Status: planned
-Planned: 2026-10-03
-Depends on: Phase 5 / Phase 5.1, Phase 5.2 complete migration and Phase 5.3 common Workflow loop / minimal data access, CNCF Phase 80 minimum execution-requirement extension
+status=in-progress
+split_full_test_policy=final-only
+split_full_validation_method=sbt-full-suite
+split_validation_bootstrap=none
+validation_ownership=aggregate-deferred
+aggregate_validation_owner=PHASE-6.3
+aggregate_validation_sequence=["PHASE-6","PHASE-6.1","PHASE-6.2","PHASE-6.3"]
+depends_on=phase-5.3.md
+Planned: 2026-10-03; scope partition applied 2026-10-13.
+Owner: sm-workflow. Successor: [Phase 6.1](phase-6.1.md).
+Current status: in progress; S6-01 has passed its protected independent Step
+review. Step acceptance commits and the sole Phase review/release remain pending.
+Update rule: the Phase owner updates this projection at accepted work boundaries;
+keep the original Goal/history and reconcile the shared checklist with actual
+validation and independent acceptance before closing an item.
+Closure basis: the Phase 6 owned rows in the
+[shared checklist](managed-test-suites-phase-checklist.md); unchecked acceptance
+rows prevent Phase completion.
 
-Consume the [Phase 5.3](phase-5.3.md) common Workflow loop, business-typed
-Operations and one-session-per-execution contract, retaining
-[Phase 5.2](phase-5.2.md)'s removal of redundant control inputs: the
-client supplies session context and actual required parameters/results, not
-copies of Workflow's internal revision/snapshot/issued envelope. This runtime
-boundary does not predefine thinking modes or task-specific skill semantics;
-those and actual CLI/skill wiring remain Phase 6 work. Integration must not
-reintroduce unnecessary copy/unchanged-content validation.
+Current acceptance projection (2026-10-17): the complete S6-01 accumulator and
+all 24 original independent repair obligations are accepted at Step scope.
+Repair79/streak0, the original Goal/start/binding/bases and epoch1 are retained;
+no Phase full review has been consumed. The Phase 6 owned checklist rows are
+accepted. Earlier intermediate pending statements below retain their historical
+scope; they do not override this current projection. Local evidence remains in
+the active private workflow storage; it is not a repository evidence package.
 
-Skills are new consumers, not legacy clients to preserve. Use only the Phase 5.3
-business-typed minimal interface; do not teach universal JSON-string business
-parameters or old full commands/envelopes, and do not add compatibility
-wrappers, optional legacy modes or fallback routes in skills/CLI clients.
-Phases 5.2 and 5.3 own removal of those interfaces before this connected implementation.
-Start declares business inputs, result submission uses the requested result type,
-and Human answers use their answer type. JSON is a transport representation;
-Start returns one session ID per execution; Advance and replies use that ID
-without additional execution, context or request selectors.
+## Goal and connected implementation order
 
-The owning user's 2026-10-11 normal-use limit also carries into integration:
-duplicate/competing answers are caller responsibility; intermediate exclusion,
-unique winners, complete-history retention, identical replay and intermediate
-recovery are not promised. Use normal Operation calls and a new execution from
-the beginning after abandonment. Do not rebuild removed checks in a skill or
-client, and do not automatically add new guarantees or review findings to scope.
+Complete one bounded GoalPhase development task through an actual installed
+`sm-*` skill and ordinary client, using the accepted runtime. Fix the selected
+abstract analysis/design/implementation/review modes, context, result types,
+provider placement/independence and minimum Effective Acceptance Boundary together.
+Prove issued work -> actual semantic execution -> typed result -> workflow
+continuation -> independent review and the task's real completion.
 
-## Execution plan — 2026-10-07
+Establish the admitted main route through the bounded CNCF Phase 110 early slice
+below before extending the driver. Existing Process-based file I/O is not an
+accepted effect path. Phase 6.1 retains the extended command lifecycle/live-plan/
+staged-quality connection and consumes this corrected foundation. Phase 6 does
+not simulate those as completed or wait for the entire upstream roadmap. Apply
+the shared scope and adopted integration direction for concrete missing generic
+capabilities. Real skill execution and task completion are required here;
+standalone skill text, command-only tests or fabricated results cannot close it.
 
-Reuse the accepted Phase 5 runtime and Phase 2 workflow. The first skill-connected
-driver is a bounded GoalPhase development task with implementation, independent
-review and actual completion. Preserve the requirements below; this is work
-ordering, not a new compatibility layer or a reduction to skill text alone.
+### NICT delivery-friction observations — adopted 2026-10-17
 
-The 2026-10-07 user clarification places command/CLI wiring here together with
-skill integration. Phase 2 functionally tests public Operations by direct calls;
-it does not launch a command process per test. Phase 6 connects the command
-invocation/result boundary to those same Operation implementations, then verifies
-actual skill use. Do not duplicate Workflow logic in the command or skill layer.
+This is clarification of existing requirements from the
+[NICT incident handoff](../journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
+not a new item ID, acceptance gate or retrospective reopening. Preserve current
+issued work, in-flight results and applicable validation/review evidence. The
+owning development chat adopts it at the next ordinary planning/dispatch boundary;
+this document edit does not mutate live plans, requests, counters or Goal state.
+
+For the existing session/common-loop and actual skill/result requirements, use
+the NICT stale-context, identifier-transcription and guessed-inspector incidents
+as concrete examples of friction to avoid. The normal runtime/host carries the
+selected request, canonical IDs and returned values directly; AI performs issued
+semantic work, not clerical reconstruction or reinterpretation of bound execution
+inputs. Accepted Submit can lead to the next ready Advance/request without a new
+human instruction or an AI turn solely to acknowledge/advance. Preserve actual
+Human, Wait, rejection, error and Terminal semantics; do not blindly loop/retry.
+
+Observe this in the already selected installed command driver, reusing applicable
+actual evidence. The remote client remains the previously adopted lightweight
+connection check, not another full driver. Do not reopen accepted work or repeat
+an entire scenario just to attach this incident reference. Execution-status
+classification stays with 6.1, FIX/recording with 6.2, integrated FINAL reuse with
+6.3; these successor duties do not become new Phase 6 prerequisites.
+
+### Existing CNCF client use — adopted correction 2026-10-13
+
+User direction: after clarifying that CNCF already provides Operation REST access
+and that a separate adapter is unnecessary, the user instructed
+「そのように軌道修正して。」. Use the existing CNCF Operation API, CLI and REST
+entry points directly. Phase 6 does not require a sm-workflow-specific REST
+transport, endpoint implementation, duplicate operation routing table or client
+adapter. The planned S6-01B `WorkflowRestTransport` implementation is withdrawn.
+
+Return the remaining S6-01 work to parent PLAN before implementation. Demonstrate
+the existing Start/Advance/named Submit entry points from the actual installed
+skill/client, retain each canonical session ID with its owning task across
+independent calls, and consume the actual typed acceptance and messages. Preserve
+outer/child routing and the existing error, Human, Wait and Terminal semantics.
+Evaluate the already authored S6-01A `WorkflowClient` against direct use of the
+existing CNCF facilities; its abstraction is not a prerequisite or acceptance
+requirement. Remove redundant product code through the parent's revised owned
+implementation boundary rather than extending it to justify its existence.
+
+The real task, thinking-mode/result, provider, independence, configuration and
+Effective Acceptance Boundary requirements below remain unchanged. Passing
+adapter tests alone cannot establish their completion. Preserve the original
+Phase scope, review history, repair accounting and aggregate validation owner.
+
+### Command operation and lightweight client connection — adopted direction 2026-10-14
+
+The user's latest actual direction is:
+「当面の運用はsm-workflowコマンドを使うので、client機能は軽い接続テストだけでよいよ。」
+Current operational execution and real installed task completion use the ordinary
+sm-workflow `command` route. Client qualification is one ordinary FQN Start
+connection to the selected owned server, consuming the actual typed Start result
+and retaining/rereading its canonical ID. This explicitly supersedes earlier
+remote Advance/task-depth wording only to that extent; a connection is not task
+completion and no complete remote family matrix is required here.
+
+All business Operations remain available through normal client with the same
+Operation selectors and named business parameters as command. CNCF configuration
+owns execution placement and connection settings. Semantic skill definitions
+and invocation procedures remain unchanged. Raw client-http remains internal
+deprecated compatibility only and is excluded from new public recipes and
+scenarios; callers do not construct transport paths or bodies.
+
+Actual installed three-family command skill loops, issued Goal child routing,
+real bounded GoalPhase task completion, modes/results, provider replacement and
+fallback, independence, minimum Effective Acceptance Boundary and genuine Human
+and review requirements remain mandatory. The error, Wait, Terminal, Step
+validation/acceptance commit, full Phase review and local release obligations,
+historical direction, checklist/split ownership and PHASE-6.3 aggregate validation
+declarations are preserved. This adoption makes no successful-run or acceptance
+claim.
+
+### Security requirement projection — adopted 2026-10-14
+
+Apply the [security review profile](phase-6-security-review-profile.md) and
+[development governance](../notes/textus-security-development-governance.md)
+through the existing mode/context/result/provider and minimum Effective
+Acceptance Boundary contract. For the changed Slice, identify applicable
+security requirements and the actual evidence/provider needs. AI/developer
+identity and a successful invocation do not themselves establish assurance.
+
+Select an additional security check only when an explicitly adopted contract
+is affected by this change and existing applicable evidence does not cover it,
+as defined in the profile's applicability rule. Unaffected/out-of-scope cases
+need no security execution; covered cases reuse evidence. Neither creates a
+provider wait or Admission Gap. Reuse CNCF/Cozy's actual delivered guarantees
+for ordinary use satisfying their contract conditions; do not repeat producer
+security tests or inspect their internals as routine application acceptance.
+Use existing requirement/evidence information, not a new check-selection ledger
+or per-Step certificate. Selecting this profile is not itself a new test trigger.
+
+Establish the real installed skill/command main route with the bounded effect
+correction below first, retaining the
+lightweight client connection scope above. Phase 6.1 owns the security content
+of Step evidence, 6.2 owns FIX/recording/dependency handling, and 6.3 owns the
+cross-Step Phase assessment and Final reuse. CNCF107/Cozy83/CBD16 plans do not
+make their complete implementation a new prerequisite for this initial driver.
+Missing evidence required by the selected boundary remains an explicit gap.
+
+Apply the added criteria to remaining work at the next planning/dispatch
+boundary. Preserve issued work, actual results, history and repair counts;
+reassess only evidence affected by the changed requirements. No extra review
+workflow or management hashes, duplicate checks or whole-tree copies are added.
+
+### Safety correction: managed Git/SBT and Capability Laundering — 2026-10-15
+
+The nine original product main methods and executable launch routes have been
+removed from source and the current packaged JAR. The packaged artifact retains
+the normal preparation Operation assembly and pure input helpers. The six normal passive
+preparation Operations and actual raw StartupImport-to-Start path have passed
+their selected checks. Actual validation188B passed 206 checks in 20 selected
+suites, including all seven normal SBT cases, catalog/DirectPreview, the six
+preparation signatures and corrected supplied-null Field predicates. Normal
+and lost post-append acknowledgement Goal episodes retain the actual typed
+completion and child result/receipt over repeated same-runtime and fresh-runtime
+Advances, with exactly three real checks, no fourth launch and no duplicate
+completion acknowledgement. The five native completion guard cases also passed.
+These historical results retain their declared scope. Actual193 additionally
+passed 139 checks in 21 selected suites for all 18 common-fixture consumers and
+3 generated ABI/completion/retention guards. This qualifies the current normal
+route within that scope; original installed whole-Phase obligations remain open.
+The CNCF adapter uses a direct normal sbt executable with typed results, and
+actually used Git operations use CNCF's typed Git DSL. Git's
+executable/workspace/environment/argv/limits/result and conflict interpretation
+belong to CNCF; workflow judgment, selections, durable intent/result and
+uncertainty stay here. No old generic fallback or extra main/JVM is accepted.
+The [normal typed SBT connection](../spec/normal-typed-sbt-validation.md) is an
+intermediate Slice: isolated saved-result readback does not complete the owning
+workflow, SBX01, Step or Phase. The selected Repository success/failure and
+one-Step Goal StepCheck/PhaseCheck/RepositoryCheck cases are now enabled with
+clean public typed Git/SBT composition. The Goal scenarios cover both normal and
+lost completion acknowledgement, retaining exactly three checks on repeated and
+fresh-runtime reads, qualified in188B. Existing Goal, history, review/acceptance duties
+and all open checklist items remain in force.
+
+Git/SBT protected DSL methods must be thin typed UoW intent constructors.
+Constructing intent performs no permission/service/binding checks or launch;
+the interpreter checks the actual current UoW context, admits and executes the
+operation, then returns its typed result through the same workflow. The SBT
+producer uses `UnitOfWorkOp.SbtExec` as one External occurrence and the existing
+managed process lifecycle internally; generic SBT-tagged ProcessExec cannot
+bypass this boundary. Host-assembly validation is separate from these
+operation-time checks.
+
+The current intermediate producer evidence qualifies the UoW SBT boundary
+(90 producer checks plus three isolated normal-tool success/failure/unknown
+fixtures), the typed Git boundary (134 producer checks), and the compatible
+index-check codec addition (57 checks). These results cover their declared
+producer/current-context, parser, lifecycle and isolated connection conditions;
+they do not establish full primary workflow/product-test assurance, installed
+operator/reviewer acceptance, File retirement, Step acceptance or Phase closure.
+The SBT fixtures use direct normal sbt and native tool locks, with no scripted
+or global wrapper prerequisite in product configuration.
+
+Primary Git consumer migration has completed bounded source-level parent
+qualification under [normal typed Git workflow](../spec/normal-typed-git-workflow.md):
+61 checks in seven suites plus five representative checks in one suite passed
+(66 checks in eight suites), with no failed, aborted, canceled, ignored or pending
+checks. Public Equal/LocalAhead/RemoteAhead first-loop and reopen results,
+terminal/history/reflog stability, missing Fetch grant and unknown check intent
+without replay passed. Independent review and Step/Phase acceptance remain
+pending. The explicit Git-only no-product-tests fixtures do not establish
+required product validation or genuine installed operator acceptance. Existing
+full conflict/Goal/repair acceptance remains required after the common-fixture
+qualification.
+
+The ordinary-read and File Workspace producers are delivered in their bounded
+producer scope. The primary five File consumers now use current-UoW typed
+capture/observe/apply, trusted logical document mapping and business compare/edit
+while preserving native saved intent and no replay. All nine original product
+main classes are now removed from source and the actual packaged JAR, including
+the six NativeHost routes replaced by
+[normal typed passive preparation Operations](../spec/normal-host-preparation-operations.md).
+Current normal-wire evidence covers all six preparation signatures, exact
+storage output and actual raw StartupImport-to-Start consumption. Supplied
+Record/finite-question-JSON null-presence and the strict preparation matrix passed
+actual188B, as did the exact existing sixteen-operation publication catalog.
+That scope does not qualify broader installed work. This does not change the
+general decoder or raw-text null behavior. Independent review and Step/Phase
+acceptance remain required; producer evidence alone does not qualify consumer
+composition. See
+[normal typed File workflow](../spec/normal-typed-file-workflow.md).
+`ThreeWorkflowManagedRepositoryFixture` now authors clean public typed Git/SBT
+plans for Repository/Goal/Repair and tracks the five real build inputs in the
+original initial commit without changing setup indices or rewriting builds on
+reopen. The generic Java validation definitions and repair JVM probe are removed.
+Repair C1–C4 use actual ordinary SBT product text for connected success, assertion
+failure, managed timeout and NUL-refused receipt/retained intent. All 18 concrete
+shared-fixture consumers (9 direct, 8 via `NativeHostPreparationManagedFixture`,
+1 via `NativeHostPreparationOperationFixture`) plus 3 generated
+ABI/completion/retention guards passed actual193: 139 checks in 21 selected
+suites. This common-fixture migration has scoped normal-route qualification. The two File conflict negatives explicitly retain missing SBT
+permission and required-check denial/Wait on initial boot and reopen, with no
+SBT marker. The five Git-only cases retain their selected empty test policy and
+no unsolicited validation. Original full conflict/repair/Goal acceptance remains
+mandatory.
+The preserved old installed host `phase6-command-main-2` replaces its residual
+generic launch definitions with strict public V3 typed Git configuration for
+exactly its 21 original capabilities on the same native target. The host retains
+its required validation policy with empty SBT declarations and no TestOnly target;
+the legacy Git diff document check supplies no SBT product-test target. Its
+original malformed captured pending repair request, native history and staged
+native worktree remain preserved. The fresh normal host
+`phase6-testonly-command-1` fixes two genuine specification classes as its
+TestOnly target. Actual native validation failed at Decision: SBT exited 1 in
+`cozyGenerate` because `cozy` could not be found in the configured SBT environment
+PATH. The normally installed `cozy` resides in the Coursier bin directory, which
+is absent from that fixed PATH. The fixed PATH correction is selected and
+configured for the fresh normal local task `phase6-testonly-command-2`, with
+the installed Coursier bin immediately after the selected JDK bin. The old
+lossy repair request and failed validation history remain preserved. Actual
+host 2 validation reached Cozy generation and both selected specification suites,
+then failed before shared-fixture runtime boot because the normal SBT JVM lacked
+the explicit `smworkflow.spec.sbt` executable property. `runtimeTestOnly` prepares
+artifacts but does not supply this prerequisite; suites using
+`ThreeWorkflowManagedRepositoryFixture` require it through
+`TypedSbtHostPlanFixture`. The fresh normal local task
+`phase6-testonly-command-3` used runtime-owned fixed
+`JAVA_TOOL_OPTIONS` whose complete value is
+`"-Dsmworkflow.spec.sbt=/Users/asami/Library/Application Support/Coursier/bin/sbt"`.
+Direct JVM parsing accepts that quoted property, but the actual normal SBT shell
+runner splits the option and appends tokens retaining quote characters to Java
+argv. Host 3's actual native validation therefore failed at launch before tests.
+The fresh normal local task `phase6-testonly-command-4` is selected and configured
+with the unquoted single fixed option
+`-Dsmworkflow.spec.sbt=/Users/asami/Library/Caches/Coursier/arc/https/github.com/sbt/sbt/releases/download/v2.0.9/sbt-2.0.9.zip/sbt/bin/sbt`.
+This path without whitespace is the existing ordinary installed script selected
+by the actual Coursier entry. The host's `sbtExecutable` remains
+`/Users/asami/Library/Application Support/Coursier/bin/sbt`; no application argv
+or mutable caller environment is exposed. The corrected PATH, same two genuine
+classes, finite limits and typed Git/SBT workspaces/grants remain selected.
+All three failed native sessions retain their saved intent/results and staged
+guides. Host 4's actual ordinary native typed TestOnly execution passed both
+selected specification suites, with 25 tests, raw exit zero and verified
+`test-only` / `succeeded` selection facts. The check-running public Advance
+issued `Request` / `ReviewStep` in the same call. Its genuine saved check facts
+appear in `work.review.checks` and the host review context; that Request needs
+no top-level validation view. This qualifies the fixed PATH and corrected
+ordinary-script prerequisite behavior from cycles 52 and 54; cycle 53 remains
+failed history. All three cycles still require the same original protected Step
+review; the fourteen M2 findings open at that historical point remain part of
+the preserved review history.
+
+Internal validation returns Wait with the actual validation view, but its owning
+continuation consumes passed validation and can issue review in the same public
+Advance when review is installed. Without review installation, or for unfinished
+or failed validation, the existing Wait fallback remains available. The earlier
+mandatory public Wait/separate-first-review expectation was wrong; its failed
+expectation and the saved issued message containing that wording remain history.
+The additive optional Goal validation view remains implemented and
+focused-qualified, including two ordinary observations of retained failed
+validation. It projects saved raw/typed facts without replay.
+
+Retained-result reopening is qualified: Host 4's third ordinary public Advance
+reopened the same pending `ReviewStep` and issued context, candidate, check
+receipt and retained typed facts, including both selected suites and 25 passed
+tests. The early pending-suspension branch precedes check preparation and
+execution; no instrumented launch-counter claim is made. This reopening is no
+extra mandatory transition before initial review, automatic loop or independent
+review result. At that historical point Host 4's staged candidate guide contained
+the known public-ordering defect; its issued candidate, request and failed-branch
+history remain preserved. Positive checks grant no independent review, Human,
+effect or closure authority.
+
+The subsequent bounded installed task `phase6-testonly-command-6` completed its
+selected guide change through the ordinary command route, admitted Step/Phase
+review and native repository closure, with actual local/tracking/remote
+convergence. That bounded task is complete; its already consumed remote
+authority is not replayable. This does not establish the newly added application
+quality contract's installed/provider/all-family acceptance or close the original
+Phase. The earlier failed sessions and protected review history remain intact.
+The normal command/HTTP composition evidence for P6-SBX04 is available in the
+[native client installation contract](../spec/native-client-installation.md):
+E3 admits the explicitly granted Client POST to its exact owned origin; E7
+refuses an absent HTTP plan despite supplied baseurl/business metadata; E8
+refuses POST under a GET-only grant; E9 refuses normal typed Git observations
+without component capability grants. Reuse the delivered CNCF classification
+and ordinary-shell refusal guarantees under their documented scope. This
+bounded evidence is ready for the existing independent Step acceptance; it
+does not itself check the P6-SBX04 box or close the Step or Phase. P6-SBX05
+remains open for independent acceptance; the bounded CBD16 validation and actual
+consumer results are recorded below. Imported plans or documents
+do not establish feature or provider availability. Reuse applicable producer
+guarantees under the existing security applicability rule; no new review workflow
+is introduced.
+Installed command and lightweight client, mode/session/provider tasks, bounded
+CBD16 integration and minimum Boundary behavior now have applicable bounded
+execution/specification evidence. The original Step's pending independent
+review obligations and acceptance commits, and the sole epoch1 full Phase review
+and final local release remain unfinished. These
+intermediate deliveries do not close SBX01, Step or Phase. Existing Goal/history,
+planning/security adoption, Phase 6.1/6.2/6.3 responsibilities and Phase 6.3's sole
+aggregate full-suite boundary remain unchanged.
+
+The initial bounded CBD managed-effect adoption was authored on 2026-10-17. The
+human-approved CBD main participant supplies the ordinary private
+`CbdSupport.CbdReviewAdmin.reviewManagedEffects` typed QUERY, connected through
+CNCF ProviderCall/UnitOfWork to the shared `ExternalEffectUsage` classifier.
+This diagnoses explicitly supplied source observations for the original
+Process-to-file misuse and typed Git/SBT/resource routes; it neither scans
+source nor performs the observed effects. The existing P6-SBX05 checkbox stays
+open for the existing independent Step acceptance; subsequent normal validation
+and source-observation command results are recorded below. The initial authored
+snapshot preserved the original Goal/start/binding and bases, epoch1,
+repair77/streak0 and 22 pending obligations at that time, protected Step review
+history and Phase 6.3's sole aggregate full-suite ownership. See the
+[adoption journal](../journal/2026/10/2026-10-17-phase-6-cbd-managed-effect-adoption.md).
+
+The authorized existing CBD/CNCF dependency integration is authored as of
+2026-10-17 under S6-01D35. CNCF main now contains the selected static Component
+Capability discovery and raw Component Usage package transport, plus the narrow
+fresh-UnitOfWork context facade. CBD's knowledge consumer uses the current
+schema/path carrier declaration and exact Component/release admission, without
+carrier-derived digest controls; resource metadata retains its own consumer
+contract. The normal managed-effect QUERY remains connected. This is initial
+implementation within the same Phase 6 Goal, not acceptance of CBD11/14 or
+CNCF78 as whole Phases. Normal build/selected tests and the actual normal provider
+command with sm-workflow source observations have now been checked: normal
+generation/compilation and 270 focused tests in 25 suites succeeded. Normal
+`cozyPrepareRuntime` supplies the complete development runtime evidence set;
+`CncfMain --component-dev-dir` selects the current admitted CBD checkout.
+Six actual QUERY results distinguish historical laundering/direct Process use,
+current typed Git/SBT/resource use and an unknown command; missing SBT operation
+returns a genuine input 400. This is bounded classification of supplied source
+observations, not source scanning or overall security acceptance. The private
+harness's camelCase output assumption failed; parent intake qualified the
+original successful command responses against generated snake_case wire fields,
+preserving that failure without replay. The original protected Step review has
+accepted this bounded integration and P6-SBX05. The whole Phase remains in
+progress pending Step commits and Phase review/release, with the original
+Goal/start/binding/bases, epoch1, repair79/streak0 and PHASE-6.3 full-suite
+ownership. All 24 original independent repair obligations are resolved. See the
+[dependency integration journal](../journal/2026/10/2026-10-17-phase-6-cbd-cncf-dependency-integration.md).
+
+Adopt the GitHub Phase 6 correction from `cd73fe3` into this split plan. The
+observed defect is Process Execution used for ordinary file reads/writes:
+`ObserveSelectedDocuments`, `ApplySelectedDocuments`, `CaptureConflictFiles`,
+`ObserveConflictFiles` and `ApplyConflictFiles`. A registered executable and
+fixed argv alone do not authorize its filesystem effects. Classify this as
+Capability Laundering; remove the route rather than approving its Java wrapper.
+Detailed inventory, upstream references and rationale are in the
+[integration journal](../journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
+
+Phase 6 drives CNCF Phase 110 P110-01 and the necessary P110-04 process/HTTP,
+Git/SBT and shared External Effect classification slice. CNCF owns enforcement
+and typed adapters; CBD Support Phase 16 consumes that vocabulary for the bounded
+Capability Laundering rule slice; sm-workflow selects and consumes their contracts.
+This is producer work during Phase 6, not activation or completion of whole
+producer Phases.
+
+Required policy:
+
+- Process Execution and outbound HTTP/provider access are default-deny and
+  explicitly opt-in. CAR metadata requests authority; deployment/runtime
+  configuration grants it. A request, AI result or command name grants nothing.
+- Git and SBT use CNCF-owned typed semantic operations. Runtime adapters own
+  executable, actual cwd, environment, bounded arguments/results and effects.
+  No arbitrary argv, shell text, SBT expression or `runMain` escape is exposed
+  to a semantic worker as a substitute for denied file/network/store access.
+- Other required commands need explicit command-name opt-in plus a trusted
+  registered definition and admitted effect scope. `sh`, `bash`, `zsh` and
+  equivalent interpreters are outside ordinary command opt-in. Registering
+  `java`, an interpreter or a wrapper is not a blanket effect grant.
+- Ordinary logical resource reads use `read_resource` / `read_resource_text`;
+  development-file manipulation uses the CNCF File Workspace internal DSL below.
+  Both use normal CNCF runtime read limits, not an application-selected safety
+  variant such as `read_resource_bounded`. Do not replace the old subprocess
+  with ambient `Files` access inside the CAR. Implement needed generic behavior
+  in CNCF; preserve workspace scope, non-overwrite semantics and truthful errors
+  without copying the old lock/check machinery.
+
+Connected development order (main route first):
+
+1. Bind the minimum shared effect vocabulary, logical workspace/target and runtime
+   limits contract without building the whole SandboxContext hierarchy; implement
+   and consume the CNCF SBT DSL for an actually needed build/test. Return its
+   actual outcome to the same workflow. Narrow `Test / compile` runtime/JAR
+   preparation to the integration tests that need it; ordinary focused tests
+   must not prepare all runtime artifacts merely to run.
+2. Connect CNCF Git DSL status/diff/selected commit to that driver. Map existing
+   Git intentions to semantic operations, adding only operations needed by the
+   selected path; remote operations retain separate destination/effect scope.
+3. Fold bounded acquisition into ordinary resource reads, then implement the
+   minimum protected File Workspace DSL (`file_read_text` / `file_write_text`
+   first) and migrate the five Process-based file operations. Prove the connected
+   read -> edit -> write -> SBT test -> Git diff -> same-workflow continuation,
+   plus the affected workspace/limit boundaries and old-route non-admission.
+   Pure reads must not need a writable lock file or a separate JVM.
+4. Prove default denial of an unregistered command and outbound destination,
+   scoped opt-in success, and exclusion of ordinary shell opt-in on the same
+   route with bounded executable specifications.
+5. Consume CBD16's minimum laundering diagnostics using CNCF's classification,
+   then complete the installed command/skill -> real work -> typed result ->
+   workflow continuation driver. Reuse CNCF evidence; add only the consumer
+   composition checks missing from that evidence.
+
+The sole delivery checklist for this correction is
+[P6-SBX01..05](managed-test-suites-phase-checklist.md#phase-6-managed-effects-correction--2026-10-15),
+all owned by Phase 6. The five steps are ordering, not five extra review/approval
+cycles. P6-EX/PS/SQ ownership stays with 6.1/6.3; their accepted foundation is not
+reimplemented or retested in each child. Keep ordinary launcher startup and the
+lightweight client connection; no routine `sbt runMain` startup or file access.
+
+Full `Server ∩ Client ∩ Operation` SandboxContext, broad CAR Loading Admission,
+Client-to-Server propagation and Docker handoff remain in Phase 110/later
+adoption. The typed boundary reduces accidental/AI-generated misuse; this slice
+does not claim hostile-code containment or complete static effect inference.
+SBT/Git may launch their legitimate tool subprocesses under their admitted
+contract; the ban concerns using them to evade another capability boundary.
+
+#### Dedicated protected internal DSL — clarified 2026-10-15
+
+Expose operation-specific CNCF internal DSL methods such as `git_pull` and
+`sbt_test` in the protected Behavior operation layer between implementation code
+and UoW, alongside the existing `process_exec`/resource methods. Implementations
+compose these methods using the existing `ExecUowM` execution model; they do not
+construct `ProcessExecutionRequest` or invoke process drivers for Git/SBT.
+
+The vocabulary includes `git_status`, `git_diff`, `git_add`, `git_commit`,
+`git_fetch`, `git_pull`, `git_push`, `sbt_compile`, `sbt_test`, `sbt_test_only`
+and `sbt_package` as needed. This is the naming/design direction, not a demand
+to implement every method before the first working slice. `git_pull` carries
+explicit typed integration semantics rather than inheriting an unspecified
+merge/rebase policy; existing workflow-owned fetch/integration sequencing may
+use the smaller operations. Publication requires its own adopted use case.
+
+Each method accepts typed logical target/operation parameters and yields a
+typed outcome: Git observations/conflicts, build/test results and actual failure
+or unknown completion as appropriate. Target executables, cwd, environment,
+argv rendering and result interpretation belong to CNCF adapters. Neither
+`git(commandString)` / `sbt(taskString)` nor arbitrary extra arguments is an
+equivalent implementation of this contract. Plain identifiers/text are allowed
+inside typed parameters without becoming executable command expressions.
+
+The protected modifier is API visibility, not an authority grant. Each protected
+Git/SBT DSL method only constructs typed UoW intent, without permission, service,
+binding or admission checks. Interpretation under the actual current UoW
+ExecutionContext owns the operation checks and admission, invokes the CNCF
+adapter once through the managed execution lifecycle and returns its typed
+result. A pre-admitted generic ProcessExec is no fallback for Git/SBT intent.
+Reuse interpreter-owned enforcement once; do not add a second sm-workflow
+policy check. Do not claim Git/SBT effects are rollbackable merely because
+they compose in UoW. No separate executor or custom main is added.
+
+#### File Workspace DSL and ordinary read limits — adopted 2026-10-15
+
+Adopt the [GitHub design input at 959a869](https://github.com/asami/sm-workflow/blob/959a869/docs/journal/2026-10-15-file-workspace-dsl-safety-sandbox.md).
+The implementation handoff is the
+[File Workspace journal](../journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
+This refines P6-SBX03, not a new Phase or a second delivery checklist.
+
+Keep logical-resource reads on `read_resource` / `read_resource_text`. Move the
+current `read_resource_bounded` acquisition behavior behind the normal read
+contract and retire that public safety-variant DSL. Resolve the maximum read
+size from CNCF runtime/execution limits, apply it during acquisition, and do not
+fall back to an unlimited read. Applications/AI do not select a special safe API
+or supply the authority/limit through a work result. Reuse the proven acquisition
+and decoding behavior; validate the changed normal entry and limit resolution.
+
+Also adopt the [large-text/streaming design input at 91a7eaa](https://github.com/asami/sm-workflow/blob/91a7eaa/docs/journal/2026-10-15-file-workspace-large-text-streaming.md).
+The candidate default full-read cap is 1 MiB (1,048,576 bytes), resolved by CNCF
+runtime limits for both ordinary resource and file reads. This remains a design
+candidate, not a claim about the current deployed default. Confirm the configured
+default in the producer contract; do not weaken it just to consume large logs.
+
+For actual large-log inspection, select only needed partial operations from
+`file_read_head`, `file_read_tail`, `file_read_lines` and `file_search_text`.
+They return a bounded region; caller-requested lines/bytes cannot raise runtime
+caps. Do not load a whole large file and slice it afterwards, or accumulate an
+unbounded single line. Define location/range and truncation/continuation meaning
+for the selected operation so a partial result is not mistaken for a full read.
+Use tail -> search -> surrounding lines where that matches the actual workflow.
+Phase 6 adds only partial reads required by its real driver, not the whole menu.
+
+Preserve extension points for later `file_stream_lines` and
+`file_stream_line_chunks`. Streaming must eventually own close/cancel, bounded
+buffering/backpressure and runtime per-chunk/total limits under the same workspace
+authority. A 200-line window is an example, not a fixed grant/default. No full
+streaming subsystem, mandatory live-log scenario or fake whole-file-backed stream
+is part of this Phase 6 correction. The handoff records these later obligations.
+
+Add File Workspace operations in the same protected Behavior operation layer
+as Git/SBT, using existing CNCF effect/UoW conventions where applicable. Bind a
+logical workspace through ExecutionContext; the runtime resolves relative paths
+under its admitted root. Reuse this target binding across File/Git/SBT rather
+than inventing independent root registries or a second sm-workflow policy layer.
+This does not make the tools' effect permissions interchangeable.
+
+Authority is coarse per root: selected development workspace MANAGE/read-write,
+dependencies read-only unless separately admitted, and workflow state under its
+own bounded root. Reject root escape through traversal or alternate/symlink
+resolution. Do not introduce per-path ACL matrices. Workflow-selected files and
+write intent still determine the task's scope; root permission alone does not
+authorize editing every file. Workspace authority and read-size limits remain
+separate concerns, enforced in CNCF.
+
+Start with `file_read_text` and `file_write_text`. The three observe/capture
+purposes become reads plus in-process interpretation; the two apply purposes
+become typed writes plus application document/conflict semantics. Represent
+needed create-without-overwrite/update behavior explicitly. Temporary files,
+atomic replacement and cleanup needed by a write remain producer internals,
+not reasons to require consumer-visible move/delete operations. Add binary
+read/write, list/exists/mkdir/copy/move/delete only for an actual missing use case;
+copy/move, if adopted, require both endpoint authorities and cannot escape the
+selected workspace contract.
+
+Accept the normal edit/test/diff/continuation path and focused denial cases for
+root escape, write to a read-only dependency, read limit overflow and Process
+file-I/O laundering. Do not build a command/path/provider matrix or repeat the
+producer suite in each consumer. Preserve the prior 23-test producer evidence
+at its actual scope; it does not prove this new normal-read entry, File DSL or
+consumer integration. Reassess only changed contracts and uncovered composition.
+When a partial-read operation is selected, prove bounded retrieval on a file
+larger than the full-read cap and truthful partial-result semantics with focused
+producer/consumer evidence. Do not add tests for unimplemented streaming breadth.
+
+SBT -> Git -> File migration -> command/HTTP policy -> CBD/installed workflow
+remains the implementation order. Binding the common target/limits first is a
+small contract decision, not speculative File DSL implementation ahead of SBT.
+This slice uses existing admitted checkouts. It does not resume local worktree
+operations, create worktrees, implement Phase 7 overlays, or require complete
+hierarchical SandboxContext/Loading Admission/server propagation/Docker handoff.
+Phase 6.1 consumes the accepted File DSL; aggregate full validation stays at 6.3.
 
 ### Session identity lifecycle — 2026-10-12
 
-Consume Phase 5.2's minimal-input handoff and Phase 5.3's business types and
-one-session-per-execution contract. This supersedes the earlier multiple-target
-selection plan. The caller supplies an identity on every command/REST
-invocation, directly or through a client that explicitly attaches invocation
-context. An Operation without new business parameters still receives that
-identity. A process-local implicit session alone does not establish this client
-contract.
-
-Before implementing batch A, fix the following finite responsibility table for
-the supported client. Document concrete fields, retention location and examples
-alongside that client; do not leave these duties assigned to an unspecified host.
-
-| Concern | Required contract |
-| --- | --- |
-| Existing identity | A chat ID or another host ID may be proposed at Start when obtainable and usable for this one execution. Do not assume Codex exposes it or reuse it across several executions. |
-| No usable identity | Omit the proposed ID; sm-workflow Start allocates and returns the session ID as implemented in Phase 5.3. In both cases the client retains the canonical ID returned by Start. |
-| Retention | Name the caller-side storage location and owner. The client retrieves the same ID for subsequent independent invocations; the skill must not reconstruct it from prose or Workflow state. Persist only the needed routing references, not state snapshots or copied work envelopes. |
-| Propagation | Define the command argument and/or REST request field/context mapping for each supported transport. Start, advance, result submission and Human answers carry the same session identity to the existing runtime binding. Host-supplied context removes duplicate business arguments, not the identity transfer itself. |
-| Several executions | Each execution has its own session ID, including executions started from the same chat. Retain each returned ID with the corresponding development task. No candidate search or extra selection/instance/context/request identifier is exposed to the caller. |
-| Meaning | The ID locates workflow context; it does not grant execution permission. Existing caller authority and effect scope remain with their current owners. No TTL, hash, unchanged-state proof or new comparison ledger is introduced. |
-
-Connected acceptance, included in batch A and its integrated review:
-
-- [ ] P6-ID01: Demonstrate proposing an available chat/host ID and omitting it
-  when unavailable. In both cases retain the ID returned by Start at the
-  documented client location; no Codex-only assumption.
-- [ ] P6-ID02: Use the actual client across independent command processes or
-  REST requests for Start -> issued work -> result/Human answer as applicable
-  -> advance -> intended outcome. Read the retained ID and propagate it each
-  time; test-fixture injection of a prebuilt ExecutionContext is insufficient.
-- [ ] P6-ID03: Two different chats conduct independent developments through
-  the ordinary client with separate returned session IDs; their interleaved
-  calls reach only their own execution. A chat starting another execution retains
-  a distinct ID. No extra selector, candidate list or internal-state copy is
-  requested; missing/invalid IDs produce ordinary input errors.
-
-Use the selected practical driver and affected examples, not a new exhaustive
-transport, concurrency or recovery matrix. Normal continuation between calls
-does not add recovery of interrupted effects. These are Phase 6 integration
-conditions, not new release gates for Phase 5.2 or business-type work for 5.3.
+Document concrete client fields, retention owner/location and CLI/REST context
+mapping. Propose an available usable host/chat ID or omit it; retain the canonical
+ID returned by Start in both cases. Propagate it across independent calls. Different
+executions, including those in one chat, retain separate IDs with their tasks.
+No process-local-only session, prose reconstruction or extra target selector.
+The ID locates context and does not grant authority. P6-ID01..03 are the single
+current checklist entries; full adopted details remain in the historical plan.
 
 ### Common client loop and chat display — 2026-10-12
 
-Use the same loop for GoalPhase, SplitPhase and RepositorySync: Start and retain
-its session ID -> Advance -> process the returned work Request or obtain the
-Human answer -> call its named Submit Operation -> display the returned chat
-message -> Advance again after acceptance. No extra human instruction is needed
-for an accepted normal submission. Wait follows its stated condition, Terminal
-ends the loop, and errors are displayed/handled without success-path Advance.
+Start/retain ID -> Advance -> Request/Human -> named typed Submit -> display its
+actual message -> Advance after acceptance. Wait follows its stated condition;
+Terminal ends; errors/rejections do not trigger success-path Advance. Use typed
+acceptance, not prose inference, extra status/history queries or an AI-generated
+acknowledgement. Preserve a Goal's outer session and the issued child submission
+route. Apply this same client contract to all three workflow families; prove the
+selected GoalPhase driver now without claiming later integrated-family acceptance.
 
-Every submit result is designed by Phase 5.3 for chat display. Display its actual
-message with ordinary formatting and use its typed acceptance outcome for
-control. Do not dump internal JSON, infer acceptance from prose, reconstruct the
-outcome via extra status/history queries or add a model call for acknowledgement.
-Next-work selection belongs to Advance, not the display code or the worker skill.
-The host/client owns this loop; semantic skills process the assigned request and
-return the required result without recreating a workflow engine.
+### Abstract thinking modes and the skill interface
 
-The accepted priority is AI cost and structural simplicity over fewer transport
-calls. Display -> Advance after acceptance is deterministic client control, not
-an additional AI planning/decision step. Do not add combined Start/Submit-and-
-Advance variants or a batching mechanism to this delivery merely to reduce calls.
+Settle finite mode names and task/context/result/consuming-Operation mappings.
+Analysis identifies problem structure/constraints; design supplies concrete
+choices; implementation edits the assigned scope; review remains independent.
+Modes are semantic tasks, separate from reasoning effort, placement and model names.
+Use saved issued requests and the Phase 5.3 declared business values, never legacy
+universal string/full-command compatibility. Define incompatible-result errors.
 
-Include this behavior in the existing connected driver and integrated review:
-verify that work/Human submission messages are displayed before the next Advance,
-and that failure/Wait/Terminal do not cause unconditional next-loop calls.
-Runtime response semantics and removal of unnecessary information reads are
-Phase 5.3 obligations; Phase 6 connects their actual skill/client/chat use.
+Reuse generic ExecutionRequirement/Evidence for inline and delegated work,
+independence, configurable provider replacement, one unavailable-provider fallback,
+DECLINED distinct from BLOCKED/semantic failure, and one non-identical participant.
+Consume existing logical Component resources/hierarchical configuration; define
+project defaults and explicit adopted Goal/Phase boundary overrides through it.
+Carry the boundary in requests/results/Review/Admission. A provider cannot adopt
+extra assurance or infer mutation permission. Record attributable routing/outcome,
+validation/review and bounded usage/resource observations without a new registry.
 
-### Command execution ownership — 2026-10-12
-
-sm-workflow owns the whole command-execution activity, not merely recording a
-command that an AI worker runs. This applies to SBT, Git, test tools, generators,
-formatters, history maintenance, application/acceptance commands, packaging and
-authorized artifact placement/publication. Reuse existing tools and CNCF execution
-facilities; do not implement another compiler, Git engine or generic shell framework.
-
-The runtime selects the adopted operation, resolves the working directory, argv,
-environment and relevant inputs, starts the process, handles waiting/readiness,
-collects exit status and bounded diagnostics, records the actual result, performs
-owned cleanup and applies the defined next transition. Long-lived processes use
-the same ownership through shutdown; never stop an unrelated user-owned process.
-Failures remain actual execution outcomes. Do not blindly retry effects whose
-completion is unknown, claim a command succeeded from an AI summary, or add
-intermediate recovery guarantees withdrawn from the normal-use contract.
-
-AI owns semantic implementation/editing, diagnosis, review, conflict resolution
-and proposals for new validation/build behavior. A compile failure is collected
-by runtime and supplied to AI for diagnosis/fix; runtime runs the subsequent
-validation. A Git conflict yields semantic resolution work; runtime performs
-subsequent Git operations. An unfamiliar required tool/command follows the normal
-configuration/development decision path, not a fallback to AI shell execution.
-Do not send command work orders to AI runners, require AI log transcription, or
-ask AI to choose the next command after every process. AI file editing remains
-semantic work; its editor transport does not transfer build/Git execution ownership.
-
-The client's CLI/REST calls to sm-workflow are the entry transport, not recursive
-command work. Runtime consumes existing permission/effect scope and yields only
-where an actual decision is required; owning execution grants no new push,
-publication, deployment or dependency-edit authority. Product SBT/cache exclusion
-remains with SBT/Ivy/Coursier as already planned; do not add a machine-wide runtime
-mutex. Current repository development must still obey its separate SBT runner
-and serialization instructions while implementing this product.
-
-### Phase documents and live plan synchronization — 2026-10-12
-
-Phase documents/checklists are the external planning and progress interface.
-sm-workflow encodes their supported fields into typed internal plan data and
-executes from that data plus its owned execution state. The encoding is a working
-representation, not an independently authored plan, copied-source certificate or
-tamper-detection ledger. Phase documents own plan meaning; actual execution state
-and results remain runtime facts. Stable Phase/work-item IDs connect the two.
-
-Implement this ordinary live-use sequence in the same GoalPhase driver:
-
-1. At Start, read the selected Phase document set and encode items, dependencies,
-   acceptance conditions and supported configuration. Parse declared fields
-   deterministically; unresolved free-text meaning goes to bounded AI planning
-   and, where required, developer adoption. Do not ask AI to reinterpret the
-   entire plan on every iteration or treat arbitrary prose as executable commands.
-2. After receiving work results and before selecting/dispatching the next work,
-   refresh from the latest relevant documents. A next Advance after Wait also
-   refreshes before selection. Retain execution facts and map updates by item ID;
-   ordinary additions, ordering changes and clarified text do not themselves
-   require stopping or renewed approval within the existing scope.
-3. Keep an in-flight work assignment attributable to the conditions under which
-   it was issued. If its item is removed, its acceptance changes, or another
-   actual contradiction leaves applicability/continuation undecidable, retain
-   the result and ask the specific semantic/Human decision through the existing
-   route before accepting affected work or dispatching a conflicting successor.
-   Do not silently cancel a process, discard its result, or claim the revised
-   requirement is already satisfied. Missing/duplicate IDs and invalid dependency
-   references are ordinary input errors, not a demand for integrity proof.
-4. Project actual progress into the latest document's designated status/checklist
-   fields and result references. Read that target at write time and update only
-   owned fields, preserving current human/AI prose, ordering and plan edits.
-   A stale internal serialization must never replace the whole document. An
-   unresolved overlapping edit produces a specific conflict, not silent loss;
-   no general concurrent-document editor or recovery framework is required.
-
-A document checkbox alone cannot establish an unexecuted test, review or release.
-Keep previously recorded/imported completion attributable to its actual source;
-do not erase it or turn it into newly executed evidence. Changed plan text does
-not reset Goal/base/epoch, review history, fix counts or recorded results. Reuse
-applicable results when their real inputs and acceptance still apply; a changed
-requirement affects its relevant acceptance, not an automatic full-suite rerun.
-If applicability needs semantic interpretation, request that bounded judgment.
-
-Use deterministic updates for structured progress and AI for narrative journal
-entries, rationale and substantive replanning. Metrics alone never rewrite the
-plan. Live synchronization neither auto-expands permission nor introduces hashes,
-file snapshots, TTL gates, unchanged-content proofs or repository-wide monitors.
-Refresh the relevant plan at normal boundaries, not before every helper operation.
-This is synchronization during ordinary work, not restoration of abandoned runs.
-
-### A. Deliver one complete mode/skill/client/result contract
-
-1. Fix the session identity lifecycle above together with a finite table for
-   the selected thinking modes: task purpose, supplied
-   context, expected result and the workflow operation consuming that result.
-   Include the required abstract analysis/design distinction and implementation/
-   review uses. Choose concrete public names/payloads here, together with existing
-   supported callers and saved-request handling; avoid a vocabulary-only phase.
-2. Implement the selected skills, ordinary client invocation/completion and
-   corresponding runtime bindings together. First prove issued request -> actual
-   skill execution -> typed result -> normal workflow continuation. Then complete
-   the driver through independent review and its real outcome. Design connected
-   executable specs at the same time; do not leave client installation until last.
-3. Reuse CNCF ExecutionRequirement/Evidence for placement, independence and
-   provider matching. Connect one supported unavailable-provider fallback and
-   the already-required non-identical participant case, using Human where
-   applicable. Test the generic contract without implementing every remote worker,
-   local-model or OpenClaw integration. No new provider framework is a prerequisite.
-
-Connect command execution and live Phase-plan synchronization above in this same
-batch: an actual build/test and local Git effect are runtime-owned, and a document
-edit between work steps changes the next selection without erasing prior results.
-Use P6-EX01..03 and P6-PS01..04 in the
-[connected checklist](managed-test-suites-phase-checklist.md#command-execution-and-live-phase-plan-synchronization)
-as cases in this driver, not separate helper-by-helper implementation/review
-cycles or optional Phase 8 adapters.
-
-Observable result: the chosen development workflow can be invoked through its
-real skill/client and completed. Mode/result mismatches and prohibited reviewer
-identity reuse fail at the existing typed boundary. This internal milestone
-does not bypass the remaining Phase 6 acceptance before gradual daily use.
-
-### B. Reuse that interface for validation planning, FIX and improvement
-
-Implement AI-authored metadata/Slice planning, TEST_FIX, REVIEW_FIX, semantic
-change classification, Issue dispositions and convergence hints on the same
-request/result route. Connect the existing human-selected warning/improvement
-path to an actual proposal and adopted revision. Developer-requested replanning
-uses that path; it is not another engine or another mandatory acceptance gate.
-
-Include the [Hygiene / development-candidate recording route](#hygiene-and-development-candidate-recording--2026-10-12)
-in this same batch: review result -> AI recording request -> document edit/result
--> next workflow work. Implement runtime progression and the recording skill
-together; a note telling developers to maintain journals manually is insufficient.
-
-Apply the [review and maintenance responsibility split](#review-and-maintenance-responsibilities--2026-10-12)
-in this batch as well. Source-history maintenance is deterministic Workflow work;
-GWT and other meaning-dependent review/correction are AI work. Do not route all
-Hygiene observations to an AI fixer merely because they share a classification.
-
-Include [dependency Component boundary handling](#dependency-component-boundary-and-human-approval--2026-10-12)
-on this same request/result/decision path. Planning, implementation and review
-participants identify proposed dependency modifications; Workflow yields to the
-developer before dispatching that work. Deliver both skill behavior and runtime
-decision handling, not a caution in the skill text alone.
-
-Implement the repair-count reset contract in this batch, including the runtime
-decision/guard and Step-close transitions as well as their skill/client
-connection. Explicit user continuation approval resets both active counts;
-accepted Step completion with its commit makes the next Step start at zero.
-Retain history and convergence trends, and remove per-finding reapproval caused
-solely by the previous window's exhausted counts. P6-TS05 tracks this required
-delivery. It is not deferred to Phase 9 or satisfied by skill wording alone.
-
-Use one shared driver with representative test-failure, review-finding,
-validation-design-gap and human-selected improvement branches. Exercise each
-branch's distinct semantics, reusing the Phase 5 runtime tests for policy
-permutations. Do not repeat every threshold/Issue-state case through live AI.
-Keep an actual connected invocation/result example; scripted results alone do
-not establish skill integration, and AI assertions never replace runtime evidence.
-
-Existing coverage is P6-TS01..06. AI does not choose official tests per execution,
-reset counters, infer approval from a warning or change the adopted plan by itself.
-No additional instrumentation is required just to improve an explanatory hint.
-
-### Staged quality review across projects — 2026-10-13
-
-Phase 6 is the concrete consumer/driver for the adopted
-[staged review matrix](../journal/2026/10/2026-10-13-staged-quality-review-matrix.md).
-Deliver the required producer/provider work in its owning project, connecting
-the smallest complete Step route first rather than waiting for whole upstream
-roadmaps. This does not expand Phase 5.2/5.3 or reset prior execution history.
-
-| Owner / delivery | Required responsibility |
-| --- | --- |
-| sm-workflow Phase 6 | Lifecycle timing, scope/requirements, Evidence consumption/reuse, Admission, Repair/ReReview and runtime commit/closure. |
-| [CNCF Phase 106](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-106.md) | Reuse existing Phase 90 CAM and implement only missing generic Requirement/Evidence/coverage/applicability/Admission connections. |
-| [Cozy Phase 81](https://github.com/asami/cozy/blob/main/docs/phase/phase-81.md) | Existing CML/CAR metadata path supplies required model identities, Usage Contract-facing relationships and generated-artifact scope with explicit coverage limits. |
-| [cbd-support Phase 15](https://github.com/asami/textus-cbd-support/blob/main/docs/phase/phase-15.md) | Common scoped lint/semantic review, typed findings and coverage/gaps, focused re-review and reusable results. |
-
-`STEP`, `PHASE` and `FINAL` are application lifecycle meanings owned here, not
-CNCF ABI values or generic Cozy-generated runtime enums. Map them to generic
-requirements and provider profiles/scope. The detailed matrix in the journal
-is the baseline, not a requirement to run every checker three times.
-
-| Boundary | Question and normal action |
-| --- | --- |
-| Step Close | Is the delivered Slice locally sound? Evaluate changed and necessary connected scope before Admission/Step commit, using applicable existing evidence where available. |
-| Phase Review | Is the integrated Phase sound? Review whole-Phase Usage Contract, integration, cross-Step assumptions, duplication and excessive checking/abstraction; Step PASS alone does not establish integration quality. |
-| Phase Final | Is release justified? Confirm required coverage, actual findings/dispositions, applicable review/validation and release prerequisites; reuse comprehensive Phase evidence and examine only relevant repair deltas/gaps. |
-
-Final is primarily deterministic closure readiness. Dispatch bounded semantic
-work only for an actual unmet semantic requirement; no automatic full exploratory
-review or redundant full test merely because a lifecycle label changed. Preserve
-actually required final validation and independent review, and do not silently
-waive scope when evidence is insufficient. Nonblocking findings follow existing
-recording rules; unresolved blockers prevent closure. A newly discovered real
-blocker still receives ordinary handling, even at Final.
-
-Freshness means applicability to actual current subject, inputs and requirements.
-Use ordinary references, known changes and supplied review judgments; no TTL,
-management hash, full-copy comparison or unchanged-content certificate. A commit
-or state transition alone does not invalidate evidence. After repair or a live
-Phase-plan change, evaluate affected coverage and request only missing work;
-preserve unrelated applicable results. Unknown applicability stays explicit and
-uses the existing scoped decision route, not guessed PASS or a blanket rerun.
-
-Keep cbd-support's advisory findings, structured semantic-review results, developer
-authority and CNCF Admission distinct. SQR-01 defines the supported integration
-with its existing provider-authority contract; do not treat an AI summary as
-Assurance or give a provider direct commit authority. CAR lint commands and result
-collection run under runtime ownership. Semantic reviews follow P6-DG context/
-independence/cost policy, with no extra full-parent-history inheritance.
-
-Delivery within the existing batches:
-
-1. Batch A fixes a finite generic contract/fixture with the three owners and
-   connects real CML output -> lint/scoped independent review -> Admission ->
-   local Step commit. Runtime/interface missing work is implemented at its owner.
-2. Batch B extends the same route to two locally accepted Steps with a cross-Step
-   Usage Contract conflict, then integrated review -> bounded repair -> affected
-   re-review. Include an excessive-checking/duplicate-state semantic observation
-   without requiring automatic discovery of every possible design defect.
-3. Batch C accepts Final reuse and real closing effects, including coverage gaps,
-   unresolved blockers and changed acceptance. P6-SQ01..05 in the connected
-   checklist cover these behaviors through one shared driver; no review cycle
-   per helper/finding and no separate full campaign per project.
-
-Each producer/provider closes on its own bounded checklist, validation/review and
-its actual handoff in this driver, without waiting for all of Phase 6 to close.
-Phase 6 completion requires those needed deliveries and the integrated outcome,
-not unrelated UI/KPI, exhaustive CML support or full producer roadmaps. This avoids
-circular whole-Phase dependencies. Share evidence at its actual scope without
-claiming one repository's tests accept another. Phase 7 reuses this route across
-the workspace; Phase 9 adds convergence/provider re-routing, not initial review
-or Final evidence reuse. Creating these plans starts no other project's Goal.
-
-### C. Integrated acceptance, usable installation and gradual use
-
-Validate the selected modes, ordinary client, independent execution, bounded
-fallback, non-identical participant and managed-suite branches together. Perform
-the required independent review at this connected boundary; after fixes, rerun
-affected interface/behavior checks and required regressions rather than another
-complete provider-by-mode matrix. Check actual callers against the Phase 5.3
-contract; do not preserve earlier input formats.
-
-Complete the existing acceptance below, document installation/configuration and
-limitations, and start gradual real use. Do not wait for Phase 7 overlay or an
-empty Phase 8 backlog. P2-C02 initial skill creation/connection is delivered here;
-broader distribution/provider coverage remains separately owned. Record actual
-use-blocking discoveries for early repair and other needs in Phase 8, preserving
-their evidence and the accepted contract rather than reopening completed phases.
-
-## Skill integration and start of use (2026-10-06)
-
-Follow the revised [incremental-use plan](README.md). Phase 5 supplies a runtime
-foundation validated through CLI/control operations; it does not create or
-connect skills. This phase designs abstract thinking modes and the skill-facing
-contract, creates/adapts the selected skills and connects them to that foundation
-as one coherent delivery. After connected acceptance, start gradual skill-based
-real use and continue it through Phase 7. Phase 2's
-extended backlog now belongs to [Phase 8](phase-8.md), not an implicit
-prerequisite that must be completed before this phase can start.
-
-Keep the planned Phase 6 acceptance scope bounded. Implement newly discovered
-missing functionality early when it prevents the supported real-use scenario;
-include a nonblocking addition here only when it belongs to this phase and fits
-the bounded delivery. Otherwise record it in Phase 8 with the observed use case,
-impact, current state and existing evidence. Do not continually expand this
-phase to cover every provider, participant or hypothetical fallback. Preserve
-Phase 5's removal of unnecessary hash, tamper, unchanged-content and local TTL
-checks across all newly supported paths.
-
-Implement connected behavior and its Executable Specifications as a coherent
-batch. Use compilation and focused tests as needed during implementation, then
-validate and independently review the integrated behavior. A small internal
-helper or declaration does not require a separate acceptance/review cycle.
-After review fixes, rerun affected specifications and required regressions;
-reuse relevant actual results instead of repeating unrelated checks. Completion
-requires this phase's selected behavior and required validation/review, not an
-empty Phase 8 backlog. Continue real use into [Phase 7](phase-7.md).
-
-## Goal
-
-Deliver the minimum system usable through skills: define abstract thinking modes and the skill-facing request/result contract, implement the selected skills and their runtime connection, and generalize the execution-routing model proven by Phase 5 without making sm-workflow own provider-specific or harness-specific semantics.
-
-Phase 5 proves the minimum runtime foundation. Phase 6 completes the skill-connected development slice and establishes the contract used for further sm-* skills. Existing skill files are reference material to reconcile with this contract, not proof that the interface or integration is already complete. Do not build a provisional skill set in Phase 5 and require compatibility with its accidental interface.
-
-## Abstract thinking modes and the skill interface
-
-Abstract thinking modes affect the work requested from a skill, not just the
-provider/model/effort chosen to execute it. Define the supported modes from the
-selected development scenario: what question is asked, what context and
-constraints are supplied, the expected abstraction level and result structure,
-and how Workflow uses the returned result. In particular, distinguish a request
-to identify problem structure/constraints from one asking for concrete design or
-implementation where those tasks are needed. Settle exact names and typed
-payloads with the interface design; do not assume an unimplemented mode exists.
-
-Design the request, semantic result, normal client invocation/completion route
-and applicable error behavior together. Keep thinking-mode meaning distinct
-from reasoning intensity, INLINE/DELEGATED placement and concrete model effort.
-The skill performs the issued semantic task; Workflow owns progression and the
-harness owns provider execution. Do not duplicate their responsibilities in the
-skill. A returned analysis does not itself authorize a mutation.
-
-Implement the contract, selected skills, runtime connection and connected
-Executable Specifications in one delivery. Reconcile existing reference skills
-and affected callers together rather than inventing a provisional compatibility
-layer. Use the current saved-request representation retained through Phases 5.2/5.3 and do not
-silently reinterpret its meaning or restore pre-migration readers. Use the
-accepted Phase 6 interface as the baseline for subsequent skill expansion and
-caller contract tests.
+The normative [GoalPhase effective acceptance boundary](../spec/goal-phase-acceptance-boundary.md)
+defines the minimum application quality contract: existing Component project
+configuration, explicit complete adopted overrides/exclusions, Start capture,
+saved Plan consumption, scoped typed reports and the existing owning admission
+and independent review paths. Its first connected Goal fixture and focused
+examples are authored for parent validation; they do not establish actual
+installed/provider/all-family acceptance. Remaining mode/provider/session and
+original Step/full Phase obligations retain their existing owners.
 
 ### Parent chat, delegation and review context — 2026-10-12
 
-The ordinary operating loop is parent chat <-> sm-workflow. The parent handles
-developer dialogue, requirements, design judgment and semantic work that does
-not benefit from delegation. Runtime owns deterministic progression and command
-execution. Delegate semantic work when its cost/capability, reasoning needs,
-independence or context isolation justify a subagent; do not spawn one for every
-Workflow step or for command execution. Delegated results return through the same
-typed Submit -> chat display -> Advance loop, not a second orchestration loop.
+The [native host execution handoff](../spec/native-host-execution.md) provides
+the finite library contract for original issued scope, retained canonical
+selection, one explicitly configured unavailable/declined alternate and actual
+outcome/resource observations. The connected Goal fixture uses the actual public
+Advance context and normal Submit/independent review path. This library and its
+specification-owned provider descriptors do not install a Codex driver or close
+the required actual installed host/tool/provider, all-family and genuine two-chat
+acceptance. Preserve those original obligations and their existing review owner;
+no additional review stage is introduced.
 
-| Work | Operational selection policy |
+The same existing `NativeHostPreparationService` now declares passive normal
+`prepareExecution` and `recordExecution` COMMANDs with the three concrete generated
+host-execution values. The current executing reader owns the explicit original
+mapping/origin, retained Session, supplied selected-attempt observation and
+completion-reference files. Session/selection remain opaque canonical JSON
+strings; only final operational COMPLETED may project structured execution
+evidence for a separate normal semantic Submit. The finite existing Goal caller
+retains each selected call's explicit Session/selection/evidence artifacts and
+performs no automatic provider invocation, Submit, Advance or pending re-prepare.
+This is the [normal host handoff contract](../spec/native-host-execution.md),
+not installed host/provider availability or completion acceptance. Actual
+provider routing/replacement/fallback/independence, all-family installed tasks,
+genuine two-chat evidence, remaining non-Goal first-issue mapped bindings and bounded CBD
+consumer obligations remain open with their existing owners. Skill meanings,
+command-primary/client-light direction, review and split validation duties remain
+unchanged.
+
+The [Repository native execution contract](../spec/repository-sync-native-execution.md)
+adds explicit paired REVIEW/CODING review/repair classifications and additive
+optional CODING conflict under the existing key and schema. The ordinary Repository service and Goal child
+consume the same repository declaration and canonical execution mapping/origin.
+Pending issue/completion paths keep their original requirement, disposition,
+host Session and submission route despite later configuration. Classification
+grants no provider, independent review or effect authority. Old two-field input
+remains valid; omitted conflict preserves the original unmapped requirement.
+Fresh mapped conflict requires its explicit CODING member and canonical class;
+null/malformed/wrong-kind input and missing mapped input/class refuse without
+fallback. Only the conflict missing-issued-row branch binds; pure projection,
+pending redisplay, completion and Human reconstruction retain their original owners.
+Conflict and repair Submit save only their proposal; separate Advance owns
+application, fresh typed UoW SBT or the real separate Human question and a new
+independent review. Human has no issued work context. Each fresh review retains
+its own later mapping/origin and Session, DELEGATED/REQUIRED executor and separate
+host review evidence. The connected E5/E6 and optional-conflict E7/E8 specifications
+are authored for parent validation and claim no successful run. E8 extends the
+existing Human-preparation E6 with exactly two mapped conflict execution cases,
+resolved and decision-needed, preserving all three legacy directions. It retains
+the original conflict Session across changed configuration omitting its old class,
+canonical restore and repeated pending reads; missing/crossed original-origin
+observations refuse without native/file/SBT effects. Its executor and Human
+evidence remain explicitly specification-owned. Human and other unbound
+Repository obligations remain, alongside actual installed
+provider/tool routing, replacement/fallback, independent contexts/resources,
+all-family tasks, bounded CBD integration, minimum Boundary admission, protected
+Step review/acceptance commits, full Phase review and local release. Existing
+history, security policy, split owners and Phase 6.3 aggregate validation remain.
+
+The bounded [Split native execution contract](../spec/split-phase-native-execution.md)
+now authors explicit finite partition DESIGN, scope DESIGN and reasoning ANALYSIS
+input on the normal Component path. The shared internal semantic derivation
+preserves the original independent-review obligation; strict Goal/Repository
+review-kind admission remains unchanged. Only the three fresh native issue branches
+bind canonical selection. Saved work, original intent, pure completion and retained
+host Sessions remain the owners through redisplay, changed mapping and Submit.
+The finite adapter and one added mapped variant each for reopened partition and
+scope-to-reasoning-to-Terminal Operations are authored for parent intake; focused
+validation and independent acceptance are pending. Their specification-owned
+executors prove no installed provider, all-family task or genuine separate-chat
+acceptance. Original history, Step review/acceptance commits, sole epoch1 full
+Phase review, local release, minimum Boundary/CBD integration and PHASE-6.3
+aggregate validation obligations are preserved.
+
+The parent handles dialogue and appropriate semantic work; runtime handles
+deterministic progression. Delegate for capability/cost, independence or context
+isolation, not every workflow step. Configure suitable implementation/fix and
+review profiles independently of the parent. Reviews receive relevant requirements,
+changes, contracts and actual evidence, not automatic full parent history;
+missing relevant context can be obtained. P6-DG01..03 own this delivered contract.
+
+## Closure and successor handoff
+
+Own P6-ID01..03, P6-DG01..03 and P6-SBX01..05 in the [single checklist](managed-test-suites-phase-checklist.md#phase-6-family--aiskill-connection),
+plus the adopted unnumbered mode/result/provider/configuration/Boundary conditions
+above. Installed client/skills and real bounded task completion, errors, provider
+replacement/fallback/non-identical participant and independent review are accepted
+through connected examples and focused specs. Document installation/limitations.
+Hand Phase 6.1 the accepted named mode/result/context types, session storage and
+transport mapping, CNCF typed Git/SBT/resource and opt-in contracts, bounded
+CBD classification, actual driver and applicable evidence. This is a working
+bounded contract; general gradual daily use begins after Phase 6.3 acceptance.
+
+## Applied split — 2026-10-13
+
+Invocation authority: explicit same-task `$cncf-split-phase sm-workflow 6` in apply
+mode. Source goal/status: none / no-goal-pre-entry. Original Phase 6 was planned
+with no accepted Step or completion history. Preserve its complete dated
+[pre-split adopted plan](../notes/phase-6-pre-split-plan-20261013.md), existing
+journals and all Phase 1–5.3 releases; do not move completed evidence into children.
+
+Pre-split gate evidence (2026-10-13): typed entry
+`SMWF-P6-ENTRY-20261013-ROOT-01@1` returned `SPLIT_REQUIRED`,
+`split_reasons=["time-bound"]`, expected 24h, planning range 20–30h and risk upper 36h.
+This is historical evidence, not the narrowed Phase's current gate.
+
+The frozen proposal retains the first identity and inserts decimal suffixes:
+6 -> 6.1 -> 6.2 -> 6.3 -> unchanged Phase 7; Phases 8 and 9 retain their identities.
+One serial same-repository final-only SBT chain owns the declarations above.
+
+Subsequent scope addition on 2026-10-13: the user adopted
+[Phase 6.4 Evidence storage](phase-6.4.md) after 6.3 and before 7. The current
+rollout is 6 -> 6.1 -> 6.2 -> 6.3 -> 6.4 -> 7. The frozen four-member split,
+requirement ownership, estimates and aggregate validation ending at 6.3 remain
+unchanged; 6.4 is additional work with its own checklist and validation/closure.
+
+| Child | Owned connected delivery/closure | Expected / range | Parent profile / cost role |
+| --- | --- | --- | --- |
+| [6](phase-6.md) | Actual mode/skill/client/session/provider result loop and bounded GoalPhase completion | 6h / 5–7h | gpt-6.1-sol high; connected interface decisions |
+| [6.1](phase-6.1.md) | Command lifecycle, live plans, deterministic maintenance and scoped Step quality Admission/commit | 6h / 5–8h | gpt-6.1-sol high; process/plan/evidence decisions |
+| [6.2](phase-6.2.md) | Validation/FIX/improvement/reset, semantic maintenance, recording and dependency decisions | 6h / 5–8h | gpt-6.1-sol high; correction/decision integration |
+| [6.3](phase-6.3.md) | Integrated Phase Review/repair/Final reuse, complete-family setup/use acceptance and aggregate full validation | 6h / 5–7h | gpt-6.1-sol medium; frozen-interface integration |
+
+This table records the 2026-10-13 split baseline. The 2026-10-15 P6-SBX
+addition expands Phase 6's remaining delivery; its old 6h estimate is not a
+current estimate including the producer work. Reassess remaining work at the
+next ordinary planning boundary, preserving the serial split and actual history.
+
+Split planning capability: `PROCEED_UNVERIFIED`. Exact current parent model/effort
+is not directly observable; no saved profile was selected or failed verification.
+The documentation partition is `bounded-settled`: it applies adopted requirements
+and the prior proposal without changing runtime semantics/authority. Direct
+spawn_agent/followup_task/wait_agent tools are present; no agents were spawned.
+All `plan_owner_*` fields are `not_applicable`; this operation creates no Goal.
+
+Estimate calibration: no comparable planned/observed pair; no fabricated ratio or
+fixed model/hour multiplier. Critical path: actual client -> execution/plan/Step
+Admission -> correction/recording -> integrated acceptance/Final. Each expected
+duration includes planning, implementation, focused validation, review/likely
+fix, Step commits, closure and release overhead. Confidence is low. The final
+child additionally owns the complete validation. Expected distribution is three
+6h high-profile planning envelopes plus one 6h medium envelope, not measured
+continuous reasoning usage. Scope changes require normal execution-time reassessment.
+
+Reasoning kernels are owned once: Phase 6 mode/session/provider/Boundary binding;
+6.1 command lifecycle/plan writeback/Step Evidence ownership; 6.2 FIX/reset/recording/
+dependency disposition. Each stays with its connected implementation, not a tiny
+design-only child. Phase 6.3 consumes settled contracts; new design is not assumed.
+Profiles are least-cost recommendations under those demands, with standard parent
+mode. Routine implementation/specification/review remains in the first three
+children only where needed to prove the same connected contract's closure.
+
+Frozen transition handoffs: 6 -> 6.1 accepted client/mode/context/result contract;
+6.1 -> 6.2 accepted process/plan/Step-evidence owners and actual results;
+6.2 -> 6.3 accepted FIX/reset/recording/boundary contracts and applicable evidence.
+Later children reuse rather than redesign these contracts.
+
+Incoming semantic handoffs (sole semantic-edge record):
+`{"PHASE-6":[],"PHASE-6.1":[],"PHASE-6.2":[],"PHASE-6.3":[]}`.
+These are ordinary implementation/acceptance dependencies, not invented human,
+external-operation, migration or authority boundaries. The adopted integration
+scope below does not add a semantic edge or upstream Goal.
+No child is below 5h; rebalance/short-child merge attempts are not applicable.
+Adjacent expected 12h exceeds 8h; no profile-cost-only rejection is used
+(`profile_cost_only_rejection_forbidden=true`). Three extra Phase reviews,
+handoffs, ledgers and release commits are real overhead. Final-only avoids
+repeated full suites; independently closable six-hour delivery is the benefit,
+not a quantified promise of cost/time savings.
+
+### Exhaustive unfinished-requirement ownership
+
+| Pre-split requirement | One delivery owner |
 | --- | --- |
-| Parent dialogue and ordinary design/development judgment | Normally use an upper-tier programming model appropriate to the current environment. This does not require the most expensive general-purpose model. |
-| Implementation and repair | Prefer the least expensive suitable model/profile for the bounded task, retaining required quality and validation. Delegate when this makes sense even if the parent uses a stronger model; do not assume every repair is simple or require delegation for trivial work. |
-| Review | Meet the required independence and choose capability/effort for the difficulty and impact. A stronger or more expensive model is available when needed, not mandatory for every review. Context isolation alone can justify delegation to the same model. |
-| Deterministic execution | Use sm-workflow/tool adapters, with no AI command-runner or model invocation. |
+| Session acquisition/retention/propagation; P6-ID01..03; chat display/common loop | 6 |
+| Abstract modes, actual skills/client/results, saved-request binding; batch A interface | 6 |
+| Scope 1..12: generic requirement/placement/independence/providers/participants/evidence/resources/configuration; Executable Specification direction | 6 |
+| Scope 13..15: minimum Effective Acceptance Boundary definition/projection; Usage Contract input | 6; FIX/override branch examples P6-TS02/03 belong once to 6.2 |
+| Parent/delegation/review context; P6-DG01..03 | 6 |
+| Added 2026-10-15: CNCF110 early slice, CBD16 laundering slice, managed resource migration and necessary-only SBT preparation; P6-SBX01..05 | 6; 6.1–6.3 consume the accepted contract/evidence |
+| Command lifecycle; P6-EX01..03; live Phase-plan synchronization P6-PS01..04 | 6.1 |
+| STEP staged-quality connection P6-SQ01 and bounded producer/provider handoff | 6.1 |
+| Deterministic source-history maintenance/tool errors P6-HR01/04 | 6.1 |
+| Metadata/Slice validation planning, TEST_FIX/REVIEW_FIX, gap/improvement/replanning; P6-TS01..06 | 6.2 |
+| Explicit continuation/Step-completion reset and history preservation | 6.2 (P6-TS05) |
+| Dependency Component boundary/approval, Scope16; P6-CB01..04 | 6.2 |
+| Meaning-dependent GWT/other maintenance/adopted correction; P6-HR02/03 | 6.2 |
+| Hygiene/development-candidate AI recording and actual file/result path | 6.2 |
+| PHASE integration, affected repair/re-review, FINAL reuse/gaps; P6-SQ02..05 | 6.3 |
+| Batch C complete-family modes/client/placement/fallback/participant integration, installed setup/limitations, actual use eligibility | 6.3 |
+| Practical completion: EX/PS, DG, ID, TS, CB, HR and recording clauses | Their one owners above; 6.3 consumes accepted evidence without duplicating unchecked delivery |
+| Practical completion: required owner-specific staged-review deliveries and integrated outcome | 6.3 accepts the complete route; 6.1 owns its initial Step connection |
+| Shared normal-use, no redundant checks, permission/semantic/runtime boundaries, genericization and non-goals | Invariants applied by each owner; no duplicate delivery checkbox |
+| Security profile: Slice/Boundary selection; Step evidence; FIX/recording; PHASE/FINAL assessment | 6; 6.1 (P6-SQ01); 6.2 (P6-TS02/03, P6-CB01..04 and recording); 6.3 (P6-SQ02..05), respectively; [profile](phase-6-security-review-profile.md) |
+| OpenCode/local-provider breadth, workspace overlay and observed carryover | Existing Phase 7/8/9/reference ownership unchanged; not added to this sequence |
 
-The user's current example, GPT-6.1 Sol high for the parent and no Astra default
-for routine programming, expresses this operational preference, not fixed model
-names or permanent rankings. Resolve concrete models/effort through environment
-profiles and existing configuration. Keep parent defaults separate from per-work
-provider selection; no model name belongs in Workflow guards or public business
-parameters. Model choice, reasoning effort, context scope and independence are
-separate dimensions; stronger models do not substitute for independent review.
+The shared checklist retains every existing P6 ID and assertion text with one
+explicit owner. Historical descriptions of batches A/B/C refer to the family;
+they do not assign all moved work to this first Phase. Existing journal links
+retain their recorded historical meaning and canonical finding IDs.
 
-Review context should contain the applicable requirements/acceptance boundary,
-target changes and necessary surrounding code, relevant design/usage contracts,
-actual validation results and the specific findings under review. Do not inherit
-the entire parent conversation or implementation deliberation by default. Supply
-decision rationale when necessary to understand the adopted contract, without
-treating the implementer's confidence as review evidence. Preserve required
-coverage, especially final review scope; narrower context does not mean omitted
-dependencies or acceptance conditions. Reviewers can request/access additional
-relevant material through the existing route when needed, without automatically
-importing full history or creating a new information-gathering framework.
+### Review and maintenance responsibilities — 2026-10-12
 
-Workflow policy supplies the semantic request and execution requirements; the
-Codex/client harness maps them to inline work or actual subagent invocation and
-the selected context. Use the existing configuration/ExecutionRequirement path,
-not a second Codex-specific Workflow policy engine. Phase 6 delivers this initial
-role-based selection and context contract; Phase 9 adds validation-observed
-re-routing, not the first ability to choose a cheaper implementer or independent
-review context. Cover P6-DG01..03 in the existing connected driver and integrated
-review, without a provider-by-model benchmark matrix.
+Historical links to this pre-split heading remain usable. Its current delivery
+owners are [6.1 deterministic maintenance](phase-6.1.md#review-and-maintenance-responsibilities--2026-10-12)
+and [6.2 semantic review/correction](phase-6.2.md#review-and-maintenance-responsibilities--2026-10-12).
+This navigation entry adds no requirement or unchecked item to Phase 6.
 
-## Boundary
+Stale-reference classification: archived pre-split text, dated journals and
+closed Phase 2/5 records retain historical broad-family meaning. Current
+roadmap/checklist/Phase 7–9 moved-owner references are corrected or explicitly
+interpret the complete family in their dated split notes. Session lifecycle
+and operating-policy anchors still belong to this first member. The historical
+maintenance link resolves through the navigation entry above; its work is not
+owned here. No historical release or accepted finding is reopened.
 
-The intended three-layer boundary is:
+## Shared scope and adopted integration direction
 
-```text
-Skill / application planning
-  -> application-specific WorkAssessment / WorkClassification
+sm-workflow owns this Phase; necessary CNCF/Cozy integration is admitted in the
+selected existing main checkouts as adopted below. Consume the accepted Phase
+5.3 [business Operation contract](phase-5.3-operation-contract-handoff.md): one
+session per execution, named inputs/results/answers and explicit Advance.
+Keep actual effect permissions and the existing configuration/resource owners.
+Do not restore full-envelope echoes, target discovery, hashes, TTL, copied-state
+proofs, compatibility routes or a second workflow/configuration engine.
 
-Workflow application policy
-  -> generic logical ExecutionRequirement
+The user's prior same-task direction on 2026-10-13 was
+"cncf, cozyが必要になったら待機して". This wait-only restriction is superseded for
+the two selected main roots by the 2026-10-14 direction below and remains history.
+Do not start or close their own Phases or create a sm-workflow substitute.
+Other repositories require separately scoped authority. Missing cbd-support capabilities
+require their separately scoped delivery; the 2026-10-15 adopted plan selects
+only CBD16's laundering early slice for this correction, not its full backlog.
+Existing supported capabilities may be reused without reopening their Phases.
 
-Execution Harness
-  -> concrete Provider Selection
-  -> ExecutionEvidence
-```
+### Existing main checkouts — adopted direction 2026-10-14
 
-Input assessment remains application-specific where its meaning is domain-specific. Generic execution requirements and evidence belong to CNCF.
+The user's actual direction is:
+「本機macminiはsm-workflow中心の開発になったので、sm-workflowの開発の中で、cncf, cozyのmainディレクトリのmainブランチを修正することになった。」
+Necessary integration changes for sm-workflow development are now authorized in
+`/Users/asami/src/dev2026/goldenport-cncf` and `/Users/asami/src/dev2026/cozy`, using
+their existing main checkouts and main branches. sm-workflow remains the primary
+Phase owner; CNCF and Cozy are integration participants. This direction admits
+neither unrelated roots nor their own Phase activation/closure. Preserve the
+original Phase completion requirements, split ownership/IDs/acceptance and
+PHASE-6.3 aggregate validation declarations.
 
-## Scope
+The 2026-10-15 plan extends the bounded producer work to CNCF110's early slice
+and CBD16's matching classification slice described above. Record actual
+producer work-item delivery and reusable handoffs under those owners; never
+mark Phase 110 or Phase 16 complete from Phase 6 acceptance. This document
+update does not itself run that work or change producer working trees.
 
-The skill integration below is core Phase 6 work, not a Phase 8 distribution
-follow-up. Keep the first supported workflow and modes finite; broader provider
-coverage must not turn this phase into an unbounded framework project.
+The ordinary-use scope is unchanged: distinct executions have distinct sessions;
+after abandonment start a NEW execution. No same-execution winner, identical
+replay, exhaustive history or interrupted-effect recovery is promised. Actual
+file scope/non-overwrite and truthful execution results remain required.
 
-Define the selected abstract thinking modes and their skill request/result
-semantics; create/adapt and connect the skills needed for the first practical
-workflow, with ordinary invocation/completion and documented setup. The
-following execution-requirement work supports that delivery:
+## Validation and closure obligations
 
-1. Reconcile Phase 5 WorkClassification with the generic CNCF ExecutionRequirement contract.
-2. Stabilize placement semantics such as INLINE / DELEGATED without referring to ChatGPT/Codex parent/child task topology.
-3. Stabilize independence semantics and execution-context identity sufficient to prove producer/reviewer separation.
-4. Define Requirement -> ExecutionEvidence conformance and Admission behavior.
-5. Generalize context-isolation / context-footprint routing beyond the Phase 5 heuristic; evaluate explicit context-budget evidence only if operationally justified.
-6. Define provider capability matching and configuration-driven Provider Selection without making provider identity Workflow transition semantics.
-7. Define bounded fallback/escalation behavior for unavailable or insufficient providers.
-8. Generalize the contract to Human, remote worker, OpenClaw-like worker, local model, and other execution participants where the same semantics apply.
-9. Preserve direct control-plane invocation: Workflow commands themselves do not require a child AI task.
-10. Record enough execution evidence to evaluate routing quality, independence, admission rate, retries, latency, usage and cost. Preserve dimensions needed for project/provider/machine profiling: semantic work type/classification, reasoning requirement, provider/profile, execution context/machine identity where available, COMPLETED/DECLINED/BLOCKED outcome and typed reason, validation outcome, review outcome/disagreement, escalation path, and elapsed/resource evidence. Do not collapse these observations into one opaque heaviness score.
-11. Consume CNCF Phase 101 logical Component resource APIs for runtime state/work resources where execution participants require project-local storage; provider/harness code MUST NOT depend on a hard-coded `.textus/sm-workflow` layout.
-12. Keep configuration on CNCF's existing hierarchical Component configuration mechanism; Phase 6 MUST NOT create a second configuration lookup/merge model.
-13. Define the minimum Project Acceptance Boundary as project configuration on that same hierarchical configuration mechanism. Combine it with the current Goal/Phase acceptance conditions into an Effective Acceptance Boundary and carry that boundary through implementation, TEST_FIX/REVIEW_FIX, Admission and Review.
-14. The Effective Acceptance Boundary limits required quality assurance as well as defining required quality. A provider/reviewer MUST NOT promote an out-of-boundary robustness idea, exceptional-path guarantee or new test into a blocking completion condition merely because it appears safer.
-15. Phase 6 implements only boundary definition, configuration, projection and enforcement at the existing request/result/Admission/Review interfaces. Rich convergence interpretation, assurance-overhead classification and boundary-aware provider re-routing belong to Phase 9; do not add a second quality-policy engine here.
-16. Implement dependency Component / Usage Contract Boundary handling throughout planning, implementation and review. A proposal to modify an external Component or library outside the adopted scope yields to Human Approval through the existing decision path; repository/worktree location alone does not define this boundary.
+Implement connected Executable Specifications with the owned behavior. Each
+member retains proportional focused compile/behavior and affected-consumer
+validation, independent Step acceptance review, Step commits, one comprehensive
+review of its own Phase scope, bounded repair/focused re-review, recorded finding
+dispositions, a closure ledger and its own local Phase-release commit.
+Reuse actual applicable evidence; no acceptance/review cycle per helper or finding.
 
-## Usage Contract input boundary (2026-10-11)
-
-The development plan is authored and reviewed separately before sm-workflow execution. Its top-down entry is a **Usage Contract**: how a human or software consumer uses the system and the observable behavior/effect expected. It may describe a Use Case, API/Operation, CLI/MCP command, UI action, or event/message; it is more than an interface signature.
-
-Phase 6 consumes the adopted Usage Contract and Project Acceptance Boundary, projecting applicable acceptance conditions into existing WorkOrder, implementation/FIX, Admission and Review. A Development Slice realizes a bounded portion through the necessary implementation layers. Do not create another planning engine, contract registry or configuration mechanism. Providers cannot silently change the adopted Usage Contract or Boundary.
-
-## Managed-suite design, FIX and improvement skills (2026-10-06)
-
-### Acceptance Boundary integration — 2026-10-11
-
-Resolve project defaults through CNCF's existing hierarchical configuration.
-Combine them with the explicitly adopted Goal/Phase conditions; an explicit
-Goal/Phase override takes precedence for that scope, including an explicit
-exclusion of a broader project default. Conditions not overridden retain their
-project meaning. Providers and reviewers cannot invent an override. Resolve
-conflicting adopted conditions during planning through an explicit owner
-decision, rather than silently unioning them into stronger requirements.
-This quality-policy boundary does not override actual execution permissions.
-
-Carry the resulting boundary through the selected skill request, implementation,
-TEST_FIX/REVIEW_FIX and normal Review/Admission. Within the existing connected
-driver, demonstrate that a required failure blocks acceptance, an excluded
-assurance proposal does not block or authorize repair, and an explicit
-Goal/Phase override is applied consistently at each consuming interface.
-Include these outcomes in Phase 6 connected acceptance and independent review;
-no separate review cycle or policy engine is required. P6-TS02/03 below in the
-linked checklist track these branches. Phase 9 extends this same contract.
-
-### Dependency Component Boundary and Human Approval — 2026-10-12
-
-Adopt the [dependency-component boundary journal at commit 13ac53f](https://github.com/asami/sm-workflow/blob/13ac53f/docs/journal/2026/10/2026-10-12-dependency-component-boundary.md).
-This is a sm-workflow product requirement. It is independent of CNCF Phase 105's
-hygiene work and is not satisfied by the present cncf-goal-phase skill stopping.
-
-Resolve the target Component, dependency Components/libraries, permitted Usage
-Contracts and explicitly approved modification scope from the current project
-and Goal/Phase context. Carry these meanings into planning, implementation/FIX
-and review requests through the existing configuration/request mechanisms. A
-shared repository or worktree does not combine Component ownership; a different
-repository alone does not imply an unapproved change when that Component is
-already explicitly included. Keep the minimal session-resolved interface: do
-not ask callers to echo internal scope copies, revisions or approval certificates.
-
-Responsibilities and progression:
-
-- AI/skill participants use the supplied boundary and actual task/code context
-  to identify dependency changes. Dependency inspection for diagnosis and normal
-  use of its public Usage Contract do not by themselves require new approval.
-- Planning reports a plan that requires modification inside a dependency before
-  adopting that work. Implementation stops before the outside-scope edit and
-  reports the required change. Review reports accidental or unjustified crossing
-  that escaped the earlier stages; it does not silently approve or expand scope.
-- The result identifies the affected Component/library, proposed modification,
-  reason, affected Usage Contract and current work that depends on the decision.
-  Runtime consumes that proposal, retains its context and yields through the
-  existing Human Decision request. It must not dispatch the proposed dependency
-  modification or accept an unresolved crossing as completed work while waiting.
-- A developer can approve the stated scope, reject it or defer it. Approval
-  normally establishes a separately scoped dependency work unit with its own
-  acceptance criteria and a link back to the consumer; it does not authorize
-  arbitrary additional dependency changes. Rejection/defer leaves the dependency
-  modification unapproved and leads to replanning or waiting, not automatic repair.
-- Existing explicit approval covering the actual proposed change is reused;
-  ordinary continuation does not repeatedly ask for the same approval. A new
-  proposal outside that scope yields again. AI assertions, test success, public
-  API stability and a hygiene classification are not developer approval.
-- Review-discovered edits are retained for developer judgment; do not erase them,
-  automatically revert unrelated work or publish/accept the crossing. Retain the
-  work's history and report what has already changed separately from a proposal.
-
-This is semantic development control using AI findings and runtime decisions,
-not a claim that Workflow can statically detect every possible dependency edit
-or sandbox all file writes. Do not build another approval engine, filesystem
-monitor, management hash, TTL or unchanged-content proof mechanism. Reuse the
-normal decision/result path and record concrete detection limits.
-
-P6-CB01..04 in the [connected checklist](managed-test-suites-phase-checklist.md)
-cover the cncf-goal-phase reference case and its planning/implementation/review,
-same-repository, external-library, approval and refusal branches. Exercise them
-within the existing driver and integrated review; no per-stage review cycle or
-new dependency-management framework is required.
-
-### Managed-suite skill connection
-
-Connect the Phase 5 runtime to AI/skills under
-[Managed Test Suites and Verification Cost Guard](../notes/managed-test-suites-and-verification-cost-guard.md)
-and its [decision journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
-Reuse Phase 5 CNCF Phase 103 discovery/query, RunTestSuite, receipts, warnings and validation
-transitions; do not implement another test selector or execution ledger in a skill.
-
-- AI proposes changes to executable tests and their CNCF annotations/Cozy-owned
-  CML properties. Changes pass normal Candidate/review/admission; no suite
-  metadata registry is created. Slice planning authors the management file with
-  acceptance conditions, FOCUSED feature selection, supplemental operation refs
-  and typed parameters. Runtime executes that admitted combination. New feature
-  declarations, when needed, remain explicit Test Architecture changes. Runtime never asks AI for ad-hoc official test lists.
-- Connect TEST_FIX and REVIEW_FIX as evidence-triggered FIX semantic work.
-  Both receive the original requirement, current Candidate and relevant evidence;
-  TEST_FIX includes purpose/metadata revision and failure diagnostics, REVIEW_FIX includes
-  review findings. Both use implementation-like execution routing, not review
-  routing merely because a request came from a review. Reconcile their thinking
-  modes and payloads with this phase's common request/result interface.
-- A fix may identify a production, test, suite-design or requirement problem;
-  never define success as merely satisfying a failed assertion. Return the revised
-  Candidate or explicit design gap. Runtime owns revalidation and admission:
-  SMOKE -> the same Slice FOCUSED, then review/admission as required. The skill
-  cannot announce validation success, broaden official scope or change state.
-- A human-selected duration warning forms one bounded improvement request using
-  the suite, receipts, warning and relevant context. AI may propose no change
-  with a reason, revised metadata, test-code changes or both. Review/admit those
-  source changes normally, including coverage deltas and CNCF interpretation. Compare subsequent measured
-  results before claiming improvement; warning alone never starts this work.
-- Each Fix returns semantic change depth, logical units/cross-file coupling,
-  a minorBugFix classification with rationale, and convergence assessment/hints.
-  Keep physical metrics separate from AI classification. AI-authored GWT/comment
-  hygiene and small bug corrections are exempt only from the ordinary repair
-  count under Phase 5 policy; their results still affect convergence judgment
-  and every AI Fix batch consumes an automatic cycle toward the absolute hard limit.
-  Routine deterministic history/format maintenance is not an AI Fix batch and
-  does not create a repair cycle; actual failures remain attributable outcomes.
-  Feature work, major restructuring and mixed substantive fixes are not made
-  exempt by a convenient label. PROGRESSING/STALLED/REGRESSING remain advisory;
-  explicit BLOCKED stops automatic cycling through runtime decision handling.
-  Explain progress, remaining issues or needed decisions using bounded existing
-  evidence; do not require extra scans/tests to enrich every hint. Future feedback
-  refinements are possible without expanding the current collection requirement.
-- Fix skills account for every assigned issue ID with FIXED, UNRESOLVED,
-  DECLINED or BLOCKED; new findings enter separately through evidence intake.
-  FIXED is a claim, not validation. UNRESOLVED can explain partial progress with
-  bounded existing evidence. Reviewers retain supplied identities where supported
-  and return explicit coverage/resolution evidence; absence from a narrowed
-  review never closes an issue. Runtime owns reconciliation and guard decisions.
-  Exercise intermediate narrowing within policy while preserving affected scope
-  and required final review/SMOKE/FOCUSED/ADMISSION. No fuzzy identity matching or
-  extra per-issue review cycle is introduced.
-
-Developer-requested plan reconstruction is another use of the existing
-human-selected improvement path and thinking-mode/skill interface. A developer
-uses the Phase 5 cost/convergence/issue indicators to decide whether to ask AI
-to investigate the plan. AI receives current acceptance conditions, unresolved
-issues, recent observations and known dependencies as bounded existing context,
-and proposes work ordering, batch or scope-allocation changes with reasons.
-The developer chooses the plan; runtime continues with consistently updated
-completion conditions and validation planning, retaining history, deferred-item
-identities, counters and applicable evidence. Indicators alone never request
-replanning or alter scope. This usage adds no separate replanning engine or
-acceptance gate and does not bypass existing guard decisions or cycle limits.
-See [indicator use for replanning](../notes/managed-test-suites-and-verification-cost-guard.md#using-indicators-for-developer-requested-replanning-2026-10-07).
-
-Connected acceptance must demonstrate the Phase 6 items in the
-[managed-suite checklist](managed-test-suites-phase-checklist.md): planning-time
-feature selection, both FIX paths, a validation-design gap and one actual
-human-selected warning -> AI proposal -> admitted revision -> later observation
-cycle. Duration warnings and provider ERROR/TIMEOUT must not turn into automatic
-TEST_FIX or repair authorization. Keep ordinary execution deterministic and
-bounded; no autonomous optimizer, copied full logs or management hashes.
-Validate the connected convergence-assessment/guard path, including minor-count
-exclusions, the absolute 10-cycle backstop including hygiene/minor-only repetition,
-and AI BLOCKED. Runtime owns both counts and decisions;
-AI does not reset history or turn its own optimism into continuation authority.
-Also validate connected issue accounting, rejected unsolicited FIXED claims,
-partial-progress reports, evidence-confirmed resolution/reopening and review
-scope preservation using the Phase 5 runtime path.
-
-## Review and maintenance responsibilities — 2026-10-12
-
-Review covers both functional correctness and applicable Hygiene/conformance.
-Given/When/Then is one meaning-dependent review item, not a separate mandatory
-review service or a new review round. Separate who performs the work from its
-classification and from whether a finding is required for this delivery.
-
-| Concern | Owner and handling |
-| --- | --- |
-| Source history comments, including declared version/date/header fields | sm-workflow executes the repository's deterministic maintenance rule on the owned changed files. AI does not calculate/edit/check these fields or receive omissions as repair tasks. Preserve existing origin/authorship information as the rule requires; do not invent history. |
-| Mechanical formatting, whitespace, imports or other tool-fixable conventions | sm-workflow invokes the configured formatter/linter and its bounded fixes where deterministic behavior is declared. Do not ask AI to reproduce a tool's transformations. A diagnostic requiring meaning-dependent judgment goes to the AI path below. |
-| Executable Spec Given/When/Then | AI reviews and, when adopted, edits the actual scenario explanation and placement against the setup, action and assertions. Empty labels or mechanically inserted prose do not establish correct GWT. |
-| Names, comments, documentation and examples | AI checks meaning, clarity, terminology and agreement with actual behavior. Adopted fixes are AI editing tasks; free-form explanation is distinct from deterministic history fields. |
-| Local readability and organization | AI assesses small local cleanup and duplication in the changed scope. A large file split, architectural refactor or behavior change is not automatically Hygiene and is not implicitly adopted. |
-| Correctness, test adequacy and design/contract issues | AI reviews semantics and returns required findings or development candidates under the Effective Acceptance Boundary. Assertions, setup/actions and test coverage changes are not comments-only GWT hygiene. |
-
-The table is a responsibility guide for the existing changed-scope review, not
-an exhaustive new checklist for every file or a separate pass per category.
-Runtime may use configured tools to collect factual diagnostics; AI performs
-the judgment that cannot be determined by those rules. No new general-purpose
-static-analysis framework or history-comparison ledger is required.
-
-### Connected handling
-
-1. AI implementation/FIX returns its actual edits and result. Its assignment
-   excludes source-history field maintenance; generated skill instructions must
-   not reintroduce history-date chores inherited from older development skills.
-2. During mechanical progression, sm-workflow applies declared history and
-   formatting maintenance before the candidate's applicable validation/review
-   and commit. Reuse existing changed-path information. Do not scan the whole
-   repository or silently alter an already accepted candidate after review.
-3. One integrated AI review receives the relevant requirements, changed code/specs
-   and actual diagnostics. It covers semantic correctness and meaning-dependent
-   Hygiene, including GWT, names, explanations and local readability. It does not
-   duplicate history-date or deterministic formatter inspection.
-4. Runtime routes each finding by responsibility and adopted scope. Required
-   or already-adopted semantic corrections become one bounded REVIEW_FIX request
-   with issue IDs, targets, reasons and expected corrections. The AI edits the
-   actual files and returns per-issue outcomes through the common Submit route.
-   Deterministic maintenance omissions stay on the Workflow/tool path.
-5. Nonblocking Hygiene and development candidates that were not adopted follow
-   the recording route below and do not block completion. Validation/review of
-   actual corrections follows their affected meaning; no extra cycle per GWT
-   comment, name or individual finding, and no unrelated full-suite rerun merely
-   for a deterministic header edit.
-
-If maintenance fails or its rule is unavailable, report the actual tool/configuration
-problem through normal error handling; do not silently delegate date/header editing
-to AI. A separate explicit request to develop/fix the maintenance tool is ordinary
-development work, not routine source-history upkeep. Actual execution results are
-recorded normally; no unchanged-content proof or copied-file certificate is added.
-
-Phase 6 delivers the runtime maintenance connection and the review/FIX/recording
-skill responsibilities together, using Phase 5.3's common loop. P6-HR01..04 in the
-[connected checklist](managed-test-suites-phase-checklist.md#review-and-maintenance-responsibilities)
-cover this distinction in the existing integrated batch. This is not a new Phase
-5.3 completion condition or permission to expand the active Phase 5.2.
-
-## Hygiene and development-candidate recording — 2026-10-12
-
-Deliver the following connected responsibility split as Phase 6 functionality:
-
-1. **sm-workflow receives the review result**, distinguishing required repairs,
-   nonblocking Hygiene and development candidates. Reuse applicable finding
-   identities and classification contracts. Review acceptance can coexist with
-   nonblocking findings; do not require every finding list to be empty to accept.
-2. **sm-workflow requests recording work from AI** through the normal semantic
-   work/result route. Supply the items, their review/source context and the
-   project's selected recording destination/convention. The request is to record
-   discoveries, not to fix or implement them.
-3. **Codex / the assigned recording skill edits and saves the document**. It reads
-   the existing project journal or candidate document, records the classification,
-   description, affected target, reason and source, and returns the actual edited
-   file/section references and work outcome. Use the selected project convention;
-   each skill must not independently invent its own storage location or format.
-4. **sm-workflow consumes the recording result and requests the next work** under
-   the existing workflow decision. Required repairs remain required; where only
-   nonblocking items remain, proceed toward normal completion/release after
-   recording instead of starting a repair cycle for those items.
-
-sm-workflow owns the request, result association and progression. AI owns this
-free-form finding-record prose and document editing. Deterministic source-history
-edits follow the separate maintenance contract above. Workflow does not need a prose editor or a second
-document-storage subsystem. Keep the original review result and recording
-references in the ordinary workflow records; the project document holds the
-human-readable entry. A read-only reviewer can return findings without editing;
-the development/recording worker performs the subsequent recording task.
-
-Recording and adoption are distinct. Neither an entry nor its classification
-adds a required repair, changes the accepted scope, increments repair counts or
-consumes an automatic Fix cycle. This task records findings; it is not a Hygiene
-repair batch. Later actual Hygiene/minor repairs still follow the existing count
-and convergence rules. A developer can explicitly adopt a candidate into a
-Phase/Step through the existing planning path. Recording is not such adoption.
-
-Batch the items from one review into a bounded recording task. When there are no
-items, skip it. A failed/partial recording returns its actual outcome and uses
-ordinary task failure/decision handling; do not claim the entries were saved or
-silently turn that failure into implementation work. Do not add unbounded retry,
-a separate review cycle for each entry, or another review of the recording that
-recursively creates more mandatory recording work.
-
-Use Phase 5.3's business-typed minimal interface: session context plus actual recording inputs
-and results. Do not require callers to echo issued envelopes, internal revisions,
-saved findings or file contents as comparison certificates. Use ordinary file
-changes and task outcomes, without hashes, full-copy retention, unchanged-content
-checks or a new recording-integrity ledger.
-
-Connected Executable Specifications and the Phase 6 driver cover:
-
-- a review accepted with Hygiene/development candidates -> a recording request
-  -> AI/skill writes the selected project document -> result consumed -> normal
-  continuation/release eligibility, without converting those items into repairs;
-- a mixed review preserves required repairs while separately recording optional
-  items; recording does not enlarge repair scope or alter repair counters;
-- no optional items skips recording, and failed/partial recording is reported
-  accurately rather than marked complete.
-
-Include an actual Codex/skill file-edit/result example in the connected Phase 6
-acceptance, alongside deterministic specs. Standalone skill text or a fabricated
-recording receipt does not demonstrate the feature. Validate and review this
-with the existing integrated batch, not through another per-item review process.
-
-## Workflow responsibility boundary
-
-Consume the [explicit continuation and Step-completion reset contract](../notes/managed-test-suites-and-verification-cost-guard.md#explicit-continuation-approval-and-step-completion--2026-10-11).
-User approval to continue stopped repairs resets both active counts once while
-retaining history and convergence trends. Accepted Step completion/commit closes
-that Step's loop; the next Step starts at zero. Checkpoint/WIP/within-Step repair
-commits do not reset an unfinished loop. Connect this behavior through the
-existing decision and Step-close routes, without per-finding reapproval.
-Phase 6 owns implementation and connected acceptance of this contract. Reuse
-existing runtime support where present and implement missing transitions here;
-do not assume the Phase 5 foundation already supplies the reset behavior.
-Phase 9 consumes the accepted contract when adding provider re-routing.
-
-The generic execution contract MUST preserve the software-development responsibility split proven by sm-workflow: GoalPhase may close and locally commit one admitted repository/worktree, while RepositorySync may orchestrate synchronization/convergence across the Project Workspace. ExecutionRequirement generalization MUST NOT merge these application responsibilities into one generic closing operation.
-
-Phase 7's [Development Artifact Overlay](../spec/development-artifact-overlay.md)
-uses this same skill/client boundary: native Operations and execution adapters
-own publication and dependency selection. Skills must not acquire an alternate
-artifact lifecycle or copied JSON state machine. The overlay implementation is
-Phase 7 work and does not become a prerequisite for Phase 6's first usable skills.
-
-## Genericization rule
-
-Do not move software-development classifications such as TRIVIAL or PROGRAMMING / ENGINEERING into CNCF merely because Phase 5 uses them. Generalize only the resolved execution concepts that are meaningful across applications.
-
-## Executable Specification direction
-
-Demonstrate at least:
-
-- application-specific assessments mapping to the same generic execution requirement;
-- INLINE execution by the current participant;
-- DELEGATED execution by another provider;
-- REQUIRED independence rejecting completion that reuses a prohibited producer execution identity;
-- provider replacement without Workflow definition change;
-- provider unavailability/fallback without changing semantic WorkOrder identity;
-- equivalent generic behavior for an AI worker and at least one non-identical participant class;
-- ExecutionEvidence sufficient for requirement conformance and later audit;
-- DECLINED preserved as a normal attributable provider-routing outcome distinct from semantic failure/BLOCKED;
-- evidence can be aggregated by Project x Provider/Machine to derive local decline rate, validated local completion rate, escalation rate, and review disagreement without changing Workflow semantics.
-
-Also demonstrate the actual skill-connected route: an issued request carries
-the selected thinking mode and relevant context; the skill supplies the declared
-semantic result; Workflow accepts it and proceeds to the real scenario outcome.
-Cover supported modes with examples of their expected abstraction/result shape,
-and reject incompatible request/result combinations at the appropriate boundary.
-Changing concrete provider mapping must not silently change the requested mode
-or its semantic result contract. CLI-only tests and standalone skill text are
-insufficient evidence of this connection.
-
-## Practical completion and start of use
-
-- P6-SQ01..05 establish the real Step -> integrated Phase Review -> repair/re-review
-  -> Final reuse/closure route with CNCF 106, Cozy 81 and cbd-support 15 bounded
-  deliveries accepted at their owners. Initial staged review is not deferred to
-  Phase 9 or satisfied only by mocked provider output or authored skill text.
-- P6-EX01..03 and P6-PS01..04 in the connected checklist demonstrate runtime-owned
-  command lifecycles and live Phase-document/internal-plan synchronization.
-  Required SBT/Git connections use real effects; AI executes semantic work, not
-  shell commands or log forwarding. Progress writeback preserves current plan
-  edits and execution facts; these capabilities are not deferred to Phase 8.
-- The selected abstract thinking modes and request/result contract are implemented.
-- P6-DG01..03 demonstrate the parent/runtime loop, role-appropriate delegation
-  and bounded but sufficient independent-review context. Concrete model profiles
-  are replaceable; neither universal delegation nor the most expensive model
-  is the programming default.
-- Required skills are created/adapted, available in the intended execution
-  environment and connected through the normal client to the runtime.
-- The common client loop displays each submit's returned chat-oriented result
-  before the next Advance and uses its actual typed acceptance outcome. No extra
-  information fetch or AI acknowledgement step is needed for that display.
-- P6-ID01..03 establish the documented identity acquisition/allocation owner,
-  caller retention and propagation across independent invocations, including
-  independent developments in different chats with one session ID per execution
-  and no additional caller-side target selection.
-- The selected development workflow works from skill invocation through result
-  submission and completion, with required execution placement and independent
-  review; setup and limitations are documented.
-- Connected Executable Specifications and required checks pass, and independent
-  review has no unresolved blockers for this practical scope.
-- The connected driver demonstrates Effective Acceptance Boundary enforcement:
-  required failures block, excluded assurance proposals do not, and explicit
-  adopted Goal/Phase overrides are consistent across request/FIX/Review/Admission.
-- Dependency boundary scenarios P6-CB01..04 pass through actual skill/client and
-  runtime decision handling: proposed external Component/library edits yield to
-  the developer, including same-repository dependencies; approval is scoped,
-  refusal does not dispatch edits and already-approved work does not re-prompt.
-  Planning, implementation and review responsibilities are all demonstrated.
-- The managed-suite design/FIX/improvement connection above passes its assigned
-  acceptance, using the Phase 5 runtime and the same public skill interface.
-- Hygiene and development candidates pass through review intake -> AI recording
-  request -> actual project-document edit/save -> result -> next work. Review
-  acceptance permits nonblocking findings; recording does not adopt them as
-  required repairs or add a repair cycle. The runtime and skill both implement
-  their responsibilities, including accurate recording-failure outcomes.
-- P6-HR01..04 demonstrate deterministic source-history maintenance with no AI
-  editing/review chore, integrated semantic Hygiene review including GWT and
-  other observations, bounded adopted correction and nonblocking recording.
-- P6-TS05 proves runtime and normal client behavior for exhaustion -> explicit
-  continuation approval -> both counts zero -> multiple subsequent repair
-  batches without per-finding reapproval, retaining history/convergence trends.
-  Accepted Step completion/commit -> next Step counts zero is also verified;
-  a checkpoint/WIP/within-Step repair commit leaves active counts intact.
-  Reset implementation and this connected acceptance are required to close
-  Phase 6, before gradual real use begins.
-- Phase 5's removal of unnecessary checks remains effective on the connected
-  route. Record other needs in Phase 8 without delaying use for optional breadth.
-
-After this acceptance, begin gradual real use. Continue it during Phase 7;
-address use-blocking gaps early and finish necessary carryover in Phase 8.
+The generated top metadata is the reciprocal aggregate declaration. Phases 6,
+6.1 and 6.2 omit only repository-full validation and truthfully record
+`deferred-not-run`; Phase 6.3 owns `sbt --batch test` once for the entire accepted
+serial sequence at its final release tree. No bootstrap exception applies:
+`build.sbt` already exists. Product execution uses ordinary sbt directly with
+native sbt locks, standard caches and scoped platform permission, without a
+global wrapper or scripted prerequisite. Development validation follows the
+latest supplied AGENTS: the registered runner serializes independent top-level
+SBT invocations through the shared wrapper and releases its lock before another
+invocation. Legitimate child SBT belongs to the owning managed lifecycle.
+The isolated normal connection Slice claims no actual runtime-parallelism result.
+This split records no test/review success or release acceptance.
 
 ## Non-goals
 
-- Moving sm-goal-phase planning semantics into CNCF.
-- Treating concrete model/provider names as Workflow guards.
-- Building a universal autonomous-agent framework.
-- Making context-budget optimization a prerequisite for Phase 5 runtime completion or Phase 6 initial skill-based use.
+No Phase 7 workspace/overlay delivery, Phase 8 optional transport/provider breadth,
+Phase 9 convergence/provider switching, OpenCode/local-LLM installation or new
+universal agent framework. Manual local-LLM trials remain reference activity.
+This planning update starts no product Goal, child execution, upstream work,
+test, publication, push, deployment or commit.
 
-## Post-Phase-6 provider candidate: OpenCode
+## Phase Plan Gate
 
-OpenCode is a concrete provider candidate for a successor Phase after Phase 6 closes. It is intentionally NOT a Phase 6 completion requirement.
+The following PROCEED is the recorded split gate, not a new duration assessment
+for the 2026-10-15 scope. Update the remaining-work estimate during ordinary
+planning before using it for implementation dispatch; no new approval cycle.
 
-Phase 6 should establish a provider-neutral contract strong enough that a later OpenCode adapter can be added without changing Workflow definitions or semantic WorkClassification. The later adapter can be evaluated as a driver of the generic ExecutionRequirement -> Provider Selection -> ExecutionEvidence boundary.
+Phase Plan Gate: PROCEED
+- scope_revision: bounded CNCF110/CBD16 correction and SBT preparation separation added; retain ongoing history and re-estimate remaining connected work at the next planning boundary, without a new user-approval ritual
+- target: 6h expected-duration target; 8h expected-duration ceiling
+- estimate_calibration: no comparable planned/observed duration pair; no multiplier
+- planning_demand: protected-decision
+- recommended_parent_profile: gpt-6.1-sol / high
+- profile_cost_role: expensive reasoning kernel
+- expensive_reasoning_kernel: mode/session/provider/Boundary binding proved in the actual client
+- frozen_profile_transition_handoff: accepted Phase 5.3 business Operation contract
+- parent_reasoning_mode_policy: standard
+- estimated_at_recommended_profile: historical split baseline 6h / 5–7h; not a current estimate for the added producer/integration work
+- incoming_semantic_handoffs: []
+- merge_attempts_for_every_sub_4h_child: none; no child below 4h
+- rebalance_attempts_for_every_sub_5h_child: none; no child below 5h
+- adjacent_merge_structural_rejection_evidence: none; adjacent expected totals are 12h, above the 8h ceiling
+- profile_cost_only_rejection_forbidden: true
+- short_child_basis: none
+- overhead_tradeoff: three added Phase review/closure/release handoffs; final-only avoids repeating repository-full tests; no quantified cost saving claimed
+- agent_reasoning_mode_policy: default standard; pro only at an eligible justified agent launch
+- runtime_suitability: re-evaluate in the Phase execution task
+- source: applied split from Phase 6 on 2026-10-13
 
-The main expected value is a common execution gateway to cloud and local/self-hosted models, including Ollama/LM Studio-class environments, without making sm-workflow itself implement each model/provider protocol. Codex remains an independent provider; OpenCode is not intended to replace or become the semantic identity of coding work.
-
-A successor implementation should study VirtusLab Orca's OpenCode backend as a reference for server/session lifecycle, model selection, streaming/result handling, tool execution, local/self-hosted provider use, and execution/cost evidence. Orca is reference evidence only; sm-workflow/CNCF contracts remain authoritative.
-
-The Workflow boundary must remain logical. OpenCode/provider/model/reasoning-variant identifiers belong to environment/provider resolution and ExecutionEvidence, not Workflow guards or application state transitions.
-
-Phase 6 therefore closes once generic provider replacement is proven; it must not remain open waiting for OpenCode/Ollama integration.
-
-Concrete local LLM integration is a manual operational trial, recorded as
-[Phase 8 reference information](phase-8-local-llm-reference.md). It is a
-developer-owned reference activity, not a completion condition for Phase 6, 8
-or 9. Only a need observed in real use
-can bring a bounded provider-related extension into Phase 8's selected work.
+These are structural planning results, not verification of a future task's
+runtime profile. Dependency delay is separate from the implementation estimate;
+the 8h ceiling is a packing rule, not an execution timeout.

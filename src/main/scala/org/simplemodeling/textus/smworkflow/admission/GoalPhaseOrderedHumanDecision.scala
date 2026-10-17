@@ -20,7 +20,7 @@ import GoalPhaseOrderedProgression as O
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 14, 2026
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
@@ -97,7 +97,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       }
       retained <- retainedForPlanC(plan, core)
       wire <- retained match {
-        case None => NativeWorkflowOperationOutput.goalHumanC(plan.question)
+        case None => NativeWorkflowOperationOutput.goalHumanC(plan.question, core)
         case Some((state, next, result)) => if (result.result.value.choice == "ResumeAssignedWork")
           resume(source, state, next, result.result.value, core)
         else waitC(next, result)

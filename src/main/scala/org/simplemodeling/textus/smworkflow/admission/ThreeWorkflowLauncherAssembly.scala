@@ -10,7 +10,8 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowHostParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
   final case class Host(
@@ -37,7 +38,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
     "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
-    "RepositorySyncService.submitRepositoryConflictDecision")
+    "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   def factory(declarations: Vector[ComponentParameterKey[?]], routes: Vector[ComponentParameterPathRoute],
     host: HostDecoder): Component.BundleFactory = {
@@ -76,5 +77,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),
         creation, host.split, host.splitCatalog.definition),
       NativeWorkflowSessionInput.repository(NativeWorkflowResultInput.repository(sync, creation, repository.declaration, repositoryDefinition),
-        creation, repository.declaration, repositoryDefinition))
+        creation, repository.declaration, repositoryDefinition),
+      NativeHostPreparationServiceAssembly.bind)
 }

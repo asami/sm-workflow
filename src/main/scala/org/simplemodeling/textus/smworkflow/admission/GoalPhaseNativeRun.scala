@@ -23,7 +23,9 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
   val startOperation = StateMachineOperationIdentity("GoalPhaseService", "startGoalPhase")
@@ -38,7 +40,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     phaseValidationPolicy: Option[GoalPhaseNativeValidation.Policy] = None,
     repositoryClosure: Option[GoalPhaseNativeRepositoryClosure.Installation] = None,
     humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None,
-    executionProfiles: Option[WorkflowExecutionProfileMapping] = None)
+    executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
+    executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
+    projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan)
   trait PlanPort {
@@ -78,7 +82,9 @@ private[smworkflow] object GoalPhaseNativeRun {
           value.participantIdentity == selected.participantIdentity => Consequence.success(value)
       case _ => invalid("Start has no independently selected complete plan")
     }
-    _ <- if (admitted.plan.phase == input.phaseIdentity && admitted.plan.repository == input.repositoryIdentity &&
+    _ <- O.validatePlanC(admitted.plan)
+    plan <- GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, admitted.plan)
+    _ <- if (plan.phase == input.phaseIdentity && plan.repository == input.repositoryIdentity &&
         input.phaseIdentity == d.input.phaseIdentity && input.repositoryIdentity == d.input.repositoryIdentity)
       Consequence.unit else invalid("selected plan crosses its requested Phase/repository or host target")
     root <- G.rootC(core)
@@ -86,7 +92,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
       Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
     base = O.Snapshot(observed.head, observed.tree)
-    payload = Payload(selected.participantIdentity, root, observed.branch, admitted.plan, base)
+    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base)
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -130,7 +136,9 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null))
       invalid("native ordered host declaration is incomplete")
-    else d.configuration.validateC.flatMap(_ => d.validationPolicy.fold(Consequence.unit)(p =>
+    else GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance).flatMap(_ =>
+      GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
+      d.configuration.validateC).flatMap(_ => d.validationPolicy.fold(Consequence.unit)(p =>
       if (p == null) invalid("native ordered validation policy is missing") else p.validateC)).flatMap(_ =>
         d.reviewInstallation.fold(Consequence.unit)(r =>
           if (r == null || d.validationPolicy.isEmpty || d.candidatePaths.isEmpty)

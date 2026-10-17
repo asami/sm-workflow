@@ -322,12 +322,14 @@ All changed cases remain UNVERIFIED.
 
 ## R6 — Retain the selected parent-child invocation, not a regenerated command
 
-The owning Phase stores a typed child Start using the existing public v1 command
-wire shape. Recovery consumes this selected original command and parent input;
-it does not build a fresh child command or demand whole-command/Plan/authority
-input equality. A new installation's selection for new invocations is not a
-certificate for the retained invocation. The original selection still resolves
-through the actual installed child Operation and selection port. Actual parent
+The current owning Phase retains its selected parent input, child session and
+actual child convergence result in the current v3 closure payload. Terminal
+consumes that original meaning through the owning native completion boundary;
+it does not start or advance the child again or demand whole-command/Plan/grant/
+body equality. A new installation's selection for new invocations is not a
+certificate for the retained invocation. The original selection resolves through
+the actual installed child Operation and selection port when child work is
+needed. Actual parent
 instance/source frontier, selected Plan reference, candidate/native commit chain,
 review-result reference, child invocation, participant and repository/tracking/
 endpoint/effect scope remain required. These references resolve real targets;
@@ -342,8 +344,27 @@ nested executable/authority fields and malformed actual data still refuse.
 Terminal consumes the saved parent meaning, not fresh authority presentation.
 No legacy row rewrite, new authority or synthetic child completion is implied.
 
-Parent and child completion use the authoritative native append's readback rather
-than loading again to prove its unchanged body. Convergence resolves the actual
+Parent completion loads the owning current native instance by the saved closure
+identity. Both records must validate and match actual instance and workflow
+identity/revision; the saved record must be Active at `phase.Closed` without
+suspension and name a nonblank child session. The proposed completion entry is
+derived from that saved frontier and admitted through native append validation.
+If the current frontier still has that saved revision and selected last native
+entry, normal conditional append commits the next Completed transition once,
+then emits `goal-repository-completed`. A CAS conflict propagates without retry.
+
+If current is already exactly that next revision, Completed with no progression
+or suspension and its actual last entry is the derived completion entry, Terminal
+returns the actual loaded current record and original child result without a
+second append or acknowledgement. Sequence, causation, correlation, occurrence
+and predecessor linkage belong to this selected transition. Missing native state
+or another owner, workflow revision, revision, lifecycle, progression, last entry
+or completion cause fails. This compares the selected committed native frontier,
+not complete history, record/body copies, source or diagnostic DefinitionBinding
+object identity. A lost post-append acknowledgement can therefore be followed by
+an ordinary result read without renewing authority or replaying child Git/SBT.
+
+Child completion uses the authoritative native append's readback. Convergence resolves the actual
 selected accepted frontier and Git target, not copied previous history, whole
 observation or validation-policy diagnostic bodies. The final local observation
 is not repeated solely for equality with the first observation. Actual local/
@@ -366,6 +387,37 @@ E15: GoalPhaseNativeRetentionApplicabilitySpec resolves actual adjacent accepted
 and current frontiers despite preceding-history/observation diagnostics; actual
 Git target or foreign instance contradictions refuse. It exercises this selector,
 not complete convergence/effect admission. All changed cases are UNVERIFIED.
+
+E16: GoalPhaseRepositoryCompletionSpec constructs specification-owned records
+with the actual admitted GoalPhase catalog and native `validateC`/`appendC`.
+Active closed state proposes one completion entry; its corresponding Completed
+state returns no entry even with a separately admitted definition. Another
+instance/workflow revision, prior/extra native revision, altered causal linkage,
+progression/suspension and missing or malformed consumed records/session fail.
+These fixture records are not managed history or evidence of process execution.
+ThreeWorkflowSbtOperationSpec owns the actual SQLite/public-Operation proof:
+ordinary completion and lost post-append acknowledgement both retain the original
+typed result, Step commit, child convergence/receipt and native revisions/history
+over repeated same-runtime and fresh-runtime Advances, with exactly three real
+checks and no fourth process. In the interrupted episode the first close fails
+after native completion, and its completion acknowledgement occurs exactly once.
+Actual188B qualified all five selected GoalPhaseRepositoryCompletionSpec guard
+cases and both normal/lost-acknowledgement SBT Goal episodes. Repeated public
+same-runtime and fresh-runtime reads retained the original typed completion,
+child result/receipt, Step commit and native revisions/history with three actual
+checks and no fourth launch or repeated completion acknowledgement. This is
+scoped R6/E16 evidence within 206 passing checks in 20 selected suites, not whole
+Phase acceptance. Actual193 qualified the common Repository/Goal/Repair fixture
+migration with 139 passing checks across all 18 concrete shared-fixture
+consumers (9 direct, 8 via `NativeHostPreparationManagedFixture`, 1 via
+`NativeHostPreparationOperationFixture`) plus 3 generated ABI/completion/retention
+guards: 21 selected suites. This scoped normal-route result does not complete
+the original installed task or correct its malformed captured pending request.
+The selected host's residual generic definitions are replaced with typed Git V3;
+required validation stays required while SBT declarations remain empty. Step
+acceptance, the sole full Phase review and release remain open, and Phase 6.3
+owns aggregate validation. Historical evidence above retains its original scope
+and links.
 
 ## Remaining connected removal
 

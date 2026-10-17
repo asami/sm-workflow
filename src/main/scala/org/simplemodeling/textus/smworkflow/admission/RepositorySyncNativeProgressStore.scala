@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -27,10 +27,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     validation: Option[RepositorySyncNativeMergeValidation.State] = None,
     finalTip: Option[String] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
-  private given Encoder[RepositorySyncNativeMergeValidation.Check] = deriveEncoder
-  private given Decoder[RepositorySyncNativeMergeValidation.Check] = deriveDecoder
-  private given Encoder[RepositorySyncNativeMergeValidation.Receipt] = deriveEncoder
-  private given Decoder[RepositorySyncNativeMergeValidation.Receipt] = deriveDecoder
+  final case class Candidate(namespace: String, pending: Stage)
+  def candidateKey(namespace: String, key: String): String =
+    if (namespace.isEmpty) key else namespace + "-" + key
   private given Encoder[RepositorySyncNativeMergeValidation.State] = Encoder.instance(RepositorySyncNativeMergeValidation.stateCodec.encode)
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
@@ -53,6 +52,32 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     val identity: String,
     adapter: WorkflowManagedMechanicalTransition[Payload], storage: WorkflowComponentStorage,
     acknowledgement: String => Consequence[Unit]) {
+    /** The current native history selects the actual candidate receipt. A
+      * reference is an ordinary progression link, not an unchanged-data seal.
+      */
+    def currentMergeCandidateC(current: InstanceRecord): Consequence[Candidate] = {
+      if (current.identity.value != identity) return invalid("current candidate history crosses its instance")
+      val selected = current.history.reverse.find(entry =>
+        entry.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared")) &&
+          entry.causation.value.startsWith("native-repository:") && entry.causation.value.contains(":repair-"))
+      selected match {
+        case None => loadC("pending-merge").flatMap {
+          case Some(value) if value.payload.stage == "PendingMergePrepared" => Consequence.success(Candidate("", value))
+          case _ => invalid("original pending merge receipt is absent")
+        }
+        case Some(entry) =>
+          val pattern = (java.util.regex.Pattern.quote("native-repository:" + identity + ":") +
+            "(repair-[1-9][0-9]*)-pending-merge").r
+          entry.causation.value match {
+            case pattern(namespace) => loadC(candidateKey(namespace, "pending-merge")).flatMap {
+              case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision =>
+                Consequence.success(Candidate(namespace, value))
+              case _ => invalid("selected repaired candidate receipt is absent or has the wrong stage")
+            }
+            case _ => invalid("selected repaired candidate reference crosses its instance or is malformed")
+          }
+      }
+    }
     def loadC(key: String): Consequence[Option[Stage]] =
       adapter.loadRetainedC(reference(key))(using core.executionContext).flatMap {
         case None => Consequence.success(None)
@@ -109,6 +134,20 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     session.storage.bindMechanicalC(RepositorySyncManagedFetch.advanceOperation, codec).map(adapter =>
       new Store(declaration, core, session.started.receipt.payload.value, session.context,
         session.started.receipt.next.identity.value, adapter, session.storage, acknowledgement))
+  /** Consume the actual paired committed revision in the current native record;
+    * never regenerate or append a historical completion.
+    */
+  def completionNextC(current: InstanceRecord, revision: InstanceRevision,
+    reference: ContextReference, stage: String): Consequence[InstanceRecord] =
+    current.history.find(_.revision == revision) match {
+      case Some(entry) if entry.currentProgression.contains(ProgressionReference("sync." + stage)) &&
+          entry.causation.value == reference.identity && entry.suspension.isEmpty =>
+        Consequence.success(current.copy(revision = entry.revision, lifecycle = entry.lifecycle,
+          currentProgression = entry.currentProgression, correlation = entry.correlation, causation = entry.causation,
+          derivedCompositeOccurrence = entry.derivedCompositeOccurrence, committedPredecessor = entry.committedPredecessor,
+          suspension = entry.suspension, history = current.history.takeWhile(_.revision.value <= entry.revision.value)))
+      case _ => invalid("paired completion has no actual committed native entry")
+    }
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native progression " + reason)
   def uncertain[A](reason: String): Consequence[A] =
     DataStoreConditionalTransitionFailure.transactionIndeterminate("RepositorySync native progression " + reason)

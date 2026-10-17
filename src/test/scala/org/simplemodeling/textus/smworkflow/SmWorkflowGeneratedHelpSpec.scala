@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 15, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -28,6 +29,10 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
+    SmWorkflowComponent.NativeHostPreparationServiceService -> Vector(
+      "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
+      "prepareExecution", "recordExecution"
+    ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision"
     ),
@@ -37,7 +42,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     ),
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
       "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
-      "submitNativeMergeReview", "submitRepositoryConflictDecision"
+      "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
@@ -47,6 +52,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.GoalPhaseStepReviewServiceService -> Vector("reviewGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseReviewServiceService -> Vector("reviewGoalPhase"),
     SmWorkflowComponent.MergeReviewServiceService -> Vector("reviewNativePendingMerge"),
+    SmWorkflowComponent.MergeRepairServiceService -> Vector("repairNativePendingMerge"),
     SmWorkflowComponent.SplitSemanticServiceService -> Vector(
       "assessPartitionSemanticInputs", "assessHandoffScopes", "assessReasoningDemand"
     ),
@@ -54,7 +60,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "admitPartitionSemanticInputs", "admitHandoffScopes", "admitReasoningDemand"
     ),
     SmWorkflowComponent.SplitHumanServiceService -> Vector("presentSplitHumanDirection", "presentReasoningHumanDirection"),
-    SmWorkflowComponent.RepositorySyncSemanticAdmissionServiceService -> Vector("admitRepositoryConflicts", "admitNativeMergeReview"),
+    SmWorkflowComponent.RepositorySyncSemanticAdmissionServiceService -> Vector("admitRepositoryConflicts", "admitNativeMergeReview", "admitNativeMergeRepair"),
     SmWorkflowComponent.GoalPhaseSemanticAdmissionServiceService -> Vector("admitOrderedStepReview")
   )
   // The generated Component retains CNCF's canonical host services in addition
@@ -76,6 +82,12 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     )),
     ("RepositoryConflictService", "resolveRepositoryMergeConflicts", Vector(
       "Do not modify files", "grants command authority"
+    )),
+    ("MergeRepairService", "repairNativePendingMerge", Vector(
+      "exactly the assigned finding/file scope", "subsequent reviewer remains independent"
+    )),
+    ("RepositorySyncService", "submitNativeMergeRepair", Vector(
+      "Submit never calls Advance", "Decision-needed stays nonterminal"
     )),
     ("GoalPhaseImplementationService", "implementGoalPhaseStep", Vector(
       "do not select another Step", "supply native receipts"
@@ -111,9 +123,29 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
   private def _selector(service: String, operation: String): String =
     s"${SmWorkflowComponent.componentId.name}.$service.$operation"
 
-  "SmWorkflow generated Help" should {
+  "SmWorkflow generated Help" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
+    "normal passive execution descriptions" which {
+      Vector("prepareExecution" -> "workflowhostexecutionprepareinput", "recordExecution" -> "workflowhostexecutionrecordinput")
+        .foreach { (name, inputtype) =>
+        s"describe the concrete input and execution-state output of $name" in {
+          Given("spec:native-host-execution R6,R7,R9: the generated passive execution declaration " + name)
+          val operation = SmWorkflowComponent.NativeHostPreparationServiceService.operations.operations.find(_.name == name).get
+          When("ordinary canonical Help projects that exact generated Operation")
+          val help = HelpProjection.projectModel(_component(), Some(_selector("NativeHostPreparationService", name)))
+          Then("the one named input, concrete public type and opaque execution-state output remain ordinary generated Help metadata")
+          help.details("arguments") shouldBe Vector("input")
+          help.details("returns").mkString should include("WorkflowHostExecutionState")
+          help.details("description").mkString should include("opaque")
+          help.details("description").mkString should include("No provider IO")
+          operation.specification.request.parameters.head.name shouldBe "input"
+          operation.specification.request.parameters.head.datatype.name should include(inputtype)
+          help.details("argumentDetails").mkString should include(inputtype)
+        }
+      }
+    }
+
     "the declared component catalog" which {
-      "retain all sixteen current declared services and thirty-four operations alongside the canonical host services" in {
+      "retain the complete declared operation catalog alongside the canonical host services" in {
         Given("the complete public declaration catalog, independently of production handler installation")
         val names = _declarations.map(_._1.name).sorted
 
@@ -129,14 +161,13 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
         help.`type` shouldBe "component"
         help.componentId shouldBe Some(SmWorkflowComponent.componentId.name)
         help.selector.map(_.canonical) shouldBe Some(SmWorkflowComponent.componentId.name)
-        names.size shouldBe 16
-        names.distinct.size shouldBe 16
+        names.distinct.size shouldBe names.size
         declaredServices.map(_.name).sorted shouldBe names
         hostServices.map(_.name).sorted shouldBe _host_service_names.sorted
         help.children shouldBe (names ++ _host_service_names).sorted
-        help.children.size shouldBe 18
+        help.children.size shouldBe names.size + _host_service_names.size
         help.details("services") shouldBe help.children
-        operations.size shouldBe 34
+        operations.size shouldBe _declarations.flatMap(_._2).size
         declaredServices.foreach { service =>
           service.operations.operations.map(_.name).toVector.sorted shouldBe
             _declarations.find(_._1.name == service.name).get._2.sorted

@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
   * nonempty descriptions or that native all-three production hosts are installed.
   * The complete generated Help contract separately requires real descriptions.
   * @since   Oct.  7, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
   */
 final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _operations: Vector[(String, spec.OperationDefinition)] = Vector(
@@ -26,6 +26,7 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.AdvanceRepositorySyncOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
+    "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation,
     "RepositorySyncService" -> SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
     "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.StartSplitPhaseOperation,
     "SplitPhaseService" -> SmWorkflowComponent.SplitPhaseServiceService.AdvanceSplitPhaseOperation,
@@ -41,7 +42,7 @@ final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Match
   )
 
   "Native workflow descriptions" should {
-    "normal named operation specifications" which {
+    "normal named operation specifications" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
       _operations.foreach { case (service, declared) =>
         s"retain $service.${declared.name}'s named request, response and generated descriptions" in {
           Given("the actual generated CML Operation and its named business contract")

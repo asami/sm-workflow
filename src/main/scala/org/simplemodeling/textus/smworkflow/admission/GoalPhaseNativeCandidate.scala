@@ -5,6 +5,7 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -19,7 +20,8 @@ import WorkflowManagedProcessExecution as E
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
   final case class Payload(sourceRevision: String, step: String,
@@ -100,7 +102,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           _ <- store.acknowledgeC("goal-candidate-prepared:" + path)
           actual <- E.stageGoalCandidateC(store.core, store.d.candidatePaths.indexOf(path) + 1)
           _ <- store.acknowledgeC("goal-candidate-executed:" + path)
-          _ <- G.requiredTextC(actual).map(_ => ())
+          _ <- actual.valueC
           recorded <- store.saveC("stage-result-" + index, prepared.record,
             current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
           _ <- store.acknowledgeC("goal-candidate-recorded:" + path)
@@ -113,12 +115,14 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       _ <- if (actual.dirty.forall(p => p.worktree == ' ' && p.index != '?' && p.index != '!')) Consequence.unit
         else F.invalid("candidate has unstaged or unsupported native changes")
       tree <- G.indexTreeC(store.core)
-      paths <- E.executeNativeGitC(store.core, E.NativeGitEffect.PendingPaths(store.diffBase.head))
-        .flatMap(G.requiredTextC).flatMap(pathsC)
+      parent <- GitObjectId.parseC(store.diffBase.head)
+      nativePaths <- E.executeGitC(store.core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
+      paths = nativePaths.map(_.value)
       _ <- if (paths.forall(p => store.ownedPaths.exists(covers(_, p)))) Consequence.unit
         else F.invalid("candidate diff crosses selected Step ownership")
-      diff <- E.executeNativeGitC(store.core, E.NativeGitEffect.PendingDiff(store.diffBase.head)).flatMap(G.requiredTextC)
-      _ <- if (diff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 131072) Consequence.unit
+      nativeDiff <- E.executeGitC(store.core, GitOperation.PendingDiff(parent)).flatMap(_.valueC)
+      diff = nativeDiff.text
+      _ <- if (!nativeDiff.isBinary && diff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 131072) Consequence.unit
         else F.invalid("candidate diff exceeds the supported native inspection boundary")
       snapshot = O.Snapshot(actual.head, tree)
       inspected <- store.controller.acceptC(O.CandidateObserved(snapshot))
@@ -182,11 +186,4 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     }
   }
   private def covers(owner: String, path: String): Boolean = path == owner || path.startsWith(owner + "/")
-  private def pathsC(text: String): Consequence[Vector[String]] =
-    if (text.isEmpty) Consequence.success(Vector.empty)
-    else if (text.endsWith("\u0000")) {
-      val paths = text.dropRight(1).split("\u0000", -1).toVector
-      if (paths.distinct == paths && paths.forall(RepositorySyncNativeConflictInput.relative)) Consequence.success(paths)
-      else F.invalid("native candidate paths are malformed")
-    } else F.invalid("native candidate paths are not NUL terminated")
 }

@@ -9,7 +9,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreConditionalTransitionFailure}
-import org.goldenport.cncf.processexecution.ProcessExecutionTermination
+import org.goldenport.cncf.processexecution.GitOperation
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -24,7 +24,9 @@ import WorkflowManagedProcessExecution as Process
   * client stage command, SQL provider or component-owned process is used.
   * Fetch and DB commits are separate effects: an uncertain call never retries.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 15, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedFetch {
   val startOperation = StateMachineOperationIdentity("RepositorySyncService", "startRepositorySync")
@@ -32,7 +34,10 @@ private[smworkflow] object RepositorySyncManagedFetch {
   val schema = "sm-workflow.repository-sync-managed-fetch.v3"
   final case class Declaration(configuration: Configuration, instances: DataStore.CollectionId,
     continuations: DataStore.CollectionId, input: RepositorySyncStartInput,
-    target: RepositoryGitRuntimePrograms.Target)
+    target: RepositoryGitRuntimePrograms.Target,
+    executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
+    executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
+    executionClassifications: Option[RepositorySyncNativeExecution.Classifications] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -75,7 +80,10 @@ private[smworkflow] object RepositorySyncManagedFetch {
         d.input.localBranch != d.target.localBranch || d.input.trackingRemote != d.target.remote ||
         d.input.trackingBranch != d.target.remoteBranch)
       invalid("host storage/tracking declaration differs")
-    else d.configuration.validateC.map(_ => ())
+    else for {
+      _ <- d.configuration.validateC
+      _ <- RepositorySyncNativeExecution.validateC(d.executionClassifications, d.executionProfiles, d.executionOrigin)
+    } yield ()
 
   /** Actual repository/tracking/effect scope, not a policy-version witness. */
   private def sameTarget(left: NativeWorkflowStartInput.Repository, right: RepositorySyncStartInput): Boolean =
@@ -162,9 +170,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
         present = observed.trackingTip.contains(expected)
         effect <- if (present) Consequence.success(if (fresh) "already-present" else "observed-present")
           else if (!fresh) uncertain("prior fetch outcome is not established; no automatic replay is authorized")
-          else Process.executeC(core, Process.Purpose.GitFetch, "").flatMap(result =>
-            if (result.termination == ProcessExecutionTermination.Exited(0)) Consequence.success("executed")
-            else uncertain("fetch termination does not establish its result; observe later"))
+          else Process.executeGitC(core, GitOperation.Fetch).flatMap(_.valueC).map(_ => "executed")
         after <- if (present) Consequence.success(observed) else Git.observeC(core)
         _ <- if (after.trackingTip.contains(expected) && after.counts.nonEmpty) Consequence.unit
           else uncertain("actual fetched tip differs from the advertised intent; no receipt was invented")

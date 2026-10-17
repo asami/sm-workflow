@@ -10,7 +10,9 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
   final case class Step(identity: String, purpose: String, ownedPaths: Vector[String],
@@ -25,10 +27,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   }
   final case class Plan(identity: String, revision: String, phase: String, repository: String,
     steps: Vector[Step], phaseChecks: Vector[String], repairLimit: Int = 0,
-    phaseReviewClassification: Option[GoalPhaseWorkClassification.Classification] = None)
+    phaseReviewClassification: Option[GoalPhaseWorkClassification.Classification] = None,
+    acceptance: Option[GoalPhaseAcceptanceBoundary.Adoption] = None,
+    effectiveAcceptance: Option[GoalPhaseAcceptanceBoundary.Effective] = None)
   object Plan {
     given Encoder[Plan] = deriveEncoder[Plan].mapJson(_.mapObject(_.filter {
-      case ("phaseReviewClassification", value) => !value.isNull
+      case ("phaseReviewClassification" | "acceptance" | "effectiveAcceptance", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Plan] = deriveDecoder
@@ -202,7 +206,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       return invalid("selected complete Phase plan or bounded repair policy is missing")
     val ids = plan.steps.map(s => Option(s).map(_.identity).getOrElse(""))
     if (!identities(ids)) return invalid("selected Step identities are empty or duplicated")
-    plan.steps.zipWithIndex.foldLeft(Consequence.unit) { case (prior, (s, index)) => prior.flatMap { _ =>
+    plan.steps.zipWithIndex.foldLeft(GoalPhaseAcceptanceBoundary.validatePlanC(plan)) { case (prior, (s, index)) => prior.flatMap { _ =>
       if (s == null || !text(s.purpose) || s.ownedPaths == null || s.ownedPaths.isEmpty ||
           s.ownedPaths.size > 256 || s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
           !identities(s.dependencies) || !s.dependencies.forall(ids.take(index).contains) ||

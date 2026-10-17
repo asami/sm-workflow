@@ -5,6 +5,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.processexecution.{GitBranchName, GitObjectId, GitOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -17,7 +18,8 @@ import WorkflowManagedProcessExecution as E
   * recorded as normal progression. Intermediate recovery and replay guarantees
   * are not supplied here. Push remains non-forcing; actual convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 15, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
   enum Effect { case CommitPending, Push, FinalFetch }
@@ -63,7 +65,7 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     _ <- authorizeC(store, authority, Effect.CommitPending)
     intent <- store.saveC("commit-intent", "native-commit-prepared", accepted.record,
       accepted.payload.copy(stage = "NativeCommitPreparing"))
-    _ <- E.executeC(store.core, E.Purpose.GitCommitPending, "")
+    _ <- E.executeGitC(store.core, GitOperation.CommitPending).flatMap(_.valueC)
     actual <- G.inspectC(store.core)
     _ <- store.scopeC(actual.observed)
     saved <- store.saveC("commit-observed", "native-commit-observed", intent.record,
@@ -75,8 +77,9 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     _ <- authorizeC(store, authority, Effect.Push)
     intent <- store.saveC("push-intent", "native-push-prepared", committed.record,
       committed.payload.copy(stage = "NativePushPreparing"))
-    _ <- E.executeNativeGitC(store.core, E.NativeGitEffect.Push(committed.payload.finalTip.get,
-      store.declaration.target.remoteBranch))
+    tip <- GitObjectId.parseC(committed.payload.finalTip.get)
+    branch <- GitBranchName.parseC(store.declaration.target.remoteBranch)
+    _ <- E.executeGitC(store.core, GitOperation.Push(tip, branch)).flatMap(_.valueC)
     saved <- store.saveC("push-observed", "native-push-observed", intent.record,
       committed.payload.copy(stage = "NativePushObserved"))
   } yield saved
@@ -86,7 +89,7 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     _ <- authorizeC(store, authority, Effect.FinalFetch)
     intent <- store.saveC("final-fetch-intent", "native-final-fetch-prepared", pushed.record,
       pushed.payload.copy(stage = "NativeFinalFetching"))
-    _ <- E.executeC(store.core, E.Purpose.GitFetch, "")
+    _ <- E.executeGitC(store.core, GitOperation.Fetch).flatMap(_.valueC)
   } yield intent
 
   private def localC(store: N.Store, stage: N.Stage): Consequence[G.Observed] = for {
