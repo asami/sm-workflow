@@ -4,10 +4,40 @@ Date: 2026-10-06
 Status: in-progress; PHASE-6.1 acceptance scope only
 Phase acceptance scope: PHASE-6.1
 Current status: P61-PLAN accepts P6-PS01..04 through its complete protected Step
-review and mechanical conformance closure. Its local Step commit is next;
-P61-COMMAND and P61-ADMISSION remain unfinished. The Phase 6.1 comprehensive
+review and mechanical conformance closure, locally acceptance-committed at
+`8c48c329`. P61-COMMAND is accepted through its complete protected independent
+Step review and focused repair closure; its local acceptance commit is pending. P61-ADMISSION has not
+started: real scoped producer review, CAM Evidence/Admission and local commit
+remain required, including the C4 source-history route. The Phase 6.1 comprehensive
 review and final release remain open; repository-full validation is
 deferred-not-run to PHASE-6.3.
+Current COMMAND results: A/A2 focused 2 suites/17 tests and actual owning-UoW
+Compile/configured generator success plus compiler failure 1 suite/2 tests;
+existing terminating ProductCheck is the representative application acceptance
+command (no service readiness/cleanup applies). B4 preparation plus accumulator
+3 suites/4 tests -> genuine selected medium semantic repair -> normal consumer
+1 suite/1 test -> pending independent Review. B5 preparation 2 suites/2 tests ->
+genuine selected medium conflict proposal -> normal consumer 1 suite/1 test,
+runtime materialization/typed stage/structural checks/fresh Test -> pending merge
+Review. Semantic workers ran no SBT/Git/process commands; requested configuration
+and parent-observed completion are distinct evidence, without runtime/model
+attestation. Fixture initial Git effects grant no real remote permission or
+CommitPending/Push/final-fetch/convergence acceptance.
+C1/C2 rules/current config/File UoW passed 3 suites/54 tests; C3 normal CLI passed
+2 suites/6 tests (five history scenarios plus the existing repair test), with
+production/test compilation and both exits 0/lock released. C4 preparation and
+normal consumer each passed 1 suite/1 test, both exits 0/lock released: genuine
+selected medium ImplementStep changed only `HistoryExample.value` to 42, then
+normal recordExecution/Submit/Advance generated the configured header via File
+UoW and typed stage/Test reached pending Review. Parent inspection observed the
+header and preserved semantic value; repeated Advance added no SBT. No full
+external-tool or installed-host acceptance is claimed. P6-EX01..03 and P6-HR01/04
+are accepted through the complete COMMAND review and focused closure. Both
+blockers are resolved; final focused checks passed 4 suites/91 tests and the
+affected rule suite's 39 tests. Two historical Hygiene findings remain
+nonblocking. COMMAND repair history is 5 and Phase repair history remains 0.
+P6-SQ01 remains incomplete pending actual producer/provider Evidence/Admission
+and the workflow's local Step commit.
 Historical PHASE-6 projection: closed; the Phase 6 owned rows are accepted through the original S6-01
 protected independent Step review and its five repository-local acceptance
 commits are complete. The sole Phase review and its M0 naming repair are
@@ -447,15 +477,15 @@ and [plan synchronization](phase-6.1.md#phase-documents-and-live-plan-synchroniz
 Phase 6.1 implements these in the connected driver; Phase 6.2 reuses them
 for FIX/recording/improvement and Phase 6.3 accepts integrated behavior.
 
-- [ ] P6-EX01: **Owner: [Phase 6.1](phase-6.1.md).** A normal skill-connected task reaches an actual SBT validation
+- [x] P6-EX01: **Owner: [Phase 6.1](phase-6.1.md).** A normal skill-connected task reaches an actual SBT validation
       and a local Git effect through runtime-owned execution. Runtime prepares
       cwd/argv/environment, waits, captures the real result and progresses; the
       AI assignment contains no command execution or log-transcription work.
-- [ ] P6-EX02: **Owner: [Phase 6.1](phase-6.1.md).** Exercise command failure -> semantic AI diagnosis/fix -> runtime
+- [x] P6-EX02: **Owner: [Phase 6.1](phase-6.1.md).** Exercise command failure -> semantic AI diagnosis/fix -> runtime
       revalidation, and Git conflict -> AI resolution -> runtime Git progression.
       Unknown completion is not successful execution or permission to retry.
       Existing effect permissions remain; missing tools yield an actual problem.
-- [ ] P6-EX03: **Owner: [Phase 6.1](phase-6.1.md).** A representative configured generator/formatter and supported
+- [x] P6-EX03: **Owner: [Phase 6.1](phase-6.1.md).** A representative configured generator/formatter and supported
       application acceptance command use the same execution owner. Where the
       command starts a service, runtime handles readiness and owned cleanup.
       Use real representative effects plus bounded branch specs, not exhaustive
@@ -482,7 +512,7 @@ for FIX/recording/improvement and Phase 6.3 accepts integrated behavior.
 Requirement: [Phase 6 responsibility split](phase-6.2.md#review-and-maintenance-responsibilities--2026-10-12).
 Exercise these within the existing Phase 6 review/FIX driver, not a new campaign.
 
-- [ ] P6-HR01: **Owner: [Phase 6.1](phase-6.1.md).** AI changes an owned source file without maintaining its history
+- [x] P6-HR01: **Owner: [Phase 6.1](phase-6.1.md).** AI changes an owned source file without maintaining its history
       fields. Runtime applies the declared rule before applicable validation/
       review/commit. The resulting fields follow that rule; the AI assignment
       and review do not request/check source-history edits. Include actual tool
@@ -496,7 +526,7 @@ Exercise these within the existing Phase 6 review/FIX driver, not a new campaign
       and returns assigned-issue outcomes. Distinguish explanatory-only changes
       from assertion/behavior changes for validation and convergence accounting.
       Unadopted nonblocking observations are recorded without blocking release.
-- [ ] P6-HR04: **Owner: [Phase 6.1](phase-6.1.md).** A deterministic maintenance error remains a tool/configuration
+- [x] P6-HR04: **Owner: [Phase 6.1](phase-6.1.md).** A deterministic maintenance error remains a tool/configuration
       outcome, not an AI history-edit task. Routine mechanical maintenance does
       not create an AI Fix cycle; actual AI Hygiene fixes retain the existing
       convergence/absolute-cycle rules. No hash/copy proof or additional repeated

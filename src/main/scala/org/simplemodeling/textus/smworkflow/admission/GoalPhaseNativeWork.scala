@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Encoder, Decoder, Json}
+import io.circe.{Encoder, Decoder, DecodingFailure, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
@@ -18,13 +18,16 @@ import GoalPhaseNativeRun as F
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
+  final case class CheckFailureContext(changedPaths: Vector[String], diff: String,
+    validation: GoalPhaseNativeValidation.Payload)
   final case class Request(instanceIdentity: String, sourceRevision: String, kind: String,
     stepIdentity: Option[String], generation: Long, purpose: String, selectedPlan: O.Plan,
     originalBase: O.Snapshot, completed: Vector[O.ClosedStep], candidate: Option[O.Snapshot],
     checksReceipt: Option[String], repairDirective: Option[O.RepairDirective],
     review: Option[GoalPhaseNativeReview.Context] = None,
     decisionContext: Option[DecisionContext] = None,
-    documents: Option[GoalPhaseDocumentSource.Bound] = None)
+    documents: Option[GoalPhaseDocumentSource.Bound] = None,
+    checkFailure: Option[CheckFailureContext] = None)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None)
   object Result {
@@ -43,6 +46,10 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Decoder[GoalPhaseNativeReview.Context] = deriveDecoder
   private given Encoder[DecisionContext] = deriveEncoder
   private given Decoder[DecisionContext] = deriveDecoder
+  private given Encoder[GoalPhaseNativeValidation.Payload] = deriveEncoder
+  private given Decoder[GoalPhaseNativeValidation.Payload] = deriveDecoder
+  private given Encoder[CheckFailureContext] = deriveEncoder
+  private given Decoder[CheckFailureContext] = deriveDecoder
 
   // Derive the nested document payload bottom-up to keep whole-Request
   // derivation within Scala's inline depth without changing the wire fields.
@@ -54,6 +61,29 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Decoder[GoalPhaseDocumentPlan.Item] = deriveDecoder
   private given Encoder[GoalPhaseDocumentSource.Bound] = deriveEncoder
   private given Decoder[GoalPhaseDocumentSource.Bound] = deriveDecoder
+  private given Encoder[Request] = deriveEncoder
+  private val _request_decoder: Decoder[Request] = deriveDecoder
+  private given Decoder[Request] = Decoder.instance { cursor =>
+    if (cursor.downField("checkFailure").focus.exists(_.isNull))
+      Left(DecodingFailure("Check failure context must be absent or a valid object", cursor.history))
+    else _request_decoder.tryDecode(cursor).flatMap { request =>
+      if (request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess)) Right(request)
+      else Left(DecodingFailure("Invalid retained check failure context", cursor.history))
+    }
+  }
+
+  def checkFailureContextC(changedPaths: Vector[String], diff: String,
+    validation: GoalPhaseNativeValidation.Payload): Consequence[CheckFailureContext] = {
+    val value = CheckFailureContext(changedPaths, diff, validation)
+    admitCheckFailureContextC(value).map(_ => value)
+  }
+
+  def admitCheckFailureContextC(value: CheckFailureContext): Consequence[Unit] =
+    if (value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
+        value.changedPaths.forall(_bounded_text) && _context_text(value.diff) &&
+        value.validation != null && value.validation.outcome != null &&
+        value.validation.outcome.contains("repair-required") && GoalPhaseNativeValidation.repairable(value.validation))
+      Consequence.unit else F.invalid("repair requires its retained actual selected check failure context")
 
   def initialC(source: F.Session): Consequence[Request] = for {
     state <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
@@ -92,7 +122,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     else F.invalid("initial work differs from actual CML Required SPI")
   }
   def admitInitialResultC(request: Request, result: Result): Consequence[Unit] =
-    if (request == null || result == null || request.kind != "ImplementStep" || request.review.nonEmpty ||
+    if (request == null || result == null || request.kind != "ImplementStep" || request.review == null || request.review.nonEmpty ||
+        request.checkFailure == null || request.checkFailure.nonEmpty ||
         !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
         !result.findings.forall(_bounded_text) ||
         !Set("completed", "decision-needed")(result.outcome) ||
@@ -103,7 +134,10 @@ private[smworkflow] object GoalPhaseNativeWork {
   def admitSemanticResultC(request: Request, result: Result): Consequence[Unit] =
     if (request == null) F.invalid("assigned request is missing")
     else if (request.kind == "ImplementStep") admitInitialResultC(request, result)
-    else if (request.kind != "RepairStep" || request.repairDirective.isEmpty || request.review.isEmpty ||
+    else if (request.kind != "RepairStep" || request.repairDirective == null ||
+        !request.repairDirective.exists(value => value != null && _bounded_text(value.reason) &&
+          value.findings != null && value.findings.nonEmpty && value.findings.forall(_bounded_text)) ||
+        !_repair_source(request) ||
         request.candidate.nonEmpty || request.checksReceipt.nonEmpty || result == null ||
         !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
         !result.findings.forall(_bounded_text) ||
@@ -112,8 +146,16 @@ private[smworkflow] object GoalPhaseNativeWork {
       F.invalid("assigned repair must return semantics or a decision, not review, checks, commands or closure")
     else GoalPhaseAcceptanceBoundary.admitC(request.selectedPlan, request.kind, result)
 
+  private def _repair_source(request: Request): Boolean = request.review != null && request.checkFailure != null &&
+    ((request.review.exists(value => value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
+        value.changedPaths.forall(_bounded_text) && _context_text(value.diff) && value.checks != null &&
+        value.checks.forall(_ != null)) && request.checkFailure.isEmpty) ||
+      (request.review.isEmpty && request.checkFailure.exists(value => admitCheckFailureContextC(value).isSuccess &&
+        request.stepIdentity != null && request.stepIdentity.contains(value.validation.step))))
+
   private def _bounded_text(value: String): Boolean = value != null && value.trim.nonEmpty &&
     !value.contains('\u0000') && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384
+  private def _context_text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
 
   private class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
@@ -131,7 +173,8 @@ private[smworkflow] object GoalPhaseNativeWork {
         val payload = value.asJson.mapObject { fields =>
           val review = if (value.review.isEmpty) fields.remove("review") else fields
           val decision = if (value.decisionContext.isEmpty) review.remove("decisionContext") else review
-          if (value.documents.isEmpty) decision.remove("documents") else decision
+          val documents = if (value.documents.isEmpty) decision.remove("documents") else decision
+          if (value.checkFailure.isEmpty) documents.remove("checkFailure") else documents
         }
         Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-work-request.v2"),
           "payload" -> payload)

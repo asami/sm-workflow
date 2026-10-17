@@ -9,7 +9,7 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 17, 2026
  */
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](c: Consequence[A]): A = c match {
@@ -40,6 +40,91 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "assign one fresh semantic repair for admitted known Step check failure and require fresh review" in {
+      Given("S1 is closed and S2 has its actual selected candidate with one remaining lifetime repair")
+      val second = close(initial, oid('c'), oid('d'))
+      val assigned = work(second)
+      val ready = take(second.acceptC(SemanticCompleted(assigned, "S2 implementation ready")))
+      val failedsnapshot = Snapshot(oid('c'), oid('f'))
+      val inspected = take(ready.acceptC(CandidateObserved(failedsnapshot)))
+      When("the owning adapter admits a known selected check failure with its directive")
+      val repair = take(inspected.acceptC(RepairableChecksObserved(failedsnapshot, Vector("focused-2"), "actual-failed-check", directive)))
+      Then("one allowance and generation are consumed while original plan, base and closed history remain")
+      repair.stage shouldBe Stage.Repair
+      repair.repairs shouldBe 1
+      repair.generation shouldBe inspected.generation + 1
+      repair.plan shouldBe plan
+      repair.base shouldBe base
+      repair.completed shouldBe second.completed
+      repair.cursor shouldBe second.cursor
+      repair.candidate shouldBe empty
+      repair.checksReceipt shouldBe empty
+      repair.reviewEvidence shouldBe empty
+      repair.closureIntent shouldBe empty
+      repair.next.asInstanceOf[Semantic].repairDirective shouldBe Some(directive)
+      repair.acceptC(SemanticCompleted(assigned, "stale implementation")).isSuccess shouldBe false
+      When("the assigned repair completes and runtime observes a fresh candidate and passing checks")
+      val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "Source correction completed")))
+      val fresh = Snapshot(oid('c'), oid('e'))
+      val reinspected = take(repaired.acceptC(CandidateObserved(fresh)))
+      val revalidated = take(reinspected.acceptC(ChecksObserved(fresh, Vector("focused-2"), "fresh-checks", true)))
+      Then("only a fresh independent review can admit closure")
+      repaired.next shouldBe Inspect(false, oid('c'))
+      revalidated.stage shouldBe Stage.Review
+      revalidated.candidate shouldBe Some(fresh)
+      revalidated.checksReceipt shouldBe Some("fresh-checks")
+      revalidated.reviewEvidence shouldBe empty
+      revalidated.acceptC(ClosureIntentSaved(fresh, "premature-close")).isSuccess shouldBe false
+      val accepted = take(revalidated.acceptC(ReviewAdmitted(work(revalidated), fresh, "fresh-checks", "fresh-review", ReviewOutcome.Accept)))
+      accepted.stage shouldBe Stage.Closing
+      accepted.completed shouldBe second.completed
+      accepted.repairs shouldBe 1
+    }
+
+    "reject crossed or incomplete known failure repair events and exhausted allowances" in {
+      Given("a selected current Step Validation frontier")
+      val ready = take(initial.acceptC(SemanticCompleted(work(initial), "ready")))
+      val snap = Snapshot(base.head, oid('d'))
+      val inspected = take(ready.acceptC(CandidateObserved(snap)))
+      val invalid = Vector(
+        RepairableChecksObserved(Snapshot(base.head, oid('e')), Vector("focused-1"), "receipt", directive),
+        RepairableChecksObserved(snap, Vector("focused-2"), "receipt", directive),
+        RepairableChecksObserved(snap, Vector("focused-1"), "", directive),
+        RepairableChecksObserved(snap, Vector("focused-1"), "receipt", null),
+        RepairableChecksObserved(snap, Vector("focused-1"), "receipt", directive.copy(findings = Vector.empty)))
+      invalid.foreach { event =>
+        Given("the same frontier and a crossed identity, missing receipt or invalid directive: " + event)
+        When("the pure controller receives that repair event")
+        val result = inspected.acceptC(event)
+        Then("no repair is assigned or allowance consumed")
+        result.isSuccess shouldBe false
+        inspected.repairs shouldBe 0
+      }
+      When("the first known failure consumes the sole allowance and corrected work is inspected again")
+      val repair = take(inspected.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "first", directive)))
+      val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "repaired")))
+      val again = take(repaired.acceptC(CandidateObserved(snap)))
+      val exhausted = again.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "second", directive))
+      Then("the exhausted repair is rejected without resetting the lifetime count")
+      exhausted.isSuccess shouldBe false
+      again.repairs shouldBe 1
+      again.completed shouldBe empty
+    }
+
+    "refuse to turn whole-Phase check failure into Step repair" in {
+      Given("all original Steps have closed and the whole-Phase candidate is selected")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val snap = Snapshot(oid('e'), oid('f'))
+      val inspected = take(all.acceptC(CandidateObserved(snap)))
+      When("a repairable-check event attempts whole-Phase repair")
+      val result = inspected.acceptC(RepairableChecksObserved(snap, Vector("whole-phase"), "phase-failure", directive))
+      Then("the original closed Steps and repair allowance remain unchanged")
+      result.isSuccess shouldBe false
+      inspected.stage shouldBe Stage.PhaseValidation
+      inspected.completed shouldBe all.completed
+      inspected.repairs shouldBe 0
+    }
+
     "keep Step closure separate from full Phase closure and select the next Step itself" in {
       Given("a selected complete two-Step plan and an initial native snapshot")
       val first = initial

@@ -7,11 +7,12 @@ import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
   enum Kind(val wire: String) {
+    case Compile extends Kind("compile")
     case Test extends Kind("test")
     case TestOnly extends Kind("test-only")
   }
@@ -84,7 +85,8 @@ private[smworkflow] object WorkflowSbtValidation {
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.processResult != null &&
         result.processResult.termination != null && result.testSelection != null &&
-        ((kind == Kind.Test && result.operation == SbtOperation.Test) ||
+        ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
+          (kind == Kind.Test && result.operation == SbtOperation.Test) ||
           (kind == Kind.TestOnly && result.operation == SbtOperation.TestOnly)) &&
         result.testSelection.forall {
           case SbtTestSelectionResult.Verified(classes, suites, tests) =>

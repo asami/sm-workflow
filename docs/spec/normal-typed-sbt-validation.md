@@ -12,10 +12,12 @@ consumers (9 direct, 8 via `NativeHostPreparationManagedFixture`, 1 via
 guards. This is scoped normal-route qualification; Step and Phase acceptance
 remain open.
 
-`WorkflowManagedProcessExecution.repositoryValidationC(core, ordinal)` accepts
+`WorkflowManagedProcessExecution.repositoryValidationC(core, ordinal, kind)` accepts
 only ordinals 1–16 and constructs the logical
 `SbtTarget(WorkspaceId("sm-workflow-repository-validation-" + ordinal))`.
-Its ProcedureActionCall composes protected `sbt_test` as thin typed intent.
+Its ProcedureActionCall composes protected `sbt_compile`, `sbt_test` or
+`sbt_test_only` for the selected Compile, Test or TestOnly kind as thin typed
+intent; the omitted kind remains Test.
 Constructing that intent performs no permission, service, binding or launch
 check. The interpreter checks the actual current UoW context, admits and
 executes the selected operation through the existing managed process lifecycle,
@@ -153,12 +155,15 @@ current typed-SBT acceptance. See the
 [runtime contract](sbt-validation-runtime.md).
 
 
-## Explicit typed validation consumer (authored, unverified)
+## Explicit typed validation consumer (focused qualification accepted)
 
-The S6-01D6T2 consumer change adds the closed trusted Check kind `test` or
-`test-only` to the existing logical `sm-workflow-repository-validation-N`
+The S6-01D6T2 consumer change introduced the closed trusted Check kinds `test`
+and `test-only`; P61-COMMAND-A adds `compile` to the existing logical
+`sm-workflow-repository-validation-N`
 binding. The existing ordinal and owning UoW still select the host program.
-`test` dispatches `sbt_test`; `test-only` dispatches `sbt_test_only`. CNCF owns
+`compile` dispatches `sbt_compile`; `test` dispatches `sbt_test`; `test-only`
+dispatches `sbt_test_only`. All three compose and return through the actual
+owning UoW. CNCF owns
 fixed TestOnly classes from the trusted host declaration, command construction,
 permission, execution and selection verification. Application calls carry no
 class names, suite expressions, configuration or arbitrary tasks.
@@ -172,6 +177,14 @@ as `unverified-tests`, with its actual refusal reason and unchanged raw capture.
 It cannot open Review or satisfy completion. No application stdout parser or
 claimed success supplies these facts.
 
+Compile receipts require an actual `SbtExecutionResult` whose operation is
+Compile. Test and TestOnly likewise require their exact operation; no selected
+kind can accept another operation's result or receipt. Compile success requires
+the actual zero exit and succeeded outcome, with no test count, selection or
+reason. Nonzero and incomplete Compile results retain their negative outcome,
+raw stdout/stderr and exit semantics. Compile never accepts TestOnly selection
+metadata or persisted `unverified-tests`, selection or reason facts.
+
 Current-schema records explicitly read absent Check `kind` as Test and absent
 Receipt `sbt` as no typed facts. Test encoding preserves the historical absent
 kind shape; absent `sbt` remains omitted. Present null, mistyped or unknown kind,
@@ -179,19 +192,23 @@ and present null or malformed `sbt`, fail decoding. These rules apply through
 Goal validation, Repository validation state and native progress, Goal review
 work, Repository review Request and the existing host definition. Unsupported
 older schema versions remain unsupported. Existing saved records are not
-rewritten, migrated or promoted from Test to TestOnly.
+rewritten, migrated or promoted from Test to Compile or TestOnly.
 
 Both native workflows compare the selected identity and kind against actual
 receipts; retained selection also resolves the original ordinal in the current
 policy. A legacy receipt without typed facts can satisfy only Test. Exact
-positive TestOnly facts are required even at raw zero. Retained results and
+positive TestOnly facts are required even at raw zero; selected Compile requires
+matching actual Compile facts. Retained results and
 unknown intents are read without replay. Review Context and Request retain
 complete typed receipts; evidence targets project typed operation, outcome,
 classes and counts without copying raw logs or policy bodies. All-None review
 targets retain their historical shape.
 
-This consumer implementation and its codec/predicate scenarios are authored
-and await parent-selected validation. The seven actual normal Test episodes
+Parent accepted P61-COMMAND A-2: 2 selected suites and 17 passing tests, with
+SBT/wrapper exit 0 and the shared serial lock released. This qualifies the
+focused consumer/codec behavior. Parent also accepted A2-RUNTIME-1: 1 suite and
+2 actual normal generator/compiler scenarios, with SBT/wrapper exit 0 and the
+shared lock released, as scoped below. The seven actual normal Test episodes
 qualified by actual188 and the 18 shared-fixture consumers qualified by
 actual193 retain their original scope. Actual200 qualified the CNCF TestOnly
 producer (nine selected suites, 111 passing checks); it does not establish this
@@ -202,3 +219,173 @@ genuine current `NativeHostPreparationOperationSpec` and
 facts to the same ordinary installed workflow. That configuration and native
 progression are not performed here. Original installed workflow, security/CBD,
 independent review, Step/Phase and release obligations remain open.
+
+## Normal Compile and configured source generation (runtime qualification accepted)
+
+P61-COMMAND-A2 adds two isolated normal Compile scenarios to
+`ThreeWorkflowSbtOperationSpec`. The public host fixture accepts a final typed
+Compile or Test operation parameter, preserving Test as its default and the
+existing Test declarations. Only the two new scenarios select Compile through
+SBT-only V2 authority. Each first persists its Compile intent in a completed
+managed Setup Operation, then a fresh owning call reads that intent and invokes
+`repositoryValidationC(core, 1, Kind.Compile)`, converts the actual result with
+`sbtReceiptC` and persists the existing complete result evidence.
+
+The isolated SBT 1.9.7 / Scala 2.12.18 build configures ordinary
+`Compile / sourceGenerators` and selects `target/selected-generated` as
+`Compile / sourceManaged`. SBT writes `CompileGenerated.scala`, emits
+`COMPILE_GENERATOR_ENTERED` with the actual repository cwd and appends its
+external PID to `compile-generations.txt`. A source without a main references
+the generated value. The success input generates `val value: Int = 42`; the
+failure input assigns a String to Int, requiring a real compiler type error.
+
+The authored cases require actual typed success or failure, exit/termination,
+bounded untruncated captures and byte counts, selected generated content and
+exactly one external generator PID. Success requires the generated and consumer
+classes and passes only the Compile product gate. Failure requires a nonzero
+compiler exit, the type mismatch diagnostic, no consumer class and a closed
+product gate. Both receipts retain Compile facts without selection or reason.
+Fresh-runtime reads must preserve the exact durable intent and result without
+adding a generator PID entry.
+
+Parent accepted A2-RUNTIME-1: both actual generator/compiler success and failure
+scenarios passed in 1 suite with 2 tests. SBT/wrapper exit 0 and the shared serial
+lock was released. This proves only normal owning-UoW Compile, configured source
+generation, actual compiler success/failure and retained fresh-runtime reads.
+The preceding Test qualification and A-2 focused consumer/codec result retain
+their own scope. Existing normal ProductCheck supplies representative terminating
+application acceptance through the same owning typed SBT path; it starts no
+service, so service-specific readiness/cleanup is not applicable. This does not
+establish full external-tool coverage or installed-host acceptance. The actual
+B4 failure-to-AI repair connection is qualified below; independent COMMAND Step
+review/local acceptance commit and the other Phase obligations remain open.
+
+## P61-COMMAND-B selected failed-check repair (pure, managed runtime and B3/B4 CLI qualification)
+
+New Step validation can select `repair-required` only for an actual-shaped
+nonempty ordered typed receipt prefix with positive product-successful
+predecessors and final matching `failed` facts, `exited` termination and nonzero
+exit. Compile, Test and TestOnly use the same classification. Unknown intent,
+legacy facts, missing/partial positive results, timeout, incomplete or unverified
+tests, crossed identities/kinds/order, exhausted allowance and whole-Phase scope
+never create an automatic repair. Historical saved `failed` outcomes retain
+Decision without migration or replay.
+
+The owning validation transition persists Repair and is also used for retained
+admission and history reconstruction. Issued RepairStep carries separate
+`checkFailure` business context with the actual failed candidate, selected
+checks, raw typed receipts, changed paths and diff. It replaces no independent
+review context: exactly one valid source is required. Semantic completion still
+requires the selected acceptance report and returns to fresh runtime inspection,
+checks and independent review. Submit supplies no receipts or commands.
+
+Parent accepted B focused pure qualification: 2 suites and 47 passing tests,
+including generated public DTO compilation. These scenarios use pure
+actual-shaped facts and codecs; this result establishes neither actual external
+execution nor provider proof.
+
+P61-COMMAND-B2 adds one managed public-operation connection obligation in
+`ThreeWorkflowSbtOperationSpec`: `repair a real failed SBT check through assigned
+semantic work and fresh runtime validation`. Four separate runtimes issue
+ImplementStep, submit incorrect semantic input and execute a real failed Test,
+reopen the identical RepairStep and correct the assigned input before a fresh
+runtime-owned Test, then reopen the identical pending independent ReviewStep.
+The scenario requires actual failed and successful typed Test receipts, native
+checkout output, two distinct external PID entries, retained original failure
+diagnostics and no extra launch on Submit or pending-work reopen. It preserves
+the original base, selected plan and consumed repair generation and leaves the
+native Goal active at `phase.Review`.
+
+The deterministic semantic fixture supplies only assigned source corrections
+and participant result evidence. It supplies no native receipts, independent
+review, effect authority or provider invocation. Parent accepted actual B2
+managed public-operation validation: 1 selected suite and 1 passing test, with
+SBT/wrapper exit 0 and the shared development lock released. This qualifies the
+connected actual failure, assigned semantic-fixture correction, fresh validation
+and retained pending review through ordinary public Operations.
+
+P61-COMMAND-B3 authors the separate normal CLI connection in
+`NativeGoalCheckRepairCliSpec`: `carry actual failed checks through ordinary CLI
+repair and fresh validation`. An opt-in host fixture prepares the ordinary
+selected SBT build before its initial repository commit, selects only value.txt
+for workflow staging and combines finite typed Git observations with typed Test.
+Separate standard CncfMain Start, Advance and semantic Submit commands retain the
+actual canonical task and issued public work context. The selected incorrect
+input must produce a real failed Test and RepairStep; only the assigned fixture
+correction changes it to the expected newline. Explicit Advance must then run a
+fresh successful Test and issue independent ReviewStep. Pending Repair and Review
+rereads must retain their actual public context without another SBT launch, and
+the two checks must have distinct external PID markers. Public CLI assertions
+use the actual issued context and route; B2 retains the internal generation proof.
+
+Parent accepted actual B3 ordinary CLI validation: 2 selected suites and 3 passing
+tests, covering `NativeGoalCheckRepairCliSpec` and `NativeHostExecutionCliSpec`,
+with SBT/wrapper exit 0 and the shared serial lock released. The repair scenario
+stops at pending independent Review and supplies no review, commit or closure.
+Its source correction is initial semantic fixture data; this qualification does
+not establish genuine external provider repair.
+
+P61-COMMAND-B4 authors two separately selected cases in
+`NativeGoalProviderRepairCliSpec`: `prepare actual provider repair` and
+`consume actual provider repair`. The suite is admitted only by explicit
+testOnly selection and remains excluded from default discovery. Preparation
+requires explicit `smworkflow.spec.providerOrigin` and the normal selected SBT
+executable. Initial Start/Implement has a selected classification and no mapped
+disposition. Its deliberately incorrect value and initial semantic Submit are
+explicit fixture inputs, without execution evidence. Only after that Submit does
+the host install the requested `p61-provider-sol-medium` OpenAI/gpt-6.1-sol profile
+with `reasoning-effort=medium`, the parent high profile and isolated context.
+CodingProgrammingStandard and ReviewStandard select medium without fallbacks.
+These are requested configurations, not observations of provider execution.
+
+Explicit Advance must execute actual failing Test and retain the typed nonzero
+receipt, checkout diagnostics and candidate in RepairStep. A repeated Advance
+must retain identical work/context with one external SBT PID. Ordinary
+prepareExecution consumes the original mapping and origin and returns the actual
+medium selection and opaque execution session, without completion evidence.
+Preparation saves `provider-issued.json`, `provider-prepared.json` and the raw
+`provider-session.json`, plus original `provider-mapping.json`,
+`provider-origin.json` and passive `provider-input.json` business inputs in the
+owned root. After all assertions it prints the exact anchored
+`P61_PROVIDER_REPAIR_ROOT=<actual root>` and stops while the value remains
+incorrect and genuine Repair is pending. The passive input grants no authority.
+
+The parent must dispatch genuine external semantic work under that selected
+profile with the original Request and actual failure context. The provider owns
+only `repository/value.txt` and `provider-result.json`, may inspect assigned
+source/diagnostics, and runs no SBT, Git, launcher or process commands. The result
+file is a closed object with `result` and `reference`, using the public
+GoalPhaseWorkResult and WorkflowArtifactReference shapes. Its reference identity
+is the actual provider child context and revision is `1`. Only after actual
+native provider completion does the parent write `provider-observation.json`
+using the public harness attempt shape: actual selection, COMPLETED status,
+Completed reason, actual executor context/profile, detail and observed resources.
+Unknown resource fields are omitted. Observation coherence authenticates no
+provider provenance; actual dispatch and honest observations remain parent-owned.
+
+Consumption requires explicit `smworkflow.spec.providerRoot` and reopens only
+that normalized existing direct child of `target/sm-workflow/work/native-cli`.
+It reads the public host definition, Plan and existing provider task route;
+it rewrites no host, Plan, build, Git or Workflow state. Its ordinary command
+logs start at unused index 1000, preserving earlier outputs. Repeated Advance
+must still equal the saved actual Repair despite the provider-corrected value.
+Ordinary recordExecution consumes the original opaque session, actual observation
+and semantic reference, returning completion evidence without another SBT.
+Named Submit then supplies the actual provider semantic result/reference and that
+returned evidence. Only an explicit subsequent Advance runs fresh Test and
+issues pending independent Review with a positive typed receipt, fresh candidate,
+retained base/plan/completed context and exactly two distinct external SBT PIDs.
+A repeated Review Advance must retain that work and context without a third check.
+
+Parent qualified actual B4 preparation plus the existing accumulator: 3 suites
+and 4 tests. A genuine selected medium semantic provider then completed the
+assigned repair, and the actual normal consumer passed 1 suite/1 test. Runtime
+owned the failed Test, fresh Test and transition to pending independent Review;
+the semantic worker ran no SBT, Git or process commands. Requested configuration
+and parent-observed actual completion are distinct evidence, without runtime/model
+attestation. This supplies no independent review acceptance, Step/Phase commit or
+closure. COMMAND is connected and focused validated, pending its existing
+protected independent Step review/local acceptance commit. P6-EX02, installed-task
+acceptance, security/CBD, the sole full Phase review and local release remain
+open; aggregate full-suite validation remains Phase 6.3. No raw logs or private
+evidence package are added to Git.

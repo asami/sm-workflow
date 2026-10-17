@@ -162,3 +162,62 @@ Related: [managed observations](repository-sync-managed-git-observation.md),
 [native installation](native-client-installation.md),
 [normal typed SBT](normal-typed-sbt-validation.md),
 [CNCF typed Git contract](../../../goldenport-cncf/docs/spec/typed-git-execution.md).
+
+## P61-COMMAND-B5 — Qualified provider conflict continuation
+
+Actual focused qualification recorded 2026-10-17. The explicitly selected
+`NativeRepositoryProviderConflictCliSpec` has two independent command cases:
+`prepare actual provider conflict` and `consume actual provider conflict`.
+The prepare case creates one owned local bare upstream and diverged tracked
+`value.txt`, prepares its public Repository input through
+`prepareRepositoryStart`, selects the actual successful import and calls normal
+Repository Start/Advance through the standard `CncfMain` launcher. Its pending
+conflict must expose the actual initial/local/remote text, tips, blobs and
+worktree markers without running SBT. Repeated Advance must retain that Request.
+
+The requested mapping `p61-git-provider-mapping` revision 1 selects
+`p61-git-provider-sol-medium` (`openai`, `gpt-6.1-sol`, medium reasoning effort)
+for `CodingProgrammingStandard` and `ReviewStandard`, with no fallback. The
+explicit parent is `p61-parent-sol-high` with the actual supplied origin context;
+context isolation is requested and forced inline execution is disabled. Review
+is classified REVIEW/STANDARD/PROGRAMMING/SMALL; repair and conflict are
+CODING/STANDARD/PROGRAMMING/SMALL. This configuration authenticates no provider
+completion. Normal `prepareExecution` saves the actual opaque session and first
+pending selection alongside the public Start/issued/prepared DTOs. Only after
+assertions does the case print `P61_GIT_PROVIDER_ROOT=<root>`.
+
+The parent's separately selected semantic provider reads those actual inputs
+and the product contract and returns only ordered conflict IDs, proposed text
+and rationale in `git-provider-result.json`, with its actual child reference.
+The provider neither edits the repository nor executes Git/SBT. The parent
+records `git-provider-observation.json` after actual native completion, retaining
+only observed resource values. These files are business inputs; JSON coherence
+alone establishes no provenance or permission.
+
+The consume case requires explicit `smworkflow.spec.gitProviderRoot`, reopens
+only that existing direct fixture child and correlates the original session,
+medium selection and actual child result/reference/observation. Ordinary Advance
+must still show the original conflict before `recordExecution`. Recording and
+the named semantic Submit must leave its text unchanged and start no SBT. A
+separate owning Advance must materialize the proposal, stage only `value.txt`
+through the typed Git DSL/UoW, run both structural index checks and fresh
+required Test, and issue independent `ReviewStandard` merge Review. Assertions
+cover both parent diffs/tips, the actual index tree, completed check codes,
+product cwd/pass output and one external SBT PID. Repeated Review must not run
+another Test. Every business call uses a distinct standard CLI child process.
+
+Initial fixture commit/push only establishes the real tracked inputs. The
+selected workflow host retains initial Fetch, excludes CommitPending and Push,
+has no generic process program and creates no effect authority evidence or
+FinalFetch grant. Parent qualified actual preparation (2 suites/2 tests), genuine
+selected medium provider completion supplying a proposal only, then the normal
+consumer (1 suite/1 test). Runtime materialized the proposal, performed typed Git
+stage/structural checks/fresh Test and reached pending independent merge Review.
+The semantic provider ran no SBT, Git or process commands. Requested configuration
+and parent-observed completion are distinct evidence, without runtime/model
+attestation. Both cases stop at their declared pending boundary; independent
+Review acceptance remains unfinished. Local fixture initial Git effects grant no
+real remote permission. No CommitPending, Push, final fetch or convergence
+acceptance is claimed. COMMAND is connected and focused validated, pending its
+existing protected independent Step review/local acceptance commit. This does
+not close P6-EX02 or Phase 6.1 or replace historical results.

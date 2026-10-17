@@ -2,12 +2,13 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import java.nio.file.{Files, Path}
+import org.goldenport.cncf.processexecution.SbtOperation
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -22,7 +23,10 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   def plan(root: Path, executable: Path, ordinals: Vector[Int], gitPlan: Option[Json] = None,
-    executionTimeoutMillis: Long = 180000L): Json = {
+    executionTimeoutMillis: Long = 180000L, operation: SbtOperation = SbtOperation.Test): Json = {
+    require(operation == SbtOperation.Compile || operation == SbtOperation.Test,
+      "Only Compile and Test are admitted by this host fixture")
+    val operationwire = if (operation == SbtOperation.Compile) "compile" else "test"
     require(ordinals.nonEmpty && ordinals.forall(value => value >= 1 && value <= 16) &&
       ordinals.distinct == ordinals, "Only distinct selected SBT ordinals 1..16 are admitted")
     require(executionTimeoutMillis > 0L, "The finite SBT execution timeout must be positive")
@@ -44,7 +48,7 @@ private[admission] object TypedSbtHostPlanFixture {
       "workspaceGrants" -> Json.fromValues(targets.map(target => Json.obj(
         "componentId" -> owner, "workspaceId" -> Json.fromString(target), "access" -> Json.fromString("manage")))),
       "sbtPrograms" -> Json.fromValues(targets.map(target => Json.obj("target" -> Json.fromString(target),
-        "operation" -> Json.fromString("test"), "capability" -> Json.fromString(target), "identity" -> Json.fromString(target),
+        "operation" -> Json.fromString(operationwire), "capability" -> Json.fromString(target), "identity" -> Json.fromString(target),
         "sbtExecutable" -> Json.fromString(executable.toString), "limits" -> limits,
         "environment" -> Json.obj(environment.toVector.map { case (name, value) => name -> Json.fromString(value) }*)))))
     gitPlan.fold(sbtplan) { git =>
@@ -79,6 +83,48 @@ private[admission] object TypedSbtHostPlanFixture {
       |      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
       |    println("PRODUCT_CHECK_ENTERED " + root)
       |    assert(java.nio.file.Files.readString(root.resolve("value.txt")) == "expected\n", "actual product input differs")
+      |    println("PRODUCT_CHECK_PASSED")
+      |  }
+      |}
+      |""".stripMargin)
+  }
+
+  /** Normal Compile consumes an ordinary managed source generator, with no main. */
+  def buildCompile(root: Path, successful: Boolean): Unit = {
+    val repository = Files.createDirectories(root.resolve("repository"))
+    Files.createDirectories(repository.resolve("project"))
+    Files.createDirectories(repository.resolve("src/main/scala"))
+    Files.writeString(repository.resolve("project/build.properties"), "sbt.version=1.9.7\n")
+    Files.writeString(repository.resolve("build.sbt"), """scalaVersion := "2.12.18"
+      |Compile / sourceManaged := baseDirectory.value / "target" / "selected-generated"
+      |Compile / sourceGenerators += Def.task {
+      |  val root = baseDirectory.value
+      |  val generated = (Compile / sourceManaged).value / "CompileGenerated.scala"
+      |  IO.write(generated, "object CompileGenerated { val value: Int = __VALUE__ }\n")
+      |  IO.append(root.getParentFile / "compile-generations.txt", java.lang.ProcessHandle.current().pid().toString + "\n")
+      |  streams.value.log.info("COMPILE_GENERATOR_ENTERED " + root.getCanonicalPath)
+      |  Seq(generated)
+      |}.taskValue
+      |""".stripMargin.replace("__VALUE__", if (successful) "42" else "\\\"incorrect\\\""))
+    Files.writeString(repository.resolve("src/main/scala/CompileConsumer.scala"),
+      "object CompileConsumer { val value: Int = CompileGenerated.value }\n")
+  }
+
+  /** ProductCheck consumes actual compiled semantic code; history is runtime-owned. */
+  def buildSourceHistory(root: Path): Unit = {
+    build(root, true)
+    val repository = root.resolve("repository")
+    Files.createDirectories(repository.resolve("src/main/scala"))
+    Files.writeString(repository.resolve("src/main/scala/HistoryExample.scala"),
+      "object HistoryExample { val value: Int = 0 }\n")
+    Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), """object ProductCheck {
+      |  def main(args: Array[String]): Unit = {
+      |    val root = java.nio.file.Paths.get("").toAbsolutePath.normalize
+      |    val marker = root.getParent.resolve("sbt-executions.txt")
+      |    java.nio.file.Files.write(marker, (java.lang.ProcessHandle.current().pid().toString + "\n").getBytes("UTF-8"),
+      |      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
+      |    println("PRODUCT_CHECK_ENTERED " + root)
+      |    assert(HistoryExample.value == 42, "actual compiled source value differs")
       |    println("PRODUCT_CHECK_PASSED")
       |  }
       |}

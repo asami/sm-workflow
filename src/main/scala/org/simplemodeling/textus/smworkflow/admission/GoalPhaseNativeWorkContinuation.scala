@@ -140,7 +140,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     state <- _completed_state_c(prepared, value.completion.result)
                     next <- GoalPhaseNativeHistory.completionC(source.current, pending,
                       value.completion.result.resultReference, state.stage.toString)
-                    clear = prepared.input.kind == "ImplementStep" || prepared.input.kind == "RepairStep" || state.stage == O.Stage.Repair
+                    clear = state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair
                     result <- _walk_c(source, cursor.copy(from = next, controller = state,
                       documents = prepared.input.documents,
                       candidate = if (clear) None else cursor.candidate,
@@ -178,9 +178,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           result <- retained match {
             case None => _paused_c(source, cursor, "Native checks have an actual partial or unknown result; no automatic replay.")
             case Some(value) => for {
-              state <- cursor.controller.acceptC(O.ChecksObserved(value.payload.candidate, value.payload.selected.map(_.identity),
-                value.record.identity.value + ":ordered-validation:" + value.payload.sourceRevision + ":validation",
-                value.payload.outcome.contains("passed")))
+              state <- GoalPhaseNativeValidation.observedStateC(cursor.controller, value.payload,
+                value.record.identity.value + ":ordered-validation:" + value.payload.sourceRevision + ":validation")
               record <- _native_record_c(source, cursor.from, value.record, "ordered-validation:", state.stage)
               result <- _walk_c(source, cursor.copy(from = record, controller = state,
                 validation = Some(value.copy(record = record))), soughtwork, soughthuman, core)
@@ -256,11 +255,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
       required <- S.requiredC(input.kind)
       context <- _review_context_c(cursor.copy(controller = controller), input.kind)
+      checkfailure <- _check_failure_context_c(cursor.copy(controller = controller), input.kind)
       _ <- if (input.instanceIdentity == source.current.identity.value && input.sourceRevision == cursor.from.revision.value.toString &&
           input.kind == semantic.key.kind.toString && input.stepIdentity == semantic.key.step && input.generation == semantic.key.generation &&
           input.originalBase == semantic.originalBase && input.completed == semantic.completed && input.purpose == semantic.purpose &&
           input.candidate == semantic.candidate && input.checksReceipt == semantic.checksReceipt &&
-          input.repairDirective == semantic.repairDirective && input.review == context && input.decisionContext == cursor.decisioncontext &&
+          input.repairDirective == semantic.repairDirective && input.review == context && input.checkFailure == checkfailure &&
+          input.decisionContext == cursor.decisioncontext &&
           actual.handle.instanceIdentity.value == source.current.identity.value && order.request.runId.value == source.current.identity.value &&
           order.request.continuationId.value == boundary.continuationIdentity.value &&
           _assigned_id(source, input).value == boundary.continuationIdentity.value &&
@@ -279,10 +280,21 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             candidate.payload.diff.get, validation.payload.receipts)))
         case _ => F.invalid("review has no actual current candidate and passed native checks")
       }
+      case "RepairStep" if cursor.validation.exists(_.payload.outcome.contains("repair-required")) => Consequence.success(None)
       case "RepairStep" => cursor.lastresult.flatMap(_._1.review).map(value => Consequence.success(Some(value)))
         .getOrElse(F.invalid("repair has no retained independent review context"))
       case _ => Consequence.success(None)
     }
+
+    private def _check_failure_context_c(cursor: Cursor, kind: String): Consequence[Option[S.CheckFailureContext]] =
+      if (kind != "RepairStep" || !cursor.validation.exists(_.payload.outcome.contains("repair-required")))
+        Consequence.success(None)
+      else (cursor.candidate, cursor.validation) match {
+        case (Some(candidate), Some(validation)) if candidate.payload.candidate.contains(validation.payload.candidate) &&
+            candidate.payload.diff.nonEmpty =>
+          S.checkFailureContextC(candidate.payload.changedPaths, candidate.payload.diff.get, validation.payload).map(Some(_))
+        case _ => F.invalid("repair has no matching actual retained failed candidate and validation")
+      }
 
     private def _advance_session_c(source: F.Session, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = source.current.suspension match {
@@ -341,7 +353,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           }
           _ <- if (_is_review_kind(semantic.key.kind.toString)) d.reviewInstallation.get.validateC else Consequence.unit
           context <- _review_context_c(cursor, semantic.key.kind.toString)
-          input = _request(source, cursor, semantic, context)
+          checkfailure <- _check_failure_context_c(cursor, semantic.key.kind.toString)
+          input = _request(source, cursor, semantic, context, checkfailure)
           draft <- _prepare_assigned_c(source, input, cursor.from, cursor.controller,
             if (_is_review(input)) cursor.candidate else None, cursor.documentpolicy)
           plan <- _issue_assigned_c(draft, core)
@@ -395,11 +408,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       }
 
     private def _request(source: F.Session, cursor: Cursor, semantic: O.Semantic,
-      context: Option[GoalPhaseNativeReview.Context]): S.Request =
+      context: Option[GoalPhaseNativeReview.Context], checkfailure: Option[S.CheckFailureContext]): S.Request =
       S.Request(source.current.identity.value, cursor.from.revision.value.toString, semantic.key.kind.toString,
         semantic.key.step, semantic.key.generation, semantic.purpose, semantic.selectedPlan,
         semantic.originalBase, semantic.completed, semantic.candidate, semantic.checksReceipt,
-        semantic.repairDirective, context, cursor.decisioncontext, cursor.documents)
+        semantic.repairDirective, context, cursor.decisioncontext, cursor.documents, checkfailure)
 
     private def _issue_assigned_c(plan: Prepared, core: ActionCall.Core): Consequence[Prepared] = for {
       intent <- plan.intent.map(Consequence.success).getOrElse(F.invalid("retained work cannot be resuspended"))
@@ -466,6 +479,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       requirement <- _requirement_c(input, required, independent)
       documents <- GoalPhaseDocumentSource.instructionsC(input.documents, input.stepIdentity)
       bundle = ContextBundle((if (independent) "Independently review the actual candidate and selected native check outcomes"
+        else if (input.kind == "RepairStep" && input.checkFailure.nonEmpty)
+          "Correct semantic source only within the selected Step to fix its selected failed checks using the retained actual typed diagnostics. Runtime owns commands, fresh candidate observation and revalidation before independent review."
         else if (input.kind == "RepairStep") "Repair only the assigned Step findings from the retained independent review"
         else "Implement only the current Step of the complete selected ordered Phase plan") +
         GoalPhaseAcceptanceBoundary.instructions(input.selectedPlan) + documents,

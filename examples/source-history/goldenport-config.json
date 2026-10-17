@@ -1,0 +1,28 @@
+{
+  "sm-workflow.source-history.style": "goldenport",
+  "sm-workflow.source-history.rule": {
+    "schemaVersion": "sm-workflow.source-history-rule.v1",
+    "identity": "goldenport-source-history-v1",
+    "style": "goldenport",
+    "format": "scala-block-history-v1",
+    "sourceRoots": ["src/main/scala", "src/test/scala"],
+    "extensions": ["scala"],
+    "excludedSegments": ["generated", "vendor", "target", "sample", "samples"],
+    "tags": {
+      "since": "@since",
+      "version": "@version",
+      "history": "version",
+      "author": "@author"
+    },
+    "datePattern": "MMM. ppd, uuuu",
+    "locale": "en-US",
+    "rollover": "month",
+    "removeHistoryAtSince": true,
+    "removeHistoryInCurrentPeriod": true,
+    "header": {
+      "open": "/**",
+      "linePrefix": " * ",
+      "close": " */"
+    }
+  }
+}

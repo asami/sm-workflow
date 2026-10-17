@@ -85,6 +85,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
       case Some("passed") => "Actual required native checks passed. Independent review work, acceptance and Step/Phase closure remain unfinished."
+      case Some("repair-required") => "Actual terminated selected Step check failure is retained for assigned semantic repair. Fresh native inspection, checks and independent review remain unfinished."
       case Some("failed") => "Actual failed or indeterminate checks are retained at Decision. No automatic replay or review acceptance."
       case _ => "A native check intent has no recorded result. Observe or request a genuine decision; checks are not automatically replayed."
     })
@@ -165,13 +166,19 @@ private[smworkflow] object GoalPhaseNativeValidation {
         inspected <- if (store.controller.stage.toString == store.validationStage &&
             store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
           else GoalPhaseNativeCandidate.observedStateC(store.controller, store.candidate.payload, store.documentPolicy)
-        validated <- inspected.acceptC(O.ChecksObserved(store.initial.candidate, store.checks,
-          store.reference("validation").identity, passed))
-        target = if (passed) store.reviewStage else "Decision"
-        event = (if (store.whole) "phase-" else "") + (if (passed) "checks-passed" else "checks-failed")
+        outcome = if (passed) "passed" else if (!store.whole && inspected.repairs < inspected.plan.repairLimit &&
+          inspected.generation < Long.MaxValue && repairable(current.payload)) "repair-required" else "failed"
+        payload = current.payload.copy(outcome = Some(outcome))
+        validated <- observedStateC(inspected, payload, store.reference("validation").identity)
+        target = validated.stage.toString
+        event = (if (store.whole) "phase-" else "") + (outcome match {
+          case "passed" => "checks-passed"
+          case "repair-required" => "checks-repair-required"
+          case _ => "checks-failed"
+        })
         _ <- if (validated.stage.toString == target && domain.statemachine.GoalPhaseRunLifecycle.permits(store.validationStage, event, target))
           Consequence.unit else F.invalid("native check outcome differs from CML/controller")
-        saved <- store.saveC("validation", current.record, current.payload.copy(outcome = Some(if (passed) "passed" else "failed")))
+        saved <- store.saveC("validation", current.record, payload)
         _ <- store.acknowledgeC("goal-checks-admitted")
       } yield saved else Consequence.success(current)
     }
@@ -200,29 +207,32 @@ private[smworkflow] object GoalPhaseNativeValidation {
     def saveC(key: String, from: InstanceRecord, payload: Payload): Consequence[Saved] = for {
       _ <- if (from.currentProgression.contains(ProgressionReference("phase." + validationStage))) Consequence.unit
         else F.invalid("check intent/result has no actual unsuspended Validation frontier")
-      target = payload.outcome.map { case "passed" => reviewStage; case _ => "Decision" }.getOrElse(validationStage)
+      target = payload.outcome.map {
+        case "passed" => reviewStage
+        case "repair-required" => "Repair"
+        case _ => "Decision"
+      }.getOrElse(validationStage)
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(key), from, from.revision,
         F.history(from, "phase." + target, "ordered-validation:" + key), TypedValue(codec.typeIdentity, payload)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield Saved(saved.receipt.next, saved.receipt.payload.value)
     def compatible(payload: Payload): Boolean =
-      payload.sourceRevision == initial.sourceRevision && payload.step == initial.step &&
+      _valid_payload(payload) && payload.sourceRevision == initial.sourceRevision && payload.step == initial.step &&
         payload.candidate == initial.candidate && payload.selected == initial.selected &&
         payload.receipts.size <= payload.selected.size && payload.receipts.zip(payload.selected).forall((receipt, check) =>
           receipt != null && receipt.identity == check.identity && receipt.sbt != null &&
             receipt.sbt.fold(check.kind == WorkflowSbtValidation.Kind.Test)(facts =>
               facts != null && facts.valid && facts.kind == check.kind))
-    def completedC(saved: Saved): Consequence[Saved] = {
-      val p = saved.payload
-      val complete = p.outcome match {
-        case Some("passed") => p.receipts.size == p.selected.size && successful(p.receipts, initial.selected) &&
-          saved.record.currentProgression.contains(ProgressionReference("phase." + reviewStage))
-        case Some("failed") => p.receipts.nonEmpty && !successful(p.receipts, initial.selected) &&
-          saved.record.currentProgression.contains(ProgressionReference("phase.Decision"))
-        case _ => false
-      }
-      if (complete && compatible(p)) Consequence.success(saved) else F.invalid("retained check outcome is not its actual native successor")
-    }
+    def completedC(saved: Saved): Consequence[Saved] = for {
+      _ <- if (saved != null && compatible(saved.payload)) Consequence.unit
+        else F.invalid("retained check outcome crosses its selected candidate or binding")
+      inspected <- if (controller.stage.toString == validationStage && controller.candidate.contains(initial.candidate))
+        Consequence.success(controller)
+        else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy)
+      state <- observedStateC(inspected, saved.payload, reference("validation").identity)
+      _ <- if (saved.record.currentProgression.contains(ProgressionReference("phase." + state.stage.toString))) Consequence.unit
+        else F.invalid("retained check outcome is not its actual native successor")
+    } yield saved
     def preconditionsC: Consequence[Unit] = for {
       actual <- G.observeC(core)
       tree <- G.indexTreeC(core)
@@ -246,9 +256,64 @@ private[smworkflow] object GoalPhaseNativeValidation {
         "GoalPhase validation acknowledgement interrupted; retained intent is not replayed: " + stage)
     }
   }
+  /** Classification of retained typed facts only; this grants no effect or retry authority. */
+  private[admission] def repairable(payload: Payload): Boolean =
+    _valid_payload(payload) && payload.receipts.nonEmpty &&
+      payload.receipts.zip(payload.selected).forall { (receipt, check) =>
+        receipt.sbt.exists(facts => facts != null && facts.valid && facts.kind == check.kind)
+      } && successful(payload.receipts.dropRight(1), payload.selected) && {
+        val last = payload.receipts.last
+        last.termination == "exited" && last.exitCode.exists(_ != 0) &&
+          last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Failed)
+      }
+
+  /** One owner reconstructs new and retained outcomes; old failed records stay Decision. */
+  private[admission] def observedStateC(controller: O.State, payload: Payload,
+    receiptIdentity: String): Consequence[O.State] = {
+    if (controller == null || !_valid_payload(payload) || !_text(receiptIdentity) ||
+        !(controller.stage == O.Stage.Validation || controller.stage == O.Stage.PhaseValidation) ||
+        payload.step != (if (controller.cursor == controller.plan.steps.size) "phase:" + controller.plan.phase
+          else controller.plan.steps(controller.cursor).identity))
+      F.invalid("native check outcome has no matching selected Validation frontier")
+    else payload.outcome match {
+      case Some("passed") if payload.receipts.size == payload.selected.size && successful(payload.receipts, payload.selected) =>
+        controller.acceptC(O.ChecksObserved(payload.candidate, payload.selected.map(_.identity), receiptIdentity, true))
+      case Some("failed") if payload.receipts.nonEmpty && !successful(payload.receipts, payload.selected) =>
+        controller.acceptC(O.ChecksObserved(payload.candidate, payload.selected.map(_.identity), receiptIdentity, false))
+      case Some("repair-required") if repairable(payload) =>
+        val failed = payload.selected(payload.receipts.size - 1)
+        val exit = payload.receipts.last.exitCode.get
+        val directive = O.RepairDirective("Correct selected Step check " + failed.identity + " (" + failed.kind.wire +
+          ") after actual exit " + exit,
+          Vector("Correct semantic source within selected Step " + payload.step + " using the retained actual diagnostics for " +
+            failed.identity + "; runtime must inspect the fresh candidate and rerun selected checks before independent review."))
+        controller.acceptC(O.RepairableChecksObserved(payload.candidate, payload.selected.map(_.identity), receiptIdentity, directive))
+      case _ => F.invalid("native check outcome is incomplete or contradicts its actual selected receipts")
+    }
+  }
+
+  private def _valid_payload(payload: Payload): Boolean = payload != null && _text(payload.sourceRevision) &&
+    _text(payload.step) && payload.candidate != null &&
+    Vector(payload.candidate.head, payload.candidate.tree).forall(value => value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
+    payload.selected != null && payload.selected.nonEmpty && payload.selected.size <= 16 &&
+    payload.selected.forall(check => check != null && id(check.identity) && check.kind != null && check.ordinal > 0 && check.ordinal <= 16) &&
+    payload.selected.map(_.identity).distinct.size == payload.selected.size &&
+    payload.selected.map(_.ordinal).distinct.size == payload.selected.size &&
+    payload.receipts != null && payload.receipts.size <= payload.selected.size && payload.outcome != null &&
+    payload.receipts.zip(payload.selected).forall { (receipt, check) =>
+      receipt != null && receipt.identity == check.identity && receipt.exitCode != null && receipt.sbt != null &&
+        _stored_text(receipt.stdout) && _stored_text(receipt.stderr) &&
+        receipt.sbt.forall(facts => facts != null && facts.valid && facts.kind == check.kind) &&
+        (receipt.sbt.nonEmpty || check.kind == WorkflowSbtValidation.Kind.Test)
+    }
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    !value.exists(c => c == '\u0000' || c == '\r' || c == '\n')
+  private def _stored_text(value: String): Boolean = value != null && !value.contains('\u0000') &&
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) &&
+    value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
   private[admission] def successful(receipts: Vector[V.Receipt], selected: Vector[Check]): Boolean =
-    receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
-      receipt != null && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))
+    receipts != null && selected != null && receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
+      check != null && receipt != null && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))
   private def covers(owner: String, path: String): Boolean = path == owner || path.startsWith(owner + "/")
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

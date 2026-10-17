@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 @DoNotDiscover
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -44,7 +44,8 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     original.take(2) ++ Vector(Vector("-C", root.resolve("repository").toString, "add", "--", ".")) ++ original.drop(2)
   }
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
-    val isolated = Set("NormalSbtSuccess", "NormalSbtFailure", "NormalSbtUnknown")(scenario)
+    val compile = Set("NormalSbtCompileSuccess", "NormalSbtCompileFailure")(scenario)
+    val isolated = compile || Set("NormalSbtSuccess", "NormalSbtFailure", "NormalSbtUnknown")(scenario)
     require(isolated || Set("Equal", "Goal")(scenario), "Only the selected normal SBT episodes are admitted")
     val gitplan = if (isolated) None else Some(TypedGitHostPlanFixture.plan(
       Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
@@ -52,7 +53,8 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
       goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty))
     val ordinals = if (isolated || scenario != "Goal") Vector(1) else
       (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal).distinct
-    TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan)
+    TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan,
+      operation = if (compile) SbtOperation.Compile else SbtOperation.Test)
   }
   private def _build(root: Path, successful: Boolean): Unit = TypedSbtHostPlanFixture.build(root, successful)
   private def _same_native(actual: InstanceRecord, expected: InstanceRecord): Unit = {
@@ -164,6 +166,101 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
           reread shouldBe stored
           prepare(call => _stored_c(call, "normal-sbt-intent").map(value => { value shouldBe Some(intent); () }))
           Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe 1
+        }
+      }
+    }
+
+    for (successful <- Vector(true, false)) {
+      (if (successful) "persist successful Compile source generation and compiled classes without replay after reopening"
+        else "persist failed Compile source generation and its real compiler failure without replay after reopening") in {
+        Given("an isolated normal Compile build with a configured source generator and no application main")
+        val directory = Files.createDirectories(Path.of("target/sm-workflow/work/normal-typed-sbt").toAbsolutePath)
+        val root = Files.createTempDirectory(directory, "compile-episode-")
+        TypedSbtHostPlanFixture.buildCompile(root, successful)
+        val scenario = if (successful) "NormalSbtCompileSuccess" else "NormalSbtCompileFailure"
+        val intent = Json.obj("target" -> Json.fromString("sm-workflow-repository-validation-1"),
+          "operation" -> Json.fromString("compile"), "checkIdentity" -> Json.fromString("compile"), "state" -> Json.fromString("prepared"))
+        val marker = root.resolve("compile-generations.txt")
+        var stored = Option.empty[Json]
+        var generation = Option.empty[String]
+        _with_runtime_(root, scenario) { (_, _, _, prepare) =>
+          When("a completed managed Setup Operation persists the Compile intent before any build effect")
+          prepare(call => call.createC("host_evidence", "normal-sbt-intent", Record.data(_storage_field -> intent.noSpaces)))
+          Then("the intent exists without entering the configured source generator")
+          prepare(call => _stored_c(call, "normal-sbt-intent").map(value => { value shouldBe Some(intent); () }))
+          Files.exists(marker) shouldBe false
+
+          Given("that durable Compile intent and a fresh owning managed call")
+          When("the call loads the intent, executes typed Compile once and retains its actual receipt")
+          prepare(call => for {
+            retained <- _stored_c(call, "normal-sbt-intent")
+            _ = retained shouldBe Some(intent)
+            actual <- WorkflowManagedProcessExecution.repositoryValidationC(call.core, 1, WorkflowSbtValidation.Kind.Compile)
+            _ = actual.operation shouldBe SbtOperation.Compile
+            receipt <- RepositorySyncNativeMergeValidation.sbtReceiptC("compile", WorkflowSbtValidation.Kind.Compile, actual)
+            _ = actual.outcome shouldBe (if (successful) SbtExecutionOutcome.Succeeded else SbtExecutionOutcome.Failed(receipt.exitCode.get))
+            evidence = _result(actual, receipt)
+            _ <- call.createC("host_evidence", "normal-sbt-result", Record.data(_storage_field -> evidence.noSpaces))
+            _ = { stored = Some(evidence) }
+          } yield ())
+          Then("the external compiler result, bounded captures and Compile-only product gate describe the real generated source")
+          val value = stored.get
+          value.hcursor.get[String]("target").toOption shouldBe Some("sm-workflow-repository-validation-1")
+          value.hcursor.get[String]("operation").toOption shouldBe Some("compile")
+          value.hcursor.get[String]("safeProgramIdentity").toOption shouldBe Some("sm-workflow-repository-validation-1")
+          val receipt = take(value.hcursor.downField("receipt").as[RepositorySyncNativeMergeValidation.Receipt].fold(
+            _ => Consequence.stateConflict("Actual Compile receipt cannot be decoded"), Consequence.success))
+          receipt.identity shouldBe "compile"
+          receipt.termination shouldBe "exited"
+          value.hcursor.get[String]("termination").toOption shouldBe Some(ProcessExecutionTermination.Exited(receipt.exitCode.get).toString)
+          value.hcursor.get[String]("outcome").toOption shouldBe Some(
+            (if (successful) SbtExecutionOutcome.Succeeded else SbtExecutionOutcome.Failed(receipt.exitCode.get)).toString)
+          value.hcursor.get[Long]("elapsedMillis").toOption.get should be >= 0L
+          value.hcursor.downField("artifacts").focus.get shouldBe Json.arr()
+          val facts = receipt.sbt.get
+          facts.kind shouldBe WorkflowSbtValidation.Kind.Compile
+          facts.outcome shouldBe (if (successful) WorkflowSbtValidation.Outcome.Succeeded else WorkflowSbtValidation.Outcome.Failed)
+          facts.selection shouldBe None
+          facts.reason shouldBe None
+          RepositorySyncNativeMergeValidation.productSuccessful(receipt, WorkflowSbtValidation.Kind.Compile) shouldBe successful
+          RepositorySyncNativeMergeValidation.productSuccessful(receipt, WorkflowSbtValidation.Kind.Test) shouldBe false
+          RepositorySyncNativeMergeValidation.productSuccessful(receipt, WorkflowSbtValidation.Kind.TestOnly) shouldBe false
+          receipt.stdout should include("COMPILE_GENERATOR_ENTERED " + root.resolve("repository"))
+          val generated = root.resolve("repository/target/selected-generated/CompileGenerated.scala")
+          Files.readString(generated) shouldBe
+            ("object CompileGenerated { val value: Int = " + (if (successful) "42" else "\"incorrect\"") + " }\n")
+          val classes = root.resolve("repository/target/scala-2.12/classes")
+          if (successful) {
+            receipt.exitCode shouldBe Some(0)
+            Files.isRegularFile(classes.resolve("CompileGenerated$.class")) shouldBe true
+            Files.isRegularFile(classes.resolve("CompileConsumer$.class")) shouldBe true
+          } else {
+            receipt.exitCode.get should not be 0
+            (receipt.stdout + receipt.stderr) should include("type mismatch")
+            Files.exists(classes.resolve("CompileConsumer$.class")) shouldBe false
+          }
+          for (stream <- Vector("stdout", "stderr")) {
+            val capture = value.hcursor.downField(stream)
+            capture.get[Boolean]("truncated").toOption shouldBe Some(false)
+            capture.get[Long]("byteCount").toOption.get shouldBe capture.get[Vector[Int]]("bytes").toOption.get.size.toLong
+            capture.get[Long]("byteCount").toOption.get should be <= (if (stream == "stdout") 131072L else 16384L)
+          }
+          generation = Some(Files.readString(marker))
+          generation.get.linesIterator.size shouldBe 1
+          generation.get.trim.toLong should not be ProcessHandle.current().pid()
+        }
+        Given("the original runtime is closed with its exact Compile intent and actual result retained")
+        _with_runtime_(root, scenario) { (_, _, _, prepare) =>
+          When("a reopened runtime reads the durable intent and result through fresh managed calls")
+          var reread = Option.empty[Json]
+          var retainedintent = Option.empty[Json]
+          prepare(call => _stored_c(call, "normal-sbt-intent").map(value => { retainedintent = value; () }))
+          prepare(call => _retained_c(call).map(value => { reread = Some(value); () }))
+          Then("both records are identical and the configured source generator still has exactly one external PID entry")
+          retainedintent shouldBe Some(intent)
+          reread shouldBe stored
+          Files.readString(marker) shouldBe generation.get
+          Files.readString(marker).linesIterator.size shouldBe 1
         }
       }
     }
@@ -284,6 +381,205 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
   }
   "Direct GoalPhase Operations with the runtime SBT adapter" should afterWord(
     "in spec:normal-typed-sbt-validation, example:wholeGoal, rule:owning-workflow; spec:goal-phase-native-retention-applicability, example:E16, rule:R6") {
+    "repair a real failed SBT check through assigned semantic work and fresh runtime validation" in {
+      Given("an isolated clean one-Step Goal with only value.txt owned and a normal typed Test host")
+      val directory = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)
+      val root = Files.createTempDirectory(directory, "sbt-goal-check-repair-")
+      _build(root, true)
+      Files.writeString(root.resolve("repository/value.txt"), "initial\n")
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = Vector("value.txt")))
+      val plan = O.Plan("selected-sbt-check-repair-plan", "1", host.goal.input.phaseIdentity,
+        host.goal.input.repositoryIdentity, Vector(O.Step("step-1", "Correct selected product input",
+          Vector("value.txt"), Vector.empty, Vector("test"))), Vector("test"), repairLimit = 1)
+      val selection = _goal_selection_(host.goal.input, "selected-sbt-check-repair", "direct-sbt-check-repair-start")
+      var execution = Option.empty[InstanceIdentity]
+      var assigned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
+      var implementation = Option.empty[S.Request]
+      var base = Option.empty[O.Snapshot]
+      var failedwork = Option.empty[WorkflowInteraction[S.Request, Nothing]]
+      var failedresponse = Option.empty[V.GoalPhaseAdvanceResult]
+      var failure = Option.empty[S.CheckFailureContext]
+      var faileddiagnostics = Option.empty[(String, String)]
+      var reviewwork = Option.empty[WorkflowInteraction[S.Request, Nothing]]
+      var reviewresponse = Option.empty[V.GoalPhaseAdvanceResult]
+      def _identity_ : InstanceIdentity = execution.get
+      def _advance_ : List[Property] = NativeWorkflowOperationInputFixture.advance(_identity_.value)
+      def _input_(): S.Request = assigned.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
+      def _executions_(): Vector[Long] = if (Files.exists(root.resolve("sbt-executions.txt")))
+        Files.readString(root.resolve("sbt-executions.txt")).linesIterator.map(_.toLong).toVector else Vector.empty
+      // This deterministic participant supplies semantic edits only; it is not provider evidence.
+      def _result_(): ContinuationResult[S.Result] = {
+        val work = assigned.get
+        val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
+        val selected = order.input.get.value
+        val reference = ContextReference("specification-sbt-check-repair-" + selected.kind, selected.sourceRevision)
+        ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
+          TypedValue(S.resultCodec.typeIdentity, S.Result("completed", "Specification response to assigned semantic work only", Vector.empty)),
+          reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("participant")))
+      }
+      for (session <- Vector("issue", "implement", "repair", "review"))
+        _with_runtime_(root, "Goal", Some(host)) { (owner, component, actor, prepare) =>
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "GoalPhaseService", operation = operation,
+              properties = properties), actor)))
+          def _next_(): V.GoalPhaseAdvanceResult = {
+            val response = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase", _advance_)
+            response.kind shouldBe "Request"
+            response.sessionId shouldBe _identity_.value
+            prepare(call => call.goalWorkC(_identity_).map(value => { assigned = Some(value); () }))
+            response.work.get.kind shouldBe _input_().kind
+            _input_().selectedPlan shouldBe plan
+            response.work.get.selectedPlan.identity shouldBe plan.identity
+            response
+          }
+          if (session == "issue") {
+            prepare(call => for {
+              _ <- call.setupC(_setup_commands_(root, "Goal").size)
+              _ <- call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(host.goal.input), selection.participantIdentity), Record.data(ProfileSelectionJsonV1.storageField ->
+                take(ProfileSelectionJsonV1.encodeStorageC(selection))))
+              _ <- call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+                take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(
+                  selection.selectionId, selection.participantIdentity, plan)))))
+            } yield ())
+            When("ordinary public Start and Advance issue the selected implementation")
+            val started = _invoke_[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(host.goal.input))
+            execution = Some(InstanceIdentity(started.sessionId))
+            _next_()
+            Then("the actual assigned implementation retains its plan and clean base without running SBT")
+            _input_().kind shouldBe "ImplementStep"
+            _input_().stepIdentity shouldBe Some("step-1")
+            _input_().completed shouldBe empty
+            implementation = Some(_input_())
+            base = Some(_input_().originalBase)
+            _executions_() shouldBe empty
+          } else if (session == "implement") {
+            Given("the original runtime is closed and the actual pending implementation is reopened")
+            _next_()
+            _input_() shouldBe implementation.get
+            When("the semantic fixture writes incorrect input and submits only its assigned completed result")
+            Files.writeString(root.resolve("repository/value.txt"), "incorrect\n")
+            _invoke_[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(_result_()))).accepted shouldBe true
+            Then("Submit accepts semantic completion without launching a product check")
+            _executions_() shouldBe empty
+            When("public Advance executes the selected real Test and assigns RepairStep for its failure")
+            val response = _next_()
+            Then("internal and public repair work retain the actual failed candidate and typed diagnostics")
+            val selected = _input_()
+            selected.kind shouldBe "RepairStep"
+            selected.stepIdentity shouldBe implementation.get.stepIdentity
+            selected.originalBase shouldBe base.get
+            selected.completed shouldBe implementation.get.completed
+            selected.generation shouldBe implementation.get.generation + 1L
+            selected.review shouldBe None
+            selected.candidate shouldBe None
+            selected.checksReceipt shouldBe None
+            val context = selected.checkFailure.get
+            val validation = context.validation
+            context.changedPaths shouldBe Vector("value.txt")
+            context.diff should include("+incorrect")
+            validation.candidate.head shouldBe base.get.head
+            validation.candidate.tree should not be base.get.tree
+            validation.step shouldBe "step-1"
+            validation.outcome shouldBe Some("repair-required")
+            validation.selected.map(c => (c.identity, c.kind)) shouldBe Vector(("test", WorkflowSbtValidation.Kind.Test))
+            validation.receipts.size shouldBe 1
+            val receipt = validation.receipts.head
+            receipt.identity shouldBe "test"
+            receipt.termination shouldBe "exited"
+            receipt.exitCode.get should not be 0
+            receipt.sbt.get.kind shouldBe WorkflowSbtValidation.Kind.Test
+            receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+            receipt.stdout should include("PRODUCT_CHECK_ENTERED " + root.resolve("repository"))
+            (receipt.stdout + receipt.stderr) should include("actual product input differs")
+            receipt.stdout should not include "PRODUCT_CHECK_PASSED"
+            selected.repairDirective.get.reason should include("test")
+            selected.repairDirective.get.reason should include(receipt.exitCode.get.toString)
+            val publicwork = response.work.get
+            publicwork.review shouldBe None
+            publicwork.candidate shouldBe None
+            publicwork.checksReceipt shouldBe None
+            publicwork.stepIdentity shouldBe selected.stepIdentity
+            publicwork.completed shouldBe empty
+            publicwork.checkFailure.get.changedPaths shouldBe context.changedPaths
+            publicwork.checkFailure.get.diff shouldBe context.diff
+            publicwork.checkFailure.get.validation shouldBe NativeWorkflowOperationOutput.goalValidation(validation)
+            _executions_().size shouldBe 1
+            _executions_() should not contain ProcessHandle.current().pid()
+            failedwork = assigned
+            failedresponse = Some(response)
+            failure = Some(context)
+            faileddiagnostics = Some((receipt.stdout, receipt.stderr))
+          } else if (session == "repair") {
+            Given("the failed runtime is closed with its full issued RepairStep and raw failure context saved")
+            When("a fresh public Advance rereads the pending repair before any correction")
+            val reopened = _next_()
+            Then("the same repair request and handle retain the original diagnostics without another SBT launch")
+            reopened shouldBe failedresponse.get
+            assigned shouldBe failedwork
+            _input_().originalBase shouldBe base.get
+            _input_().checkFailure shouldBe failure
+            val receipt = _input_().checkFailure.get.validation.receipts.head
+            (receipt.stdout, receipt.stderr) shouldBe faileddiagnostics.get
+            _executions_().size shouldBe 1
+            When("the assigned semantic fixture corrects value.txt and submits completed without receipts or review evidence")
+            Files.writeString(root.resolve("repository/value.txt"), "expected\n")
+            _invoke_[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(_result_()))).accepted shouldBe true
+            Then("repair Submit records semantic work without executing another check")
+            _executions_().size shouldBe 1
+            When("public Advance freshly inspects and stages the corrected candidate and executes the real selected Test")
+            val response = _next_()
+            Then("independent ReviewStep receives a fresh successful receipt while the consumed repair allowance and failed evidence remain retained")
+            val selected = _input_()
+            selected.kind shouldBe "ReviewStep"
+            selected.checkFailure shouldBe None
+            response.work.get.checkFailure shouldBe None
+            selected.review.get.changedPaths shouldBe Vector("value.txt")
+            selected.review.get.diff should include("+expected")
+            val positive = selected.review.get.checks.last
+            positive.identity shouldBe "test"
+            positive.termination shouldBe "exited"
+            positive.exitCode shouldBe Some(0)
+            positive.sbt.get.kind shouldBe WorkflowSbtValidation.Kind.Test
+            positive.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+            positive.stdout should include("PRODUCT_CHECK_ENTERED " + root.resolve("repository"))
+            positive.stdout should include("PRODUCT_CHECK_PASSED")
+            selected.candidate.get.head shouldBe base.get.head
+            selected.candidate.get.tree should not be failure.get.validation.candidate.tree
+            selected.originalBase shouldBe base.get
+            selected.generation shouldBe failedwork.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value.generation
+            selected.completed shouldBe empty
+            selected.selectedPlan.repairLimit shouldBe 1
+            response.work.get.review.get.changedPaths shouldBe Vector("value.txt")
+            (failure.get.validation.receipts.head.stdout, failure.get.validation.receipts.head.stderr) shouldBe faileddiagnostics.get
+            failure.get.validation.outcome shouldBe Some("repair-required")
+            _executions_().size shouldBe 2
+            _executions_().distinct.size shouldBe 2
+            _executions_() should not contain ProcessHandle.current().pid()
+            reviewwork = assigned
+            reviewresponse = Some(response)
+          } else {
+            Given("the corrected runtime is closed with independent ReviewStep still pending")
+            When("a fresh public Advance and native issued-work read reopen that ReviewStep")
+            val reopened = _next_()
+            Then("the identical review request and handle retain the positive receipt in active phase.Review without a third launch")
+            reopened shouldBe reviewresponse.get
+            assigned shouldBe reviewwork
+            _input_().kind shouldBe "ReviewStep"
+            _input_().review.get.checks.last.exitCode shouldBe Some(0)
+            _input_().review.get.checks.last.stdout should include("PRODUCT_CHECK_PASSED")
+            prepare(call => call.goalCurrentC(_identity_).map { current =>
+              current.currentProgression shouldBe Some(ProgressionReference("phase.Review"))
+              current.lifecycle shouldBe Lifecycle.Active
+              current.suspension.nonEmpty shouldBe true
+              ()
+            })
+            _executions_().size shouldBe 2
+            _executions_().distinct.size shouldBe 2
+            _executions_() should not contain ProcessHandle.current().pid()
+          }
+        }
+    }
     Vector(false, true).foreach { lostAcknowledgement =>
     (if (lostAcknowledgement) "retain actual completion after its first post-append acknowledgement is lost"
       else "validate the Step and whole Phase, commit and converge through RepositorySync") in {

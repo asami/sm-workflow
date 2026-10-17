@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -38,7 +38,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.candidate.map(_goal_snapshot),
       value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
       value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), hostContext)),
-      value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale)))
+      value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale)),
+      value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView =
     V.GoalPhaseNativeValidationView(payload.sourceRevision, payload.step, _goal_snapshot(payload.candidate),
@@ -59,7 +60,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     context <- NativeHostHumanContext.goalC(core, question)
     value <- decisionInputC(question)
     _ <- if (value != null && value.work != null && value.result != null && value.work.completed != null &&
-        value.work.review != null && value.work.decisionContext != null && value.work.repairDirective != null) Consequence.unit
+        value.work.review != null && value.work.decisionContext != null && value.work.repairDirective != null &&
+        value.work.checkFailure != null) Consequence.unit
       else Consequence.stateConflict("Issued Goal Human has no business display input")
   } yield V.GoalPhaseAdvanceResult(question.handle.instanceIdentity.value, "Human", value.reason,
       Some(GoalPhaseOrderedHumanDecision.completionOperation.operation), Some(question.handle.instanceIdentity.value),

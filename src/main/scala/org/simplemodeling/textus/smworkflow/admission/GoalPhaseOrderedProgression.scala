@@ -65,6 +65,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class PhaseDocumentCandidateObserved(snapshot: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, passed: Boolean) extends Event
+  final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
+    receipt: String, directive: RepairDirective) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
     evidence: String, outcome: ReviewOutcome, repairDirective: Option[RepairDirective] = None) extends Event
   enum ReviewOutcome { case Accept, Repair, Human }
@@ -195,6 +197,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         if (passed) success(if (phaseWide) Stage.PhaseReview else Stage.Review,
           newChecks = Some(receipt))
         else success(Stage.Decision, reason = Some("Selected native checks failed: " + receipt))
+      case RepairableChecksObserved(value, selected, receipt, directive) if
+          stage == Stage.Validation && !phaseWide && candidate.contains(value) &&
+          selected == checks && text(receipt) && _valid_directive(directive) &&
+          generation < Long.MaxValue && repairs < plan.repairLimit =>
+        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
+          newDirective = Some(directive), clear = true)
       case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive) if
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(evidence) &&
           ((stage == Stage.Review && value == key(WorkKind.ReviewStep)) ||
@@ -294,6 +302,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     value.split("/", -1).forall(p => p.nonEmpty && p != "." && p != ".." && p != ".git")
   private def oid(value: String) = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
   private def validSnapshot(value: Snapshot) = value != null && oid(value.head) && oid(value.tree)
+  private def _valid_directive(value: RepairDirective) = value != null && text(value.reason) &&
+    value.findings != null && value.findings.nonEmpty && value.findings.forall(text)
   private def validCommit(value: Commit) = value != null && oid(value.identity) && oid(value.parent) && oid(value.tree)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase ordered progression: " + reason)
 }

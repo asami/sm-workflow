@@ -13,7 +13,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -43,7 +43,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     if (ordinal > 0 && ordinal <= maximum) Consequence.unit
     else Consequence.stateConflict("Workflow Git semantic selection exceeds its host ordinal bounds")
 
-  /** The host binds the logical selected check to typed Test/TestOnly authority.
+  /** The host binds the logical selected check to typed Compile/Test/TestOnly authority.
     * No executable or command vector can be supplied by a semantic result.
     */
   def repositoryValidationC(core: ActionCall.Core, ordinal: Int,
@@ -66,6 +66,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     // Typed constructors and executeProgram borrow the actual owning UoW.
     // CNCF interprets its current authority and owns the managed lifecycle.
     def prepareSbt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionResult] = kind match {
+      case WorkflowSbtValidation.Kind.Compile => sbt_compile(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
     }

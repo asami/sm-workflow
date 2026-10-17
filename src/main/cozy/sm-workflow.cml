@@ -322,6 +322,7 @@ OperationResult
 | repairDirective | GoalPhaseRepairDirective | ? |
 | review | GoalPhaseNativeReviewContext | ? |
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
+| checkFailure | GoalPhaseCheckFailureContext | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -447,6 +448,16 @@ OperationResult
 | diff | string | 1 |
 | checks | GoalPhaseNativeCheckReceipt | * |
 | hostContext | WorkflowHostReviewContext | ? |
+
+## GoalPhaseCheckFailureContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| changedPaths | string | * |
+| diff | string | 1 |
+| validation | GoalPhaseNativeValidationView | 1 |
 
 ## GoalPhaseWorkResult
 
@@ -1109,6 +1120,11 @@ on = checks-passed
 
 to = Decision
 on = checks-failed
+
+##### TRANSITION
+
+to = Repair
+on = checks-repair-required
 
 #### Review
 
@@ -3241,6 +3257,8 @@ Own the selected Phase's entry, assigned semantic/Human completion and mechanica
 
 Advance the single execution identified by sessionId. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
 
+Optional sm-workflow.source-history.style selects none (the default, with no history rule or source work) or goldenport for changed owned Scala sources before staging and checks. sm-workflow.source-history.rule supplies the external goldenport rule as a JSON object string; common configuration also accepts an object. CNCF resolves common configuration and these same-key operation properties for the current call, with operation values taking precedence. Invalid style or a missing/invalid selected rule fails before candidate inspection is recorded. These properties change no host grants, stores or business input binding.
+
 ##### TYPE
 
 COMMAND
@@ -3256,6 +3274,8 @@ GoalPhaseAdvanceInput
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| sm-workflow.source-history.style | string | ? |
+| sm-workflow.source-history.rule | string | ? |
 
 ##### OUTPUT
 
@@ -3920,7 +3940,8 @@ review or closure authority and installs no repair worker.
 ##### DESCRIPTION
 
 Repair only the assigned Step under its issued repair directive and retained
-review context. Return completion or an explicit decision-needed result through
+independent review or actual failed-check context. Use actual retained diagnostics
+for a failed check. Return only semantic completion or an explicit decision-needed result through
 the assigned completion route. Do not expand the repair scope, reset counters,
 execute external commands or substitute a passing review. Workflow observes the
 changed candidate and selects the required checks and independent follow-up.
@@ -5049,6 +5070,7 @@ GoalPhaseWorkSubmissionResult
 | repairDirective | GoalPhaseRepairDirective | ? |
 | review | GoalPhaseNativeReviewContext | ? |
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
+| checkFailure | GoalPhaseCheckFailureContext | ? |
 
 ## GoalPhaseHumanQuestion
 

@@ -56,6 +56,65 @@ The actual corrected CNCF public-binder dependency is required for its connected
 validation. Earlier counts below do not establish current Step/Phase acceptance;
 connected independent reviews and owned commits/final release remain open.
 
+## Current P61-COMMAND-B failed-check repair route — 2026-10-17
+
+The authored normal Step route now distinguishes a known terminated typed check
+failure from an unknown effect. A nonempty ordered receipt prefix must match
+the selected identities and Compile, Test or TestOnly kinds. Every receipt must
+have valid typed facts; every prefix receipt before the final one must pass the
+product gate. Only a final `exited` receipt with actual nonzero exit and matching
+typed `failed` outcome can select `repair-required`, and only at Step Validation
+with a remaining lifetime repair allowance. No following check runs after the
+first negative receipt. Whole-Phase failure, legacy facts, timeout, incomplete
+or unverified tests and unknown intents do not assign repair. Saved `failed`
+outcomes remain Decision without promotion or replay.
+
+The owning validation adapter uses one outcome transition for new results,
+retained admission and contiguous-history reconstruction. A qualified failure
+consumes one allowance and generation and clears candidate/check/review/closure
+acceptance before assigning RepairStep. The original Plan, base, closed Steps
+and lifetime count remain intact. Independent-review repair retains its own
+separate source and meaning.
+
+Repair work carries exactly one source: retained independent review or optional
+`checkFailure`. The latter contains actual changed paths, diff and complete
+native validation context, including failed candidate, selected kinds and raw
+typed receipts. It carries no host review context. The existing Request schema
+keeps absent `checkFailure` omitted; explicit null or malformed new context is
+rejected. Reconstruction compares issued context with its actual retained
+candidate/validation predecessor, never current source files or AI-supplied
+receipts. Pending assignments retain their captured input.
+
+The repair provider returns only semantic completion or an explicit decision,
+with the existing bounded result and acceptance-report obligations. Completion
+returns to fresh native candidate inspection, selected checks and independent
+review; Submit executes no commands. CNCF continues to own execution permission,
+argv, cwd, lifecycle and typed result interpretation.
+
+Parent qualified B focused pure scenarios (2 suites/47 tests), B2 managed public
+Operations (1 suite/1 test) and B3 normal CLI (2 suites/3 tests). B4 preparation
+plus the accumulator passed 3 suites/4 tests; genuine selected medium semantic
+repair then passed the actual normal consumer (1 suite/1 test), through failed
+Test, repair and fresh Test to pending independent Review. See the current
+[SBT repair qualification](normal-typed-sbt-validation.md#p61-command-b-selected-failed-check-repair-pure-managed-runtime-and-b3b4-cli-qualification).
+B5 preparation passed 2 suites/2 tests; a genuine selected medium conflict
+provider supplied a proposal, then the normal consumer passed 1 suite/1 test
+through runtime materialization, typed Git stage, structural checks and fresh
+Test to pending independent merge Review. See the current
+[Git conflict qualification](normal-typed-git-workflow.md#p61-command-b5--qualified-provider-conflict-continuation).
+All qualifying SBT/wrapper exits were 0 and the shared development lock was
+released. Requested provider configuration and parent-observed completion are
+distinct evidence, without runtime/model attestation; semantic providers ran no
+SBT, Git or process commands.
+
+A-2 and A2-RUNTIME-1 retain their own focused consumer/codec and normal
+Compile/source-generation scope. COMMAND is connected and focused validated;
+its protected independent Step review and local acceptance commit remain pending.
+Installed-host acceptance, real review/CAM Admission/local commit and whole-Phase
+acceptance remain unfinished. No actual CommitPending, Push, final-fetch or
+convergence acceptance or new remote authority is established. These results
+do not close P6-EX02, COMMAND, the Step or the Phase.
+
 ## Historical chronology — nonnormative
 
 All following dated candidates, requirements and results describe their original

@@ -9,6 +9,7 @@ import io.circe.Json
 import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
+import org.goldenport.cncf.processexecution.GitOperationKind
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.io.RecordDecoder
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -19,8 +20,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -45,11 +45,14 @@ private[admission] object NativeWorkflowCliFixture {
 
   final class Scenario private[NativeWorkflowCliFixture] (
     val root: Path, val host: ThreeWorkflowHostParameters.Definition,
-    val plan: GoalPhaseOrderedProgression.Plan, val port: Option[Int]
+    val plan: GoalPhaseOrderedProgression.Plan, val port: Option[Int],
+    private[NativeWorkflowCliFixture] val _sbt_repair: Option[Path], startingLogIndex: Int = 0,
+    val sourceHistory: Boolean = false
   ) {
+    require(startingLogIndex >= 0, "Select a finite nonnegative starting log index")
     private val _assembly = root.resolve(".textus/assembly.yaml")
     private var _sequence = Vector.empty[Invocation]
-    private var _log_index = 0
+    private var _log_index = startingLogIndex
     private var _server_deadline = Option.empty[Long]
     def invocations: Vector[Invocation] = _sequence
     def input: Json = NativeWorkflowOperationInputFixture.selectedGoalInput(host.goal.input).value
@@ -105,6 +108,8 @@ private[admission] object NativeWorkflowCliFixture {
     def call(mode: String, operation: String, parameters: Vector[String]): Result =
       _run(_launcher ++ Vector(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
+    def repositoryCall(operation: String, parameters: Vector[String]): Result =
+      _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
 
     def prepareHostInput(operation: String, input: org.goldenport.record.Record): Result = {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
@@ -154,6 +159,7 @@ private[admission] object NativeWorkflowCliFixture {
       _log_index += 1
       val stdout = logs.resolve(s"$index.stdout.json")
       val stderr = logs.resolve(s"$index.stderr")
+      require(!Files.exists(stdout) && !Files.exists(stderr), "Owned invocation logs must not replace previous outputs")
       val builder = new ProcessBuilder(argv.asJava).directory(root.toFile)
         .redirectOutput(stdout.toFile).redirectError(stderr.toFile)
       if (argv.head == "/usr/bin/git") {
@@ -171,11 +177,12 @@ private[admission] object NativeWorkflowCliFixture {
       (process, invocation)
     }
     private def _run(argv: Vector[String]): Result = {
-      val remaining = _server_deadline.fold(TimeUnit.SECONDS.toNanos(60))(_ - System.nanoTime())
+      val bound = TimeUnit.SECONDS.toNanos(if (_sbt_repair.nonEmpty) 240 else 60)
+      val remaining = _server_deadline.fold(bound)(_ - System.nanoTime())
       require(remaining > 0, "Owned server scenario deadline expired")
       val (process, invocation) = _spawn(argv)
       try {
-        if (!process.waitFor(math.min(remaining, TimeUnit.SECONDS.toNanos(60)), TimeUnit.NANOSECONDS))
+        if (!process.waitFor(math.min(remaining, bound), TimeUnit.NANOSECONDS))
           throw new AssertionError("Owned process exceeded its deadline\n" + invocation.logs)
         Result(process.exitValue(), invocation)
       } finally _stop(process)
@@ -187,9 +194,12 @@ private[admission] object NativeWorkflowCliFixture {
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false")
+      val initialpaths = if (_sbt_repair.nonEmpty) Vector("docs/phase.md", ".gitignore", "build.sbt",
+        "project/build.properties", "src/test/scala/ProductCheck.scala", "value.txt") ++
+        Option.when(sourceHistory)("src/main/scala/HistoryExample.scala").toVector else Vector("docs/phase.md")
       val commands = Vector(Vector("init", "--bare", "--initial-branch=main", host.target.endpoint),
         Vector("init", "--initial-branch=main", repository.toString),
-        Vector("-C", repository.toString, "--literal-pathspecs", "add", "--", "docs/phase.md"),
+        Vector("-C", repository.toString, "--literal-pathspecs", "add", "--") ++ initialpaths,
         Vector("-C", repository.toString, "-c", "user.name=Native Workflow Fixture",
           "-c", "user.email=native-workflow@example.invalid", "-c", "user.useConfigOnly=true",
           "commit", "--no-verify", "--no-gpg-sign", "-m", "Initial owned native fixture"),
@@ -202,16 +212,61 @@ private[admission] object NativeWorkflowCliFixture {
       // Setup observations are not business calls in the rejection-sequence assertion.
       _sequence = Vector.empty
     }
+
+    private[NativeWorkflowCliFixture] def _prepare_repository_conflict(): Unit = {
+      val repository = Path.of(host.target.root)
+      val peer = root.resolve("peer")
+      val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
+        "-c", "gc.auto=0", "-c", "maintenance.auto=false")
+      def _run_(command: Vector[String]): Unit = {
+        val result = _run(prefix ++ command)
+        require(result.exitCode == 0, result.invocation.logs)
+      }
+      def _commit_(directory: Path, message: String): Unit = {
+        _run_(Vector("-C", directory.toString, "--literal-pathspecs", "add", "--", "value.txt"))
+        _run_(Vector("-C", directory.toString, "-c", "user.name=Native Workflow Fixture",
+          "-c", "user.email=native-workflow@example.invalid", "-c", "user.useConfigOnly=true",
+          "commit", "--no-verify", "--no-gpg-sign", "-m", message))
+      }
+      _run_(Vector("clone", "--no-local", "--", root.resolve("upstream.git").toString, peer.toString))
+      Files.writeString(peer.resolve("value.txt"), "remote product input\n")
+      _commit_(peer, "Remote owned product input")
+      _run_(Vector("-C", peer.toString, "push", "--no-verify", "--", host.target.endpoint, "HEAD:refs/heads/main"))
+      Files.writeString(repository.resolve("value.txt"), "local product input\n")
+      _commit_(repository, "Local owned product input")
+      _sequence = Vector.empty
+    }
   }
 
   def fresh(name: String, remote: Boolean = false, resourceRoots: Vector[Path] = Vector.empty,
     bootstrapSelectedInput: Boolean = true, httpMethods: Option[Vector[String]] = Some(Vector("POST")),
-    denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None): Scenario = {
+    denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None,
+    sbtRepair: Option[Path] = None, classifiedSbtRepair: Boolean = false, sourceHistory: Boolean = false): Scenario = {
+    require(!classifiedSbtRepair || sbtRepair.nonEmpty, "Classified SBT repair requires its selected SBT executable")
+    require(!sourceHistory || sbtRepair.nonEmpty, "Source history requires its selected SBT executable")
+    sbtRepair.foreach(executable => require(executable.isAbsolute && Files.isRegularFile(executable) &&
+      Files.isExecutable(executable), "Select an absolute existing executable from smworkflow.spec.sbt"))
     val parent = Files.createDirectories(_primary.resolve("target/sm-workflow/work/native-cli"))
     val root = Files.createTempDirectory(parent, name + "-")
     val original = ThreeWorkflowNormalHostFixture.definition(root)
-    val host = original.copy(target = original.target.copy(root = root.resolve("repository").toString))
-    val classification = Option.when(mappedExecution.nonEmpty) {
+    val goal = if (sourceHistory) original.goal.copy(
+      input = V.GoalPhaseStartInput("1", "smwf-p61-cli-source-history"),
+      candidatePaths = Vector("src/main/scala/HistoryExample.scala"))
+      else if (sbtRepair.nonEmpty) original.goal.copy(
+      input = V.GoalPhaseStartInput("1", "smwf-p61-cli-check-repair"), candidatePaths = Vector("value.txt"))
+      else original.goal
+    val host = original.copy(target = original.target.copy(root = root.resolve("repository").toString), goal = goal,
+      repository = original.repository.copy(input = original.repository.input.copy(
+        repositoryIdentity = goal.input.repositoryIdentity)))
+    sbtRepair.foreach { _ =>
+      if (sourceHistory) TypedSbtHostPlanFixture.buildSourceHistory(root)
+      else {
+        TypedSbtHostPlanFixture.build(root, true)
+        Files.writeString(root.resolve("repository/value.txt"), "initial\n")
+      }
+    }
+    val classification = Option.when(mappedExecution.nonEmpty || classifiedSbtRepair) {
       import GoalPhaseWorkClassification.*
       val coding = Classification(Kind.CODING, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.MEDIUM)
       val review = Classification(Kind.REVIEW, Complexity.STANDARD, Domain.ENGINEERING, Footprint.MEDIUM)
@@ -219,12 +274,132 @@ private[admission] object NativeWorkflowCliFixture {
     }
     val plan = GoalPhaseOrderedProgression.Plan("native-selected-plan", "1", host.goal.input.phaseIdentity,
       host.goal.input.repositoryIdentity, Vector(GoalPhaseOrderedProgression.Step("step-1",
-        "Implement the selected boundary", host.goal.candidatePaths, Vector.empty, Vector("test"), classification)),
-      Vector("test"), repairLimit = 0, phaseReviewClassification = classification.map(_.review))
+        if (sourceHistory) "Set the selected compiled HistoryExample value to 42 without authoring history"
+        else if (sbtRepair.nonEmpty) "Correct selected product input to expected newline" else "Implement the selected boundary",
+        host.goal.candidatePaths, Vector.empty, Vector("test"), classification)),
+      Vector("test"), repairLimit = if (sbtRepair.nonEmpty) 1 else 0,
+      phaseReviewClassification = classification.map(_.review))
     val port = if (remote) Some(_available_port()) else None
-    val scenario = new Scenario(root, host, plan, port)
-    _host_files(scenario, resourceRoots, bootstrapSelectedInput, httpMethods, denyGit, mappedExecution)
+    val scenario = new Scenario(root, host, plan, port, sbtRepair, sourceHistory = sourceHistory)
+    _host_files(scenario, resourceRoots ++ Option.when(classifiedSbtRepair)(root),
+      bootstrapSelectedInput, httpMethods, denyGit, mappedExecution)
     scenario.prepareRepository()
+    scenario
+  }
+
+  def freshRepositoryConflict(name: String, executable: Path, mapping: Json, origin: Json,
+    classifications: Json): Scenario = {
+    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
+      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
+    val initial = fresh(name, sbtRepair = Some(executable), classifiedSbtRepair = true)
+    val host = initial.host.copy(repository = initial.host.repository.copy(
+      conflicts = RepositorySyncNativeConflictInput.Policy(Set("value.txt"))))
+    val scenario = new Scenario(initial.root, host, initial.plan, None, Some(executable), startingLogIndex = 100)
+    scenario._prepare_repository_conflict()
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, Some(mapping -> origin))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).fold(error => throw new AssertionError(error.message), identity)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target,
+      kinds = TypedGitHostPlanFixture.ordinary.filterNot(kind =>
+        Set(GitOperationKind.CommitPending, GitOperationKind.Push)(kind)),
+      conflictPaths = Set("value.txt"))
+    val processes = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1), Some(git))
+    Files.writeString(configfile, config.mapObject(
+      _.add(RepositorySyncNativeExecution.declaration.name, Json.fromString(classifications.noSpaces))
+        .add("textus.subsystem.process-execution.plan", Json.fromString(processes.noSpaces))).noSpaces)
+    scenario
+  }
+
+  def reopenRepositoryConflict(root: Path, executable: Path): Scenario = {
+    val parent = _primary.resolve("target/sm-workflow/work/native-cli")
+    require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
+      Files.isDirectory(root) && root.toRealPath() == root,
+      "Select one explicit existing normalized direct native-cli child without a symlink alias")
+    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
+      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+      error => throw new AssertionError(error.message), identity)
+    val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
+    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
+      _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
+    require(host.target.root == root.resolve("repository").toString && host.goal.input.phaseIdentity == "1" &&
+      host.goal.input.repositoryIdentity == "smwf-p61-cli-check-repair" &&
+      host.repository.input.repositoryIdentity == host.goal.input.repositoryIdentity &&
+      host.goal.candidatePaths == Vector("value.txt") && plan.phase == "1" &&
+      plan.repository == host.goal.input.repositoryIdentity && plan.steps.map(_.identity) == Vector("step-1") &&
+      plan.steps.head.ownedPaths == Vector("value.txt") && plan.repairLimit == 1 &&
+      host.repository.conflicts == RepositorySyncNativeConflictInput.Policy(Set("value.txt")) &&
+      host.repository.validation.mode == "required" &&
+      host.repository.validation.checks == Vector(RepositorySyncNativeMergeValidation.Check("test", 1)),
+      "Existing selected host and Plan must retain the finite required-Test Repository conflict boundary")
+    require(!Files.exists(root.resolve("logs/1000.stdout.json")) && !Files.exists(root.resolve("logs/1000.stderr")),
+      "Reopened stage must retain all previous logs and start at unused index 1000")
+    new Scenario(root, host, plan, None, Some(executable), startingLogIndex = 1000)
+  }
+
+  def reopenSbtRepair(root: Path, executable: Path): Scenario = {
+    val parent = _primary.resolve("target/sm-workflow/work/native-cli")
+    require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
+      Files.isDirectory(root) && root.toRealPath() == root,
+      "Select one explicit existing normalized direct native-cli child without a symlink alias")
+    require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
+      "Select an absolute existing executable from smworkflow.spec.sbt")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+      error => throw new AssertionError(error.message), identity)
+    val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
+    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
+      _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
+    require(host.target.root == root.resolve("repository").toString && host.goal.input.phaseIdentity == "1" &&
+      host.goal.input.repositoryIdentity == "smwf-p61-cli-check-repair" &&
+      host.repository.input.repositoryIdentity == host.goal.input.repositoryIdentity &&
+      host.goal.candidatePaths == Vector("value.txt") && plan.phase == "1" &&
+      plan.repository == host.goal.input.repositoryIdentity && plan.steps.map(_.identity) == Vector("step-1") &&
+      plan.steps.head.ownedPaths == Vector("value.txt") && plan.repairLimit == 1,
+      "Existing selected host and Plan must retain the finite SBT repair boundary")
+    require(!Files.exists(root.resolve("logs/1000.stdout.json")) && !Files.exists(root.resolve("logs/1000.stderr")),
+      "Reopened stage must retain all previous logs and start at unused index 1000")
+    val scenario = new Scenario(root, host, plan, None, Some(executable), startingLogIndex = 1000)
+    scenario.retrieve(root.resolve("target/sm-workflow/tasks/provider-repair-task"))
+    scenario
+  }
+
+  def reopenSourceHistory(root: Path, executable: Path): Scenario = {
+    val parent = _primary.resolve("target/sm-workflow/work/native-cli")
+    require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
+      Files.isDirectory(root) && root.toRealPath() == root,
+      "Select one explicit existing normalized direct native-cli child without a symlink alias")
+    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
+      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+      error => throw new AssertionError(error.message), identity)
+    val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
+    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
+      _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
+    val source = Vector("src/main/scala/HistoryExample.scala")
+    require(host.target.root == root.resolve("repository").toString && host.goal.input.phaseIdentity == "1" &&
+      host.goal.input.repositoryIdentity == "smwf-p61-cli-source-history" &&
+      host.repository.input.repositoryIdentity == host.goal.input.repositoryIdentity &&
+      host.goal.candidatePaths == source && plan.phase == "1" &&
+      plan.repository == host.goal.input.repositoryIdentity && plan.steps.map(_.identity) == Vector("step-1") &&
+      plan.steps.head.ownedPaths == source && plan.steps.head.checks == Vector("test") &&
+      plan.phaseChecks == Vector("test") && plan.repairLimit == 1,
+      "Existing selected host and Plan must retain the finite source-history Test boundary")
+    require(!Files.exists(root.resolve("logs/1000.stdout.json")) && !Files.exists(root.resolve("logs/1000.stderr")),
+      "Reopened stage must retain all previous logs and start at unused index 1000")
+    val scenario = new Scenario(root, host, plan, None, Some(executable), startingLogIndex = 1000,
+      sourceHistory = true)
+    scenario.retrieve(root.resolve("target/sm-workflow/tasks/provider-source-history-task"))
     scenario
   }
 
@@ -273,7 +448,7 @@ private[admission] object NativeWorkflowCliFixture {
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
       "textus.datastore.path" -> root.resolve("workflow.sqlite").toString,
       "textus.subsystem.storage.plan" -> ThreeWorkflowNormalHostFixture.storagePlan.noSpaces,
-      "textus.subsystem.process-execution.plan" -> _process_plan(host, denygit).noSpaces,
+      "textus.subsystem.process-execution.plan" -> _process_plan(root, host, denygit, scenario._sbt_repair).noSpaces,
       "textus.server.host" -> "127.0.0.1",
       "textus.server.port-assignment-file" -> root.resolve("server-port-assignments.json").toString) ++
       Option.when(bootstrapselectedinput)("textus.import.data.file" -> seed.toString).toVector ++
@@ -306,12 +481,20 @@ private[admission] object NativeWorkflowCliFixture {
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin)
   }
-  private def _process_plan(host: ThreeWorkflowHostParameters.Definition, denygit: Boolean): Json = {
+  private def _process_plan(root: Path, host: ThreeWorkflowHostParameters.Definition, denygit: Boolean,
+    sbtrepair: Option[Path]): Json = {
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
     val observations = TypedGitHostPlanFixture.observations
     val denied = if (denygit) observations.map(kind => TypedGitHostPlanFixture.capability(kind)).toSet else Set.empty[String]
-    TypedGitHostPlanFixture.plan(target, kinds = observations, denied = denied)
+    sbtrepair match {
+      case None => TypedGitHostPlanFixture.plan(target, kinds = observations, denied = denied)
+      case Some(executable) =>
+        val git = TypedGitHostPlanFixture.plan(target,
+          kinds = observations ++ Vector(GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff),
+          goalPaths = host.goal.candidatePaths, denied = denied)
+        TypedSbtHostPlanFixture.plan(root, executable, Vector(1), Some(git))
+    }
   }
   private def _available_port(): Int = {
     val socket = new ServerSocket()

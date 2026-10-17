@@ -13,19 +13,64 @@ Owner: sm-workflow. Predecessor: [6](phase-6.md). Successor: [6.2](phase-6.2.md)
 
 ## Current delivery — 2026-10-17
 
+Current status: P61-PLAN accepted; P61-COMMAND accepted through independent Step review and focused repair closure, local acceptance commit pending; P61-ADMISSION not started.
+Update rule: update from actual validation and the owning Step/Phase acceptance; retain historical allocations and unfinished work.
+
 The existing Phase 6.1 Goal, original base, PLAN epoch and repair history remain
 active. Deliver the following connected Steps in order:
 
 1. **P61-PLAN — accepted:** P6-PS01..04, supported Phase/checklist import,
    live dispatch refresh, retained issued context and current-document progress
    writeback. Complete protected Step review and mechanical conformance closure
-   are accepted; this Step is ready for its local acceptance commit.
-2. **P61-COMMAND — not started:** P6-EX01..03 and P6-HR01/04, actual commands,
+   are accepted; its local acceptance commit is `8c48c329`.
+2. **P61-COMMAND — accepted:** P6-EX01..03 and P6-HR01/04, actual commands,
    semantic correction/revalidation and configured deterministic maintenance.
    Source-history handling follows the `none`/`goldenport` selection below;
-   rules belong to the configured external provider.
+   rules belong to the configured external provider. Its complete protected
+   independent Step review and focused repair closure are accepted; the local
+   acceptance commit remains pending.
 3. **P61-ADMISSION — not started:** P6-SQ01, real scoped producer/provider
    review, typed Evidence/Admission and local Step commit.
+
+Actual COMMAND qualification covers A/A2 focused consumer/codec checks (2 suites,
+17 tests), normal owning-UoW Compile/configured SBT source generation and real
+compiler failure (1 suite, 2 tests). Existing normal ProductCheck supplies a
+representative terminating application acceptance command through the same typed
+SBT path; it starts no service, so service readiness/cleanup is not applicable.
+B4 preparation plus the existing accumulator passed 3 suites/4 tests; genuine
+selected medium semantic repair then passed the normal consumer (1 suite/1 test):
+runtime-owned failed Test -> semantic repair -> fresh Test -> pending independent
+Review. B5 preparation passed 2 suites/2 tests; the genuine selected medium
+conflict provider supplied a proposal only, then the normal consumer passed
+1 suite/1 test through runtime materialization, typed Git stage, structural
+checks and fresh Test to pending independent merge Review. Requested provider
+configuration and parent-observed completion are distinct evidence, without
+runtime/model attestation; semantic workers ran no SBT/Git/process commands.
+Local fixture Git setup grants no real remote permission or commit/push/convergence
+acceptance.
+
+C1/C2 pure rules/current configuration/File UoW driver passed 3 suites/54 tests.
+C3 normal CLI passed 2 suites/6 tests (five history scenarios and the existing
+repair test), with production/test compilation and both exits 0/lock released.
+C4 ordinary preparation passed 1 suite/1 test; genuine selected medium ImplementStep
+changed only `HistoryExample.value` to 42 without manual history. Normal
+recordExecution/Submit/Advance applied the configured header through File UoW,
+then typed stage/Test reached pending independent Review. The normal consumer
+passed 1 suite/1 test, both exits 0/lock released; repeated Advance added no SBT.
+Parent inspection observed the generated header and preserved semantic value.
+This route's independent review, CAM Evidence/Admission and local commit are
+unfinished P61-ADMISSION work. These focused results establish neither full
+external-tool coverage nor installed-host acceptance. P6-EX01..03/P6-HR01/04
+are accepted through the complete COMMAND Step review and focused closure;
+P6-SQ01 remains incomplete until the real producer/provider Admission route closes.
+
+The COMMAND review's two blockers are resolved. The source-history interpreter
+preserves nested interpolation literals, including backslashes before escaped
+or actual interpolated dollars, while changing only genuine history comments.
+The final focused checks passed 4 suites/91 tests and then the affected rule
+suite's 39 tests; independent focused review accepted the repairs. The two
+nonblocking historical Hygiene findings retain their recorded dispositions.
+COMMAND repair history is 5; Phase repair history remains 0.
 
 The sole Phase 6.1 comprehensive review and final local release remain open.
 Repository-full validation is deferred-not-run to PHASE-6.3. Phase 6 acceptance
@@ -245,13 +290,13 @@ the 8h ceiling is a packing rule, not an execution timeout.
 
 ### Source history comment policy selection — 2026-10-17
 
-Source history comments are optional, repository-specific conventions, not a universal sm-workflow requirement. Select `sourceHistory.style` from `none` (default) or `goldenport`. `none` performs no source-history header update, check, or warning. `goldenport` explicitly selects the Asami-style source history convention (浅海式); resolve its actual rules from the configured external rule provider rather than hard-coding the convention into sm-workflow. There is no separate `asami` selection. An unavailable selected rule reports a configuration/tool error; it must not silently fall back to another style. Phase 6.1 P6-HR01/04 owns deterministic execution only when a style is enabled. Phase 6.2 P6-HR02/03 retains semantic comment review as appropriate to the selected profile; ordinary semantic source comments are not disabled by `none`.
+Source history comments are optional, repository-specific conventions, not a universal sm-workflow requirement. Select `sm-workflow.source-history.style` from `none` (default) or `goldenport`. The previous `sourceHistory.style` spelling was explanatory shorthand, not an external property or compatibility alias. Consume the current call's `ExecutionContext.resolvedParameters`; CNCF owns common configuration loading and command-parameter precedence, as recorded in the [authoritative configuration contract](../journal/2026/10/2026-10-17-source-history-resolved-configuration-contract.md). `none` performs no source-history rule access, source read/update, check, or warning. `goldenport` explicitly selects the Asami-style source history convention (浅海式); obtain its external rule data from `sm-workflow.source-history.rule` in the same resolved configuration rather than hard-coding the convention into sm-workflow or loading a separate rule file. There is no separate `asami` selection. An unavailable selected rule reports a configuration/tool error; it must not silently fall back to another style. Phase 6.1 P6-HR01/04 owns deterministic execution only when a style is enabled. Phase 6.2 P6-HR02/03 retains semantic comment review as appropriate to the selected profile; ordinary semantic source comments are not disabled by `none`.
 
 Illustrative project setting:
 
 ```yaml
-sourceHistory:
-  style: none # none | goldenport
+sm-workflow.source-history.style: none # none | goldenport
 ```
 
-This section specifies the intended contract; it does not assert that the setting or rule providers are implemented.
+This setting/rule-data path is connected and focused qualified as recorded above;
+provider deployment and Step/Phase acceptance remain separate and unfinished.

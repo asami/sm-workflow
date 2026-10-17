@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Current-schema compatibility and actual selected facts, without runtime effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -30,16 +30,21 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
   private val _goal_check = G.Check("focused", 1, Kind.TestOnly)
   private val _snapshot = O.Snapshot("a" * 40, "b" * 40)
   private def _receipt(tests: Long = 3L, classes: Vector[String] = Vector("example.SelectedSpec"),
-    selection: Boolean = true): V.Receipt = {
+    selection: Boolean = true, kind: Kind = Kind.TestOnly): V.Receipt = {
     def capture(text: String) = {
       val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
       ProcessExecutionCapture(bytes, bytes.size.toLong, false)
     }
+    val operation = kind match {
+      case Kind.Compile => SbtOperation.Compile
+      case Kind.Test => SbtOperation.Test
+      case Kind.TestOnly => SbtOperation.TestOnly
+    }
     val result = SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))),
-      SbtOperation.TestOnly, ProcessExecutionResult(ProcessExecutionTermination.Exited(0), capture("actual output\n"),
+      operation, ProcessExecutionResult(ProcessExecutionTermination.Exited(0), capture("actual output\n"),
         capture("diagnostic\n"), Vector.empty, 1L, "selected-sbt"),
-      if (selection) Some(SbtTestSelectionResult.Verified(classes, classes.size, tests)) else None)
-    take(V.sbtReceiptC("focused", Kind.TestOnly, result))
+      if (selection && kind == Kind.TestOnly) Some(SbtTestSelectionResult.Verified(classes, classes.size, tests)) else None)
+    take(V.sbtReceiptC("focused", kind, result))
   }
   private val _actual = _receipt()
   private val _state = V.State("required", "Selected product check", Vector(_check), "8", Vector(_actual))
@@ -72,6 +77,57 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
     Some(if (key == "sbt") sbt else item))
 
   "Current typed validation codecs" should {
+    "roundtrip selected Compile and actual Compile facts through every current persistence review and host boundary" in {
+      Given("a selected Compile check and actual typed Compile receipt in the existing Goal Repository and host fixtures")
+      val compilecheck = _check.copy(kind = Kind.Compile)
+      val compilegoalcheck = _goal_check.copy(kind = Kind.Compile)
+      val receipt = _receipt(kind = Kind.Compile)
+      val compilestate = _state.copy(selected = Vector(compilecheck), receipts = Vector(receipt))
+      val compilegoal = _goal.copy(selected = Vector(compilegoalcheck), receipts = Vector(receipt))
+      val compileprogress = _progress.copy(validation = Some(compilestate))
+      val compilework = _work.copy(review = _work.review.map(_.copy(checks = Vector(receipt))))
+      val compilereview = _review.copy(checks = Vector(receipt))
+      val originalhost = _host
+      val compilehost = originalhost.copy(goal = originalhost.goal.copy(
+        stepValidation = originalhost.goal.stepValidation.copy(checks = Vector(compilegoalcheck)),
+        phaseValidation = originalhost.goal.phaseValidation.copy(checks = Vector(compilegoalcheck))),
+        repository = originalhost.repository.copy(validation = originalhost.repository.validation.copy(checks = Vector(compilecheck))))
+      val structural = V.Receipt("index-local", "exited", Some(0), "", "")
+      When("the existing codecs encode and reopen each Compile selection and receipt")
+      val goal = G.codec.decode(G.codec.encode(compilegoal))
+      val state = V.stateCodec.decode(V.stateCodec.encode(compilestate))
+      val progress = N.codec.decode(N.codec.encode(compileprogress))
+      val work = W.inputCodec.decode(W.inputCodec.encode(compilework))
+      val review = R.inputCodec.decode(R.inputCodec.encode(compilereview))
+      val host = take(ThreeWorkflowHostParameters.decodeDefinitionC(ThreeWorkflowHostParameters.encode(compilehost)))
+      Then("explicit Compile selections raw output and facts survive without gaining selected-test metadata")
+      goal shouldBe Right(compilegoal)
+      state shouldBe Right(compilestate)
+      progress shouldBe Right(compileprogress)
+      work shouldBe Right(compilework)
+      review shouldBe Right(compilereview)
+      host shouldBe compilehost
+      compilecheck.asJson.hcursor.get[String]("kind") shouldBe Right("compile")
+      compilegoalcheck.asJson.hcursor.get[String]("kind") shouldBe Right("compile")
+      receipt.sbt shouldBe Some(Facts(Kind.Compile, Outcome.Succeeded, None, None))
+      state.toOption.get.receipts.head.stdout shouldBe "actual output\n"
+      state.toOption.get.receipts.head.stderr shouldBe "diagnostic\n"
+      G.successful(goal.toOption.get.receipts, goal.toOption.get.selected) shouldBe true
+      V.successful(Vector(structural, state.toOption.get.receipts.head), merge = false,
+        selected = state.toOption.get.selected) shouldBe true
+
+      Given("the same Compile selections with a historical raw Test receipt lacking typed facts")
+      val legacy = _receipt(kind = Kind.Test).copy(sbt = None)
+      When("both workflow gates compare those legacy facts with the selected Compile checks")
+      val goallegacy = G.successful(Vector(legacy), Vector(compilegoalcheck))
+      val repositorylegacy = V.successful(Vector(structural, legacy), merge = false, selected = Vector(compilecheck))
+      Then("historical absence can satisfy only Test and cannot satisfy either Compile workflow")
+      V.productSuccessful(legacy, Kind.Test) shouldBe true
+      V.productSuccessful(legacy, Kind.Compile) shouldBe false
+      goallegacy shouldBe false
+      repositorylegacy shouldBe false
+    }
+
     "roundtrip TestOnly facts through all five nested persistence and review boundaries and the actual host definition" in {
       Given("actual typed TestOnly receipts and selected Check kind in current Goal, Repository and host payloads")
       When("each existing current-schema codec encodes and decodes its own nested facts")
@@ -127,7 +183,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
 
     "reject present null Boolean number and unknown Check kinds at every selected host and payload boundary" in {
       Given("current records whose explicit Check kind is present but malformed")
-      val invalid = Vector(Json.Null, Json.True, Json.fromInt(1), Json.fromString("compile"))
+      val invalid = Vector(Json.Null, Json.True, Json.fromInt(1), Json.fromString("unsupported-operation"))
       When("the explicit Check companion codecs are consumed by Goal, Repository and actual host codecs")
       val rejected = invalid.map { kind => Vector(
         G.codec.decode(_invalid_kind(G.codec.encode(_goal), kind)).isLeft,

@@ -30,9 +30,14 @@ lazy val root = project
       (Compile / packageBin).value
       (Test / testOnly).toTask(" " + selection)
     }.evaluated,
-    // Explicit testOnly selection admits this @DoNotDiscover suite.
+    // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (definition.name == "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec")
+      if (Set("org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalSourceHistoryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderSourceHistoryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderRepairCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeRepositoryProviderConflictCliSpec")(definition.name))
         new TestDefinition(definition.name, definition.fingerprint, true, definition.selectors)
       else definition
     },
