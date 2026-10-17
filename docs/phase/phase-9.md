@@ -2,8 +2,18 @@
 
 Status: planned
 Planned: 2026-10-08
-Depends on: Phase 6, Phase 8
+Depends on: Phase 6.3, Phase 8
 Related: CAR lint, deterministic validation, Provider Routing, textus-experiment
+
+## Phase 6 split dependency correction — 2026-10-13
+
+The earlier broad Phase 6 references in this document denote the accepted
+[6 -> 6.1 -> 6.2 -> 6.3 family](phase-6.md#applied-split--2026-10-13), not
+completion of the narrowed first member alone. Consume 6's client/modes/session/
+provider contract, 6.1's execution/plan/Step-review contract, 6.2's FIX/reset/recording/
+dependency contract and 6.3's integrated PHASE/FINAL/use evidence. Initial staged
+review is owned by 6.1 and 6.3; it is not deferred to Phase 9. This Phase's identity,
+scope and original historical decisions remain; no successor is started here.
 
 ## Goal
 
@@ -252,7 +262,7 @@ Demonstrate at least:
 
 ## Completion
 
-Phase 6 owns implementation and connected acceptance of approval-based and
+Phase 6.2 owns implementation and connected acceptance of approval-based and
 Step-completion resets (P6-TS05). Reuse that accepted evidence here and verify
 that provider switching preserves the active window and does not break those
 reset semantics; do not defer their initial delivery until this phase.

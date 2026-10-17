@@ -511,7 +511,8 @@ existing convergence and absolute-cycle rules. This qualifies history-comment
 examples in the classification/acceptance lists: record their actual changes,
 but do not manufacture an AI repair cycle for deterministic maintenance.
 Nonblocking unadopted findings follow AI document recording, not automatic repair.
-See the [Phase 6 responsibility and delivery contract](../phase/phase-6.md#review-and-maintenance-responsibilities--2026-10-12).
+See the [Phase 6.2 semantic responsibility contract](../phase/phase-6.2.md#review-and-maintenance-responsibilities--2026-10-12)
+and [Phase 6.1 deterministic maintenance contract](../phase/phase-6.1.md#review-and-maintenance-responsibilities--2026-10-12).
 
 The classes form an ordinal depth for trend evaluation only:
 
@@ -625,8 +626,8 @@ This design update alone does not mutate historical records or live counters.
 
 #### Explicit continuation approval and Step completion — 2026-10-11
 
-Delivery owner: Phase 6 batch B, with connected acceptance in P6-TS05 and the
-Phase 6 completion conditions. Implement missing runtime transitions and normal
+Delivery owner: Phase 6.2, with connected acceptance in P6-TS05 and the
+Phase 6.2 completion conditions. Implement missing runtime transitions and normal
 client/skill wiring together. Phase 9 consumes this behavior for provider
 switching; it does not own or delay initial reset delivery.
 

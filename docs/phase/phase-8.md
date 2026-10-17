@@ -3,13 +3,23 @@
 Status: planned
 Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
 Planned after: Phase 7, with carryover recorded from Phase 2 onward
-Depends on: practical Phase 2, Phase 5 and the selected Phase 6/7 delivery
+Depends on: practical Phase 2, Phase 5 and the selected Phase 6.3/7 delivery
+
+## Phase 6 split dependency correction — 2026-10-13
+
+The earlier broad Phase 6 references in this document denote the accepted
+[6 -> 6.1 -> 6.2 -> 6.3 family](phase-6.md#applied-split--2026-10-13), not
+completion of the narrowed first member alone. Consume 6's client/modes/session/
+provider contract, 6.1's execution/plan/Step-review contract, 6.2's FIX/reset/recording/
+dependency contract and 6.3's integrated PHASE/FINAL/use evidence. Initial staged
+review is owned by 6.1 and 6.3; it is not deferred to Phase 9. This Phase's identity,
+scope and original historical decisions remain; no successor is started here.
 
 ## Goal
 
 Close the current development rollout by resolving the necessary extensions
 deferred from Phase 2 and missing functionality discovered through real use
-after Phase 6 skill-connected acceptance and during Phase 7. Phase 5 validates
+after Phase 6.3 integrated acceptance and during Phase 7. Phase 5 validates
 the foundation without creating skills; Phase 6 defines thinking modes and
 creates/connects the initial skills. Follow the [incremental-use roadmap](README.md).
 Phase 8 is not a prerequisite for gradual use and must not retroactively reopen
@@ -113,7 +123,7 @@ or erasing prior facts. Verify affected connections in the selected scenario;
 do not reopen earlier acceptance or add a new synchronization test campaign.
 
 1. Review Phase 2 carryover, Phase 5 runtime evidence, Phase 6 connected acceptance
-   and actual use after Phase 6 and during Phase 7. Confirm which
+   and actual use after Phase 6.3 and during Phase 7. Confirm which
    functions are still needed and which are unnecessary or superseded.
 2. Freeze a finite set of user-visible scenarios for this closing phase. Record
    a reason for exclusions; do not silently drop an unresolved supported-use bug.

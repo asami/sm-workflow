@@ -1,5 +1,25 @@
 # SmWorkflow
 
+## Current Phase 6 planning sequence (2026-10-13)
+
+The applied split is [6](docs/phase/phase-6.md) -> [6.1](docs/phase/phase-6.1.md)
+-> [6.2](docs/phase/phase-6.2.md) -> [6.3](docs/phase/phase-6.3.md), followed by
+the newly planned [6.4 Evidence storage](docs/phase/phase-6.4.md), then Phase 7.
+Phase 6 delivers the actual typed skill/client loop; 6.1
+adds runtime commands/live plans/Step Admission; 6.2 adds FIX/recording/decisions;
+6.3 accepts the integration and starts gradual daily use. Phase 6.4 first proves
+one file's notification, exact destination allocation, archival outside Git,
+actual AI journal recording and fresh-process lookup, then adds bounded branches.
+Repository-full SBT validation for 6–6.3 remains final-only at 6.3; Phase 6.4
+has its own validation and closure. Each member retains its focused/review/release
+obligations. Wait if CNCF or Cozy changes are needed. No implementation, child
+Goal, test or commit is claimed by this planning update. Older broad "Phase 6"
+references below describe the complete family; the [current roadmap](docs/phase/README.md)
+and [ownership map](docs/phase/phase-6.md#exhaustive-unfinished-requirement-ownership)
+select exact current owners. The older dated development-status paragraph below
+is a historical projection; actual Phase 5.3 completion is recorded in its
+[2026-10-13 closure](docs/phase/phase-5.3-closure.md) and local release `b852427`.
+
 ## Current development boundary (2026-10-12)
 
 Phase5.2 is formally released locally at

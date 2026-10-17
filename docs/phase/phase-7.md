@@ -2,7 +2,33 @@
 
 Status: planned
 Planned: 2026-10-04
-Depends on: Phase 1, Phase 5, Phase 6
+Depends on: Phase 1, Phase 5, Phase 6.3, Phase 6.4
+
+## Evidence-storage predecessor — 2026-10-13
+
+[Phase 6.4](phase-6.4.md) now follows 6.3 and precedes this Phase. Consume its
+accepted local evidence allocation/archive/lookup and AI-recording interface
+for released workspace execution evidence. Work files and logs/results/media
+remain outside Git; retained evidence goes under the configured host's
+`~/backup/journal/YYYY/MM/` root. Canonical source, decisions, accepted product
+inputs and Phase state retain their roles. Storage location records do not
+replace test/acceptance evidence, and archive failure is not product-test failure.
+
+Use the facility before freezing selected synchronization paths; keep live
+dependencies at their bound locations. Do not reimplement archival, silently
+clean already tracked evidence or rewrite Git history. Artifact overlays remain
+this Phase's separate development-artifact responsibility. The Phase 6–6.3
+aggregate validation chain remains closed at its original final owner.
+
+## Phase 6 split dependency correction — 2026-10-13
+
+The earlier broad Phase 6 references in this document denote the accepted
+[6 -> 6.1 -> 6.2 -> 6.3 family](phase-6.md#applied-split--2026-10-13), not
+completion of the narrowed first member alone. Consume 6's client/modes/session/
+provider contract, 6.1's execution/plan/Step-review contract, 6.2's FIX/reset/recording/
+dependency contract and 6.3's integrated PHASE/FINAL/use evidence. Initial staged
+review is owned by 6.1 and 6.3; it is not deferred to Phase 9. This Phase's identity,
+scope and original historical decisions remain; no successor is started here.
 
 ## Execution plan — 2026-10-07
 
@@ -119,7 +145,7 @@ transports, providers and measurements stay in Phase 8.
 
 Follow the revised [incremental-use plan](README.md): Phase 5 supplies the
 runtime foundation without skills; Phase 6 delivers thinking modes and skill
-integration. Gradual use begins after Phase 6 connected acceptance and continues
+integration. Gradual use begins after Phase 6.3 integrated acceptance and continues
 through Phase 7. Exercise this phase against real,
 explicitly configured project repositories and dedicated dependency worktrees;
 use the resulting needs to prioritize bounded additions.
