@@ -220,3 +220,16 @@ Phase Plan Gate: PROCEED
 These are structural planning results, not verification of a future task's
 runtime profile. Dependency delay is separate from the implementation estimate;
 the 8h ceiling is a packing rule, not an execution timeout.
+
+### Source history comment policy selection — 2026-10-17
+
+Source history comments are optional, repository-specific conventions, not a universal sm-workflow requirement. Select `sourceHistory.style` from `none` (default), `goldenport`, or `asami`. `none` performs no source-history header update, check, or warning. `goldenport` and `asami` are distinct named rule profiles; resolve their actual rules from the configured external rule provider rather than hard-coding Asami conventions into sm-workflow or assuming both profiles have identical behavior. An unavailable selected rule reports a configuration/tool error; it must not silently fall back to another style. Phase 6.1 P6-HR01/04 owns deterministic execution only when a style is enabled. Phase 6.2 P6-HR02/03 retains semantic comment review as appropriate to the selected profile; ordinary semantic source comments are not disabled by `none`.
+
+Illustrative project setting:
+
+```yaml
+sourceHistory:
+  style: none # none | goldenport | asami
+```
+
+This section specifies the intended contract; it does not assert that the setting or rule providers are implemented.
