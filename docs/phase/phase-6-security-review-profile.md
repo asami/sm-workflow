@@ -196,3 +196,15 @@ Keep the adopted command-based operational route and lightweight client
 connection scope. Keep PHASE-6.3 as the sole aggregate full-suite owner for
 6/6.1/6.2/6.3; Phase 6.4 remains separate evidence-storage work. This adoption
 records no validation PASS, review acceptance or Phase completion.
+## Authorization evidence routing
+
+For changes affecting public Operations, Entity access, internal-service
+delegation or access modes, consume evidence against CNCF's existing
+authorization architecture rather than requesting ad-hoc application
+authorization code.
+
+Focused/Phase evidence may include Operation authorization, internal DSL -> UoW
+Entity authorization, search/list visibility, and ServiceInternal/System
+delegation scenarios. A repair that bypasses the canonical UoW route or adds a
+parallel authorization mechanism is not preferred merely because it makes one
+test pass.

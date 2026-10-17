@@ -944,3 +944,32 @@ Phase Plan Gate: PROCEED
 These are structural planning results, not verification of a future task's
 runtime profile. Dependency delay is separate from the implementation estimate;
 the 8h ceiling is a packing rule, not an execution timeout.
+
+The main expected value is a common execution gateway to cloud and local/self-hosted models, including Ollama/LM Studio-class environments, without making sm-workflow itself implement each model/provider protocol. Codex remains an independent provider; OpenCode is not intended to replace or become the semantic identity of coding work.
+
+A successor implementation should study VirtusLab Orca's OpenCode backend as a reference for server/session lifecycle, model selection, streaming/result handling, tool execution, local/self-hosted provider use, and execution/cost evidence. Orca is reference evidence only; sm-workflow/CNCF contracts remain authoritative.
+
+The Workflow boundary must remain logical. OpenCode/provider/model/reasoning-variant identifiers belong to environment/provider resolution and ExecutionEvidence, not Workflow guards or application state transitions.
+
+Phase 6 therefore closes once generic provider replacement is proven; it must not remain open waiting for OpenCode/Ollama integration.
+
+Concrete local LLM integration is a manual operational trial, recorded as
+[Phase 8 reference information](phase-8-local-llm-reference.md). It is a
+developer-owned reference activity, not a completion condition for Phase 6, 8
+or 9. Only a need observed in real use
+can bring a bounded provider-related extension into Phase 8's selected work.
+
+
+## Safe-by-construction security review projection — 2026-10-14
+
+Application-security evidence follows the existing Step / Phase / Final review
+route; Phase 6 does not create a second security workflow. The detailed
+placement and producer dependencies are defined in
+[Phase 6 Security Review Profile](phase-6-security-review-profile.md).
+
+CNCF Phase 107 supplies safe runtime/ABI primitives, Cozy Phase 83 supplies safe
+generated surfaces, and textus-cbd-support Phase 16 supplies CAR lint/CBD Review
+evidence. Step review uses focused deterministic evidence; Phase review owns
+cross-cutting architecture/security assessment; Final reuses current evidence
+and adds only release-relevant checks. Security findings obey the same Effective
+Acceptance Boundary, staleness, repair and admission rules as other findings.

@@ -15,6 +15,18 @@ dependency contract and 6.3's integrated PHASE/FINAL/use evidence. Initial stage
 review is owned by 6.1 and 6.3; it is not deferred to Phase 9. This Phase's identity,
 scope and original historical decisions remain; no successor is started here.
 
+## Safety Sandbox adoption boundary (2026-10-15)
+
+Safety Sandbox is deliberately adopted only after the basic command-driven workflow functions are operational. It must not become a prerequisite that delays the foundation delivered by the earlier phases.
+
+Use real sm-workflow operation as the development driver for CNCF Phase 110 and textus-cbd-support Phase 16. Map CNCF hierarchical sandbox scopes as Server -> Client/Command -> Operation/Worker, with the resolved Effective Sandbox carried by CNCF ExecutionContext. During initial CLI use, exercise Client/Command and Operation scopes against real Git/SBT/worktree/provider effects; when resident-server operation is selected, add the Server deployment scope without changing Operation semantics.
+
+Gaps discovered by this use are fixed in the owning shared layer: CNCF for runtime capability/enforcement/loading admission, CBD Support for lint/review, sm-workflow only for workflow-specific scope/profile definitions. Do not add sm-workflow-specific direct filesystem/process/network bypasses. AI-generated workflow/component code must also not define and invoke its own `main`, Scala `@main`, App-style launcher or equivalent execution root; sm-workflow execution remains owned by CNCF Runtime/Operation boundaries. Reusable logic is an Operation/Service/API, while a real external executable is invoked only through admitted managed process execution.
+
+Detailed rationale: [Safety Sandbox adoption as a development driver](../journal/2026-10-15-safety-sandbox-development-driver.md).
+
+Adopt it incrementally against the real workflow in this order: (1) Command/Operation ExecutionContext scope, (2) worktree/resource boundaries, (3) managed Git/SBT process execution and arbitrary-shell rejection, (4) provider/network authority, (5) CAR Loading Admission plus CBD lint/review, and (6) Server Sandbox plus Client->Server ExecutionContext propagation when resident-server operation is introduced. Each slice is accepted through an actual sm-workflow scenario and may create a bounded upstream CNCF Phase 110 or cbd-support Phase 16 gap; re-consume the upstream fix before moving on. Do not build all sandbox families in advance.
+
 ## Goal
 
 Close the current development rollout by resolving the necessary extensions

@@ -136,6 +136,65 @@ On native failure preserve available streams and stop without retry. Later work
 requires a NEW execution with its own actual ID/task and independently admitted
 prerequisites; the failed execution and its history remain as observed.
 
+Use normal `NativeHostPreparationService.prepareAuthority` with generated
+`WorkflowAuthorityPreparationInput` for independently issued Step or PhaseClosure
+authority. Its single `--input` DTO supplies `request` and `reference` file URIs,
+actual participant, trusted issuer, historical `occurredAt` and collection. The
+request is the full actual closing `Wait` with its supported `authorityContext`.
+Step and Phase purposes/scopes remain distinct; an ordinary Wait or a review
+Request supplies no closing authority. Encoding the scope does not issue
+authorization. Native readers retain their current issuer, owner, scope, time
+and managed read admission.
+
+Use normal `prepareRepositoryEffect` with generated
+`WorkflowRepositoryEffectPreparationInput` for independently issued
+`CommitPending`, `Push` or `FinalFetch` authority. Its DTO contains selected
+`selection`, `target` and `reference` file URIs, the exact selected effect and
+explicit participant/issuer/time/collection. Trusted physical Git target and
+endpoint remain host-owned. It emits passive importer input without Git effects.
+Neither preparation replaces genuine source evidence or independently admitted
+authority; StartupImport alone provisions the separately selected rows.
+
+On error or uncertain effects, stop the current caller branch and retain its
+observed history and available streams. Later work requires a NEW independently
+admitted execution with its own task and actual returned ID. Do not replay the
+failed call or infer rollback or interrupted recovery. The existing common
+Operation loop, command caller and adopted security profile retain their owners;
+preparation does not supply native checks, independent review or closure.
+
+## Pre-Start checklist
+
+Before Goal Start, require the following, using the preparation contracts above:
+
+1. Record the owning host's genuine Goal business selection and complete ordered
+   Plan, attributing parent-selected details to the parent. If the installed
+   closure invokes RepositorySync, independently record its attributable
+   Repository business selection. Supplied `ExplicitHuman` certifies no consent.
+2. Match the actual selected participant to the normal host local subject. For
+   the Repository child, require all six fields (`repositoryIdentity`,
+   `localBranch`, `trackingRemote`, `trackingBranch`, `remoteEndpointIdentity`,
+   `syncMode`) to agree with the trusted logical target and physical host binding;
+   native principal and target owners still admit their use.
+3. Require successful normal passive `prepareGoalStart` output containing
+   `goal_selection` and `goal_plans`. When that closure invokes RepositorySync,
+   also require successful normal passive `prepareRepositoryStart` output
+   containing `repository_selections`, both before this Goal Start.
+4. Select trusted `textus.import.data.file` before normal startup. For combined
+   use, its standard `datastore` envelope must preserve all three original
+   producer collection entries and row payloads at their selected distinct
+   collection addresses, with matching storage destinations and managed read
+   grants. Preparation does not provision; ordinary StartupImport alone saves
+   or creates these mutable input rows. Use the detailed composition above.
+5. Keep independent review, native child eligibility and genuine Step,
+   PhaseClosure and RepositoryEffect authority with their separate owners.
+   Preparation, import and Start establish none of these permissions; separate
+   PhaseClosure authority and Repository selection are required for child entry.
+6. Use a fresh owned task with no occupied route. Retain Start's actual returned
+   canonical ID in that exact task file and reread it for independent calls.
+   Failure or uncertain effects stop the caller branch with its history retained;
+   infer neither replay permission nor rollback. Later work requires a new
+   independently admitted execution as described above.
+
 ## Start once, then explicitly Advance
 
 ```sh
@@ -205,6 +264,69 @@ The caller accepts these four native field aliases only:
 If both spellings occur they must agree. The routing file retains its exact
 camel spelling and two-field shape. Contradictory aliases or issued context,
 unsupported work, missing scope/result data and ID mismatches stop.
+
+## Run configured semantic work
+
+The current primary contracts `docs/spec/goal-phase-native-execution.md` and
+`docs/spec/native-host-execution.md` define this handoff. The Plan
+supplies semantic classification, ReasoningClass and review responsibility.
+The host's canonical `workflow.execution.profiles` mapping and companion
+`sm-workflow.execution.origin` supply concrete selection and the actual origin
+descriptor. Both absent retain ordinary composition; a partial or invalid pair
+stops. Configuration names and successful preparation prove no provider work,
+availability, independence or permission.
+
+1. Use the actual returned Start ID in the exact owned task's routing file.
+   Check the whole issued Request: owning Goal, Step/Plan, source revision,
+   mode, required facts, result type, completion route and nonempty
+   `issuedWorkContext` (or agreeing `issued_work_context`). Preserve that entire
+   context, including handle, run, continuation, expected revision and execution
+   requirement; a task/chat ID or profile label cannot replace it. Load the
+   actual task-installed `sm-goal-phase` and consume the saved effective
+   acceptance boundary for this assigned kind.
+2. At first issue, the host selects explicit original mapping/origin snapshots.
+   The existing caller's `prepare-execution` action takes `--request`,
+   `--mapping` and `--origin` alongside common primary/host/task/action/output
+   options and calls normal `NativeHostPreparationService.prepareExecution`.
+   Prepare once and retain the returned opaque `execution-session.json` and
+   `execution-selection.json` unchanged. Pending/reopened work uses that original
+   Session and selection, including after configuration replacement. A later
+   mapping cannot reconstruct a missing pending Session or authorize another
+   preparation. These passive calls execute no provider.
+3. Through existing host tools, perform only the admitted selected real executor's
+   scoped semantic work. Ordinary INLINE work needs no mandatory child. Record
+   actual executor context/profile, outcome and honest detail; include only
+   observed resources, leaving unavailable metrics unknown. Neither configuration
+   nor a workflow/process/chat identity establishes an executor observation.
+   Only the first DELEGATED `UNAVAILABLE` or `DECLINED` may permit the single
+   configured alternate under native rules. `BLOCKED`, `FAILED`, uncertainty,
+   exhaustion or INLINE unavailability returns control without success, retry,
+   fabricated `completed`/`decision-needed` or automatic Advance. A genuine
+   semantic `decision-needed` result retains its separate independent Human route.
+4. The host's `record-execution` takes `--request`, `--execution-session` selecting
+   the original retained artifact, `--observation` and, only for actual
+   `COMPLETED`, `--reference` selecting the generated artifact reference. It calls
+   normal `NativeHostPreparationService.recordExecution`; retain its opaque
+   Session and actual structured `completionEvidence`/`execution-evidence.json`.
+   Noncompleted outcomes supply no reference or completion evidence. Preserve
+   raw outputs and stop on failure or uncertainty without reconstructing success.
+5. Return the actual typed semantic result with honest observations for every
+   applicable required saved acceptance condition, as defined by current primary
+   `docs/spec/goal-phase-acceptance-boundary.md`. `all` applies here; `step` also
+   applies to ImplementStep/RepairStep/ReviewStep, while `phase` applies only to
+   ReviewPhase. Excluded conditions stay advisory. Only actual final operational
+   completion supplies the returned execution evidence to a separate typed Submit
+   with its genuine result/reference. Check its actual target ID, message,
+   Boolean accepted and outcome before handing control back for a separately
+   selected host Advance. Accepted Submit establishes semantic admission only.
+
+Command remains primary and client qualification remains lightweight. Independent
+Step/Phase review, Human consent and native repository closure authority keep
+their existing owners. Thin typed `git_*`/`sbt_*` intent retains checks, direct
+normal binary execution and typed results inside CNCF's owning UoW, with native
+SBT locks and no global product wrapper or `scripted` prerequisite. PHASE-6.3
+retains aggregate full-suite responsibility. This handoff supplies no check,
+review, effect, terminal task or outer Phase acceptance claim.
 
 ## Return the scoped semantic result
 
@@ -638,6 +760,82 @@ binaries and native SBT locks. All nine retired main entry points remain retired
 no application Process fallback or global product serialization is introduced.
 Genuine Human handling, consent, independent review and effects retain their
 separate owners. Command remains primary and client qualification stays light.
+## Owning-UoW checks and public review order
+
+After accepted semantic Submit, the owning host explicitly selects Advance.
+The native Workflow inspects/stages only its assigned candidate paths and selects
+checks from its saved policy. Thin `git_*` and `sbt_*` DSL calls express logical
+intent and closed parameters. Permission, service, binding, workspace, limits,
+lifecycle and admission checks, direct normal binary execution and typed result
+interpretation all occur inside CNCF's actual current UoW. The application
+supplies neither `ProcessExecutionRequest` nor direct `ProcessExec`, executable,
+arbitrary argv or a generic process fallback. The Workflow saves intent before
+execution and the actual bounded result afterward. An unknown effect remains
+uncertain; reopening or a failed check never authorizes replay.
+
+The logical Git work target is `sm-workflow-repository`. The selected fixed
+two-suite TestOnly build uses `sm-workflow-repository-validation-1`, bound to the
+current primary repository. These are distinct trusted workspaces: candidate
+Git staging does not redirect the primary build. The saved Check kind is
+`test-only`; CNCF owns the fixed ordered selection:
+
+1. `org.simplemodeling.textus.smworkflow.admission.NativeHostPreparationOperationSpec`
+2. `org.simplemodeling.textus.smworkflow.admission.NativeHostRepositoryStartInputSpec`
+
+The host owns the normal executable, workspaces, owner/capability/Manage grants,
+fixed classes, environment and finite launch/execution/capture/termination limits.
+Its actual `sbtExecutable` remains
+`/Users/asami/Library/Application Support/Coursier/bin/sbt`. The fixed SBT PATH
+includes the selected JDK and installed Coursier bin directory, including Cozy;
+it is not inherited from a caller-selected environment. These fixture suites
+also require the host's single unquoted `JAVA_TOOL_OPTIONS` option:
+
+```text
+-Dsmworkflow.spec.sbt=/Users/asami/Library/Caches/Coursier/arc/https/github.com/sbt/sbt/releases/download/v2.0.9/sbt-2.0.9.zip/sbt/bin/sbt
+```
+
+That existing installed script path has no whitespace and is the fixture's
+normal SBT prerequisite. Quoting a property containing spaces in
+`JAVA_TOOL_OPTIONS` fails the normal SBT shell runner's token handling. The host
+executable remains the Coursier entry above; semantic work cannot substitute it.
+CNCF runs normal SBT directly with its managed lifecycle; SBT owns native locks
+and legitimate children. Product execution has no global SBT wrapper or
+`scripted` prerequisite. Independent development SBT follows current AGENTS
+policy separately, through registered `cncf_command_runner` and the shared
+serial runner, waiting for `lock=released` before another top-level invocation.
+See current primary `docs/spec/sbt-validation-runtime.md` for the normative
+runtime and receipt contract, available in this checkout.
+
+For this TestOnly selection, require actual termination `exited`, raw exit zero,
+typed `sbt.kind: test-only`, `sbt.outcome: succeeded`, the exact ordered two
+`selection.testClasses` above, `completedSuites: 2` and positive `testsRun`.
+Raw zero alone, absent legacy facts, `unverified-tests`, incomplete capture,
+failed or unresolved results do not pass. Typed selection and outcome are
+CNCF-owned facts; callers and semantic authors must not manufacture them by
+parsing logs. Historical no-facts Test compatibility does not qualify TestOnly.
+
+When those checks pass and review is installed, the check-running public Advance
+issues `Request` / `ReviewStep` in that same public call. Its actual saved checks
+are in `work.review.checks` and the host review context. A top-level `validation`
+field is not required on this Request. There is no mandatory successful Wait
+or extra Advance before this first review issue. With unfinished or failed
+validation, or absent review installation, the fallback can remain `Wait` with
+its actual condition and validation. Follow that condition without treating
+Wait or raw zero as success or automatically polling/retrying.
+
+A later independently selected Advance may explicitly reopen an already pending
+review through the retained suspension. It reuses the actual issued context,
+candidate and saved checks without another SBT execution. This optional reopening
+is not a transition required to issue the first review, an independent review
+result or permission to replay uncertain effects. Passed checks and an issued
+review grant no accepted review, Human authorization, Step commit, effect or
+Phase closure.
+
+These paragraphs prescribe evidence to observe in actual normal calls; they
+record no execution or PASS. A new independently selected execution may follow
+parent planning after earlier uncertain work, with its own task and actual Start
+ID. It is never automatic fallback, replacement routing or amendment of the old
+execution's Defer, Plan, history or repair limit.
 
 ## Acceptance and evidence owners
 
