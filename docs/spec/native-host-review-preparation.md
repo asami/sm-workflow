@@ -117,6 +117,26 @@ paths and rationale retain their exact selected meaning; unused nonrepair
 diagnostics retain the existing `Json.Null` behavior. Actual task completion
 remains separate from specification inputs.
 
+R7: Ordinary Goal `ReviewStep` and `ReviewPhase` host admission consumes the actual
+independently supplied reviewer result through the configured managed Reader,
+without a CBD call or another AI review. The actual owner, target, result
+reference, worker, verdict and continuation remain bound to independently
+provisioned host evidence. Existing semantic acceptance gates, separate effect
+authority and explicit Advance remain required. CBD-scoped review integration
+belongs to Phase 10; ordinary admission does not fabricate CBD review coverage.
+
+R8: An actual accepted ordinary review and its saved normal StepClosure Wait
+retain the successful validation of the same reviewed candidate and selected
+checks. The Wait is an input to the existing public `prepareAuthority` route,
+not permission to commit. A separately authorized host reference, retained Start
+participant and current issuer prepare the ordinary StartupImport input; only
+explicit Advance consumes it for typed Git/UoW Step closure and the Phase
+ProductCheck. Continuation consumes the actual saved Wait without repeating its
+earlier Advance, appending grants or clearing previous configuration, logs or
+execution facts. It must observe the real local commit and fresh ProductCheck,
+then stop at pending independent ReviewPhase. This bounded isolated fixture
+establishes neither CBD coverage nor installed-skill or Phase acceptance.
+
 ## Executable examples
 
 `NativeHostReviewPreparationSpec` uses visible example sentences, afterWord
@@ -137,6 +157,8 @@ results and select subsequent work with explicit Advance.
 | E7 | R1,R2,R3,R5,R6 | Fixture-issued Goal ReviewStep/ReviewPhase and Repository review cross the real normal command formatter and strict generated reader, retaining the same canonical v7 payload, actual native owner/target/completion and successful check exit |
 | E8 | R1,R2,R4,R6 | Every fixed consumed alias pair accepts agreement and rejects contradiction, absence, null and wrong types; malformed check structure and fractional generation/exit fail under existing native validators |
 | E9 | R1,R2,R4,R5,R6 | Fixture-issued typed Goal ReviewStep/ReviewPhase and direct/forwarded Repository reviews cross normal command formatting, generated readers and public prepareEvidence; raw v7 storage retains explicit TestOnly kind, succeeded outcome, two classes, two suites and 25 tests; managed observation rejects crossed selected facts, fixed aliases require semantic agreement, historical absence stays absent and malformed presence fails |
+| E10 | R3,R4,R5,R7 | Fixture-issued ReviewStep and ReviewPhase use the actual ordinary Goal review port and configured managed Reader without CBD or scoped-quality metadata: missing host evidence refuses admission, matching explicitly provisioned evidence admits, and altered candidate tree, result reference, worker or verdict refuses reuse. These fixture rows establish neither genuine independent connected review nor completed task proof |
+| E11 | R3,R4,R5,R7,R8 | Explicit `NativeGoalScopedQualityClosureCliSpec` consumes an actual accepted independent review and saved normal StepClosure Wait, requires the retained matching passed candidate validation and separately authorized host reference, then uses normal prepareAuthority/StartupImport/Advance to observe exactly one isolated typed local Step commit, a fresh ProductCheck and pending ReviewPhase. Repeated Advance adds no check or commit; no Submit, CBD call or AI review is repeated. Parent-authorized real inputs are required, and this does not establish installed-skill or Phase acceptance |
 
 `NativeTestOnlyValidationReceiptSpec` exercises the real v7 encoder, decoder and
 observation boundary for Goal and Repository selected facts, historical shapes,

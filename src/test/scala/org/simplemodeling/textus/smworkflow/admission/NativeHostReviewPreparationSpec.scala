@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
@@ -724,6 +724,52 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           }
         }
         Consequence.unit
+      }
+    }
+  }
+  "E10 Ordinary Goal host admission" should afterWord(
+    "in spec:native-host-review-preparation, example:E10, rules:R3,R4,R5,R7, phase:6.1"
+  ) {
+    Vector("ReviewStep", "ReviewPhase").foreach { kind =>
+      s"admit only the matching independently provisioned $kind result without CBD" in {
+        Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R3,R4,R5,R7; Example: E10; a specification-issued " + kind + " in the normal SmWorkflow-only managed runtime without CBD or scoped-quality metadata")
+        _with_core { call =>
+          val input = _goal_input.copy(kind = kind)
+          val work = _goal_work(input)
+          val submitted = _submitted(work,
+            GoalPhaseNativeWork.Result(_goal_result.outcome, _goal_result.summary, _goal_result.findings),
+            GoalPhaseNativeWork.resultCodec.typeIdentity)
+          val context = take(NativeHostReviewContext.goalC(call.core, work)).get
+          val prepared = take(Preparation.goalC(context, _goal_result, _reference, _execution,
+            _declared.issuer, _now.minusSeconds(60)))
+          val reader = take(NativeHostEvidence.bindC(call.core.component.get.subsystem.get.configuration,
+            GoalPhaseRuntimeParameters.Persistence(_configuration_, _collection_("instances"), _collection_("continuations"))))
+          val port = new ThreeWorkflowHostEvidencePorts(reader).goalReview
+          When("the actual Goal review port admits the supplied result before any host row is provisioned")
+          val absent = port.admitC(call.core, input, submitted)
+          Then("passive preparation alone supplies no independent host admission")
+          absent.isSuccess shouldBe false
+
+          Given("the specification explicitly provisions the prepared host row using its existing managed Create permission")
+          take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
+          When("the actual Goal review port consumes the matching result through its configured managed Reader")
+          val accepted = port.admitC(call.core, input, submitted)
+          Then("the matching result is host-admitted without a CBD component or an additional AI review")
+          accepted.isSuccess shouldBe true
+
+          Given("the same provisioned row and separately altered candidate tree, result reference, worker and verdict")
+          val crossedcandidate = input.copy(candidate = input.candidate.map(_.copy(tree = "d" * 40)))
+          val crossedreference = submitted.copy(resultReference = submitted.resultReference.copy(identity = "foreign-result"))
+          val crossedworker = submitted.copy(evidence = submitted.evidence.copy(workerIdentity = Some("foreign-reviewer")))
+          val crossedverdict = submitted.copy(result = submitted.result.copy(value = submitted.result.value.copy(outcome = "decision-needed")))
+          When("each altered fact is submitted to that same actual Goal review port")
+          val refused = Vector(port.admitC(call.core, crossedcandidate, submitted),
+            port.admitC(call.core, input, crossedreference), port.admitC(call.core, input, crossedworker),
+            port.admitC(call.core, input, crossedverdict))
+          Then("none can reuse the matching result's independently provisioned host evidence")
+          refused.foreach(_.isSuccess shouldBe false)
+          Consequence.unit
+        }
       }
     }
   }

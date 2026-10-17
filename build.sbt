@@ -36,6 +36,7 @@ lazy val root = project
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalSourceHistoryCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderSourceHistoryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalScopedQualityClosureCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderRepairCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeRepositoryProviderConflictCliSpec")(definition.name))
         new TestDefinition(definition.name, definition.fingerprint, true, definition.selectors)

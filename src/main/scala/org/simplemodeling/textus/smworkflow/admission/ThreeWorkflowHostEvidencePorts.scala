@@ -14,8 +14,7 @@ import NativeHostEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHostEvidence.Reader) {
@@ -43,6 +42,8 @@ private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHos
       else Consequence.securityPermissionDenied("Action has no independently issued host evidence for its actual target")
   } yield ()
 
+  // Actual ordinary reviewer results are independently host-admitted here;
+  // CBD review integration is a separate Phase 10 boundary.
   val goalReview: GoalPhaseNativeReview.EvidencePort = new GoalPhaseNativeReview.EvidencePort {
     def admitC(core: ActionCall.Core, input: GoalPhaseNativeWork.Request,
       submitted: ContinuationResult[GoalPhaseNativeWork.Result]) = for {

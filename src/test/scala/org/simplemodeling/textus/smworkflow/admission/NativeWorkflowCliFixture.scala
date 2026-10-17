@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -371,7 +371,8 @@ private[admission] object NativeWorkflowCliFixture {
     scenario
   }
 
-  def reopenSourceHistory(root: Path, executable: Path): Scenario = {
+  def reopenSourceHistory(root: Path, executable: Path, startingLogIndex: Int = 1000): Scenario = {
+    require(startingLogIndex >= 0, "Select a finite nonnegative starting log index")
     val parent = _primary.resolve("target/sm-workflow/work/native-cli")
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
@@ -395,9 +396,10 @@ private[admission] object NativeWorkflowCliFixture {
       plan.steps.head.ownedPaths == source && plan.steps.head.checks == Vector("test") &&
       plan.phaseChecks == Vector("test") && plan.repairLimit == 1,
       "Existing selected host and Plan must retain the finite source-history Test boundary")
-    require(!Files.exists(root.resolve("logs/1000.stdout.json")) && !Files.exists(root.resolve("logs/1000.stderr")),
-      "Reopened stage must retain all previous logs and start at unused index 1000")
-    val scenario = new Scenario(root, host, plan, None, Some(executable), startingLogIndex = 1000,
+    require(!Files.exists(root.resolve(s"logs/$startingLogIndex.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$startingLogIndex.stderr")),
+      s"Reopened stage must retain all previous logs and start at unused index $startingLogIndex")
+    val scenario = new Scenario(root, host, plan, None, Some(executable), startingLogIndex = startingLogIndex,
       sourceHistory = true)
     scenario.retrieve(root.resolve("target/sm-workflow/tasks/provider-source-history-task"))
     scenario
