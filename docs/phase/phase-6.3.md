@@ -101,6 +101,31 @@ release-relevant missing checks. No second comprehensive security review or
 automatic repetition of unchanged checks is required. PHASE-6.3 remains the
 aggregate full-suite owner for 6/6.1/6.2/6.3; 6.4 evidence storage stays separate.
 
+### Same-Context and explicit Independent Review policy — adopted 2026-10-18
+
+Consume Phase 6.2's accepted Same-Context Review route and cbd-support Phase 15
+ReviewRequest contract. Extend it to PHASE/FINAL without making every review a
+fresh-model review. Same-context remains the default when review benefits from the
+active worker's accumulated development context. Independent-context execution is
+selected explicitly only when independence is part of the review purpose, such as
+a deliberate second opinion, final independent acceptance, or later controlled
+reasoning-engine comparison.
+
+The orchestration record distinguishes review purpose and execution provenance
+(`same-context` / `independent-context`) but does not persist the worker conversation.
+An independent review receives the bounded ReviewRequest and admitted evidence
+needed for its purpose; it must not masquerade as preservation of the original
+worker context. Conversely, a lifecycle label such as PHASE or FINAL does not by
+itself require a new AI session when applicable accepted review evidence can be
+reused under the existing rules.
+
+Acceptance demonstrates both routes intentionally: a PHASE/FIX-related review can
+continue in the active worker without cbd-support AI execution, and one review whose
+contract requires independence is deliberately routed to a distinct worker/model
+and recorded as such. No accidental provider/session change is treated as
+independent-review evidence. Existing Final evidence-reuse and no-redundant-review
+rules remain authoritative.
+
 ### Integrated acceptance, usable installation and gradual use
 
 Run one representative shared driver through actual semantic skills/client,
