@@ -29,7 +29,7 @@ routing context from prose, another task or native storage.
 
 You may read this exact host-exposed artifact as caller metadata, not Workflow
 storage or authority. Check that its owning outer family/session agrees with
-the current issued business view. Submit the declared generated result using
+the current issued business view. Supply the declared generated result using
 the current issued `submitOperation`, `submitSessionId` and `resultType`, with
 only genuinely supplied consumed metadata and `resultReference` when required
 by that Operation. For Goal child work, use the issued child submission ID and
@@ -38,14 +38,34 @@ for the host's next Goal Advance. Check ordinary submission response IDs too.
 
 The host admits Start selection, persists routing, displays actual Start/Advance
 messages and owns explicit outer Advance and the caller loop. Perform only the
-issued semantic work and exact typed Submit, display its actual `message`,
-boolean `accepted` and `outcome`, then return control to the host. Only the host
-may explicitly Advance after `accepted=true`. Rejection, failed transport,
-conversion failure, uncertain effect, incompatible result or ID mismatch must
-not cause success-path Advance, retry or restart. Human uses the host's
-independent actual human channel and genuine evidence; Wait follows its actual
-condition without spin/polling, and Terminal ends. Do not infer state or recover
-a route through status/history/storage. Workflow retains mechanical effects.
+issued semantic work, supply its actual typed result and genuine consumed
+metadata, then return control to the host. For supported issued routes the host
+uses `scripts/native-goal-command.py --action complete` with common options and
+the exact `--request` and `--submission`. This is a HOST action, not the semantic
+skill's authority to Advance. It uses only the existing fixed Goal pair, three
+Split pairs or three Repository review/repair/conflict pairs compatible with the
+outer family; other issued routes retain their existing explicit host procedure.
+
+The host's `complete` prepares its exclusive `advance` output child before
+Submit, retains the raw Submit response/stderr, validates and displays actual
+`message`, Boolean `accepted` and `outcome` as one flushed JSON line. Only a
+matching actual Submit ID with `accepted=true`, `outcome=accepted` permits one
+explicit ordinary outer Advance. A Goal-owned Repository child uses its actual
+child Submit ID and retained outer Goal Advance ID. The host retains the Advance
+response/stderr under `advance`, verifies its actual outer ID and kind, displays
+its JSON line and stops. No user continuation prompt or continuation-only AI
+turn occurs between accepted Submit and that Advance.
+
+Rejection, failed transport, conversion failure, uncertain effect, incompatible
+result or ID mismatch stops without success-path Advance, retry or restart.
+Failed/uncertain Advance retains the displayed Submit and available outputs,
+returns nonzero and permits no replay. Request returns semantic work to the
+host; Human uses its independent actual human channel and genuine evidence;
+Wait follows its actual condition without spin/polling; Terminal ends. The
+skill implements no caller loop, automatic semantic chaining or pending-call
+replay. Do not infer state or recover a route through status/history/storage.
+Workflow retains mechanical effects. Source edits and mechanical fixtures prove
+no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Host execution handoff
 
@@ -100,8 +120,9 @@ For an issued semantic request:
    and source. Later project defaults do not replace the issued task boundary.
    An adopted Plan without its Start-captured effective boundary is invalid;
    report the gap instead of resolving a replacement configuration.
-3. Return the semantic payload and honest evidence through the existing CNCF
-   entry at the exact completion route supplied by the issued request. Forward
+3. Return the semantic payload and honest evidence to the host for the existing
+   CNCF entry at the exact completion route supplied by the issued request. For
+   supported routes, the host selects `complete` as described above. Forward
    the original issued references and genuinely supplied consumed completion
    metadata. Supply only the requested semantic payload and evidence; do not
    require or manufacture an application claim/token, invent client metadata,
@@ -118,7 +139,7 @@ For an issued semantic request:
    or advisory never creates repair scope. Required not-evaluated prevents
    acceptance; a structurally valid decision-needed report uses the existing
    independent Human route. For an unconfigured Plan omit the report.
-4. Hand control back to the host. Report rejection or uncertain submission;
+4. Hand the actual result and control back to the host. Report rejection or uncertain submission;
    do not replay, select the next operation or implement a polling/advance loop.
 
 ## Issued finding recording

@@ -35,8 +35,11 @@ proves no mapped-provider execution. A profile or descriptor grants no authority
 
 The examples below use placeholders, to be replaced with the explicitly selected
 paths and values. Invoke the current script through the host's selected managed
-Python runner; every invocation performs exactly one action. Output directories
-are prepared separately by the owning host.
+Python runner; every invocation performs exactly one finite host action. The
+normal `complete` action joins one Submit observation to one explicit outer
+Advance. Other actions retain their single-call behavior for diagnostics and
+explicit operations. The owning host prepares each empty output directory;
+`complete` exclusively prepares its `advance` child before making Submit.
 
 ```sh
 /absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
@@ -315,10 +318,12 @@ availability, independence or permission.
    `docs/spec/goal-phase-acceptance-boundary.md`. `all` applies here; `step` also
    applies to ImplementStep/RepairStep/ReviewStep, while `phase` applies only to
    ReviewPhase. Excluded conditions stay advisory. Only actual final operational
-   completion supplies the returned execution evidence to a separate typed Submit
-   with its genuine result/reference. Check its actual target ID, message,
-   Boolean accepted and outcome before handing control back for a separately
-   selected host Advance. Accepted Submit establishes semantic admission only.
+   completion supplies the returned execution evidence with its genuine
+   result/reference to the host's `complete` action below. That finite action
+   checks the actual Submit target ID, message, Boolean accepted and outcome,
+   displays and flushes the observation, then explicitly Advances the retained
+   outer session once on acceptance. Accepted Submit establishes semantic
+   admission only.
 
 Command remains primary and client qualification remains lightweight. Independent
 Step/Phase review, Human consent and native repository closure authority keep
@@ -359,23 +364,57 @@ derive observations from model, profile, task or context labels.
   --primary /absolute/path/to/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
-  --action submit \
-  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-submit \
+  --action complete \
+  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-complete \
   --request /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-advance/response.json \
   --submission /absolute/path/to/semantic-submission.json
 ```
 
-Submit reads the exact caller route and actual Request, then calls the issued
+The host's `complete` reads the exact caller route and actual Request, then calls the issued
 `GoalPhaseService.submitGoalPhaseWorkResult` with named `--sessionId`,
 `--result`, `--resultReference` and only supplied `--completionFacts`/
 `--executionEvidence`. It forwards semantic values unchanged for native admission.
 Require zero native exit, strict JSON object, matching response ID, nonblank
-message, Boolean `accepted=true` and `outcome=accepted`. Display actual message,
-accepted and outcome, then hand control back to the host. Submit does not Advance;
-any later Advance is a separately selected host action.
+message, a Boolean `accepted` and nonblank `outcome`. Display and flush that
+actual Submit JSON as one line. Only `accepted=true` with `outcome=accepted`
+permits exactly one ordinary explicit outer Advance in this same host action,
+without a user continuation prompt or continuation-only AI turn. Validate that
+Advance's actual outer ID, message and kind, then display its JSON as the second
+line and return control. Request returns semantic work to the host; Human uses
+the independent actual human channel; Wait stops for its actual condition;
+Terminal ends. None causes another call inside `complete`.
+
+`complete` requires exactly `--request` and `--submission` alongside common
+options for all three families. It selects only the original Goal pair above,
+the three fixed Split pairs below, or the three fixed Repository review/repair/
+conflict pairs below. All existing issued-route and submission metadata checks
+apply, including agreeing consumed aliases. Split accepts only its own pairs;
+Repository accepts only its own pairs; Goal accepts its own pair or an issued
+Repository child pair. A Goal-owned child uses the actual distinct child Submit
+ID while its following Goal Advance uses the retained outer ID. Other issued
+operations are unsupported by this action; presentation never selects a route.
+
+The raw Submit `response.json` and `stderr.log` remain in the selected empty
+output directory. Before Submit, `complete` exclusively creates and opens its
+`advance` child directory; the following call retains its raw files there.
+Output and routing are never overwritten. Valid rejection is displayed and
+returns nonzero without Advance. Invalid, mismatched or uncertain Submit also
+returns nonzero without Advance. If Advance fails or is uncertain, the already
+flushed Submit remains visible and all available raw output is retained; return
+nonzero without retry, resubmission, restart, discovery or pending-call replay.
+Successful output is newline-delimited JSON containing exactly two actual
+observations, not an inferred completion summary.
+
+The original `submit`, dedicated `submit-split-*`/`submit-repository-*` and
+`advance*` actions described below remain available as explicit single-call
+operations and diagnostics, with their original response/output behavior.
+Their examples describe those individual actions. Normal supported semantic
+handoffs use the host's `complete` action; a semantic skill returns its typed
+result and control and gains no Advance or caller-loop authority.
 
 The caller allows a finite outer observation wait of 240 seconds for each
-explicit Advance and 60 seconds for every other action. These bounds are fixed
+explicit Advance (including the Advance inside `complete`) and 60 seconds for
+Submit and every other native call. These bounds are fixed
 by the action, with no caller timeout option. CNCF owns the shorter effect
 execution and cleanup limits, including the selected SBT execution limit of
 120000 milliseconds; the outer wait does not extend those limits or grant
@@ -762,7 +801,9 @@ Genuine Human handling, consent, independent review and effects retain their
 separate owners. Command remains primary and client qualification stays light.
 ## Owning-UoW checks and public review order
 
-After accepted semantic Submit, the owning host explicitly selects Advance.
+For supported semantic routes, the owning host selects `complete`, which
+displays accepted Submit and performs one explicit outer Advance without an
+intervening continuation-only interaction.
 The native Workflow inspects/stages only its assigned candidate paths and selects
 checks from its saved policy. Thin `git_*` and `sbt_*` DSL calls express logical
 intent and closed parameters. Permission, service, binding, workspace, limits,
@@ -1032,4 +1073,19 @@ provider/task execution, genuine two-chat work or Step/Phase acceptance.
 | E46 | R2,R3,R5,R12 | Start/Advance/three Submits/review preparation/prepare/record stop on nonzero, timeout, strict/bounded output or acknowledgement uncertainty, preserving raw streams without retry/progression |
 | E47 | R2,R3,R12 | Exact options, strict collections, explicit paths, required resultReference and metadata types/unknown fields refuse before launch/output |
 
-All passive preparation actions use the [canonical normal command/input/output contract](normal-host-preparation-operations.md). The finite Python options, selected-task routing, no-overwrite, output retention, timeout cleanup, one native invocation, unknown-result stop/no retry and separate Submit boundaries are unchanged.
+All passive preparation actions use the [canonical normal command/input/output contract](normal-host-preparation-operations.md). Their finite Python options, selected-task routing, no-overwrite, output retention, timeout cleanup, one native invocation, unknown-result stop/no retry and separate Submit boundaries are unchanged. Only the host's `complete` action connects a validated accepted Submit to one explicit outer Advance.
+
+## Common host completion executable scenarios
+
+`scripts/tests/test_native_host_progression.py` specifies PHASE-6.3 / HOST /
+HOST-A with adjacent Given/When/Then clauses and subprocess-boundary fixtures:
+Goal call order and flush before Advance; all three Split pairs; all three
+Repository pairs; separate Goal-child/outer IDs; each Request/Human/Wait/Terminal
+frontier stopping after two calls; rejection; wrong response ID and contradictory
+aliases; transport/nonzero/timeout failure; strict malformed response; accepted
+Submit followed by failed or invalid Advance; invalid issued routes and options
+refused before any call; and exclusive occupied-output refusal. These behavioral
+fixtures supply no real installed execution, provenance, route acceptance or
+Phase completion evidence. Existing single-action specifications keep their
+original obligations; parent-selected validation and actual installed task
+acceptance remain separate.
