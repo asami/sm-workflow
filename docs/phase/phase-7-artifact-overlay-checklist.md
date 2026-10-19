@@ -13,6 +13,12 @@ does not introduce a second test-command selector or per-run AI selection.
 ## Connected implementation
 
 Follow the [Phase 7 execution plan](phase-7.md#execution-plan--2026-10-07).
+The [cost-first order](phase-7.md#cost-first-execution-order--2026-10-18) takes
+A's single-producer/consumer main route into C's connected workspace sync before
+finishing second-consumer and B/C breadth. Bring only driver-required generation
+from B forward. Batch letters identify responsibility, not a requirement to finish
+all B operations before C. Tests accompany the route; partial evidence does not
+complete a whole checkbox or authorize general Phase 7 production use.
 Batch A connects 01..04 and the publish/select/status parts of 06/07 through
 actual native invocation and SBT compilation; batch B completes 05..07 including
 generation, verify/detach/prune. Batch C adds workspace synchronization on the

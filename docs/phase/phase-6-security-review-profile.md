@@ -1,5 +1,17 @@
 # Phase 6 Security Review Profile
 
+## Current allocation — production-first, 2026-10-18
+
+CBD-backed review integration P6-SQ01..05 belongs to [Phase 10](phase-10.md).
+Earlier Phase 6 allocations below retain historical scope only where they would
+require new CBD review calls. Initial use after 6.3 needs no CBD15/15.1 handoff.
+Ordinary review, required independence, actual authorization, missing-evidence
+handling and the accepted Phase 6 managed-effects/CBD16 slice remain in force.
+No producer safeguard is disabled, no CBD result is fabricated, and generic
+security review is not deferred. Phase 10 has its own validation; the existing
+four-member 6..6.3 aggregate is unchanged.
+
+
 Status: adopted plan for the Phase 6 / 6.1 / 6.2 / 6.3 family; implementation acceptance pending
 Added: 2026-10-14
 Producer dependencies: CNCF Phase 107, CNCF Phase 110 bounded early slice, Cozy Phase 83, textus-cbd-support Phase 16 (laundering early slice included)
@@ -96,7 +108,7 @@ Detailed rationale and upstream versions:
 - **Step end**: only when the three applicability conditions above hold, run
   the smallest missing deterministic check within the existing Step route.
   Step completion itself does not trigger a security scan.
-- **Phase review**: consume CBD Review for cross-cutting authorization,
+- **Phase review**: use actual ordinary review for cross-cutting authorization,
   exposure, escape-hatch justification and security architecture fit when the
   three applicability conditions hold for the affected composition. Reuse
   applicable evidence when it already covers those concerns.
@@ -136,9 +148,9 @@ records the additional criteria against existing delivery owners and IDs.
 | Owner | Security projection | Existing acceptance boundary |
 | --- | --- | --- |
 | [6](phase-6.md) | Select applicable requirements; establish the admitted installed command/skill main route including the CNCF110/CBD16 correction. | Existing mode/context/result/provider/Boundary contract plus P6-SBX01..05; no private security engine or complete scanner matrix. |
-| [6.1](phase-6.1.md) | Request only missing applicable CAR lint/scoped review evidence through the real provider connection; reuse covered guarantees without additional execution. | P6-SQ01; no additional Step-review cycle. |
+| [6.1](phase-6.1.md) | Use actual reviewer results and applicable producer evidence; new CBD review calls belong to Phase 10; reuse covered guarantees without additional execution. | Ordinary Step review; CBD P6-SQ01 belongs to Phase 10; no additional Step-review cycle. |
 | [6.2](phase-6.2.md) | Route an in-boundary security finding through ordinary FIX, recording and dependency decisions; preserve identity, authority and actual unresolved results. | P6-TS02/03, P6-CB01..04 and the existing recording contract. |
-| [6.3](phase-6.3.md) | Assess only uncovered affected cross-Step security meaning; perform affected repair/re-review and reuse applicable evidence and producer guarantees at Final. | P6-SQ02..05; repository-full validation remains owned here. |
+| [6.3](phase-6.3.md) | Assess only uncovered affected cross-Step security meaning; perform affected repair/re-review and reuse applicable evidence and producer guarantees at Final. | Ordinary integrated review/Final; CBD P6-SQ02..05 belongs to Phase 10; repository-full validation remains owned here. |
 
 Security is a concern carried by existing requirements, evidence and findings,
 not a new generic lifecycle enum. For a changed public surface, declared input,

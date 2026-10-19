@@ -35,6 +35,13 @@ the active private workflow storage; it is not a repository evidence package.
 
 ## Goal and connected implementation order
 
+The [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+transfers unfinished CBD-backed P6-SQ01..05 integration to [Phase 10](phase-10.md).
+Phase 6.1 ordinary Step Admission, 6.2 repair and 6.3 integrated review/Final use
+the existing reviewer route without CBD15/15.1 waits. This does not reopen this
+accepted Phase, remove its bounded CBD16/managed-effect evidence or change the
+four-member aggregate full-validation sequence and Phase 6.3 owner.
+
 Complete one bounded GoalPhase development task through an actual installed
 `sm-*` skill and ordinary client, using the accepted runtime. Fix the selected
 abstract analysis/design/implementation/review modes, context, result types,
@@ -806,23 +813,26 @@ not a quantified promise of cost/time savings.
 | Parent/delegation/review context; P6-DG01..03 | 6 |
 | Added 2026-10-15: CNCF110 early slice, CBD16 laundering slice, managed resource migration and necessary-only SBT preparation; P6-SBX01..05 | 6; 6.1–6.3 consume the accepted contract/evidence |
 | Command lifecycle; P6-EX01..03; live Phase-plan synchronization P6-PS01..04 | 6.1 |
-| STEP staged-quality connection P6-SQ01 and bounded producer/provider handoff | 6.1 |
+| Ordinary Step review/Admission/commit | 6.1 / P61-ADMISSION |
+| CBD STEP connection P6-SQ01 and bounded producer/provider handoff | 10 |
 | Deterministic source-history maintenance/tool errors P6-HR01/04 | 6.1 |
 | Metadata/Slice validation planning, TEST_FIX/REVIEW_FIX, gap/improvement/replanning; P6-TS01..06 | 6.2 |
 | Explicit continuation/Step-completion reset and history preservation | 6.2 (P6-TS05) |
 | Dependency Component boundary/approval, Scope16; P6-CB01..04 | 6.2 |
 | Meaning-dependent GWT/other maintenance/adopted correction; P6-HR02/03 | 6.2 |
 | Hygiene/development-candidate AI recording and actual file/result path | 6.2 |
-| PHASE integration, affected repair/re-review, FINAL reuse/gaps; P6-SQ02..05 | 6.3 |
-| Batch C complete-family modes/client/placement/fallback/participant integration, installed setup/limitations, actual use eligibility | 6.3 |
+| Ordinary PHASE integration, affected repair/re-review, FINAL reuse/gaps | 6.3 |
+| CBD-backed PHASE/repair/FINAL connection; P6-SQ02..05 | 10 |
+| Batch C complete-family integration, installed setup/limits and P63-USE01..03: ordinary SplitPhase/single-repository RepositorySync, limited single-repository GoalPhase | 6.3; see [use tiers](phase-6.3.md#three-skill-use-tiers--2026-10-18); full practical GoalPhase adoption with related-project management belongs to 7 |
 | Practical completion: EX/PS, DG, ID, TS, CB, HR and recording clauses | Their one owners above; 6.3 consumes accepted evidence without duplicating unchecked delivery |
-| Practical completion: required owner-specific staged-review deliveries and integrated outcome | 6.3 accepts the complete route; 6.1 owns its initial Step connection |
+| Practical completion: required review deliveries and integrated outcome | 6.3 accepts ordinary review; CBD integration belongs to 10 |
 | Shared normal-use, no redundant checks, permission/semantic/runtime boundaries, genericization and non-goals | Invariants applied by each owner; no duplicate delivery checkbox |
-| Security profile: Slice/Boundary selection; Step evidence; FIX/recording; PHASE/FINAL assessment | 6; 6.1 (P6-SQ01); 6.2 (P6-TS02/03, P6-CB01..04 and recording); 6.3 (P6-SQ02..05), respectively; [profile](phase-6-security-review-profile.md) |
+| Security profile: Slice/Boundary selection; Step evidence; FIX/recording; PHASE/FINAL assessment | 6; 6.1 (ordinary Step review); 6.2 (P6-TS02/03, P6-CB01..04 and recording); 6.3 (ordinary PHASE/FINAL); 10 (CBD P6-SQ01..05), respectively; [profile](phase-6-security-review-profile.md) |
 | OpenCode/local-provider breadth, workspace overlay and observed carryover | Existing Phase 7/8/9/reference ownership unchanged; not added to this sequence |
 
-The shared checklist retains every existing P6 ID and assertion text with one
-explicit owner. Historical descriptions of batches A/B/C refer to the family;
+The shared checklist and linked Phase 10 checklist retain every existing P6 ID
+with one explicit owner and completion ledger. CBD obligations are transferred,
+not completed or silently removed. Historical descriptions of batches A/B/C refer to the family;
 they do not assign all moved work to this first Phase. Existing journal links
 retain their recorded historical meaning and canonical finding IDs.
 

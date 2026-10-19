@@ -1,5 +1,12 @@
 # Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
+Production-first revision (2026-10-18): references below to Phase 6 delivery of
+CBD-backed P6-SQ01..05 are superseded by [Phase 10](phase-10.md). Consume the
+accepted ordinary review/Admission route for this Phase; do not wait for Phase
+10 or claim deferred CBD coverage. Reuse CBD integration when actually accepted
+and explicitly selected. Other owned delivery/validation obligations remain.
+
+
 Status: planned
 Planned: 2026-10-08
 Depends on: Phase 6.3, Phase 8
@@ -17,10 +24,11 @@ scope and original historical decisions remain; no successor is started here.
 
 ## Goal
 
-The Step/Phase/Final quality-review route, scoped Repair/ReReview and Final
-Evidence reuse are delivered in Phase 6 with CNCF 106, Cozy 81 and cbd-support 15.
-Consume P6-SQ01..05 evidence and actual interfaces here; this Phase adds observed
-convergence/provider switching and does not defer or duplicate that initial route.
+The ordinary Step/Phase/Final review route, scoped Repair/ReReview and Final
+evidence reuse belong to 6.1/6.2/6.3. CBD P6-SQ01..05 integration belongs to
+Phase 10 and is not a prerequisite here. Consume actual accepted interfaces;
+this Phase adds observed convergence/provider switching without duplicating
+either the ordinary route or the separately scheduled CBD integration.
 
 Extend Provider Routing from provider-declared DECLINED escalation into validation-observed model switching.
 
