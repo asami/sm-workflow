@@ -253,6 +253,23 @@ not install into the user's home, replace existing skills or select a bundle
 by searching arbitrary candidates. An occupied destination requires an
 explicitly chosen fresh task-private destination.
 
+The same ZIP also installs four supporting contract resources at
+`<skill_destination>/docs/spec/`:
+
+- `native-host-execution.md`
+- `goal-phase-acceptance-boundary.md`
+- `goal-phase-dependency-scope.md`
+- `goal-phase-validation-metadata.md`
+
+Together with the three `SKILL.md` files, these are the bundle's exact seven
+files. Before loading a skill, verify that all seven are present in the fresh
+destination and that its direct `../../docs/spec/` Markdown links resolve there,
+removing any `#fragment` before checking the file path. These contracts support
+the installed instructions' host execution, acceptance boundary, dependency scope
+and validation metadata guidance. Use the selected bundle's installed resources;
+missing files require correcting that bundle and installing into a fresh
+task-private destination, with no copy from another checkout or silent fallback.
+
 A capable semantic host must load the installed `SKILL.md` source for the
 actual assigned work. Listing or extracting the files is only installation,
 and ordinary CNCF CLI execution alone does not load an AI skill. The host

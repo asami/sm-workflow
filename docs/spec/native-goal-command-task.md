@@ -165,6 +165,78 @@ failed call or infer rollback or interrupted recovery. The existing common
 Operation loop, command caller and adopted security profile retain their owners;
 preparation does not supply native checks, independent review or closure.
 
+## Explicitly prepare Repository effect input
+
+Use finite action `prepare-repository-effect` for the existing generated
+`WorkflowRepositoryEffectPreparationInput` contract. The same five common
+`primary`, `host`, `task`, `action` and `output` options and owned task/output
+preflight apply. Alongside them, all nine fields below are required named pairs;
+none has a default or optional form.
+
+| Option | Generated field | Forwarding |
+| --- | --- | --- |
+| `component-instance` | `componentInstance` | Verbatim selected component instance |
+| `selection` | `selection` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `target` | `target` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `effect` | `effect` | Exactly `CommitPending`, `Push` or `FinalFetch` |
+| `reference` | `reference` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `participant` | `participant` | Verbatim actual selected participant |
+| `issuer` | `issuer` | Verbatim supplied issuer |
+| `occurred-at` | `occurredAt` | Verbatim supplied historical time |
+| `collection` | `collection` | Strict three-label dotted `entity:` address |
+
+```sh
+/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
+  --primary /absolute/path/to/sm-workflow \
+  --host /absolute/path/to/host \
+  --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
+  --action prepare-repository-effect \
+  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-prepare-effect \
+  --component-instance '<selected component instance>' \
+  --selection /absolute/path/to/selected-repository-selection.json \
+  --target /absolute/path/to/trusted-repository-target.json \
+  --effect CommitPending \
+  --reference /absolute/path/to/actual-effect-source-reference.json \
+  --participant '<actual participant>' --issuer '<actual issuer>' \
+  --occurred-at '<actual historical timestamp>' \
+  --collection entity:smworkflow.cli.effect_authority
+```
+
+Replace every placeholder with independently selected actual values. Select
+exactly one of the three supported effect names. Each collection label must
+match `[A-Za-z][A-Za-z0-9_]*`; slashes, missing or additional labels refuse.
+Missing, duplicate, blank, unpaired, unknown and action-inapplicable options
+refuse before native invocation. Unavailable or non-regular selected files and
+relative or unnormalized paths also refuse before invocation. No selection is
+reconstructed from a repository, task route or business input.
+
+The caller leaves all three source files opaque, converts their explicit paths
+with `Path.as_uri()` and forwards their URIs and literal metadata in one
+`--input` JSON object. Its sole ordinary CncfMain command invokes fixed
+`org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect`
+with `--json`. Native URI acquisition, domain decoding and passive importer
+record encoding remain with that existing Operation. There is no arbitrary
+operation or argv selector, alternate main or fallback.
+
+Zero exit and an actual strict bounded JSON object with a `datastore` array
+acknowledge passive output only. Successful stdout is displayed unchanged;
+actual stdout/stderr are retained as `response.json` and `stderr.log`. Native
+failure, timeout, malformed output or a non-datastore response stops with the
+available original streams and no retry. This action reads or creates no
+workflow route, returns no caller Session ID and performs no Start, Submit,
+Advance, import, save or Git effect. Existing routing may be present or absent.
+
+Encoding creates no authority. Only a separately selected trusted import through
+ordinary StartupImport provisions the passive rows; import also establishes no
+effect admission. The native workflow still admits independently issued
+authority against its principal, selected target, issuer, scope and time before
+any effect execution. The host owns the trusted physical Git target and endpoint
+and every later runtime action. Supplied participant, issuer, time, effect or
+reference metadata certifies no genuine Human provenance or permission. Retain
+the attributable actual source evidence; never fabricate a Human decision from
+preparation success, fixture data or a metadata label. The installed semantic
+skill continues to own assessment only.
+
 ## Pre-Start checklist
 
 Before Goal Start, require the following, using the preparation contracts above:
@@ -1072,6 +1144,27 @@ provider/task execution, genuine two-chat work or Step/Phase acceptance.
 | E45 | R2,R3,R4,R12 | Wrong/crossed family, request/submit IDs, child, operation/type/kind/context and contradictory consumed aliases refuse before launch/output; original family boundaries remain |
 | E46 | R2,R3,R5,R12 | Start/Advance/three Submits/review preparation/prepare/record stop on nonzero, timeout, strict/bounded output or acknowledgement uncertainty, preserving raw streams without retry/progression |
 | E47 | R2,R3,R12 | Exact options, strict collections, explicit paths, required resultReference and metadata types/unknown fields refuse before launch/output |
+
+R13: `prepare-repository-effect` adds one finite passive caller to the existing
+normal `prepareRepositoryEffect` Operation with all nine explicit generated
+fields, exactly three supported effect names and strict dotted collection
+validation. It forwards opaque selected files and literal metadata without
+routing, selection reconstruction, inferred authority, import or effect
+execution. R1–R12 retain their existing scopes.
+
+`scripts/tests/test_native_repository_effect_command.py` specifies PHASE-6.3 /
+SYNC with adjacent Given/When/Then clauses at every scenario leaf. Only the
+subprocess boundary is mocked. Its temporary files and native-shaped streams
+are executable specification fixtures, never actual consent, Human provenance,
+imported authority or installed execution. These authored obligations claim no
+validation result or Phase acceptance.
+
+| Example | Observable behavior |
+| --- | --- |
+| SYNC-E1 | Each exact effect forwards all three opaque file URIs and literal metadata once to the sole normal API; absent or invalid existing routing, files and host configuration stay unchanged; only actual passive streams are retained |
+| SYNC-E2 | Missing, duplicate, blank, unpaired, unknown or inapplicable pairs, unsupported effects and malformed collections refuse before native invocation/output |
+| SYNC-E3 | Each selection/target/reference must be an existing absolute normalized regular file; refusal creates no output, route or reconstructed selection |
+| SYNC-E4 | Native failure, timeout, strict malformed or non-datastore responses retain actual streams and stop without retry, unrelated operations or Session/route creation |
 
 All passive preparation actions use the [canonical normal command/input/output contract](normal-host-preparation-operations.md). Their finite Python options, selected-task routing, no-overwrite, output retention, timeout cleanup, one native invocation, unknown-result stop/no retry and separate Submit boundaries are unchanged. Only the host's `complete` action connects a validated accepted Submit to one explicit outer Advance.
 

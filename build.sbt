@@ -61,11 +61,22 @@ lazy val root = project
     skillSourceFiles := {
       val sourceRoot = baseDirectory.value / "skills"
       val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
-      names.map { name =>
+      val skills = names.map { name =>
         val source = sourceRoot / name / "SKILL.md"
         if (!source.isFile) sys.error("Missing component-owned skill source: " + source)
         source -> ("skills/" + name + "/SKILL.md")
       }
+      val contracts = Seq(
+        "docs/spec/native-host-execution.md",
+        "docs/spec/goal-phase-acceptance-boundary.md",
+        "docs/spec/goal-phase-dependency-scope.md",
+        "docs/spec/goal-phase-validation-metadata.md"
+      ).map { relativepath =>
+        val source = baseDirectory.value / relativepath
+        if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)
+        source -> relativepath
+      }
+      skills ++ contracts
     },
     Compile / resourceGenerators += Def.task {
       val destinationRoot = (Compile / resourceManaged).value / "META-INF" / "sm-workflow"

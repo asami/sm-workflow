@@ -40,6 +40,10 @@ ACTION_OPTIONS = {
     "prepare-repository-input": {
         "input", "selection-id", "participant", "idempotency-key", "selection-collection",
     },
+    "prepare-repository-effect": {
+        "component-instance", "selection", "target", "effect", "reference",
+        "participant", "issuer", "occurred-at", "collection",
+    },
     "prepare-goal-input": {
         "input", "plan", "selection-id", "participant", "idempotency-key",
         "selection-collection", "plan-collection",
@@ -128,8 +132,12 @@ def parse_options(argv):
     required = permitted - optional
     require(options.keys() <= permitted, "action-inapplicable argument")
     require(required <= options.keys(), "missing action argument")
+    if action == "prepare-repository-effect":
+        require(options["effect"] in {"CommitPending", "Push", "FinalFetch"},
+                "unsupported Repository effect")
     preparation_collections = {
         "prepare-split-input": ("collection",),
+        "prepare-repository-effect": ("collection",),
         "prepare-goal-input": ("selection-collection", "plan-collection"),
         "prepare-review-input": ("collection",),
         "prepare-repository-review-input": ("collection",),
@@ -271,6 +279,19 @@ def prepare_split_input(options, primary):
                  occurredAt=options["occurred-at"], collection=options["collection"])
     return command_prefix(primary, explicit_path(options["host"])) + [
         "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareSplitStart",
+        "--input", json.dumps(value, ensure_ascii=False), "--json"], None
+
+
+def prepare_repository_effect(options, primary):
+    """Forward opaque effect sources and explicit metadata to the normal owner."""
+    value = {"componentInstance": options["component-instance"]}
+    for name in ("selection", "target", "reference"):
+        value[name] = existing_file(explicit_path(options[name])).as_uri()
+    value.update(effect=options["effect"], participant=options["participant"],
+                 issuer=options["issuer"], occurredAt=options["occurred-at"],
+                 collection=options["collection"])
+    return command_prefix(primary, explicit_path(options["host"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -445,6 +466,8 @@ def action_command(options, primary, host, task_fd):
         return execution_command(options, primary, task_fd)
     if action == "prepare-repository-input":
         return prepare_repository_input(options, primary)
+    if action == "prepare-repository-effect":
+        return prepare_repository_effect(options, primary)
     if action == "prepare-goal-input":
         return prepare_goal_input(options, primary)
     if action == "prepare-split-input":
@@ -576,7 +599,7 @@ def acknowledge(action, response, session_id, task_fd, output_fd):
                 stream.write(json.dumps(evidence, ensure_ascii=False, allow_nan=False).encode("utf-8"))
         return
     if action in {"prepare-goal-input", "prepare-review-input", "prepare-repository-input",
-                  "prepare-repository-review-input", "prepare-split-input"}:
+                  "prepare-repository-review-input", "prepare-split-input", "prepare-repository-effect"}:
         require(isinstance(response.get("datastore"), list), "preparation must return a datastore array")
         return
     response_session_id = native_field(response, "sessionId")
