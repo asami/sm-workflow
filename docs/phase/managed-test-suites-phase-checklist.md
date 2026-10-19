@@ -1,7 +1,7 @@
 # Managed Test Suites: Phase 5/5.1/6–6.3/7 delivery and acceptance
 
-Status: closed; PHASE-6.1 acceptance scope only
-Phase acceptance scope: PHASE-6.1
+Status: closed; PHASE-6.2 acceptance scope only
+Phase acceptance scope: PHASE-6.2
 
 ## Current allocation — production-first, 2026-10-18
 
@@ -14,6 +14,27 @@ No producer safeguard is disabled, no CBD result is fabricated, and generic
 security review is not deferred. Phase 10 has its own validation; the existing
 four-member 6..6.3 aggregate is unchanged.
 
+Current Phase 6.2 acceptance, 2026-10-19: the original FIX, RECORD and DECISION
+Steps are independently accepted and locally committed as `a42e6df`, `5251ea4`
+and `b802cd3`. The sole comprehensive Phase review `p62-phase-full-review@1`
+passes over the complete 145-path original accumulator. This final projection
+becomes authoritative with the verified native release receipt
+`p62-phase-closure@1`; it closes only the selected PHASE-6.2 rows below.
+Normal command/skill evidence covers actual authored validation inputs and Plan
+adoption, TEST_FIX/semantic REVIEW_FIX and retained issue/count history, actual
+mixed finding recording and separate Submit/Advance, and actual Human approval
+of one exact linked dependency unit through checks/review/Git Step closure.
+The developer separately adopted the selected warning's no-additional-change
+proposal; earlier successes are context, not measured improvement from it.
+Bounded specification-owned branches retain their limits. Latest recording
+Submit coverage passes11/11 with Git denied; effects stay in separate Advance.
+Original Goal/base/PLAN, all failures/nonstarts and engineering41/Phase0 remain.
+Full configured validation stays deferred-not-run to PHASE-6.3 for sm-workflow
+and separately selected CNCF/Cozy contributions with own focused evidence.
+Strict CAR lint1/95OK437WARN0FAIL is not strict PASS. CBD work remains Phase10;
+successor planning, remaining unchecked rows and previous closure history stay.
+
+## Historical Phase 6.1 acceptance
 
 Date: 2026-10-06
 Current status: P61-PLAN (`8c48c329`), P61-COMMAND (`1f61d94`) and revised ordinary
@@ -353,27 +374,27 @@ These original P6-ID entries move from the old Phase plan to this single checkli
 
 ### Managed-suite FIX and improvement
 
-- [ ] P6-TS01: **Owner: [Phase 6.2](phase-6.2.md).** AI changes tests and CNCF annotations/CML properties through
+- [x] P6-TS01: **Owner: [Phase 6.2](phase-6.2.md).** AI changes tests and CNCF annotations/CML properties through
       normal Candidate/review/admission. Slice planning selects feature IDs,
       explicitly revising insufficient classification when needed. Runtime uses
       FOCUSED plus feature union and admitted supplemental refs/typed parameters.
       AI authors the Slice validation management file; no duplicate metadata
       registry or per-run improvised selectors.
-- [ ] P6-TS02: **Owner: [Phase 6.2](phase-6.2.md).** TEST_FIX/REVIEW_FIX share the FIX semantic contract with distinct
+- [x] P6-TS02: **Owner: [Phase 6.2](phase-6.2.md).** TEST_FIX/REVIEW_FIX share the FIX semantic contract with distinct
       trigger evidence and original requirement/current Candidate; both route
       as implementation-like work. Runtime, not the fixing skill, owns validation
       outcomes and next transitions. Exercise both connected correction paths.
       Carry the Phase 6 Effective Acceptance Boundary through both paths:
       required failures block acceptance; excluded assurance proposals neither
       block acceptance nor authorize another repair.
-- [ ] P6-TS03: **Owner: [Phase 6.2](phase-6.2.md).** A fix can identify test/suite/requirement/design gaps instead of
+- [x] P6-TS03: **Owner: [Phase 6.2](phase-6.2.md).** A fix can identify test/suite/requirement/design gaps instead of
       blindly changing production code. Invalid validation design follows explicit
       plan/metadata revision; TEST_FIX cannot silently broaden the admitted profile.
       Exercise an explicit adopted Goal/Phase override of a project default in
       the shared driver and verify consistent request/Review/Admission behavior.
       Conflicting adopted conditions need an owner decision during planning;
       providers cannot resolve them by silently enlarging the scope.
-- [ ] P6-TS04: **Owner: [Phase 6.2](phase-6.2.md).** Human selects a recorded warning, AI receives bounded context and
+- [x] P6-TS04: **Owner: [Phase 6.2](phase-6.2.md).** Human selects a recorded warning, AI receives bounded context and
       proposes no change/metadata revision/code change/both; normal admission and
       validation apply. Later observed executions support any improvement claim.
       Warning alone triggers neither AI work nor repair authorization.
@@ -383,7 +404,7 @@ These original P6-ID entries move from the old Phase plan to this single checkli
       adopts the plan, history/counters remain, and indicators alone neither
       diagnose the plan as wrong nor change it. No additional acceptance gate
       or measurement infrastructure is required for this usage.
-- [ ] P6-TS05: **Owner: [Phase 6.2](phase-6.2.md).** Fix results report semantic depth, cross-file coupling, minor-fix
+- [x] P6-TS05: **Owner: [Phase 6.2](phase-6.2.md).** Fix results report semantic depth, cross-file coupling, minor-fix
       rationale and bounded convergence hints separately from deterministic
       counts. Multiple independent file-local changes can remain STANDARD_LOGIC;
       coordinated logic is COMPLEX_LOGIC. AI optimism does not override the
@@ -403,7 +424,7 @@ These original P6-ID entries move from the old Phase plan to this single checkli
       This is mandatory Phase 6.2 closure work; Phase 9 consumes its evidence and
       checks compatibility with provider switching rather than owning delivery.
 
-- [ ] P6-TS06: **Owner: [Phase 6.2](phase-6.2.md).** Connected fixers account for assigned IDs and cannot declare
+- [x] P6-TS06: **Owner: [Phase 6.2](phase-6.2.md).** Connected fixers account for assigned IDs and cannot declare
       unsolicited issues FIXED. Reviewers reuse supported IDs and report relevant
       coverage/resolution. Exercise FIXED awaiting validation, UNRESOLVED with
       supported partial progress, DECLINED, BLOCKED, recurrence and bounded
@@ -462,10 +483,89 @@ acceptance before 6.3 closes.
       worktree and artifact management integration belongs to Phase 7. Reuse
       applicable accepted GoalPhase evidence without reopening precursor work.
 
+      Include [known uncommitted failure continuation](phase-6.3.md#known-uncommitted-failure-continuation--2026-10-19):
+      in the installed normal route, a confirmed no-commit failure within standing
+      authority proceeds through correction and selected staging update to one
+      successful local commit and the same workflow, without additional Human
+      approval or continuation-only AI calls. Preserve unrelated staged/unstaged
+      work, Goal/base/Plan/Step, history, repair accounting and applicable results;
+      ordinary accepted Step closure keeps its normal counter transition.
+      Reuse actual commits and do not replay unknown effects. Reuse applicable
+      existing coverage and fill only missing cases within this same USE03 row.
+
+      Include [known unexecuted validation continuation](phase-6.3.md#known-unexecuted-validation-continuation--2026-10-19):
+      a confirmed pre-launch failure permits preparation correction or executor
+      replacement for the same target/operation/authority without additional
+      Human approval or continuation-only AI calls. The installed normal route
+      executes that selected validation once, collects its result and continues
+      the same workflow. Preserve Goal/history/repair counts and applicable
+      results; the superseded dispatch cannot later compete with its replacement.
+      Reuse running/completed/unknown coverage: wait, consume results or observe
+      respectively, without duplicate launches. This remains the same USE03 row.
+
 P63-USE02/03 explicitly record the existing integrated acceptance obligations,
 not extra review/full-test campaigns. Limited GoalPhase use limits scope, not
 validation quality. These new rows remain unchecked until owner acceptance;
 ordinary split/sync use does not wait for full cross-project GoalPhase adoption.
+
+The [Core execution-overhead follow-up](phase-6.3.md#execution-overhead-in-ordinary-production-acceptance--2026-10-18)
+is accepted inside these same USE01..03 rows, without changing the active 6.2
+plan or adding a completion row, review cycle or measurement-only run. Reuse
+precursor implementation/results and fill only actual installed-route gaps.
+The ordinary acceptance records cover:
+
+- Actual accepted Submit -> display -> host-owned explicit Advance, with no
+  continuation-only human prompt or model turn; retain genuine Human/Wait/Terminal
+  and failure behavior. Common evidence is reused across the three family routes.
+- USE03's connected implementation/specification and bounded repair example:
+  group known related small repairs, proportionate INLINE/delegated work,
+  runtime-owned typed command selection/collection, and required independent review.
+- No duplicate same-candidate effects, plus affected validation/review choices
+  after real changes with applicable results retained. Do not equate those two
+  kinds of reuse or add an unchanged-content proof mechanism.
+- Available invocation/delegation/continuation counts and timing sources/limits
+  in the existing result. Separate queue/startup/test/AI overhead when observed;
+  unknown remains unknown, and no measured saving is claimed without evidence.
+  Missing timing alone is not a release blocker. Distinguish execution-procedure
+  defects from product test failures without weakening actual required checks.
+
+USE01's actual push/convergence and USE02's usable split output remain mandatory.
+No additional per-repair gate or automatic scheduling/batching engine is added.
+See the [active-chat handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md).
+
+Under the [review scope and reuse policy](phase-6.3.md#review-scope-and-reuse-acceptance--2026-10-18),
+P63-USE03 and the existing integrated review/Final acceptance also retain actual
+issued review inputs and outcomes showing:
+
+- Ordinary local corrections stay inside one coherent implementation/repair
+  batch, using compilation and selected tests with no per-edit review, omission
+  assessment or AI approval. Step closure consolidates business/semantic review.
+- Compilation, selected-test coverage and applicable prior semantic review are
+  reused without AI reconfirmation. A repair whose acceptance conditions are
+  covered and has no unconfirmed semantic judgment reaches ordinary Admission/
+  closure with zero additional semantic review requests or invocations; its
+  result honestly identifies reused evidence rather than a fabricated new PASS.
+- Where semantic judgment remains at closure, combined re-review consumes prior findings/results,
+  repair diff and affected scope, confirms only outstanding questions and affected
+  regressions, and reuses other guarantees/approval. Any broader scope has a
+  concrete changed-contract/impact/coverage reason. A minor label or compiler
+  success alone is not the combined evidence needed for review omission.
+- Release uses the existing Phase Review and accepted Step results to assess
+  business completeness, integration and cross-Step assumptions. There is no
+  separate release reviewer or repetition of all local Step reviews.
+- Final with sufficient applicable evidence reaches closure without a new
+  semantic AI review. A concrete uncovered gap receives only affected review;
+  reuse applicable existing evidence for this branch.
+
+These details add no completion row, per-helper review, scope-certification
+reviewer or new full-test campaign. Actual inputs/results and invocation behavior
+are required; review labels or intended prompts alone are insufficient. Preserve
+6.2 and existing evidence, independence for required semantic review, real blockers
+and aggregate validation. Exercise the no-additional-review and still-needs-review
+outcomes in the existing ordinary acceptance; add no AI review to approve omission.
+AI cost is addressed by consolidating calls and reusing context/results. Report
+available invocation/token/cost facts from normal acceptance without extra AI
+calls, a benchmark or a savings threshold. No per-correction decision ledger is added.
 
 ### Security review projection — adopted 2026-10-14
 
@@ -564,11 +664,11 @@ Exercise these within the existing Phase 6 review/FIX driver, not a new campaign
       review/commit. The resulting fields follow that rule; the AI assignment
       and review do not request/check source-history edits. Include actual tool
       execution and preserve prior origin/authorship as required by the rule.
-- [ ] P6-HR02: **Owner: [Phase 6.2](phase-6.2.md).** One integrated AI review covers a meaning-dependent GWT issue
+- [x] P6-HR02: **Owner: [Phase 6.2](phase-6.2.md).** One integrated AI review covers a meaning-dependent GWT issue
       and another applicable item such as a misleading name/comment/example.
       It returns concrete findings and their dispositions without creating a
       review cycle per category or requiring a blanket audit of unrelated files.
-- [ ] P6-HR03: **Owner: [Phase 6.2](phase-6.2.md).** Adopted GWT and other semantic Hygiene corrections are batched
+- [x] P6-HR03: **Owner: [Phase 6.2](phase-6.2.md).** Adopted GWT and other semantic Hygiene corrections are batched
       into the ordinary AI REVIEW_FIX request; the worker edits actual files
       and returns assigned-issue outcomes. Distinguish explanatory-only changes
       from assertion/behavior changes for validation and convergence accounting.
@@ -586,23 +686,23 @@ Source: [2026-10-12 journal, commit 13ac53f](https://github.com/asami/sm-workflo
 All items are planned and unverified. These extend the existing connected driver,
 not the managed-test vocabulary or a separate execution/approval framework.
 
-- [ ] P6-CB01: **Owner: [Phase 6.2](phase-6.2.md).** Planning for Component A identifies that dependency B must be
+- [x] P6-CB01: **Owner: [Phase 6.2](phase-6.2.md).** Planning for Component A identifies that dependency B must be
       internally modified. The AI returns the reason, proposed scope and affected
       Usage Contract; runtime retains the proposal and presents a Human Decision
       before dependency work is adopted/dispatched. Exercise an external library
       and a same-repository dependency: Component boundaries, not repository or
       worktree boundaries, determine the decision.
-- [ ] P6-CB02: **Owner: [Phase 6.2](phase-6.2.md).** Implementation/FIX discovers the same need after an initially
+- [x] P6-CB02: **Owner: [Phase 6.2](phase-6.2.md).** Implementation/FIX discovers the same need after an initially
       in-scope plan. It yields before editing B. Review identifies an unapproved
       cross-Component edit that escaped earlier detection and yields before work
       acceptance, preserving the actual edits and context for developer judgment.
       Neither stage silently expands scope or treats a passing test as approval.
-- [ ] P6-CB03: **Owner: [Phase 6.2](phase-6.2.md).** Through the normal client, explicit approval adopts the stated
+- [x] P6-CB03: **Owner: [Phase 6.2](phase-6.2.md).** Through the normal client, explicit approval adopts the stated
       dependency scope, normally as a separate work unit with acceptance criteria
       and a consumer link. Rejection/defer or a pending answer never authorizes
       that edit. An AI claim of approval cannot substitute for the developer's
       answer. A newly proposed change outside the approved scope yields again.
-- [ ] P6-CB04: **Owner: [Phase 6.2](phase-6.2.md).** Normal Usage Contract consumption and diagnostic inspection do
+- [x] P6-CB04: **Owner: [Phase 6.2](phase-6.2.md).** Normal Usage Contract consumption and diagnostic inspection do
       not trigger approval. Explicitly approved dependency work proceeds without
       repeated prompts, even across repositories; unapproved internal changes
       still yield when classified as hygiene or preserving the public API.

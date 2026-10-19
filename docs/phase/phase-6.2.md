@@ -1,6 +1,6 @@
 # Phase 6.2: FIX, Finding Recording and Dependency Decisions
 
-status=in_progress
+status=closed
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
 split_validation_bootstrap=none
@@ -11,20 +11,26 @@ depends_on=phase-6.1.md
 Planned: 2026-10-13. Split from Phase 6.
 Owner: sm-workflow. Predecessor: [6.1](phase-6.1.md). Successor: [6.3](phase-6.3.md).
 
-Current status: P62-FIX has passed its integrated Step acceptance review and
-parent-verified mechanical naming closure; its local Step commit is pending. Actual
-isolated runs have exercised authored validation inputs, adopted Plan changes,
-Human-approved dependency work, repair continuation, semantic REVIEW_FIX and
-reviewed local Step commits with counter reset. These scoped results do not
-accept the remaining primary Steps. Actual nonempty finding recording remains
-unfinished; P62-RECORD/P62-DECISION acceptance, the primary Step commits and
-Phase review/release remain open.
-The developer adopted the selected STALLED warning's no-additional-change
-proposal on 2026-10-19: preserve Plan, metadata, test conditions, product code,
-repair allowance and history. Earlier successful runs are diagnostic context,
-not a later measurement of improvement. P6-TS04 still receives its ordinary
-integrated acceptance assessment. Existing Goal, base, PLAN epoch and repair
-history continue; full-suite validation remains deferred-not-run to Phase 6.3.
+Current status: closed; PHASE-6.2 acceptance and local release candidate.
+All three original Steps have passed their selected independent acceptance:
+P62-FIX `a42e6df2da9483a4045613ae3dee4f94d77a8e7b`, P62-RECORD
+`5251ea448af0b17995d47b99bda5cb5846cf7a85`, and P62-DECISION
+`b802cd33bd159929e6f5b74bc70da245b57b6d1f`. The sole comprehensive Phase
+review `p62-phase-full-review@1` passes over the complete original 145-path
+accumulator and affected producer/consumer connections. This closure becomes
+authoritative with the verified native release receipt `p62-phase-closure@1`.
+Original Goal, base, PLAN epoch, findings, failed validations, runner nonstarts
+and engineering repair41/Phase0 remain retained. Actual Git-denied recording
+Submit coverage passes 11/11; separate Advance retains its effect owner. Genuine
+finding/journal and Human-approved linked work use normal Submit/Advance,
+checks, independent review and local Step closure with no accepted-work replay.
+The selected STALLED warning has a separately adopted no-additional-change
+proposal: earlier successful runs are diagnostic context, not later measured
+improvement. Full configured validation remains deferred-not-run to PHASE-6.3
+for this management repository and the admitted CNCF/Cozy program contributions,
+each retaining its own focused evidence. Strict CAR lint remains exit1 with
+95 OK, 437 WARN, 0 FAIL, not strict PASS. CBD integration remains Phase10.
+No successor Phase is started by this closure.
 Update rule: update from actual results and the owning Step/Phase acceptance;
 preserve prior failures, evidence limits, concurrent changes and other Phases.
 
@@ -41,7 +47,11 @@ Earlier failures and actual command/Human/review/commit evidence retain their
 individual scopes. Strict CAR lint remains exit 1 (95 OK, 437 WARN, 0 FAIL),
 not a strict pass. Shared recording and dependency foundations receive source
 acceptance here; their remaining connected outcomes belong to P62-RECORD and
-P62-DECISION. Repair accounting remains 39/Phase 0 until actual Step closure.
+P62-DECISION. The first commit attempt stopped at the cached whitespace check
+without creating a commit. After the developer's bounded recovery approval,
+the two EOF blank lines were corrected and the same 117 paths were committed
+through a fresh ordinary request. The failed request and all applicable evidence
+remain retained; cumulative repair accounting remains 39/Phase 0.
 
 ## Goal and connected implementation order
 
@@ -267,3 +277,32 @@ Phase Plan Gate: PROCEED
 These are structural planning results, not verification of a future task's
 runtime profile. Dependency delay is separate from the implementation estimate;
 the 8h ceiling is a packing rule, not an execution timeout.
+
+## Accepted Phase 6.2 delivery — 2026-10-19
+
+The original FIX/RECORD/DECISION cycle is accepted under `p62-plan@1` with its
+original review/failure/repair history. AI-authored test, annotation/CML and Slice
+validation inputs connect through CNCF normalization, discovery and typed SBT
+UoW results; explicit Plan revision/adoption retains the same native execution.
+TEST_FIX and semantic REVIEW_FIX, issue coverage, exhaustion/ContinueRepairs,
+multiple repair batches and accepted Step-commit counter reset have connected
+normal-command evidence plus bounded branch specifications. Meaning-dependent
+GWT/security explanation findings are handled in the same independent review
+and ordinary repair, with actual later resolution; no helper review campaign.
+
+Actual finding recording retains a genuine independent source, assigned literal
+journal destinations, an actual AI edit and truthful result, distinct Submit
+and separate Advance. Actual same-repository dependency approval retains the
+full proposal and independent saved Human answer, then exact linked work, real
+ProductCheck, independent review and typed Git Step commit. Rejection, Defer,
+Cancel, escaped-edit and malformed/source/scope branches have specification-owned
+coverage; this does not claim genuine Human acts for every branch. The warning's
+advisory input is specification-owned; selection, bounded AI no-change assessment
+and separate developer adoption are actual recorded acts. No measured benefit
+is claimed from that no-change outcome.
+
+Applicable focused compilation, behavioral and real command/skill evidence is
+retained for Phase6.3 reuse with its original targets, inputs and limits. Full
+validation is still owed to the reciprocal final owner PHASE-6.3, and ordinary
+installed-use scope is assessed there. Accepted Hygiene remains in the fixed
+Phase journal; nonblocking debt is not repaired or erased by this closure.
