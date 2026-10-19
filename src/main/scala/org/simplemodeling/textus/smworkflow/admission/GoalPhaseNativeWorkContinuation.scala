@@ -524,7 +524,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       _recording_port.bindCompletionC(params)
     private def _locate_recording_c(identity: String, selected: ContinuationIdentity,
       core: ActionCall.Core): Consequence[N.Source] = for {
-      source <- F.sessionC(identity, d, definition, core)
+      source <- F.retainedSessionC(identity, d, definition, core)
       initial <- _initial_cursor_c(source)
       located <- _walk_c(source, initial, None, None, Some(selected), core)
       recording <- located match {

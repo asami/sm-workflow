@@ -25,16 +25,19 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
   import NativeHostExecutionFixture.{json, take}
 
   private val _prefix = "smworkflow.spec.p62.recording."
-  private val _semantic_example = sys.props.get(_prefix + "example").filter(_.trim.nonEmpty) match {
-    case None => false
-    case Some("semantic-maintenance") => true
+  private val _example = sys.props.get(_prefix + "example").filter(_.trim.nonEmpty) match {
+    case None => "ordinary"
+    case Some("semantic-maintenance") => "semantic-maintenance"
+    case Some("security-contract") => "security-contract"
     case Some(other) => throw new AssertionError("Unknown finding recording example: " + other)
   }
-  private val _paths = if (_semantic_example) F.semanticFindingRecordingPaths else F.findingRecordingPaths
-  private val _step_checks = if (_semantic_example) 2 else 1
+  private val _security_example = _example == "security-contract"
+  private val _reviewed_repair_stages = _example != "ordinary"
+  private val _paths = if (_reviewed_repair_stages) F.semanticFindingRecordingPaths else F.findingRecordingPaths
+  private val _step_checks = if (_reviewed_repair_stages) 2 else 1
   private val _ranges = Map("after-implementation" -> 1000, "after-review" -> 2000,
-    "after-authority" -> 3000, "after-recording" -> 4000) ++
-    (if (_semantic_example) Map("after-repair" -> 5000, "after-rereview" -> 6000) else Map.empty[String, Int])
+    "after-authority" -> 3000, "after-recording" -> 4000, "verify-recorded" -> 7000) ++
+    (if (_reviewed_repair_stages) Map("after-repair" -> 5000, "after-rereview" -> 6000) else Map.empty[String, Int])
 
   private def _property(name: String): String = sys.props.get(_prefix + name).filter(_.trim.nonEmpty)
     .getOrElse(throw new AssertionError("Select explicit " + _prefix + name))
@@ -115,10 +118,13 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
   }
   private def _plan(scenario: F.Scenario, value: V.GoalPhaseOrderedPlan): Unit = {
     value.copy(effectiveAcceptance = None) shouldBe F.publicPlan(scenario.plan)
-    value.identity shouldBe (if (_semantic_example) "native-semantic-recording-plan" else "native-finding-recording-plan")
+    value.identity shouldBe (if (_security_example) "native-security-recording-plan"
+      else if (_reviewed_repair_stages) "native-semantic-recording-plan" else "native-finding-recording-plan")
     value.revision shouldBe "1"
-    value.phase shouldBe (if (_semantic_example) "verification-p62-semantic-recording-live" else "verification-p62-recording-live")
-    value.repository shouldBe (if (_semantic_example) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording")
+    value.phase shouldBe (if (_security_example) "verification-p62-security-recording-live"
+      else if (_reviewed_repair_stages) "verification-p62-semantic-recording-live" else "verification-p62-recording-live")
+    value.repository shouldBe (if (_security_example) "smwf-p62-cli-security-recording"
+      else if (_reviewed_repair_stages) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording")
     value.steps.map(_.identity) shouldBe Vector("step-1")
     value.steps.map(_.ownedPaths) shouldBe Vector(_paths)
     value.steps.map(_.checks) shouldBe Vector(Vector("test"))
@@ -185,9 +191,9 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
   private def _review_preparation(scenario: F.Scenario, name: String = "review"): V.WorkflowEvidencePreparationInput =
     _load[V.WorkflowEvidencePreparationInput](_file(scenario.root.resolve("finding-recording-" + name + "-preparation.json"), scenario.root))
   private def _latest_review(scenario: F.Scenario): V.GoalPhaseAdvanceResult =
-    _saved(scenario, if (_semantic_example) "rereview" else "review")
+    _saved(scenario, if (_reviewed_repair_stages) "rereview" else "review")
   private def _review_sources(scenario: F.Scenario): Vector[(V.GoalPhaseWorkResult, V.WorkflowArtifactReference)] =
-    (if (_semantic_example) Vector("review", "rereview") else Vector("review")).map { name =>
+    (if (_reviewed_repair_stages) Vector("review", "rereview") else Vector("review")).map { name =>
       val preparation = _review_preparation(scenario, name)
       _load[V.GoalPhaseWorkResult](_uri(preparation.result, scenario.root)) ->
         _load[V.WorkflowArtifactReference](_uri(preparation.reference, scenario.root))
@@ -256,7 +262,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
     request.originalBase shouldBe initial.work.get.originalBase
     request.stepIdentity shouldBe Some("step-1")
     val reviewed = _latest_review(scenario).work.get
-    if (_semantic_example) _accepted_issues(scenario, request.requiredIssues.get)
+    if (_reviewed_repair_stages) _accepted_issues(scenario, request.requiredIssues.get)
     else request.requiredIssues shouldBe initial.work.get.issues
     request.repairProgress shouldBe initial.repairProgress
     request.completed.map(_.step) shouldBe Vector("step-1")
@@ -325,6 +331,31 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
       }
     }
   }
+  private def _recorded_review(scenario: F.Scenario, value: V.GoalPhaseAdvanceResult,
+    initial: V.GoalPhaseAdvanceResult, request: V.GoalPhaseFindingRecordingRequest,
+    result: V.GoalPhaseFindingRecordingResult, reference: V.WorkflowArtifactReference): Unit = {
+    val work = _review(scenario, value, initial, "ReviewPhase")
+    work.completed shouldBe request.completed
+    if (_reviewed_repair_stages) {
+      val issues = work.issues.get
+      val required = request.requiredIssues.get
+      issues.issues shouldBe required.issues
+      issues.history shouldBe required.history
+      issues.movement shouldBe Some(V.GoalPhaseIssueMovement(work.checksReceipt.get, 0, 0, 0, 0, true))
+    }
+    work.candidate.get.head shouldBe request.completed.head.commit.identity
+    val state = value.findingRecording.get
+    state.pending shouldBe empty
+    state.request shouldBe None
+    state.completed.size shouldBe 1
+    state.completed.head.request shouldBe request
+    state.completed.head.result shouldBe result
+    state.completed.head.resultReference shouldBe reference
+    val recordedpaths = result.items.flatMap(_.records.map(_.file)).distinct
+    recordedpaths.foreach(path => work.review.get.changedPaths should contain(path))
+    work.review.get.changedPaths.forall(_paths.contains) shouldBe true
+    _checks(scenario, _step_checks + 1)
+  }
 
   "Actual finite finding recording" should afterWord(
     "in spec:goal-phase-finding-recording, example:P62-RECORD-R3, rule:actual-installed-skill-work") {
@@ -339,8 +370,14 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
       require(output.isAbsolute && output.normalize == output && output.startsWith(ignored) && output != ignored &&
         Files.isDirectory(output.getParent) && output.getParent.toRealPath() == output.getParent && !Files.exists(output),
         "Select fresh normalized ignored output under an existing real parent")
-      When("the driver creates or reopens only the dedicated one-Step scenario")
-      val scenario = if (_semantic_example) {
+      Given(if (_security_example)
+        "explicit security-contract selection with a fixed misleading cross-effect authorization baseline, owned independently of review"
+        else "the explicit ordinary or semantic-maintenance recording example")
+      When("the driver creates or reopens only the explicitly selected dedicated one-Step scenario")
+      val scenario = if (_security_example) {
+        if (stage == "prepare") F.freshSecurityFindingRecording("p62-security-recording-live", executable)
+        else F.reopenSecurityFindingRecording(Path.of(_property("root")), executable, _ranges(stage))
+      } else if (_reviewed_repair_stages) {
         if (stage == "prepare") F.freshSemanticFindingRecording("p62-semantic-recording-live", executable)
         else F.reopenSemanticFindingRecording(Path.of(_property("root")), executable, _ranges(stage))
       } else {
@@ -350,9 +387,13 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
       Files.createDirectory(output)
       val task = if (stage == "prepare") scenario.ownTask("finding-recording-live-task")
         else scenario.root.resolve("target/sm-workflow/tasks/finding-recording-live-task")
-      Then("the explicit example retains its four ordinary or five semantic literal paths and no document or progress variant")
+      Then("the explicit example retains its four ordinary or five counterexample literal paths and its own host and Plan identities")
       scenario.host.goal.candidatePaths shouldBe _paths
       scenario.plan.steps.map(_.ownedPaths) shouldBe Vector(_paths)
+      _plan(scenario, F.publicPlan(scenario.plan))
+      scenario.host.goal.input.phaseIdentity shouldBe scenario.plan.phase
+      scenario.host.goal.input.repositoryIdentity shouldBe scenario.plan.repository
+      if (_security_example) scenario.root.getFileName.toString should startWith("p62-security-recording-live")
       scenario.documentRevision shouldBe false
       try {
         if (stage != "prepare") _metadata(output, scenario, task, stage)
@@ -437,7 +478,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             _checks(scenario, 1) shouldBe checks
             When("a separate Advance saves the actual next public frontier")
             val next = _advance(scenario, task, output, "after-review", Some(
-              if (result.outcome == "accept") "wait" else if (_semantic_example && result.outcome == "repair") "repair" else "next"))
+              if (result.outcome == "accept") "wait" else if (_reviewed_repair_stages && result.outcome == "repair") "repair" else "next"))
             Then("only genuine acceptance expects StepClosure Wait; other actual work stops this finite stage")
             next.sessionId shouldBe retained.sessionId
             if (result.outcome == "accept") {
@@ -446,7 +487,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
               next.validation.get.candidate shouldBe retained.work.get.candidate.get
               next.work shouldBe None
               _progress(next)
-            } else if (_semantic_example && result.outcome == "repair") {
+            } else if (_reviewed_repair_stages && result.outcome == "repair") {
               Given("the independent review actually requests repair with its real required findings")
               When("the returned ordinary frontier is inspected as the assigned semantic RepairStep")
               val work = _repair(scenario, next, _saved(scenario, "initial"))
@@ -459,23 +500,27 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             _checks(scenario, 1) shouldBe checks
 
           case "after-repair" =>
-            Given("the semantic example's actual saved RepairStep and externally completed explanation-only repair")
-            _semantic_example shouldBe true
+            Given("the selected counterexample's actual reviewer-owned RepairStep and externally completed explanation-only repair")
+            _reviewed_repair_stages shouldBe true
             val initial = _saved(scenario, "initial")
             val retained = _saved(scenario, "repair")
             val assigned = _repair(scenario, retained, initial)
             val result = _supplied[V.GoalPhaseWorkResult](scenario, "result")
             val reference = _supplied[V.WorkflowArtifactReference](scenario, "reference")
-            result.outcome shouldBe "completed"
+            When("the external repair result is admitted only as an explanation-only HYGIENE change with exact assigned issue coverage")
             val issues = assigned.issues.get.issues.filter(issue => issue.step == "step-1" && issue.status != "RESOLVED")
             val dispositions = result.issueReport.get.dispositions
+            Then("every actual issue is claimed FIXED once; a substantive assessment stops for separate parent planning")
+            result.outcome shouldBe "completed"
             dispositions.map(_.issueIdentity).distinct.size shouldBe issues.size
             dispositions.size shouldBe issues.size
             dispositions.map(_.issueIdentity).toSet shouldBe issues.map(_.identity).toSet
             dispositions.map(_.disposition).distinct shouldBe Vector("FIXED")
             dispositions.foreach(_.findingOrdinal shouldBe None)
             val change = result.fixAssessment.get.change
-            change.changeClass shouldBe "HYGIENE"
+            withClue("This finite counterexample supports only HYGIENE; substantive repair requires separate parent planning: ") {
+              change.changeClass shouldBe "HYGIENE"
+            }
             change.requirementChanged shouldBe false
             change.contractChanged shouldBe false
             change.crossFileLogic shouldBe false
@@ -515,8 +560,8 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             _checks(scenario, 2) shouldBe repeatedchecks
 
           case "after-rereview" =>
-            Given("the semantic example's second actual ReviewStep and fresh independent external preparation")
-            _semantic_example shouldBe true
+            Given("the selected counterexample's second actual ReviewStep and fresh independent external preparation")
+            _reviewed_repair_stages shouldBe true
             val retained = _saved(scenario, "rereview")
             val initial = _saved(scenario, "initial")
             val preparation = _supplied[V.WorkflowEvidencePreparationInput](scenario, "preparation")
@@ -596,7 +641,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
             waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
-            _progress(waiting, if (_semantic_example) 1 else 0)
+            _progress(waiting, if (_reviewed_repair_stages) 1 else 0)
             val checks = _checks(scenario, _step_checks)
             Given("the real authority input and actual independent review observations, possibly empty")
             val sources = _review_sources(scenario)
@@ -613,7 +658,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             val completed = if (observations.nonEmpty) _assigned(scenario, next, initial).completed else {
               next.findingRecording.flatMap(_.request) shouldBe None
               val work = _review(scenario, next, initial, "ReviewPhase")
-              if (_semantic_example) _accepted_issues(scenario, work.issues.get)
+              if (_reviewed_repair_stages) _accepted_issues(scenario, work.issues.get)
               work.completed
             }
             completed.map(_.step) shouldBe Vector("step-1")
@@ -660,26 +705,38 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             When("explicit Advance retains it once and performs ordinary Phase inspection and Test")
             val next = _advance(scenario, task, output, "phase-review", Some("next"))
             Then("actual ReviewPhase includes only bounded paths with the same Plan base closed commit and repair counts")
-            val work = _review(scenario, next, initial, "ReviewPhase")
-            work.completed shouldBe request.completed
-            if (_semantic_example) work.issues shouldBe request.requiredIssues
-            work.candidate.get.head shouldBe request.completed.head.commit.identity
-            val state = next.findingRecording.get
-            state.pending shouldBe empty
-            state.request shouldBe None
-            state.completed.size shouldBe 1
-            state.completed.head.request shouldBe request
-            state.completed.head.result shouldBe result
-            state.completed.head.resultReference shouldBe reference
-            val recordedpaths = result.items.flatMap(_.records.map(_.file)).distinct
-            recordedpaths.foreach(path => work.review.get.changedPaths should contain(path))
-            work.review.get.changedPaths.forall(_paths.contains) shouldBe true
+            _recorded_review(scenario, next, initial, request, result, reference)
             val phasechecks = _checks(scenario, _step_checks + 1)
             When("the unanswered Phase review is advanced once more")
             val repeated = _advance(scenario, task, output, "phase-review-repeated")
             Then("the exact retained batch and ReviewPhase return without duplicate Test or final closure")
             repeated shouldBe next
             _checks(scenario, _step_checks + 1) shouldBe phasechecks
+
+          case "verify-recorded" =>
+            Given("the actual saved initial recording and post-recording ReviewPhase handoffs with external recording result and reference")
+            val initial = _saved(scenario, "initial")
+            val retained = _saved(scenario, "recording")
+            val next = _saved(scenario, "next")
+            val request = _assigned(scenario, retained, initial)
+            val result = _supplied[V.GoalPhaseFindingRecordingResult](scenario, "result")
+            val reference = _supplied[V.WorkflowArtifactReference](scenario, "reference")
+            When("the saved recording result is admitted against its exact request and recorded journal sections")
+            _recorded_files(scenario, request, result)
+            Then("the existing Step and Phase checks already have exactly their distinct real child PIDs")
+            val phasechecks = _checks(scenario, _step_checks + 1)
+            Given("the consumed recording Submit and its saved next public frontier")
+            When("ordinary Advance redisplays that frontier without another Submit")
+            val current = _advance(scenario, task, output, "phase-review")
+            Then("the exact saved public handoff and child PIDs remain unchanged")
+            current shouldBe next
+            _checks(scenario, _step_checks + 1) shouldBe phasechecks
+            When("the unanswered Phase review is explicitly advanced once more")
+            val repeated = _advance(scenario, task, output, "phase-review-repeated")
+            Then("the identical retained batch Plan base closed commit resolved history and latest validation movement persist without another Test or closure")
+            repeated shouldBe next
+            _checks(scenario, _step_checks + 1) shouldBe phasechecks
+            _recorded_review(scenario, repeated, initial, request, result, reference)
 
           case other => fail("Unreachable finite stage: " + other)
         }

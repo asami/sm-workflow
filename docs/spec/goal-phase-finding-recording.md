@@ -114,8 +114,12 @@ evidence. Contracts are `goal-phase-finding-recording-context-v1`,
 `GoalPhaseFindingRecordingSubmissionResult` returns actual committed
 session/accepted/outcome/message through the normal after-commit binding.
 Submit validates exact assigned Request/result keys and destinations against
-the contiguous actual source and issued identity/run/revision/SPI/operation.
-It runs no File, Git or SBT effect and calls no eager Advance. Its history
+the canonical retained Start, participant admission, declaration scope,
+contiguous actual history and issued identity/run/revision/SPI/operation.
+Submit reconstructs this retained source without observing the live Git root
+or branch. It runs no File, Git or SBT effect and calls no eager Advance;
+actual Git observation and managed effects belong to separate ordinary Advance.
+Its history
 retains the same controller stage with actual result causation. Only later
 ordinary Advance removes the completed batch's pending keys and appends its
 actual Request/reference/Result once. Public Request, Human, Wait, child and
@@ -183,7 +187,13 @@ issuance across host policy changes, public destination/key refusal, typed
 after-commit acknowledgement, actual retained outcomes, stable missing-policy
 and oversized Wait, honest partial/failed outcomes, final Phase Markdown staging,
 two-candidate authority Wait, bounded local child closure and no-replay/error
-behavior for unknown staging/unassigned edits. All reviewers, authority and file
+behavior for unknown staging/unassigned edits. Its reopened canonical Session
+regression denies every declared Git capability for completed Step and
+partial/failed Phase replies: malformed destination/source replies leave history
+unchanged, valid Submit appends only its completion, and separate Advance fails
+under the same denial. Reopening with ordinary grants permits the existing next
+frontier while retaining exact batches, Plan/base/completed prefix and counts
+without duplicate recording or SBT replay. All reviewers, authority and file
 edits in that specification are explicitly SPECIFICATION-OWNED. Pure controller
 and authority preparation/scope specifications cover preservation and target
 negatives; the actual Scala2.12 CML probe checks all 13 combinations and typed
@@ -297,6 +307,19 @@ The finite lifecycle is:
    receipt and bounded inclusion of assigned journals. Exactly two check PIDs
    exist; repeated Advance adds none. Stop before any Phase review result,
    final authority or closure.
+6. `verify-recorded`, fixed log range 7000, verifies an already consumed
+   recording Submit using only the actual saved initial, recording and next
+   public handoffs and the external `result` and `reference` files. Exact
+   request/result admission and saved journal sections remain required. Exactly
+   the Step checks plus one Phase check must already have distinct real child
+   PIDs. Two ordinary Advances must each equal the saved next handoff and
+   preserve those PIDs. The shared post-recording assertions require the exact
+   retained Request/result/reference once, empty pending and absent request,
+   unchanged Plan/base/closed Step/progress, bounded journal inclusion and
+   successful ReviewPhase receipt. This stage performs no Submit, preparation,
+   authority import, new Test or closure. It neither reconstructs storage nor
+   replaces missing handoffs; `after-recording` is not a recovery route for an
+   already consumed Submit. Every output remains create-new.
 
 Public handoffs are retained at the scenario root as
 `finding-recording-{initial,review,wait,recording,next}.stdout.json` when their
@@ -414,6 +437,17 @@ The R13 stages and transport remain, with these finite semantic extensions:
    Advance adds no child or replay. The ordinary example still expects one
    child before recording and two after Phase Test.
 
+Required issue records and their complete transition history must equal the
+recording Request's captured `requiredIssues` exactly after Phase Test. The
+latest movement describes the current evidence boundary rather than cumulative
+resolved history: a successful Phase validation with no issue transitions has
+the current `work.checksReceipt` as evidence, zero open/resolved/new/reopened
+counts and known correspondence. It does not retain the earlier rereview's
+movement. Both `after-recording` and `verify-recorded` enforce this separation
+for reviewed-repair examples while preserving the full RESOLVED records and
+history. `verify-recorded` requires three existing check PIDs for these examples
+and adds none.
+
 Both actual independent review results retain their own provenance and complete
 optional observations, including observations accompanying the repair outcome
 and empty arrays. All saved outputs are create-new; actual invocations and child
@@ -422,3 +456,61 @@ alternate process route, additional engine, recursive review, forced finding,
 primary acceptance or new run is implied. R13's ownership, source attribution,
 security, no-items and honest failure limits continue to apply. Adding this
 variant claims no actual execution or independent acceptance.
+
+R15. The same explicit finite driver additionally accepts
+`smworkflow.spec.p62.recording.example=security-contract`. Absence/blank keeps
+R13, `semantic-maintenance` keeps R14, and every other nonblank value rejects.
+The explicit fresh/reopen security helpers share the existing setup and stages;
+they never infer selection from repository contents. The fresh root prefix is
+`p62-security-recording-live`, raw Plan `native-security-recording-plan` revision
+`1`, Phase `verification-p62-security-recording-live`, and repository
+`smwf-p62-cli-security-recording`. Ownership and typed Git selection use exactly
+R14's five literal paths, one Step, repair limit 2, Step/Phase `test`, canonical
+task and the fixed closure message.
+
+The adopted Step requires exact `expected` plus one LF, accurate ordinary usage
+preserving its introduction, and unchanged ProductCheck check behavior. Its
+narration/comments and usage must accurately explain that CNCF SBT registration
+authorizes only the declared operation: registration alone grants neither
+arbitrary filesystem/network authority nor bypass of independent File/HTTP
+grants. Ordinary `git_`/`sbt_` effects run in CNCF UoW; generic Process/shell
+fallback must not be recommended. The threat illustrated is misleading
+cross-effect authorization guidance. This is documentation and contract
+composition, with no actual bypass, network access, scanner, application
+authorization engine or new executable feature. Journals stay at baseline
+until distinct assigned recording work.
+
+Before Start, the same baseline setup commit includes a fixed test-owned
+ProductCheck counterexample. Its Given says `A registered SBT program grants
+arbitrary filesystem and network authority`; its When describes the ordinary
+read; its Then says `The registered command may bypass independent File and
+HTTP grants`. The adjacent comment says `Registration alone authorizes those
+other managed effects.` These false guarantees are specification-owned input,
+never execution authority or authored review findings. A baseline local
+`workJson` holds the normalized absolute Paths.get root, used by `val root =
+workJson`; that harmless old naming is outside adopted cleanup and imposes no
+observation or verdict requirement. Marker location, actual PID write,
+PRODUCT_CHECK_ENTERED/PASSED, exact real value assertion, failure behavior and
+normal test/main wiring retain R14's meaning.
+
+R14's finite reviewed-repair stages and counts apply unchanged: actual REVIEW
+RepairStep at 1/1/2, exact external FIXED issue coverage with explanation-only
+HYGIENE and all four change flags false, normal second Test and independent
+rereview at 1/0/2, explicit RESOLVED on actual accept, StepClosure authority,
+typed Git commit of the accepted candidate and reset to 0/0/2. A substantive
+non-HYGIENE assessment stops truthfully for separate parent planning. The real
+reviewer owns accept/repair/other outcomes, findings and optional observations;
+the separately assigned editor owns any repair. No finding, category, identity,
+quota or intended outcome is supplied by setup or source-shape assertions.
+Complete actual review and rereview sources, including empty observations and
+observations accompanying repair, accumulate in order with their own provenance.
+Actual nonempty observations use the distinct recording route with exact keys,
+destinations and honest outcomes; empty accumulation retains truthful no-items.
+There are two checks before recording and three after Phase Test, without replay.
+All actual result, authority and destination checks remain required.
+
+This variant reuses existing producer guarantees and selects only changed
+misleading contract explanation; it adds no producer retest or security review
+campaign. Adding it claims no live run, nonempty recording, security enforcement,
+primary acceptance or universal security PASS. Original integrated P62-RECORD
+acceptance and the sole full Phase review remain required.

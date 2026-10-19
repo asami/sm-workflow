@@ -264,35 +264,48 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     /** Fixed setup only, before Start; this cannot accept or rewrite Workflow work.
-      * Semantic narration is a deliberate specification-owned counterexample input;
-      * its verdict and eventual explanation edits belong to independent workers.
+      * Semantic and security narration are deliberate specification-owned counterexample inputs;
+      * their verdicts and eventual explanation edits belong to independent workers.
       */
-    private[NativeWorkflowCliFixture] def _prepare_finding_recording_baseline(semantic: Boolean = false): Unit = {
+    private[NativeWorkflowCliFixture] def _prepare_finding_recording_baseline(semantic: Boolean = false, security: Boolean = false): Unit = {
+      require(!(semantic && security), "Select exactly one finding recording counterexample")
       val repository = Path.of(host.target.root)
       findingRecordingBaseline.foreach { (path, text) =>
         Files.writeString(repository.resolve(path), text, StandardOpenOption.CREATE_NEW)
       }
-      if (semantic) Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), """object ProductCheck {
+      if (semantic || security) {
+        // workJson is legacy baseline input outside adopted naming cleanup, not a required finding.
+        val rootinput = if (security)
+          "val workJson = java.nio.file.Paths.get(\"\").toAbsolutePath.normalize\n    val root = workJson"
+          else "val root = java.nio.file.Paths.get(\"\").toAbsolutePath.normalize"
+        val giveninput = if (security) "A registered SBT program grants arbitrary filesystem and network authority"
+          else "value.txt uses CRLF line endings"
+        val commentinput = if (security) "Registration alone authorizes those other managed effects."
+          else "CRLF normalization happens before matching."
+        val theninput = if (security) "The registered command may bypass independent File and HTTP grants"
+          else "either LF or CRLF is accepted"
+        Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), raw"""object ProductCheck {
         |  def main(args: Array[String]): Unit = {
-        |    val root = java.nio.file.Paths.get("").toAbsolutePath.normalize
+        |    $rootinput
         |    val marker = root.getParent.resolve("sbt-executions.txt")
         |    java.nio.file.Files.write(marker, (java.lang.ProcessHandle.current().pid().toString + "\n").getBytes("UTF-8"),
         |      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
         |    println("PRODUCT_CHECK_ENTERED " + root)
-        |    println("Given value.txt uses CRLF line endings")
+        |    println("Given $giveninput")
         |    println("When the ordinary check reads value.txt")
-        |    // CRLF normalization happens before matching.
+        |    // $commentinput
         |    assert(java.nio.file.Files.readString(root.resolve("value.txt")) == "expected\n", "actual product input differs")
-        |    println("Then either LF or CRLF is accepted")
+        |    println("Then $theninput")
         |    println("PRODUCT_CHECK_PASSED")
         |  }
         |}
         |""".stripMargin)
+      }
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root)
       val commands = Vector(Vector("--literal-pathspecs", "add", "--") ++ findingRecordingBaseline.map(_._1) ++
-        Option.when(semantic)("src/test/scala/ProductCheck.scala").toVector,
+        Option.when(semantic || security)("src/test/scala/ProductCheck.scala").toVector,
         Vector("-c", "user.name=Native Workflow Fixture", "-c", "user.email=native-workflow@example.invalid",
           "-c", "user.useConfigOnly=true", "commit", "--no-verify", "--no-gpg-sign", "-m",
           "Initial owned finding recording narratives"))
@@ -494,25 +507,30 @@ private[admission] object NativeWorkflowCliFixture {
     "docs/journal.md" -> "# Hygiene\n\nPreserve this original hygiene narrative.\n",
     "docs/candidates.md" -> "# Development candidates\n\nPreserve this original candidate narrative.\n")
 
-  private def _finding_recording_host(root: Path, semantic: Boolean = false): ThreeWorkflowHostParameters.Definition = {
+  private def _finding_recording_host(root: Path, semantic: Boolean = false, security: Boolean = false): ThreeWorkflowHostParameters.Definition = {
+    require(!(semantic && security), "Select exactly one finding recording counterexample")
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val goal = original.goal.copy(input = V.GoalPhaseStartInput(
-      if (semantic) "verification-p62-semantic-recording-live" else "verification-p62-recording-live",
-      if (semantic) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording"),
-      candidatePaths = if (semantic) semanticFindingRecordingPaths else findingRecordingPaths,
+      if (security) "verification-p62-security-recording-live" else if (semantic) "verification-p62-semantic-recording-live" else "verification-p62-recording-live",
+      if (security) "smwf-p62-cli-security-recording" else if (semantic) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording"),
+      candidatePaths = if (semantic || security) semanticFindingRecordingPaths else findingRecordingPaths,
       closure = original.goal.closure.copy(programs = Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1))))
     original.copy(target = original.target.copy(root = root.resolve("repository").toString), goal = goal,
       repository = original.repository.copy(input = original.repository.input.copy(repositoryIdentity = goal.input.repositoryIdentity)))
   }
 
-  private def _finding_recording_plan(semantic: Boolean = false): GoalPhaseOrderedProgression.Plan = GoalPhaseOrderedProgression.Plan(
-    if (semantic) "native-semantic-recording-plan" else "native-finding-recording-plan", "1",
-    if (semantic) "verification-p62-semantic-recording-live" else "verification-p62-recording-live",
-    if (semantic) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording", Vector(
+  private def _finding_recording_plan(semantic: Boolean = false, security: Boolean = false): GoalPhaseOrderedProgression.Plan = {
+    require(!(semantic && security), "Select exactly one finding recording counterexample")
+    GoalPhaseOrderedProgression.Plan(
+    if (security) "native-security-recording-plan" else if (semantic) "native-semantic-recording-plan" else "native-finding-recording-plan", "1",
+    if (security) "verification-p62-security-recording-live" else if (semantic) "verification-p62-semantic-recording-live" else "verification-p62-recording-live",
+    if (security) "smwf-p62-cli-security-recording" else if (semantic) "smwf-p62-cli-semantic-recording" else "smwf-p62-cli-recording", Vector(
       GoalPhaseOrderedProgression.Step("step-1",
-        if (semantic) "Set value.txt to exactly expected followed by one LF and document accurate ordinary usage in docs/usage.md, preserving its original introduction; keep ProductCheck behavior unchanged and make its Given/When/Then narrative and comments meaning-correct; do not edit either journal until a distinct assigned recording task"
+        if (security) "Set value.txt to exactly expected followed by one LF and document accurate ordinary usage in docs/usage.md, preserving its original introduction; keep ProductCheck check behavior unchanged and make its narration/comments and usage accurately state that CNCF SBT registration authorizes only the declared operation: registration alone grants neither arbitrary filesystem/network authority nor bypass of independent File/HTTP grants; ordinary git_/sbt_ effects run in CNCF UoW; do not recommend generic Process/shell fallback; baseline naming cleanup is outside this Step and any findings remain the independent reviewer's classification; do not edit either journal until a distinct assigned recording task"
+        else if (semantic) "Set value.txt to exactly expected followed by one LF and document accurate ordinary usage in docs/usage.md, preserving its original introduction; keep ProductCheck behavior unchanged and make its Given/When/Then narrative and comments meaning-correct; do not edit either journal until a distinct assigned recording task"
         else "Set value.txt to exactly expected followed by one LF and document that ordinary usage in docs/usage.md, preserving its prior narrative; do not edit either journal during implementation",
-        if (semantic) semanticFindingRecordingPaths else findingRecordingPaths, Vector.empty, Vector("test"))), Vector("test"), repairLimit = 2)
+        if (semantic || security) semanticFindingRecordingPaths else findingRecordingPaths, Vector.empty, Vector("test"))), Vector("test"), repairLimit = 2)
+  }
 
   private def _finding_recording_policy(): Json = Json.obj(
     "schemaVersion" -> Json.fromString(GoalPhaseFindingRecording.schemaVersion),
@@ -533,11 +551,15 @@ private[admission] object NativeWorkflowCliFixture {
   def freshSemanticFindingRecording(name: String, executable: Path): Scenario =
     _fresh_finding_recording(name, executable, true)
 
-  private def _fresh_finding_recording(name: String, executable: Path, semantic: Boolean): Scenario = {
+  def freshSecurityFindingRecording(name: String, executable: Path): Scenario =
+    _fresh_finding_recording(name, executable, false, true)
+
+  private def _fresh_finding_recording(name: String, executable: Path, semantic: Boolean, security: Boolean = false): Scenario = {
+    require(!(semantic && security), "Select exactly one finding recording counterexample")
     require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
       "Select the real normal SBT executable")
     val initial = fresh(name, sbtRepair = Some(executable))
-    val scenario = new Scenario(initial.root, _finding_recording_host(initial.root, semantic), _finding_recording_plan(semantic),
+    val scenario = new Scenario(initial.root, _finding_recording_host(initial.root, semantic, security), _finding_recording_plan(semantic, security),
       None, Some(executable), startingLogIndex = 100)
     _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
     val configfile = scenario.root.resolve(".textus/config.json")
@@ -546,7 +568,7 @@ private[admission] object NativeWorkflowCliFixture {
     Files.writeString(configfile, config.mapObject(_.add(GoalPhaseFindingRecording.declaration.name,
       Json.fromString(_finding_recording_policy().noSpaces)).add("textus.subsystem.process-execution.plan",
       Json.fromString(processes.noSpaces))).noSpaces)
-    scenario._prepare_finding_recording_baseline(semantic)
+    scenario._prepare_finding_recording_baseline(semantic, security)
     scenario
   }
 
@@ -557,8 +579,12 @@ private[admission] object NativeWorkflowCliFixture {
   def reopenSemanticFindingRecording(root: Path, executable: Path, startingLogIndex: Int): Scenario =
     _reopen_finding_recording(root, executable, startingLogIndex, true)
 
-  private def _reopen_finding_recording(root: Path, executable: Path, startinglogindex: Int, semantic: Boolean): Scenario = {
-    require((Set(1000, 2000, 3000, 4000) ++ (if (semantic) Set(5000, 6000) else Set.empty[Int]))(startinglogindex),
+  def reopenSecurityFindingRecording(root: Path, executable: Path, startingLogIndex: Int): Scenario =
+    _reopen_finding_recording(root, executable, startingLogIndex, false, true)
+
+  private def _reopen_finding_recording(root: Path, executable: Path, startinglogindex: Int, semantic: Boolean, security: Boolean = false): Scenario = {
+    require(!(semantic && security), "Select exactly one finding recording counterexample")
+    require((Set(1000, 2000, 3000, 4000, 7000) ++ (if (semantic || security) Set(5000, 6000) else Set.empty[Int]))(startinglogindex),
       "Select one finite recording stage log range")
     require(root.isAbsolute && root.normalize == root && root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select a normalized real direct native-cli child")
@@ -574,10 +600,10 @@ private[admission] object NativeWorkflowCliFixture {
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
     val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(_configured_("sm-workflow.host.definition")), "Retained recording host")
-    require(host == _finding_recording_host(root, semantic), "Retain the exact dedicated one-Step host and target")
+    require(host == _finding_recording_host(root, semantic, security), "Retain the exact dedicated one-Step host and target")
     val plan = parse(_read_("goal-plan.json")).flatMap(_.as[GoalPhaseOrderedProgression.Plan]).fold(
       error => throw new AssertionError(error.getMessage), identity)
-    require(plan == _finding_recording_plan(semantic), "Retain the exact raw one-Step recording Plan")
+    require(plan == _finding_recording_plan(semantic, security), "Retain the exact raw one-Step recording Plan")
     val input = _take(summon[ValueReader[V.GoalPhaseStartInput]].readC(
       _take(new RecordDecoder().json(_read_("goal-input.json")), "Retained recording input")), "Retained recording input")
     require(input == host.goal.input, "Retain the selected dedicated Goal input")

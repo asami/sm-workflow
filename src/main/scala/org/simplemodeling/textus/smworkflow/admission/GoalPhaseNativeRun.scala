@@ -24,7 +24,8 @@ import RepositorySyncManagedGitObservation as G
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
   *  version Oct. 17, 2026
-  * @version Oct. 18, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -112,6 +113,14 @@ private[smworkflow] object GoalPhaseNativeRun {
       ". The selected plan is saved; Advance selects the first work.")
 
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
+    session <- retainedSessionC(identity, d, definition, core)
+    p = session.started.receipt.payload.value
+    root <- G.rootC(core)
+    branch <- G.branchC(core)
+    _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
+  } yield session
+
+  def retainedSessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     storage <- bindC(d, definition, core)
     starts <- storage.bindMechanicalC(startOperation, codec)
     started <- starts.loadRetainedC(reference(identity))(using core.executionContext).flatMap {
@@ -124,9 +133,6 @@ private[smworkflow] object GoalPhaseNativeRun {
       Consequence.unit else invalid("retained original plan scope differs from the host")
     _ <- GoalPhaseParticipantAdmission.admitC(p.participantIdentity, core.executionContext)
     current = started.current
-    root <- G.rootC(core)
-    branch <- G.branchC(core)
-    _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
   } yield Session(storage, started, p.participantIdentity, current)
 
   def validateC(d: Declaration): Consequence[Unit] =

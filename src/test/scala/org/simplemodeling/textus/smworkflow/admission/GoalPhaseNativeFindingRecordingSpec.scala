@@ -71,11 +71,26 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     commands.patch(commands.indexWhere(_.contains("commit")), Vector(Vector("-C", directory.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", _hygiene, _candidates)), 0)
   }
-  override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
-    val git = TypedGitHostPlanFixture.plan(Programs.Target(directory.resolve("repository"), "main", "origin", "main",
-      directory.resolve("upstream.git").toString), goalPaths = goal.candidatePaths,
-      goalMessages = goal.closure.programs.map(p => "Goal Step " + p.step))
-    TypedSbtHostPlanFixture.plan(directory, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+  override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json =
+    _process_plan(directory, goal)
+  private def _process_plan(directory: Path, goal: ThreeWorkflowHostParameters.Goal, denygit: Boolean = false): Json = {
+    val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
+    val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
+    val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages)
+    val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+      .map(_.hcursor.get[String]("capability").toOption.get).toSet else Set.empty[String]
+    val git = if (!denygit) normalgit else TypedGitHostPlanFixture.plan(target,
+      goalPaths = goal.candidatePaths, goalMessages = messages, denied = denied)
+    val combined = TypedSbtHostPlanFixture.plan(directory, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+    if (!denygit) combined else {
+      val gitcapabilities = git.hcursor.get[Vector[Json]]("grants").toOption.get
+        .flatMap(_.hcursor.get[Vector[Json]]("capabilities").toOption.get)
+      val sbtcapabilities = combined.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+        .map(_.hcursor.downField("capability").focus.get)
+      val grants = combined.hcursor.get[Vector[Json]]("grants").toOption.get.map(_.mapObject(
+        _.add("capabilities", Json.fromValues(gitcapabilities ++ sbtcapabilities))))
+      combined.mapObject(_.add("grants", Json.fromValues(grants)))
+    }
   }
   private def _install(call: Setup, selected: O.Plan): Consequence[Unit] = {
     val selection = _goal_selection_(_input, "specification-recording-selection", "specification-recording-start")
@@ -86,12 +101,14 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId, selection.participantIdentity, selected)))))
     } yield ()
   }
-  private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(),
+  private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:"))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
-    _with_runtime_(directory, "FindingRecording", Some(_host(directory)), selectedPolicy.map(_configured).getOrElse(Map.empty),
+    val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ (if (!denygit) Map.empty else Map(
+      "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces))
+    _with_runtime_(directory, "FindingRecording", Some(_host(directory)), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
       if (initialize) prepare(call => call.setupC(_setup_commands_(directory, "FindingRecording").size).flatMap(_ => _install(call, selected)))
       task(new Episode(directory, owner, component, actor, prepare))
@@ -100,6 +117,11 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _request[A](work: WorkflowInteraction[A, Nothing]): ContinuationRequest[A] =
     work.current.asInstanceOf[WorkflowContinuation.WorkOrder[A]].request
   private def _business[A](work: WorkflowInteraction[A, Nothing]): A = _request(work).input.get.value
+  private def _same_instance(actual: InstanceRecord, expected: InstanceRecord): Unit = {
+    actual.definition.workflowIdentity shouldBe expected.definition.workflowIdentity
+    actual.definition.workflowRevision shouldBe expected.definition.workflowRevision
+    actual.copy(definition = expected.definition) shouldBe expected
+  }
   private def _checks(directory: Path): Int = {
     val file = directory.resolve("sbt-executions.txt")
     if (Files.exists(file)) Files.readString(file).linesIterator.size else 0
@@ -437,6 +459,136 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         e.current(id).suspension shouldBe None
         e.current(id).history.exists(_.causation.value.startsWith("ordered-recording-issued:")) shouldBe false
         _checks(directory) shouldBe count
+      }
+    }
+
+    Vector(Vector("recorded", "recorded"), Vector("partial", "failed"), Vector("failed", "failed")).foreach { outcomes =>
+      s"accept ${outcomes.mkString("/")} recording Submit with all Git grants denied and reserve observation for separate Advance" in {
+        Given("ordinary typed Git and SBT grants create a legitimate Step or Phase recording frontier with specification-owned review inputs")
+        val directory = _root()
+        val step = outcomes.forall(_ == "recorded")
+        var id = ""
+        var issued = Option.empty[WorkflowInteraction[R.Request, Nothing]]
+        var response = Option.empty[ContinuationResult[R.Result]]
+        var pending = Option.empty[InstanceRecord]
+        var completed = Option.empty[InstanceRecord]
+        var reviewed = Option.empty[O.Snapshot]
+        var journals = Map.empty[String, String]
+        var count = 0
+        _episode(directory, initialize = true, selected = _plan(two = step)) { e =>
+          if (step) {
+            id = e.start()
+            e.advance(id)
+            Files.writeString(directory.resolve("repository/step-1.txt"), "Assigned required implementation.\n")
+            e.submit(e.work(id))
+            val display = e.advance(id)
+            e.submit(e.work(id), Some(display), "accept", Some(R.Observations(Vector(_observation, _idea))))
+            val waiting = e.advance(id)
+            e.authority(id, waiting)
+          } else {
+            val (identity, display, review) = _phase_review(e)
+            id = identity
+            reviewed = _business(review).candidate
+            e.submit(review, Some(display), "accept", Some(R.Observations(Vector(_observation, _idea))))
+          }
+          e.advance(id)
+          val work = e.recording(id)
+          issued = Some(work)
+          response = Some(e.response(work, outcomes))
+          if (step) e.writeAssigned(work)
+          else if (outcomes.head == "partial") e.writeAssigned(work, Set(0))
+          pending = Some(e.current(id))
+          journals = Vector(_hygiene, _candidates).map(path => path -> Files.readString(directory.resolve("repository").resolve(path))).toMap
+          count = _checks(directory)
+        }
+
+        Given("the closed runtime reopens the same canonical SQLite Session with every declared Git capability denied and ordinary SBT grants retained")
+        _episode(directory, denygit = true) { e =>
+          val work = issued.get
+          val good = response.get
+          val resumed = e.current(id)
+          _same_instance(resumed, pending.get)
+          e.recording(id) shouldBe work
+          val wrongitems = good.result.value.items.updated(0, good.result.value.items.head.copy(outcome = "recorded",
+            records = Vector(R.SavedSection(_candidates, "Crossed assigned destination"))))
+          val wrongoutcome = if (wrongitems.forall(_.outcome == "recorded")) "completed" else "partial"
+          val wrong = good.copy(result = good.result.copy(value = good.result.value.copy(outcome = wrongoutcome, items = wrongitems)))
+          val crossed = good.copy(result = good.result.copy(value = good.result.value.copy(items = good.result.value.items.reverse)))
+          When("the distinct named Submit receives validly shaped crossed-destination and crossed-source replies under the denied Git plan")
+          Vector(wrong, crossed).foreach { value =>
+            e.call("submitGoalPhaseFindingRecording", take(NativeWorkflowOperationInputFixture.submissionC(value))).isSuccess shouldBe false
+          }
+          Then("both malformed replies leave the actual pending issue and complete native history unchanged")
+          _same_instance(e.current(id), resumed)
+          e.recording(id) shouldBe work
+          _checks(directory) shouldBe count
+          journals.foreach { (path, text) => Files.readString(directory.resolve("repository").resolve(path)) shouldBe text }
+
+          When("the same named Submit consumes the saved exact honest response while all Git grants remain denied")
+          val ack = e.submitRecording(good)
+          val actual = e.current(id)
+          completed = Some(actual)
+          Then("canonical completion accepts and appends only its exact result without a file rewrite SBT run next suspension or automatic Advance")
+          ack.sessionId shouldBe id
+          ack.accepted shouldBe true
+          ack.outcome shouldBe "accepted"
+          ack.message shouldBe ("Accepted recording " + good.result.value.outcome + ": " + good.result.value.summary)
+          actual.revision shouldBe pending.get.revision.next
+          actual.history.init shouldBe pending.get.history
+          actual.history.last.causation.value shouldBe good.resultReference.identity
+          actual.currentProgression shouldBe pending.get.currentProgression
+          actual.suspension shouldBe None
+          actual.history.count(_.causation.value == "ordered-recording-issued:" + id) shouldBe 1
+          _checks(directory) shouldBe count
+          journals.foreach { (path, text) => Files.readString(directory.resolve("repository").resolve(path)) shouldBe text }
+
+          When("a separate ordinary Advance attempts its required live Git observation under the same denied grants")
+          val denied = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
+          Then("Advance fails and preserves that exact completed state showing that Git denial is effective")
+          denied.isSuccess shouldBe false
+          _same_instance(e.current(id), actual)
+          _checks(directory) shouldBe count
+          journals.foreach { (path, text) => Files.readString(directory.resolve("repository").resolve(path)) shouldBe text }
+        }
+
+        Given("the same completed Session reopens again with its ordinary typed Git and SBT grants")
+        _episode(directory) { e =>
+          val work = issued.get
+          val assigned = _business(work)
+          val result = response.get
+          val reopened = e.current(id)
+          _same_instance(reopened, completed.get)
+          When("a separate normal Advance observes the retained result and selects the existing outcome-specific frontier")
+          val next = e.advance(id)
+          val actual = e.current(id)
+          Then("the exact request result reference completed prefix Plan base and counts survive once with empty pending keys and no SBT replay")
+          next.findingRecording shouldBe NativeWorkflowOperationOutput.goalFindingRecording(N.State(completed = Vector(
+            N.Completed(assigned, result.resultReference, result.result.value))))
+          actual.history.take(completed.get.history.size) shouldBe completed.get.history
+          actual.history.count(_.causation.value == "ordered-recording-issued:" + id) shouldBe 1
+          actual.history.count(_.causation.value == result.resultReference.identity) shouldBe 1
+          _checks(directory) shouldBe count
+          journals.foreach { (path, text) => Files.readString(directory.resolve("repository").resolve(path)) shouldBe text }
+          if (step) {
+            val nextwork = _business(e.work(id))
+            nextwork.kind shouldBe "ImplementStep"
+            nextwork.stepIdentity shouldBe Some("step-2")
+            nextwork.selectedPlan shouldBe assigned.selectedPlan
+            nextwork.originalBase shouldBe assigned.originalBase
+            nextwork.completed shouldBe assigned.completed
+            nextwork.repairProgress shouldBe assigned.repairProgress
+          } else {
+            next.kind shouldBe "Wait"
+            next.authorityContext should not be empty
+            val candidate = e.recordingCandidate(id)
+            candidate.payload.reviewedCandidate shouldBe reviewed.get
+            if (outcomes.head == "partial") candidate.payload.changedPaths shouldBe Vector(_hygiene)
+            else {
+              candidate.payload.finalCandidate shouldBe reviewed
+              candidate.payload.changedPaths shouldBe empty
+            }
+          }
+        }
       }
     }
 
