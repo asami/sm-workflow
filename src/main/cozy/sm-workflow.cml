@@ -468,6 +468,7 @@ OperationResult
 | checks | GoalPhaseNativeCheckReceipt | * |
 | hostContext | WorkflowHostReviewContext | ? |
 | metadata | org.goldenport.record.Record | * |
+| priorReviews | org.goldenport.record.Record | * |
 
 ## GoalPhaseCheckFailureContext
 
@@ -496,6 +497,7 @@ OperationResult
 | planRevision | org.goldenport.record.Record | ? |
 | reviewObservations | GoalPhaseReviewObservations | ? |
 | dependencyProposal | org.goldenport.record.Record | ? |
+| completionConditions | org.goldenport.record.Record | ? |
 
 ## GoalPhaseReviewObservation
 

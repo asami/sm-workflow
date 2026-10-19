@@ -36,7 +36,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
   private val _now = Instant.parse("2026-10-07T00:00:00Z")
   private val _reference = V.WorkflowArtifactReference("specification-review", "1")
   private val _execution = V.WorkflowExecutionEvidence(Vector(_reference), Some("specification-reviewer"), None, None)
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty)
   private val _receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "diagnostic output", "")
   private val _goal_input = NativeHostHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = "ReviewStep",
@@ -161,6 +161,75 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           Preparation.goalC(context, _goal_result.copy(reviewObservations = invalid),
             _reference, _execution, _declared.issuer, _now).isSuccess shouldBe false
         }
+        Consequence.unit
+      }
+    }
+  }
+
+  "Original Step review completion conditions" should {
+    "preserve normal public readback conditions in managed review evidence and refuse changed removed or malformed content" in {
+      Given("docs/spec/native-goal-command-task.md; a specification-owned ReviewStep with selected owned paths and one terminal-LF repair finding")
+      val paths = Vector("docs/reader.md", "one.scala")
+      val step = _goal_input.selectedPlan.steps.head.copy(ownedPaths = paths)
+      val input = _goal_input.copy(selectedPlan = _goal_input.selectedPlan.copy(steps = Vector(step)),
+        review = _goal_input.review.map(_.copy(changedPaths = paths)))
+      val conditions = GoalPhaseNativeReviewCompletion.Conditions("terminal-lf", Vector(paths.head))
+      val result = GoalPhaseNativeWork.Result("repair", "Remove only the extra terminal LF",
+        Vector("Remove the extra terminal LF in " + paths.head), completionConditions = Some(conditions))
+      val publicresult = _goal_result.copy(outcome = result.outcome, summary = result.summary, findings = result.findings,
+        completionConditions = Some(GoalPhaseNativeMetadata.record(conditions.asJson)))
+      _with_core { call =>
+        val work = _goal_work(input)
+        val submitted = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
+        When("the normal command formatter and generated Record readers feed passive preparation with default property names")
+        val resultjson = NativeHostEvidenceToolFixture.normalCommandJson(publicresult)
+        val decodedresult = take(V.GoalPhaseWorkResult.createC(take(new RecordDecoder().json(resultjson))))
+        val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(work, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(
+          NativeHostEvidenceToolFixture.normalCommandJson(output)))))
+        val context = decoded.work.get.review.get.hostContext.get
+        val prepared = take(Preparation.goalC(context, decodedresult, _reference, _execution, _declared.issuer, _now))
+        val evidence = _evidence(prepared)
+        val actual = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input, submitted))
+        Then("the formatted result and prepared verdict retain the exact selected conditions and matching independent binding")
+        io.circe.parser.parse(resultjson).toOption.get.hcursor.get[Json]("completion_conditions") shouldBe Right(conditions.asJson)
+        take(GoalPhaseNativeReviewCompletion.fromPublicConditionsC(decodedresult.completionConditions)) shouldBe Some(conditions)
+        _verdict(evidence).hcursor.get[Json]("completionConditions") shouldBe Right(conditions.asJson)
+        _observe(evidence, Purpose.GoalReview, actual).isSuccess shouldBe true
+
+        Given("the specification provisions that exact prepared row through its existing managed Create permission")
+        take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
+        val reader = take(NativeHostEvidence.bindC(call.core.component.get.subsystem.get.configuration,
+          GoalPhaseRuntimeParameters.Persistence(_configuration_, _collection_("instances"), _collection_("continuations"))))
+        val port = new ThreeWorkflowHostEvidencePorts(reader).goalReview
+        val changed = result.copy(completionConditions = Some(conditions.copy(paths = Vector(paths(1)))))
+        val removed = result.copy(completionConditions = None)
+        When("the ordinary Goal review port consumes matching changed and removed conditions against the stored evidence")
+        val accepted = port.admitC(call.core, input, submitted)
+        val crossed = Vector(changed, removed).map(value => port.admitC(call.core, input,
+          submitted.copy(result = submitted.result.copy(value = value))))
+        Then("the matching independently bound result is admitted and neither alteration can reuse its evidence")
+        accepted.isSuccess shouldBe true
+        crossed.foreach(_.isSuccess shouldBe false)
+
+        Given("a historical result with no completion field and null options null Records or malformed present Records")
+        val historicalresult = publicresult.copy(completionConditions = None)
+        val historicaljson = NativeHostEvidenceToolFixture.normalCommandJson(historicalresult)
+        val historical = take(V.GoalPhaseWorkResult.createC(take(new RecordDecoder().json(historicaljson))))
+        val malformed = Vector[Option[Record]](null, Some(null), Some(Record.empty),
+          Some(GoalPhaseNativeMetadata.record(conditions.copy(kind = "semantic").asJson)),
+          Some(GoalPhaseNativeMetadata.record(conditions.copy(paths = Vector.empty).asJson)),
+          Some(GoalPhaseNativeMetadata.record(Json.obj("kind" -> Json.fromString("terminal-lf"), "paths" -> Json.Null))))
+        When("passive preparation consumes historical readback and each malformed public option")
+        val oldevidence = _evidence(take(Preparation.goalC(context, historical, _reference, _execution, _declared.issuer, _now)))
+        val refused = malformed.map(value => Preparation.goalC(context, publicresult.copy(completionConditions = value),
+          _reference, _execution, _declared.issuer, _now))
+        Then("historical absence stays absent and validly bound while malformed presence is rejected")
+        historical.completionConditions shouldBe None
+        _verdict(oldevidence).hcursor.downField("completionConditions").focus shouldBe None
+        _observe(oldevidence, Purpose.GoalReview, take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input,
+          submitted.copy(result = submitted.result.copy(value = removed))))).isSuccess shouldBe true
+        refused.foreach(_.isSuccess shouldBe false)
         Consequence.unit
       }
     }
@@ -340,7 +409,8 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           issue.identity, "RESOLVED", "Independent fixture observed the actual corrected behavior", None)))
         val result = GoalPhaseNativeWork.Result("accept", "Explicit independent coverage", Vector.empty, issueReport = Some(report))
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, None, None,
-          GoalPhaseFixIssues.publicReport(result.issueReport), None, GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None)
+          GoalPhaseFixIssues.publicReport(result.issueReport), None, GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)))
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("normal formatted output and generated readers carry actual selected issues into public passive preparation")
@@ -417,7 +487,8 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         val result = GoalPhaseNativeWork.Result("accept", "Fixture review", Vector.empty, Some(report))
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, boundary.publicReport(result.acceptance),
           GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
-          GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None)
+          GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)))
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("the normal command formatter and generated readers carry the issued view and result into passive preparation")
@@ -541,7 +612,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
       _with_core { call =>
         val goal = take(NativeHostReviewContext.goalC(call.core, _goal_work())).get
         val repository = take(NativeHostReviewContext.repositoryC(call.core, _repository_work))
-        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None)
+        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None, None)
         val finding = V.RepositorySyncNativeMergeReviewFinding("missing-case", Vector("one.scala"), "Repair only this native path")
         When("public preparation encodes each selected repair result through the existing binding")
         val goalrepair = _evidence(take(Preparation.goalC(goal, repair, _reference, _execution, _declared.issuer, _now)))

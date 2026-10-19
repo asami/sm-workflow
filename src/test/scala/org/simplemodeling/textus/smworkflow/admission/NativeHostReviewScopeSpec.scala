@@ -47,9 +47,7 @@ private[admission] object NativeHostReviewEvidenceFixture {
 
 /** Real target/disposition selection, not whole input or transport certification.
   * @since   Oct.  8, 2026
-  *  version Oct. 11, 2026
-  *  version Oct. 16, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -211,6 +209,111 @@ final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with Giv
   }
 
   "Independent review attestation" should {
+    "bind the exact original terminal-LF condition order and reject crossed kind outcome or malformed presence" in {
+      Given("docs/spec/native-goal-command-task.md; an original Step repair verdict settling all semantics except two ordered terminal-LF findings")
+      val conditions = GoalPhaseNativeReviewCompletion.Conditions("terminal-lf", Vector("one.scala", "two.scala"))
+      val result = GoalPhaseNativeWork.Result("repair", "Only the specified extra terminal LF remain",
+        Vector("Correct terminal LF in one.scala", "Correct terminal LF in two.scala"), completionConditions = Some(conditions))
+      val verdict = ThreeWorkflowHostEvidencePorts.goalReviewVerdict(result)
+      val original = binding(Purpose.GoalReview, verdict = Some(verdict))
+      When("normal evidence storage selects the original condition contract as part of the actual review verdict")
+      val saved = read(Purpose.GoalReview, original)
+      val accepted = observe(saved, Purpose.GoalReview, original)
+      Then("exact ordered condition content survives and applies only to that original independent result")
+      accepted.isSuccess shouldBe true
+      saved.binding.hcursor.downField("attestation").downField("result").downField("verdict")
+        .downField("completionConditions").focus shouldBe Some(conditions.asJson)
+
+      Given("the stored original report and a changed path, order, kind, scope, outcome or malformed optional value")
+      val changed = Vector(conditions.copy(paths = Vector("other.scala", "two.scala")).asJson,
+        conditions.copy(paths = conditions.paths.reverse).asJson, conditions.copy(kind = "semantic").asJson,
+        conditions.copy(paths = Vector("one.scala")).asJson, Json.Null, Json.True, Json.obj())
+      val invalid = changed.map(value => binding(Purpose.GoalReview,
+        verdict = Some(verdict.mapObject(_.add("completionConditions", value))))) ++ Vector(
+        binding(Purpose.GoalReview, Some(goalInput.mapObject(_.add("workKind", Json.fromString("ReviewPhase")).add("step", Json.Null))), Some(verdict)),
+        binding(Purpose.GoalReview, verdict = Some(verdict.mapObject(_.add("outcome", Json.fromString("accept"))))),
+        binding(Purpose.GoalReview, verdict = Some(verdict.mapObject(_.add("outcome", Json.fromString("decision-needed"))))))
+      val wire = encodeStorageC(saved).toOption.get
+      val payload = io.circe.parser.parse(wire.substring(schema.length + 1)).toOption.get
+      When("each crossed target is observed and malformed contracts reach normal storage encoding and decoding")
+      val crossed = invalid.map(observe(saved, Purpose.GoalReview, _))
+      val malformed = invalid.drop(2)
+      val encoded = malformed.map(value => encodeStorageC(record(Purpose.GoalReview, value)))
+      val decoded = malformed.map(value => decodeStorageC(schema + ":" + payload.mapObject(_.add("binding", value)).noSpaces))
+      Then("a changed attestation cannot reuse the original row and malformed or contradictory presence never disappears")
+      crossed.foreach(_.isSuccess shouldBe false)
+      encoded.foreach(_.isSuccess shouldBe false)
+      decoded.foreach(_.isSuccess shouldBe false)
+
+      Given("a historical independent result with no completion condition claim")
+      val absent = binding(Purpose.GoalReview)
+      When("the ordinary evidence owner stores and observes historical absence")
+      val historical = read(Purpose.GoalReview, absent)
+      Then("absence remains readable without fabricating a condition contract")
+      observe(historical, Purpose.GoalReview, absent).isSuccess shouldBe true
+      historical.binding.hcursor.downField("attestation").downField("result").downField("verdict")
+        .downField("completionConditions").focus shouldBe None
+    }
+
+    "bind the exact actual Phase corrective proposal and refuse changed meaning or malformed presence" in {
+      Given("an actual-shaped independent Phase decision-needed result with a genuine integration finding and a complete raw Plan proposal")
+      val oldsteps = Vector(
+        GoalPhaseOrderedProgression.Step("S1", "First accepted boundary", Vector("one.scala"), Vector.empty, Vector("first-check")),
+        GoalPhaseOrderedProgression.Step("S2", "Second accepted boundary", Vector("two.scala"), Vector("S1"), Vector("second-check")))
+      val proposedplan = GoalPhaseOrderedProgression.Plan("plan", "2", "phase", "repository", oldsteps :+
+        GoalPhaseOrderedProgression.Step("S3", "Correct the integrated finding", Vector("one.scala"), Vector("S1", "S2"),
+          Vector("corrective-check")), Vector("phase-check"))
+      val proposal = GoalPhasePlanRevision.Proposal("corrective-proposal", "1", "The combined Steps break the selected integration", proposedplan)
+      val result = GoalPhaseNativeWork.Result("decision-needed", "One bounded corrective Step is required",
+        Vector("The second Step breaks the first Step integration"), planRevision = Some(proposal))
+      val verdict = ThreeWorkflowHostEvidencePorts.goalReviewVerdict(result)
+      val target = goalInput.mapObject(_.add("workKind", Json.fromString("ReviewPhase")).add("step", Json.Null))
+      val original = binding(Purpose.GoalReview, Some(target), Some(verdict))
+      When("the production verdict projection and normal evidence storage retain the selected independent business decision")
+      val saved = read(Purpose.GoalReview, original)
+      val selected = saved.binding.hcursor.downField("attestation").downField("result").downField("verdict")
+      val changed = Vector(proposal.copy(reason = "A different integration reason"), proposal.copy(revision = "2"),
+        proposal.copy(plan = proposedplan.copy(revision = "3")),
+        proposal.copy(plan = proposedplan.copy(steps = proposedplan.steps.updated(2,
+          proposedplan.steps.last.copy(purpose = "A different corrective requirement")))),
+        proposal.copy(plan = proposedplan.copy(steps = proposedplan.steps.updated(2,
+          proposedplan.steps.last.copy(checks = Vector("different-corrective-check"))))))
+      val crossed = changed.map(value => observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(target),
+        Some(ThreeWorkflowHostEvidencePorts.goalReviewVerdict(result.copy(planRevision = Some(value)))))))
+      Then("the complete exact typed Proposal survives and changed reason, revision or Step meaning cannot reuse the independent result")
+      selected.get[GoalPhasePlanRevision.Proposal]("planRevision") shouldBe Right(proposal)
+      selected.downField("planRevision").focus shouldBe Some(proposal.asJson)
+      verdict.hcursor.downField("planRevision").focus shouldBe Some(proposal.asJson)
+      observe(saved, Purpose.GoalReview, original).isSuccess shouldBe true
+      crossed.foreach(_.isSuccess shouldBe false)
+
+      Given("the same independent result slot with present null, unknown, absent required or malformed proposal data")
+      val badproposal = Vector(Json.Null, Json.True, Json.obj(), proposal.asJson.mapObject(_.add("unknown", Json.True)),
+        proposal.asJson.mapObject(_.remove("reason")), proposal.asJson.mapObject(_.add("reason", Json.Null)),
+        proposal.asJson.mapObject(_.add("plan", proposedplan.asJson.mapObject(_.add("steps", Json.arr())))))
+      val malformed = badproposal.map(value => binding(Purpose.GoalReview, Some(target), Some(verdict.mapObject(_.add("planRevision", value)))))
+      val wire = encodeStorageC(saved).toOption.get
+      val payload = io.circe.parser.parse(wire.substring(schema.length + 1)).toOption.get
+      When("encoding, stored-row decoding and review observation receive each malformed business decision")
+      val encoded = malformed.map(value => encodeStorageC(record(Purpose.GoalReview, value)))
+      val decoded = malformed.map(value => decodeStorageC(schema + ":" + payload.mapObject(_.add("binding", value)).noSpaces))
+      val observed = malformed.map(observe(saved, Purpose.GoalReview, _))
+      Then("malformed proposal presence fails at every consumer instead of disappearing as diagnostics")
+      encoded.foreach(_.isSuccess shouldBe false)
+      decoded.foreach(_.isSuccess shouldBe false)
+      observed.foreach(_.isSuccess shouldBe false)
+
+      Given("a historical independent review with no Plan revision proposal")
+      val historical = binding(Purpose.GoalReview)
+      When("the same existing evidence route selects the absent proposal")
+      val retained = read(Purpose.GoalReview, historical)
+      Then("absence remains absent and the existing attestation stays applicable")
+      retained.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("planRevision").focus shouldBe None
+      observe(retained, Purpose.GoalReview, historical).isSuccess shouldBe true
+      observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(target),
+        Some(ThreeWorkflowHostEvidencePorts.goalReviewVerdict(result.copy(planRevision = None))))).isSuccess shouldBe false
+    }
+
     "retain actual validation metadata as selected independent review context and reject malformed presence" in {
       Given("a real fixture Batch and the same ordinary review assignment with that selected metadata context")
       val batch = GoalPhaseNativeMetadataFixture.batch

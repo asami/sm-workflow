@@ -20,8 +20,6 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  *  version Oct. 15, 2026
-  *  version Oct. 16, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -85,8 +83,9 @@ private[smworkflow] object NativeWorkflowResultInput {
               revision <- GoalPhasePlanRevision.fromPublicProposalC(value.planRevision)
               observations <- GoalPhaseFindingRecording.internalObservationsC(value.reviewObservations)
               dependency <- GoalPhaseDependencyScope.fromPublicProposalC(value.dependencyProposal)
+              conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)
             } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
-                GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency))),
+                GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions))),
         _work(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseFindingRecordingResult](request, "result").map[Value](value =>
             GoalPhaseFindingRecording.Result(value.outcome, value.summary, value.items.map(item =>

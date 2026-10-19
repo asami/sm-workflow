@@ -36,15 +36,16 @@ private[smworkflow] object GoalPhaseNativeWork {
     issueReport: Option[GoalPhaseFixIssues.Report] = None,
     planRevision: Option[GoalPhasePlanRevision.Proposal] = None,
     reviewObservations: Option[GoalPhaseFindingRecording.Observations] = None,
-    dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None)
+    dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None,
+    completionConditions: Option[GoalPhaseNativeReviewCompletion.Conditions] = None)
   object Result {
     given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
-      case ("acceptance" | "fixAssessment" | "issueReport" | "planRevision" | "reviewObservations" | "dependencyProposal", value) => !value.isNull
+      case ("acceptance" | "fixAssessment" | "issueReport" | "planRevision" | "reviewObservations" | "dependencyProposal" | "completionConditions", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[Result] = deriveDecoder
     given Decoder[Result] = Decoder.instance { cursor =>
-      if (Vector("fixAssessment", "issueReport", "planRevision", "reviewObservations", "dependencyProposal").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+      if (Vector("fixAssessment", "issueReport", "planRevision", "reviewObservations", "dependencyProposal", "completionConditions").exists(key => cursor.downField(key).focus.exists(_.isNull)))
         Left(DecodingFailure("Fix reports must be absent or valid objects", cursor.history))
       else _decoder.tryDecode(cursor).flatMap { result =>
         if (GoalPhaseFixAssessment.validateOptionC(result.fixAssessment).isSuccess &&
@@ -52,6 +53,7 @@ private[smworkflow] object GoalPhaseNativeWork {
             GoalPhasePlanRevision.validateOptionC(result.planRevision).isSuccess &&
             GoalPhaseFindingRecording.validateObservationsOptionC(result.reviewObservations).isSuccess &&
             GoalPhaseDependencyScope.validateOptionC(result.dependencyProposal).isSuccess &&
+            GoalPhaseNativeReviewCompletion.validateOptionC(result.completionConditions).isSuccess &&
             (result.planRevision.isEmpty || result.dependencyProposal.isEmpty)) Right(result)
         else Left(DecodingFailure("Invalid Fix assessment", cursor.history))
       }
@@ -160,6 +162,7 @@ private[smworkflow] object GoalPhaseNativeWork {
   def admitInitialResultC(request: Request, result: Result): Consequence[Unit] =
     if (request == null || !GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess || result == null || request.kind != "ImplementStep" || request.review == null || request.review.nonEmpty ||
         request.checkFailure == null || request.checkFailure.nonEmpty ||
+        result.completionConditions == null || result.completionConditions.nonEmpty ||
         !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
         !result.findings.forall(_bounded_text) ||
         !Set("completed", "decision-needed")(result.outcome) ||
@@ -183,6 +186,7 @@ private[smworkflow] object GoalPhaseNativeWork {
           value.findings != null && value.findings.nonEmpty && value.findings.forall(_bounded_text)) ||
         !_repair_source(request) ||
         request.candidate.nonEmpty || request.checksReceipt.nonEmpty || result == null ||
+        result.completionConditions == null || result.completionConditions.nonEmpty ||
         !_bounded_text(result.summary) || result.findings == null || result.findings.size > 128 ||
         !result.findings.forall(_bounded_text) ||
         !Set("completed", "decision-needed")(result.outcome) ||

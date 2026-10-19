@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.protocol.Property
 import org.goldenport.record.RecordPresentable
@@ -12,8 +13,6 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  *  version Oct. 15, 2026
-  *  version Oct. 16, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -53,7 +52,8 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
     case result: GoalPhaseNativeWork.Result => Consequence.success("result" ->
       V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
         GoalPhaseAcceptanceBoundary.publicReport(result.acceptance), GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport),
-        GoalPhasePlanRevision.publicProposal(result.planRevision), GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None))
+        GoalPhasePlanRevision.publicProposal(result.planRevision), GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
+        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson))))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
       V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
     case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->

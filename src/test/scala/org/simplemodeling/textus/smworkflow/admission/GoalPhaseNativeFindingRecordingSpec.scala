@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin}
@@ -76,11 +77,13 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _process_plan(directory: Path, goal: ThreeWorkflowHostParameters.Goal, denygit: Boolean = false): Json = {
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
-    val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages)
+    val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates))
+    val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
+      goalSelections = selections)
     val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
       .map(_.hcursor.get[String]("capability").toOption.get).toSet else Set.empty[String]
     val git = if (!denygit) normalgit else TypedGitHostPlanFixture.plan(target,
-      goalPaths = goal.candidatePaths, goalMessages = messages, denied = denied)
+      goalPaths = goal.candidatePaths, goalMessages = messages, denied = denied, goalSelections = selections)
     val combined = TypedSbtHostPlanFixture.plan(directory, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
     if (!denygit) combined else {
       val gitcapabilities = git.hcursor.get[Vector[Json]]("grants").toOption.get
@@ -177,7 +180,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       if (assigned.kind.startsWith("Review")) prepare(call => for {
         prepared <- NativeHostReviewPreparation.goalC(display.get.work.get.review.get.hostContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None, None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
-            R.publicObservations(value.reviewObservations), None), V.WorkflowArtifactReference(reference.identity, reference.revision),
+            R.publicObservations(value.reviewObservations), None,
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

@@ -75,7 +75,7 @@ final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers w
       Vector("Retain current callers and expose the selected operation"),
       Vector(ContextReference("specification-dependent-work", "1")), Vector.empty)
     val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED dependency direction needed",
-      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)))
+      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)), None)
     When("ordinary semantic Submit precedes Advance that saves the actual ordered Human question")
     val submitted = scenario.call("command", initial.submitOperation.get,
       Vector("--sessionId", initial.submitSessionId.get, "--result", json(result.toRecord()).noSpaces,

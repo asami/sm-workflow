@@ -7,7 +7,7 @@ import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -23,6 +23,7 @@ private[smworkflow] object WorkflowSbtValidation {
   }
   enum Outcome(val wire: String) {
     case Succeeded extends Outcome("succeeded")
+    case NotExecuted extends Outcome("not-executed")
     case Failed extends Outcome("failed")
     case Incomplete extends Outcome("incomplete")
     case Unverified extends Outcome("unverified-tests")
@@ -99,6 +100,7 @@ private[smworkflow] object WorkflowSbtValidation {
         case SbtTestSelectionResult.Verified(classes, suites, tests) => Selection(classes, suites, tests)
       }, None)
       case SbtExecutionOutcome.Failed(_) => Facts(kind, Outcome.Failed, None, None)
+      case SbtExecutionOutcome.NotExecuted => Facts(kind, Outcome.NotExecuted, None, None)
       case SbtExecutionOutcome.Incomplete(_) => Facts(kind, Outcome.Incomplete, None, None)
       case SbtExecutionOutcome.UnverifiedTests(reason) => Facts(kind, Outcome.Unverified, None, Some(reason.toString))
     }

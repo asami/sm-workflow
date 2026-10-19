@@ -23,7 +23,6 @@ import org.simplemodeling.textus.smworkflow.admission.typedmetafixture.{TypedMet
 /** Finite public transport for externally authored typed input selection and adoption.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  *  version Oct. 18, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -590,7 +589,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
           Files.writeString(Path.of(scenario.host.target.root).resolve("docs/phase.md"),
             "# Specification-owned negative typed input\n\nExplicit invalid input: " + name + "\n", UTF_8)
           val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned invalid input scenario " + name,
-            Vector.empty, None, None, None, None, None, None)
+            Vector.empty, None, None, None, None, None, None, None)
           val reference = V.WorkflowArtifactReference("specification-negative-typed-input-" + name, "1")
           When("the normal issued semantic Submit consumes only those stated negative fixture inputs")
           _semantic(scenario, initial, output, semantic, reference)

@@ -10,7 +10,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -71,11 +71,16 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     receipt: String, directive: RepairDirective) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
     evidence: String, outcome: ReviewOutcome, repairDirective: Option[RepairDirective] = None) extends Event
+  /** Mechanical admission by the native completion owner; this event grants no effect authority. */
+  final case class CoveredReviewCompletionObserved(snapshot: Snapshot, checksReceipt: String,
+    originalGeneration: Long, originalCandidate: Snapshot, originalReviewReference: String,
+    completionReference: String) extends Event
   enum ReviewOutcome { case Accept, Repair, Human }
   /** Durable intent must have committed before the native executor runs. */
   final case class ClosureIntentSaved(snapshot: Snapshot, identity: String) extends Event
   final case class ClosureUnknown(identity: String) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
+  final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
     * integrate upstream history. The adapter proves this tip remains an ancestor
     * of the child's actual converged tip and retains that separate child result.
@@ -117,25 +122,36 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     def phaseAcceptanceLocked(issued: Boolean): Boolean =
       stage == Stage.PhaseClosing || stage == Stage.Closed || (stage == Stage.PhaseReview && issued)
 
-    /** Explicit host-admitted current-Step adoption; grants no execution authority
-      * and retains the consumed repair window and accepted Step prefix. */
+    /** Explicit host-admitted adoption retains the consumed repair window and
+      * accepted prefix. A Phase review may append one bounded corrective Step. */
     def adoptRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
       _ <- validatePlanC(proposed)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
       _ <- if (text(evidence) && !evidence.exists(c => Character.isISOControl(c))) Consequence.unit
         else invalid("Plan adoption requires an actual host-admitted answer reference")
+      current = cursor < plan.steps.size &&
+        decisionSource.exists(Set(Stage.Implementation, Stage.Repair, Stage.Review))
+      corrective = cursor == plan.steps.size && cursor == completed.size && plan.steps.size < 64 &&
+        decisionSource.contains(Stage.PhaseReview)
       _ <- if (stage == Stage.Decision && !documentDecision && pendingRepair.isEmpty &&
-          closureIntent.isEmpty && cursor < plan.steps.size && generation < Long.MaxValue &&
-          decisionSource.exists(Set(Stage.Implementation, Stage.Repair, Stage.Review))) Consequence.unit
-        else invalid("Plan adoption requires an eligible current-Step semantic decision")
+          closureIntent.isEmpty && generation < Long.MaxValue && (current || corrective)) Consequence.unit
+        else invalid("Plan adoption requires an eligible current-Step or completed-Phase review decision")
       _ <- if (proposed.revision != plan.revision && proposed.identity == plan.identity &&
           proposed.phase == plan.phase && proposed.repository == plan.repository &&
           proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
-          proposed.phaseReviewClassification == plan.phaseReviewClassification &&
+          proposed.phaseReviewClassification == plan.phaseReviewClassification) Consequence.unit
+        else invalid("Plan adoption must retain Plan identity, Phase, repository and closure policy")
+      _ <- if (current &&
           proposed.steps.size == plan.steps.size && proposed.steps.updated(cursor, step) == plan.steps &&
           proposed.steps(cursor).copy(purpose = step.purpose, checks = step.checks) == step) Consequence.unit
-        else invalid("Plan adoption may revise only the current Step purpose and selected checks")
-      _ <- if (completed.isEmpty || (_acceptance_usage(proposed) == _acceptance_usage(plan) &&
+        else if (corrective && proposed.steps.size == plan.steps.size + 1 &&
+          proposed.steps.take(plan.steps.size) == plan.steps &&
+          proposed.steps.last.dependencies.toSet == plan.steps.map(_.identity).toSet &&
+          proposed.steps.last.ownedPaths.forall(value => plan.steps.exists(_.ownedPaths.exists(owner =>
+            value == owner || value.startsWith(owner + "/")))) &&
+          proposed.acceptance == plan.acceptance && proposed.effectiveAcceptance == plan.effectiveAcceptance) Consequence.unit
+        else invalid("Plan adoption may revise the current Step or append exactly one corrective Step within the unchanged completed Plan scope and acceptance")
+      _ <- if (corrective || completed.isEmpty || (_acceptance_usage(proposed) == _acceptance_usage(plan) &&
           _acceptance_conditions(proposed, Set("all", "step")) ==
             _acceptance_conditions(plan, Set("all", "step")))) Consequence.unit
         else invalid("Plan adoption cannot redefine accepted Step conditions or Usage Contract")
@@ -247,6 +263,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else success(Stage.Decision, newChecks = Some(receipt), newDirective = Some(directive),
           newPendingRepair = Option.when(plan.repairLimit > 0 && generation < Long.MaxValue)(directive),
           reason = Some("Selected Step repair window requires a Human decision: " + receipt))
+      case CoveredReviewCompletionObserved(snapshot, validation, originalgeneration, originalcandidate,
+          originalreview, completion) if stage == Stage.Review && !phaseWide &&
+          candidate.contains(snapshot) && checksReceipt.contains(validation) && text(validation) &&
+          generation > 1 && originalgeneration == generation - 1 && repairs > 0 &&
+          validSnapshot(snapshot) && validSnapshot(originalcandidate) &&
+          originalcandidate.head == snapshot.head && snapshot.head == tip &&
+          originalcandidate.tree != snapshot.tree && text(originalreview) && text(completion) &&
+          closureIntent.isEmpty => success(Stage.Closing, newReview = Some(originalreview))
       case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive) if
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(evidence) &&
           ((stage == Stage.Review && value == key(WorkKind.ReviewStep)) ||
@@ -275,11 +299,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case StepCommitObserved(intent, commit) if stage == Stage.Closing &&
           closureIntent.contains(intent) && validCommit(commit) && commit.parent == tip &&
           candidate.exists(_.tree == commit.tree) && commit.identity != tip && generation < Long.MaxValue =>
-        val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence.get)
-        val nextCursor = cursor + 1
-        Consequence.success(new State(plan,
-          if (nextCursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
-          nextCursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None))
+        _close_step_c(commit)
+      case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && reviewEvidence.nonEmpty &&
+          validCommit(commit) && commit.parent == tip && commit.identity != tip && generation < Long.MaxValue &&
+          candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
+          paths.distinct == paths && paths.forall(value => path(value) &&
+            step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
+        _close_step_c(commit)
       case PhaseRepositoryClosed(intent, original, finalTip, commits, receipt) if
           stage == Stage.PhaseClosing && closureIntent.contains(intent) && original == base.head &&
           finalTip == tip && commits == completed.map(_.commit) && text(receipt) =>
@@ -309,6 +336,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
             Stage.Review, Stage.PhaseReview)) =>
         success(decisionSource.get, newGeneration = generation + 1, reason = None)
       case _ => invalid("event differs from the Workflow-assigned ordered Phase frontier")
+    }
+
+    private def _close_step_c(commit: Commit): Consequence[State] = {
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence.get)
+      val nextcursor = cursor + 1
+      Consequence.success(new State(plan,
+        if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
+        nextcursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None))
     }
 
     private def success(nextStage: Stage, newCandidate: Option[Snapshot] = candidate,

@@ -13,8 +13,6 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  *  version Oct. 15, 2026
-  *  version Oct. 17, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -41,20 +39,24 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.candidate.map(_goal_snapshot),
       value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
       value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), hostContext,
-        r.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))),
+        r.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)),
+        r.priorReviews.map(prior => GoalPhaseNativeMetadata.record(prior.asJson)))),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
         d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
       value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))),
       GoalPhaseFixIssues.publicState(value.issues))
 
-  def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView =
+  def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
+    val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
+      payload.selected.lift(payload.receipts.size).exists(_.identity == receipt.identity)).toVector else Vector.empty
     V.GoalPhaseNativeValidationView(payload.sourceRevision, payload.step, _goal_snapshot(payload.candidate),
       payload.selected.map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.kind.wire, c.hostIdentity,
         c.operation.map { operation =>
           import GoalPhaseNativeMetadata.given
           GoalPhaseNativeMetadata.record(operation.asJson)
-        })), payload.receipts.map(_goal_check), payload.outcome,
+        })), (payload.receipts ++ stopped).map(_goal_check), payload.outcome,
       payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))
+  }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
     value <- workInputC(work)
@@ -230,7 +232,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance),
       GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport),
       GoalPhasePlanRevision.publicProposal(value.planRevision), GoalPhaseFindingRecording.publicObservations(value.reviewObservations),
-      GoalPhaseDependencyScope.publicProposal(value.dependencyProposal))
+      GoalPhaseDependencyScope.publicProposal(value.dependencyProposal),
+      value.completionConditions.map(conditions => GoalPhaseNativeMetadata.record(conditions.asJson)))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not

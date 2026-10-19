@@ -291,7 +291,8 @@ inputs or AI validation. Those require their separate actual evidence.
 When implementation or repair discovers a genuine test, suite, requirement or
 design gap, return `decision-needed` and an optional structured `planRevision`
 Proposal: `{identity, revision, reason, plan}`. Supply the complete raw Plan with
-no `effectiveAcceptance`. Keep Plan identity, Phase, repository, repair limit,
+no `effectiveAcceptance`. This route changes only the current unclosed Step.
+Keep Plan identity, Phase, repository, repair limit,
 Phase checks, classifications, ownership, dependencies and every other Step;
 only the current unclosed Step's purpose and declared literal check selection
 may change within this route. Describe any explicit acceptance adoption through
@@ -327,7 +328,27 @@ retain the old documents, policy and progress; no file restoration is implied.
 Ordinary document refresh and progress keep their existing owners at the next
 fresh frontier. Checks, independent review, Step commit and
 Phase closure retain their mandatory gates. Review reports gaps as findings
-for later repair and has no Plan proposal/adoption authority.
+for later repair, with only the disjoint ReviewPhase proposal case below.
+
+An actual `ReviewPhase` with a genuine integrated finding after all accepted
+Steps may return `decision-needed` with one complete raw `planRevision` Proposal.
+Use a fresh revision and omit `effectiveAcceptance`. Retain the Plan identity,
+Phase, repository, repair limit, Phase checks, Phase review classification and
+raw acceptance unchanged. Preserve the exact entire accepted Step prefix and
+its completed commits. Append exactly one new distinct corrective Step, with
+nonempty selected declared checks, dependencies exactly all old Step IDs and
+owned paths within the original owned-path union; the total must be at most
+64 Steps. Document-backed Phase corrective adoption is unsupported: report that
+gap without silently discarding the documents or their bindings. Only a genuine
+independent Human `AdoptPlanRevision` selects this proposal. `ReviewStep` and
+review outcomes `accept` or `repair` cannot carry a Plan proposal;
+`dependencyProposal` and `planRevision` remain mutually exclusive. An ordinary
+reviewer remains read-only and cannot adopt, dispatch or edit. This proposal
+does not grant any of those authorities.
+
+Affected Phase re-review uses the actual latest prior reports and judges the
+current combined scope together with the original genuine finding. Unaffected
+judgments remain context; never present them as invented fresh PASS results.
 
 Fixture-owned specifications establish no genuine AI authoring, genuine Human
 adoption or integrated Step acceptance. Actual authoring and independent Human
@@ -341,6 +362,16 @@ issued issue IDs. Classify every required unresolved issue in the selected
 repository and Step exactly once in the typed `issueReport`; never silently drop
 an issue, invent an ID, infer resolution from no report or replace the required
 issue set with a new narrative list.
+
+Issued `work.review.priorReviews` is native-reconstructed business context.
+Preserve each actual report's original kind, Step, generation, candidate, checks,
+result references and actual result, with exact source/target and prior findings.
+`ReviewStep` considers the current Step together with prior Phase reports;
+Phase review considers the latest actual reports. Repair follows the actual
+original review and directive. Do not manufacture reviewer/provider identities
+or claim that copying a report grants independence or authority. At closing
+re-review, assess only genuinely affected meaning and preserve applicable
+unrelated conclusions.
 
 For repair, `FIXED` is an honest semantic correction claim awaiting the owning
 Workflow's validation. `UNRESOLVED` and `DECLINED` leave the issue open. `BLOCKED`
@@ -361,6 +392,26 @@ reviewer/provider identity and observed coverage honest; passing tests alone do
 not supply independent review. Names, comments, examples and Given/When/Then
 meaning are assessed in this same ordinary independent review. Batch adopted
 semantic corrections into the admitted work; do not create another review service.
+
+An original independent `ReviewStep` with outcome `repair` may optionally supply
+`result.completionConditions` exactly as
+`{"kind":"terminal-lf","paths":[...]}`. It requires genuine nonempty findings
+and all semantic judgment settled except those terminal-LF conditions. Supply
+one unique current-owned text path per finding, with 1..16 paths, and no Plan or
+dependency proposal. Honest required acceptance unsatisfied details/findings
+and ordinary issue coverage remain mandatory; the conditions must agree with
+the actual findings. No actor is required to provide this optional field.
+Implementation, Repair, Phase review and every other outcome cannot use it.
+
+The real `RepairStep` still reports actual `FIXED` issue dispositions. Native
+actual fresh complete selected Compile+Test evidence and exact typed blob, mode
+and path proof may resolve those original issues and proceed through ordinary
+closing without a new semantic review. Any uncovered semantic or other delta
+still requires affected re-review. No actor claims reuse or acceptance, issues
+a fake fresh PASS, or creates an omission certificate. The known Closing
+index-EOF continuation remains a separate ordinary retained-precheck case.
+These conditions add no AI execution, review or adoption authority and no new
+engine.
 
 Treat issued `repairProgress` as read-only current-window context. A genuine
 Human `ContinueRepairs` decision renews the current repair window while cumulative

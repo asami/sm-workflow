@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -232,6 +232,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       if (out.contains('\u0000') || err.contains('\u0000')) N.uncertain("validation capture is not ordinary text")
       else result.termination match {
         case ProcessExecutionTermination.Exited(code) => Consequence.success(Receipt(identity, "exited", Some(code), out, err))
+        case ProcessExecutionTermination.NotStarted => Consequence.success(Receipt(identity, "not-started", None, out, err))
         case _ => Consequence.success(Receipt(identity, "indeterminate", None, out, err))
       }
     } catch { case scala.util.control.NonFatal(_) => N.uncertain("validation capture is not UTF-8") }

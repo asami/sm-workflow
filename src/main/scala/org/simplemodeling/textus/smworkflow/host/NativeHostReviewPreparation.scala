@@ -4,7 +4,7 @@ import io.circe.Json
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhaseRepairProgress, NativeHostEvidence,
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeReviewCompletion, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhaseRepairProgress, NativeHostEvidence,
   RepositorySyncNativeMergeReview, ThreeWorkflowHostEvidencePorts, WorkflowSbtValidation}
 import io.circe.syntax.*
 import org.simplemodeling.textus.smworkflow.value as V
@@ -12,7 +12,6 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent host owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  *  version Oct. 16, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -48,9 +47,10 @@ object NativeHostReviewPreparation {
         revision <- GoalPhasePlanRevision.fromPublicProposalC(result.planRevision)
         observations <- GoalPhaseFindingRecording.internalObservationsC(result.reviewObservations)
         dependency <- GoalPhaseDependencyScope.fromPublicProposalC(result.dependencyProposal)
+        conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(result.completionConditions)
         prepared <- _prepare_c(context, NativeHostEvidence.Purpose.GoalReview, GoalPhaseNativeWork.resultCodec.typeIdentity,
           resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowHostEvidencePorts.goalReviewVerdict(
-            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report, assessment, issues, revision, observations, dependency)))
+            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report, assessment, issues, revision, observations, dependency, conditions)))
       } yield prepared
     }
 

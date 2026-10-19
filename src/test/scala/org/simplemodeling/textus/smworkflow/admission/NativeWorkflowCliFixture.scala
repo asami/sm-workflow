@@ -541,7 +541,8 @@ private[admission] object NativeWorkflowCliFixture {
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
       GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
-      goalPaths = host.goal.candidatePaths, goalMessages = Vector("Complete selected continuation Step 1"))
+      goalPaths = host.goal.candidatePaths, goalMessages = Vector("Complete selected continuation Step 1"),
+      goalSelections = Vector(host.goal.candidatePaths))
   }
 
   /** Isolated normal build and baseline inputs only, before any Workflow Start. */
@@ -694,7 +695,8 @@ private[admission] object NativeWorkflowCliFixture {
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
       GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
-      goalPaths = sliceValidationPlanPaths, goalMessages = Vector("Complete selected continuation Step 1"))
+      goalPaths = sliceValidationPlanPaths, goalMessages = Vector("Complete selected continuation Step 1"),
+      goalSelections = Vector(sliceValidationPlanPaths))
   }
 
   /** Requirements only; the selected version-controlled plan remains absent until external work. */
@@ -832,7 +834,8 @@ private[admission] object NativeWorkflowCliFixture {
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
       GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
-      goalPaths = typedInputsPaths, goalMessages = Vector("Complete selected continuation Step 1"))
+      goalPaths = typedInputsPaths, goalMessages = Vector("Complete selected continuation Step 1"),
+      goalSelections = Vector(typedInputsPaths))
   }
 
   /** Requirements only; the selected version-controlled plan remains absent until external work. */
@@ -1008,7 +1011,9 @@ private[admission] object NativeWorkflowCliFixture {
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
       GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
       goalPaths = paths, goalMessages = if (paths == cmlAuthoringPaths) Vector("Complete selected continuation Step 1")
-        else Vector("Complete selected continuation Step 1", "Complete selected continuation Step 2"))
+        else Vector("Complete selected continuation Step 1", "Complete selected continuation Step 2"),
+      goalSelections = if (paths == cmlAuthoringPaths) Vector(cmlAuthoringPaths)
+        else Vector(authoringPaths, Vector("docs/validation.md")))
   }
 
   /** Ordinary repository setup followed by inputs only; no semantic source is authored. */
@@ -1482,7 +1487,10 @@ private[admission] object NativeWorkflowCliFixture {
             Option.when(repaircontinuation)(GitOperationKind.CommitMetadata),
           goalPaths = host.goal.candidatePaths,
           goalMessages = if (repaircontinuation) Vector("Complete selected continuation Step 1",
-            "Complete selected continuation Step 2") else Vector.empty, denied = denied)
+            "Complete selected continuation Step 2") else Vector.empty, denied = denied,
+          goalSelections = if (repaircontinuation) Vector(host.goal.candidatePaths,
+            Vector("docs/phase.md") ++ Option.when(host.goal.candidatePaths.contains("docs/checklist.md"))("docs/checklist.md"))
+            else Vector.empty)
         TypedSbtHostPlanFixture.plan(root, executable, Vector(1), Some(git))
     }
   }

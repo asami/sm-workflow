@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 @DoNotDiscover
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -50,7 +50,8 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     val gitplan = if (isolated) None else Some(TypedGitHostPlanFixture.plan(
       Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
       goalPaths = if (scenario == "Goal") goal.candidatePaths else Vector.empty,
-      goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty))
+      goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty,
+      goalSelections = if (scenario == "Goal") Vector(goal.candidatePaths) else Vector.empty))
     val ordinals = if (isolated || scenario != "Goal") Vector(1) else
       (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal).distinct
     TypedSbtHostPlanFixture.plan(root, _sbt_executable, ordinals, gitplan,

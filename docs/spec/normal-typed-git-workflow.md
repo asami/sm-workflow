@@ -20,7 +20,8 @@ JSON with exactly `schema`, `programs`, `grants`, `workspaces`,
 `workspaceGrants`, `sbtPrograms` and `gitPrograms`. Bootstrap, host admission
 and private codecs belong to CNCF. A Git declaration contains target, operation,
 capability, identity, gitExecutable, localBranch, remote, remoteBranch, endpoint,
-commitIdentity, selectionId, selectedPath, commitMessage, limits and environment.
+commitIdentity, selectionId, selectedPath, commitMessage, limits and environment;
+the three bounded Goal closure kinds also require `selectedPaths` as described below.
 Unused optional fields are explicitly null. Selected path/message fields occur
 only on compatible kinds; semantic capabilities and selection keys are unique.
 The canonical repository directory exists before bootstrap.
@@ -55,7 +56,7 @@ path ownership and workflow judgment without parsing Git stdout again.
 | --- | --- | --- | --- |
 | `conflict-N` | 1..128 | StageSelected | Conflict path |
 | `goal-path-N` | 1..256 | StageSelectedAll | Goal candidate path |
-| `goal-step-N` | 1..64 | CommitSelected | Step commit message and identity |
+| `goal-step-N` | 1..64 | CommitSelected, CheckSelectedIndex, SelectedIndexChanges | Exact selected Step paths; commit additionally fixes message and identity |
 
 The unused old immediate Merge, IsAncestor and IndexEntries definitions are
 retired. PendingMerge followed by CommitPending supplies the existing merge path.
@@ -221,3 +222,70 @@ real remote permission. No CommitPending, Push, final fetch or convergence
 acceptance is claimed. COMMAND is connected and focused validated, pending its
 existing protected independent Step review/local acceptance commit. This does
 not close P6-EX02 or Phase 6.1 or replace historical results.
+
+## Selected Goal closure and known-no-commit continuation
+
+Every host declaration for `commit-selected`, `check-selected-index` and
+`selected-index-changes` requires its own explicit `selectedPaths` JSON array:
+1..256 unique valid Git paths fixed by the host for the exact `goal-step-N`.
+All three declarations for a Step bind the same vector. There is no implicit
+fallback to candidate paths or the whole index. Update obsolete declarations
+before using this contract. Selected reads need their own grants and no commit
+identity; commit retains its independent identity and grant. Closure also needs
+fixed `blob-content` and `tree-changes` read declarations. The fixture's finite
+argument count is 512 to accommodate 256 fixed paths and their fixed prefix;
+this changes no other production limit.
+
+The current native v3 closure receipt retains the original Input, ordinal and
+optional commit, plus optional attempt, actual precheck and native change facts.
+Absent new fields default to zero/none/empty; explicit null or malformed values
+reject. Existing v3 completed receipts keep their exact reviewed-tree meaning
+and grant no new effect. An old intent without a result remains unknown.
+
+Before a new selected precheck, native branch, HEAD and HEAD tree must still
+match the original parent. Current-Step changes must be staged and merged with
+no selected unstaged or untracked data. Unrelated staged or unstaged work can
+remain. Native closure neither stages nor resets nor unstages unrelated paths,
+and compares selected content rather than requiring a globally empty index.
+Commit uses ordinary CNCF typed `CommitSelected` with its host-fixed selection.
+
+The owner saves actual `CheckSelectedIndex` facts before commit intent. A
+nonclean check with unchanged selected reviewed content is a terminal
+known-no-commit result for that Advance: it dispatches no commit, saves no commit
+intent and changes no controller counters. After selected correction, the next
+ordinary Advance may append one new attempt under the same original authority
+lookup. A clean precheck without its intent, a retained intent without completion,
+or any unknown effect remains Wait and grants no replay. Missing success or a
+generic exit code never establishes known-no-commit. There is no same-call retry.
+
+Only an earlier admitted actual EOF-only failure can permit a difference from
+the reviewed candidate. The owner requires every native change to be `M` on
+an owned path reported by that earlier check, with distinct present old/new
+blob IDs and unchanged regular mode `100644` or `100755`. Complete typed UTF8
+blob bytes without NUL must prove removal solely of extra terminal LF bytes:
+the original ends in at least two LF bytes, and the nonempty result retains all
+other bytes followed by exactly one LF. No trailing-space, CR, semantic, rename,
+delete, type or mode change qualifies. Other changes require the ordinary
+affected validation/review route.
+
+After commit, native identity, exact original single parent and observed HEAD
+tree must agree. No owned dirty path may remain, while unrelated work can
+remain. Actual typed `TreeChanges` from reviewed candidate to committed tree
+must match exactly the admitted canonical path/mode/blob vector; ordinary
+closure requires that vector to be empty and the original reviewed tree.
+Reconstruction re-observes immutable typed blobs and tree changes and admits
+each retained record against its actual full native history prefix. Prior
+failed checks are append-only; only the actual latest failed frontier can select
+a fresh attempt. Later legitimate Step history can follow an already completed
+receipt without making it authority for another commit.
+
+The narrow EOF correction event preserves original validation and review result
+targets and the original review reference. It introduces no semantic request,
+review-reuse certificate, Human reapproval, new controller state or authority.
+There is no reset-to-empty ritual. `GoalPhaseNativeClosureSpec`,
+`GoalPhaseOrderedProgressionSpec` and
+`GoalPhaseNativeRetentionApplicabilitySpec` author adjacent Given/When/Then
+expectations for these contracts. Targeted pure specifications are not installed
+acceptance or a production availability claim. Parent validation and the actual
+selected staging → EOF failure → correction → one commit → next Step episode,
+plus aggregate validation and Phase review, retain their existing obligations.

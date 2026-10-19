@@ -11,7 +11,7 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -43,6 +43,55 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "admit a proven covered repair into ordinary Closing with current checks and the original review reference" in {
+      Given("docs/spec/native-goal-command-task.md; an original Step repair review, one consumed repair and a distinct freshly checked candidate")
+      val implemented = take(initial.acceptC(SemanticCompleted(work(initial), "Initial selected change")))
+      val original = Snapshot(base.head, oid('c'))
+      val inspected = take(implemented.acceptC(CandidateObserved(original)))
+      val checked = take(inspected.acceptC(ChecksObserved(original, plan.steps.head.checks, "original-checks", true)))
+      val repair = take(checked.acceptC(ReviewAdmitted(work(checked), original, "original-checks", "original-review",
+        ReviewOutcome.Repair, Some(directive))))
+      val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "Assigned repair completed")))
+      val candidate = original.copy(tree = oid('d'))
+      val observed = take(repaired.acceptC(CandidateObserved(candidate)))
+      val fresh = take(observed.acceptC(ChecksObserved(candidate, plan.steps.head.checks, "current-checks", true)))
+      val event = CoveredReviewCompletionObserved(candidate, "current-checks", checked.generation,
+        original, "original-review", "actual-mechanical-completion")
+      When("the native owner supplies its proven mechanical completion event and ordinary durable commit facts")
+      val closing = take(fresh.acceptC(event))
+      val intent = take(closing.acceptC(ClosureIntentSaved(candidate, "ordinary-step-intent")))
+      val commit = Commit(oid('e'), base.head, candidate.tree)
+      val next = take(intent.acceptC(StepCommitObserved("ordinary-step-intent", commit)))
+      Then("no new semantic review or counter/generation change occurs at admission and the normal commit preserves the original review")
+      closing.stage shouldBe Stage.Closing
+      closing.next shouldBe BeginClosure(candidate, false)
+      closing.candidate shouldBe Some(candidate)
+      closing.checksReceipt shouldBe Some("current-checks")
+      closing.reviewEvidence shouldBe Some("original-review")
+      closing.generation shouldBe fresh.generation
+      closing.repairs shouldBe fresh.repairs
+      closing.ordinaryRepairs shouldBe fresh.ordinaryRepairs
+      closing.closureIntent shouldBe None
+      next.completed shouldBe Vector(ClosedStep("S1", commit, "original-review"))
+      next.cursor shouldBe 1
+      next.stage shouldBe Stage.Implementation
+
+      Given("the same pure event with crossed current facts, original generation/target, empty references or another frontier")
+      val invalid = Vector(event.copy(snapshot = original), event.copy(checksReceipt = "original-checks"),
+        event.copy(originalGeneration = fresh.generation), event.copy(originalGeneration = 0),
+        event.copy(originalCandidate = original.copy(head = oid('f'))), event.copy(originalCandidate = candidate),
+        event.copy(originalReviewReference = ""), event.copy(completionReference = ""))
+      val phase = close(close(initial, oid('1'), oid('2')), oid('3'), oid('4'))
+      val phasecandidate = phase.tipSnapshot
+      val phaseobserved = take(phase.acceptC(CandidateObserved(phasecandidate)))
+      val phasechecked = take(phaseobserved.acceptC(ChecksObserved(phasecandidate, plan.phaseChecks, "phase-checks", true)))
+      When("each crossed event or premature/Phase/Closing frontier is offered without new source authority")
+      val refused = invalid.map(fresh.acceptC) ++ Vector(initial.acceptC(event), checked.acceptC(event),
+        closing.acceptC(event), intent.acceptC(event), phasechecked.acceptC(event))
+      Then("the narrow event grants no broad acceptance, replay or effect authority")
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
     "retain accepted Phase source checks and history while observing only the final Markdown management tree" in {
       Given("both Steps closed through pure events and a Phase candidate independently accepted with its actual receipt")
       val owned = plan.copy(steps = plan.steps.map(s => s.copy(ownedPaths = s.ownedPaths :+ "docs/findings.md")))
@@ -662,6 +711,73 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       premature.shouldBe(a[Consequence.Failure[?]])
       s.cursor shouldBe 0
       s.completed shouldBe empty
+    }
+
+    "close only an adapter-proven EOF correction through the matching reviewed intent and normal reset" in {
+      Given("S1 consumed its selected repair and then obtained actual-shaped validation and independent review")
+      val seen = take(take(initial.acceptC(SemanticCompleted(work(initial), "ready")))
+        .acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+      val repair = take(seen.acceptC(RepairableChecksObserved(seen.candidate.get, Vector("focused-1"), "failed", directive)))
+      val accepted = reviewed(repair, oid('d'))
+      val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "eof-intent")))
+      val corrected = Commit(oid('c'), base.head, oid('e'))
+      When("the owning adapter supplies the narrow correction event after its typed byte/tree proof")
+      val next = take(pending.acceptC(StepEofCorrectionCommitObserved("eof-intent", corrected, Vector("src/one.scala"))))
+      Then("S2 starts through the ordinary close transition while the original review reference and prior targets remain intact")
+      next.stage shouldBe Stage.Implementation
+      next.cursor shouldBe 1
+      next.generation shouldBe pending.generation + 1
+      next.repairs shouldBe 0
+      next.ordinaryRepairs shouldBe 0
+      next.completed shouldBe Vector(ClosedStep("S1", corrected, "independent-review"))
+      next.candidate shouldBe empty
+      next.reviewEvidence shouldBe empty
+      pending.candidate shouldBe Some(Snapshot(base.head, oid('d')))
+      pending.checksReceipt shouldBe Some("native-check")
+      pending.reviewEvidence shouldBe Some("independent-review")
+      pending.repairs shouldBe 1
+      pending.ordinaryRepairs shouldBe 1
+    }
+
+    "reject correction events before review or intent and for unchanged trees or foreign scope" in {
+      Given("a selected reviewed S1 and its original candidate, before and after durable closure intent")
+      val accepted = reviewed(initial, oid('d'))
+      val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "eof-intent")))
+      val commit = Commit(oid('c'), base.head, oid('e'))
+      val event = StepEofCorrectionCommitObserved("eof-intent", commit, Vector("src/one.scala"))
+      When("the event is offered before its required native review and durable intent gates")
+      val before = Vector(initial, accepted).map(_.acceptC(event))
+      Then("neither stage can close a Step")
+      before.foreach(_.isSuccess shouldBe false)
+      val invalid = Vector(event.copy(intent = "foreign-intent"), event.copy(commit = commit.copy(parent = oid('f'))),
+        event.copy(commit = commit.copy(identity = base.head)), event.copy(commit = commit.copy(identity = "invalid")),
+        event.copy(commit = commit.copy(tree = oid('d'))), event.copy(paths = Vector.empty),
+        event.copy(paths = Vector("src/one.scala", "src/one.scala")), event.copy(paths = Vector("src/two.scala")),
+        event.copy(paths = Vector("../src/one.scala")), event.copy(paths = null),
+        event.copy(paths = (1 to 257).map(index => "src/one.scala/" + index).toVector))
+      invalid.zipWithIndex.foreach { (value, index) =>
+        Given("crossed correction event case " + index)
+        When("the pure Closing controller admits its assigned event")
+        val result = pending.acceptC(value)
+        Then("a changed tree alone supplies no ownership, parent or intent authority")
+        result.isSuccess shouldBe false
+        pending.completed shouldBe empty
+        pending.candidate shouldBe accepted.candidate
+        pending.reviewEvidence shouldBe accepted.reviewEvidence
+      }
+      Given("the whole Phase has reached its own separately reviewed PhaseClosing intent")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val seen = take(all.acceptC(CandidateObserved(Snapshot(oid('e'), oid('f')))))
+      val checked = take(seen.acceptC(ChecksObserved(seen.candidate.get, Vector("whole-phase"), "phase-checks", true)))
+      val reviewedphase = take(checked.acceptC(ReviewAdmitted(work(checked), checked.candidate.get,
+        "phase-checks", "phase-review", ReviewOutcome.Accept)))
+      val phase = take(reviewedphase.acceptC(ClosureIntentSaved(reviewedphase.candidate.get, "phase-intent")))
+      When("the Step-only correction event is offered to PhaseClosing")
+      val result = phase.acceptC(event.copy(intent = "phase-intent"))
+      Then("whole-Phase closure keeps its existing independent event")
+      result.isSuccess shouldBe false
+      phase.stage shouldBe Stage.PhaseClosing
+      phase.completed shouldBe all.completed
     }
 
     "revalidate and request a fresh full review after repair without reusing accepted evidence" in {

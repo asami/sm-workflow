@@ -70,6 +70,19 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   final case class Source(session: F.Session, input: S.Request, controller: O.State,
     from: InstanceRecord, result: ContinuationResult[S.Result], candidate: Option[GoalPhaseNativeCandidate.Saved],
     documents: Option[GoalPhaseDocumentSource.Bound] = None)
+
+  private[admission] def admitRevisionSourceC(controller: O.State, kind: String, result: S.Result,
+    documents: Option[GoalPhaseDocumentSource.Bound]): Consequence[Unit] = {
+    val phase = controller != null && controller.stage == O.Stage.Decision &&
+      controller.decisionSource.contains(O.Stage.PhaseReview) && kind == "ReviewPhase"
+    if (documents == null) F.invalid("ordered Human document Option is null")
+    else if (phase && documents.nonEmpty)
+      F.invalid("document-backed Phase corrective-Step Plan revision is unsupported; selected document bindings must be retained")
+    else if (result != null && result.outcome == "decision-needed" &&
+        (Set("ImplementStep", "RepairStep")(kind) || (phase && result.findings != null && result.findings.nonEmpty)))
+      Consequence.unit
+    else F.invalid("Plan revision requires an implementation, repair or whole-Phase review decision-needed result")
+  }
   private final case class Prepared(source: Source, question: WorkflowInteraction[Input, Nothing],
     intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, pending: InstanceRecord)
 
@@ -283,7 +296,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       input <- _input_c(source, selected, core)
       required <- requiredC
       bundle = ContextBundle(if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
-        else if (input.planRevision.nonEmpty) "Answer only the saved complete current-Step Plan revision proposal"
+        else if (input.planRevision.nonEmpty) "Answer only the saved complete bounded Plan revision proposal"
         else if (source.controller.pendingRepair.nonEmpty) "Answer only the exhausted selected Step repair window"
         else if (source.controller.documentDecision) "Answer only the retained document acceptance conflict"
         else "Answer only the retained ordered semantic decision", Vector(source.result.resultReference), Vector.empty,
@@ -335,6 +348,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           captured <- source.result.result.value.planRevision match {
             case None => Consequence.success(Option.empty[R.Captured])
             case Some(proposal) => for {
+              _ <- admitRevisionSourceC(source.controller, source.input.kind, source.result.result.value, source.documents)
               captured <- source.documents match {
                 case None => R.captureC(source.controller, proposal, d.projectAcceptance)
                 case Some(previous) => for {
@@ -345,7 +359,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
               checks = captured.plan.steps(source.controller.cursor).checks
               _ <- if (checks.nonEmpty && d.validationPolicy.exists(policy =>
                   checks.forall(identity => policy.checks.exists(_.identity == identity)))) Consequence.unit
-                else F.invalid("Plan revision checks must match the declared current-Step validation policy")
+                else F.invalid("Plan revision checks must match the declared selected-Step validation policy")
             } yield Some(captured)
           }
         } yield Input(source.input, source.result.resultReference, source.result.result.value, source.controller.decision.get,
@@ -370,8 +384,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             input.repairProgress == Some(GoalPhaseRepairProgress.snapshot(source.controller))))) Consequence.unit
         else F.invalid("saved Human question differs from its requesting semantic result")
       _ <- input.planRevision.fold(Consequence.unit) { captured => for {
-        _ <- if (Set("ImplementStep", "RepairStep")(source.input.kind) && input.result.outcome == "decision-needed") Consequence.unit
-          else F.invalid("Plan revision requires an ordinary implementation or repair decision")
+        _ <- admitRevisionSourceC(source.controller, source.input.kind, input.result, source.documents)
         _ <- R.validateDocumentsC(source.controller, captured, source.documents)
         // Saved questions consume their own acceptance selection, never later host defaults/check policy.
         _ <- R.adoptedC(source.controller, captured, "saved-proposal-eligibility")

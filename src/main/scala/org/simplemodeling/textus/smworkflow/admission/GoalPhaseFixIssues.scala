@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -104,6 +104,46 @@ private[smworkflow] object GoalPhaseFixIssues {
 
   def admitC(request: W.Request, result: W.Result): Consequence[Unit] =
     completedC(request, result, "semantic-admission").map(_ => ())
+
+  /** Eligibility only; this never settles an issue or supplies byte evidence. */
+  private[admission] def coveredIssuesC(previous: Option[State], request: W.Request,
+    result: W.Result, prior: GoalPhaseNativeReview.Prior): Consequence[Vector[Issue]] = for {
+    _ <- validateOptionC(previous)
+    _ <- _check(request != null && result != null && prior != null && request.selectedPlan != null &&
+      request.kind == "RepairStep" && request.stepIdentity != null && request.stepIdentity.nonEmpty &&
+      prior.kind == "ReviewStep" && prior.step == request.stepIdentity && prior.result != null &&
+      prior.result.outcome == "repair" && prior.result.findings != null && prior.result.findings.nonEmpty &&
+      result.outcome == "completed", "covered issue source is not its actual prior review and completed repair")
+    _ <- validateReportOptionC(result.issueReport)
+    current = previous.toVector.flatMap(_.issues).filter(issue => relevant(request, issue) && unresolved(issue))
+    entries = result.issueReport.toVector.flatMap(_.dispositions)
+    _ <- _check(current.nonEmpty && current.size == prior.result.findings.size &&
+      current.forall(issue => issue.source == "REVIEW" && issue.evidenceReference == prior.resultIdentity &&
+        issue.latestDisposition.contains("FIXED")) &&
+      current.map(_.summary).groupMapReduce(identity)(_ => 1)(_ + _) ==
+        prior.result.findings.groupMapReduce(identity)(_ => 1)(_ + _) &&
+      entries.map(_.issueIdentity).toSet == current.map(_.identity).toSet &&
+      entries.forall(entry => entry.disposition == "FIXED" && entry.findingOrdinal.isEmpty),
+      "covered completion must account for exactly the original unresolved REVIEW findings and actual FIXED dispositions")
+    ordered = prior.result.findings.foldLeft((Vector.empty[Issue], current)) { case ((saved, remaining), finding) =>
+      val issue = remaining.find(_.summary == finding).get
+      (saved :+ issue, remaining.filterNot(_.identity == issue.identity))
+    }._1
+  } yield ordered
+
+  /** Called only by the native completion owner after actual byte proof. No
+    * reviewer report or reviewer disposition is synthesized. */
+  private[admission] def completeCoveredC(previous: Option[State], request: W.Request,
+    result: W.Result, prior: GoalPhaseNativeReview.Prior, evidence: String): Consequence[Option[State]] = for {
+    _ <- _check(_text(evidence, 4096), "covered completion reference is absent")
+    selected <- coveredIssuesC(previous, request, result, prior)
+    state = previous.get
+    resolved = selected.foldLeft(state)((saved, issue) => _update(saved,
+      issue.copy(status = "RESOLVED", evidenceReference = evidence), evidence))
+    next = _movement_at(resolved, state.history.size, request.selectedPlan.repository,
+      request.stepIdentity, evidence, _correspondence(resolved, request.selectedPlan.repository, request.stepIdentity))
+    _ <- validateC(next)
+  } yield Some(next)
 
   private def _repair_c(request: W.Request, result: W.Result, state: State,
     entries: Vector[Disposition], evidence: String): Consequence[State] = for {

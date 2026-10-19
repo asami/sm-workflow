@@ -4,6 +4,7 @@ import io.circe.Json
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.RuntimeContext.{PropertyNameContext, PropertyNameStyle}
+import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,7 @@ import GoalPhaseDocumentPlan as P
 /** Pure proposal/controller examples with explicit fixture answer references.
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -62,8 +63,246 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
     val pending = _take(accepted.acceptC(O.ClosureIntentSaved(snapshot, "fixture-intent")))
     _take(pending.acceptC(O.StepCommitObserved("fixture-intent", O.Commit("c" * 40, _base.head, snapshot.tree))))
   }
+  private def _close_step(state: O.State, identity: String, tree: String): O.State = {
+    val implemented = _take(state.acceptC(O.SemanticCompleted(_key(state), "Specification-owned implementation")))
+    val snapshot = O.Snapshot(state.tipSnapshot.head, tree)
+    val observed = _take(implemented.acceptC(O.CandidateObserved(snapshot)))
+    val checked = _take(observed.acceptC(O.ChecksObserved(snapshot, state.plan.steps(state.cursor).checks,
+      "fixture-step-checks", true)))
+    val reviewed = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "fixture-step-checks",
+      "fixture-step-review", O.ReviewOutcome.Accept)))
+    val pending = _take(reviewed.acceptC(O.ClosureIntentSaved(snapshot, "fixture-step-intent")))
+    _take(pending.acceptC(O.StepCommitObserved("fixture-step-intent", O.Commit(identity, snapshot.head, tree))))
+  }
+  private def _two_closed_steps: O.State = _close_step(_close_first(_start), "f" * 40, "e" * 40)
+  private def _review_phase(state: O.State): O.State = {
+    val snapshot = state.tipSnapshot
+    val observed = _take(state.acceptC(O.CandidateObserved(snapshot)))
+    _take(observed.acceptC(O.ChecksObserved(snapshot, state.plan.phaseChecks, "fixture-phase-checks", true)))
+  }
+  private def _corrective(state: O.State): O.Plan = state.plan.copy(revision = "2", effectiveAcceptance = None,
+    steps = state.plan.steps :+ O.Step("S3", "Correct the actual cross-Step integration finding",
+      Vector("src/one.scala", "src/two.scala"), state.plan.steps.map(_.identity), Vector("corrective-check"), Some(_assignment)))
+  private def _phase_result(state: O.State): S.Result = S.Result("decision-needed",
+    "The combined Steps need one bounded corrective Step", Vector("The second Step breaks the first Step integration"),
+    acceptance = Some(A.Report(A.applicable(state.plan.effectiveAcceptance.get, "ReviewPhase").filter(_.required).map(condition =>
+      A.Observation(condition.identity, if (condition.scope == "phase") "unsatisfied" else "satisfied",
+        if (condition.scope == "phase") "The second Step breaks the first Step integration" else "Observed selected behavior")), Vector.empty)),
+    planRevision = Some(_proposal(_corrective(state))))
+  private def _review_request(state: O.State): S.Request = {
+    val work = state.next.asInstanceOf[O.Semantic]
+    S.Request("specification-instance", "17", work.key.kind.toString, work.key.step, work.key.generation,
+      work.purpose, state.plan, state.base, state.completed, state.candidate, state.checksReceipt, None,
+      review = Some(GoalPhaseNativeReview.Context(Vector("src/one.scala", "src/two.scala"),
+        "Specification-owned current combined diff", Vector.empty)))
+  }
+  private def _submitted(request: S.Request, result: S.Result): ContinuationResult[S.Result] = {
+    val handle = NativeHostHumanEvidenceFixture.goalQuestion.handle
+    val reference = ContextReference("specification-phase-review-result", "18")
+    ContinuationResult(handle, StateMachineRunIdentity("specification-run"), ContinuationIdentity("specification-phase-review"),
+      StateMachineRevision("18"), ContextSnapshot(handle.workflowRevision.value), TypedValue(S.resultCodec.typeIdentity, result),
+      reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-independent-reviewer")))
+  }
 
   "Pure complete Plan revision" should {
+    "retain the actual integrated Phase proposal and adopt exactly one corrective Step without reopening accepted Steps" in {
+      Given("two pure closed Steps, their real controller PhaseReview frontier and an actual-shaped integrated finding with a complete raw proposal")
+      val closed = _two_closed_steps
+      val review = _review_phase(closed)
+      val result = _phase_result(review)
+      val request = _review_request(review)
+      val submitted = _submitted(request, result)
+      When("the native result becomes a Decision, its full actual-shaped report is retained and an explicit fixture answer selects the saved capture")
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "fixture-phase-review", review))
+      val retained = _take(GoalPhaseNativeReview.retainPriorC(Vector.empty, request, submitted))
+      val captured = _take(captureC(paused, result.planRevision.get, Some(_project)))
+      val input = GoalPhaseOrderedHumanDecision.Input(request, submitted.resultReference, result, paused.decision.get,
+        Some(GoalPhaseRepairProgress.snapshot(paused)), Some(captured))
+      val saved = GoalPhaseOrderedHumanDecision.inputCodec.decode(GoalPhaseOrderedHumanDecision.inputCodec.encode(input))
+      val adopted = _take(adoptedC(paused, saved.toOption.get.planRevision.get, "fixture:actual-shaped-human-answer"))
+      Then("the actual result, finding, proposal and original target survive while only the appended Step starts at a new generation")
+      retained shouldBe Vector(GoalPhaseNativeReview.Prior("ReviewPhase", None, review.generation,
+        review.candidate.get, review.checksReceipt.get, submitted.resultReference.identity, submitted.resultReference.revision, result))
+      retained.head.asJson.as[GoalPhaseNativeReview.Prior] shouldBe Right(retained.head)
+      retained.head.result.planRevision shouldBe result.planRevision
+      saved shouldBe Right(input)
+      GoalPhaseOrderedHumanDecision.admitRevisionSourceC(paused, "ReviewPhase", result, None) shouldBe Consequence.unit
+      paused.stage shouldBe O.Stage.Decision
+      paused.decisionSource shouldBe Some(O.Stage.PhaseReview)
+      paused.plan shouldBe closed.plan
+      adopted.stage shouldBe O.Stage.Implementation
+      adopted.cursor shouldBe closed.plan.steps.size
+      adopted.plan.steps.take(adopted.cursor) shouldBe closed.plan.steps
+      adopted.plan.steps.last shouldBe result.planRevision.get.plan.steps.last
+      adopted.plan.steps.last.dependencies.toSet shouldBe Set("S1", "S2")
+      adopted.plan.acceptance shouldBe paused.plan.acceptance
+      adopted.plan.effectiveAcceptance shouldBe paused.plan.effectiveAcceptance
+      adopted.base shouldBe closed.base
+      adopted.completed shouldBe closed.completed
+      adopted.completed.map(_.step) shouldBe Vector("S1", "S2")
+      adopted.completed.map(_.commit.identity) shouldBe Vector("c" * 40, "f" * 40)
+      adopted.completed.map(_.review) shouldBe closed.completed.map(_.review)
+      adopted.generation shouldBe paused.generation + 1
+      adopted.repairs shouldBe paused.repairs
+      adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      adopted.repositoryReceipt shouldBe paused.repositoryReceipt
+      adopted.candidate shouldBe empty
+      adopted.checksReceipt shouldBe empty
+      adopted.reviewEvidence shouldBe empty
+      adopted.closureIntent shouldBe empty
+      adopted.decision shouldBe empty
+      adopted.decisionSource shouldBe empty
+      adopted.repairDirective shouldBe empty
+      adopted.pendingRepair shouldBe empty
+      adopted.next.asInstanceOf[O.Semantic].key.step shouldBe Some("S3")
+      adopted.next.asInstanceOf[O.Semantic].key.kind shouldBe O.WorkKind.ImplementStep
+
+      Given("the adopted corrective Step still owes ordinary semantic completion, selected checks, independent review and a new commit")
+      When("the pure controller consumes those normal gates and the next whole-Phase check")
+      val corrected = _close_step(adopted, "1" * 40, "2" * 40)
+      val rereview = _review_phase(corrected)
+      val priorcontext = _take(GoalPhaseNativeReview.priorReviewsForC(retained, "ReviewPhase", None))
+      Then("the original commits remain exact and PhaseReview returns against the combined tip with the actual integrated finding available")
+      corrected.completed.take(2) shouldBe closed.completed
+      corrected.completed.last shouldBe O.ClosedStep("S3", O.Commit("1" * 40, "f" * 40, "2" * 40), "fixture-step-review")
+      corrected.repairs shouldBe 0
+      corrected.ordinaryRepairs shouldBe 0
+      rereview.stage shouldBe O.Stage.PhaseReview
+      rereview.base shouldBe _base
+      rereview.candidate shouldBe Some(O.Snapshot("1" * 40, "2" * 40))
+      rereview.next.asInstanceOf[O.Semantic].key.kind shouldBe O.WorkKind.ReviewPhase
+      priorcontext shouldBe retained
+    }
+
+    "reject crossed completed Plans acceptance policies paths dependencies Step counts and ineligible amendment frontiers" in {
+      Given("an integrated Phase decision with two accepted Steps and an exact one-Step corrective proposal")
+      val review = _review_phase(_two_closed_steps)
+      val result = _phase_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "fixture-phase-review", review))
+      val next = _corrective(paused)
+      val appended = next.steps.last
+      val invalid = Vector(next.copy(revision = paused.plan.revision), next.copy(identity = "other-plan"),
+        next.copy(phase = "other-phase"), next.copy(repository = "other-repository"), next.copy(repairLimit = 3),
+        next.copy(phaseChecks = Vector("other-phase-check")), next.copy(phaseReviewClassification = None),
+        next.copy(acceptance = Some(_adoption.copy(usage = "Retrospective usage"))),
+        next.copy(acceptance = Some(_adoption.copy(conditions = Vector.empty))),
+        next.copy(steps = next.steps.updated(0, next.steps.head.copy(purpose = "Changed accepted purpose"))),
+        next.copy(steps = next.steps.updated(1, next.steps(1).copy(checks = Vector("changed-accepted-check")))),
+        next.copy(steps = next.steps.take(2)), next.copy(steps = next.steps :+ appended.copy(identity = "S4")),
+        next.copy(steps = next.steps.updated(2, appended.copy(identity = "S2"))),
+        next.copy(steps = next.steps.updated(2, appended.copy(ownedPaths = Vector("src")))),
+        next.copy(steps = next.steps.updated(2, appended.copy(ownedPaths = Vector("src/one.scala-other")))),
+        next.copy(steps = next.steps.updated(2, appended.copy(dependencies = Vector("S1")))),
+        next.copy(steps = next.steps.updated(2, appended.copy(checks = Vector.empty))))
+      val changedproject = _project.copy(conditions = _project.conditions.updated(2,
+        _project.conditions(2).copy(description = "Changed accepted Phase condition")))
+      val accepted = _take(review.acceptC(O.ReviewAdmitted(_key(review), review.candidate.get,
+        review.checksReceipt.get, "fixture-accepted-phase", O.ReviewOutcome.Accept)))
+      val pending = _take(accepted.acceptC(O.ClosureIntentSaved(accepted.candidate.get, "fixture-phase-intent")))
+      val uncertain = _decision(pending)
+      val documentconflict = _take(review.acceptC(O.DocumentConflictObserved(Vector("phase-scope"))))
+      When("capture sees every crossed boundary, uncertain closure, document conflict or ordinary unpaused frontier")
+      val refused = invalid.map(plan => captureC(paused, _proposal(plan), Some(_project))) ++
+        Vector(captureC(paused, _proposal(next), Some(changedproject)),
+          captureC(review, _proposal(next), Some(_project)), captureC(uncertain, _proposal(next), Some(_project)),
+          captureC(documentconflict, _proposal(next), Some(_project)),
+          captureC(_decision(_start), _proposal(next), Some(_project)))
+      val saved = _take(captureC(paused, _proposal(next), Some(_project)))
+      val rejected = _take(paused.acceptC(O.DecisionResumptionAdmitted("fixture:reject-corrective-proposal")))
+      Then("none rewrites the closed prefix or selected contract and rejection resumes only the original whole-Phase review")
+      refused.foreach(_ shouldBe a[Consequence.Failure[?]])
+      paused.refreshedC(saved.plan, issued = false) shouldBe a[Consequence.Failure[?]]
+      rejected.stage shouldBe O.Stage.PhaseReview
+      rejected.plan shouldBe paused.plan
+      rejected.completed shouldBe paused.completed
+      rejected.base shouldBe paused.base
+      rejected.repairs shouldBe paused.repairs
+      rejected.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      captureC(paused, _proposal(next.copy(steps = next.steps.updated(2,
+        appended.copy(dependencies = Vector("S2", "S1"), ownedPaths = Vector("src/one.scala/nested"))))), Some(_project)).isSuccess shouldBe true
+    }
+
+    "refuse corrective adoption at the Step bound or generation overflow without refunding retained counters" in {
+      Given("a pure 64-Step closed Plan at PhaseReview and a separate two-Step decision fixture at the maximum generation")
+      val steps = (1 to 64).map(index => O.Step("S" + index, "Selected bounded Step " + index,
+        Vector("src/one.scala"), if (index == 1) Vector.empty else Vector("S" + (index - 1)), Vector("selected-check"))).toVector
+      val initial = _take(O.startC(_take(A.captureC(Some(_project), _raw.copy(steps = steps))), _base))
+      val closed = (1 to 64).foldLeft(initial)((state, index) =>
+        _close_step(state, f"$index%040x", f"${index + 1024}%040x"))
+      val fullreview = _review_phase(closed)
+      val fullpaused = _take(fullreview.acceptC(O.ReviewAdmitted(_key(fullreview), fullreview.candidate.get,
+        fullreview.checksReceipt.get, "fixture-full-plan-finding", O.ReviewOutcome.Human)))
+      val review = _review_phase(_two_closed_steps)
+      val result = _phase_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "fixture-phase-review", review))
+      // Pure boundary fixture only; no persisted state, Human or provider is changed.
+      val generationfield = classOf[O.State].getDeclaredField("generation")
+      generationfield.setAccessible(true)
+      val repairfield = classOf[O.State].getDeclaredField("repairs")
+      repairfield.setAccessible(true)
+      repairfield.setInt(paused, 1)
+      val ordinaryfield = classOf[O.State].getDeclaredField("ordinaryRepairs")
+      ordinaryfield.setAccessible(true)
+      ordinaryfield.setInt(paused, 1)
+      When("explicit fixture adoption retains consumed counters and capture attempts a 65th Step or generation overflow")
+      val captured = _take(captureC(paused, result.planRevision.get, Some(_project)))
+      val adopted = _take(adoptedC(paused, captured, "fixture:retained-counters-answer"))
+      generationfield.setLong(paused, Long.MaxValue)
+      val fullplan = fullpaused.plan.copy(revision = "2", effectiveAcceptance = None,
+        steps = fullpaused.plan.steps :+ O.Step("S65", "One too many", Vector("src/one.scala"), steps.map(_.identity), Vector("corrective-check")))
+      val refused = Vector(captureC(fullpaused, _proposal(fullplan), Some(_project)),
+        captureC(paused, result.planRevision.get, Some(_project)))
+      Then("both fail with every original closed commit and consumed count retained")
+      refused.foreach(_ shouldBe a[Consequence.Failure[?]])
+      fullpaused.completed.size shouldBe 64
+      paused.generation shouldBe Long.MaxValue
+      paused.repairs shouldBe 1
+      paused.ordinaryRepairs shouldBe 1
+      paused.completed shouldBe review.completed
+      adopted.repairs shouldBe 1
+      adopted.ordinaryRepairs shouldBe 1
+      adopted.completed shouldBe review.completed
+    }
+
+    "admit only actual Phase decision findings with a proposal and clearly refuse the document-backed additional branch" in {
+      Given("a real pure PhaseReview frontier and a complete corrective proposal, plus an ordinary StepReview frontier")
+      val phase = _review_phase(_two_closed_steps)
+      val result = _phase_result(phase)
+      val implemented = _take(_start.acceptC(O.SemanticCompleted(_key(_start), "First fixture Step implemented")))
+      val snapshot = O.Snapshot(_base.head, "d" * 40)
+      val observed = _take(implemented.acceptC(O.CandidateObserved(snapshot)))
+      val step = _take(observed.acceptC(O.ChecksObserved(snapshot, _raw.steps.head.checks, "fixture-check", true)))
+      val dependency = GoalPhaseDependencyScope.Proposal("dependency-proposal", "1", "REVIEW",
+        GoalPhaseDependencyScope.Component("org.simplemodeling.workflow", "sm-workflow", "workflow-code"),
+        GoalPhaseDependencyScope.Component("org.simplemodeling.contracts", "sm-workflow", "workflow-code"),
+        ContextReference("usage-contract", "1"), "A separately bounded dependency finding", Vector("src/one.scala"),
+        Vector("Preserve the selected dependency contract"), Vector(ContextReference("dependent-work", "1")), Vector.empty)
+      val invalid = Vector(result.copy(outcome = "accept", findings = Vector.empty), result.copy(outcome = "repair"),
+        result.copy(findings = Vector.empty), result.copy(findings = Vector(" ")), result.copy(planRevision = null),
+        result.copy(planRevision = Some(null)), result.copy(dependencyProposal = Some(dependency)))
+      When("review admission and prior retention consume each result shape and Human capture checks the actual document selection")
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "fixture-phase-review", phase))
+      val refused = invalid.map(value => GoalPhaseNativeReview.completedStateC(value, "fixture-review", phase)) ++
+        invalid.map(value => GoalPhaseNativeReview.retainPriorC(Vector.empty, _review_request(phase), _submitted(_review_request(phase), value))) ++
+        invalid.map(value => ThreeWorkflowHostEvidencePorts.goalReviewBindingC(null, _review_request(phase),
+          _submitted(_review_request(phase), value))) ++
+        Vector(GoalPhaseNativeReview.completedStateC(result, "fixture-step-review", step))
+      val documentrefused = GoalPhaseOrderedHumanDecision.admitRevisionSourceC(paused, "ReviewPhase", result,
+        Some(_documents(firstChecked = true)))
+      val captured = _take(captureC(paused, result.planRevision.get, Some(_project)))
+      val retaineddocumentrefused = GoalPhaseOrderedHumanDecision.admitRevisionSourceC(paused, "ReviewPhase", result,
+        Some(_documents(firstChecked = true)))
+      Then("only the finding-backed Phase decision is eligible and saved document bindings cannot be discarded or silently imported")
+      refused.foreach(_ shouldBe a[Consequence.Failure[?]])
+      documentrefused shouldBe a[Consequence.Failure[?]]
+      documentrefused.toString should include ("document-backed Phase corrective-Step Plan revision is unsupported")
+      retaineddocumentrefused shouldBe a[Consequence.Failure[?]]
+      validateDocumentsC(paused, captured, Some(_documents(firstChecked = true))) shouldBe a[Consequence.Failure[?]]
+      validateDocumentsC(paused, captured, None) shouldBe Consequence.unit
+      GoalPhaseOrderedHumanDecision.admitRevisionSourceC(paused, "ReviewStep", result, None) shouldBe a[Consequence.Failure[?]]
+      S.resultCodec.decode(S.resultCodec.encode(result.copy(dependencyProposal = Some(dependency)))) shouldBe a[Left[?, ?]]
+    }
+
     "roundtrip optional saved documents and refuse unknown absent null malformed nested fields and invalid membership" in {
       Given("an eligible document-bound proposal and the exact selected source bindings and unchecked acceptance")
       val paused = _decision(_start)

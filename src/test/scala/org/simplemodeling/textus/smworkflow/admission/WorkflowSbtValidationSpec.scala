@@ -13,7 +13,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -29,6 +29,50 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "retain confirmed nonexecution for every selected kind without a product result or repair" in {
+      Given("actual-shaped typed NotStarted results for Compile, Test and TestOnly with no process captures")
+      val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
+        Kind.TestOnly -> SbtOperation.TestOnly)
+      val results = kinds.map { (kind, operation) =>
+        val result = _result(operation, ProcessExecutionTermination.NotStarted)
+        kind -> result.copy(processResult = result.processResult.copy(stdout = _capture(""), stderr = _capture(""), elapsedMillis = 0L))
+      }
+      When("the typed result boundary retains each actual stopped receipt and its canonical wire facts")
+      val receipts = results.map { (kind, result) => take(V.sbtReceiptC("selected", kind, result)) }
+      Then("not-executed stays distinct from failed or incomplete and cannot pass or allocate a semantic repair")
+      receipts.zip(kinds).foreach { (receipt, selected) =>
+        receipt.termination shouldBe "not-started"
+        receipt.exitCode shouldBe None
+        receipt.stdout shouldBe ""
+        receipt.stderr shouldBe ""
+        receipt.sbt shouldBe Some(Facts(selected._1, Outcome.NotExecuted, None, None))
+        receipt.asJson.as[V.Receipt] shouldBe Right(receipt)
+        receipt.sbt.get.asJson.hcursor.get[String]("outcome").toOption shouldBe Some("not-executed")
+        V.productSuccessful(receipt, selected._1) shouldBe false
+        val payload = GoalPhaseNativeValidation.Payload("1", "S1", GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40),
+          Vector(GoalPhaseNativeValidation.Check("selected", 1, selected._1)), Vector.empty, None, stopped = Vector(receipt))
+        GoalPhaseNativeValidation.repairable(payload) shouldBe false
+      }
+    }
+
+    "keep launch failure and timeout incomplete for every selected kind" in {
+      Given("actual-shaped LaunchFailed and TimedOut typed results for each selected SBT operation")
+      val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
+        Kind.TestOnly -> SbtOperation.TestOnly)
+      When("native receipts project those actual uncertain terminations")
+      val receipts = kinds.flatMap { (kind, operation) =>
+        Vector(ProcessExecutionTermination.LaunchFailed, ProcessExecutionTermination.TimedOut).map(termination =>
+          take(V.sbtReceiptC("selected", kind, _result(operation, termination))))
+      }
+      Then("each remains indeterminate and incomplete without becoming confirmed nonexecution")
+      receipts.foreach { receipt =>
+        receipt.termination shouldBe "indeterminate"
+        receipt.exitCode shouldBe None
+        receipt.sbt.get.outcome shouldBe Outcome.Incomplete
+        V.productSuccessful(receipt, receipt.sbt.get.kind) shouldBe false
+      }
+    }
+
     "preserve actual Compile success failure and timeout through the canonical receipt codec" in {
       Given("actual typed Compile results with zero, nonzero and timed-out termination")
       val results = Vector(_result(SbtOperation.Compile), _result(SbtOperation.Compile, ProcessExecutionTermination.Exited(7)),

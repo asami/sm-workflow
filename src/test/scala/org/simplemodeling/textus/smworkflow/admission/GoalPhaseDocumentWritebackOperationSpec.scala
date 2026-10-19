@@ -29,7 +29,6 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  *  version Oct. 17, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -62,7 +61,8 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), goalPaths = goal.candidatePaths,
-      goalMessages = goal.closure.programs.map(program => "Goal Step " + program.step))
+      goalMessages = goal.closure.programs.map(program => "Goal Step " + program.step),
+      goalSelections = goal.closure.programs.map(program => _sourcepaths :+ (program.step + ".txt")))
     TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
   }
 
@@ -186,7 +186,8 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         prepared <- NativeHostReviewPreparation.goalC(displayed.get.work.get.review.get.hostContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
             GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
-            GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None),
+            GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), result.evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))

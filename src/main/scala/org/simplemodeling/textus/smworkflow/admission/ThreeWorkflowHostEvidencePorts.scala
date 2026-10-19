@@ -224,6 +224,13 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
       _ <- GoalPhaseFixIssues.validateReportOptionC(submitted.result.value.issueReport)
       _ <- GoalPhaseFindingRecording.admitObservationsC(input.kind, submitted.result.value.reviewObservations)
       _ <- GoalPhaseDependencyScope.admitResultC(input.kind, submitted.result.value.outcome, submitted.result.value.dependencyProposal)
+      _ <- GoalPhaseNativeReview.admitPlanRevisionC(input.kind, submitted.result.value)
+      _ <- GoalPhaseNativeReviewCompletion.validateOptionC(submitted.result.value.completionConditions)
+      _ <- if (input.stepIdentity != null && (submitted.result.value.completionConditions.isEmpty ||
+          input.stepIdentity.exists(identity => input.selectedPlan.steps.exists(_.identity == identity)))) Consequence.unit
+        else Consequence.stateConflict("Goal completion conditions have no actual selected Step ownership")
+      _ <- GoalPhaseNativeReviewCompletion.admitResultC(input.kind, submitted.result.value,
+        input.stepIdentity.flatMap(identity => input.selectedPlan.steps.find(_.identity == identity)).map(_.ownedPaths))
       _ <- if (input.review != null && input.review.forall(context => context != null && context.metadata != null &&
           context.metadata.forall(batch => GoalPhaseNativeMetadata.bindC(batch).isSuccess))) Consequence.unit
         else Consequence.stateConflict("Goal review validation metadata is invalid")
@@ -251,7 +258,9 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
         val acceptance = result.acceptance.fold(fields)(value => fields.add("acceptance", value.asJson))
         val issues = result.issueReport.fold(acceptance)(value => acceptance.add("issueReport", value.asJson))
         val observations = result.reviewObservations.fold(issues)(value => issues.add("reviewObservations", value.asJson))
-        result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
+        val dependency = result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
+        val proposed = result.planRevision.fold(dependency)(value => dependency.add("planRevision", value.asJson))
+        result.completionConditions.fold(proposed)(value => proposed.add("completionConditions", value.asJson))
       }
   def repositoryReviewBindingC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
     submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] = {

@@ -1,10 +1,12 @@
-# Explicit current-Step Plan revision
+# Explicit bounded Plan revision
 
 `GoalPhasePlanRevision` owns the pure proposal/capture/adoption boundary for
 PHASE-6.2 TS03. H2/H3 connect it to ordinary semantic Submit, actual saved Human
 questions, independent evidence admission, atomic Human completion and the sole
 native same-Session history walker. Specifications use explicit fixture-owned
 answers; they establish neither genuine Human adoption nor Step acceptance.
+PHASE-6.3 additionally permits one explicit corrective Step after an integrated
+whole-Phase finding, through the same saved question and actual Human adoption.
 
 The connected route is a raw complete Plan proposal, followed by the
 actual question owner's captured Human question, explicit host-admitted adoption
@@ -62,10 +64,11 @@ checks. It performs no reads, writes or reconstruction of prior configuration.
 
 `adoptedC(controller, captured, evidence)` validates the saved capture and passes
 the actual host-admitted answer reference to `State.adoptRevisionC`. Adoption
-requires a current unclosed Step at a semantic Decision sourced from
+ordinarily requires a current unclosed Step at a semantic Decision sourced from
 Implementation, Repair or Review, with no document conflict, pending exhausted
 repair or closure intent, and a generation below the maximum. Ordinary unpaused
-work, uncertain native effects, whole-Phase frontiers and Closed are ineligible.
+work, uncertain native effects and Closed are ineligible. The sole additional
+whole-Phase eligibility branch is specified below.
 An exhausted repair window cannot be renewed through adoption.
 
 The complete proposed Plan must have a new revision. Plan identity, Phase,
@@ -98,12 +101,83 @@ Resume cannot impersonate Plan adoption. Existing live `refreshedC` behavior is
 also unchanged. This boundary adds no generic Event, reset, native action or
 commit. The parent owns focused validation and integrated review/acceptance.
 
+## Corrective Step after an integrated Phase finding
+
+An actual independent `ReviewPhase` may report `decision-needed`, a genuine
+nonempty integration finding and one complete raw `planRevision` proposal.
+The proposal is business decision content in the actual independent result.
+Its exact owning Proposal JSON, including reason, revision and proposed Step
+meaning, participates in the review evidence verdict; a different proposal
+cannot reuse that attestation. Present null or malformed data is rejected.
+An absent historical proposal remains absent. No entire request, state, provider
+snapshot or hash certificate is added. A `dependencyProposal` and `planRevision`
+cannot accompany the same result. Existing acceptance observations, issue
+coverage, finding recording and independence requirements still apply.
+
+The ordinary review outcome becomes `ReviewOutcome.Human` and then Decision;
+neither the proposal nor its independent admission adopts a Plan. The native
+owner retains the complete actual-shaped Phase report, including its proposal,
+original candidate, checks, generation and actual result reference, in prior
+business context. Retention and reconstruction keep their existing provenance
+and bounds. The actual Human question owner captures the proposal against the
+selected host acceptance before offering adoption.
+
+The extra `State.adoptRevisionC` branch requires Decision sourced from
+PhaseReview, no document conflict, pending repair or closure intent, a cursor
+equal to both the old Step count and completed Step count, a generation below
+`Long.MaxValue`, and fewer than 64 old Steps. The proposed complete valid Plan
+must use a fresh revision and retain exactly the same identity, Phase,
+repository, repair limit, Phase checks, Phase review classification, raw
+acceptance declaration and captured effective acceptance. Every old Step remains
+the exact prefix. Exactly one appended Step has a distinct identity, every old
+Step identity as its exact dependency set, nonempty checks and nonempty owned
+paths each equal to or nested under an original owned-path scope. No completed
+Step, accepted requirement, repository or permission can change.
+
+This additional branch requires an explicit Plan with `Source.documents = None`.
+Document-backed Phase corrective-Step amendment is unsupported and returns the
+ordinary precise limitation without rereading, removing or rewriting selected
+document bindings or falling back to an explicit Plan. Existing document-backed
+current-Step revision remains available under its unchanged rules.
+
+Fresh capture checks the appended Step's selected checks against the already
+declared host validation policy. The host must also have predeclared the needed
+closure ordinal, owned paths and checks; Plan adoption extends no host authority.
+Saved questions retain their exact proposal, captured acceptance, actual result
+and history rather than consulting later defaults. Genuine host-admitted
+`AdoptPlanRevision` uses the existing `human-plan-revision-adopted`
+Decision-to-Implementation transition. Reject retains the old PhaseReview
+decision source and resumes only that existing review through its ordinary
+resumption transition. Defer and Cancel keep their current paused semantics.
+An invocation of the enclosing Phase is not the actual Human answer.
+
+Adoption retains the original Session/base, every completed Step identity,
+commit and review reference, issue history and both consumed repair counts.
+It increments generation once, keeps the cursor at the old Step count and
+starts only the appended Step at Implementation, clearing the ordinary
+candidate/check/review/intent/decision/pending fields. It does not refund the
+predecessor's current repair counters. The normal corrective Step closure
+performs its existing counter reset. Fresh semantic completion, inspection,
+selected checks, independent Step review and a real new Step commit must all
+precede the next whole-Phase review. Accepted commits are never reopened.
+No automatic refresh, new Stage, WorkKind, CML transition or repair engine is
+introduced by this branch.
+
+Review instructions keep `ReviewStep` unable to propose or adopt revisions and
+keep `ReviewPhase` read-only. Affected re-review consumes actual prior reports
+and findings, the current combined diff/checks and adopted requirements. It
+reuses unrelated still-applicable judgment and assesses remaining integration
+findings and regressions. It introduces no per-edit reviewer, approval bypass or
+automatic rerun of all Step semantics.
+
 ## Ordinary semantic proposal and actual saved question
 
 `GoalPhaseNativeWork.Result` carries trailing optional `planRevision: Proposal`.
-Only ordinary `ImplementStep` or `RepairStep` `decision-needed` results may
-include it. Completed results refuse it. Every review outcome refuses nonempty
-or null proposal options; reviewers report findings for a later repair proposal.
+Ordinary `ImplementStep` or `RepairStep` `decision-needed` results may
+include it. Completed results refuse it. `ReviewStep`, review `accept` and review
+`repair` refuse it. Only `ReviewPhase` `decision-needed` with a genuine nonempty
+finding may additionally carry a corrective-Step proposal. Null or malformed
+proposal presence remains invalid for every kind.
 Existing acceptance, issue report and Fix assessment requirements still apply.
 Proposal presence supplies no correction or `FIXED` disposition. Owning codecs
 omit absence and reject present null or malformed values.
@@ -124,6 +198,8 @@ Captured business input and offers exactly `AdoptPlanRevision`,
 retain their exact existing choice vectors. Selected documents are saved only
 through the bounded current-Step capture above. An ineligible proposal cannot
 produce a question or a consent claim.
+The additional PhaseReview corrective-Step question requires absent selected
+documents; it never changes the existing document-backed current-Step route.
 
 Advance, retained readback and Human completion load the actual issued question
 before preparing their state. Existing questions validate and consume their
@@ -179,6 +255,14 @@ review and actual Step commit remain mandatory gates.
 
 `GoalPhasePlanRevisionSpec` covers public naming/collision refusal, semantic
 result restrictions and saved-question codecs in addition to H1 pure guards.
+Its Phase 6.3 pure cases close two Steps, retain the complete actual-shaped
+integrated decision and proposal, capture an explicit fixture answer, adopt
+exactly one bounded corrective Step, and pass through the normal controller
+gates to PhaseReview again. They cover protected prefix/acceptance/policy/scope
+refusals, rejection, document-backed limits, the Step bound and generation
+overflow. `NativeHostReviewScopeSpec` covers exact typed proposal retention,
+changed reason/revision/Step evidence refusal and malformed presence while
+preserving historical absence.
 Its H3 cases cover strict optional and nested saved document codecs, eligible
 current acceptance revision with a completed prefix and actual progress
 projection, and refusal of changed source, membership, checked flags, unselected
@@ -225,3 +309,9 @@ document authoring and genuine Human-selected adoption remain incomplete. H2/H3
 fixture wiring closes neither TS01/TS03 nor the protected FIX Step; RECORD,
 DECISION and integrated Step acceptance remain required. Full-suite
 ownership remains Phase 6.3 and CBD ownership remains Phase 10.
+This corrective-Step implementation and targeted specifications do not establish
+actual installed integration, a real cross-Step finding, genuine Human
+adoption, completed corrective work, affected Phase re-review or final Phase
+closure. Those installed acceptance obligations and the parent's comprehensive
+development Phase review and aggregate validation remain owed in the same
+active Phase 6.3 Goal.

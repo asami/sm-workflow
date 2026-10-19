@@ -6,7 +6,6 @@ import NativeHostEvidence.Purpose
 
 /** Selected independent review targets; native completion owns result validity.
   * @since   Oct.  8, 2026
-  *  version Oct. 16, 2026
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -21,6 +20,12 @@ private[smworkflow] object NativeHostReviewScope {
       input <- at(body, "target")
       target <- if (purpose == Purpose.GoalReview) goal(input) else repository(input)
       result <- at(body, "result").flatMap(resultTarget(_, purpose))
+      _ <- if (purpose != Purpose.GoalReview) Right(()) else {
+        val conditions = result.hcursor.downField("verdict").downField("completionConditions").focus
+        Either.cond(conditions.isEmpty || (input("workKind").flatMap(_.asString).contains("ReviewStep") &&
+          input("step").flatMap(_.asString).exists(_.nonEmpty)), (),
+          "Completion conditions require an assigned Step review")
+      }
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "attestation" -> Json.obj(
       "kind" -> Json.fromString(if (purpose == Purpose.GoalReview) "goal-review" else "repository-review"),
       "target" -> target, "result" -> result))
@@ -105,11 +110,25 @@ private[smworkflow] object NativeHostReviewScope {
       case None => Right(None)
       case Some(value) => value.as[GoalPhaseDependencyScope.Proposal].left.map(_.message).map(value => Some(value.asJson))
     }
+    revision <- input("planRevision") match {
+      case None => Right(None)
+      case Some(value) => value.as[GoalPhasePlanRevision.Proposal].left.map(_.message).map(value => Some(value.asJson))
+    }
+    conditions <- input("completionConditions") match {
+      case None => Right(None)
+      case Some(value) => for {
+        parsed <- value.as[GoalPhaseNativeReviewCompletion.Conditions].left.map(_.message)
+        _ <- Either.cond(outcome == "repair" && findings.nonEmpty && findings.forall(_.trim.nonEmpty) && parsed.paths.size == findings.size &&
+          revision.isEmpty && dependency.isEmpty, (), "Completion conditions contradict the original repair verdict")
+      } yield Some(parsed.asJson)
+    }
     selected = Json.obj("outcome" -> Json.fromString(outcome), "findings" -> Json.fromValues(findings.map(Json.fromString)), "repairSummary" -> summary)
     quality = acceptance.fold(selected)(value => selected.mapObject(_.add("acceptance", value)))
     reported = issues.fold(quality)(value => quality.mapObject(_.add("issueReport", value)))
     observed = observations.fold(reported)(value => reported.mapObject(_.add("reviewObservations", value)))
-  } yield dependency.fold(observed)(value => observed.mapObject(_.add("dependencyProposal", value)))
+    proposed = dependency.fold(observed)(value => observed.mapObject(_.add("dependencyProposal", value)))
+    revised = revision.fold(proposed)(value => proposed.mapObject(_.add("planRevision", value)))
+  } yield conditions.fold(revised)(value => revised.mapObject(_.add("completionConditions", value)))
 
   private def _effective(input: JsonObject): Either[String, Option[Json]] = input("effectiveAcceptance").filterNot(_.isNull) match {
     case None => Right(None)
