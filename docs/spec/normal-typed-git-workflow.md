@@ -20,7 +20,8 @@ JSON with exactly `schema`, `programs`, `grants`, `workspaces`,
 `workspaceGrants`, `sbtPrograms` and `gitPrograms`. Bootstrap, host admission
 and private codecs belong to CNCF. A Git declaration contains target, operation,
 capability, identity, gitExecutable, localBranch, remote, remoteBranch, endpoint,
-commitIdentity, selectionId, selectedPath, commitMessage, limits and environment.
+commitIdentity, selectionId, selectedPath, commitMessage, limits and environment;
+the three bounded Goal closure kinds also require `selectedPaths` as described below.
 Unused optional fields are explicitly null. Selected path/message fields occur
 only on compatible kinds; semantic capabilities and selection keys are unique.
 The canonical repository directory exists before bootstrap.
@@ -55,7 +56,7 @@ path ownership and workflow judgment without parsing Git stdout again.
 | --- | --- | --- | --- |
 | `conflict-N` | 1..128 | StageSelected | Conflict path |
 | `goal-path-N` | 1..256 | StageSelectedAll | Goal candidate path |
-| `goal-step-N` | 1..64 | CommitSelected | Step commit message and identity |
+| `goal-step-N` | 1..64 | CommitSelected, CheckSelectedIndex, SelectedIndexChanges | Exact selected Step paths; commit additionally fixes message and identity |
 
 The unused old immediate Merge, IsAncestor and IndexEntries definitions are
 retired. PendingMerge followed by CommitPending supplies the existing merge path.
@@ -162,3 +163,129 @@ Related: [managed observations](repository-sync-managed-git-observation.md),
 [native installation](native-client-installation.md),
 [normal typed SBT](normal-typed-sbt-validation.md),
 [CNCF typed Git contract](../../../goldenport-cncf/docs/spec/typed-git-execution.md).
+
+## P61-COMMAND-B5 — Qualified provider conflict continuation
+
+Actual focused qualification recorded 2026-10-17. The explicitly selected
+`NativeRepositoryProviderConflictCliSpec` has two independent command cases:
+`prepare actual provider conflict` and `consume actual provider conflict`.
+The prepare case creates one owned local bare upstream and diverged tracked
+`value.txt`, prepares its public Repository input through
+`prepareRepositoryStart`, selects the actual successful import and calls normal
+Repository Start/Advance through the standard `CncfMain` launcher. Its pending
+conflict must expose the actual initial/local/remote text, tips, blobs and
+worktree markers without running SBT. Repeated Advance must retain that Request.
+
+The requested mapping `p61-git-provider-mapping` revision 1 selects
+`p61-git-provider-sol-medium` (`openai`, `gpt-6.1-sol`, medium reasoning effort)
+for `CodingProgrammingStandard` and `ReviewStandard`, with no fallback. The
+explicit parent is `p61-parent-sol-high` with the actual supplied origin context;
+context isolation is requested and forced inline execution is disabled. Review
+is classified REVIEW/STANDARD/PROGRAMMING/SMALL; repair and conflict are
+CODING/STANDARD/PROGRAMMING/SMALL. This configuration authenticates no provider
+completion. Normal `prepareExecution` saves the actual opaque session and first
+pending selection alongside the public Start/issued/prepared DTOs. Only after
+assertions does the case print `P61_GIT_PROVIDER_ROOT=<root>`.
+
+The parent's separately selected semantic provider reads those actual inputs
+and the product contract and returns only ordered conflict IDs, proposed text
+and rationale in `git-provider-result.json`, with its actual child reference.
+The provider neither edits the repository nor executes Git/SBT. The parent
+records `git-provider-observation.json` after actual native completion, retaining
+only observed resource values. These files are business inputs; JSON coherence
+alone establishes no provenance or permission.
+
+The consume case requires explicit `smworkflow.spec.gitProviderRoot`, reopens
+only that existing direct fixture child and correlates the original session,
+medium selection and actual child result/reference/observation. Ordinary Advance
+must still show the original conflict before `recordExecution`. Recording and
+the named semantic Submit must leave its text unchanged and start no SBT. A
+separate owning Advance must materialize the proposal, stage only `value.txt`
+through the typed Git DSL/UoW, run both structural index checks and fresh
+required Test, and issue independent `ReviewStandard` merge Review. Assertions
+cover both parent diffs/tips, the actual index tree, completed check codes,
+product cwd/pass output and one external SBT PID. Repeated Review must not run
+another Test. Every business call uses a distinct standard CLI child process.
+
+Initial fixture commit/push only establishes the real tracked inputs. The
+selected workflow host retains initial Fetch, excludes CommitPending and Push,
+has no generic process program and creates no effect authority evidence or
+FinalFetch grant. Parent qualified actual preparation (2 suites/2 tests), genuine
+selected medium provider completion supplying a proposal only, then the normal
+consumer (1 suite/1 test). Runtime materialized the proposal, performed typed Git
+stage/structural checks/fresh Test and reached pending independent merge Review.
+The semantic provider ran no SBT, Git or process commands. Requested configuration
+and parent-observed completion are distinct evidence, without runtime/model
+attestation. Both cases stop at their declared pending boundary; independent
+Review acceptance remains unfinished. Local fixture initial Git effects grant no
+real remote permission. No CommitPending, Push, final fetch or convergence
+acceptance is claimed. COMMAND is connected and focused validated, pending its
+existing protected independent Step review/local acceptance commit. This does
+not close P6-EX02 or Phase 6.1 or replace historical results.
+
+## Selected Goal closure and known-no-commit continuation
+
+Every host declaration for `commit-selected`, `check-selected-index` and
+`selected-index-changes` requires its own explicit `selectedPaths` JSON array:
+1..256 unique valid Git paths fixed by the host for the exact `goal-step-N`.
+All three declarations for a Step bind the same vector. There is no implicit
+fallback to candidate paths or the whole index. Update obsolete declarations
+before using this contract. Selected reads need their own grants and no commit
+identity; commit retains its independent identity and grant. Closure also needs
+fixed `blob-content` and `tree-changes` read declarations. The fixture's finite
+argument count is 512 to accommodate 256 fixed paths and their fixed prefix;
+this changes no other production limit.
+
+The current native v3 closure receipt retains the original Input, ordinal and
+optional commit, plus optional attempt, actual precheck and native change facts.
+Absent new fields default to zero/none/empty; explicit null or malformed values
+reject. Existing v3 completed receipts keep their exact reviewed-tree meaning
+and grant no new effect. An old intent without a result remains unknown.
+
+Before a new selected precheck, native branch, HEAD and HEAD tree must still
+match the original parent. Current-Step changes must be staged and merged with
+no selected unstaged or untracked data. Unrelated staged or unstaged work can
+remain. Native closure neither stages nor resets nor unstages unrelated paths,
+and compares selected content rather than requiring a globally empty index.
+Commit uses ordinary CNCF typed `CommitSelected` with its host-fixed selection.
+
+The owner saves actual `CheckSelectedIndex` facts before commit intent. A
+nonclean check with unchanged selected reviewed content is a terminal
+known-no-commit result for that Advance: it dispatches no commit, saves no commit
+intent and changes no controller counters. After selected correction, the next
+ordinary Advance may append one new attempt under the same original authority
+lookup. A clean precheck without its intent, a retained intent without completion,
+or any unknown effect remains Wait and grants no replay. Missing success or a
+generic exit code never establishes known-no-commit. There is no same-call retry.
+
+Only an earlier admitted actual EOF-only failure can permit a difference from
+the reviewed candidate. The owner requires every native change to be `M` on
+an owned path reported by that earlier check, with distinct present old/new
+blob IDs and unchanged regular mode `100644` or `100755`. Complete typed UTF8
+blob bytes without NUL must prove removal solely of extra terminal LF bytes:
+the original ends in at least two LF bytes, and the nonempty result retains all
+other bytes followed by exactly one LF. No trailing-space, CR, semantic, rename,
+delete, type or mode change qualifies. Other changes require the ordinary
+affected validation/review route.
+
+After commit, native identity, exact original single parent and observed HEAD
+tree must agree. No owned dirty path may remain, while unrelated work can
+remain. Actual typed `TreeChanges` from reviewed candidate to committed tree
+must match exactly the admitted canonical path/mode/blob vector; ordinary
+closure requires that vector to be empty and the original reviewed tree.
+Reconstruction re-observes immutable typed blobs and tree changes and admits
+each retained record against its actual full native history prefix. Prior
+failed checks are append-only; only the actual latest failed frontier can select
+a fresh attempt. Later legitimate Step history can follow an already completed
+receipt without making it authority for another commit.
+
+The narrow EOF correction event preserves original validation and review result
+targets and the original review reference. It introduces no semantic request,
+review-reuse certificate, Human reapproval, new controller state or authority.
+There is no reset-to-empty ritual. `GoalPhaseNativeClosureSpec`,
+`GoalPhaseOrderedProgressionSpec` and
+`GoalPhaseNativeRetentionApplicabilitySpec` author adjacent Given/When/Then
+expectations for these contracts. Targeted pure specifications are not installed
+acceptance or a production availability claim. Parent validation and the actual
+selected staging → EOF failure → correction → one commit → next Step episode,
+plus aggregate validation and Phase review, retain their existing obligations.

@@ -2,6 +2,8 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.generic.auto.*
+import io.circe.{Decoder, Encoder}
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction}
@@ -27,13 +29,21 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  *  version Oct. 17, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
   final case class Input(instance: String, sourceRevision: String, plan: O.Plan,
     base: O.Snapshot, completed: Vector[O.ClosedStep], candidate: O.Snapshot,
-    review: String, childInvocation: String)
+    review: String, childInvocation: String, reviewedCandidate: Option[O.Snapshot] = None)
+  object Input {
+    given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(_.filter {
+      case ("reviewedCandidate", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Input] = deriveDecoder
+  }
   trait AuthorityPort {
     def isGrantedC(core: ActionCall.Core, input: Input): Consequence[Boolean]
   }
@@ -82,14 +92,18 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         controller.reviewEvidence.nonEmpty && from.currentProgression.contains(ProgressionReference("phase.PhaseClosing")))
       Consequence.success(Input(from.identity.value, from.revision.value.toString, controller.plan, controller.base,
         controller.completed, controller.candidate.get, controller.reviewEvidence.get,
-        from.identity.value + ":repository-closure:" + from.revision.value))
+        from.identity.value + ":repository-closure:" + from.revision.value, controller.phaseReviewedCandidate))
     else F.invalid("repository closure requires actual whole-Phase checks and independent acceptance")
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[V.GoalPhaseAdvanceResult] = for {
+    from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
+    recordingPaths: Vector[String] = Vector.empty): Consequence[V.GoalPhaseAdvanceResult] = for {
     installation <- d.repositoryClosure.map(Consequence.success).getOrElse(F.invalid("repository closure host is absent"))
     _ <- installation.validateC(d)
     input <- inputC(from, controller)
+    _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
+    management = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, d, core, from, input, acknowledge)
     complete <- store.loadC("closed")
@@ -105,8 +119,15 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
               case false => Consequence.success(Option.empty[(InstanceRecord, Payload, Boolean)])
               case true => for {
                 actual <- G.observeC(core)
-                _ <- if (actual.head == input.candidate.head && actual.tree == input.candidate.tree &&
-                  actual.branch == d.target.localBranch && actual.dirty.isEmpty) Consequence.unit
+                _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
+                staged <- if (management.nonEmpty && input.candidate.tree != controller.tipSnapshot.tree) for {
+                  tree <- G.indexTreeC(core)
+                } yield actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree &&
+                  tree == input.candidate.tree && actual.dirty.nonEmpty && actual.dirty.forall(p =>
+                    !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
+                    management.contains(p.path) && p.renamedFrom.forall(management.contains))
+                else Consequence.success(actual.tree == input.candidate.tree && actual.dirty.isEmpty)
+                _ <- if (actual.head == input.candidate.head && actual.branch == d.target.localBranch && staged) Consequence.unit
                   else F.invalid("accepted whole-Phase candidate changed before child Start")
                 entered <- controller.acceptC(O.ClosureIntentSaved(input.candidate, store.intentIdentity))
                 _ <- if (entered.stage == O.Stage.PhaseClosing && domain.statemachine.GoalPhaseRunLifecycle.permits(
@@ -247,7 +268,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       completed <- closeC(saved)
       selected = saved._2.input
     } yield NativeWorkflowOperationOutput.goalComplete(completed.identity.value, selected.plan, selected.base,
-      selected.completed, selected.candidate, saved._2.result.get)
+      selected.completed, selected.reviewedCandidate.getOrElse(selected.candidate), saved._2.result.get)
     def ackC(point: String): Consequence[Unit] = acknowledge(point) match {
       case Consequence.Success(_) => Consequence.unit
       case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(

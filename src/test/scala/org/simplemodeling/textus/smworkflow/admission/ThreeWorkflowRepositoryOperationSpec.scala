@@ -41,8 +41,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -134,11 +133,14 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     }
   } catch { case scala.util.control.NonFatal(error) => Consequence.stateConflict("Owned repository fixture setup failed: " + error.getMessage) }
 
+  protected def goal_selected_paths(goal: ThreeWorkflowHostParameters.Goal): Vector[Vector[String]] =
+    Vector(goal.candidatePaths)
   protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
     val target = Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString)
     val git = TypedGitHostPlanFixture.plan(target, conflictPaths = conflict_path(scenario).toSet,
       goalPaths = if (scenario == "Goal") goal.candidatePaths else Vector.empty,
-      goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty)
+      goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty,
+      goalSelections = if (scenario == "Goal") goal_selected_paths(goal) else Vector.empty)
     val ordinals = (Vector(1) ++ (if (scenario == "Goal")
       (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal) else Vector.empty)).distinct
     TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, ordinals, Some(git),
@@ -211,6 +213,15 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       reader <- storage.bindIssuedC(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec)
       work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Goal assignment is absent")))
+    } yield work
+    def goalRecordingC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseFindingRecording.Request, Nothing]] = for {
+      current <- goalCurrentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Goal has no pending recording work"))
+      storage <- _goal_storage_c()
+      reader <- storage.bindIssuedC(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec)
+      work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Goal recording assignment is absent")))
     } yield work
     def goalQuestionC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]] = for {
       current <- goalCurrentC(identity)
@@ -343,7 +354,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |  key: direct-repository-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-07T00:00:00Z
+        |    start-at: '2026-10-07T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: direct-repository-spec

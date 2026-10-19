@@ -10,7 +10,8 @@ import org.goldenport.record.{Record, RecordPresentable}
 /** Named business values at the Operation boundary. JSON is a representation
   * of the named value, never a universal command or completion envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 20, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInput {
   def valueC[A](request: Request, name: String)(using reader: ValueReader[A]): Consequence[A] =
@@ -84,16 +85,31 @@ private[smworkflow] object NativeWorkflowOperationInput {
   }
 
   private def _json_record_c(value: Json, name: String): Consequence[Record] =
-    value.asObject.map(fields => Consequence.success(Record.dataAuto(
-      fields.toVector.map((key, value) => key -> _json_value(value))*)))
+    value.asObject.map(fields => _json_fields_c(fields.toVector, name))
       .getOrElse(_invalid("Workflow named parameter " + name + " requires an object"))
+
+  private def _json_fields_c(fields: Vector[(String, Json)], name: String): Consequence[Record] =
+    fields.foldLeft(Consequence.success(Vector.empty[(String, Any)])) { (prior, field) =>
+      for {
+        accumulated <- prior
+        converted <- _json_value_c(field._2, name)
+      } yield accumulated :+ (field._1 -> converted)
+    }.flatMap(Record.createC)
 
   // Record's existing transport vocabulary contains heterogeneous primitive
   // cells. Public business types remain the concrete generated named values.
-  private def _json_value(value: Json): Any = value.fold(
-    null, identity, number => number.toBigDecimal.fold[Any](number.toString)(identity), identity,
-    values => values.map(_json_value).toVector,
-    fields => Record.dataAuto(fields.toVector.map((key, value) => key -> _json_value(value))*))
+  private def _json_value_c(value: Json, name: String): Consequence[Any] = value.fold[Consequence[Any]](
+    _invalid("Workflow named parameter " + name + " must not contain explicit JSON null"),
+    value => Consequence.success(value),
+    number => Consequence.success(number.toBigDecimal.fold[Any](number.toString)(identity)),
+    value => Consequence.success(value),
+    values => values.foldLeft(Consequence.success(Vector.empty[Any])) { (prior, member) =>
+      for {
+        accumulated <- prior
+        converted <- _json_value_c(member, name)
+      } yield accumulated :+ converted
+    }.map(value => value: Any),
+    fields => _json_fields_c(fields.toVector, name).map(value => value: Any))
 
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict(reason)
 }

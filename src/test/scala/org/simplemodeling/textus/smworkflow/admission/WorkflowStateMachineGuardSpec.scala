@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual application CML progression; common completion guarantees are not re-specified.
   * @since   Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 17, 2026
   */
 final class WorkflowStateMachineGuardSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Application CML progression" should {
@@ -87,7 +87,8 @@ final class WorkflowStateMachineGuardSpec extends AnyWordSpec with Matchers with
         "AssessReasoningDemand" -> Vector("Enriched", "DecisionNeeded"))
       syncAlternatives shouldBe Vector(
         "ResolveRepositoryMergeConflicts" -> Vector("resolved", "decision-needed"),
-        "ReviewNativePendingMerge" -> Vector("accept", "repair", "decision-needed", "reject"))
+        "ReviewNativePendingMerge" -> Vector("accept", "repair", "decision-needed", "reject"),
+        "RepairNativePendingMerge" -> Vector("repaired", "decision-needed"))
       alternatives.intersect(events) shouldBe empty
     }
   }

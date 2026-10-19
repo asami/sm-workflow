@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Finite preparation of explicitly selected Goal business input and Plan.
   * Supplied origin metadata authenticates no Human and grants no permission.
   * @since   Oct. 14, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHostGoalStartInput {
@@ -35,8 +35,6 @@ private[smworkflow] object NativeHostGoalStartInput {
         record <- new RecordDecoder().json(inputText)
         input <- summon[ValueReader[V.GoalPhaseStartInput]].readC(record)
         planText <- readText(options("plan"))
-        plan <- decode[GoalPhaseOrderedProgression.Plan](planText).fold(
-          _ => _invalid("selected Plan JSON is structurally invalid"), Consequence.success)
         catalog <- GoalPhaseRuntimeCatalog.loadC()
         definition = catalog.definition
         selection = ProfileStartAdmission.Selection(options("selection-id"), GoalPhaseNativeRun.startOperation,
@@ -44,17 +42,27 @@ private[smworkflow] object NativeHostGoalStartInput {
           ProfileStartAdmission.SelectionOrigin.ExplicitHuman, options("idempotency-key"), None,
           Some(TypedValue(NativeWorkflowStartInput.Kind.GoalPhase.inputType, input.asJson)))
         selectionPayload <- ProfileSelectionJsonV1.encodeStorageC(selection)
-        planPayload <- GoalPhaseSelectedPlanJsonV1.encodeStorageC(
-          GoalPhaseNativeRun.SelectedPlan(selection.selectionId, options("participant"), plan))
+        planRow <- _plan_row_c(planText, selection.selectionId, options("participant"))
         selectionRow = Record.data("id" -> NativeWorkflowStartBusinessKey(
           NativeWorkflowStartInput.Goal(input), options("participant")), ProfileSelectionJsonV1.storageField -> selectionPayload)
-        planRow = Record.data("id" -> selection.selectionId, GoalPhaseSelectedPlanJsonV1.storageField -> planPayload)
         bootstrap = Record.data("datastore" -> Vector(
           Record.data("collection" -> options("selection-collection"), "records" -> Vector(selectionRow)),
           Record.data("collection" -> options("plan-collection"), "records" -> Vector(planRow))))
       } yield bootstrap
     } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
   }
+
+  private def _plan_row_c(raw: String, identity: String, participant: String): Consequence[Record] =
+    io.circe.parser.parse(raw).fold(_ => _invalid("selected Plan JSON is structurally invalid"), json =>
+      if (json.asObject.exists(_.contains("schemaVersion"))) for {
+        source <- GoalPhaseDocumentSource.decodeDeclarationC(raw)
+        payload <- GoalPhaseDocumentSource.encodeStorageC(GoalPhaseDocumentSource.Selection(identity, participant, source))
+      } yield Record.data("id" -> identity, GoalPhaseDocumentSource.storageField -> payload)
+      else for {
+        plan <- decode[GoalPhaseOrderedProgression.Plan](raw).fold(
+          _ => _invalid("selected Plan JSON is structurally invalid"), Consequence.success)
+        payload <- GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(identity, participant, plan))
+      } yield Record.data("id" -> identity, GoalPhaseSelectedPlanJsonV1.storageField -> payload))
 
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Host Goal Start input " + reason)
 }

@@ -68,6 +68,9 @@
         },
         {
           "name": "NativeHostPreparationService"
+        },
+        {
+          "name": "GoalPhaseFindingRecordingService"
         }
       ],
       "operations": [
@@ -371,6 +374,20 @@
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowEvidencePreparationInput"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "submitGoalPhaseFindingRecording",
+          "kind": "COMMAND",
+          "input": "GoalPhaseFindingRecordingResult",
+          "output": "GoalPhaseFindingRecordingSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseFindingRecordingService",
+          "name": "recordGoalFindings",
+          "kind": "COMMAND",
+          "input": "GoalPhaseFindingRecordingRequest",
+          "output": "GoalPhaseFindingRecordingResult"
         }
       ],
       "types": [
@@ -379,16 +396,10 @@
           "kind": "value",
           "fields": [
             {
-              "name": "sessionIdentity",
+              "name": "sessionId",
               "type": "string",
-              "multiplicity": "?",
-              "required": false
-            },
-            {
-              "name": "instanceIdentity",
-              "type": "string",
-              "multiplicity": "?",
-              "required": false
+              "multiplicity": "1",
+              "required": true
             }
           ]
         },
@@ -455,12 +466,152 @@
         {
           "name": "GoalPhaseStartResult",
           "kind": "value",
-          "fields": []
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
         },
         {
           "name": "GoalPhaseAdvanceResult",
           "kind": "value",
-          "fields": []
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "submitOperation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "resultType",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "condition",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "work",
+              "type": "GoalPhaseWorkView",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "human",
+              "type": "GoalPhaseHumanQuestion",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repositoryConflict",
+              "type": "RepositorySyncConflictWorkView",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repositoryReview",
+              "type": "RepositorySyncMergeReviewWorkView",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repositoryHuman",
+              "type": "RepositorySyncHumanQuestion",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "completion",
+              "type": "GoalPhaseCompletionResult",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "authorityContext",
+              "type": "WorkflowHostAuthorityContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repositoryRepair",
+              "type": "RepositorySyncNativeMergeRepairRequest",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "validation",
+              "type": "GoalPhaseNativeValidationView",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repairProgress",
+              "type": "GoalPhaseRepairProgress",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "findingRecording",
+              "type": "GoalPhaseFindingRecordingState",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
         },
         {
           "name": "GoalPhaseOrderedStep",
@@ -543,6 +694,18 @@
               "type": "int",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "acceptance",
+              "type": "GoalPhaseAcceptanceAdoption",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "effectiveAcceptance",
+              "type": "GoalPhaseEffectiveAcceptanceBoundary",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -717,6 +880,24 @@
               "type": "GoalPhaseOrderedDecisionContext",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "checkFailure",
+              "type": "GoalPhaseCheckFailureContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issues",
+              "type": "GoalPhaseIssueState",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repairProgress",
+              "type": "GoalPhaseRepairProgress",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -789,6 +970,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "repairProgress",
+              "type": "GoalPhaseRepairProgress",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -813,7 +1000,32 @@
         {
           "name": "GoalPhaseOrderedDecisionSubmissionResult",
           "kind": "value",
-          "fields": []
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
         },
         {
           "name": "GoalPhaseNativeCheckReceipt",
@@ -926,6 +1138,18 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "hostIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "operation",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -968,6 +1192,12 @@
               "type": "string",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "metadata",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -990,6 +1220,18 @@
             {
               "name": "checks",
               "type": "GoalPhaseNativeCheckReceipt",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "hostContext",
+              "type": "WorkflowHostReviewContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "metadata",
+              "type": "org.goldenport.record.Record",
               "multiplicity": "*",
               "required": false
             }
@@ -1016,13 +1258,68 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            },
+            {
+              "name": "acceptance",
+              "type": "GoalPhaseAcceptanceReport",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "fixAssessment",
+              "type": "GoalPhaseFixAssessment",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issueReport",
+              "type": "GoalPhaseIssueReport",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "planRevision",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "reviewObservations",
+              "type": "GoalPhaseReviewObservations",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
         {
           "name": "GoalPhaseWorkSubmissionResult",
           "kind": "value",
-          "fields": []
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
         },
         {
           "name": "SplitPhaseStartInput",
@@ -2956,6 +3253,983 @@
               "required": false
             }
           ]
+        },
+        {
+          "name": "GoalPhaseAcceptanceCondition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scope",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "required",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseAcceptanceAdoption",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "usage",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "conditions",
+              "type": "GoalPhaseAcceptanceCondition",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseEffectiveAcceptanceCondition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scope",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "required",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseEffectiveAcceptanceBoundary",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "usage",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "conditions",
+              "type": "GoalPhaseEffectiveAcceptanceCondition",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseAcceptanceObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseAcceptanceReport",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "conditions",
+              "type": "GoalPhaseAcceptanceObservation",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "advisories",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseRepairProgress",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "automaticCount",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ordinaryCount",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "limit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseCheckFailureContext",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "changedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "diff",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validation",
+              "type": "GoalPhaseNativeValidationView",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReviewObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "category",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReviewObservations",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "items",
+              "type": "GoalPhaseReviewObservation",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseTrackedIssue",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repository",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "step",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidenceReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "latestDisposition",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueTransition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issueIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "previousStatus",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidenceReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueMovement",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "evidenceReference",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "openIssues",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resolvedIssues",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "newIssues",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reopenedIssues",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "correspondenceKnown",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueState",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issues",
+              "type": "GoalPhaseTrackedIssue",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "history",
+              "type": "GoalPhaseIssueTransition",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "movement",
+              "type": "GoalPhaseIssueMovement",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueDisposition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issueIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findingOrdinal",
+              "type": "int",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseIssueReport",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "dispositions",
+              "type": "GoalPhaseIssueDisposition",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFixChangeAssessment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "changeClass",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "affectedLogicalUnits",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "crossFileLogic",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "minorBugFix",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requirementChanged",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "contractChanged",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFixConvergenceAssessment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "confidence",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFixAssessment",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "change",
+              "type": "GoalPhaseFixChangeAssessment",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "convergence",
+              "type": "GoalPhaseFixConvergenceAssessment",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingObservationSource",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceKind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "observation",
+              "type": "GoalPhaseReviewObservation",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingItem",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceKind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "observation",
+              "type": "GoalPhaseReviewObservation",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destination",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "instanceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "batchIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectedPlan",
+              "type": "GoalPhaseOrderedPlan",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalBase",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completed",
+              "type": "GoalPhaseClosedStep",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "items",
+              "type": "GoalPhaseFindingRecordingItem",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "requiredIssues",
+              "type": "GoalPhaseIssueState",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repairProgress",
+              "type": "GoalPhaseRepairProgress",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingSavedSection",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "file",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "section",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingItemResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "records",
+              "type": "GoalPhaseFindingSavedSection",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "items",
+              "type": "GoalPhaseFindingRecordingItemResult",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingCompleted",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "request",
+              "type": "GoalPhaseFindingRecordingRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "resultReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "result",
+              "type": "GoalPhaseFindingRecordingResult",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingState",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "pending",
+              "type": "GoalPhaseFindingObservationSource",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "request",
+              "type": "GoalPhaseFindingRecordingRequest",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "completed",
+              "type": "GoalPhaseFindingRecordingCompleted",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingSubmissionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseWorkView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "purpose",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "selectedPlan",
+              "type": "GoalPhaseOrderedPlan",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalBase",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completed",
+              "type": "GoalPhaseClosedStep",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "candidate",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "checksReceipt",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "repairDirective",
+              "type": "GoalPhaseRepairDirective",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "review",
+              "type": "GoalPhaseNativeReviewContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "decisionContext",
+              "type": "GoalPhaseOrderedDecisionContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "checkFailure",
+              "type": "GoalPhaseCheckFailureContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issues",
+              "type": "GoalPhaseIssueState",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseHumanQuestion",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "work",
+              "type": "GoalPhaseWorkView",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestingResult",
+              "type": "GoalPhaseWorkResult",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "hostContext",
+              "type": "WorkflowHostHumanContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "planRevision",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseCompletionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "selectedPlan",
+              "type": "GoalPhaseOrderedPlan",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalBase",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "completed",
+              "type": "GoalPhaseClosedStep",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reviewedCandidate",
+              "type": "GoalPhaseNativeSnapshot",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repository",
+              "type": "RepositorySyncNativeConvergenceResult",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseFindingRecordingContext",
+          "kind": "statemachine",
+          "fields": []
         }
       ],
       "entities": []

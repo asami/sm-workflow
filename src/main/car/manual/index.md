@@ -47,8 +47,8 @@ limits and release. Preparation grants no provenance or effect and performs no
 import/save/Start/Submit/Advance; trusted StartupImport provisioning is separate.
 The existing workflow services, session behavior and semantic publication remain.
 
-The [canonical normal preparation contract](../../../../docs/spec/normal-host-preparation-operations.md)
-provides all six exact command FQNs, JSON input schemas, output and ownership rules.
+The repository-only canonical normal preparation contract,
+`docs/spec/normal-host-preparation-operations.md`, provides all six exact command FQNs, JSON input schemas, output and ownership rules.
 Preparation does not close installed-task or whole-workflow acceptance obligations.
 
 ## Workflow and AI responsibilities
@@ -99,7 +99,7 @@ preserving the child's own submitSessionId. Do not select internal stages.
 
 Submit takes sessionId, the declared `result` or `answer`, and genuine
 completion/reference/evidence data. Three Split semantic completions obtain the
-assigned result destination internally; the other seven completions require
+assigned result destination internally; the other eight completions require
 resultReference. Workflow resolves native work/decision/revision from actual
 issued state. No caller ambiguity selectors or native envelope echoes are used.
 
@@ -107,7 +107,7 @@ Every successful Submit returns actual accepted/outcome/message after commit,
 without eager Advance or an additional model/readback proof. Next work requires
 explicit Advance. A failed completion is an error, not an invented acceptance.
 
-Current definitions are `goal-phase-business-operation-v6`,
+Current definitions are `goal-phase-business-operation-v7`,
 `split-phase-business-operation-v14` and `repository-sync-business-operation-v12`.
 CML, generated descriptors, installed request metadata and direct binders agree
 on named business parameters. Outputs use existing RecordResponse with the
@@ -115,8 +115,8 @@ generated Values' business Records; typed callers use their ValueReader.
 JSON formatting remains at existing protocol ingress/egress, not a String
 business facade or native WorkOrder/Wait/Terminal response.
 
-Current normal provided Operation sets are GoalPhase 4, SplitPhase 6 and
-RepositorySync 6, for sixteen total. The additive required
+Current normal provided Operation sets are GoalPhase 5, SplitPhase 6 and
+RepositorySync 6, for seventeen total. The additive required
 `MergeRepairService.repairNativePendingMerge` and provided
 `RepositorySyncService.submitNativeMergeRepair` retain Repository workflow v12.
 Repair installs only with the existing explicit nonempty conflict text policy,
@@ -174,7 +174,94 @@ configuration string to claim human or command authority.
 The normal connection also requires `sm-workflow.host.definition`, host evidence
 and all selected SplitPhase/RepositorySync read/allocation/checkpoint settings.
 See the repository's `docs/spec/normal-three-workflow-host.md` for the closed
-host-definition and sixteen provided Operation input/response contracts.
+host-definition and provided Operation input/response contracts.
+
+## Accepted review finding recording
+
+V7 adds `GoalPhaseFindingRecordingService.recordGoalFindings` as the sixth Goal
+Required operation and `GoalPhaseService.submitGoalPhaseFindingRecording` as
+the fifth Goal Provided operation. A normal Advance returns a Request with
+`findingRecording.request`, the actual source references, selected Plan,
+original base, completed Steps, issues and repair progress. Step observations
+wait until their independently reviewed Step has an actual commit; Phase
+observations wait until actual Phase review accepts. Empty observations issue
+no recording work. Missing policy and batches exceeding 256 items return honest
+Wait with every pending observation retained.
+
+The optional Component parameter `sm-workflow.findings.recording` uses schema
+`sm-workflow.finding-recording-policy.v1` and exact `hygiene` and
+`developmentCandidate` paths. Each must be a literal repository-relative `.md`
+entry in every selected Step and the host's fixed candidate paths. Categories
+may share a file. A pending assignment keeps its captured destinations when
+later host defaults change.
+
+Recording is a file-edit-only semantic task. Read the selected current journal
+or candidate document, preserve prior content, and append the assigned source
+identity/revision, observation ID and rationale under meaningful sections.
+Return the ordinary `GoalPhaseFindingRecordingResult` with honest per-item
+`recorded`, `partial` or `failed` outcomes and exact saved file/section records.
+Submit uses named `sessionId`, `result`, `resultReference`, `completionFacts`
+and optional `executionEvidence`; its distinct
+`GoalPhaseFindingRecordingSubmissionResult` reports committed acceptance.
+Submit performs no File/Git/SBT work and issues no successor. The host's next
+explicit Advance exposes retained outcomes; partial or failed batches are
+terminal dispositions with no automatic retry, implementation adoption,
+counter reset or recursive review.
+
+Native candidate/check/closure owners permit only the exact retained recording
+destinations alongside actual document-progress paths. After Phase review,
+the native recording candidate owner stages only that Phase batch's actual
+Markdown changes. Authority Wait exposes the original `reviewedCandidate`
+separately from the final `candidate`; the child consumes the final actual
+index. This clerical transition supplies no new source review or checks.
+Unexpected edits fail visibly; an unknown stage intent waits without replay.
+The repository-only source contract is `docs/spec/goal-phase-finding-recording.md`.
+
+Use fresh isolated V7 Sessions. Existing V6 Sessions and their actual evidence
+retain their original definition and scope; there is no migration, alias or
+silent replay under V7. Declarations, generated metadata and specification-owned
+file edits do not prove installed-skill AI execution or Step acceptance.
+
+## Dependency decisions and bounded improvement
+
+Ordinary public Usage Contract use and inspection need no dependency-change
+question. To change another Component, including one in the same repository,
+propose the exact scope: logical requester and dependency identities, repository
+and workspace identities, the selected Usage Contract, reason, exact files
+relative to the dependency workspace, acceptance conditions and dependent work.
+Directories and prefixes do not expand the selected files. Report discovered
+unapproved edits honestly; independent review reports their exact paths and
+remains read-only, without silently undoing or approving them.
+
+Submit the proposal with the matching assigned semantic result and outcome
+`decision-needed`. The next explicit Advance exposes the saved Human question
+with exactly `ApproveDependencyScope`, `RejectDependencyScope`, `Defer` and
+`Cancel`. Have the developer answer through the independent Human channel;
+actual admitted Human evidence and the saved answer/result reference determine
+the direction. A proposal or self-asserted choice supplies no consent. Human
+Submit and the following explicit Advance are separate actions; Defer and Cancel
+retain the pause without automatically dispatching or changing work.
+
+Use the saved answer for that single linked unit, including its exact scope,
+acceptance and dependent work, without asking again for each selected file.
+A new out-of-scope change requires another question. Continuation retains the
+same Plan, original base, completed Steps, issues, execution history and repair
+progress. Approval does not execute the work, grant File, Git, SBT or remote
+effect authority, or make a reviewer an editor. Existing execution permissions,
+independent review and acceptance gates still apply.
+
+For improvement, first select a recorded warning as the developer. Ask the AI
+for a bounded assessment of its cause, the proposed change or reason no change
+is needed, and the expected impact. Then separately adopt or decline that
+assessment. Additional change being unnecessary is a valid outcome. This is a
+developer decision process within the existing workflow; there is no automatic
+warning-selection or improvement-adoption operation.
+
+A proposal does not automatically change the Plan, tests, code or repair
+allowance. Retain the selected warning, assessment, decision, supporting evidence
+and existing history. Expected impact is a proposal, not a measured effect;
+claim improvement effects only after actual later measurement. Adopted work
+still follows the normal workflow and acceptance requirements.
 
 ## Failure and recovery
 

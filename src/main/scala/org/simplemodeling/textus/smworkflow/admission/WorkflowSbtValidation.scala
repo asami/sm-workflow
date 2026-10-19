@@ -7,11 +7,12 @@ import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
   enum Kind(val wire: String) {
+    case Compile extends Kind("compile")
     case Test extends Kind("test")
     case TestOnly extends Kind("test-only")
   }
@@ -22,6 +23,7 @@ private[smworkflow] object WorkflowSbtValidation {
   }
   enum Outcome(val wire: String) {
     case Succeeded extends Outcome("succeeded")
+    case NotExecuted extends Outcome("not-executed")
     case Failed extends Outcome("failed")
     case Incomplete extends Outcome("incomplete")
     case Unverified extends Outcome("unverified-tests")
@@ -84,7 +86,8 @@ private[smworkflow] object WorkflowSbtValidation {
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
     _ <- if (kind != null && result != null && result.processResult != null &&
         result.processResult.termination != null && result.testSelection != null &&
-        ((kind == Kind.Test && result.operation == SbtOperation.Test) ||
+        ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
+          (kind == Kind.Test && result.operation == SbtOperation.Test) ||
           (kind == Kind.TestOnly && result.operation == SbtOperation.TestOnly)) &&
         result.testSelection.forall {
           case SbtTestSelectionResult.Verified(classes, suites, tests) =>
@@ -97,6 +100,7 @@ private[smworkflow] object WorkflowSbtValidation {
         case SbtTestSelectionResult.Verified(classes, suites, tests) => Selection(classes, suites, tests)
       }, None)
       case SbtExecutionOutcome.Failed(_) => Facts(kind, Outcome.Failed, None, None)
+      case SbtExecutionOutcome.NotExecuted => Facts(kind, Outcome.NotExecuted, None, None)
       case SbtExecutionOutcome.Incomplete(_) => Facts(kind, Outcome.Incomplete, None, None)
       case SbtExecutionOutcome.UnverifiedTests(reason) => Facts(kind, Outcome.Unverified, None, Some(reason.toString))
     }

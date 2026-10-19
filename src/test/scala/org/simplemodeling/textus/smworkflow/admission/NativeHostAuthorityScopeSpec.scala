@@ -11,7 +11,8 @@ import NativeHostEvidence.*
 
 /** Selected grants do not attest that full commands or Plan bodies stayed equal.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Oct. 18, 2026
   */
 final class NativeHostAuthorityScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-10-08T00:00:00Z")
@@ -97,6 +98,46 @@ final class NativeHostAuthorityScopeSpec extends AnyWordSpec with Matchers with 
       Vector(step.mapObject(_.add("generation", Json.fromLong(2))), step.mapObject(_.add("reviewEvidence", Json.fromString("foreign"))),
         step.mapObject(_.remove("candidate")), step.mapObject(_.add("parent", Json.True))).foreach(v =>
         observeC(saved, declared, Purpose.StepClosure, "selected-target", owned(v), now).isSuccess shouldBe false)
+    }
+    "preserve legacy Phase output and bind the optional original reviewed snapshot as an actual target" in {
+      Given("a legacy Phase closure grant and a separate final management candidate with an original reviewed source")
+      val legacy = read(Purpose.PhaseClosure, owned(phase))
+      val reviewed = snapshot.mapObject(_.add("tree", Json.fromString("e" * 40)))
+      val current = phase.mapObject(_.add("reviewedCandidate", reviewed))
+      val saved = read(Purpose.PhaseClosure, owned(current))
+      When("canonical normalization selects either absent or present reviewed source and consumes the same target")
+      val legacyselected = NativeHostAuthorityScope.select(Purpose.PhaseClosure, owned(phase)).toOption.get
+      val selected = saved.binding.hcursor.downField("scope")
+      val equivalent = current.mapObject(_.add("reviewedCandidate", reviewed.mapObject(_.add("unused", Json.True))))
+      Then("absence retains the historical output and equal head/tree accepts without copying unrelated snapshot fields")
+      legacy.binding shouldBe legacyselected
+      legacy.binding.hcursor.downField("scope").focus.get.asObject.get.contains("reviewedCandidate") shouldBe false
+      legacy.binding.hcursor.downField("scope").focus.get.asObject.get.keys.toSet shouldBe
+        Set("kind", "instance", "sourceRevision", "review", "childInvocation", "plan", "base", "candidate", "completed")
+      observeC(legacy, declared, Purpose.PhaseClosure, "selected-target", owned(phase), now).isSuccess shouldBe true
+      selected.downField("reviewedCandidate").focus shouldBe Some(reviewed)
+      observeC(saved, declared, Purpose.PhaseClosure, "selected-target", owned(equivalent), now).isSuccess shouldBe true
+    }
+    "refuse crossed absent and malformed optional Phase reviewed targets in both comparison directions" in {
+      Given("a grant bound to an original reviewed source separately from its final management candidate")
+      val current = phase.mapObject(_.add("reviewedCandidate", snapshot))
+      val saved = read(Purpose.PhaseClosure, owned(current))
+      val legacy = read(Purpose.PhaseClosure, owned(phase))
+      val crossed = Vector(phase,
+        current.mapObject(_.add("reviewedCandidate", snapshot.mapObject(_.add("head", Json.fromString("f" * 40))))),
+        current.mapObject(_.add("reviewedCandidate", snapshot.mapObject(_.add("tree", Json.fromString("f" * 40))))))
+      val malformed = Vector(Json.Null, Json.True, Json.fromString("snapshot"), Json.obj(),
+        Json.obj("head" -> Json.fromString("a" * 40)), Json.obj("tree" -> Json.fromString("b" * 40)))
+        .map(value => current.mapObject(_.add("reviewedCandidate", value)))
+      When("actual admission compares another source or tries to select a null scalar or incomplete optional snapshot")
+      val compared = crossed.map(value => observeC(saved, declared, Purpose.PhaseClosure, "selected-target", owned(value), now))
+      val reversed = observeC(legacy, declared, Purpose.PhaseClosure, "selected-target", owned(current), now)
+      val selected = malformed.map(value => NativeHostAuthorityScope.select(Purpose.PhaseClosure, owned(value)))
+      Then("different head/tree, presence changes and malformed present snapshots cannot reuse authority")
+      compared.foreach(_.isSuccess shouldBe false)
+      reversed.isSuccess shouldBe false
+      selected.foreach(_.isLeft shouldBe true)
+      malformed.foreach(value => observeC(saved, declared, Purpose.PhaseClosure, "selected-target", owned(value), now).isSuccess shouldBe false)
     }
   }
 }

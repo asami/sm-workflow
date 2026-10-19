@@ -80,7 +80,8 @@ private[admission] object NativeHostAuthorityPreparationFixture {
 /** Parent-selected validation owns execution; E5/E6 use actual public Goal
   * episodes in ThreeWorkflowGoalOperationSpec, not these native input fixtures.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 18, 2026
   */
 final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeHostPreparationManagedFixture {
@@ -92,6 +93,46 @@ final class NativeHostAuthorityPreparationSpec extends AnyWordSpec with Matchers
   }
   private def _observe(value: Evidence, purpose: Purpose, binding: Json): Consequence[NativeHostEvidence.Observed] = {
     NativeHostEvidence.observeC(value, _declared, purpose, authorityKey(purpose), binding, now)
+  }
+
+  "E9 Phase recording closure target" should {
+    "preserve the reviewed source and final management candidate through native projection and alias preparation" in {
+      Given("a specification-owned Phase closure input with an accepted source and a distinct final Markdown index")
+      withCore { call =>
+        val source = phaseInput.candidate
+        val finalinput = phaseInput.copy(candidate = source.copy(tree = "9" * 40), reviewedCandidate = Some(source))
+        val legacy = take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, phaseInput))
+        val expected = take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, finalinput))
+        val context = take(NativeHostAuthorityContext.phaseC(call.core, finalinput))
+        val canonical = json(context.scope)
+        val reviewed = canonical.hcursor.downField("reviewedCandidate").focus.get
+        When("normal generated output intake and canonical or ordinary wire aliases feed passive authority preparation")
+        val output = NativeWorkflowOperationOutput.goalWait("specification-instance", "Final management target", "Separate authority")
+          .copy(authorityContext = Some(context))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(wire(output))).authorityContext.get
+        val variants = Vector(json(decoded.scope), canonical.mapObject(_.remove("reviewedCandidate").add("reviewed_candidate", reviewed)),
+          canonical.mapObject(_.add("reviewed_candidate", reviewed)))
+        val prepared = variants.map(scope => evidence(_prepare(context.copy(scope = record(scope)))))
+        Then("all normal spellings retain both actual targets while absent historical output remains absent")
+        legacy.hcursor.downField("scope").focus.get.asObject.get.contains("reviewedCandidate") shouldBe false
+        prepared.foreach { actual =>
+          actual.binding shouldBe expected
+          actual.binding.hcursor.downField("scope").downField("candidate").get[String]("tree").toOption shouldBe Some(finalinput.candidate.tree)
+          actual.binding.hcursor.downField("scope").downField("reviewedCandidate").get[String]("tree").toOption shouldBe Some(source.tree)
+          _observe(actual, Purpose.PhaseClosure, legacy).isSuccess shouldBe false
+        }
+        Given("contradictory optional source aliases and a different source tree")
+        val conflicting = canonical.mapObject(_.add("reviewed_candidate", reviewed.mapObject(_.add("tree", Json.fromString("8" * 40)))))
+        When("preparation or actual selected-grant admission consumes those crossed source targets")
+        val refused = Preparation.goalC(context.copy(scope = record(conflicting)), reference, participant, issuer, now.minusSeconds(60))
+        val other = take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core,
+          finalinput.copy(reviewedCandidate = Some(source.copy(tree = "8" * 40)))))
+        Then("neither an alias contradiction nor another original source can reuse the final-target grant")
+        refused.isSuccess shouldBe false
+        _observe(prepared.head, Purpose.PhaseClosure, other).isSuccess shouldBe false
+        Consequence.unit
+      }
+    }
   }
 
   "E7 Normal command closing targets" should afterWord("in spec:native-host-authority-preparation, example:E7, rules:R1,R2,R3,R6, phase:6") {

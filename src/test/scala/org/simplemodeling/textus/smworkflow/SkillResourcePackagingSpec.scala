@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow
 
 import java.nio.file.{Files, Paths}
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.jar.JarFile
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
@@ -10,9 +11,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 19, 2026
  */
 final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
+    .map(name => s"skills/$name/SKILL.md")
+  private val _contract_paths = Vector(
+    "docs/spec/native-host-execution.md",
+    "docs/spec/goal-phase-acceptance-boundary.md",
+    "docs/spec/goal-phase-dependency-scope.md",
+    "docs/spec/goal-phase-validation-metadata.md"
+  )
+  private val _distribution_paths = _skill_paths ++ _contract_paths
+
   "Component-owned skill resources" should {
     "retain exactly the three public semantic skill sources in the actual component JAR" in {
       Given("the official packageBin component artifact and the independently readable authoring sources")
@@ -38,27 +49,29 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       } finally jar.close()
     }
 
-    "retain identical instruction bytes in the standalone ZIP and component JAR" in {
+    "retain identical bytes for exactly seven distribution files in the standalone ZIP and component JAR" in {
       Given("the actual skillBundle ZIP, packageBin JAR and independent authoring sources")
       val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
       withClue("Run skillBundle before this distribution spec: ")(Files.isRegularFile(archive) shouldBe true)
       Files.isRegularFile(artifact) shouldBe true
-      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
-      val expected = names.map(name => s"skills/$name/SKILL.md")
       val zip = new ZipFile(archive.toFile)
       try {
         val jar = new JarFile(artifact.toFile)
         try {
-          When("both real archives are opened and every standalone instruction is read")
+          When("both real archives are opened and all standalone skills and supporting contracts are read")
           val entries = zip.entries().asScala.filterNot(_.isDirectory).toVector
           val contents = entries.map { entry =>
             val input = zip.getInputStream(entry)
             try entry.getName -> input.readAllBytes().toVector finally input.close()
           }.toMap
-          Then("the standalone namespace contains exactly three skills with source and JAR byte equality")
-          entries.map(_.getName).sorted shouldBe expected.sorted
-          expected.foreach { path =>
+          val packagedpaths = jar.entries().asScala
+            .filter(entry => !entry.isDirectory && entry.getName.startsWith("META-INF/sm-workflow/"))
+            .map(_.getName.stripPrefix("META-INF/sm-workflow/")).toVector
+          Then("both distribution namespaces contain exactly seven files with authoring and JAR byte equality")
+          entries.map(_.getName).sorted shouldBe _distribution_paths.sorted
+          packagedpaths.sorted shouldBe _distribution_paths.sorted
+          _distribution_paths.foreach { path =>
             val sourceBytes = Files.readAllBytes(Paths.get(path)).toVector
             contents(path) shouldBe sourceBytes
             val packagedEntry = jar.getJarEntry(s"META-INF/sm-workflow/$path")
@@ -70,6 +83,32 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       } finally zip.close()
     }
 
+    "resolve actual direct contract links from installed skill instructions within the standalone ZIP" in {
+      Given("the actual standalone ZIP and its installed relative skill paths")
+      val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
+      withClue("Run skillBundle before this link specification: ")(Files.isRegularFile(archive) shouldBe true)
+      val markdownlink = "\\[[^\\]]*\\]\\(([^)]+)\\)".r
+      val zip = new ZipFile(archive.toFile)
+      try {
+        When("direct docs/spec Markdown links are read from each packaged skill and resolved after fragment removal")
+        val packagedpaths = zip.entries().asScala.filterNot(_.isDirectory).map(_.getName).toSet
+        val resolvedbyskill = _skill_paths.map { path =>
+          val entry = zip.getEntry(path)
+          val input = zip.getInputStream(entry)
+          val instructions = try new String(input.readAllBytes(), UTF_8) finally input.close()
+          val references = markdownlink.findAllMatchIn(instructions).map(_.group(1))
+            .map(_.takeWhile(_ != '#')).filter(_.startsWith("../../docs/spec/")).toVector
+          path -> references.map(reference => Paths.get(path).getParent.resolve(reference).normalize().toString)
+        }.toMap
+        Then("every skill has actual contract links, every resolved target is packaged, and the links cover all four contracts")
+        resolvedbyskill.values.foreach { targets =>
+          targets should not be empty
+          targets.foreach { target => packagedpaths should contain(target) }
+        }
+        resolvedbyskill.values.flatten.toSet shouldBe _contract_paths.toSet
+      } finally zip.close()
+    }
+
     "produce identical standalone archive bytes after source timestamp and input-order changes" in {
       Given("the original skillBundle archive and the build task's separately copied and repacked source probe")
       val original = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
@@ -77,18 +116,29 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       val probe = probeRoot.resolve("repacked.zip")
       Files.isRegularFile(original) shouldBe true
       withClue("Run checkSkillBundleReproducibility before this scenario: ")(Files.isRegularFile(probe) shouldBe true)
-      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
-      names.foreach { name =>
-        val copy = probeRoot.resolve(s"skills/$name/SKILL.md")
-        Files.isRegularFile(copy) shouldBe true
-        Files.getLastModifiedTime(copy).toMillis shouldBe 946684800000L
-        Files.readAllBytes(copy).toVector shouldBe Files.readAllBytes(Paths.get("skills", name, "SKILL.md")).toVector
-      }
-      When("the complete original and independently repacked ZIP files are read")
+      When("the complete ZIP bytes and all seven copied sources, timestamps and original authoring bytes are read")
       val originalBytes = Files.readAllBytes(original).toVector
       val probeBytes = Files.readAllBytes(probe).toVector
-      Then("archive bytes are equal without a digest comparison or source-file metadata mutation")
-      probeBytes shouldBe originalBytes
+      val copies = _distribution_paths.map { path =>
+        val copy = probeRoot.resolve(path)
+        (path, Files.isRegularFile(copy), Files.getLastModifiedTime(copy).toMillis,
+          Files.readAllBytes(copy).toVector, Files.readAllBytes(Paths.get(path)).toVector)
+      }
+      val zip = new ZipFile(original.toFile)
+      try {
+        val originalsources = _distribution_paths.map { path =>
+          val input = zip.getInputStream(zip.getEntry(path))
+          try path -> input.readAllBytes().toVector finally input.close()
+        }.toMap
+        Then("all seven copies have the changed timestamp, authoring bytes remain original, and full ZIP bytes are equal")
+        copies.foreach { case (path, regular, timestamp, copiedbytes, authoringbytes) =>
+          regular shouldBe true
+          timestamp shouldBe 946684800000L
+          copiedbytes shouldBe originalsources(path)
+          authoringbytes shouldBe originalsources(path)
+        }
+        probeBytes shouldBe originalBytes
+      } finally zip.close()
     }
   }
 }

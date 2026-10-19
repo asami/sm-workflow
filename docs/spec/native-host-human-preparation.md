@@ -80,19 +80,27 @@ Missing or mistyped consumed fields and unsupported or crossed purpose/type fail
 without compatibility fallback or consent renewal. Historical records retain
 their dates and meaning.
 
-R7: Keys present in the supplied question Record, or in the finite question JSON
-passed directly to `NativeHostHumanQuestionWire.normalize`, accept the existing
+R7: Keys surviving in the supplied question Record, or present in finite question
+JSON passed directly to `NativeHostHumanQuestionWire.normalize`, accept the
 framework's declaration/camel, snake and kebab spellings only at finite declared
-paths. Selection takes the first present key in that order before decoding: a
-present canonical key wins over a differing alias, and a present null, wrongly
-typed or blank canonical value is never rescued by a valid alias.
+paths. Selection takes the first present key in that order before decoding.
+A surviving canonical key wins over a differing alias; wrongly typed or blank
+canonical values are never rescued by a valid alias. Direct JSON normalization
+also retains canonical `Json.Null` ahead of a valid alias.
 
-The existing general `RecordDecoder` constructs objects with `Record.create`,
-which drops JSON null fields before this API receives a Record. Preparation
-cannot recover that removed presence. An actually absent canonical key may
-therefore resolve a declared alias; a missing consumed required value without
-an alias still fails. This contract makes no raw-text null-preserving parsing
-promise and changes neither the shared decoder nor strict native decoding.
+Core structured-data R4 omits null object attributes at every depth during Record
+construction and ordinary decoding/encoding, including `Record.createFull`.
+Empty objects and arrays, false, zero and literal strings remain meaningful;
+null array elements fail canonical decoding before preparation. Preparation
+cannot recover a removed attribute. An omitted canonical key may therefore
+resolve a declared alias. Missing consumed required values without an alias,
+including nested required null attributes removed by Core, still fail.
+Optional null Plan revision and current/assignment progress become absent; their
+selected binding equals explicit omission and cannot recreate captured revision,
+later defaults or original progress facts. A passive row prepared from that
+surviving shape supplies neither approval nor native Submit acceptance.
+This adapts the consumer specification to Core R4 without changing the Record or
+finite JSON APIs, strict native decoding, issuer checks or authentication.
 
 The question schema covers runId, continuationId,
 requiredOperation, inputType, resultType, handle, operation, completionOperation
@@ -128,17 +136,16 @@ with the existing native state/effect assertions.
 | E4 | R2,R3,R6 | All declared Goal Resume/Defer/Cancel, Repository ProvideResolution/Defer/Cancel and Split ProvideResolution/Defer/Cancel retain native meaning and ignore unused annotations |
 | E5 | R1,R3,R6 | Missing identities/types/metadata and mistyped selected fields fail; unrelated copied annotations remain inert |
 | E6 | R4,R5 | Preparation alone creates no row; fixture managed Create permits only live current-call reading, exact-scope Submit and separate Advance; foreign facts and effect aliases fail |
-| E7 | R1,R2,R3,R5,R6,R7 | Goal, Repository, Split Scope and Split Reasoning canonical and actual framework snake/kebab questions retain identical native rows; scenario-local recursive `Record.createFull` construction proves exact canonical `Field` keys with null `value.single` and serialized JSON nulls remain supplied beside valid aliases, and direct finite normalization retains those nulls; malformed nested values, crossed codecs and changed-target observation preserve strict admission and literal values |
+| E7 | R1,R2,R3,R5,R6,R7 | Goal, Repository, Split Scope and Split Reasoning canonical and actual framework snake/kebab questions retain identical native rows; canonical Record omission lets a declared valid alias resolve while direct finite JSON normalization retains canonical null; surviving wrong types or blank values, missing required values, malformed nested values, crossed codecs and changed-target observation preserve strict admission and literal values |
 
-E7 uses the null-preserving conversion only to construct malformed supplied
-question Records. Presence is inspected through `Record.fields`: `keySet` and
-`asMap` omit explicit-null fields even when `createFull` retained them. The
-serialized `Json.Null`, direct finite normalizer and actual preparation refusal
-remain required; a field-presence assertion alone proves no preparation behavior.
-Normal `record()`/`wire()` input and actual framework alias
-positive cases retain the ordinary decoder. Per-purpose and per-field failure
-clues identify each refusal; the fixture supplies no live Human output or
-provenance.
+E7 checks canonical Record JSON against a small independent recursive expectation
+that omits only object null attributes. It does not derive expected shapes from
+production normalizers or remove null array elements. Separate direct JSON
+assertions preserve canonical-null precedence. Saved revision/progress examples
+compare optional null omission with explicit removal and refuse reuse against
+the original native target. Normal `record()`/`wire()` input and actual framework
+alias cases use the ordinary decoder. Per-purpose and per-field failure clues
+identify each refusal; the fixture supplies no live Human output or provenance.
 
 These are specification obligations, not an execution report or acceptance claim.
 Distinct typed Split Start input, native Step/Phase/Git contexts and provisioning,

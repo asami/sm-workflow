@@ -10,7 +10,8 @@ import java.nio.charset.StandardCharsets
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 13, 2026
+ *  version Oct. 13, 2026
+ * @version Oct. 18, 2026
  */
 final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val workflow = Files.readString(Path.of("target/cozy/statemachine-workflow-abi.json"), StandardCharsets.UTF_8)
@@ -66,7 +67,7 @@ final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with G
       val catalog = take(GoalPhaseRuntimeCatalog.parseC(workflow, producer))
       Then("the executable reference is resolved without a content certificate")
       catalog.definition.workflowIdentity.value shouldBe "GoalPhaseWorkflow"
-      catalog.definition.workflowRevision.value shouldBe "goal-phase-business-operation-v6"
+      catalog.definition.workflowRevision.value shouldBe "goal-phase-business-operation-v7"
     }
 
     "consume a receiver-valid unused state without comparing a compiled copy" in {

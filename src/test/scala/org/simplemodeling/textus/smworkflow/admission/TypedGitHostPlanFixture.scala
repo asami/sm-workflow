@@ -1,14 +1,14 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
-import org.goldenport.cncf.processexecution.GitOperationKind
+import org.goldenport.cncf.processexecution.{GitOperationKind, GitPath}
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target
 
 /** Public strict host JSON, decoded and bound only by ordinary CNCF bootstrap.
   * No producer-private declaration, codec, binding or admission is constructed.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedGitHostPlanFixture {
@@ -20,10 +20,11 @@ private[admission] object TypedGitHostPlanFixture {
   val integration: Vector[GitOperationKind] = observations ++ Vector(GitOperationKind.RemoteTip,
     GitOperationKind.Fetch, GitOperationKind.FastForward, GitOperationKind.IndexTree, GitOperationKind.CheckPendingIndex)
   val ordinary: Vector[GitOperationKind] = GitOperationKind.values.toVector.filterNot(kind =>
-    Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll, GitOperationKind.CommitSelected)(kind))
+    Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll, GitOperationKind.CommitSelected,
+      GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)(kind))
   val limits: Json = Json.obj(Vector("launchTimeoutMillis" -> 10000L, "executionTimeoutMillis" -> 30000L,
     "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> 131072L,
-    "stderrBytes" -> 16384L, "argumentCount" -> 32L, "argumentBytes" -> 131072L,
+    "stderrBytes" -> 16384L, "argumentCount" -> 512L, "argumentBytes" -> 131072L,
     "artifactCount" -> 1L, "artifactBytes" -> 131072L, "workAreaBytes" -> 4194304L)
     .map { case (name, value) => name -> Json.fromLong(value) }*)
 
@@ -33,13 +34,18 @@ private[admission] object TypedGitHostPlanFixture {
   def plan(target: Target, kinds: Vector[GitOperationKind] = ordinary,
     conflictPaths: Set[String] = Set.empty, goalPaths: Vector[String] = Vector.empty,
     goalMessages: Vector[String] = Vector.empty, programs: Vector[Json] = Vector.empty,
-    denied: Set[String] = Set.empty, commitIdentity: Boolean = true): Json = {
+    denied: Set[String] = Set.empty, commitIdentity: Boolean = true,
+    goalSelections: Vector[Vector[String]] = Vector.empty): Json = {
+    require(goalMessages != null && goalSelections != null && goalMessages.size == goalSelections.size &&
+      goalMessages.size <= 64 && goalSelections.forall(paths => paths != null && paths.nonEmpty && paths.size <= 256 &&
+        paths.distinct == paths && paths.forall(path => path != null && GitPath.parseC(path).isSuccess)),
+      "Every actual Goal message requires its explicit nonempty unique valid selectedPaths")
     val identitykinds = Set(GitOperationKind.PendingMerge, GitOperationKind.CommitPending,
       GitOperationKind.CreateCheckpoint, GitOperationKind.CommitSelected)
     def declaration(kind: GitOperationKind, selection: Option[String] = None,
-      path: Option[String] = None, message: Option[String] = None): Json = {
+      path: Option[String] = None, message: Option[String] = None, paths: Vector[String] = Vector.empty): Json = {
       val id = capability(kind, selection)
-      Json.obj("target" -> Json.fromString(workspace), "operation" -> Json.fromString(kind.wireName),
+      val fields = Vector("target" -> Json.fromString(workspace), "operation" -> Json.fromString(kind.wireName),
         "capability" -> Json.fromString(id), "identity" -> Json.fromString(id),
         "gitExecutable" -> Json.fromString("/usr/bin/git"), "localBranch" -> Json.fromString(target.localBranch),
         "remote" -> Json.fromString(target.remote), "remoteBranch" -> Json.fromString(target.remoteBranch),
@@ -50,15 +56,25 @@ private[admission] object TypedGitHostPlanFixture {
         "selectedPath" -> path.fold(Json.Null)(Json.fromString),
         "commitMessage" -> message.fold(Json.Null)(Json.fromString), "limits" -> limits,
         "environment" -> Json.obj("PATH" -> Json.fromString("/usr/bin:/bin")))
+      Json.obj((fields ++ (if (paths.isEmpty) Vector.empty else
+        Vector("selectedPaths" -> Json.fromValues(paths.map(Json.fromString)))))*)
     }
-    val git = kinds.filter(kind => commitIdentity || !identitykinds(kind)).map(kind => declaration(kind)) ++
+    val selectedkinds = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll,
+      GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+    val readkinds = if (goalMessages.isEmpty) Vector.empty else Vector(GitOperationKind.BlobContent, GitOperationKind.TreeChanges)
+    val git = (kinds ++ readkinds).distinct.filterNot(selectedkinds)
+      .filter(kind => commitIdentity || !identitykinds(kind)).map(kind => declaration(kind)) ++
       conflictPaths.toVector.sorted.zipWithIndex.map { case (path, index) =>
         declaration(GitOperationKind.StageSelected, Some("conflict-" + (index + 1)), Some(path))
       } ++ goalPaths.zipWithIndex.map { case (path, index) =>
         declaration(GitOperationKind.StageSelectedAll, Some("goal-path-" + (index + 1)), Some(path))
-      } ++ (if (!commitIdentity) Vector.empty else goalMessages.zipWithIndex.map { case (message, index) =>
-        declaration(GitOperationKind.CommitSelected, Some("goal-step-" + (index + 1)), message = Some(message))
-      })
+      } ++ goalMessages.zip(goalSelections).zipWithIndex.flatMap { case ((message, paths), index) =>
+        val selection = Some("goal-step-" + (index + 1))
+        Vector(declaration(GitOperationKind.CheckSelectedIndex, selection, paths = paths),
+          declaration(GitOperationKind.SelectedIndexChanges, selection, paths = paths)) ++
+          (if (!commitIdentity) Vector.empty else Vector(declaration(GitOperationKind.CommitSelected,
+            selection, message = Some(message), paths = paths)))
+      }
     val owner = Json.fromString(SmWorkflowComponent.componentId.name)
     val capabilities = (programs ++ git).map(_.hcursor.get[String]("capability").toOption.get).filterNot(denied)
     Json.obj("schema" -> Json.fromString("cncf.runtime-process-execution.v3"),

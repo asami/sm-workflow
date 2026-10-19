@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * Owned producer JVM only; never starts SBT or mutates application sources.
  * @since   Oct.  6, 2026
- * @version Oct. 13, 2026
+ *  version Oct. 13, 2026
+ * @version Oct. 18, 2026
  */
 final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def execute(argv: Vector[String], log: Path): String = {
@@ -35,12 +36,12 @@ final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with Gi
       val javaExecutable = Path.of(sys.props("java.home"), "bin", "java").toString
       execute(Vector(javaExecutable, "-cp", cp, "scala.tools.nsc.Main", "-classpath", cp, "-d", classes.toString,
         "src/test/probes/GoalPhaseCmlDerivationProbe.scala"), work.resolve("compile.log"))
-      When("the real producer derives every phase and retained ordered-Decision configuration")
+      When("the real Scala2.12 producer derives every phase with retained Decision/recording roles and resolves the recording SPI")
       val output = execute(Vector(javaExecutable, "-cp", classes.toString + java.io.File.pathSeparator + cp,
         "cozy.modeler.GoalPhaseCmlDerivationProbe", "src/main/cozy/sm-workflow.cml"), work.resolve("probe.log"))
-      Then("the13 configurations are unique and only whole-Phase closure derives PhaseClosed")
+      Then("the13 configurations are unique, all five Provided and six Required typed contracts resolve, and only whole-Phase closure derives PhaseClosed")
       output.linesIterator.exists(_ ==
-        "accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v6 combinations=13 phaseClosure=1") shouldBe true
+        "accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v7 combinations=13 phaseClosure=1") shouldBe true
     }
   }
 }

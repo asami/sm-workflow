@@ -10,7 +10,7 @@ import GoalPhaseNativeRun.SelectedPlan
 /**
  * Passive selected data. Start owns selection/scope; progression owns Plan meaning.
  * @since   Oct.  6, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 17, 2026
  */
 private[smworkflow] object GoalPhaseSelectedPlanJsonV1 {
   val schemaVersion = "sm-workflow.goal-phase-selected-plan.v1"
@@ -37,5 +37,6 @@ private[smworkflow] object GoalPhaseSelectedPlanJsonV1 {
   }
 
   private def _envelope(value: SelectedPlan): Json = Json.obj(
-    "schemaVersion" -> Json.fromString(schemaVersion), "payload" -> value.asJson)
+    "schemaVersion" -> Json.fromString(schemaVersion), "payload" ->
+      (if (value.documents.isEmpty) value.asJson.mapObject(_.remove("documents")) else value.asJson))
 }

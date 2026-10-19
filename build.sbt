@@ -30,9 +30,27 @@ lazy val root = project
       (Compile / packageBin).value
       (Test / testOnly).toTask(" " + selection)
     }.evaluated,
-    // Explicit testOnly selection admits this @DoNotDiscover suite.
+    // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (definition.name == "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec")
+      if (Set("org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalMetadataCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPlanRevisionCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalDependencyScopeCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalDependencyScopeLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalAcceptanceBoundaryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPlanRevisionLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalValidationAuthoringLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalCmlValidationAuthoringLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalSliceValidationPlanLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalTypedInputsLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalFindingRecordingLiveSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalSourceHistoryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderSourceHistoryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalScopedQualityClosureCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderRepairCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeRepositoryProviderConflictCliSpec")(definition.name))
         new TestDefinition(definition.name, definition.fingerprint, true, definition.selectors)
       else definition
     },
@@ -43,11 +61,22 @@ lazy val root = project
     skillSourceFiles := {
       val sourceRoot = baseDirectory.value / "skills"
       val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
-      names.map { name =>
+      val skills = names.map { name =>
         val source = sourceRoot / name / "SKILL.md"
         if (!source.isFile) sys.error("Missing component-owned skill source: " + source)
         source -> ("skills/" + name + "/SKILL.md")
       }
+      val contracts = Seq(
+        "docs/spec/native-host-execution.md",
+        "docs/spec/goal-phase-acceptance-boundary.md",
+        "docs/spec/goal-phase-dependency-scope.md",
+        "docs/spec/goal-phase-validation-metadata.md"
+      ).map { relativepath =>
+        val source = baseDirectory.value / relativepath
+        if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)
+        source -> relativepath
+      }
+      skills ++ contracts
     },
     Compile / resourceGenerators += Def.task {
       val destinationRoot = (Compile / resourceManaged).value / "META-INF" / "sm-workflow"

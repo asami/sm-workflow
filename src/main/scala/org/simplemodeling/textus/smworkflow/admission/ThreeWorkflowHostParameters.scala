@@ -20,7 +20,8 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 14, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
@@ -64,7 +65,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
     })
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
-      GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration)
+      GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
+      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -82,6 +84,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
       _ <- SplitPhaseNativeExecution.validateC(splitclassifications, executionprofiles, executionorigin)
       projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
+      findingpolicy <- GoalPhaseFindingRecording.resolvePolicyC(parameters)
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
@@ -96,7 +99,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
         Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
-        executionprofiles, executionorigin, projectacceptance)
+        executionprofiles, executionorigin, projectacceptance, findingpolicy)
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

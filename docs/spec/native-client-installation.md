@@ -1,5 +1,13 @@
 # Native client and task-private skill installation
 
+For the practical setup and task sequence, start with
+[the three-skills start-of-use guide](../notes/three-skills-start-of-use.md).
+The Phase 6.3 supported tiers are ordinary split planning, synchronization of one
+selected repository and limited Goal development in one repository. Production
+acceptance depends on formal Phase closure. Dated historical fixture-only and
+pending statements below retain their original evidence bounds; they do not
+replace the current release scope or establish its acceptance.
+
 Use the ordinary CNCF launcher with the production component factory and a
 normally configured host. The [business client contract](workflow-business-client.md)
 defines named native command/client calls and the exact caller routing file. The
@@ -11,8 +19,9 @@ Current real task execution uses `command`. Client qualification is one
 lightweight ordinary FQN Start connection with actual canonical-ID retention;
 that connection does not complete a task. Normal client supports the same
 Operations and named business parameters as command, with execution placement
-and connection settings owned by CNCF. The semantic skill definitions and their
-invocation procedures remain unchanged.
+and connection settings owned by CNCF. Semantic skills return the actual typed
+result and host control; normal supported semantic handoffs use the host's
+finite `complete` action described below.
 
 Normal command Advance Requests expose the generated
 [issued work context](native-issued-work-context.md) alongside their business
@@ -21,8 +30,41 @@ and completion/evidence contracts from that actual output. Preserve the outer
 Goal ID and exact issued child submission ID/operation/type when child work is
 forwarded. Private input payload and presentation are omitted; context grants
 no consent, permission, provider assurance or task acceptance. Human, Wait and
-Terminal carry no issued-work view, and the current Submit/explicit Advance and
-skill procedures remain unchanged.
+Terminal carry no issued-work view. Submit and explicit Advance retain their
+native owners and business contracts.
+
+## Complete one issued semantic handoff
+
+The installed host uses `scripts/native-goal-command.py --action complete` with
+the usual `--primary`, `--host`, exact already-owned `--task`, fresh empty
+`--output`, and required absolute `--request`/`--submission` files. Follow the
+[normal host completion recipe](native-goal-command-task.md#return-the-scoped-semantic-result).
+Load the actual installed semantic skill for the issued work, obtain its genuine
+typed result and consumed evidence, and return control to this host action.
+
+`complete` consumes the exact task routing file and actual Request DTO. It
+permits only the existing fixed Goal pair, three Split pairs and three Repository
+review/repair/conflict pairs compatible with the retained outer family. Goal's
+Repository child retains its distinct Submit ID and outer Goal Advance ID.
+It provisions an exclusive `advance` output child before Submit, captures raw
+Submit response/stderr in the selected output, validates and displays the actual
+Submit message, Boolean accepted and outcome as one flushed JSON line. Only
+matching-ID `accepted=true`, `outcome=accepted` permits one explicit ordinary
+outer Advance. Capture its response/stderr in `advance`, verify actual outer ID
+and kind, display its JSON as the second line, and stop on Request, Human, Wait
+or Terminal. There is no user continuation prompt or continuation-only AI turn
+between that accepted Submit and Advance, and no semantic work inside the action.
+
+Rejection, malformed or contradictory response, transport failure, timeout or
+uncertain Submit stops nonzero without Advance. A failed/uncertain Advance keeps
+the already displayed Submit and available output, returns nonzero, and performs
+no retry, resubmission, restart, discovery or pending-call replay. Human retains
+its independent actual channel and Wait follows its actual condition without
+spin. Existing single-action Submit/Advance operations retain their exact output
+behavior for diagnostics and explicit calls. `complete` gives semantic skills
+no Advance authority and installs no provider or review engine. Mechanical
+fixture specifications do not establish installed route acceptance, genuine
+task provenance or Phase completion; actual installed-use evidence remains due.
 
 ## Finite host execution actions
 
@@ -76,13 +118,14 @@ or Advance. Missing metrics remain unknown.
 
 Only final operational COMPLETED returns completion evidence. Supply that actual
 generated evidence with the compatible semantic result/reference to the existing
-named Submit, check its actual accepted/message/outcome, and separately Advance
-only under the existing workflow procedure. Neither new action invokes a
+named Submit through the host's `complete` action for a supported issued route;
+that action checks and flushes actual accepted/message/outcome before its one
+explicit outer Advance. Neither preparation/recording action invokes a
 provider, ranks/chooses attempts, auto-Submits or auto-Advances. Config/descriptors
 authenticate no executor, reviewer, operator or effect permission. Follow the
 [three public shapes and current reader contract](native-host-execution.md#r6--three-generated-public-values-and-two-normal-operations).
 Command remains the operational route, client remains light connectivity,
-skills retain their meaning/procedure, and PHASE-6.3 retains aggregate validation.
+skills retain their semantic responsibility, and PHASE-6.3 retains aggregate validation.
 Actual installed providers, all-family tasks and genuine two-chat acceptance
 remain required.
 
@@ -218,12 +261,31 @@ not install into the user's home, replace existing skills or select a bundle
 by searching arbitrary candidates. An occupied destination requires an
 explicitly chosen fresh task-private destination.
 
+The same ZIP also installs four supporting contract resources at
+`<skill_destination>/docs/spec/`:
+
+- `native-host-execution.md`
+- `goal-phase-acceptance-boundary.md`
+- `goal-phase-dependency-scope.md`
+- `goal-phase-validation-metadata.md`
+
+Together with the three `SKILL.md` files, these are the bundle's exact seven
+files. Before loading a skill, verify that all seven are present in the fresh
+destination and that its direct `../../docs/spec/` Markdown links resolve there,
+removing any `#fragment` before checking the file path. These contracts support
+the installed instructions' host execution, acceptance boundary, dependency scope
+and validation metadata guidance. Use the selected bundle's installed resources;
+missing files require correcting that bundle and installing into a fresh
+task-private destination, with no copy from another checkout or silent fallback.
+
 A capable semantic host must load the installed `SKILL.md` source for the
 actual assigned work. Listing or extracting the files is only installation,
 and ordinary CNCF CLI execution alone does not load an AI skill. The host
 supplies actual issued business work and genuine result/evidence destinations
-to the loaded skill. The skill performs that work and its exact typed Submit;
-the hosting caller owns Start, explicit Advance and independent Human admission.
+to the loaded skill. The skill performs that work and returns its actual typed
+result and host control. The hosting caller owns `complete` for supported issued
+routes, Start, explicit Advance and independent Human admission; semantic skills
+do not implement caller loops or gain authority to Advance.
 
 ## Prepare actual selected Goal input and Plan
 
@@ -395,8 +457,10 @@ behavior evidence only; actual host/writer integration and real tasks remain D2.
 
 Submit keeps its existing named `sessionId`, compatible typed result and genuine
 reference/completion/execution evidence fields. The caller never echoes native
-handle, run, continuation or revision as Submit controls. Display the actual
-Submit acknowledgement/message, then use explicit Advance for subsequent work.
+handle, run, continuation or revision as Submit controls. For supported semantic
+routes, select the host's `complete` action to display and flush the actual
+Submit acknowledgement before one explicit outer Advance in the same finite
+host action. Human responses retain their independently admitted host procedure.
 
 A bare `sessionId` (including `session_id`) declared by the resolved Operation
 is business context. CNCF preserves it in the original operation Request while

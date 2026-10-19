@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public V3 configuration and ordinary host/Operation UoW, with no File process.
   * Each fixture owns its normal handle and closes its runtime resources.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object WorkflowFileRuntimeFixture {
@@ -72,7 +72,7 @@ private[admission] object WorkflowFileRuntimeFixture {
         |  key: typed-file-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-15T00:00:00Z
+        |    start-at: '2026-10-15T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: typed-file-spec

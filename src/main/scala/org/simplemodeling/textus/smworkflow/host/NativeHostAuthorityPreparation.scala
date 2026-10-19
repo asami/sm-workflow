@@ -10,14 +10,16 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of explicit host Step/Phase permission input.
   * The responsible operator owns authorization and trusted provisioning.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 18, 2026
   */
 object NativeHostAuthorityPreparation {
   final case class Prepared(recordIdentity: String, record: Record)
 
   private val _step_names = Vector("sourceRevision" -> "source_revision", "planRevision" -> "plan_revision",
     "reviewEvidence" -> "review_evidence")
-  private val _phase_names = Vector("sourceRevision" -> "source_revision", "childInvocation" -> "child_invocation")
+  private val _phase_names = Vector("sourceRevision" -> "source_revision", "childInvocation" -> "child_invocation",
+    "reviewedCandidate" -> "reviewed_candidate")
 
   def goalC(context: V.WorkflowHostAuthorityContext, reference: V.WorkflowArtifactReference,
     participant: String, issuer: String, occurredAt: Instant): Consequence[Prepared] = for {

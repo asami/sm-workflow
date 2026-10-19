@@ -19,6 +19,16 @@ ownership, acceptance and PHASE-6.3 aggregate-full-validation responsibility
 remain unchanged. Gradual use may start after 6.3; this storage feature is
 delivered next, before Phase 7 workspace synchronization.
 
+The installed single-repository `sm-repository-sync` is already required for
+[6.3 production acceptance](phase-6.3.md#single-repository-production-acceptance--2026-10-18).
+This Phase adds archive/recording/lookup to that usable route; neither it nor
+its storage completion is a gate for initial synchronization use.
+
+Preserve the [6.3 use tiers](phase-6.3.md#three-skill-use-tiers--2026-10-18):
+ordinary SplitPhase and single-repository RepositorySync, limited single-repository
+GoalPhase. Evidence storage supports those routes without itself delivering the
+Phase 7 related-project management needed for full practical GoalPhase adoption.
+
 ## Main route first
 
 ```text

@@ -1,6 +1,6 @@
 ---
 name: sm-goal-phase
-description: Perform semantic work issued by GoalPhaseWorkflow in sm-workflow and return its typed result. Use for an issued development, review, repair, or planning request; the runtime owns execution and closure.
+description: Perform semantic work issued by GoalPhaseWorkflow in sm-workflow and return its typed result. Use for an issued development, review, repair, planning, or finding-recording request; the runtime owns execution and closure.
 ---
 
 # GoalPhase semantic work
@@ -29,7 +29,7 @@ routing context from prose, another task or native storage.
 
 You may read this exact host-exposed artifact as caller metadata, not Workflow
 storage or authority. Check that its owning outer family/session agrees with
-the current issued business view. Submit the declared generated result using
+the current issued business view. Supply the declared generated result using
 the current issued `submitOperation`, `submitSessionId` and `resultType`, with
 only genuinely supplied consumed metadata and `resultReference` when required
 by that Operation. For Goal child work, use the issued child submission ID and
@@ -38,14 +38,34 @@ for the host's next Goal Advance. Check ordinary submission response IDs too.
 
 The host admits Start selection, persists routing, displays actual Start/Advance
 messages and owns explicit outer Advance and the caller loop. Perform only the
-issued semantic work and exact typed Submit, display its actual `message`,
-boolean `accepted` and `outcome`, then return control to the host. Only the host
-may explicitly Advance after `accepted=true`. Rejection, failed transport,
-conversion failure, uncertain effect, incompatible result or ID mismatch must
-not cause success-path Advance, retry or restart. Human uses the host's
-independent actual human channel and genuine evidence; Wait follows its actual
-condition without spin/polling, and Terminal ends. Do not infer state or recover
-a route through status/history/storage. Workflow retains mechanical effects.
+issued semantic work, supply its actual typed result and genuine consumed
+metadata, then return control to the host. For supported issued routes the host
+uses `scripts/native-goal-command.py --action complete` with common options and
+the exact `--request` and `--submission`. This is a HOST action, not the semantic
+skill's authority to Advance. It uses only the existing fixed Goal pair, three
+Split pairs or three Repository review/repair/conflict pairs compatible with the
+outer family; other issued routes retain their existing explicit host procedure.
+
+The host's `complete` prepares its exclusive `advance` output child before
+Submit, retains the raw Submit response/stderr, validates and displays actual
+`message`, Boolean `accepted` and `outcome` as one flushed JSON line. Only a
+matching actual Submit ID with `accepted=true`, `outcome=accepted` permits one
+explicit ordinary outer Advance. A Goal-owned Repository child uses its actual
+child Submit ID and retained outer Goal Advance ID. The host retains the Advance
+response/stderr under `advance`, verifies its actual outer ID and kind, displays
+its JSON line and stops. No user continuation prompt or continuation-only AI
+turn occurs between accepted Submit and that Advance.
+
+Rejection, failed transport, conversion failure, uncertain effect, incompatible
+result or ID mismatch stops without success-path Advance, retry or restart.
+Failed/uncertain Advance retains the displayed Submit and available outputs,
+returns nonzero and permits no replay. Request returns semantic work to the
+host; Human uses its independent actual human channel and genuine evidence;
+Wait follows its actual condition without spin/polling; Terminal ends. The
+skill implements no caller loop, automatic semantic chaining or pending-call
+replay. Do not infer state or recover a route through status/history/storage.
+Workflow retains mechanical effects. Source edits and mechanical fixtures prove
+no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Host execution handoff
 
@@ -100,8 +120,9 @@ For an issued semantic request:
    and source. Later project defaults do not replace the issued task boundary.
    An adopted Plan without its Start-captured effective boundary is invalid;
    report the gap instead of resolving a replacement configuration.
-3. Return the semantic payload and honest evidence through the existing CNCF
-   entry at the exact completion route supplied by the issued request. Forward
+3. Return the semantic payload and honest evidence to the host for the existing
+   CNCF entry at the exact completion route supplied by the issued request. For
+   supported routes, the host selects `complete` as described above. Forward
    the original issued references and genuinely supplied consumed completion
    metadata. Supply only the requested semantic payload and evidence; do not
    require or manufacture an application claim/token, invent client metadata,
@@ -118,8 +139,288 @@ For an issued semantic request:
    or advisory never creates repair scope. Required not-evaluated prevents
    acceptance; a structurally valid decision-needed report uses the existing
    independent Human route. For an unconfigured Plan omit the report.
-4. Hand control back to the host. Report rejection or uncertain submission;
+4. Hand the actual result and control back to the host. Report rejection or uncertain submission;
    do not replay, select the next operation or implement a polling/advance loop.
+
+## Issued finding recording
+
+The current Goal definition is `goal-phase-business-operation-v7`. Use the actual
+issued `GoalPhaseFindingRecordingRequest` in `findingRecording.request`, its
+`GoalPhaseFindingRecordingResult` result type, and the distinct
+`submitGoalPhaseFindingRecording` route. Existing V6 Sessions keep their old
+definition and evidence scope; do not migrate, alias, replay or reinterpret them
+as V7. The host starts fresh V7 verification Sessions where required.
+
+This assignment is file editing only. Read each exact selected current journal
+or development-candidate document. Preserve existing narrative and records, then
+append the assigned source identity/revision, observation ID, summary and
+rationale in meaningful sections. Follow each Item's literal destination;
+categories may share one file. The issued selected Plan, original base,
+completed Steps, required issues and repair counts are context, not permission
+to implement an improvement. Never substitute current host defaults for a
+pending Request's captured destinations or change its source attribution.
+
+Return exactly the assigned source keys in order. Each ItemResult includes
+`sourceReference`, `identity`, honest `outcome`, `records` and `rationale`.
+Use `recorded` only for the actual saved content, `partial` for partly saved
+content, or `failed` when no record was saved. Recorded/partial items name one
+or more exact `{file,section}` records in their assigned destination; failed
+items have no records. Overall `outcome` is `completed` when all items were
+recorded, `failed` when all failed, and `partial` otherwise. Explain missing
+files, partial edits or failures truthfully. Do not invent saved sections.
+
+Submit only the declared business Result with the issued Session and genuine
+consumed metadata/reference. The distinct acknowledgement reports committed
+acceptance, not successful file editing beyond the supplied outcome. Display
+its actual accepted/outcome/message and return control to the host. Submit
+performs no File/Git/SBT effect; the host's later explicit Advance retains the
+real outcome and owns bounded staging/closure. No automatic retry, optional
+implementation adoption, counter/reset, new task or recursive review follows
+partial/failed recording. Do not stage, commit, run commands or supply closure
+authority. Missing policy or an oversized accumulated batch is the host's
+truthful Wait, not an invitation to invent destinations or split the batch.
+
+Independent review may return nonblocking `reviewObservations` alongside its
+ordinary required `findings` and issue coverage. Give every observation an
+exact identity, `HYGIENE` or `DEVELOPMENT_CANDIDATE` category, summary and rationale.
+Keep required blockers in their existing required result fields. Observations
+never satisfy a blocker or create adopted implementation scope. Workflow uses
+the actual accepted result reference and waits for the real Step commit or
+accepted Phase review before issuing recording. Source skill and declaration
+metadata alone do not establish installed-skill execution or Step acceptance.
+
+## Issued dependency scope
+
+Follow the existing [dependency-scope contract](../../docs/spec/goal-phase-dependency-scope.md).
+Ordinary public Usage Contract use and inspection need no dependency-change
+proposal. Internal changes to a dependency Component, including a Component in
+the same repository, require the actual admitted scope. Component `identity`,
+`repository` and `workspace` values are logical identities; they grant no path
+access or executable permission.
+
+The existing optional `dependencyProposal` contains exactly `identity`, `revision`,
+`discovery`, `requester`, `dependency`, `usageContract`, `reason`, `paths`,
+`acceptance`, `dependentWork` and `discoveredEdits`, under the linked strict
+contract. Requester and dependency identify distinct Components; `usageContract`
+and `dependentWork` use the existing ContextReference. Select bounded linked work
+and acceptance, and unique literal workspace-relative files in `paths`, relative
+to the dependency's declared workspace; directories and prefixes do not expand
+scope. Keep `discoveredEdits` explicit, including when empty. Only
+`decision-needed` may carry a proposal, never completed/accept, and it cannot
+coexist with `planRevision`. `PLANNING` or `IMPLEMENTATION` discovery belongs to
+`ImplementStep`, `REPAIR` to `RepairStep`, and `REVIEW` to `ReviewStep` or
+`ReviewPhase`.
+
+Report actual discovered unapproved dependency edits through `REVIEW`, with
+`discoveredEdits` an exact subset of proposed `paths`. Preserve those edits for
+Human judgment; neither silently approve nor revert them. Disclosure grants no
+permission to create such edits, and independent review remains read-only.
+
+The saved Human choices are exactly `ApproveDependencyScope`,
+`RejectDependencyScope`, `Defer` and `Cancel`. Actual direction requires the
+existing independent Human channel and genuine evidence. `ResumeAssignedWork`,
+`ContinueRepairs` and `AdoptPlanRevision` are not dependency consent. The semantic
+worker must not manufacture answers, prepare Human evidence itself or run a
+second caller loop. Consume issued `decisionContext` only as the actual requesting
+result and proposal, with `decisionReference` from the retained genuine Human
+answer; a claimed AI reference cannot replace it.
+
+Approval covers that one exact linked unit, its acceptance and dependent work.
+Reuse the saved scope without asking again per selected file; a new out-of-scope
+proposal requires a new question. Rejection retains its actual rationale; Defer
+and Cancel remain paused. Continuation retains the same semantic kind, Plan,
+original base, completed Steps and repair counts. Approval neither makes a
+reviewer an editor nor executes linked work. Target, File, command, Git, SBT and
+acceptance permission remain with their existing owners, including the host's
+separate explicit Advance.
+
+This source guidance does not establish a fresh packaged bundle or actual
+installed-task consumption. Load the fresh packaged skill for the actual task
+and retain separate evidence. Prose and specification-owned tests establish no
+actual Human direction, linked dependency editing, execution or acceptance;
+those require their own genuine evidence and existing admission gates.
+
+## Issued repair and independent review
+
+When the issued ContextBundle supplies selected Slice validation-plan Sources,
+use only each issued exact path, identity, Slice reference and required condition
+IDs. Author or update that file as ordinary work within the issued owned
+Candidate. The initial assignment may create its missing selected file. Never
+guess a filename, search for a replacement, change host configuration or discovery
+scope, or silently narrow requirements to make checks pass. Unselected Sources
+grant no work scope. Review the selected file together with the original
+requirements, current Candidate and actual check evidence; implementation or
+repair completion cannot accept its own plan. Every plan change still requires
+the existing independent review and admission.
+
+Follow the exact closed file contract in
+[Slice validation-plan selection](../../docs/spec/goal-phase-validation-metadata.md#explicit-slice-validation-plan-source):
+`{"schemaVersion":"sm-workflow.slice-validation-plan.v1","payload":...}`.
+The payload has exact `identity`, `revision`, `sliceRef`, nonempty unique
+`acceptanceConditions` with meaningful descriptions, `metadataSelection`,
+`additionalOperations`, `executionParameters` and `acceptanceCoverageRefs`.
+Retain the issued condition-ID set and provide exactly one coverage entry for
+each condition, selecting actual query coverage or exact operation references.
+All maps and arrays are present even when empty; null and unknown fields are
+invalid. Coverage must hold against the runtime's actual complete selected
+inventory, not a claimed registration or fabricated receipt.
+
+Author exact typed parameter data against each actual operation's trusted
+declared input schema under the linked normative contract. The producer supports
+Text, Boolean and integral Long primitive values and matching defaults (schema
+kinds `Text`, `BooleanValue` and `Integer`). Unknown names, wrong kinds, explicit
+null and missing required values are rejected by the producer. Do not infer a
+schema from requested values, coerce input, discard invalid values, silently
+narrow requested variants or fall back to an empty map. An actual empty schema
+accepts only empty input. Keep every map and array explicit in the closed v1 file,
+including each invocation's `parameters` and the payload's `executionParameters`.
+
+Global `executionParameters` apply first; each invocation's `parameters` overrides
+the same keys. The actual producer binds the declared defaults before union
+deduplication: equal normalized logical references and typed values execute once,
+while distinct values for the same reference remain distinct runnable variants.
+Runtime owns selection, schema/default checks, the ordinary File UoW read,
+producer discovery, exact union/binding, execution and retained check results.
+The skill does not parse annotations, choose execution commands, run effects,
+replace host scope or accept a Plan. Retained selection is business context,
+not independent review or Step/Phase acceptance; independent review and admission
+retain their existing owners. This source guidance does not establish a fresh
+packaged bundle, actual installed-task consumption, successful nonempty runtime
+inputs or AI validation. Those require their separate actual evidence.
+
+When implementation or repair discovers a genuine test, suite, requirement or
+design gap, return `decision-needed` and an optional structured `planRevision`
+Proposal: `{identity, revision, reason, plan}`. Supply the complete raw Plan with
+no `effectiveAcceptance`. This route changes only the current unclosed Step.
+Keep Plan identity, Phase, repository, repair limit,
+Phase checks, classifications, ownership, dependencies and every other Step;
+only the current unclosed Step's purpose and declared literal check selection
+may change within this route. Describe any explicit acceptance adoption through
+the Plan's ordinary acceptance fields. Keep every required acceptance, issue and
+Fix assessment report honest; a proposal does not supply a `FIXED` correction.
+Do not amend the current Plan, broaden the selected host profile or adopt an
+improvement automatically. Source mutation and permissions require their
+separate admission. With an existing document source, author the complete raw
+proposed Plan in its selected Phase document and change only the current
+unclosed Step's checklist acceptance. Keep the two source paths, exact Step
+bindings, item membership, every checked flag and all other items unchanged.
+The imported raw Plan must equal the complete submitted Proposal. Fresh
+question preparation acquires both files once through the existing File UoW
+owner, captures project acceptance and saves their typed Bound as business data.
+It grants no source permission, integrity certificate or consent.
+
+The actual saved revision question offers exactly `AdoptPlanRevision`,
+`RejectPlanRevision`, `Defer` and `Cancel`. Only independently admitted explicit
+adoption selects that question's captured Plan. Rejection retains the original
+Plan and passes its rationale as same-work context; defer and cancel remain
+paused. `ResumeAssignedWork` and `ContinueRepairs` cannot adopt a proposal or
+bypass an exhausted repair window. Human Submit runs no test and dispatches no
+work. The following explicit host Advance owns implementation through the
+existing execution profile and Required SPI. Saved capture remains selected
+after later host defaults or document text change. Retained questions and Human
+completion validate the saved capture against its actual previous selection
+without rereading the files or recapturing project configuration. Only explicit
+independently admitted adoption selects its saved Plan and document acceptance
+for the following same-Session implementation. The native walker retains actual
+completed-Step progress and existing document policy, validating that policy
+against the adopted Plan and fixed candidate paths. Rejection, defer and cancel
+retain the old documents, policy and progress; no file restoration is implied.
+Ordinary document refresh and progress keep their existing owners at the next
+fresh frontier. Checks, independent review, Step commit and
+Phase closure retain their mandatory gates. Review reports gaps as findings
+for later repair, with only the disjoint ReviewPhase proposal case below.
+
+An actual `ReviewPhase` with a genuine integrated finding after all accepted
+Steps may return `decision-needed` with one complete raw `planRevision` Proposal.
+Use a fresh revision and omit `effectiveAcceptance`. Retain the Plan identity,
+Phase, repository, repair limit, Phase checks, Phase review classification and
+raw acceptance unchanged. Preserve the exact entire accepted Step prefix and
+its completed commits. Append exactly one new distinct corrective Step, with
+nonempty selected declared checks, dependencies exactly all old Step IDs and
+owned paths within the original owned-path union; the total must be at most
+64 Steps. Document-backed Phase corrective adoption is unsupported: report that
+gap without silently discarding the documents or their bindings. Only a genuine
+independent Human `AdoptPlanRevision` selects this proposal. `ReviewStep` and
+review outcomes `accept` or `repair` cannot carry a Plan proposal;
+`dependencyProposal` and `planRevision` remain mutually exclusive. An ordinary
+reviewer remains read-only and cannot adopt, dispatch or edit. This proposal
+does not grant any of those authorities.
+
+Affected Phase re-review uses the actual latest prior reports and judges the
+current combined scope together with the original genuine finding. Unaffected
+judgments remain context; never present them as invented fresh PASS results.
+
+Fixture-owned specifications establish no genuine AI authoring, genuine Human
+adoption or integrated Step acceptance. Actual authoring and independent Human
+adoption evidence, RECORD/DECISION and the owning Step acceptance remain required.
+
+Read the original requirements, saved acceptance boundary and current Candidate
+together with the issued repair scope. Actual failed test diagnostics and actual
+independent review findings are distinct evidence: use the supplied diagnostic
+receipt or finding correspondence for the issue being repaired. Preserve the
+issued issue IDs. Classify every required unresolved issue in the selected
+repository and Step exactly once in the typed `issueReport`; never silently drop
+an issue, invent an ID, infer resolution from no report or replace the required
+issue set with a new narrative list.
+
+Issued `work.review.priorReviews` is native-reconstructed business context.
+Preserve each actual report's original kind, Step, generation, candidate, checks,
+result references and actual result, with exact source/target and prior findings.
+`ReviewStep` considers the current Step together with prior Phase reports;
+Phase review considers the latest actual reports. Repair follows the actual
+original review and directive. Do not manufacture reviewer/provider identities
+or claim that copying a report grants independence or authority. At closing
+re-review, assess only genuinely affected meaning and preserve applicable
+unrelated conclusions.
+
+For repair, `FIXED` is an honest semantic correction claim awaiting the owning
+Workflow's validation. `UNRESOLVED` and `DECLINED` leave the issue open. `BLOCKED`
+follows the actual `decision-needed` result semantics and genuine independent
+Human route; it is not an alternative way to claim completion. Supply concrete
+rationale for each disposition and only genuinely available evidence. An optional
+`fixAssessment` may describe the actual logical change, affected units and
+convergence with honest confidence. Depth, minor-fix and convergence advice do
+not authorize continuation or determine/refund repair counts.
+
+For independent review, assess the original requirements and current Candidate
+against the actual test diagnostics and review findings, including every required
+`REVIEW` issue. Return its typed coverage as `RESOLVED`, `RECURRING` or
+`NOT_REVIEWED`. A recurring issue's `findingOrdinal` is the actual one-based
+correspondence to the returned finding, never a made-up receipt or an issue index.
+An empty or absent report does not automatically accept the work. Keep actual
+reviewer/provider identity and observed coverage honest; passing tests alone do
+not supply independent review. Names, comments, examples and Given/When/Then
+meaning are assessed in this same ordinary independent review. Batch adopted
+semantic corrections into the admitted work; do not create another review service.
+
+An original independent `ReviewStep` with outcome `repair` may optionally supply
+`result.completionConditions` exactly as
+`{"kind":"terminal-lf","paths":[...]}`. It requires genuine nonempty findings
+and all semantic judgment settled except those terminal-LF conditions. Supply
+one unique current-owned text path per finding, with 1..16 paths, and no Plan or
+dependency proposal. Honest required acceptance unsatisfied details/findings
+and ordinary issue coverage remain mandatory; the conditions must agree with
+the actual findings. No actor is required to provide this optional field.
+Implementation, Repair, Phase review and every other outcome cannot use it.
+
+The real `RepairStep` still reports actual `FIXED` issue dispositions. Native
+actual fresh complete selected Compile+Test evidence and exact typed blob, mode
+and path proof may resolve those original issues and proceed through ordinary
+closing without a new semantic review. Any uncovered semantic or other delta
+still requires affected re-review. No actor claims reuse or acceptance, issues
+a fake fresh PASS, or creates an omission certificate. The known Closing
+index-EOF continuation remains a separate ordinary retained-precheck case.
+These conditions add no AI execution, review or adoption authority and no new
+engine.
+
+Treat issued `repairProgress` as read-only current-window context. A genuine
+Human `ContinueRepairs` decision renews the current repair window while cumulative
+issue/check history remains. Only an accepted Step and its actual observed commit
+reset progress for the next Step; a WIP checkpoint, advisory assessment, semantic
+Submit or redisplayed request does not. The host owns dispatch, commands, Advance
+and consent. Editing this source skill does not establish installed-task skill
+consumption: the host must install and load the exact current skill bundle for
+the actual issued semantic task and retain that separate execution evidence.
 
 Workflow owns mechanical validation, command execution, review admission,
 progression, commit receipts and recovery. Do not run Git, SBT or other external

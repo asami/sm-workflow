@@ -12,14 +12,16 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 12, 2026
+ *  version Oct. 12, 2026
+ * @version Oct. 18, 2026
  */
 final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val operations: Vector[OperationDefinition] = Vector(
     SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation,
     SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation)
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseFindingRecordingOperation)
   private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "GoalPhaseService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -40,16 +42,21 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       absent.foreach(_.isSuccess shouldBe false)
       val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("all four Provided operations declare their business inputs, without a universal argument")
+      And("all five Provided operations declare their business inputs, without a universal argument")
       operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
         "advanceGoalPhase" -> Some("GoalPhaseAdvanceInput"),
         "submitGoalPhaseWorkResult" -> Some("GoalPhaseWorkResult"),
-        "submitGoalPhaseOrderedDecision" -> Some("GoalPhaseOrderedDecisionAnswer"))
+        "submitGoalPhaseOrderedDecision" -> Some("GoalPhaseOrderedDecisionAnswer"),
+        "submitGoalPhaseFindingRecording" -> Some("GoalPhaseFindingRecordingResult"))
+      operations.last.specification.request.parameters.map(_.name) shouldBe Vector(
+        "sessionId", "result", "resultReference", "completionFacts", "executionEvidence")
+      provided.find(_.name == "submitGoalPhaseFindingRecording").get.resultType shouldBe
+        Some("GoalPhaseFindingRecordingSubmissionResult")
     }
 
-    "resolve the five real semantic and Human capabilities in the ordered definition" in {
+    "resolve the six real semantic Human and recording capabilities in the ordered definition" in {
       Given("the generated ordered Workflow and its actual native definition consumer")
       When("the definition and Required operations are resolved")
       val workflow = GoalPhaseWorkflowStateMachineWorkflow1.workflow
@@ -57,12 +64,18 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       val native = admission.GoalPhaseRuntimeCatalog.loadC()
       Then("the native catalog is usable and only the current assignment capabilities remain")
       native.isSuccess shouldBe true
-      workflow.version shouldBe "goal-phase-business-operation-v6"
+      workflow.version shouldBe "goal-phase-business-operation-v7"
       workflow.states.map(_.name) shouldBe Vector("Pending", "OrderedImplementation", "OrderedInspectCandidate",
         "OrderedValidation", "OrderedReview", "OrderedRepair", "OrderedClosing", "PhaseInspection",
         "PhaseValidation", "PhaseReview", "PhaseClosing", "PhaseDecision", "PhaseClosed")
       capabilities shouldBe Set("goal-phase-implementation-capability", "goal-phase-repair-capability",
-        "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability")
+        "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability",
+        "goal-phase-finding-recording-capability")
+      val recording = workflow.requiredOperations.find(_.identity.capability == "goal-phase-finding-recording-capability").get
+      recording.operation.service shouldBe "GoalPhaseFindingRecordingService"
+      recording.operation.operation shouldBe "recordGoalFindings"
+      recording.inputType.map(_.value) shouldBe Some("GoalPhaseFindingRecordingRequest")
+      recording.resultType.map(_.value) shouldBe Some("GoalPhaseFindingRecordingResult")
     }
   }
 

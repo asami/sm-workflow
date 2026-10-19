@@ -102,16 +102,20 @@ mandatory child per step. Phase 6 implements this
 [operating policy](phase-6.md#parent-chat-delegation-and-review-context--2026-10-12)
 with P6-DG01..03; Phase 9 extends it with validation-observed re-routing.
 
-Staged quality review, adopted 2026-10-13: [Phase 6.1 STEP](phase-6.1.md#staged-quality-review-across-projects--2026-10-13)
-and [Phase 6.3 PHASE/FINAL](phase-6.3.md#staged-quality-review-across-projects--2026-10-13)
-drives CNCF Phase 106 generic Evidence/Admission integration, Cozy Phase 81
-CML review metadata and cbd-support Phase 15 scoped quality evaluation. Connect
-a real Step first, then integrated Phase Review, affected repair/re-review and
-Final evidence reuse. P6-SQ01..05 and each owner's checklist define the bounded
-dependencies; do not wait for unrelated full roadmaps or create circular Phase
-closure gates. Phase 7 consumes the route; Phase 9 adds convergence/provider
-switching. Initial review/Final behavior belongs to Phase 6, without reopening
-Phase 5.2/5.3 or implying automatic execution of another project's plan.
+Production-first revision, adopted 2026-10-18: [Phase 10](phase-10.md) owns the
+unfinished CBD-backed P6-SQ01..05 integration and CBD15/15.1 handoffs. Its
+[checklist](phase-10-checklist.md) retains their IDs and unchecked status.
+Phase 6.1 keeps ordinary reviewer-result/Admission/commit, 6.2 repair and 6.3
+integrated review/Final/full validation. Initial production use after 6.3 does
+not wait for CBD. Phase 10 is scheduled separately after initial use; it neither
+waits for nor blocks unrelated 6.4/7/8/9 work. Keep the accepted Phase 6 managed-
+effect/CBD16 slice and all existing source/evidence. See the
+[development handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+
+The earlier 2026-10-13 staged-review allocation and same-day CBD15/15.1 adoption
+remain history. Transfer unfinished integration rather than claiming it complete.
+Generic review, independence, actual authority and meaningful acceptance remain
+required for initial use.
 
 Revised 2026-10-06: Phase 5 builds and validates the runtime without creating
 skills. Phase 6 defines abstract thinking modes and the skill interface, creates
@@ -139,15 +143,49 @@ in Phase 6, using the corrected runtime contract.
 | [5.2: Minimal interface and complete migration](phase-5.2.md) | Complete session-resolved Start/advance/result inputs, align public definitions and remove residual checks and legacy routes | Followed by Phase 5.3 business-type redesign; preserve preceding closure/history |
 | [5.3: Common Workflow loop and minimal data access](phase-5.3.md) | Align all three families with typed Start/Advance/Submit, one session per execution and chat-oriented submission results | Before Phase 6; delete obsolete selectors, unnecessary reads and their processing without compatibility routes |
 | [6: Typed modes and real skill/client completion](phase-6.md) | Actual semantic request/result/session/provider loop and bounded GoalPhase task | Freeze the usable client contract; successors remain planned |
-| [6.1: Runtime commands, live plans and Step Admission](phase-6.1.md) | Actual command lifecycle, document sync, deterministic maintenance and scoped quality/commit | Consume Phase 6 typed effect contracts/evidence; use adopted bounded producer scope |
+| [6.1: Runtime commands, live plans and Step Admission](phase-6.1.md) | Actual command lifecycle, document sync, deterministic maintenance and ordinary review/commit | Consume Phase 6 typed effects/evidence; no CBD review handoff wait |
 | [6.2: FIX, recording and dependency decisions](phase-6.2.md) | Correction/improvement/reset, semantic maintenance, actual discovery recording and Human dependency decisions | Consume Phase 6.1; recording does not adopt repairs |
-| [6.3: Integrated quality/Final and start of use](phase-6.3.md) | Whole-family connected acceptance, PHASE/FINAL and aggregate repository-full validation | Consume Phase 6.2; begin gradual daily use after accepted closure |
+| [6.3: Integrated quality/Final and start of use](phase-6.3.md) | Three-family connected acceptance (P63-USE01..03), PHASE/FINAL and aggregate repository-full validation | Ordinary SplitPhase and single-repository RepositorySync; limited single-repository GoalPhase; no wait for 6.4/7/8/9/10 |
 | [6.4: Local Evidence storage and AI recording](phase-6.4.md) | Notification -> exact destination -> local archival -> actual AI journal record -> fresh-process lookup; then bounded failure/batch/retention branches | Newly planned after 6.3 and before 7; own [checklist](phase-6.4-checklist.md) and validation/closure, outside the 6–6.3 aggregate chain |
-| [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Continue use; deliver the bounded SimpleModeler overlay acceptance and collect optional later needs in Phase 8 |
+| [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 
 
 ## Applied Phase 6 split — 2026-10-13
+
+### Production availability by completed Phase — clarified 2026-10-18
+
+These are release/acceptance commitments, not claims that current code already
+provides every feature. Initial production use starts after 6.3 acceptance;
+6.4 storage, 7 workspace breadth, 8 selected extensions, 9 observed routing and
+10 CBD review integration are not prerequisites for that initial use.
+
+| Completed Phase | Available delivery | Production-use boundary |
+| --- | --- | --- |
+| 6 | Installed skill/client start, work/result/continuation, configured semantic roles and shared typed Git/SBT/File effects | Bounded real task; whole-family initial production acceptance remains in 6.3 |
+| 6.1 | Runtime command/result ownership, live plan/writeback, maintenance and ordinary review/Admission/local Step commit | Basic development route; no mandatory CBD review |
+| 6.2 | TEST_FIX/REVIEW_FIX, affected validation, findings/recording, continuation/reset and dependency decisions | Repair-inclusive development route ready for integrated acceptance |
+| 6.3 | Installed skills, integrated review/Final and aggregate validation | `sm-split-phase` and single-repository `sm-repository-sync`: ordinary production use. `sm-goal-phase`: limited production use within one selected repository, through development/repair/validation/review/local closure |
+| 6.4 | Git-excluded evidence archive, exact destination for AI recording, durable lookup and retention | Adds storage to the 6.3 use tiers; does not postpone ordinary split/sync use or expand GoalPhase to related-project management |
+| 7 | Root/related-repository dependency-aware sync, dedicated worktrees and development artifact publish/select/verify/detach/prune | Full practical adoption of GoalPhase together with related-project management. GoalPhase still closes locally; RepositorySync and artifact operations own cross-project synchronization and artifact selection |
+| 8 | Finite extensions selected from observed use and retained needs, potentially additional transports/providers/management and sandbox scopes | Actual delivered features depend on explicit scenario selection; no blanket promise of all server/MCP/local-LLM features |
+| 9 | Detect non-convergence from validation/repair history and switch admitted provider/profile within the acceptance boundary | Adds observed routing and cost/convergence improvement to existing role selection and repair |
+
+The concrete 6.3 condition is
+[single-repository production acceptance](phase-6.3.md#single-repository-production-acceptance--2026-10-18),
+tracked once as P63-USE01 in the
+[shared checklist](managed-test-suites-phase-checklist.md#phase-63-production-use-acceptance--2026-10-18).
+The [development handoff](../journal/2026/10/2026-10-18-phase-63-single-repository-production-handoff.md)
+preserves active work and existing evidence. A normal one-repository sync such
+as development-workstation must not be deferred to Phase 7 because that Phase
+also contains RepositorySync work. Repository names are examples, not hard-coded
+targets or authorization to push them during planning.
+
+The [three-skill use-tier clarification](phase-6.3.md#three-skill-use-tiers--2026-10-18)
+and [latest handoff](../journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md)
+make this distinction explicit. Limited GoalPhase use is a supported scope, not
+permission to skip required review, validation or actual local closure. Normal
+SplitPhase use does not imply Phase 7 worktree provisioning or artifact management.
 
 The current planned sequence is **6 -> 6.1 -> 6.2 -> 6.3 -> 6.4 -> 7**, followed by
 unchanged 8/9 scheduling. [Phase 6's split map](phase-6.md#applied-split--2026-10-13)
@@ -166,6 +204,32 @@ own validation/closure; it does not move the aggregate owner from 6.3, postpone
 gradual-use eligibility or absorb existing Phase 6.2 recording responsibilities.
 Phase 6.4's [checklist](phase-6.4-checklist.md) is separate from the managed-suite
 checklist. This planning addition claims no implementation, execution or commit.
+
+## Cost-first delivery order
+
+Cost-first execution order, adopted 2026-10-18: [6.3](phase-6.3.md#cost-first-implementation-order--2026-10-18)
+reuses accepted setup/evidence, completes ready ordinary split/single-repository
+sync routes, fills limited GoalPhase gaps, then accepts/releases the complete
+initial-use scope. [Phase 7](phase-7.md#cost-first-execution-order--2026-10-18)
+connects one producer/consumer through A into C workspace synchronization before
+the remaining generation/selection/prune and workspace branches. Required
+driver-specific generation moves forward with the main route. Closure obligations,
+6.4's predecessor role, existing work IDs and accepted evidence remain unchanged.
+See the [development handoff](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
+
+The [Core execution-overhead follow-up](phase-6.3.md#execution-overhead-in-ordinary-production-acceptance--2026-10-18)
+also belongs to 6.3's existing P63-USE01..03 acceptance. Preserve active 6.2 work
+and evidence; prove host-owned continuous progression, proportionate batches and
+applicable validation reuse in the normal installed routes. Report available cost
+facts and unknowns there, without an extra benchmark, gate or savings threshold.
+The [adoption handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md)
+records the remaining gaps and safe adoption sequence.
+
+## Independent post-adoption review integration
+
+| Phase | Delivery boundary | Scheduling |
+| --- | --- | --- |
+| [10: CBD Review Integration](phase-10.md) | CBD prepare/external execution/result acceptance, then integrated review, affected repair and Final reuse; P6-SQ01..05 | After initial production adoption and required bounded producer handoffs; no dependency on whole 7/8/9 completion and no initial-use gate |
 
 ## Scope and implementation policy
 
@@ -195,7 +259,7 @@ The detailed 2026-10-07 execution plans preserve the accepted scope:
 | [5.2](phase-5.2.md#connected-implementation-order) | One minimal public contract through all three normal workflows; migrate connected callers/storage and remove old paths in the same batch | Integrated specs/review; hand session-resolved behavior to Phase 5.3 |
 | [5.3](phase-5.3.md#connected-implementation-order) | Connect the full GoalPhase loop first, then SplitPhase/RepositorySync; align types/responses and delete old selection and unnecessary-read processing in the same delivery | Integrated specs/review; hand the common loop, session and chat-display contract to Phase 6 without compatibility routes |
 | [6](phase-6.md#goal-and-connected-implementation-order) | Actual installed skill/client/modes and one-session result loop on accepted runtime | Accepted bounded GoalPhase completion and frozen interface |
-| [6.1](phase-6.1.md#goal-and-connected-implementation-order) | Runtime commands/live plans/maintenance and real STEP quality connection | Actual Step Admission/commit and execution/plan/evidence handoff |
+| [6.1](phase-6.1.md#goal-and-connected-implementation-order) | Runtime commands/live plans/maintenance and ordinary Step review/Admission | Actual CBD-independent Step Admission/commit and execution/plan/evidence handoff |
 | [6.2](phase-6.2.md#goal-and-connected-implementation-order) | FIX/improvement/reset, recording and dependency decisions | Accepted connected branches and complete contracts |
 | [6.3](phase-6.3.md#goal-and-connected-implementation-order) | Integrated PHASE/repair/FINAL and setup/use acceptance | Aggregate full validation and gradual-use eligibility |
 | [6.4](phase-6.4.md#main-route-first) | First archive one released file, return its exact path to actual AI recording and read it after restart; then add failure/batch/compression/retention branches | Accepted local storage interface, separate Phase validation and Phase 7 handoff |

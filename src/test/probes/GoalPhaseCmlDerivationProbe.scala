@@ -6,7 +6,8 @@ import org.goldenport.kaleidox.{Config => KaleidoxConfig, Model}
 
 /** Exercise the actual Scala2.12 producer for the ordered phase and Decision roles.
   * @since   Oct.  6, 2026
-  * @version Oct. 13, 2026
+  *  version Oct. 13, 2026
+  * @version Oct. 18, 2026
   */
 object GoalPhaseCmlDerivationProbe {
   def main(args: Array[String]): Unit = {
@@ -18,7 +19,7 @@ object GoalPhaseCmlDerivationProbe {
     val selected = CompositeStateMachineCml.workflowDefinitions(model).filter(_.identity == "GoalPhaseWorkflow")
     require(selected.size == 1, "Expected one GoalPhase Workflow")
     val workflow = selected.head
-    require(workflow.version == "goal-phase-business-operation-v6", workflow.version)
+    require(workflow.version == "goal-phase-business-operation-v7", workflow.version)
     val phases = Vector("Idle", "Implementation", "InspectCandidate", "Validation", "Review", "Repair", "Closing",
       "PhaseInspection", "PhaseValidation", "PhaseReview", "PhaseClosing", "Decision", "Closed")
     val named = Map("Idle" -> "Pending", "Implementation" -> "OrderedImplementation",
@@ -29,7 +30,7 @@ object GoalPhaseCmlDerivationProbe {
       "Decision" -> "PhaseDecision", "Closed" -> "PhaseClosed")
     // When each actual phase configuration is derived from normalized producer output.
     val actual = phases.map { phase =>
-      val configuration = Map("phase" -> phase, "orderedDecision" -> "Retained")
+      val configuration = Map("phase" -> phase, "orderedDecision" -> "Retained", "findingRecords" -> "Retained")
       val states = workflow.compositeStateMachine.derivations
         .filter(_.configuration.bindings.map(b => b.role -> b.state).toMap == configuration).map(_.state)
       (phase, states)
@@ -40,6 +41,17 @@ object GoalPhaseCmlDerivationProbe {
       require(states == Vector(named(phase)), s"$phase: $states != ${named(phase)}")
     }
     require(actual.count(_._2 == Vector("PhaseClosed")) == 1, "Only whole-Phase closure derives PhaseClosed")
-    println("accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v6 combinations=13 phaseClosure=1")
+    require(workflow.compositeStateMachine.initialConfiguration.get.bindings.map(b => b.role -> b.state).toMap ==
+      Map("phase" -> "Idle", "orderedDecision" -> "Retained", "findingRecords" -> "Retained"), "Initial roles differ")
+    require(workflow.requiredOperations.size == 6, "Expected six actual Required Operations")
+    val recording = workflow.requiredOperations.find(_.capability == "goal-phase-finding-recording-capability").get
+    require(recording.action.identity == "RecordGoalFindings", "Recording action differs")
+    require(recording.action.operation.service == "GoalPhaseFindingRecordingService", "Recording service differs")
+    require(recording.action.operation.name == "recordGoalFindings", "Recording operation differs")
+    require(recording.action.operation.inputType == Some("GoalPhaseFindingRecordingRequest"), "Recording input differs")
+    require(recording.action.operation.outputType == Some("GoalPhaseFindingRecordingResult"), "Recording result differs")
+    require(workflow.providedOperations.map(_.operation.name).toSet == Set("startGoalPhase", "advanceGoalPhase",
+      "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording"), "Provided Operations differ")
+    println("accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v7 combinations=13 phaseClosure=1")
   }
 }

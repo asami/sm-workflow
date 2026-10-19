@@ -1,5 +1,12 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+Production-first revision (2026-10-18): references below to Phase 6 delivery of
+CBD-backed P6-SQ01..05 are superseded by [Phase 10](phase-10.md). Consume the
+accepted ordinary review/Admission route for this Phase; do not wait for Phase
+10 or claim deferred CBD coverage. Reuse CBD integration when actually accepted
+and explicitly selected. Other owned delivery/validation obligations remain.
+
+
 Status: planned
 Planned: 2026-10-04
 Depends on: Phase 1, Phase 5, Phase 6.3, Phase 6.4
@@ -38,13 +45,50 @@ than build another workflow engine or selector. Use one explicitly configured
 driver workspace for overlay and repository tests; project names remain data.
 These batches preserve every overlay and workspace acceptance item below.
 
+### Cost-first execution order — 2026-10-18
+
+Keep the accepted 6.3 skills in production use while extending them; consume
+6.4 evidence storage under the existing predecessor contract. The fastest useful
+extension is one related producer/consumer development route, not completion of
+every overlay operation before any workspace synchronization.
+
+Execute **A's common bindings and one-producer/consumer main route -> C's minimum
+connected workspace route -> remaining B and C cases -> D closure**. Batch letters
+and work IDs retain their identities; this ordering creates no new tracking or
+review cycles. Required generation from B is brought into the first route only
+when that selected consumer actually needs it, not as a prerequisite to all C work.
+
+| Order | Reuse and missing implementation | Exit evidence |
+| --- | --- | --- |
+| 1 | Reconcile 6.3 local GoalPhase/RepositorySync, 6.4 archive and existing CNCF resources/SBT/Cozy behavior. Bind one explicit producer/consumer workspace and identify remaining CNCF101 closure duties early. | Actual required contract gaps and evidence references in the current plan; no fresh workspace or helper layer if the existing one suffices. |
+| 2 | A: connect local development/commit to explicit publish/select/status and actual consumer compilation. Bring required generation wiring forward from B for this driver. | One selected development artifact reaches the consumer through normal operations, with truthful failure outcomes and necessary focused validation. |
+| 3 | C: extend the accepted single-repository sync to this root plus related producer, reusing typed Git, validation and admission. | Actual dependency-ordered validation and permitted non-force convergence on the same workspace. Artifact publication/selection remains explicit; Git sync cannot switch it. |
+| 4 | Complete A's second-consumer isolation and all remaining B/C requirements using the same driver: generation mismatch/correction, update/rollback/detach, verify/prune protections, workspace conflict/failure branches and plan refresh. | Applicable existing evidence plus bounded changed-path tests cover every retained checklist obligation; no new installation per branch. |
+| 5 | D: assess integrated behavior, finish missing required regressions, independent review and CNCF101 acceptance/closure, then Phase 7 closure and supported-use guidance. | Full practical GoalPhase adoption with related-project management, preserving local-development/artifact/sync ownership. |
+
+Keep necessary failure checks with the operation they protect: incomplete
+publication must never become selectable, and unvalidated/unauthorized changes
+must never be pushed. Later branch completion is not permission to defer these
+conditions. Validate the main route as soon as it connects. Do not rerun unchanged
+6.3 workflows or producer internals merely to populate Phase 7 evidence; selection
+changes do require affected generation/compilation/validation even when source
+revisions match. Reuse accepted integrated evidence during D rather than repeat
+every successful scenario. All six SimpleModeler driver cases, nine workspace
+cases, existing checklist rows and CNCF101 closure remain required.
+
+Early A/C success does not declare Phase 7 complete or restore general worktree
+use before the applicable acceptance. Continue the already accepted 6.3 scope;
+record Phase 7 driver execution as bounded development until its full adoption
+boundary passes. No Phase 8/9/10 wait or new cost-measurement framework is added.
+See the [execution-order handoff](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
+
 ### Shared execution and plan ownership — 2026-10-12
 
-Reuse Phase 6's accepted staged-review route (P6-SQ01..05) and CNCF 106 / Cozy 81 /
-cbd-support 15 handoffs. Extend review scope to actual workspace dependencies and
-consumer changes; do not implement another review engine or repeat whole-Phase
-semantic review at Final. Initial four-project connection is a Phase 6 delivery,
-not a new Phase 7 prerequisite to develop from scratch.
+Reuse the accepted ordinary review/Admission route from 6.1/6.3. Extend review
+scope to actual workspace dependencies and consumer changes without another
+review engine or repeated whole-Phase semantic review at Final. CBD P6-SQ01..05
+and producer handoffs belong to Phase 10; consume them only when accepted and
+selected, without making them a prerequisite for ordinary Phase 7 work.
 
 Consume Phase 6's runtime-owned command lifecycle and live Phase-plan
 synchronization. SBT/Git, generation, publication/selection effects and consumer
@@ -76,8 +120,9 @@ No separate full workspace campaign is added for document synchronization.
 3. Implement native publish/select/status and their execution adapter alongside
    SBT publication/resolution. Prove normal sm-workflow invocation -> staged
    JAR/Ivy publication -> selected set -> actual consumer compilation -> result.
-   Start with one producer/consumer, then extend the same spec to two consumers
-   selecting different versions. Do not leave native operation wiring until
+   Start with one producer/consumer and connect C's workspace route before the
+   remaining breadth. Then extend the same spec to two consumers selecting
+   different versions. Do not leave native operation wiring until
    after every SBT/Cozy helper is complete.
 
 Existing tracking: P7-DAO-01..04 plus the publication/selection parts of 06/07;
@@ -175,9 +220,40 @@ continue use and close the remaining necessary work in Phase 8.
 
 Extend the Phase 1 `RepositorySyncWorkflow` from synchronization of one project repository into dependency-aware synchronization and validation for a development project and the related repositories whose project-specific branches it uses.
 
+The installed single-repository `sm-repository-sync`, including actual permitted
+integration/validation/review/non-force push/convergence, must already be usable
+at [Phase 6.3 completion](phase-6.3.md#single-repository-production-acceptance--2026-10-18).
+Do not defer that basic route here or use Phase 7 as the first production-use
+gate. This Phase adds multi-repository/worktree/dependency/overlay scope to the
+accepted route, reusing its actual evidence and fixing only affected gaps.
+
 For a root project X, synchronization MUST include X itself and the related repositories explicitly participating in X through project-specific branches. When remote changes are incorporated into one of those related repositories, sm-workflow validates the changed dependency first and validates X only after all changed dependencies have passed their full tests.
 
 This is an extension of the existing `RepositorySyncWorkflow`, not a second synchronization workflow. It is also the project-workspace convergence counterpart to `sm-goal-phase`: GoalPhase closes work locally in one admitted repository/worktree; RepositorySync brings the root repository and its dedicated related worktrees into synchronized, validated GitHub convergence.
+
+### Full practical GoalPhase adoption — 2026-10-18
+
+Phase 6.3 already supplies ordinary `sm-split-phase` and single-repository
+`sm-repository-sync`, plus limited single-repository `sm-goal-phase` use.
+Phase 7 makes GoalPhase suitable for full practical use across related-project
+development by connecting its local work/closure with this Phase's workspace,
+worktree, development-artifact and dependency-aware synchronization operations.
+This is the combined use of existing owners, not a new monolithic GoalPhase.
+
+Use the existing A/B/C/D producer-consumer scenarios and accepted local GoalPhase
+closure evidence to show the handoff: admitted local development/commit -> explicit
+artifact publication/selection and affected consumer generation/validation ->
+RepositorySync dependency-ordered synchronization and permitted convergence.
+Record the actual selected repositories/artifacts and results. Do not repeat the
+whole 6.3 campaign, introduce a second review cycle, or make Git sync silently
+publish/select artifacts. Normal split/sync use remains available while this
+extension is being developed; unsupported related-project use is not claimed
+until its existing Phase 7 connected acceptance passes.
+
+Update usage instructions at closure to distinguish the 6.3 limited GoalPhase
+scope from this combined related-project workflow. Required validation, effect
+authority and independence stay with their existing owners. See the
+[development handoff](../journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md).
 
 ## Development Artifact Overlay (2026-10-06)
 

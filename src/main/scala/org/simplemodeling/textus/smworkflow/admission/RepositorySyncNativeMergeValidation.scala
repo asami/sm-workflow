@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -215,20 +215,24 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else N.invalid("actual pending merge cannot establish validation preconditions")
   } yield ()
 
-  private[admission] def receiptC(identity: String, result: ProcessExecutionResult): Consequence[Receipt] = {
-    if (!id(identity) || result == null || result.stdout == null || result.stderr == null ||
+  private[admission] def receiptC(identity: String, result: ProcessExecutionResult): Consequence[Receipt] =
+    _receipt_c(identity, result, id(identity))
+
+  private def _receipt_c(identity: String, result: ProcessExecutionResult, valididentity: Boolean): Consequence[Receipt] = {
+    if (!valididentity || result == null || result.stdout == null || result.stderr == null ||
         result.stdout.content == null || result.stderr.content == null ||
         result.stdout.truncated || result.stderr.truncated ||
         result.stdout.byteCount != result.stdout.content.size.toLong || result.stderr.byteCount != result.stderr.content.size.toLong ||
         result.stdout.byteCount > 65536 || result.stderr.byteCount > 65536)
       N.uncertain("validation result lacks complete bounded actual output; retained intent is not replayable")
     else try {
-      def text(bytes: Vector[Byte]) = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+      def _text_(bytes: Vector[Byte]) = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes.toArray)).toString
-      val out = text(result.stdout.content); val err = text(result.stderr.content)
+      val out = _text_(result.stdout.content); val err = _text_(result.stderr.content)
       if (out.contains('\u0000') || err.contains('\u0000')) N.uncertain("validation capture is not ordinary text")
       else result.termination match {
         case ProcessExecutionTermination.Exited(code) => Consequence.success(Receipt(identity, "exited", Some(code), out, err))
+        case ProcessExecutionTermination.NotStarted => Consequence.success(Receipt(identity, "not-started", None, out, err))
         case _ => Consequence.success(Receipt(identity, "indeterminate", None, out, err))
       }
     } catch { case scala.util.control.NonFatal(_) => N.uncertain("validation capture is not UTF-8") }
@@ -236,7 +240,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def sbtReceiptC(identity: String, kind: WorkflowSbtValidation.Kind,
     result: SbtExecutionResult): Consequence[Receipt] = for {
     facts <- WorkflowSbtValidation.factsC(kind, result)
-    receipt <- receiptC(identity, result.processResult)
+    receipt <- _receipt_c(identity, result.processResult, id(identity) ||
+      (identity != null && identity.startsWith("metadata:") && GoalPhaseNativeMetadata.runtimeIdentityValid(identity)))
   } yield receipt.copy(sbt = Some(facts))
 
   private def _receipt_kind(receipt: Receipt, expected: WorkflowSbtValidation.Kind): Boolean =

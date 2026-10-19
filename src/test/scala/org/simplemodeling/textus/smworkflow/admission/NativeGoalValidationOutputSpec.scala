@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.convert.ValueReader
@@ -17,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Public projection of actual retained validation facts, without runtime effects.
   * @since   Oct. 16, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -97,7 +98,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       actual.repositoryRepair shouldBe None
     }
 
-    "O2 preserve all six canonical raw-zero TestOnly rejection reasons without selected-test success" in {
+    "O2 preserve all seven canonical raw-zero TestOnly rejection reasons without selected-test success" in {
       Given("raw-zero TestOnly receipts with each actual CNCF rejection reason and no verified selection")
       val reasons = SbtTestSelectionFailure.values.toVector
       val payloads = reasons.map(reason => _retained(_payload(Vector(_focused),
@@ -109,7 +110,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
 
       Then("every exact refusal remains unverified despite its zero raw exit and no review is fabricated")
       outputs.map(_.validation.get.checks.head.sbt.get.reason.get) shouldBe
-        Vector("MissingSelection", "IncompleteCapture", "InvalidReport", "ZeroTests", "SuiteMismatch", "FailedTests")
+        Vector("MissingSelection", "IncompleteCapture", "InvalidReport", "ZeroTests", "SuiteMismatch", "FailedTests", "ScenarioMismatch")
       outputs.foreach { output =>
         output.kind shouldBe "Wait"
         output.condition shouldBe Some("phase.Decision")
@@ -197,6 +198,63 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
   }
 
   "Verified TestOnly output" should {
+    "O8 refuse oversized or control-character metadata receipt identities and preserve ordinary receipt identity limits" in {
+      Given("an explicitly synthetic nonzero result for identity admission only and a real bounded metadata selection")
+      val (selected, _) = GoalPhaseNativeMetadataFixture.prepared
+      val raw = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), _capture(_stdout), _capture(_stderr),
+        Vector.empty, 7L, "synthetic-negative")
+      val result = SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))),
+        SbtOperation.TestOnly, raw)
+      val rejectedids = Vector("metadata:" + ("x" * 4096), "metadata:invalid\u0000identity", "metadata:invalid\nidentity",
+        "x" * 129, "foreign:identity")
+
+      When("SBT receipt admission checks those identities and generic receipts retain the ordinary host identity contract")
+      val rejected = rejectedids.map(identity => R.sbtReceiptC(identity, Kind.TestOnly, result))
+      val ordinary = R.receiptC("ordinary", raw)
+      val genericmetadata = R.receiptC(selected.head.identity, raw)
+      val genericoversized = R.receiptC("x" * 129, raw)
+
+      Then("invalid identities fail without weakening generic receipt limits or inventing selected-test success")
+      rejected.foreach(_.isSuccess shouldBe false)
+      ordinary.isSuccess shouldBe true
+      take(ordinary).exitCode shouldBe Some(7)
+      genericmetadata.isSuccess shouldBe false
+      genericoversized.isSuccess shouldBe false
+    }
+
+    "O7 carry actual selected metadata through validation review and generated Record readers" in {
+      Given("a real fixture selection and an explicitly synthetic nonzero diagnostic receipt used only for passive transport")
+      val (selected, batches) = GoalPhaseNativeMetadataFixture.prepared
+      val receipt = _receipt(selected.head, ProcessExecutionTermination.Exited(7))
+      val payload = _retained(_payload(selected, Vector(receipt), Some("failed")).copy(metadata = batches))
+      val request = NativeHostHumanEvidenceFixture.work.copy(review = Some(GoalPhaseNativeReview.Context(
+        Vector("one.scala"), "actual selected diff", Vector(receipt), batches)))
+
+      When("public validation and review projections roundtrip through their generated Record readers")
+      val validation = _wire(_wait(payload)).validation.get
+      val review = NativeWorkflowOperationOutput.goalWork(request)
+      val restored = take(summon[ValueReader[V.GoalPhaseWorkView]].readC(
+        take(new RecordDecoder().json(take(review.toRecord().toJsonStringC)))))
+      val metadata = validation.metadata.map(record => io.circe.parser.parse(take(record.toJsonStringC)).toOption.get)
+      val operations = validation.selectedChecks.map(_.operation.map(record =>
+        io.circe.parser.parse(take(record.toJsonStringC)).toOption.get))
+
+      Then("canonical Batch context and exact logical references survive with original host ids and raw diagnostics")
+      metadata shouldBe batches.map(_.asJson)
+      restored shouldBe review
+      restored.review.get.metadata.map(record => io.circe.parser.parse(take(record.toJsonStringC)).toOption.get) shouldBe metadata
+      validation.selectedChecks.map(_.hostIdentity) shouldBe Vector.fill(2)(Some("selected-metadata"))
+      operations shouldBe batches.head.references.map { reference =>
+        import GoalPhaseNativeMetadata.given
+        Some(reference.asJson)
+      }
+      validation.checks.head.stdout shouldBe _stdout
+      validation.checks.head.stderr shouldBe _stderr
+      metadata.head.hcursor.downField("inventory").get[Vector[Json]]("diagnostics") shouldBe Right(Vector.empty)
+      validation.outcome shouldBe Some("failed")
+      restored.review.get.hostContext shouldBe None
+    }
+
     "O5 share exact two-suite facts between validation and Goal review through generated Record JSON roundtrips" in {
       Given("verified TestOnly with two completed suites, a positive Long count and an actual Goal review context")
       val tests = 2147483657L

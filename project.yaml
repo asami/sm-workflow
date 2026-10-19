@@ -18,6 +18,7 @@ build:
   dependencies:
     compile:
       - "org.goldenport::goldenport-cncf:0.5.3-SNAPSHOT"
+      - "org.scalatest::scalatest:3.2.19"
     test:
       - "org.scalatest::scalatest:3.2.19"
 

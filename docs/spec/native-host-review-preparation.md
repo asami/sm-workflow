@@ -99,23 +99,56 @@ adds no independent reviewer proof or execution grant.
 R6: Only consumed fields affect meaning. Unused metadata and grant annotations
 are inert. Declaration-only, snake-only and semantically matching double
 spellings retain the same selected meaning. Contradictory double spellings fail;
-neither spelling takes precedence. Missing, null or invalid consumed fields still
-fail without defaults, including object/check-array structure and the existing
-integer generation and exit requirements. Both spellings of a structured Goal
+neither surviving spelling takes precedence. Core structured-data R4 omits null
+object attributes at every depth during Record construction and ordinary
+decoding/encoding, including `Record.createFull`. Empty objects/arrays, false,
+zero and literal strings remain. Null array elements fail canonical Record
+decoding before preparation. Missing required consumed fields, including required
+null attributes removed by Core, and invalid surviving fields fail without
+defaults, including object/check-array structure and the existing integer
+generation and exit requirements. Both spellings of a structured Goal
 check array are separately projected before agreement is checked, including
 nested selection aliases; inert annotations do not create contradictions.
-Present null, nonobject, unknown or semantically invalid `sbt` fails. Missing or
+Optional null `validationMetadata`, progress, issues, `sbt` and Goal `testChecks`
+become absent at the Record boundary and select exactly the explicit-omission
+shape. They do not recreate original selected metadata, progress, issues or typed
+test facts. A null alternate alias is omitted and leaves a valid canonical value
+unchanged. Nonnull nonobject, unknown or semantically invalid `sbt` fails. Missing or
 malformed required nested selection fields, fractional or out-of-range integer
 counts, invalid or duplicate classes, inconsistent suite counts and zero tests
 fail through the existing Facts rules. No kind, success, selection or count is
 inferred. Absent `sbt` retains the exact historical three-field check shape;
 absent Goal `testChecks` remains omitted, while an explicitly supplied empty
-array remains explicit. Present malformed arrays are never treated as absence.
+array remains explicit. Surviving malformed arrays are never treated as absence.
+Malformed typed Scala result inputs, including null optional containers,
+`Some(null)` and invalid issue disposition vectors, still fail; they are distinct
+from canonical Record omission. This consumer adaptation to Core R4 grants no
+review authentication, effects or acceptance and replaces no issuer checks.
 This projection does not rename
 arbitrary or recursively nested annotation fields. Goal repair summary/findings and Repository repair findings, affected
 paths and rationale retain their exact selected meaning; unused nonrepair
 diagnostics retain the existing `Json.Null` behavior. Actual task completion
 remains separate from specification inputs.
+
+R7: Ordinary Goal `ReviewStep` and `ReviewPhase` host admission consumes the actual
+independently supplied reviewer result through the configured managed Reader,
+without a CBD call or another AI review. The actual owner, target, result
+reference, worker, verdict and continuation remain bound to independently
+provisioned host evidence. Existing semantic acceptance gates, separate effect
+authority and explicit Advance remain required. CBD-scoped review integration
+belongs to Phase 10; ordinary admission does not fabricate CBD review coverage.
+
+R8: An actual accepted ordinary review and its saved normal StepClosure Wait
+retain the successful validation of the same reviewed candidate and selected
+checks. The Wait is an input to the existing public `prepareAuthority` route,
+not permission to commit. A separately authorized host reference, retained Start
+participant and current issuer prepare the ordinary StartupImport input; only
+explicit Advance consumes it for typed Git/UoW Step closure and the Phase
+ProductCheck. Continuation consumes the actual saved Wait without repeating its
+earlier Advance, appending grants or clearing previous configuration, logs or
+execution facts. It must observe the real local commit and fresh ProductCheck,
+then stop at pending independent ReviewPhase. This bounded isolated fixture
+establishes neither CBD coverage nor installed-skill or Phase acceptance.
 
 ## Executable examples
 
@@ -135,14 +168,23 @@ results and select subsequent work with explicit Advance.
 | E5 | R3,R4,R5 | Different actual owner/target/reference/worker/verdict/continuation refuses admission; physical fixture provisioning still requires a live managed read call and supplies no Human/effect authority |
 | E6 | R2,R4,R6 | Unused metadata/grant annotations are discarded; wrong consumed types fail without TTL, complete-copy equality or new trust grants |
 | E7 | R1,R2,R3,R5,R6 | Fixture-issued Goal ReviewStep/ReviewPhase and Repository review cross the real normal command formatter and strict generated reader, retaining the same canonical v7 payload, actual native owner/target/completion and successful check exit |
-| E8 | R1,R2,R4,R6 | Every fixed consumed alias pair accepts agreement and rejects contradiction, absence, null and wrong types; malformed check structure and fractional generation/exit fail under existing native validators |
-| E9 | R1,R2,R4,R5,R6 | Fixture-issued typed Goal ReviewStep/ReviewPhase and direct/forwarded Repository reviews cross normal command formatting, generated readers and public prepareEvidence; raw v7 storage retains explicit TestOnly kind, succeeded outcome, two classes, two suites and 25 tests; managed observation rejects crossed selected facts, fixed aliases require semantic agreement, historical absence stays absent and malformed presence fails |
+| E8 | R1,R2,R4,R6 | Every required consumed alias pair accepts agreement and rejects contradiction, absence after null omission and surviving wrong types; malformed check structure and fractional generation/exit fail under existing native validators; null check array elements fail canonical decoding before preparation |
+| E9 | R1,R2,R4,R5,R6 | Fixture-issued typed Goal ReviewStep/ReviewPhase and direct/forwarded Repository reviews cross normal command formatting, generated readers and public prepareEvidence; raw v7 storage retains explicit TestOnly kind, succeeded outcome, two classes, two suites and 25 tests; managed observation rejects crossed selected facts, surviving fixed aliases require semantic agreement, optional null facts equal historical absence, explicit empty arrays remain explicit and malformed nonnull presence fails; null array elements fail canonical decoding before preparation |
+| E10 | R3,R4,R5,R7 | Fixture-issued ReviewStep and ReviewPhase use the actual ordinary Goal review port and configured managed Reader without CBD or scoped-quality metadata: missing host evidence refuses admission, matching explicitly provisioned evidence admits, and altered candidate tree, result reference, worker or verdict refuses reuse. These fixture rows establish neither genuine independent connected review nor completed task proof |
+| E11 | R3,R4,R5,R7,R8 | Explicit `NativeGoalScopedQualityClosureCliSpec` consumes an actual accepted independent review and saved normal StepClosure Wait, requires the retained matching passed candidate validation and separately authorized host reference, then uses normal prepareAuthority/StartupImport/Advance to observe exactly one isolated typed local Step commit, a fresh ProductCheck and pending ReviewPhase. Repeated Advance adds no check or commit; no Submit, CBD call or AI review is repeated. Parent-authorized real inputs are required, and this does not establish installed-skill or Phase acceptance |
 
 `NativeTestOnlyValidationReceiptSpec` exercises the real v7 encoder, decoder and
 observation boundary for Goal and Repository selected facts, historical shapes,
 crossed valid facts and inert annotations. `NativeHostReviewPreparationSpec`
 exercises normal formatter/readback, fixed typed aliases and explicit
 specification provisioning followed by managed reading.
+Its supplied Record expectations use an independent recursive object-null
+omission oracle; no production normalizer computes those expected shapes and no
+null array element is filtered. Optional null metadata, progress and issue targets
+are compared with explicit omission without weakening original managed target,
+report or count mismatch refusals. Required selection null attributes become
+missing and fail, while optional null `sbt` and Goal `testChecks` stay historical
+absence without invented kind, outcome, classes or counts.
 `NativeHostPreparationOperationSpec` invokes the real public `prepareEvidence`
 Operation against selected normal output files for both Goal reviews, direct
 Repository review and a forwarded Goal child. It checks explicit raw stored

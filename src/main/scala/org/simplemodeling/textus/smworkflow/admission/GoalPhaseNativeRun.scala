@@ -23,8 +23,9 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  *  version Oct. 14, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 17, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -42,16 +43,18 @@ private[smworkflow] object GoalPhaseNativeRun {
     humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None,
     executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
-    projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None)
+    projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None,
+    findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
-    plan: O.Plan)
+    plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
     /** Host resolves the genuinely selected complete plan, not an AI request's
       * claim or a latest arbitrary planning file. Only Start selects this plan.
       */
     def loadForCallC(selectionIdentity: String, core: ActionCall.Core): Consequence[Option[SelectedPlan]]
   }
-  final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot)
+  final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot,
+    documents: Option[GoalPhaseDocumentSource.Bound] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -59,7 +62,7 @@ private[smworkflow] object GoalPhaseNativeRun {
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStartRecord"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v2"),
-      "payload" -> value.asJson)
+      "payload" -> (if (value.documents.isEmpty) value.asJson.mapObject(_.remove("documents")) else value.asJson))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
@@ -92,7 +95,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
       Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
     base = O.Snapshot(observed.head, observed.tree)
-    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base)
+    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents)
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -110,6 +113,14 @@ private[smworkflow] object GoalPhaseNativeRun {
       ". The selected plan is saved; Advance selects the first work.")
 
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
+    session <- retainedSessionC(identity, d, definition, core)
+    p = session.started.receipt.payload.value
+    root <- G.rootC(core)
+    branch <- G.branchC(core)
+    _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
+  } yield session
+
+  def retainedSessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     storage <- bindC(d, definition, core)
     starts <- storage.bindMechanicalC(startOperation, codec)
     started <- starts.loadRetainedC(reference(identity))(using core.executionContext).flatMap {
@@ -122,9 +133,6 @@ private[smworkflow] object GoalPhaseNativeRun {
       Consequence.unit else invalid("retained original plan scope differs from the host")
     _ <- GoalPhaseParticipantAdmission.admitC(p.participantIdentity, core.executionContext)
     current = started.current
-    root <- G.rootC(core)
-    branch <- G.branchC(core)
-    _ <- if (root == p.root && branch == p.branch) Consequence.unit else invalid("actual root/branch crosses the original plan")
   } yield Session(storage, started, p.participantIdentity, current)
 
   def validateC(d: Declaration): Consequence[Unit] =
@@ -134,7 +142,10 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.candidatePaths == null || d.candidatePaths.size > 256 || d.candidatePaths.distinct != d.candidatePaths ||
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
-        d.executionProfiles == null || d.executionProfiles.exists(_ == null))
+        d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
+        d.findingRecordingPolicy.exists(p => p == null || !RepositorySyncNativeConflictInput.relative(p.hygiene) ||
+          !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
+          !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
     else GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
@@ -156,7 +167,8 @@ private[smworkflow] object GoalPhaseNativeRun {
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
           !core.action.request.service.contains("GoalPhaseService") ||
           !Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
-            GoalPhaseOrderedHumanDecision.completionOperation.operation)(core.action.request.operation) ||
+            GoalPhaseOrderedHumanDecision.completionOperation.operation,
+            GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation) ||
           !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))
         invalid("native ordered entry requires its actual owning call")
       else WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),

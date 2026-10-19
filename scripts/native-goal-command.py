@@ -2,12 +2,13 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""One explicit native Goal, Split or Repository action; admission remains native-owned.
+"""Finite native Goal, Split or Repository host actions; admission remains native-owned.
 
 PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @since   Oct. 14, 2026
 @version Oct. 15, 2026
 @version Oct. 16, 2026
+@version Oct. 19, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -39,6 +40,10 @@ ACTION_OPTIONS = {
     "prepare-repository-input": {
         "input", "selection-id", "participant", "idempotency-key", "selection-collection",
     },
+    "prepare-repository-effect": {
+        "component-instance", "selection", "target", "effect", "reference",
+        "participant", "issuer", "occurred-at", "collection",
+    },
     "prepare-goal-input": {
         "input", "plan", "selection-id", "participant", "idempotency-key",
         "selection-collection", "plan-collection",
@@ -54,6 +59,7 @@ ACTION_OPTIONS = {
     "start": {"input", "proposal"},
     "advance": set(),
     "submit": {"request", "submission"},
+    "complete": {"request", "submission"},
     "submit-repository-review": {"request", "submission"},
     "submit-repository-repair": {"request", "submission"},
     "submit-repository-conflict": {"request", "submission"},
@@ -126,8 +132,12 @@ def parse_options(argv):
     required = permitted - optional
     require(options.keys() <= permitted, "action-inapplicable argument")
     require(required <= options.keys(), "missing action argument")
+    if action == "prepare-repository-effect":
+        require(options["effect"] in {"CommitPending", "Push", "FinalFetch"},
+                "unsupported Repository effect")
     preparation_collections = {
         "prepare-split-input": ("collection",),
+        "prepare-repository-effect": ("collection",),
         "prepare-goal-input": ("selection-collection", "plan-collection"),
         "prepare-review-input": ("collection",),
         "prepare-repository-review-input": ("collection",),
@@ -269,6 +279,19 @@ def prepare_split_input(options, primary):
                  occurredAt=options["occurred-at"], collection=options["collection"])
     return command_prefix(primary, explicit_path(options["host"])) + [
         "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareSplitStart",
+        "--input", json.dumps(value, ensure_ascii=False), "--json"], None
+
+
+def prepare_repository_effect(options, primary):
+    """Forward opaque effect sources and explicit metadata to the normal owner."""
+    value = {"componentInstance": options["component-instance"]}
+    for name in ("selection", "target", "reference"):
+        value[name] = existing_file(explicit_path(options[name])).as_uri()
+    value.update(effect=options["effect"], participant=options["participant"],
+                 issuer=options["issuer"], occurredAt=options["occurred-at"],
+                 collection=options["collection"])
+    return command_prefix(primary, explicit_path(options["host"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -443,6 +466,8 @@ def action_command(options, primary, host, task_fd):
         return execution_command(options, primary, task_fd)
     if action == "prepare-repository-input":
         return prepare_repository_input(options, primary)
+    if action == "prepare-repository-effect":
+        return prepare_repository_effect(options, primary)
     if action == "prepare-goal-input":
         return prepare_goal_input(options, primary)
     if action == "prepare-split-input":
@@ -505,6 +530,57 @@ def native_call(command, host, output_fd, timeout):
     return text, json_object(text)
 
 
+def completion_commands(options, primary, host, task_fd):
+    """Select a closed issued Submit pair and retain its explicit outer Advance."""
+    route = route_record(task_fd)
+    _text, request = read_object(explicit_path(options["request"]))
+    pair = (native_field(request, "submitOperation"), native_field(request, "resultType"))
+    family = route["family"]
+    if family == "GoalPhase" and pair == ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"):
+        action = "submit"
+    else:
+        routes = SPLIT_ROUTES if family == "SplitPhase" else REPOSITORY_ROUTES
+        action = next((name for name, candidate in routes.items() if candidate == pair), None)
+        require(action is not None, "unsupported issued completion route")
+    command, submit_id = action_command(dict(options, action=action), primary, host, task_fd)
+    advance_action, service, operation = {
+        "GoalPhase": ("advance", FQN, "advanceGoalPhase"),
+        "SplitPhase": ("advance-split", SPLIT_FQN, "advanceSplitPhase"),
+        "RepositorySync": ("advance-repository", REPOSITORY_FQN, "advanceRepositorySync"),
+    }[family]
+    outer_id = route["sessionId"]
+    following = command_prefix(primary, host) + [service + operation, "--sessionId", outer_id, "--json"]
+    return command, submit_id, following, outer_id, advance_action
+
+
+def display_observation(response):
+    """Flush one actual strict JSON observation before any following native call."""
+    sys.stdout.write(json.dumps(response, ensure_ascii=False, allow_nan=False) + "\n")
+    sys.stdout.flush()
+
+
+def complete(options, primary, host, task_fd, output_fd):
+    """Submit once, then explicitly Advance once only after actual acceptance."""
+    command, submit_id, following, outer_id, advance_action = completion_commands(
+        options, primary, host, task_fd)
+    os.mkdir("advance", mode=0o700, dir_fd=output_fd)
+    advance_fd = os.open("advance", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
+    try:
+        _text, response = native_call(command, host, output_fd, 60)
+        require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
+                "Submit response ID or message mismatches the selected route")
+        require(isinstance(response.get("accepted"), bool) and nonblank(response.get("outcome")),
+                "Submit response lacks boolean accepted or outcome")
+        display_observation(response)
+        require(response["accepted"] is True and response["outcome"] == "accepted",
+                "Submit was not acknowledged as accepted")
+        _text, response = native_call(following, host, advance_fd, 240)
+        acknowledge(advance_action, response, outer_id, task_fd, advance_fd)
+        display_observation(response)
+    finally:
+        os.close(advance_fd)
+
+
 def acknowledge(action, response, session_id, task_fd, output_fd):
     if action in {"prepare-execution", "record-execution"}:
         session = response.get("session")
@@ -523,7 +599,7 @@ def acknowledge(action, response, session_id, task_fd, output_fd):
                 stream.write(json.dumps(evidence, ensure_ascii=False, allow_nan=False).encode("utf-8"))
         return
     if action in {"prepare-goal-input", "prepare-review-input", "prepare-repository-input",
-                  "prepare-repository-review-input", "prepare-split-input"}:
+                  "prepare-repository-review-input", "prepare-split-input", "prepare-repository-effect"}:
         require(isinstance(response.get("datastore"), list), "preparation must return a datastore array")
         return
     response_session_id = native_field(response, "sessionId")
@@ -558,6 +634,9 @@ def execute(options):
             existing_file(primary / "target/cncf.d" / name)
         with selected_directory(task) as task_fd, selected_directory(output) as output_fd:
             require(not os.listdir(output_fd), "output directory must be empty")
+            if options["action"] == "complete":
+                complete(options, primary, host, task_fd, output_fd)
+                return
             command, session_id = action_command(options, primary, host, task_fd)
             text, response = native_call(command, host, output_fd,
                                          240 if options["action"] in {"advance", "advance-split", "advance-repository"} else 60)

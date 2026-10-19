@@ -17,8 +17,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 15, 2026
- * @version Oct. 16, 2026
+ *  version Oct. 15, 2026
+ *  version Oct. 16, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -34,7 +35,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "prepareExecution", "recordExecution"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
-      "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision"
+      "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording"
     ),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
       "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
@@ -51,6 +52,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.GoalPhaseRepairWorkServiceService -> Vector("repairGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseStepReviewServiceService -> Vector("reviewGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseReviewServiceService -> Vector("reviewGoalPhase"),
+    SmWorkflowComponent.GoalPhaseFindingRecordingServiceService -> Vector("recordGoalFindings"),
     SmWorkflowComponent.MergeReviewServiceService -> Vector("reviewNativePendingMerge"),
     SmWorkflowComponent.MergeRepairServiceService -> Vector("repairNativePendingMerge"),
     SmWorkflowComponent.SplitSemanticServiceService -> Vector(

@@ -221,3 +221,26 @@ needs normal assembly refresh and actual installed/provider/session/dialogue
 and all-family Boundary acceptance. Existing security/CBD, Step acceptance,
 sole full Phase review and release obligations remain open; PHASE-6.3 remains
 the aggregate full-suite owner. Completed native task effects are not replayed.
+
+## Normal CLI connected examples
+
+`NativeGoalAcceptanceBoundaryCliSpec` is an explicit `runtimeTestOnly` suite
+with two examples (E10 and E11). E10 uses normal `prepareGoalStart`, managed
+import, Start, Advance and issued Submit to observe ordered project defaults,
+complete adopted replacement/exclusion and saved effective conditions after a
+later host configuration change. Missing/not-evaluated required implementation
+reports fail without changing the pending request. One real typed Test of the
+fixture-owned `value.txt` correction produces the actual ReviewStep and its
+effective review target. Normal `prepareEvidence`, managed import and issued
+Submit refuse excluded-only repair and not-evaluated required acceptance;
+the valid excluded-advisory response reaches StepClosure Wait without authority
+or completion. Repeated Advance retains that Wait without another Test. E11
+uses normal preparation and Start to refuse contradictory duplicate raw adoption
+before caller routing or SBT execution.
+
+All declarations, semantic responses, reports and review execution identities
+in these two examples are specification-owned test inputs. The examples cover
+real CLI persistence/admission and one real typed Test; they establish no genuine
+Human approval, independent review, actual AI authorship, Step acceptance,
+source-policy-review evidence or whole primary acceptance. They do not replace
+genuine I2 review or discharge the existing Phase acceptance obligations.

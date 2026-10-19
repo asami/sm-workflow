@@ -35,8 +35,11 @@ proves no mapped-provider execution. A profile or descriptor grants no authority
 
 The examples below use placeholders, to be replaced with the explicitly selected
 paths and values. Invoke the current script through the host's selected managed
-Python runner; every invocation performs exactly one action. Output directories
-are prepared separately by the owning host.
+Python runner; every invocation performs exactly one finite host action. The
+normal `complete` action joins one Submit observation to one explicit outer
+Advance. Other actions retain their single-call behavior for diagnostics and
+explicit operations. The owning host prepares each empty output directory;
+`complete` exclusively prepares its `advance` child before making Submit.
 
 ```sh
 /absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
@@ -161,6 +164,78 @@ admitted execution with its own task and actual returned ID. Do not replay the
 failed call or infer rollback or interrupted recovery. The existing common
 Operation loop, command caller and adopted security profile retain their owners;
 preparation does not supply native checks, independent review or closure.
+
+## Explicitly prepare Repository effect input
+
+Use finite action `prepare-repository-effect` for the existing generated
+`WorkflowRepositoryEffectPreparationInput` contract. The same five common
+`primary`, `host`, `task`, `action` and `output` options and owned task/output
+preflight apply. Alongside them, all nine fields below are required named pairs;
+none has a default or optional form.
+
+| Option | Generated field | Forwarding |
+| --- | --- | --- |
+| `component-instance` | `componentInstance` | Verbatim selected component instance |
+| `selection` | `selection` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `target` | `target` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `effect` | `effect` | Exactly `CommitPending`, `Push` or `FinalFetch` |
+| `reference` | `reference` | Explicit existing absolute normalized regular file as a `file:` URI |
+| `participant` | `participant` | Verbatim actual selected participant |
+| `issuer` | `issuer` | Verbatim supplied issuer |
+| `occurred-at` | `occurredAt` | Verbatim supplied historical time |
+| `collection` | `collection` | Strict three-label dotted `entity:` address |
+
+```sh
+/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
+  --primary /absolute/path/to/sm-workflow \
+  --host /absolute/path/to/host \
+  --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
+  --action prepare-repository-effect \
+  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-prepare-effect \
+  --component-instance '<selected component instance>' \
+  --selection /absolute/path/to/selected-repository-selection.json \
+  --target /absolute/path/to/trusted-repository-target.json \
+  --effect CommitPending \
+  --reference /absolute/path/to/actual-effect-source-reference.json \
+  --participant '<actual participant>' --issuer '<actual issuer>' \
+  --occurred-at '<actual historical timestamp>' \
+  --collection entity:smworkflow.cli.effect_authority
+```
+
+Replace every placeholder with independently selected actual values. Select
+exactly one of the three supported effect names. Each collection label must
+match `[A-Za-z][A-Za-z0-9_]*`; slashes, missing or additional labels refuse.
+Missing, duplicate, blank, unpaired, unknown and action-inapplicable options
+refuse before native invocation. Unavailable or non-regular selected files and
+relative or unnormalized paths also refuse before invocation. No selection is
+reconstructed from a repository, task route or business input.
+
+The caller leaves all three source files opaque, converts their explicit paths
+with `Path.as_uri()` and forwards their URIs and literal metadata in one
+`--input` JSON object. Its sole ordinary CncfMain command invokes fixed
+`org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect`
+with `--json`. Native URI acquisition, domain decoding and passive importer
+record encoding remain with that existing Operation. There is no arbitrary
+operation or argv selector, alternate main or fallback.
+
+Zero exit and an actual strict bounded JSON object with a `datastore` array
+acknowledge passive output only. Successful stdout is displayed unchanged;
+actual stdout/stderr are retained as `response.json` and `stderr.log`. Native
+failure, timeout, malformed output or a non-datastore response stops with the
+available original streams and no retry. This action reads or creates no
+workflow route, returns no caller Session ID and performs no Start, Submit,
+Advance, import, save or Git effect. Existing routing may be present or absent.
+
+Encoding creates no authority. Only a separately selected trusted import through
+ordinary StartupImport provisions the passive rows; import also establishes no
+effect admission. The native workflow still admits independently issued
+authority against its principal, selected target, issuer, scope and time before
+any effect execution. The host owns the trusted physical Git target and endpoint
+and every later runtime action. Supplied participant, issuer, time, effect or
+reference metadata certifies no genuine Human provenance or permission. Retain
+the attributable actual source evidence; never fabricate a Human decision from
+preparation success, fixture data or a metadata label. The installed semantic
+skill continues to own assessment only.
 
 ## Pre-Start checklist
 
@@ -315,10 +390,12 @@ availability, independence or permission.
    `docs/spec/goal-phase-acceptance-boundary.md`. `all` applies here; `step` also
    applies to ImplementStep/RepairStep/ReviewStep, while `phase` applies only to
    ReviewPhase. Excluded conditions stay advisory. Only actual final operational
-   completion supplies the returned execution evidence to a separate typed Submit
-   with its genuine result/reference. Check its actual target ID, message,
-   Boolean accepted and outcome before handing control back for a separately
-   selected host Advance. Accepted Submit establishes semantic admission only.
+   completion supplies the returned execution evidence with its genuine
+   result/reference to the host's `complete` action below. That finite action
+   checks the actual Submit target ID, message, Boolean accepted and outcome,
+   displays and flushes the observation, then explicitly Advances the retained
+   outer session once on acceptance. Accepted Submit establishes semantic
+   admission only.
 
 Command remains primary and client qualification remains lightweight. Independent
 Step/Phase review, Human consent and native repository closure authority keep
@@ -359,23 +436,57 @@ derive observations from model, profile, task or context labels.
   --primary /absolute/path/to/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
-  --action submit \
-  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-submit \
+  --action complete \
+  --output /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-complete \
   --request /absolute/path/to/host/target/sm-workflow/tasks/owned-task/call-advance/response.json \
   --submission /absolute/path/to/semantic-submission.json
 ```
 
-Submit reads the exact caller route and actual Request, then calls the issued
+The host's `complete` reads the exact caller route and actual Request, then calls the issued
 `GoalPhaseService.submitGoalPhaseWorkResult` with named `--sessionId`,
 `--result`, `--resultReference` and only supplied `--completionFacts`/
 `--executionEvidence`. It forwards semantic values unchanged for native admission.
 Require zero native exit, strict JSON object, matching response ID, nonblank
-message, Boolean `accepted=true` and `outcome=accepted`. Display actual message,
-accepted and outcome, then hand control back to the host. Submit does not Advance;
-any later Advance is a separately selected host action.
+message, a Boolean `accepted` and nonblank `outcome`. Display and flush that
+actual Submit JSON as one line. Only `accepted=true` with `outcome=accepted`
+permits exactly one ordinary explicit outer Advance in this same host action,
+without a user continuation prompt or continuation-only AI turn. Validate that
+Advance's actual outer ID, message and kind, then display its JSON as the second
+line and return control. Request returns semantic work to the host; Human uses
+the independent actual human channel; Wait stops for its actual condition;
+Terminal ends. None causes another call inside `complete`.
+
+`complete` requires exactly `--request` and `--submission` alongside common
+options for all three families. It selects only the original Goal pair above,
+the three fixed Split pairs below, or the three fixed Repository review/repair/
+conflict pairs below. All existing issued-route and submission metadata checks
+apply, including agreeing consumed aliases. Split accepts only its own pairs;
+Repository accepts only its own pairs; Goal accepts its own pair or an issued
+Repository child pair. A Goal-owned child uses the actual distinct child Submit
+ID while its following Goal Advance uses the retained outer ID. Other issued
+operations are unsupported by this action; presentation never selects a route.
+
+The raw Submit `response.json` and `stderr.log` remain in the selected empty
+output directory. Before Submit, `complete` exclusively creates and opens its
+`advance` child directory; the following call retains its raw files there.
+Output and routing are never overwritten. Valid rejection is displayed and
+returns nonzero without Advance. Invalid, mismatched or uncertain Submit also
+returns nonzero without Advance. If Advance fails or is uncertain, the already
+flushed Submit remains visible and all available raw output is retained; return
+nonzero without retry, resubmission, restart, discovery or pending-call replay.
+Successful output is newline-delimited JSON containing exactly two actual
+observations, not an inferred completion summary.
+
+The original `submit`, dedicated `submit-split-*`/`submit-repository-*` and
+`advance*` actions described below remain available as explicit single-call
+operations and diagnostics, with their original response/output behavior.
+Their examples describe those individual actions. Normal supported semantic
+handoffs use the host's `complete` action; a semantic skill returns its typed
+result and control and gains no Advance or caller-loop authority.
 
 The caller allows a finite outer observation wait of 240 seconds for each
-explicit Advance and 60 seconds for every other action. These bounds are fixed
+explicit Advance (including the Advance inside `complete`) and 60 seconds for
+Submit and every other native call. These bounds are fixed
 by the action, with no caller timeout option. CNCF owns the shorter effect
 execution and cleanup limits, including the selected SBT execution limit of
 120000 milliseconds; the outer wait does not extend those limits or grant
@@ -762,7 +873,9 @@ Genuine Human handling, consent, independent review and effects retain their
 separate owners. Command remains primary and client qualification stays light.
 ## Owning-UoW checks and public review order
 
-After accepted semantic Submit, the owning host explicitly selects Advance.
+For supported semantic routes, the owning host selects `complete`, which
+displays accepted Submit and performs one explicit outer Advance without an
+intervening continuation-only interaction.
 The native Workflow inspects/stages only its assigned candidate paths and selects
 checks from its saved policy. Thin `git_*` and `sbt_*` DSL calls express logical
 intent and closed parameters. Permission, service, binding, workspace, limits,
@@ -830,6 +943,118 @@ is not a transition required to issue the first review, an independent review
 result or permission to replay uncertain effects. Passed checks and an issued
 review grant no accepted review, Human authorization, Step commit, effect or
 Phase closure.
+
+`work.review.priorReviews` carries actual latest review reports reconstructed
+only from admitted native Step/Phase completions. Each declared Record retains
+the original kind, Step (or Phase), generation, candidate, checks receipt,
+result identity/revision and complete semantic result, including its rationale
+and findings. It contains no copied request, diff, log, provider snapshot or
+authority certificate. Phase integration receives all latest actual Step
+reviews and the latest Phase review when present. A Step re-review receives
+that Step's previous report and the latest Phase report, so corrective Step
+work can see the actual integration findings. Review-origin repair also
+receives its previous context plus the just-admitted report; check-origin
+repair keeps its current check-failure context.
+
+The current accumulated diff, candidate and selected validation remain current.
+Prior reports keep their original targets and are never relabeled as new PASS
+results. An affected re-review uses the prior findings/report with current
+impact to reuse still-applicable judgments, without automatically broadening
+the review scope. These reports are reviewer business context, like the diff;
+they do not change `NativeHostReviewScope`, independent evidence targets or
+the exact assignment, candidate, checks, worker and actual-result admission.
+
+Newly issued work always includes the available actual reports. Already issued
+work retains every existing Context field exactly: only an originally empty or
+absent `priorReviews` vector may remain empty when history now reconstructs
+reports. A nonempty issued vector must match exactly, including findings,
+targets and references. Explicit null or malformed vectors/reports refuse;
+absent vectors default to empty. Metadata retains its existing validation
+meaning and never carries review reports.
+
+The optional original-review completion contract below connects one mechanically
+covered repair to ordinary Closing. Prior reports alone still grant no acceptance
+or effect authority. Final reuse, actual installed evidence and Phase completion
+remain parent-owned obligations.
+
+### Complete the original review's terminal-LF conditions
+
+An independent `ReviewStep` may optionally return `completionConditions` as part
+of its ordinary original `repair` verdict. It means every semantic judgment is
+settled and the only remaining ordered findings are extra terminal-LF corrections,
+exactly one finding per explicit current Step owned path. The declared Record is
+`{"kind":"terminal-lf","paths":["src/one.scala","docs/check.md"]}`. The paths
+are in finding order, distinct valid relative Git paths, contain no ISO controls,
+and each occupy at most 4096 UTF8 bytes; there must be 1..16 paths and exactly as
+many findings. No Plan revision or dependency proposal may accompany this option.
+The reviewer remains read-only, omits it whenever any semantic question remains,
+and is never required to supply it. ImplementStep, RepairStep, ReviewPhase and
+other outcomes cannot declare it. Absent historical values remain absent;
+explicit null, malformed kinds/paths and contradictory result contracts refuse.
+Normal generated Submit converts the actual Record through the strict owner
+codec, without argument parsing or alternate schemas. The independent verdict
+attestation binds its exact kind, path content and order.
+
+Only actual native Cursor reconstruction can select completion. The latest real
+completion must be the current Step's completed RepairStep at the current
+generation, with unchanged selected Plan, original base and completed prefix,
+the exact original review directive/findings, and the latest actual prior
+ReviewStep report in its retained context. That original `repair` report must
+be from exactly the preceding generation. Its original identity/revision,
+candidate, checks reference and semantic result remain unchanged. Both candidate
+heads equal the current native tip, while their trees differ. Fresh native
+validation must pass every selected Plan-required check under the existing
+validation owner, with complete successful receipts including Compile and Test;
+TestOnly alone is insufficient. Every unresolved current Step issue must be a
+REVIEW issue from exactly those original findings, with an actual latest FIXED
+repair disposition. Other unresolved issues keep affected review required.
+
+Before issuing semantic work, the owner reads typed CNCF `TreeChanges` between
+those two actual immutable trees and their actual old/new `BlobContent` values
+inside the canonical UoW. The exact changed-path set must equal the original
+condition-path set. Each difference must be an `M` change with equal regular
+mode `100644`/`100755`, distinct present blob IDs, complete strict UTF8 without
+NUL, at least two old terminal LF bytes, nonempty other content and exactly
+unchanged nonterminal bytes followed by one LF. No new file, deletion, rename,
+mode change, semantic change, CR normalization, changed space, empty delta or
+extra path qualifies. A successful uncovered delta uses the ordinary affected
+ReviewStep with actual prior reports/current diff/checks. Malformed, failed or
+incomplete typed reads stop explicitly; no process fallback or inferred proof
+is permitted. The existing Closing EOF-only-check route shares the byte rule
+and retains its separate requirement for an actual earlier EOF-only precheck.
+
+Successful proof records one ordinary mechanical closing-admission receipt:
+`ordered-review-completion:<sourceRevision>`, with cause
+`ordered-review-completion:covered`, through the existing native
+`phase.Review` → `phase.Closing` `review-accepted` edge. Its bounded payload
+retains source revision, Step/generation, original review identity/revision and
+candidate/checks, actual repair result reference, current candidate/checks
+references, condition paths and admitted typed path/mode/blob IDs. It contains
+no full request/result copies or source bytes. Retained traversal reconstructs
+the same source and issues before that record, validates the canonical full
+native prefix and exact relationships, and reobserves immutable tree/blob facts
+as ordinary stage inputs. Lost or unknown persistence stops without automatically
+issuing semantic review or effects.
+
+The controller enters Closing with the current candidate/checks and the ORIGINAL
+review reference. It creates no new ReviewStep result, fresh PASS or semantic
+WorkKey, changes no generation or repair counter, and grants no commit authority.
+Exactly the proven original REVIEW issues become RESOLVED under the real
+mechanical completion reference in their existing history/movement; FIXED repair
+dispositions and earlier failures remain. The ordinary next operation uses
+existing Step closure authority and selected commit behavior. The normal public
+message identifies the original report, current checks reference and fulfilled
+terminal-LF paths. This is completion of the original independent judgment and
+ordinary closing admission, with no additional semantic actor or certificate.
+
+Adjacent Given/When/Then in `GoalPhaseNativeReviewCompletionSpec`,
+`GoalPhaseOrderedProgressionSpec` and `NativeHostReviewScopeSpec` specifies this
+contract. Pure fixtures prove no actual independence, installed execution or
+acceptance. Parent-selected generation/focused validation, actual installed
+original review → real RepairStep → fresh Compile/Test → zero extra semantic
+review request → ordinary selected commit, affected semantic repair re-review,
+cross-Step Phase amendment/review, Final reuse, aggregate validation and the
+comprehensive development Phase review remain unfinished acceptance obligations.
 
 These paragraphs prescribe evidence to observe in actual normal calls; they
 record no execution or PASS. A new independently selected execution may follow
@@ -1032,4 +1257,156 @@ provider/task execution, genuine two-chat work or Step/Phase acceptance.
 | E46 | R2,R3,R5,R12 | Start/Advance/three Submits/review preparation/prepare/record stop on nonzero, timeout, strict/bounded output or acknowledgement uncertainty, preserving raw streams without retry/progression |
 | E47 | R2,R3,R12 | Exact options, strict collections, explicit paths, required resultReference and metadata types/unknown fields refuse before launch/output |
 
-All passive preparation actions use the [canonical normal command/input/output contract](normal-host-preparation-operations.md). The finite Python options, selected-task routing, no-overwrite, output retention, timeout cleanup, one native invocation, unknown-result stop/no retry and separate Submit boundaries are unchanged.
+R13: `prepare-repository-effect` adds one finite passive caller to the existing
+normal `prepareRepositoryEffect` Operation with all nine explicit generated
+fields, exactly three supported effect names and strict dotted collection
+validation. It forwards opaque selected files and literal metadata without
+routing, selection reconstruction, inferred authority, import or effect
+execution. R1–R12 retain their existing scopes.
+
+`scripts/tests/test_native_repository_effect_command.py` specifies PHASE-6.3 /
+SYNC with adjacent Given/When/Then clauses at every scenario leaf. Only the
+subprocess boundary is mocked. Its temporary files and native-shaped streams
+are executable specification fixtures, never actual consent, Human provenance,
+imported authority or installed execution. These authored obligations claim no
+validation result or Phase acceptance.
+
+| Example | Observable behavior |
+| --- | --- |
+| SYNC-E1 | Each exact effect forwards all three opaque file URIs and literal metadata once to the sole normal API; absent or invalid existing routing, files and host configuration stay unchanged; only actual passive streams are retained |
+| SYNC-E2 | Missing, duplicate, blank, unpaired, unknown or inapplicable pairs, unsupported effects and malformed collections refuse before native invocation/output |
+| SYNC-E3 | Each selection/target/reference must be an existing absolute normalized regular file; refusal creates no output, route or reconstructed selection |
+| SYNC-E4 | Native failure, timeout, strict malformed or non-datastore responses retain actual streams and stop without retry, unrelated operations or Session/route creation |
+
+All passive preparation actions use the [canonical normal command/input/output contract](normal-host-preparation-operations.md). Their finite Python options, selected-task routing, no-overwrite, output retention, timeout cleanup, one native invocation, unknown-result stop/no retry and separate Submit boundaries are unchanged. Only the host's `complete` action connects a validated accepted Submit to one explicit outer Advance.
+
+## Common host completion executable scenarios
+
+`scripts/tests/test_native_host_progression.py` specifies PHASE-6.3 / HOST /
+HOST-A with adjacent Given/When/Then clauses and subprocess-boundary fixtures:
+Goal call order and flush before Advance; all three Split pairs; all three
+Repository pairs; separate Goal-child/outer IDs; each Request/Human/Wait/Terminal
+frontier stopping after two calls; rejection; wrong response ID and contradictory
+aliases; transport/nonzero/timeout failure; strict malformed response; accepted
+Submit followed by failed or invalid Advance; invalid issued routes and options
+refused before any call; and exclusive occupied-output refusal. These behavioral
+fixtures supply no real installed execution, provenance, route acceptance or
+Phase completion evidence. Existing single-action specifications keep their
+original obligations; parent-selected validation and actual installed task
+acceptance remain separate.
+
+## Retained native validation nonexecution continuation
+
+The existing native Goal validation owner distinguishes an actual typed CNCF
+`SbtExecutionOutcome.NotExecuted` from failed product validation and an unknown
+effect. Only actual `ProcessExecutionTermination.NotStarted` projects to
+`not-executed` / `not-started`, with no exit code or process capture. Launch
+failure, timeout and other uncertain terminations retain their incomplete
+meaning; an unresolved saved intent never implies nonexecution. A stopped
+attempt supplies neither success nor a semantic repair and changes no repair
+count, generation, Plan, original base, selected scope or authority.
+
+The current v2 validation payload retains completed `receipts` and an optional
+`stopped` vector. An absent vector reads as empty; explicit null or malformed
+facts reject. Completed receipts remain the ordered selected prefix. Stopped
+receipts retain their actual identity, kind and nonexecution facts in selected
+order, including repeated stopped attempts and attempts preceding a later
+success. The public validation checks show the completed prefix and, while its
+current check remains stopped, its latest actual stopped receipt. A subsequent
+success does not rewrite any earlier result or diagnostic record.
+
+For selected index `i`, attempt zero retains `check-intent-i` and
+`check-result-i`. Later attempts use `check-intent-i-retry-n` and
+`check-result-i-retry-n`, with positive contiguous `n`. Each immutable intent
+copies its actual prior payload; its one contiguous native result adds exactly
+one stopped receipt or one completed receipt. Instance, definition, source,
+candidate, selected metadata, canonical causation, revision and complete history
+prefix must all match. Missing intents, gaps, rewritten prefixes, contradictory
+terminal facts or attempts following ordinary completion reject. An unresolved
+intent remains nonreplayable. Missing records never establish an execution fact.
+
+Before any new check dispatch, the same owner reconstructs the actual chain,
+reusing completed checks. Metadata discovery and selection occur once, only
+after their complete successful ordinary prefix, and retain that prefix's
+completed and stopped facts. The final validation outcome is admitted only as
+the actual next successor of the reconstructed terminal chain with identical
+receipt history and the existing exact outcome semantics.
+
+A newly confirmed NotExecuted result ends check dispatch for that outer
+Advance, returning Wait with confirmed nonexecution and no product result.
+After preparation correction, the next explicit ordinary Advance can save one
+fresh intent and dispatch one attempt for that stopped check under the standing
+selection and existing typed UoW/policy owner. It never redispatches the old
+intent, retries immediately, schedules backoff, creates a Human question or
+creates new authority. Later selected checks run only after actual completion
+of the current check. Genuine Human, Wait, rejected and Terminal boundaries
+retain their existing owners.
+
+`WorkflowSbtValidationSpec` and `GoalPhaseNativeRetentionApplicabilitySpec`
+specify typed result projection, exact native append chains, retained success,
+repeated nonexecution, unresolved fresh intents, later success/continuation,
+codec compatibility and structural rejection with adjacent Given/When/Then
+clauses. These pure actual-shaped fixtures assert no installed SBT/provider
+acceptance. Parent-selected focused validation, the slow ordinary-tool and
+installed connected qualification in the same GOAL Step, and final INTEGRATION
+aggregate validation remain unfinished; this extension records no PASS,
+acceptance, review-cycle change or repair-cycle consumption.
+
+## Retained selected Step precheck continuation
+
+Native Closing uses the same original Input and standing authority lookup on
+each ordinary Advance. The host must explicitly declare 1..256 unique valid
+`selectedPaths` for each `goal-step-N` on all three kinds `commit-selected`,
+`check-selected-index` and `selected-index-changes`. Those vectors select only
+that Step's owned paths, including any deliberately shared document paths.
+There is no candidate-path or all-index fallback; update obsolete host
+declarations before use. Fixed typed `blob-content` and `tree-changes` reads
+and their actual grants are also required. These declarations create no
+authority or accepted review.
+
+Before dispatch, native branch, HEAD and HEAD tree still match the original
+parent, and selected dirty content is staged and merged without selected
+unstaged/untracked data. Unrelated staged and unstaged work is preserved; no
+global index-tree comparison, unrelated stage/reset/unstage or reset-to-empty
+ritual is required. CNCF retains ordinary typed UoW execution and grants.
+
+The actual selected precheck is saved before any commit intent. A nonclean
+precheck on the unchanged reviewed candidate ends this Advance with Wait at
+that saved native Closing result, showing its actual finding paths and
+diagnostics. The owner has dispatched no commit and saved no commit intent.
+Correct only the selected staged content, then use the next ordinary Advance
+under the original selection and standing authority. This known-no-commit
+continuation changes no generation or repair counter and introduces no Human
+reapproval, semantic work or same-call retry. An unresolved clean precheck,
+unknown intent/result or interrupted acknowledgement remains Wait; missing
+success or a generic exit never establishes nonexecution or replay permission.
+
+An earlier actual EOF-only failure can permit only removal of extra terminal
+LF bytes from the same reported owned paths. Complete ordinary UTF8 typed blob
+bytes without NUL must establish unchanged regular mode `100644`/`100755`,
+`M` status, present distinct old/new blob IDs, an original ending in at least
+two LF bytes and a nonempty result containing all other bytes followed by
+exactly one LF. The committed tree must have exactly that native path/mode/blob
+change vector and the original single parent; selected dirty paths disappear
+while unrelated work may remain. Semantic bytes, trailing spaces, CR, modes,
+renames, deletions, foreign paths or unavailable/incomplete producer values
+require affected validation/review rather than reuse of original results.
+
+The v3 receipt retains the original candidate, checks/review targets and review
+reference plus the actual attempt/precheck/native IDs. Failed results remain
+append-only; only an actual latest known-failed frontier can select the next
+attempt. A clean check saves one durable intent before one selected commit;
+unknown outcomes never replay. Completed reconstruction admits every retained
+record as its exact actual history prefix, re-observes immutable correction
+blobs/tree changes and follows the normal next-Step transition. Old completed
+v3 facts remain readable only under their exact original reviewed-tree meaning;
+an incomplete old intent stays unknown and authorizes no new effect.
+
+Adjacent Given/When/Then in `GoalPhaseNativeClosureSpec`,
+`GoalPhaseOrderedProgressionSpec` and
+`GoalPhaseNativeRetentionApplicabilitySpec` specifies this bounded behavior.
+These targeted tests establish no installed acceptance or production
+availability. Parent-selected focused validation and the actual installed
+selected staging → EOF failure → correction → one commit → next Step proof,
+available cost observations, aggregate validation and comprehensive Phase review
+remain with their existing owners.

@@ -24,7 +24,9 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification-owned inputs, never a genuine Human/review issuer.
   * @since   Oct. 14, 2026
-  * @version Oct. 15, 2026
+  *  version Oct. 15, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeHostPreparationFixture {
@@ -41,6 +43,12 @@ private[admission] object NativeHostPreparationFixture {
       if (choice == "ProvideResolution") Some(V.SplitPhasePartitionContextReference("actual-resolution", "1")) else None)
   def json(record: Record): Json = io.circe.parser.parse(take(record.toJsonStringC)).toOption.get
   def record(json: Json): Record = take(new RecordDecoder().json(json.noSpaces))
+  // Independent Core R4 expectation: omit object nulls at every depth, never array elements.
+  def expectedRecordJson(value: Json): Json = value.arrayOrObject(value,
+    values => Json.fromValues(values.map(expectedRecordJson)),
+    fields => Json.fromJsonObject(io.circe.JsonObject.fromIterable(fields.toVector.collect {
+      case (key, field) if !field.isNull => key -> expectedRecordJson(field)
+    })))
   def wire(value: RecordPresentable): Record = record(json(value.toRecord()))
   def evidence(prepared: Preparation.Prepared): Evidence =
     take(NativeHostEvidence.decodeStorageC(prepared.record.getString(NativeHostEvidence.storageField).get))
@@ -84,7 +92,9 @@ private[admission] trait NativeHostPreparationManagedFixture extends ThreeWorkfl
 
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
-  * @version Oct. 15, 2026
+  *  version Oct. 15, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
@@ -92,6 +102,160 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
   import NativeHostPreparationFixture.*
   private val _goal = NativeHostHumanEvidenceFixture
   private val _split = NativeHostSplitAnswerEvidenceFixture
+
+  "Saved complete Plan revision preparation" should {
+    "preserve real public nested names and bind the fixture answer to exact captured requirements checks and proposal identity" in {
+      Given("a typed revision question with full saved capture and a SPECIFICATION-OWNED answer with no genuine adoption claim")
+      withCore { call =>
+        val captured = _goal.revisionCapture()
+        val question = _goal.revisionQuestion(captured)
+        val answer = goalAnswer.copy(choice = "AdoptPlanRevision", rationale = "SPECIFICATION-OWNED adoption example")
+        When("normal public output crosses its generated reader, real CNCF name formatters and passive evidence preparation")
+        val output = take(NativeWorkflowOperationOutput.goalHumanC(question, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(wire(output)))
+        val context = decoded.human.get.hostContext.get
+        val contexts = Vector(context, context.copy(question = PropertyNameContext.default.transformRecord(context.question)),
+          context.copy(question = PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase).transformRecord(context.question)))
+        val prepared = contexts.map(value => take(Preparation.goalC(value, answer, reference, execution,
+          participant, issuer, now.minusSeconds(60))))
+        val target = take(ThreeWorkflowHostEvidencePorts.goalHumanBindingC(context.componentInstance,
+          question, _goal.revisionAnswer(question), participant))
+        Then("all public spellings retain the same complete approval target without executing or granting consent")
+        decoded.human.get.choices shouldBe Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
+        take(GoalPhasePlanRevision.normalizeJsonC(json(decoded.human.get.planRevision.get)))
+          .as[GoalPhasePlanRevision.Captured] shouldBe Right(captured)
+        prepared.map(value => evidence(value).binding).distinct.size shouldBe 1
+        prepared.foreach(value => observe(evidence(value), Purpose.GoalHuman, target).isSuccess shouldBe true)
+
+        Given("the saved independent row, later different project defaults and changed proposed business targets")
+        val saved = evidence(prepared.head)
+        val later = GoalPhaseAcceptanceBoundary.Project(Vector(
+          GoalPhaseAcceptanceBoundary.Condition("later", "step", true, "Later host default")))
+        val laterselection = take(GoalPhaseAcceptanceBoundary.captureC(Some(later), captured.proposal.plan))
+        val variants = Vector(_goal.revisionCapture(check = "different-check"),
+          _goal.revisionCapture(requirement = "Different required behavior"),
+          captured.copy(proposal = captured.proposal.copy(identity = "different-proposal")),
+          captured.copy(proposal = captured.proposal.copy(revision = "2")))
+        When("saved capture is decoded independently and native observation compares the changed targets with that old row")
+        val retained = GoalPhaseOrderedHumanDecision.inputCodec.decode(GoalPhaseOrderedHumanDecision.inputCodec.encode(
+          question.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request.input.get.value))
+        val crossed = variants.map { value =>
+          val changed = _goal.revisionQuestion(value)
+          val binding = take(ThreeWorkflowHostEvidencePorts.goalHumanBindingC(context.componentInstance,
+            changed, _goal.revisionAnswer(changed), participant))
+          observe(saved, Purpose.GoalHuman, binding)
+        }
+        Then("saved business input survives later defaults while changed checks acceptance identity or revision require their own evidence")
+        retained.toOption.get.planRevision shouldBe Some(captured)
+        laterselection.effectiveAcceptance should not be captured.plan.effectiveAcceptance
+        observe(saved, Purpose.GoalHuman, target).isSuccess shouldBe true
+        crossed.foreach(_.isSuccess shouldBe false)
+
+        Given("present malformed revision data and equal or conflicting public-name collisions")
+        val raw = json(context.question)
+        val path = Vector("source", "planRevision")
+        val revision = _goal.at(raw, path*)
+        val collisions = Vector(revision.mapObject(fields => fields.add("plan", fields("plan").get.mapObject { plan =>
+          plan.add("phase_checks", plan("phaseChecks").get)
+        })), revision.mapObject(fields => fields.add("plan", fields("plan").get.mapObject { plan =>
+          plan.add("phase_checks", Json.arr(Json.fromString("foreign-check")))
+        })))
+        val malformed = Vector(Json.True, Json.obj()) ++ collisions
+        val records = malformed.map(value => GoalPhaseNativeMetadata.record(_goal.alter(raw, path)(_ => value))) :+
+          GoalPhaseNativeMetadata.record(_goal.alter(raw, Vector("source"))(_.mapObject(
+            _.add("plan_revision", revision))))
+        When("normal preparation receives malformed nonnull structured Records")
+        val rejected = records.map(value => Preparation.goalC(context.copy(question = value), answer,
+          reference, execution, participant, issuer, now))
+        Then("no malformed or colliding present Plan revision disappears into an ordinary question")
+        rejected.foreach(_.isSuccess shouldBe false)
+
+        Given("Core R4 omits an optional null Plan revision before Human preparation")
+        val nullrevision = _goal.alter(raw, path)(_ => Json.Null)
+        val omittedrevision = _goal.alter(raw, Vector("source"))(_.mapObject(_.remove("planRevision")))
+        val nullrecord = GoalPhaseNativeMetadata.record(nullrevision)
+        When("passive preparation consumes the surviving question and the explicitly omitted equivalent")
+        val omitted = Vector(nullrecord, record(omittedrevision)).map(value => evidence(take(Preparation.goalC(
+          context.copy(question = value), answer, reference, execution, participant, issuer, now))))
+        Then("the canonical Record and selected binding omit revision without restoring captured approval facts")
+        json(nullrecord) shouldBe expectedRecordJson(nullrevision)
+        json(nullrecord).hcursor.downField("source").downField("planRevision").focus shouldBe None
+        omitted.map(_.binding).distinct.size shouldBe 1
+        omitted.head.binding.hcursor.downField("humanAttestation").downField("question").downField("source")
+          .downField("planRevision").focus shouldBe None
+        observe(omitted.head, Purpose.GoalHuman, target).isSuccess shouldBe false
+        Consequence.unit
+      }
+    }
+  }
+
+  "R3/R4 saved Human repair progress preparation" should {
+    "preserve separate current and assignment snapshots through public wire and the managed Reader" in {
+      Given("a specification-issued Human question with saved current 1/0/2 and prior assignment 1/1/2")
+      withCore { call =>
+        val question = _goal.progressQuestion()
+        When("normal public output crosses its generated reader and passive declaration or wire preparation")
+        val output = take(NativeWorkflowOperationOutput.goalHumanC(question, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(wire(output)))
+        val context = decoded.human.get.hostContext.get
+        val raw = json(context.question)
+        val contexts = Vector(context, context.copy(question = PropertyNameContext.default.transformRecord(context.question)),
+          context.copy(question = PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase).transformRecord(context.question)))
+        val prepared = contexts.map(c => take(Preparation.goalC(c, goalAnswer, reference, execution,
+          participant, issuer, now.minusSeconds(60))))
+        val target = take(ThreeWorkflowHostEvidencePorts.goalHumanBindingC(context.componentInstance, question, _goal.goalAnswer, participant))
+        Then("the exact current and prior counts survive independently without duplicate display fields")
+        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2))
+        prepared.foreach(p => observe(evidence(p), Purpose.GoalHuman, target).isSuccess shouldBe true)
+        prepared.map(p => evidence(p).binding).distinct.size shouldBe 1
+        json(output.toRecord()).hcursor.downField("human").downField("repairProgress").focus shouldBe None
+        json(output.toRecord()).hcursor.downField("human").downField("work").downField("repairProgress").focus shouldBe None
+
+        Given("that prepared row provisioned under the existing managed Create permission and changed selected count contexts")
+        take(call.createC("host_evidence", prepared.head.recordIdentity, prepared.head.record))
+        val reader = take(NativeHostEvidence.bindC(call.core.component.get.subsystem.get.configuration,
+          GoalPhaseRuntimeParameters.Persistence(_configuration_, _collection_("instances"), _collection_("continuations"))))
+        val paths = Vector(Vector("humanAttestation", "question", "source", "repairProgress"),
+          Vector("humanAttestation", "question", "source", "assignment", "repairProgress"))
+        val crossed = paths.map(path => _goal.alter(target, path)(_.mapObject(_.add("automaticCount", Json.fromInt(2)))))
+        When("the current managed Reader checks the original row against exact and crossed progress")
+        val accepted = take(reader.loadC(call.core, Purpose.GoalHuman, evidenceKey, target))
+        val rejected = crossed.map(reader.loadC(call.core, Purpose.GoalHuman, evidenceKey, _))
+        Then("only the exact selected snapshots reuse the independent row")
+        accepted.map(_.evidence.binding) shouldBe Some(evidence(prepared.head).binding)
+        rejected.foreach(_.isSuccess shouldBe false)
+
+        Given("present malformed and contradictory nonnull progress names at either consumed source position")
+        val sourcepaths = Vector(Vector("source", "repairProgress"), Vector("source", "assignment", "repairProgress"))
+        val malformed = sourcepaths.flatMap(path => Vector(Json.obj(), Json.True,
+          Json.obj("automatic_count" -> Json.fromInt(1), "ordinary_count" -> Json.fromInt(2), "limit" -> Json.fromInt(2)))
+          .map(v => _goal.alter(raw, path)(_ => v))) ++ sourcepaths.map(path => _goal.alter(raw, path)(
+            _.mapObject(_.add("automatic_count", Json.fromInt(2)))))
+        When("public preparation consumes each malformed supplied Record")
+        val failures = malformed.map(v => Preparation.goalC(context.copy(question = record(v)),
+          goalAnswer, reference, execution, participant, issuer, now))
+        Then("no malformed presence or contradictory count alias can disappear")
+        failures.foreach(_.isSuccess shouldBe false)
+        sourcepaths.foreach { path =>
+          Given("Core R4 omits optional null progress at " + path.mkString("."))
+          val supplied = _goal.alter(raw, path)(_ => Json.Null)
+          val explicit = _goal.alter(raw, path.init)(_.mapObject(_.remove(path.last)))
+          val questionrecord = record(supplied)
+          When("passive Human preparation consumes the surviving and explicitly omitted progress shapes")
+          val omitted = Vector(questionrecord, record(explicit)).map(q => evidence(take(Preparation.goalC(
+            context.copy(question = q), goalAnswer, reference, execution, participant, issuer, now))))
+          Then("the selected position remains absent and cannot reuse the original native progress evidence")
+          json(questionrecord) shouldBe expectedRecordJson(supplied)
+          _goal.at(json(questionrecord), path.init*).hcursor.downField(path.last).focus shouldBe None
+          omitted.map(_.binding).distinct.size shouldBe 1
+          val selectedsource = omitted.head.binding.hcursor.downField("humanAttestation").downField("question").downField("source").focus.get
+          _goal.at(selectedsource, path.tail.init*).hcursor.downField(path.last).focus shouldBe None
+          observe(omitted.head, Purpose.GoalHuman, target).isSuccess shouldBe false
+        }
+        Consequence.unit
+      }
+    }
+  }
 
   "E7 Finite Human question wire names" should afterWord(
     "in spec:native-host-human-preparation, example:E7, rules:R1,R2,R3,R5,R6,R7, phase:6") {
@@ -125,12 +289,11 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
           case key :: rest => value.mapObject(fields => fields.add(key, _replace_at_(fields(key).get, rest, replacement)))
           case Nil => replacement
         }
-        // E7 supplies an actual Record with present nulls. The ordinary decoder
-        // used by record()/wire() deliberately keeps its existing behavior.
-        def _question_value_(value: Json): Any = value.fold[Any](null, boolean => boolean,
-          number => number.toBigDecimal.get, string => string, array => array.map(_question_value_),
-          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> _question_value_(field) }))
-        def _question_record_(value: Json): Record = _question_value_(value).asInstanceOf[Record]
+        def _question_record_(value: Json): Record = {
+          val question = record(value)
+          json(question) shouldBe expectedRecordJson(value)
+          question
+        }
         contexts.zip(targets).foreach { (context, target) =>
           val purpose = if (context.purpose == Purpose.GoalHuman.identity) Purpose.GoalHuman
             else if (context.purpose == Purpose.RepositoryHuman.identity) Purpose.RepositoryHuman else Purpose.SplitAnswer
@@ -154,9 +317,9 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
           }
           org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire.normalize(annotated, purpose)
             .hcursor.downField("annotations").focus shouldBe Some(annotation)
-          Given("the " + context.purpose + " supplied Record retains malformed canonical values even beside valid aliases")
+          Given("the " + context.purpose + " raw JSON has malformed canonical values beside valid aliases")
           val protectednames = Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType")
-          When("the scenario constructs null-preserving question Records rather than passing them through the ordinary decoder")
+          When("Core canonical Record conversion omits null object attributes before preparation")
           val presentinvalid = protectednames.flatMap { key =>
             val alias = PropertyNameContext.default.aliases(key)(1)
             Vector(Json.Null, Json.True, Json.fromString("")).map { invalid =>
@@ -164,13 +327,12 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
               (key, invalid, supplied, _question_record_(supplied))
             }
           }
-          Then("every canonical null is still present in the supplied Record, its JSON and the finite question normalizer")
+          Then("Record omission allows the declared alias while direct finite JSON normalization retains canonical null")
           presentinvalid.filter(_._2.isNull).foreach { (key, _, supplied, question) =>
             withClue(context.purpose + " canonical null " + key + ": ") {
-              val field = question.fields.find(_.key == key)
-              field.isDefined shouldBe true
-              (field.get.value.single == null) shouldBe true
-              json(question).hcursor.downField(key).focus shouldBe Some(Json.Null)
+              question.fields.find(_.key == key) shouldBe None
+              json(question).hcursor.downField(key).focus shouldBe None
+              evidence(take(_prepare_(context.copy(question = question)))).binding shouldBe evidence(canonical).binding
               org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire.normalize(supplied, purpose)
                 .hcursor.downField(key).focus shouldBe Some(Json.Null)
             }
@@ -190,9 +352,10 @@ final class NativeHostHumanPreparationSpec extends AnyWordSpec with Matchers wit
             case _ => Vector(_malformed_(List("source", "context", "identity"), Json.Null))
           })
           When("present malformed canonical fields have valid aliases or nested required fields and input/result codecs are crossed")
-          val malformedquestions = presentinvalid.map { (key, invalid, _, question) =>
+          val malformedquestions = presentinvalid.filterNot(_._2.isNull).map { (key, invalid, _, question) =>
             (key + "=" + invalid.noSpaces + " beside valid alias", question)
-          } ++ nested ++ Vector("inputType", "resultType").map(key => _malformed_(List(key), Json.fromString("foreign-type")))
+          } ++ protectednames.map(key => _malformed_(List(key), Json.Null)) ++ nested ++
+            Vector("inputType", "resultType").map(key => _malformed_(List(key), Json.fromString("foreign-type")))
           val failures = malformedquestions.map { (field, question) => (field, _prepare_(context.copy(question = question))) }
           Then("strict native selection refuses every malformed consumed value without alias rescue")
           failures.foreach { (field, result) => withClue(context.purpose + " " + field + ": ") {

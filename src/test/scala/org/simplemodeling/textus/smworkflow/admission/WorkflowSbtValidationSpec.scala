@@ -13,7 +13,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -29,6 +29,119 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "retain confirmed nonexecution for every selected kind without a product result or repair" in {
+      Given("actual-shaped typed NotStarted results for Compile, Test and TestOnly with no process captures")
+      val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
+        Kind.TestOnly -> SbtOperation.TestOnly)
+      val results = kinds.map { (kind, operation) =>
+        val result = _result(operation, ProcessExecutionTermination.NotStarted)
+        kind -> result.copy(processResult = result.processResult.copy(stdout = _capture(""), stderr = _capture(""), elapsedMillis = 0L))
+      }
+      When("the typed result boundary retains each actual stopped receipt and its canonical wire facts")
+      val receipts = results.map { (kind, result) => take(V.sbtReceiptC("selected", kind, result)) }
+      Then("not-executed stays distinct from failed or incomplete and cannot pass or allocate a semantic repair")
+      receipts.zip(kinds).foreach { (receipt, selected) =>
+        receipt.termination shouldBe "not-started"
+        receipt.exitCode shouldBe None
+        receipt.stdout shouldBe ""
+        receipt.stderr shouldBe ""
+        receipt.sbt shouldBe Some(Facts(selected._1, Outcome.NotExecuted, None, None))
+        receipt.asJson.as[V.Receipt] shouldBe Right(receipt)
+        receipt.sbt.get.asJson.hcursor.get[String]("outcome").toOption shouldBe Some("not-executed")
+        V.productSuccessful(receipt, selected._1) shouldBe false
+        val payload = GoalPhaseNativeValidation.Payload("1", "S1", GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40),
+          Vector(GoalPhaseNativeValidation.Check("selected", 1, selected._1)), Vector.empty, None, stopped = Vector(receipt))
+        GoalPhaseNativeValidation.repairable(payload) shouldBe false
+      }
+    }
+
+    "keep launch failure and timeout incomplete for every selected kind" in {
+      Given("actual-shaped LaunchFailed and TimedOut typed results for each selected SBT operation")
+      val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
+        Kind.TestOnly -> SbtOperation.TestOnly)
+      When("native receipts project those actual uncertain terminations")
+      val receipts = kinds.flatMap { (kind, operation) =>
+        Vector(ProcessExecutionTermination.LaunchFailed, ProcessExecutionTermination.TimedOut).map(termination =>
+          take(V.sbtReceiptC("selected", kind, _result(operation, termination))))
+      }
+      Then("each remains indeterminate and incomplete without becoming confirmed nonexecution")
+      receipts.foreach { receipt =>
+        receipt.termination shouldBe "indeterminate"
+        receipt.exitCode shouldBe None
+        receipt.sbt.get.outcome shouldBe Outcome.Incomplete
+        V.productSuccessful(receipt, receipt.sbt.get.kind) shouldBe false
+      }
+    }
+
+    "preserve actual Compile success failure and timeout through the canonical receipt codec" in {
+      Given("actual typed Compile results with zero, nonzero and timed-out termination")
+      val results = Vector(_result(SbtOperation.Compile), _result(SbtOperation.Compile, ProcessExecutionTermination.Exited(7)),
+        _result(SbtOperation.Compile, ProcessExecutionTermination.TimedOut))
+      When("the native boundary projects each Compile result and its receipt is encoded and decoded")
+      val receipts = results.map(result => take(V.sbtReceiptC("compile", Kind.Compile, result)))
+      val restored = receipts.map(_.asJson.as[V.Receipt].toOption.get)
+      Then("only successful Compile passes its selected kind and all raw evidence and negative outcomes survive")
+      restored shouldBe receipts
+      restored.map(V.productSuccessful(_, Kind.Compile)) shouldBe Vector(true, false, false)
+      restored.map(_.sbt.get.outcome) shouldBe Vector(Outcome.Succeeded, Outcome.Failed, Outcome.Incomplete)
+      restored.map(_.termination) shouldBe Vector("exited", "exited", "indeterminate")
+      restored.map(_.exitCode) shouldBe Vector(Some(0), Some(7), None)
+      restored.foreach { receipt =>
+        receipt.sbt.get.kind shouldBe Kind.Compile
+        receipt.sbt.get.selection shouldBe None
+        receipt.sbt.get.reason shouldBe None
+        receipt.stdout shouldBe "actual output\r\n日本語\n"
+        receipt.stderr shouldBe "actual diagnostic\n"
+        V.productSuccessful(receipt, Kind.Test) shouldBe false
+        V.productSuccessful(receipt, Kind.TestOnly) shouldBe false
+      }
+    }
+
+    "reject every crossed selected operation and legacy Test receipt for Compile" in {
+      Given("one actual successful result for each of Compile, Test and verified TestOnly")
+      val results = Vector(Kind.Compile -> _result(SbtOperation.Compile), Kind.Test -> _result(SbtOperation.Test),
+        Kind.TestOnly -> _result(SbtOperation.TestOnly,
+          selection = Some(SbtTestSelectionResult.Verified(_classes, 2, 9L))))
+      val raw = take(V.receiptC("selected", _result(SbtOperation.Test).processResult))
+      When("each selected kind consumes each actual operation and the canonical product gate consumes its receipt")
+      val projected = results.map { case (actualkind, result) =>
+        (actualkind, results.map { case (selectedkind, _) =>
+          (selectedkind, V.sbtReceiptC("selected", selectedkind, result)) })
+      }
+      val receipts = results.map { case (actualkind, result) =>
+        actualkind -> take(V.sbtReceiptC("selected", actualkind, result))
+      }
+      Then("only exact operation matches are admitted and no pair or historical absence can cross kinds")
+      projected.foreach { case (actualkind, selected) => selected.foreach { case (selectedkind, receipt) =>
+        receipt.isSuccess shouldBe (selectedkind == actualkind)
+      }}
+      receipts.foreach { case (actualkind, receipt) =>
+        results.foreach { case (selectedkind, _) =>
+          V.productSuccessful(receipt, selectedkind) shouldBe (selectedkind == actualkind)
+        }
+      }
+      V.productSuccessful(raw, Kind.Test) shouldBe true
+      V.productSuccessful(raw, Kind.Compile) shouldBe false
+    }
+
+    "reject Compile selection and unverified facts before admission or persistence" in {
+      Given("Compile results carrying TestOnly selection and constructed Compile facts with selection reason or unverified outcome")
+      val selections = Vector(SbtTestSelectionResult.Verified(_classes, 2, 9L),
+        SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.MissingSelection))
+      val invalid = Vector(Facts(Kind.Compile, Outcome.Unverified, None, Some("MissingSelection")),
+        Facts(Kind.Compile, Outcome.Succeeded, Some(Selection(_classes, 2, 9L)), None),
+        Facts(Kind.Compile, Outcome.Succeeded, None, Some("MissingSelection")),
+        Facts(Kind.Compile, Outcome.Unverified, None, None))
+      When("the actual-result boundary and canonical facts decoder consume those contradictory values")
+      val receipts = selections.map(selection => V.sbtReceiptC("compile", Kind.Compile,
+        _result(SbtOperation.Compile, selection = Some(selection))))
+      val decoded = invalid.map(_.asJson.as[Facts])
+      Then("Compile admits neither actual selected-test metadata nor persisted selection reason or unverified facts")
+      receipts.foreach(_.isSuccess shouldBe false)
+      invalid.foreach(_.validateC.isSuccess shouldBe false)
+      decoded.foreach(_.isLeft shouldBe true)
+    }
+
     "preserve Test success failure and incomplete output meaning" in {
       Given("actual Test results with zero, nonzero and timed-out termination")
       val results = Vector(_result(SbtOperation.Test), _result(SbtOperation.Test, ProcessExecutionTermination.Exited(7)),
