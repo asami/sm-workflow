@@ -22,8 +22,7 @@ import RepositorySyncNativeProgressStore as N
   * specification-owned inputs/evidence and reads actual native records. This
   * is no genuine AI review, live task repair or Phase acceptance evidence.
   * @since   Oct. 15, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec with GivenWhenThen
@@ -175,8 +174,9 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
 
   "Mapped Repository repair" should afterWord("in spec:repository-sync-native-execution, example:E6, rules:R1,R2,R3,R4,R5") {
     "complete mapped repository execution repair through separate Submit Advance fresh SBT and newly mapped review" in {
-      Given("an owned real conflict, normal SQLite Operations, paired classifications and specification-owned canonical execution observations")
-      _with_episode(hostparameters = RepositoryExecutionFixture.parameters()) { episode =>
+      Given("an owned real conflict, normal SQLite Operations, paired review/repair classifications with explicit conflict CODING and specification-owned canonical execution observations")
+      _with_episode(hostparameters = RepositoryExecutionFixture.parameters(
+        conflict = Some(RepositoryExecutionFixture.classifications.repair))) { episode =>
         When("normal Start conflict completion and owning Advance build and actually SBT-validate the original resolved candidate")
         val original = episode.originalReview()
         val oldorder = original.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]]

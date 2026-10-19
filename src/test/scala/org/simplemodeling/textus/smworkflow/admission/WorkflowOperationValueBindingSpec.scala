@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named value binding and generated result intake checks. Real operation execution is covered by
   * the normal three-workflow specs, not inferred from a codec round trip.
   * @since   Oct. 12, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -70,13 +70,13 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
   }
 
   "Named Workflow business parameters" should {
-    "preserve present empty and null JSON cells at the root and recursively" in {
+    "preserve present empty JSON containers at the root and recursively" in {
       Given("a specification-owned object with present empty cells, ordered arrays and an exact large integer, while omitted is absent")
-      val emptycells = Json.obj("emptyarray" -> Json.arr(), "emptyobject" -> Json.obj(), "explicitnull" -> Json.Null)
+      val emptycells = Json.obj("emptyarray" -> Json.arr(), "emptyobject" -> Json.obj())
       val business = Json.obj(
-        "emptyarray" -> Json.arr(), "emptyobject" -> Json.obj(), "explicitnull" -> Json.Null,
+        "emptyarray" -> Json.arr(), "emptyobject" -> Json.obj(),
         "nested" -> emptycells,
-        "array" -> Json.arr(Json.obj(), Json.arr(), Json.Null, emptycells, Json.True, Json.fromString("ordered")),
+        "array" -> Json.arr(Json.obj(), Json.arr(), emptycells, Json.True, Json.fromInt(0), Json.fromString("ordered")),
         "boolean" -> Json.False, "text" -> Json.fromString("SPECIFICATION-OWNED value"),
         "integer" -> Json.fromBigDecimal(BigDecimal("9007199254740993")))
       val representations: Vector[Any] = Vector(business, business.noSpaces)
@@ -90,6 +90,22 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
       Then("both representations retain every present value exactly, including precision and array order, without inventing omitted")
       actual shouldBe Vector.fill(representations.size)(business)
       actual.foreach(_.hcursor.downField("omitted").focus shouldBe None)
+    }
+
+    "refuse explicit JSON null at every object and array depth with a typed failure" in {
+      Given("named business objects with root, nested object and differently nested array null cells")
+      val businesses = Vector(
+        Json.obj("field" -> Json.Null),
+        Json.obj("nested" -> Json.obj("field" -> Json.Null)),
+        Json.obj("array" -> Json.arr(Json.Null)),
+        Json.obj("array" -> Json.arr(Json.arr(Json.True, Json.Null))),
+        Json.obj("array" -> Json.arr(Json.obj("nested" -> Json.arr(Json.Null)))))
+      val representations: Vector[Any] = businesses.flatMap(value => Vector(value, value.noSpaces))
+      When("recordC consumes each actual Json and String named business object")
+      val actual = representations.map(value =>
+        NativeWorkflowOperationInput.recordC(_request(Property("input", value, None)), "input"))
+      Then("every explicit null returns Consequence.Failure without throwing or normalizing it away")
+      actual.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
     "retain a complete Plan proposal with empty Step dependencies through the generated WorkResult reader" in {

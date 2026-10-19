@@ -28,11 +28,17 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
+  override protected def goal_selected_paths(goal: ThreeWorkflowHostParameters.Goal): Vector[Vector[String]] =
+    if (goal.closure.programs.map(_.step) == Vector("step-1", "step-2") &&
+        goal.candidatePaths == Vector("one.scala", "two.scala"))
+      Vector(Vector("one.scala"), Vector("two.scala"))
+    else super.goal_selected_paths(goal)
+
   private def _assert_issued_context[A](value: Option[V.WorkflowIssuedWorkContext],
     issued: WorkflowInteraction[A, Nothing], mode: String,
     codec: WorkflowResultJsonV1.PayloadCodec[A]): Unit = {
@@ -626,7 +632,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           resumed.issues shouldBe expectedissues
           if (continuation.nonEmpty) {
             resumed.repairDirective.get.findings shouldBe requesting.result.value.findings
-            resumed.review shouldBe prior.review
+            Then("the retained review material includes the latest actual review for this task and preserves every other report")
+            val expectedprior = GoalPhaseNativeReview.Prior(prior.kind, prior.stepIdentity, prior.generation,
+              prior.candidate.get, prior.checksReceipt.get, requesting.resultReference.identity,
+              requesting.resultReference.revision, requesting.result.value)
+            resumed.review shouldBe prior.review.map(context => context.copy(priorReviews =
+              context.priorReviews.filterNot(value => value.kind == expectedprior.kind && value.step == expectedprior.step) :+ expectedprior))
             resumed.checkFailure shouldBe None
             resumed.candidate shouldBe None
             resumed.checksReceipt shouldBe None

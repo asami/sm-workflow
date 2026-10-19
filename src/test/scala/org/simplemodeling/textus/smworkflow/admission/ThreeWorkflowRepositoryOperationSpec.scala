@@ -41,7 +41,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -133,12 +133,14 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     }
   } catch { case scala.util.control.NonFatal(error) => Consequence.stateConflict("Owned repository fixture setup failed: " + error.getMessage) }
 
+  protected def goal_selected_paths(goal: ThreeWorkflowHostParameters.Goal): Vector[Vector[String]] =
+    Vector(goal.candidatePaths)
   protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
     val target = Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString)
     val git = TypedGitHostPlanFixture.plan(target, conflictPaths = conflict_path(scenario).toSet,
       goalPaths = if (scenario == "Goal") goal.candidatePaths else Vector.empty,
       goalMessages = if (scenario == "Goal") goal.closure.programs.map(p => "Goal Step " + p.step) else Vector.empty,
-      goalSelections = if (scenario == "Goal") Vector(goal.candidatePaths) else Vector.empty)
+      goalSelections = if (scenario == "Goal") goal_selected_paths(goal) else Vector.empty)
     val ordinals = (Vector(1) ++ (if (scenario == "Goal")
       (goal.stepValidation.checks ++ goal.phaseValidation.checks).map(_.ordinal) else Vector.empty)).distinct
     TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, ordinals, Some(git),

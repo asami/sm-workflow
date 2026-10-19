@@ -25,7 +25,7 @@ import GoalPhaseNativeReviewCompletion as Q
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -226,7 +226,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         }
       } yield result
       case O.Stage.Closing => for {
-        retained <- GoalPhaseNativeClosure.retainedOptionC(source, d, core, cursor.from, cursor.controller)
+        retained <- if (soughtrecording.nonEmpty)
+          GoalPhaseNativeClosure.retainedRecordingHistoryOptionC(source, d, core, cursor.from, cursor.controller)
+        else GoalPhaseNativeClosure.retainedOptionC(source, d, core, cursor.from, cursor.controller)
         result <- retained match {
           case None => _paused_c(source, cursor, "Step commit has an actual intent without its completed result; no automatic replay.")
           case Some(value) if value.payload.commit.isEmpty =>

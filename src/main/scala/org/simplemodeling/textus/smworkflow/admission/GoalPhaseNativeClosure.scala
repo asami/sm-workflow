@@ -20,7 +20,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -103,6 +103,17 @@ private[smworkflow] object GoalPhaseNativeClosure {
         progress <- store.progressC
         _ <- if (progress.nextAttempt.nonEmpty) store.latestC(progress.record) else Consequence.unit
       } yield if (progress.nextAttempt.nonEmpty) progress.failed.lastOption else None
+    }
+  } yield saved
+
+  /** Recording Submit reconstructs canonical history without observing live Git. */
+  def retainedRecordingHistoryOptionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    result <- store.loadC("committed")
+    saved <- result match {
+      case Some(value) => store.completedRecordingHistoryC(value).map(Some(_))
+      case None => Consequence.success(Option.empty[Saved])
     }
   } yield saved
 
@@ -191,8 +202,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
             Consequence.unit else F.invalid("retained Step closure is not its full actual native history prefix")
         } yield Some(Saved(admitted, value.receipt.payload.value, controller))
       }
-    def progressC: Consequence[Progress] = _scan_c(0, Vector.empty)
-    private def _scan_c(attempt: Int, attempts: Vector[Attempt]): Consequence[Progress] = for {
+    def progressC: Consequence[Progress] = _scan_c(0, Vector.empty, _verify_retained_changes_c)
+    private def _scan_c(attempt: Int, attempts: Vector[Attempt],
+      verify: (Saved, Progress) => Consequence[Unit]): Consequence[Progress] = for {
       check <- loadC(_attempt_key("check-result", attempt))
       intent <- loadC(_attempt_key("intent", attempt))
       examined = attempts :+ Attempt(check, intent)
@@ -201,14 +213,17 @@ private[smworkflow] object GoalPhaseNativeClosure {
         _ <- if (saved.payload.changes.forall(change => _owned_paths.exists(covers(_, change.path))) &&
             saved.payload.check.forall(_.eofPaths.forall(path => _owned_paths.exists(covers(_, path)))))
           Consequence.unit else F.invalid("retained correction crosses current Step ownership")
-        actual <- _typed_changes_c(saved.payload.changes)
-        admitted <- admitChangesC(progress.failed.filter(_.payload.attempt < attempt), actual)
-        _ <- if (admitted == saved.payload.changes) Consequence.unit
-          else F.invalid("retained correction rewrites the admitted native changes")
+        _ <- verify(saved, progress)
       } yield () }
       result <- if (check.nonEmpty && progress.nextAttempt.nonEmpty)
-        _scan_c(progress.nextAttempt.get, examined) else Consequence.success(progress)
+        _scan_c(progress.nextAttempt.get, examined, verify) else Consequence.success(progress)
     } yield result
+    private def _verify_retained_changes_c(saved: Saved, progress: Progress): Consequence[Unit] = for {
+      actual <- _typed_changes_c(saved.payload.changes)
+      admitted <- admitChangesC(progress.failed.filter(_.payload.attempt < saved.payload.attempt), actual)
+      _ <- if (admitted == saved.payload.changes) Consequence.unit
+        else F.invalid("retained correction rewrites the admitted native changes")
+    } yield ()
     def saveC(key: String, current: InstanceRecord, stage: String, payload: Payload): Consequence[InstanceRecord] = for {
       _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty &&
           current.currentProgression.contains(ProgressionReference("phase.Closing"))) Consequence.unit
@@ -253,13 +268,20 @@ private[smworkflow] object GoalPhaseNativeClosure {
     } yield next
     def completedC(result: Saved): Consequence[Saved] = for {
       progress <- progressC
+      saved <- _completed_c(result, progress)
+      _ <- _verified_commit_c(result.payload, progress.failed)
+    } yield saved
+    def completedRecordingHistoryC(result: Saved): Consequence[Saved] = for {
+      progress <- _scan_c(0, Vector.empty, (_, _) => Consequence.unit)
+      saved <- _completed_c(result, progress)
+    } yield saved
+    private def _completed_c(result: Saved, progress: Progress): Consequence[Saved] = for {
       pending <- progress.pending.filter(saved => saved.record.causation.value ==
         "ordered-step-closure:" + _attempt_key("intent", saved.payload.attempt))
         .map(Consequence.success).getOrElse(F.invalid("completed Step has no exact pending commit intent"))
       _ <- if (result != null && result.payload != null && result.payload.commit.nonEmpty &&
           result.payload.copy(commit = None) == pending.payload) Consequence.unit
         else F.invalid("retained Step closure changes its exact pending payload")
-      _ <- _verified_commit_c(result.payload, progress.failed)
       next <- _closed_state_c(result.payload)
       _ <- _successor_c(pending.record, result.record, "committed", next.stage.toString)
     } yield Saved(result.record, result.payload, next)

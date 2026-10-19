@@ -1,9 +1,22 @@
 # Managed Test Suites: Phase 5/5.1/6–6.3/7 delivery and acceptance
 
-Status: closed; PHASE-6.2 acceptance scope only
-Phase acceptance scope: PHASE-6.2
+Status: closed; PHASE-6.3 acceptance scope only
+Phase acceptance scope: PHASE-6.3
 
-## Current allocation — production-first, 2026-10-18
+## Current Phase 6.3 acceptance — 2026-10-20
+
+P63-USE01..03 are accepted through the installed normal routes and the original
+four development Steps. The sole comprehensive Phase review, affected focused
+closures and declared aggregate repository-full validation are complete.
+This canonical projection binds `p63-phase-closure@1` and becomes authoritative
+with its verified local release receipt. Supported scope and retained limits are
+recorded in [Phase 6.3](phase-6.3.md#current-acceptance--2026-10-20) and the
+[start-of-use guide](../notes/three-skills-start-of-use.md). Historical results,
+failures, deferrals and repair counts below retain their original meaning;
+the aggregate full obligation formerly deferred to 6.3 is now discharged.
+CBD review integration stays in Phase 10. Future work is not accepted here.
+
+## Historical allocation — production-first, 2026-10-18
 
 CBD-backed review integration P6-SQ01..05 belongs to [Phase 10](phase-10.md).
 Earlier Phase 6 allocations below retain historical scope only where they would
@@ -458,7 +471,7 @@ The USE numbering is not execution order or an extra test/review sequence.
 One blocked skill does not stop independent ready work; all rows still need
 acceptance before 6.3 closes.
 
-- [ ] P63-USE01: **Owner: [Phase 6.3](phase-6.3.md#single-repository-production-acceptance--2026-10-18).**
+- [x] P63-USE01: **Owner: [Phase 6.3](phase-6.3.md#single-repository-production-acceptance--2026-10-18).**
       Installed `sm-repository-sync` can perform ordinary one-repository production
       synchronization: preserve intended local state, actual fetch/classification,
       permitted integration, conflict/decision continuation as applicable,
@@ -468,15 +481,15 @@ acceptance before 6.3 closes.
       No-effect-only, mock-only or helper-only evidence is insufficient. GitHub
       setup claims require actual ordinary host/authentication evidence. No
       dependency on 6.4 storage, Phase 7 workspace/overlay or Phase 10 CBD review.
-      This documentation edit records no execution or acceptance.
+      Accepted through the installed local-origin effect route; GitHub setup remains environment-specific.
 
-- [ ] P63-USE02: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
+- [x] P63-USE02: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
       Installed `sm-split-phase` supports ordinary production use: an actual
       selected Phase follows the normal request/decision/result path to usable
       split plans, preserving work coverage, dependency relationships, validation
       ownership and applicable existing work/results. Reconcile accepted earlier
       evidence and fill actual installed gaps; no helper-only completion claim.
-- [ ] P63-USE03: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
+- [x] P63-USE03: **Owner: [Phase 6.3](phase-6.3.md#three-skill-use-tiers--2026-10-18).**
       Installed `sm-goal-phase` supports limited single-repository production
       development through required repair/validation/review/Admission and actual
       local Step/Phase closure. Document this scope and its limits; related-project,
@@ -505,7 +518,7 @@ acceptance before 6.3 closes.
 
 P63-USE02/03 explicitly record the existing integrated acceptance obligations,
 not extra review/full-test campaigns. Limited GoalPhase use limits scope, not
-validation quality. These new rows remain unchecked until owner acceptance;
+validation quality. These rows are now accepted by Phase 6.3 within the recorded scopes;
 ordinary split/sync use does not wait for full cross-project GoalPhase adoption.
 
 The [Core execution-overhead follow-up](phase-6.3.md#execution-overhead-in-ordinary-production-acceptance--2026-10-18)

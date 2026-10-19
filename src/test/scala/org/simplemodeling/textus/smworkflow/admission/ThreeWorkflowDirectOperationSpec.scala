@@ -44,7 +44,7 @@ import SplitPhaseTypedStartFixture as F
   * @since   Oct.  7, 2026
   *  version Oct. 15, 2026
   *  version Oct. 16, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -237,7 +237,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           |  key: direct-operation-spec
           |  time:
           |    mode: manual
-          |    start-at: 2026-10-07T00:00:00Z
+          |    start-at: '2026-10-07T00:00:00Z'
           |  random:
           |    mode: seeded
           |    seed: direct-operation-spec
