@@ -1,5 +1,13 @@
 # Normal three-workflow host
 
+Use [the three-skills start-of-use guide](../notes/three-skills-start-of-use.md)
+for the connected setup and task sequence. The Phase 6.3 supported tiers are
+ordinary split planning, synchronization of one selected repository and limited
+Goal development in one repository; production acceptance requires formal Phase
+closure. Dated historical fixture-only and pending statements below retain their
+original evidence bounds. They neither expand these tiers nor determine current
+production acceptance independently of that closure.
+
 The default ComponentFactory selects the native GoalPhase, SplitPhase and
 RepositorySync assemblies together. Use the official development CAR/classpath
 and the ordinary CNCF launcher. Factory composition does not start a workflow,

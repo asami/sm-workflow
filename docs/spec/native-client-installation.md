@@ -1,5 +1,13 @@
 # Native client and task-private skill installation
 
+For the practical setup and task sequence, start with
+[the three-skills start-of-use guide](../notes/three-skills-start-of-use.md).
+The Phase 6.3 supported tiers are ordinary split planning, synchronization of one
+selected repository and limited Goal development in one repository. Production
+acceptance depends on formal Phase closure. Dated historical fixture-only and
+pending statements below retain their original evidence bounds; they do not
+replace the current release scope or establish its acceptance.
+
 Use the ordinary CNCF launcher with the production component factory and a
 normally configured host. The [business client contract](workflow-business-client.md)
 defines named native command/client calls and the exact caller routing file. The
