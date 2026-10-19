@@ -42,7 +42,8 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -212,6 +213,15 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Goal assignment is absent")))
     } yield work
+    def goalRecordingC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseFindingRecording.Request, Nothing]] = for {
+      current <- goalCurrentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Goal has no pending recording work"))
+      storage <- _goal_storage_c()
+      reader <- storage.bindIssuedC(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec)
+      work <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification Goal recording assignment is absent")))
+    } yield work
     def goalQuestionC(identity: InstanceIdentity): Consequence[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]] = for {
       current <- goalCurrentC(identity)
       continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
@@ -343,7 +353,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |  key: direct-repository-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-07T00:00:00Z
+        |    start-at: '2026-10-07T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: direct-repository-spec

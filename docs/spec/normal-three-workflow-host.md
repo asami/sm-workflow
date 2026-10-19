@@ -52,7 +52,7 @@ minimum Boundary/CBD and existing review/Phase 6.3 aggregate duties remain.
 
 ## Current composition — common business Operation loop
 
-The normal factory installs exactly sixteen provided Operations using
+The normal factory installs exactly seventeen provided Operations using
 current public CNCF services and the Subsystem-owned storage/process facilities.
 Start receives named typed input and optional proposed sessionId, then returns
 the actual execution ID. Advance receives that sessionId. Submit receives that
@@ -61,16 +61,16 @@ where required. All outputs are declared business Values carried as structured
 RecordResponse; subsequent work is selected only by explicit Advance.
 
 See the complete [current contract](common-workflow-operation-loop.md).
-Current revisions are goal-phase-business-operation-v6,
+Current revisions are goal-phase-business-operation-v7,
 split-phase-business-operation-v14 and repository-sync-business-operation-v12.
 No positional JSON-string endpoint, caller ambiguity-selector path or alternate
 legacy business interface remains. Current native business references resolve
 the execution and pending task; independent executions can share one chat.
 Host selection/permission/effect and actual native transaction owners remain.
 
-The current participant operation sets are GoalPhase 4, SplitPhase 6 and
+The current participant operation sets are GoalPhase 5, SplitPhase 6 and
 RepositorySync 6. Three Split semantic completions obtain their assigned result
-destination internally; the seven other completions require a genuine
+destination internally; the eight other completions require a genuine
 `resultReference`. The additive Repository repair pair retains workflow v12.
 The declarative `MergeRepairService.repairNativePendingMerge` is a required
 semantic capability, and `RepositorySyncService.submitNativeMergeRepair` is its

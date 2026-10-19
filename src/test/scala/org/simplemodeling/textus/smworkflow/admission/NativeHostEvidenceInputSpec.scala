@@ -19,7 +19,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed finite tool input fixture; files contain only specification facts.
   * @since   Oct. 14, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeHostEvidenceToolFixture {
@@ -75,14 +76,15 @@ private[admission] object NativeHostEvidenceToolFixture {
   * Fixture success is not genuine independent review, Human consent or task completion.
   * @since   Oct. 14, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostEvidenceInputSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeHostPreparationManagedFixture {
   import NativeHostPreparationFixture.*
   private val _tool = NativeHostEvidenceToolFixture
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
 
   "T1 Own Goal review input" should afterWord("in spec:native-host-evidence-tool, example:T1, rules:R1,R2,R3,R4, phase:6") {

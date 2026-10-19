@@ -3,6 +3,9 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.ContinuationResult
+import io.circe.{Decoder, DecodingFailure, Encoder, Json}
+import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import GoalPhaseNativeRun as F
 import GoalPhaseNativeWork as S
 import GoalPhaseOrderedProgression as O
@@ -11,12 +14,26 @@ import GoalPhaseOrderedProgression as O
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
   *  version Oct. 11, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
   final case class Context(changedPaths: Vector[String],
-    diff: String, checks: Vector[RepositorySyncNativeMergeValidation.Receipt])
+    diff: String, checks: Vector[RepositorySyncNativeMergeValidation.Receipt],
+    metadata: Vector[GoalPhaseNativeMetadata.Batch] = Vector.empty)
+  object Context {
+    given Encoder[Context] = deriveEncoder[Context].mapJson(value => value.mapObject(fields =>
+      if (fields("metadata").exists(_.asArray.exists(_.isEmpty))) fields.remove("metadata") else fields))
+    private val _decoder: Decoder[Context] = deriveDecoder
+    given Decoder[Context] = Decoder.instance { cursor =>
+      val normalized = if (cursor.downField("metadata").focus.isEmpty)
+        cursor.value.mapObject(_.add("metadata", Json.arr())) else cursor.value
+      _decoder.decodeJson(normalized).flatMap(value => if (value.metadata != null &&
+          value.metadata.forall(batch => GoalPhaseNativeMetadata.bindC(batch).isSuccess)) Right(value)
+        else Left(DecodingFailure("Invalid retained review validation metadata", cursor.history)))
+    }
+  }
   final case class Policy(identity: String, revision: Int) {
     def validateC: Consequence[Unit] = if (identity != null &&
         identity.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}") && revision > 0) Consequence.unit
@@ -29,12 +46,14 @@ private[smworkflow] object GoalPhaseNativeReview {
     def validateC = if (policy == null || evidence == null) F.invalid("independent review verifier is missing")
       else policy.validateC
   }
-  /** The owning adapter reconstructs this controller from actual retained
-    * implementation/repair/review completions, never from a submitted stage.
+  /** The owning adapter reconciles the actual issued issue context/report
+    * before this controller transition, including its unresolved accept guard.
+    * It reconstructs from actual completions, never from a submitted stage.
     */
   def completedStateC(result: S.Result, evidence: String,
     controller: O.State): Consequence[O.State] = for {
-    _ <- if (result != null && bounded(result.summary, 16384) && result.summary.trim.nonEmpty &&
+    _ <- if (result != null && result.planRevision != null && result.planRevision.isEmpty &&
+        bounded(result.summary, 16384) && result.summary.trim.nonEmpty &&
         result.findings != null && result.findings.size <= 128 && result.findings.forall(f => bounded(f, 16384) && f.trim.nonEmpty) &&
         Set("accept", "repair", "decision-needed")(result.outcome) &&
         (result.outcome != "accept" || result.findings.isEmpty) &&
@@ -45,6 +64,9 @@ private[smworkflow] object GoalPhaseNativeReview {
           value.key.kind == O.WorkKind.ReviewPhase => Consequence.success(value)
       case _ => F.invalid("review result has no assigned semantic frontier")
     }
+    _ <- GoalPhaseFixAssessment.admitC(work.key.kind.toString, result.outcome, result.fixAssessment)
+    _ <- GoalPhaseFindingRecording.admitObservationsC(work.key.kind.toString, result.reviewObservations)
+    _ <- GoalPhaseDependencyScope.admitResultC(work.key.kind.toString, result.outcome, result.dependencyProposal)
     _ <- GoalPhaseAcceptanceBoundary.admitC(controller.plan, work.key.kind.toString, result)
     outcome = result.outcome match {
       case "accept" => O.ReviewOutcome.Accept

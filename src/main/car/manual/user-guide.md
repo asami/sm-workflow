@@ -25,7 +25,7 @@ semantic skill's responsibility. Runtime preparation and package generation do
 not prove that a Workflow completed or that human/review evidence exists.
 
 See [the reference manual](index.md) and the repository's
-`docs/spec/normal-three-workflow-host.md` for the fifteen provided Operations,
+`docs/spec/normal-three-workflow-host.md` for the seventeen provided Operations,
 their named business types and host configuration. A declared Required SPI
 does not become an additional provided Operation merely because Help describes
 it.

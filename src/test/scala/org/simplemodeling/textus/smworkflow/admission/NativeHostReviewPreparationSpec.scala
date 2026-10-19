@@ -2,10 +2,12 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
+import GoalPhaseNativeMetadata.given
 import java.nio.file.{Files, Path}
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, WorkflowDefinitionIdentity, WorkflowDefinitionRevision}
@@ -21,11 +23,12 @@ import org.simplemodeling.textus.smworkflow.host.NativeHostReviewPreparation as 
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeHostEvidence.{Purpose, Evidence}
 import SplitPhaseExplicitPartitionFixture.take
+import NativeHostPreparationFixture.expectedRecordJson
 
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
@@ -33,7 +36,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
   private val _now = Instant.parse("2026-10-07T00:00:00Z")
   private val _reference = V.WorkflowArtifactReference("specification-review", "1")
   private val _execution = V.WorkflowExecutionEvidence(Vector(_reference), Some("specification-reviewer"), None, None)
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty)
   private val _receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "diagnostic output", "")
   private val _goal_input = NativeHostHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = "ReviewStep",
@@ -108,6 +111,294 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
       Preparation.goalC(context, _goal_result, _reference, _execution, _declared.issuer, _now)
     else Preparation.repositoryC(context, _repository_result, _reference, _execution, _declared.issuer, _now)
 
+  "E11 finite review observations" should afterWord(
+    "in spec:goal-phase-finding-recording, example:E11, rules:R1,R5, phase:6.2"
+  ) {
+    "retain public observations in the actual prepared verdict and refuse reuse for changed content" in {
+      Given("a specification-issued actual review context and a public result carrying nonblocking review observations")
+      val observations = GoalPhaseFindingRecording.Observations(Vector(GoalPhaseFindingRecording.Observation(
+        "hygiene:1", "HYGIENE", "Clarify the selected name", "Required behavior is already correct")))
+      val result = GoalPhaseNativeWork.Result("accept", _goal_result.summary, Vector.empty,
+        reviewObservations = Some(observations))
+      val publicresult = _goal_result.copy(reviewObservations = GoalPhaseFindingRecording.publicObservations(result.reviewObservations))
+      _with_core { call =>
+        val work = _goal_work()
+        val context = take(NativeHostReviewContext.goalC(call.core, work)).get
+        val decoded = take(V.GoalPhaseWorkResult.createC(_wire(publicresult.toRecord())))
+        val submitted = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
+        When("the actual generated public reader and passive preparation encode the complete observations")
+        val prepared = _evidence(take(Preparation.goalC(context, decoded, _reference, _execution, _declared.issuer, _now)))
+        val actual = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, _goal_input, submitted))
+        Then("the selected verdict and matching independent evidence include the actual observation body")
+        _verdict(prepared).hcursor.get[Json]("reviewObservations") shouldBe Right(observations.asJson)
+        _observe(prepared, Purpose.GoalReview, actual).isSuccess shouldBe true
+        take(GoalPhaseFindingRecording.internalObservationsC(decoded.reviewObservations)) shouldBe Some(observations)
+
+        Given("the same source keys and verdict but a different observation rationale")
+        val changed = result.copy(reviewObservations = Some(observations.copy(items = observations.items.map(
+          _.copy(rationale = "A different independent nonblocking rationale")))))
+        val crossed = submitted.copy(result = submitted.result.copy(value = changed))
+        When("the actual result binding is prepared for that different observation body")
+        val changedbinding = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, _goal_input, crossed))
+        Then("the old prepared evidence cannot be reused and the new body requires its own prepared evidence")
+        changedbinding should not be actual
+        _observe(prepared, Purpose.GoalReview, changedbinding).isSuccess shouldBe false
+        val newlyprepared = _evidence(take(Preparation.goalC(context,
+          decoded.copy(reviewObservations = GoalPhaseFindingRecording.publicObservations(changed.reviewObservations)),
+          _reference, _execution, _declared.issuer, _now)))
+        _observe(newlyprepared, Purpose.GoalReview, changedbinding).isSuccess shouldBe true
+
+        Given("an absent historical field and separately explicit empty and malformed observations")
+        When("passive preparation selects each actual public result")
+        val historical = _evidence(take(Preparation.goalC(context, _goal_result, _reference, _execution, _declared.issuer, _now)))
+        val empty = _evidence(take(Preparation.goalC(context,
+          _goal_result.copy(reviewObservations = Some(V.GoalPhaseReviewObservations(Vector.empty))),
+          _reference, _execution, _declared.issuer, _now)))
+        Then("absence preserves its old verdict while explicit empty content stays present and malformed input fails")
+        _verdict(historical).hcursor.downField("reviewObservations").focus shouldBe None
+        _verdict(empty).hcursor.get[Json]("reviewObservations") shouldBe Right(Json.obj("items" -> Json.arr()))
+        Vector(null, Some(null), Some(V.GoalPhaseReviewObservations(null))).foreach { invalid =>
+          Preparation.goalC(context, _goal_result.copy(reviewObservations = invalid),
+            _reference, _execution, _declared.issuer, _now).isSuccess shouldBe false
+        }
+        Consequence.unit
+      }
+    }
+  }
+
+  "Selected validation metadata review context" should {
+    "normalize CNCF public metadata names and declared outer aliases while rejecting ambiguous or malformed batches" in {
+      Given("a specification-issued review of a real fixture selection carried through the actual public generated Record reader")
+      val batches = GoalPhaseNativeMetadataFixture.prepared._2
+      _with_core { call =>
+        val input = _typed_goal_input.copy(review = _typed_goal_input.review.map(_.copy(metadata = batches)))
+        val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(_goal_work(input), call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(_wire(output.toRecord())))
+        val context = decoded.work.get.review.get.hostContext.get
+        val target = _json(context.target)
+        val metadata = target.hcursor.downField("validationMetadata").focus.get
+        val fields = target.asObject.get
+        val spellings = Vector(fields, fields.remove("validationMetadata").add("validation_metadata", metadata),
+          fields.add("validation_metadata", metadata))
+        When("passive preparation consumes canonical snake-only and agreeing duplicate outer metadata names")
+        val prepared = spellings.map(value => _evidence(take(_prepare(context.copy(
+          target = GoalPhaseNativeMetadata.record(Json.fromJsonObject(value)))))))
+        Then("all variants retain the same actual full inventory and canonical nested Batch keys")
+        prepared.map(_.binding).distinct.size shouldBe 1
+        prepared.foreach { value =>
+          value.binding.hcursor.downField("attestation").downField("target").get[Vector[Json]]("validationMetadata") shouldBe
+            Right(batches.map(_.asJson))
+        }
+        decoded.work.get.review.get.metadata.map(_json) shouldBe batches.map(_.asJson)
+        metadata.hcursor.downArray.downField("inventory").get[Vector[Json]]("diagnostics") shouldBe Right(Vector.empty)
+
+        Given("the same selected context target rendered by the actual CNCF default property naming context")
+        val rendered = _wire(RuntimeContext.PropertyNameContext.default.transformRecord(context.target))
+        val publictarget = _json(rendered)
+        publictarget.hcursor.downField("validation_metadata").downArray.get[String]("check_identity") shouldBe
+          Right(batches.head.checkIdentity)
+        When("passive preparation consumes the actual nested public snake_case representation")
+        val publicevidence = _evidence(take(_prepare(context.copy(target = rendered))))
+        Then("its canonical selected binding equals the binding prepared from the original internal context")
+        publicevidence.binding shouldBe prepared.head.binding
+
+        Given("the actual public target with equal-valued source_revision and sourceRevision in a nested artifact")
+        val ambiguous = publictarget.hcursor.downField("validation_metadata").downArray.downField("profile")
+          .downField("scope").downField("artifacts").downArray
+          .withFocus(_.mapObject(_.add("sourceRevision", Json.fromString("source-1")))).top
+          .getOrElse(fail("Actual public target must retain its nested artifact"))
+        When("passive preparation consumes that ambiguous nested property through a full Record")
+        val collision = _prepare(context.copy(target = GoalPhaseNativeMetadata.record(ambiguous)))
+        Then("no selected binding can silently discard either spelling even though the values agree")
+        collision.isSuccess shouldBe false
+
+        Given("the actual selected metadata and alternate outer names with contradictory empty malformed or unknown enum values")
+        val unknowninventory = batches.head.inventory.asJson.mapObject(_.add("completeness", Json.fromString("FUTURE")))
+        val unknownbatch = batches.head.asJson.mapObject(_.add("inventory", unknowninventory))
+        val invalid = Vector(Json.arr(), Json.True, Json.arr(Json.obj()), Json.arr(unknownbatch))
+        When("passive preparation receives each conflicting or invalid nonnull alias as a canonical Record")
+        val refused = invalid.map(value => _prepare(context.copy(target = GoalPhaseNativeMetadata.record(
+          Json.fromJsonObject(fields.add("validation_metadata", value))))))
+        Then("no alternate spelling can erase selected context or manufacture a valid Batch")
+        refused.foreach(_.isSuccess shouldBe false)
+        invalid.tail.foreach { value =>
+          _prepare(context.copy(target = GoalPhaseNativeMetadata.record(
+            target.mapObject(_.add("validationMetadata", value))))).isSuccess shouldBe false
+        }
+        Given("Core R4 omits optional null validation metadata and a null alternate alias")
+        val nullmetadata = target.mapObject(_.add("validationMetadata", Json.Null))
+        val omittedmetadata = target.mapObject(_.remove("validationMetadata"))
+        val nullrecord = GoalPhaseNativeMetadata.record(nullmetadata)
+        When("passive preparation consumes absent metadata or the surviving valid canonical alias")
+        val absent = Vector(nullrecord, _record(omittedmetadata)).map(value => _evidence(take(_prepare(context.copy(target = value)))))
+        val nullalias = _evidence(take(_prepare(context.copy(target = GoalPhaseNativeMetadata.record(
+          target.mapObject(_.add("validation_metadata", Json.Null)))))))
+        Then("omission manufactures no metadata and a removed alias leaves the canonical selected binding unchanged")
+        _json(nullrecord) shouldBe expectedRecordJson(nullmetadata)
+        _json(nullrecord).hcursor.downField("validationMetadata").focus shouldBe None
+        absent.map(_.binding).distinct.size shouldBe 1
+        absent.head.binding.hcursor.downField("attestation").downField("target").downField("validationMetadata").focus shouldBe None
+        absent.head.binding should not be prepared.head.binding
+        nullalias.binding shouldBe prepared.head.binding
+        Consequence.unit
+      }
+    }
+  }
+
+  "R4 selected review repair progress" should {
+    "normalize actual typed progress and reject crossed or malformed presence in passive preparation and the managed Reader" in {
+      Given("a specification-issued review captures actual selected Work progress 1/1/2")
+      _with_core { call =>
+        val input = _typed_goal_input.copy(selectedPlan = _typed_goal_input.selectedPlan.copy(repairLimit = 2),
+          repairProgress = Some(GoalPhaseRepairProgress.Snapshot(1, 1, 2)))
+        val work = _goal_work(input)
+        val submitted = _submitted(work, GoalPhaseNativeWork.Result("accept", "Independent specification verdict", Vector.empty),
+          GoalPhaseNativeWork.resultCodec.typeIdentity)
+        When("public output and its generated reader carry progress to passive review preparation")
+        val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(work, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(_wire(output.toRecord())))
+        val context = decoded.work.get.review.get.hostContext.get
+        val raw = _json(context.target)
+        val progress = raw.hcursor.downField("repairProgress").focus.get
+        val snakeprogress = Json.obj("automatic_count" -> Json.fromInt(1), "ordinary_count" -> Json.fromInt(1), "limit" -> Json.fromInt(2))
+        val snake = raw.mapObject(_.remove("repairProgress").add("repair_progress", snakeprogress))
+        val matching = raw.mapObject(_.add("repair_progress", snakeprogress))
+        val prepared = Vector(context, context.copy(target = _record(snake)), context.copy(target = _record(matching)))
+          .map(c => take(_prepare(c)))
+        val expected = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input, submitted))
+        Then("normal declaration and wire fields retain exactly the saved Work counts while the verdict has none")
+        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+        prepared.map(p => _evidence(p).binding).distinct.size shouldBe 1
+        prepared.foreach(p => _observe(_evidence(p), Purpose.GoalReview, expected).isSuccess shouldBe true)
+        _verdict(_evidence(prepared.head)).hcursor.downField("repairProgress").focus shouldBe None
+        progress shouldBe input.repairProgress.get.asJson
+
+        Given("the explicit prepared row provisioned with the existing managed Create permission and different selected review counts")
+        take(call.createC("host_evidence", prepared.head.recordIdentity, prepared.head.record))
+        val reader = take(NativeHostEvidence.bindC(call.core.component.get.subsystem.get.configuration,
+          GoalPhaseRuntimeParameters.Persistence(_configuration_, _collection_("instances"), _collection_("continuations"))))
+        val crossed = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core,
+          input.copy(repairProgress = Some(GoalPhaseRepairProgress.Snapshot(2, 1, 2))), submitted))
+        When("the existing current-call Reader checks exact and crossed selected progress against that same row")
+        val accepted = take(reader.loadC(call.core, Purpose.GoalReview, _key, expected))
+        val rejected = reader.loadC(call.core, Purpose.GoalReview, _key, crossed)
+        Then("different actual review counts cannot reuse the independent evidence")
+        accepted.map(_.evidence.binding) shouldBe Some(_evidence(prepared.head).binding)
+        rejected.isSuccess shouldBe false
+
+        Given("incomplete, noninteger and contradictory nonnull supplied progress fields")
+        def _supplied_record_(value: Json): Record = {
+          val record = _record(value)
+          _json(record) shouldBe expectedRecordJson(value)
+          record
+        }
+        val badvalues = Vector(Json.obj(), Json.True, Json.obj("automaticCount" -> Json.fromDoubleOrNull(1.5),
+          "ordinaryCount" -> Json.fromInt(1), "limit" -> Json.fromInt(2)),
+          progress.mapObject(_.add("ordinaryCount", Json.fromInt(2))),
+          progress.mapObject(_.add("automatic_count", Json.fromInt(2))))
+        val malformedtargets = badvalues.map(v => raw.mapObject(_.add("repairProgress", v))) ++ Vector(
+          raw.mapObject(_.add("repair_progress", GoalPhaseRepairProgress.Snapshot(2, 1, 2).asJson)))
+        val malformed = malformedtargets.map(target => context.copy(target = _supplied_record_(target)))
+        When("public passive preparation encounters each present malformed value")
+        val failures = malformed.map(_prepare)
+        Then("none is silently omitted or admitted as selected context")
+        failures.zipWithIndex.foreach { case (failure, index) =>
+          val suppliedprogress = Vector("repairProgress", "repair_progress").map { name =>
+            name + "=" + malformedtargets(index).hcursor.downField(name).focus.map(_.noSpaces).getOrElse("<absent>")
+          }.mkString(", ")
+          withClue("malformed progress case " + index + ": " + suppliedprogress.take(300) + ": ") {
+            failure.isSuccess shouldBe false
+          }
+        }
+        Given("Core R4 omits optional null review progress before passive preparation")
+        val nullprogress = raw.mapObject(_.add("repairProgress", Json.Null))
+        val nullrecord = _supplied_record_(nullprogress)
+        When("the surviving target and its explicitly omitted equivalent are selected")
+        val absent = Vector(nullrecord, _record(raw.mapObject(_.remove("repairProgress")))).map(value =>
+          _evidence(take(_prepare(context.copy(target = value)))))
+        Then("progress stays absent and cannot reproduce the original selected review counts")
+        _json(nullrecord).hcursor.downField("repairProgress").focus shouldBe None
+        absent.map(_.binding).distinct.size shouldBe 1
+        absent.head.binding.hcursor.downField("attestation").downField("target").downField("repairProgress").focus shouldBe None
+        _observe(absent.head, Purpose.GoalReview, expected).isSuccess shouldBe false
+        Consequence.unit
+      }
+    }
+  }
+
+  "Structured issue target and independent coverage binding" should {
+    "preserve actual issue context and report through strict wire intake and reject mismatches in the managed Reader" in {
+      Given("a specification-issued re-review with one unresolved required REVIEW issue and explicit independent coverage")
+      _with_core { call =>
+        val issue = GoalPhaseFixIssues.Issue("issue-1", _typed_goal_input.selectedPlan.repository,
+          _typed_goal_input.stepIdentity.get, "REVIEW", None, "Required selected behavior", "prior-independent-review", "OPEN", Some("FIXED"))
+        val state = GoalPhaseFixIssues.State(Vector(issue), Vector(GoalPhaseFixIssues.Transition(
+          issue.identity, None, "OPEN", issue.evidenceReference)), Some(GoalPhaseFixIssues.Movement(
+          "prior-independent-review", 1, 0, 1, 0, false)))
+        val input = _typed_goal_input.copy(issues = Some(state))
+        val report = GoalPhaseFixIssues.Report(Vector(GoalPhaseFixIssues.Disposition(
+          issue.identity, "RESOLVED", "Independent fixture observed the actual corrected behavior", None)))
+        val result = GoalPhaseNativeWork.Result("accept", "Explicit independent coverage", Vector.empty, issueReport = Some(report))
+        val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, None, None,
+          GoalPhaseFixIssues.publicReport(result.issueReport), None, GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None)
+        val work = _goal_work(input)
+        val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
+        When("normal formatted output and generated readers carry actual selected issues into public passive preparation")
+        val displayed = take(NativeWorkflowOperationOutput.goalWorkRequestC(work, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(take(new RecordDecoder().json(
+          NativeHostEvidenceToolFixture.normalCommandJson(displayed)))))
+        val supplied = take(V.GoalPhaseWorkResult.createC(_wire(publicresult.toRecord())))
+        val context = decoded.work.get.review.get.hostContext.get
+        val prepared = take(Preparation.goalC(context, supplied, _reference, _execution, _declared.issuer, _now.minusSeconds(60)))
+        val expected = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input, native))
+        val evidence = _evidence(prepared)
+        Then("the selected state and actual coverage remain exactly in the target and verdict")
+        take(GoalPhaseFixIssues.internalStateC(decoded.work.get.issues)) shouldBe Some(state)
+        _verdict(evidence).hcursor.downField("issueReport").focus shouldBe Some(report.asJson)
+        evidence.binding.hcursor.downField("attestation").downField("target").downField("issues").focus shouldBe Some(state.asJson)
+        _observe(evidence, Purpose.GoalReview, expected).isSuccess shouldBe true
+
+        Given("that explicit prepared row provisioned only through the existing managed Create permission")
+        take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
+        val reader = take(NativeHostEvidence.bindC(call.core.component.get.subsystem.get.configuration,
+          GoalPhaseRuntimeParameters.Persistence(_configuration_, _collection_("instances"), _collection_("continuations"))))
+        val changedstate = state.copy(issues = Vector(issue.copy(summary = "A different required behavior")))
+        val changedreport = report.copy(dispositions = report.dispositions.map(_.copy(disposition = "NOT_REVIEWED")))
+        val foreigntarget = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input.copy(issues = Some(changedstate)), native))
+        val foreignverdict = take(ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, input,
+          native.copy(result = TypedValue(GoalPhaseNativeWork.resultCodec.typeIdentity, result.copy(issueReport = Some(changedreport))))))
+        When("the normal managed Reader checks the exact binding and separately crossed issue target or coverage")
+        val accepted = take(reader.loadC(call.core, Purpose.GoalReview, _key, expected))
+        val rejected = Vector(foreigntarget, foreignverdict).map(reader.loadC(call.core, Purpose.GoalReview, _key, _))
+        Then("only the actual selected issue context and actual independent report admit that same physical row")
+        accepted.map(_.evidence.binding) shouldBe Some(evidence.binding)
+        rejected.foreach(_.isSuccess shouldBe false)
+
+        Given("P62-C-NULL-FIXTURE-03; present malformed typed public issue reports")
+        val malformed = Vector(publicresult.copy(issueReport = null), publicresult.copy(issueReport = Some(null)),
+          publicresult.copy(issueReport = Some(V.GoalPhaseIssueReport(Vector(null)))))
+        When("public passive preparation strictly converts each present structured value")
+        val failures = malformed.map(Preparation.goalC(context, _, _reference, _execution, _declared.issuer, _now))
+        Then("malformed presence produces typed failure without dropping the state or coverage")
+        failures.foreach(_.isSuccess shouldBe false)
+        Given("Core R4 omits an optional null selected issue target")
+        val rawtarget = _json(context.target).mapObject(_.add("issues", Json.Null))
+        val nulltarget = context.copy(target = _record(rawtarget))
+        val omittedtarget = context.copy(target = _record(rawtarget.mapObject(_.remove("issues"))))
+        When("passive preparation consumes the surviving target and explicit omission with the same supplied report")
+        val absent = Vector(nulltarget, omittedtarget).map(value => _evidence(take(Preparation.goalC(
+          value, publicresult, _reference, _execution, _declared.issuer, _now))))
+        Then("the target remains without issues and cannot reuse the original issue-bound evidence")
+        _json(nulltarget.target) shouldBe expectedRecordJson(rawtarget)
+        _json(nulltarget.target).hcursor.downField("issues").focus shouldBe None
+        absent.map(_.binding).distinct.size shouldBe 1
+        absent.head.binding.hcursor.downField("attestation").downField("target").downField("issues").focus shouldBe None
+        _observe(absent.head, Purpose.GoalReview, expected).isSuccess shouldBe false
+        Consequence.unit
+      }
+    }
+  }
+
   "Saved quality boundary and typed report preparation" should afterWord(
     "in spec:goal-phase-acceptance-boundary, example:E3,E5, rules:R5,R6, phase:6"
   ) {
@@ -124,7 +415,9 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         val report = boundary.Report(Vector(boundary.Observation("behavior", "satisfied", "Observed required behavior"),
           boundary.Observation("extra", "unsatisfied", "Excluded suggestion")), Vector("Consider extra later"))
         val result = GoalPhaseNativeWork.Result("accept", "Fixture review", Vector.empty, Some(report))
-        val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, boundary.publicReport(result.acceptance))
+        val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, boundary.publicReport(result.acceptance),
+          GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
+          GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None)
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("the normal command formatter and generated readers carry the issued view and result into passive preparation")
@@ -248,7 +541,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
       _with_core { call =>
         val goal = take(NativeHostReviewContext.goalC(call.core, _goal_work())).get
         val repository = take(NativeHostReviewContext.repositoryC(call.core, _repository_work))
-        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None)
+        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None)
         val finding = V.RepositorySyncNativeMergeReviewFinding("missing-case", Vector("one.scala"), "Repair only this native path")
         When("public preparation encodes each selected repair result through the existing binding")
         val goalrepair = _evidence(take(Preparation.goalC(goal, repair, _reference, _execution, _declared.issuer, _now)))
@@ -541,7 +834,6 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           "null checks" -> repository.copy(target = _record(target.mapObject(_.add("checks", Json.Null)))),
           "missing checks" -> repository.copy(target = _record(target.mapObject(_.remove("checks")))),
           "nonobject check" -> repository.copy(target = _record(target.mapObject(_.add("checks", Json.arr(Json.True))))),
-          "null check" -> repository.copy(target = _record(target.mapObject(_.add("checks", Json.arr(Json.Null))))),
           "fractional exit" -> repository.copy(target = _record(target.mapObject(_.add("checks", Json.arr(fractionalexit))))))
         variants.foreach { (condition, context) =>
           Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R1,R2,R4,R6; Example: E8; selected fixture target with " + condition)
@@ -550,6 +842,11 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           Then("the " + condition + " fails under the existing native target type semantics")
           failure.isSuccess shouldBe false
         }
+        Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R2,R6; Example: E8; a null element in the selected checks array")
+        When("ordinary canonical Record decoding receives that array before preparation")
+        val nullcheck = new RecordDecoder().json(target.mapObject(_.add("checks", Json.arr(Json.Null))).noSpaces)
+        Then("canonical decoding refuses the null element before any review context can be prepared")
+        nullcheck.isSuccess shouldBe false
         Consequence.unit
       }
     }
@@ -621,14 +918,9 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
         val contexts = Vector(take(NativeHostReviewContext.goalC(call.core, _goal_work(_typed_goal_input))).get,
           take(NativeHostReviewContext.repositoryC(call.core, _typed_repository_work)))
         val selectionnames = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites", "testsRun" -> "tests_run")
-        // Adversarial supplied Records retain explicit nulls at passive intake;
-        // the ordinary JSON decoder drops null object fields.
-        def _supplied_value_(value: Json): Any = value.fold[Any](null, boolean => boolean,
-          number => number.toBigDecimal.get, string => string, array => array.map(_supplied_value_),
-          fields => Record.createFull(fields.toVector.map { case (key, field) => key -> _supplied_value_(field) }))
         def _supplied_record_(value: Json): Record = {
-          val record = _supplied_value_(value).asInstanceOf[Record]
-          _json(record) shouldBe value
+          val record = _record(value)
+          _json(record) shouldBe expectedRecordJson(value)
           record
         }
         contexts.foreach { context =>
@@ -645,11 +937,12 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
           selectionnames.foreach { (declaration, wire) =>
             val fields = selection.asObject.get
             val value = fields(declaration).get
-            val alternatives = Vector(fields, fields.remove(declaration).add(wire, value), fields.add(wire, value))
+            val alternatives = Vector(fields, fields.remove(declaration).add(wire, value), fields.add(wire, value),
+              fields.add(wire, Json.Null), fields.remove(declaration).add(declaration, Json.Null).add(wire, value))
             alternatives.foreach { alternative =>
-              Given("the typed " + key + " selection with declaration-only snake-only or agreeing " + declaration + " aliases")
+              Given("the typed " + key + " selection with valid " + declaration + " aliases after optional null alias omission")
               When("passive preparation canonicalizes that bounded nested selection")
-              val prepared = take(_prepare(_selected_(_with_selection_(Json.fromJsonObject(alternative)))))
+              val prepared = take(_prepare(_selected_present_(_with_selection_(Json.fromJsonObject(alternative)))))
               Then("the selected binding preserves the explicit typed facts")
               _evidence(prepared).binding shouldBe canonical.binding
             }
@@ -663,7 +956,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
               Given("a missing malformed or contradictory consumed nested " + declaration + " alias")
               When("passive preparation consumes both supplied spellings")
               val refused = _prepare(_selected_present_(_with_selection_(Json.fromJsonObject(alternative))))
-              Then("neither alias overrides malformed or contradictory presence")
+              Then("missing required fields and surviving malformed or contradictory aliases fail")
               refused.isSuccess shouldBe false
             }
           }
@@ -675,7 +968,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
             selection.mapObject(_.add("testsRun", Json.fromInt(0))),
             selection.mapObject(_.add("completedSuites", Json.fromInt(1))),
             selection.mapObject(_.add("testClasses", Json.arr(Json.fromString("invalid")))), Json.Null, Json.True)
-          val invalidfacts = Vector(Json.Null, Json.True, Json.obj(), facts.mapObject(_.add("kind", Json.fromString("unknown"))),
+          val invalidfacts = Vector(Json.True, Json.obj(), facts.mapObject(_.add("kind", Json.fromString("unknown"))),
             facts.mapObject(_.add("outcome", Json.fromString("unknown")))) ++
             invalidselections.map(value => facts.mapObject(_.add("selection", value)))
           invalidfacts.foreach { malformed =>
@@ -685,13 +978,23 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
             Then("invalid presence is refused without historical defaults or relaxed integer rules")
             refused.isSuccess shouldBe false
           }
-          Given("historical absent sbt and an explicit empty check array in " + key)
+          Given("historical absent or Core-omitted null sbt and an explicit empty check array in " + key)
           When("passive preparation encodes those absence shapes")
           val historical = _evidence(take(_prepare(_selected_(check.mapObject(_.remove("sbt"))))))
+          val nullfacts = _evidence(take(_prepare(_selected_present_(check.mapObject(_.add("sbt", Json.Null))))))
           val empty = _evidence(take(_prepare(context.copy(target = _record(target.mapObject(_.add(key, Json.arr())))))))
           Then("no typed facts are manufactured and an explicitly empty array remains explicit")
           historical.binding.hcursor.downField("attestation").downField("target").downField(key).downArray.downField("sbt").focus shouldBe None
+          nullfacts.binding shouldBe historical.binding
+          nullfacts.binding should not be canonical.binding
           empty.binding.hcursor.downField("attestation").downField("target").get[Vector[Json]](key) shouldBe Right(Vector.empty)
+          Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R2,R6; Example: E9; a null typed class or check array element in " + key)
+          val nullelements = Vector(target.mapObject(_.add(key, Json.arr(Json.Null))),
+            target.mapObject(_.add(key, Json.arr(_with_selection_(selection.mapObject(_.add("testClasses", Json.arr(Json.Null))))))))
+          When("ordinary canonical Record decoding sees those array elements before review preparation")
+          val decodefailures = nullelements.map(value => new RecordDecoder().json(value.noSpaces))
+          Then("each null array element refuses canonical decoding rather than disappearing or reaching preparation")
+          decodefailures.foreach(_.isSuccess shouldBe false)
           if (goal) {
             val snakeselection = selectionnames.foldLeft(selection.asObject.get) { case (fields, (declaration, wire)) =>
               fields.remove(declaration).add(wire, fields(declaration).get)
@@ -707,7 +1010,7 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
               Then("different spellings and inert check annotations retain one canonical selected meaning")
               prepared.binding shouldBe canonical.binding
             }
-            val malformedarrays = Vector(Json.Null, Json.True, Json.arr(Json.Null), Json.arr(Json.True), Json.arr(),
+            val malformedarrays = Vector(Json.True, Json.arr(Json.True), Json.arr(),
               Json.arr(_with_selection_(selection.mapObject(_.add("testsRun", Json.fromInt(26))))))
             malformedarrays.foreach { value =>
               Given("testChecks and test_checks have malformed or contradictory selected arrays")
@@ -716,11 +1019,23 @@ final class NativeHostReviewPreparationSpec extends AnyWordSpec with Matchers wi
               Then("the alternate spelling cannot conceal malformed presence or different selected checks")
               refused.isSuccess shouldBe false
             }
-            Given("the historical Goal target omits testChecks entirely")
+            Given("the historical Goal target omits testChecks or supplies an optional null attribute")
             When("passive preparation encodes the historical target")
             val absent = _evidence(take(_prepare(context.copy(target = _record(target.mapObject(_.remove("testChecks")))))))
+            val nullchecks = _evidence(take(_prepare(context.copy(target = _supplied_record_(
+              target.mapObject(_.add("testChecks", Json.Null)))))))
+            val nullalias = _evidence(take(_prepare(context.copy(target = _supplied_record_(
+              target.mapObject(_.add("test_checks", Json.Null)))))))
             Then("the absent historical field remains omitted")
             absent.binding.hcursor.downField("attestation").downField("target").downField("testChecks").focus shouldBe None
+            nullchecks.binding shouldBe absent.binding
+            nullchecks.binding should not be canonical.binding
+            nullalias.binding shouldBe canonical.binding
+            Given("Spec: docs/spec/native-host-review-preparation.md; Rules: R2,R6; Example: E9; a null check element in the alternate Goal array")
+            When("ordinary canonical Record decoding receives test_checks before preparation")
+            val nullaliaselement = new RecordDecoder().json(target.mapObject(_.add("test_checks", Json.arr(Json.Null))).noSpaces)
+            Then("the null array element fails canonical decoding even beside a valid canonical array")
+            nullaliaselement.isSuccess shouldBe false
           }
         }
         Consequence.unit

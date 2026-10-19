@@ -23,7 +23,8 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 17, 2026
+  *  version Oct. 17, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -41,7 +42,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     humanDecision: Option[GoalPhaseOrderedHumanDecision.Installation] = None,
     executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
-    projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None)
+    projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None,
+    findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -134,7 +136,10 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.candidatePaths == null || d.candidatePaths.size > 256 || d.candidatePaths.distinct != d.candidatePaths ||
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
-        d.executionProfiles == null || d.executionProfiles.exists(_ == null))
+        d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
+        d.findingRecordingPolicy.exists(p => p == null || !RepositorySyncNativeConflictInput.relative(p.hygiene) ||
+          !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
+          !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
     else GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
@@ -156,7 +161,8 @@ private[smworkflow] object GoalPhaseNativeRun {
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
           !core.action.request.service.contains("GoalPhaseService") ||
           !Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
-            GoalPhaseOrderedHumanDecision.completionOperation.operation)(core.action.request.operation) ||
+            GoalPhaseOrderedHumanDecision.completionOperation.operation,
+            GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation) ||
           !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))
         invalid("native ordered entry requires its actual owning call")
       else WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),

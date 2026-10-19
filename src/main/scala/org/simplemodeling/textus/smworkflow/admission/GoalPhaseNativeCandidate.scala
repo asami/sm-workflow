@@ -20,7 +20,8 @@ import WorkflowManagedProcessExecution as E
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 17, 2026
+  *  version Oct. 17, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -52,16 +53,19 @@ private[smworkflow] object GoalPhaseNativeCandidate {
 
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[Saved] =
-    retainedOptionC(session, d, core, from, controller, documentPolicy).flatMap(_.map(Consequence.success).getOrElse(
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
+    recordingPaths: Vector[String] = Vector.empty): Consequence[Saved] =
+    retainedOptionC(session, d, core, from, controller, documentPolicy, recordingPaths).flatMap(_.map(Consequence.success).getOrElse(
       F.invalid("review has no actual saved native candidate")))
 
   def retainedOptionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[Option[Saved]] = for {
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
+    recordingPaths: Vector[String] = Vector.empty): Consequence[Option[Saved]] = for {
     _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
+    _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    store = new Store(adapter, session, from, controller, d, core, _ => Consequence.unit, documentPolicy)
+    store = new Store(adapter, session, from, controller, d, core, _ => Consequence.unit, documentPolicy, recordingPaths)
     saved <- store.loadC("candidate").flatMap(_.fold(Consequence.success(Option.empty[Saved]))(
       value => store.completedC(value).map(Some(_))))
   } yield saved
@@ -69,7 +73,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledgement: String => Consequence[Unit],
     runValidation: Boolean = true,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
+    recordingPaths: Vector[String] = Vector.empty): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -78,8 +83,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- if (whole || controller.plan.steps(controller.cursor).ownedPaths.forall(d.candidatePaths.contains)) Consequence.unit
       else F.invalid("host has no fixed staging program for the selected Step coverage")
     _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
+    _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy)
+    store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy, recordingPaths)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
@@ -87,7 +93,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     }
     policy = if (whole) d.phaseValidationPolicy else d.validationPolicy
     wire <- if (runValidation && selected.payload.candidate.nonEmpty && policy.nonEmpty)
-      GoalPhaseNativeValidation.advanceC(session, d, core, selected, controller, acknowledgement, documentPolicy = documentPolicy)
+      GoalPhaseNativeValidation.advanceC(session, d, core, selected, controller, acknowledgement,
+        documentPolicy = documentPolicy, recordingPaths = recordingPaths)
     else if (runValidation && selected.payload.candidate.nonEmpty &&
         session.current.revision.value > selected.record.revision.value)
       F.invalid("advanced validation has lost its actual host policy")
@@ -99,7 +106,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
     actual <- store.inspectC
-    paths = if (store.whole) store.documentPolicy.toVector.flatMap(_.paths).filter(p =>
+    paths = if (store.whole) store.managementPaths.filter(p =>
       actual.dirty.exists(x => x.path == p || x.renamedFrom.contains(p)))
     else store.d.candidatePaths.filter(p => store.ownedPaths.contains(p) &&
       actual.dirty.exists(x => _covers(p, x.path) || x.renamedFrom.exists(_covers(p, _))))
@@ -134,11 +141,11 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       _ <- if (actual.dirty.forall(p => p.worktree == ' ' && p.index != '?' && p.index != '!')) Consequence.unit
         else F.invalid("candidate has unstaged or unsupported native changes")
       tree <- G.indexTreeC(store.core)
-      management <- if (store.whole && store.documentPolicy.nonEmpty) for {
+      management <- if (store.whole && store.managementPaths.nonEmpty) for {
         tip <- GitObjectId.parseC(store.base.head)
         pending <- E.executeGitC(store.core, GitOperation.PendingPaths(tip)).flatMap(_.valueC)
         paths = pending.map(_.value)
-        _ <- if (paths.distinct == paths && paths.forall(store.documentPolicy.get.paths.contains) &&
+        _ <- if (paths.distinct == paths && paths.forall(store.managementPaths.contains) &&
             paths.forall(staged.payload.stagedPaths.contains)) Consequence.unit
           else F.invalid("whole-Phase management delta crosses actual selected source staging")
       } yield paths else Consequence.success(Vector.empty[String])
@@ -155,7 +162,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       payload = staged.payload.copy(candidate = Some(snapshot), changedPaths = paths, diff = Some(diff))
       _ <- if (!store.whole || (management.isEmpty == (snapshot.tree == store.base.tree))) Consequence.unit
         else F.invalid("whole-Phase management paths contradict the actual index tree")
-      inspected <- observedStateC(store.controller, payload, store.documentPolicy)
+      inspected <- observedStateC(store.controller, payload, store.documentPolicy, store.recordingPaths)
       _ <- if (inspected.stage.toString == store.validationStage &&
           domain.statemachine.GoalPhaseRunLifecycle.permits(store.inspectionStage,
             if (store.whole) "phase-candidate-observed" else "candidate-observed", store.validationStage)) Consequence.unit
@@ -166,15 +173,15 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   } yield candidate
 
   private[admission] def observedStateC(controller: O.State, payload: Payload,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy]): Consequence[O.State] = {
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String] = Vector.empty): Consequence[O.State] = {
     val whole = controller.cursor == controller.plan.steps.size
+    val management = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     payload.candidate match {
       case Some(snapshot) if whole && snapshot.tree != controller.tipSnapshot.tree => for {
-        policy <- documentPolicy.map(Consequence.success).getOrElse(F.invalid("management candidate has no actual progress policy"))
         _ <- if (payload.selectedPaths.nonEmpty && payload.selectedPaths == payload.stagedPaths &&
-          payload.selectedPaths.distinct == payload.selectedPaths && payload.selectedPaths.forall(policy.paths.contains)) Consequence.unit
+          payload.selectedPaths.distinct == payload.selectedPaths && payload.selectedPaths.forall(management.contains)) Consequence.unit
           else F.invalid("management candidate differs from its actually selected and staged source paths")
-        state <- controller.acceptC(O.PhaseDocumentCandidateObserved(snapshot, payload.selectedPaths))
+        state <- controller.acceptC(O.PhaseManagementCandidateObserved(snapshot, payload.selectedPaths))
       } yield state
       case Some(snapshot) => controller.acceptC(O.CandidateObserved(snapshot))
       case None => F.invalid("candidate observation has no actual snapshot")
@@ -183,7 +190,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
 
   private final class Store(val adapter: WorkflowManagedMechanicalTransition[Payload], val session: F.Session,
     val from: InstanceRecord, val controller: O.State, val d: F.Declaration, val core: ActionCall.Core,
-    acknowledgement: String => Consequence[Unit], val documentPolicy: Option[GoalPhaseDocumentProgress.Policy]) {
+    acknowledgement: String => Consequence[Unit], val documentPolicy: Option[GoalPhaseDocumentProgress.Policy],
+    val recordingPaths: Vector[String]) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity
@@ -192,6 +200,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val validationStage = if (whole) "PhaseValidation" else "Validation"
     val base = controller.tipSnapshot
     val diffBase = if (whole) controller.base else base
+    val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     private def _reference(key: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-candidate:" + from.revision.value + ":" + key, "1")
     def loadC(key: String): Consequence[Option[Saved]] = adapter.loadRetainedC(_reference(key))(using core.executionContext).flatMap {
@@ -200,7 +209,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         val p = value.receipt.payload.value
         if (p.sourceRevision == from.revision.value.toString && p.step == scopeIdentity &&
             p.selectedPaths.distinct == p.selectedPaths && (if (whole) p.selectedPaths.isEmpty ||
-              documentPolicy.exists(policy => p.selectedPaths.forall(policy.paths.contains)) else
+              p.selectedPaths.forall(managementPaths.contains) else
               p.selectedPaths.forall(x => ownedPaths.contains(x) && d.candidatePaths.contains(x))) &&
             p.stagedPaths == p.selectedPaths.take(p.stagedPaths.size) && p.stagedPaths.size <= p.selectedPaths.size)
           Consequence.success(Some(Saved(value.receipt.next, p)))
@@ -218,13 +227,13 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       if (value.record.currentProgression.contains(ProgressionReference("phase." + validationStage)) &&
           value.payload.candidate.exists(_.head == base.head) && value.payload.diff.nonEmpty &&
           value.payload.stagedPaths == value.payload.selectedPaths && value.payload.changedPaths.forall(p => ownedPaths.exists(_covers(_, p))))
-        observedStateC(controller, value.payload, documentPolicy).map(_ => value)
+        observedStateC(controller, value.payload, documentPolicy, recordingPaths).map(_ => value)
       else F.invalid("retained candidate is not its actual native Validation successor")
     def inspectC: Consequence[G.Observed] = for {
       actual <- G.observeC(core)
       _ <- if (actual.branch == d.target.localBranch && actual.head == base.head && actual.tree == base.tree &&
-          (if (whole) actual.dirty.isEmpty || documentPolicy.exists(policy => actual.dirty.forall(p =>
-            !p.unmerged && policy.paths.contains(p.path) && p.renamedFrom.forall(policy.paths.contains)))
+          (if (whole) actual.dirty.forall(p =>
+            !p.unmerged && managementPaths.contains(p.path) && p.renamedFrom.forall(managementPaths.contains))
           else actual.dirty.forall(p => !p.unmerged && ownedPaths.exists(_covers(_, p.path)) &&
             p.renamedFrom.forall(x => ownedPaths.exists(_covers(_, x)))))) Consequence.unit
         else F.invalid("actual candidate crosses its original base, branch or selected Step ownership")

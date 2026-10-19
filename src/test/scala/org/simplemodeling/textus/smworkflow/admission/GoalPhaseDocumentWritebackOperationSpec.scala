@@ -29,7 +29,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  *  version Oct. 17, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -183,7 +184,9 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         ExecutionEvidence(Vector(reference), Some(if (review) "specification-reviewer" else "participant")))
       if (review) prepare(call => for {
         prepared <- NativeHostReviewPreparation.goalC(displayed.get.work.get.review.get.hostContext.get,
-          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None),
+          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
+            GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
+            GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), result.evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))

@@ -5,6 +5,7 @@ import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.unitofwork.ExecUowM
+import org.goldenport.cncf.validation.ValidationOperationBindingV1 as B
 import org.goldenport.protocol.operation.OperationResponse
 
 /** Typed Git/SBT intents. Runtime scope owns executable, fixed target,
@@ -13,7 +14,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -53,6 +54,21 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
     execution = new Execution(core)
     result <- execution.runSbtC(execution.prepareSbt(SbtTarget(workspace), kind))
+  } yield result
+
+  /** Execute the producer's exact TestOnly intent in this call's owning UoW. */
+  def validationOperationC(core: ActionCall.Core, bound: B.BoundOperation): Consequence[SbtExecutionResult] = for {
+    _ <- if (core != null && core.executionContext != null && bound != null && bound.operation != null &&
+        bound.operation.selector != null && bound.intent != null && bound.intent.target != null &&
+        bound.intent.target.workspaceId != null.asInstanceOf[WorkspaceId] && bound.intent.target.scenario != null &&
+        bound.intent.operation == SbtOperation.TestOnly && bound.intent.target.scenario.exists(s => s != null &&
+          s.suiteClassName == bound.operation.selector.suiteClassName && s.testName == bound.operation.selector.testName))
+      Consequence.unit else Consequence.stateConflict("Workflow metadata validation requires its exact bound TestOnly selector")
+    _ <- WorkspaceId.parseC(bound.intent.target.workspaceId.value)
+    execution = new Execution(core)
+    result <- execution.runSbtC(execution.prepareSbt(bound.intent.target, WorkflowSbtValidation.Kind.TestOnly))
+    _ <- if (result != null && result.operation == bound.intent.operation && result.target == bound.intent.target)
+      Consequence.unit else Consequence.stateConflict("Workflow metadata validation result differs from its exact selected target or operation")
   } yield result
 
   /** The host fixes the selected Step's message and commit identity. */

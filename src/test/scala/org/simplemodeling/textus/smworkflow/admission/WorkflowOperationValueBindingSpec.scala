@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
+import io.circe.{Json, parser}
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.record.Record
@@ -15,7 +16,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * @since   Oct. 12, 2026
   *  version Oct. 12, 2026
   *  version Oct. 14, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,7 +29,135 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
     Request.of(component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService",
       operation = "startGoalPhase", arguments = Nil, switches = Nil, properties = properties.toList)
 
+  "R1/R3 generated selected repair progress intake" should {
+    "roundtrip the additive Request Decision and Advance fields through generated business readers" in {
+      Given("saved typed assignment and question progress with their normal public declaration fields")
+      val request = NativeHostHumanEvidenceFixture.work.copy(
+        selectedPlan = NativeHostHumanEvidenceFixture.plan.copy(repairLimit = 2),
+        repairProgress = Some(GoalPhaseRepairProgress.Snapshot(1, 1, 2)))
+      val payload = GoalPhaseNativeWork.inputCodec.encode(request).hcursor.downField("payload").focus.get
+      def _record_(value: Json): Record = _take(new RecordDecoder().json(value.noSpaces))
+      val question = Json.obj("work" -> payload,
+        "requestingResult" -> Json.obj("identity" -> Json.fromString("actual-result"), "revision" -> Json.fromString("1")),
+        "result" -> Json.obj("outcome" -> Json.fromString("completed"), "summary" -> Json.fromString("Selected work"), "findings" -> Json.arr()),
+        "reason" -> Json.fromString("Actual selected question"),
+        "repairProgress" -> Json.obj("automaticCount" -> Json.fromInt(1), "ordinaryCount" -> Json.fromInt(0), "limit" -> Json.fromInt(2)))
+      val wait = NativeWorkflowOperationOutput.goalWait("selected-instance", "Pending", "Actual retained condition")
+      When("the generated readers consume present and absent optional context using declaration or wire names")
+      val work = _take(V.GoalPhaseWorkRequest.createC(_record_(payload)))
+      val human = _take(V.GoalPhaseOrderedDecisionRequest.createC(_record_(question)))
+      val output = _take(V.GoalPhaseAdvanceResult.createC(_record_(Json.obj("session_id" -> Json.fromString("selected-instance"),
+        "kind" -> Json.fromString("Request"), "message" -> Json.fromString("Selected assignment"),
+        "repair_progress" -> Json.obj("automatic_count" -> Json.fromInt(1), "ordinary_count" -> Json.fromInt(1), "limit" -> Json.fromInt(2))))))
+      val absent = _take(V.GoalPhaseAdvanceResult.createC(wait.toRecord()))
+      val child = NativeWorkflowOperationOutput.goalChild("selected-instance",
+        NativeWorkflowOperationOutput.repositoryWait("selected-instance", "Pending repository", "Actual child condition"))
+      Then("Request and question retain distinct saved counts and context-free Wait stays unknown")
+      work.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+      human.work.repairProgress shouldBe work.repairProgress
+      human.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2))
+      output.repairProgress shouldBe work.repairProgress
+      absent.repairProgress shouldBe None
+      child.repairProgress shouldBe None
+      _take(V.GoalPhaseWorkRequest.createC(work.toRecord())) shouldBe work
+      _take(V.GoalPhaseOrderedDecisionRequest.createC(human.toRecord())) shouldBe human
+      _take(V.GoalPhaseAdvanceResult.createC(output.toRecord())) shouldBe output
+      Given("a missing required limit or a noninteger automatic count in a present public snapshot")
+      val malformed = Vector(_record_(Json.obj("automatic_count" -> Json.fromInt(1), "ordinary_count" -> Json.fromInt(1))),
+        _record_(Json.obj("automatic_count" -> Json.fromString("fractional"), "ordinary_count" -> Json.fromInt(1), "limit" -> Json.fromInt(2))))
+      When("the generated required-field reader consumes those public values")
+      val failures = malformed.map(V.GoalPhaseRepairProgress.createC)
+      Then("missing or mistyped required fields fail typed public intake")
+      failures.foreach(_.isSuccess shouldBe false)
+    }
+  }
+
   "Named Workflow business parameters" should {
+    "preserve present empty and null JSON cells at the root and recursively" in {
+      Given("a specification-owned object with present empty cells, ordered arrays and an exact large integer, while omitted is absent")
+      val emptycells = Json.obj("emptyarray" -> Json.arr(), "emptyobject" -> Json.obj(), "explicitnull" -> Json.Null)
+      val business = Json.obj(
+        "emptyarray" -> Json.arr(), "emptyobject" -> Json.obj(), "explicitnull" -> Json.Null,
+        "nested" -> emptycells,
+        "array" -> Json.arr(Json.obj(), Json.arr(), Json.Null, emptycells, Json.True, Json.fromString("ordered")),
+        "boolean" -> Json.False, "text" -> Json.fromString("SPECIFICATION-OWNED value"),
+        "integer" -> Json.fromBigDecimal(BigDecimal("9007199254740993")))
+      val representations: Vector[Any] = Vector(business, business.noSpaces)
+
+      When("recordC consumes Json and String named objects and the actual Records are serialized to business JSON")
+      val actual = representations.map { value =>
+        val record = _take(NativeWorkflowOperationInput.recordC(_request(Property("input", value, None)), "input"))
+        parser.parse(_take(record.toJsonStringC)).fold(error => fail(error.message), identity)
+      }
+
+      Then("both representations retain every present value exactly, including precision and array order, without inventing omitted")
+      actual shouldBe Vector.fill(representations.size)(business)
+      actual.foreach(_.hcursor.downField("omitted").focus shouldBe None)
+    }
+
+    "retain a complete Plan proposal with empty Step dependencies through the generated WorkResult reader" in {
+      Given("a specification-owned revision Proposal whose complete raw Plan retains the selected empty dependencies")
+      val plan = NativeHostHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
+      val proposal = GoalPhasePlanRevision.Proposal("specification-public-input-proposal", "1",
+        "SPECIFICATION-OWNED public-input revision", plan)
+      val business = Json.obj("outcome" -> Json.fromString("decision-needed"),
+        "summary" -> Json.fromString("SPECIFICATION-OWNED proposed revision"), "findings" -> Json.arr(),
+        "planRevision" -> proposal.asJson)
+      val representations: Vector[Any] = Vector(business, business.noSpaces)
+
+      When("Json and String pass through valueC's generated WorkResult reader and the owning strict Proposal decoder")
+      val actual = representations.map { value =>
+        val result = _take(NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](
+          _request(Property("result", value, None)), "result"))
+        _take(GoalPhasePlanRevision.fromPublicProposalC(result.planRevision))
+      }
+
+      Then("both public representations produce the exact typed Proposal with the required empty dependencies present")
+      proposal.plan.steps.map(_.dependencies) shouldBe Vector(Vector.empty[String])
+      actual shouldBe Vector.fill(representations.size)(Some(proposal))
+    }
+
+    "reject absent and null Step dependencies through generated WorkResult and strict Proposal intake" in {
+      Given("specification-owned complete Plan proposals altered only by removing dependencies or explicitly making them null")
+      val plan = NativeHostHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
+      val proposal = GoalPhasePlanRevision.Proposal("specification-invalid-dependencies", "1",
+        "SPECIFICATION-OWNED invalid dependency cases", plan).asJson
+      val planjson = proposal.hcursor.downField("plan").focus.get
+      val steps = planjson.hcursor.downField("steps").focus.get.asArray.get
+      val invalidsteps = Vector(steps.head.mapObject(_.remove("dependencies")),
+        steps.head.mapObject(_.add("dependencies", Json.Null)))
+      val businesses = invalidsteps.map { step =>
+        val invalidplan = planjson.mapObject(_.add("steps", Json.fromValues(steps.updated(0, step))))
+        Json.obj("outcome" -> Json.fromString("decision-needed"),
+          "summary" -> Json.fromString("SPECIFICATION-OWNED invalid proposal"), "findings" -> Json.arr(),
+          "planRevision" -> proposal.mapObject(_.add("plan", invalidplan)))
+      }
+      val representations: Vector[Any] = businesses.flatMap(value => Vector(value, value.noSpaces))
+
+      When("each Json and String candidate traverses the generated WorkResult reader and owning strict Proposal decoder")
+      val actual = representations.map { value =>
+        NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](
+          _request(Property("result", value, None)), "result").flatMap(result =>
+          GoalPhasePlanRevision.fromPublicProposalC(result.planRevision))
+      }
+
+      Then("neither missing nor null dependencies become an accepted Proposal or receive an empty-array default")
+      actual.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
+    "reject scalar and array JSON as named object inputs" in {
+      Given("specification-owned scalar and array inputs in both Json and String representations")
+      val values = Vector(Json.Null, Json.True, Json.fromInt(1), Json.fromString("scalar"), Json.arr(), Json.arr(Json.obj()))
+      val representations: Vector[Any] = values.flatMap(value => Vector(value, value.noSpaces))
+
+      When("recordC consumes each value as a named business object")
+      val actual = representations.map(value =>
+        NativeWorkflowOperationInput.recordC(_request(Property("input", value, None)), "input"))
+
+      Then("every scalar and array retains the object-only boundary failure")
+      actual.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
     "consume a Goal Start DTO, its Record or business JSON without a universal command envelope" in {
       Given("the same requested phase and repository in the declared business representations")
       val input = V.GoalPhaseStartInput("phase-5.3", "sm-workflow")
@@ -59,7 +189,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
 
     "consume outcome, summary and multiple findings as the named work result" in {
       Given("a semantic work result supplied without value/payload/schema wrappers")
-      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None)
+      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None, None, None, None, None, None)
       val request = _request(Property("sessionId", "execution-1", None), Property("result", result, None))
 
       When("the result and canonical session parameters are read")

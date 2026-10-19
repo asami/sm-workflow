@@ -206,7 +206,7 @@ final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Match
       validation.outcome shouldBe Some("passed")
       validation.scopeIdentity shouldBe "step-1"
       validation.candidate shouldBe reviewed.work.get.candidate.get
-      validation.selectedChecks shouldBe Vector(V.GoalPhaseNativeValidationCheck("test", "test"))
+      validation.selectedChecks shouldBe Vector(V.GoalPhaseNativeValidationCheck("test", "test", None, None))
       validation.checks shouldBe reviewed.work.get.review.get.checks
       waiting.authorityContext.size shouldBe 1
       val authority = waiting.authorityContext.get

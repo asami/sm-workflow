@@ -14,7 +14,7 @@ import NativeHostEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHostEvidence.Reader) {
@@ -109,7 +109,8 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
         "phase" -> Json.fromString(input.plan.phase), "repository" -> Json.fromString(input.plan.repository)),
       "base" -> input.base.asJson, "candidate" -> input.candidate.asJson,
       "completed" -> Json.fromValues(input.completed.map(step => Json.obj("step" -> Json.fromString(step.step), "commit" -> step.commit.asJson))),
-      "review" -> Json.fromString(input.review), "childInvocation" -> Json.fromString(input.childInvocation))))
+      "review" -> Json.fromString(input.review), "childInvocation" -> Json.fromString(input.childInvocation))
+        .mapObject(fields => input.reviewedCandidate.fold(fields)(value => fields.add("reviewedCandidate", value.asJson)))))
   def repositoryEffectBindingC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext,
     target: RepositoryGitRuntimePrograms.Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Json] = {
     if (core == null || core.component == null || core.component.isEmpty || core.component.get == null ||
@@ -150,7 +151,14 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
           decision.request.input != null && decision.request.input.exists(v => v != null && v.value != null && v.value.work != null) =>
         val input = decision.request.input.get.value
         val work = input.work
-        if (input.requestingResult == null || work.selectedPlan == null || work.originalBase == null ||
+        if (!GoalPhaseRepairProgress.validateOptionC(input.repairProgress).isSuccess ||
+            input.result == null || !GoalPhaseFindingRecording.admitObservationsC(work.kind, input.result.reviewObservations).isSuccess ||
+            !GoalPhaseDependencyScope.admitResultC(work.kind, input.result.outcome, input.result.dependencyProposal).isSuccess ||
+            !GoalPhasePlanRevision.validateOptionC(input.result.planRevision).isSuccess ||
+            (input.result.dependencyProposal.nonEmpty && (input.planRevision.nonEmpty || input.result.planRevision.nonEmpty)) ||
+            !GoalPhasePlanRevision.validateCapturedOptionC(input.planRevision).isSuccess ||
+            !GoalPhaseRepairProgress.validateOptionC(work.repairProgress).isSuccess ||
+            input.requestingResult == null || work.selectedPlan == null || work.originalBase == null ||
             work.stepIdentity == null || work.stepIdentity.exists(_ == null) || work.candidate == null ||
             work.candidate.exists(c => c == null || c.head == null || c.tree == null) || work.checksReceipt == null ||
             work.checksReceipt.exists(_ == null) || Vector(input.requestingResult.identity, input.requestingResult.revision,
@@ -163,7 +171,16 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
           "kind" -> Json.fromString(work.kind), "stepIdentity" -> work.stepIdentity.asJson, "generation" -> Json.fromLong(work.generation),
           "selectedPlan" -> Json.obj("identity" -> Json.fromString(work.selectedPlan.identity), "revision" -> Json.fromString(work.selectedPlan.revision),
             "phase" -> Json.fromString(work.selectedPlan.phase), "repository" -> Json.fromString(work.selectedPlan.repository)),
-          "originalBase" -> work.originalBase.asJson, "candidate" -> work.candidate.asJson, "checksReceipt" -> work.checksReceipt.asJson)))
+          "originalBase" -> work.originalBase.asJson, "candidate" -> work.candidate.asJson, "checksReceipt" -> work.checksReceipt.asJson)
+            .mapObject(fields => work.repairProgress.fold(fields)(value => fields.add("repairProgress", value.asJson))))
+          .mapObject { fields =>
+            val progress = input.repairProgress.fold(fields)(value => fields.add("repairProgress", value.asJson))
+            val revision = input.planRevision.fold(progress)(value => progress.add("planRevision", value.asJson))
+            val observations = input.result.reviewObservations.fold(io.circe.JsonObject.empty)(value =>
+              io.circe.JsonObject("reviewObservations" -> value.asJson))
+            val result = input.result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
+            if (result.isEmpty) revision else revision.add("result", Json.fromJsonObject(result))
+          })
       case _ => Consequence.stateConflict("Ordered Human evidence has no actual assigned-work question")
     }
   }
@@ -202,6 +219,14 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
       report = submitted.result.value.acceptance
       _ <- if (report == null) Consequence.stateConflict("Goal review report option is absent")
         else report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC)
+      _ <- GoalPhaseRepairProgress.validateOptionC(input.repairProgress)
+      _ <- GoalPhaseFixIssues.validateOptionC(input.issues)
+      _ <- GoalPhaseFixIssues.validateReportOptionC(submitted.result.value.issueReport)
+      _ <- GoalPhaseFindingRecording.admitObservationsC(input.kind, submitted.result.value.reviewObservations)
+      _ <- GoalPhaseDependencyScope.admitResultC(input.kind, submitted.result.value.outcome, submitted.result.value.dependencyProposal)
+      _ <- if (input.review != null && input.review.forall(context => context != null && context.metadata != null &&
+          context.metadata.forall(batch => GoalPhaseNativeMetadata.bindC(batch).isSuccess))) Consequence.unit
+        else Consequence.stateConflict("Goal review validation metadata is invalid")
     } yield _review_target(core, "goal-review", goalReviewTarget(input), submitted,
       goalReviewVerdict(submitted.result.value))
   def goalReviewTarget(input: GoalPhaseNativeWork.Request): Json =
@@ -212,13 +237,22 @@ private[smworkflow] object ThreeWorkflowHostEvidencePorts {
       "base" -> input.originalBase.asJson, "candidate" -> input.candidate.asJson, "checksReceipt" -> input.checksReceipt.asJson,
       "changedPaths" -> input.review.map(_.changedPaths).getOrElse(Vector.empty).asJson).mapObject { fields =>
         val checks = input.review.toVector.flatMap(_.checks).filter(_.sbt.nonEmpty)
-        val target = input.selectedPlan.effectiveAcceptance.fold(fields)(value => fields.add("effectiveAcceptance", value.asJson))
-        if (checks.isEmpty) target else target.add("testChecks", Json.fromValues(checks.map(_check_target)))
+        val quality = input.selectedPlan.effectiveAcceptance.fold(fields)(value => fields.add("effectiveAcceptance", value.asJson))
+        val target = input.issues.fold(quality)(value => quality.add("issues", value.asJson))
+        val progress = input.repairProgress.fold(target)(value => target.add("repairProgress", value.asJson))
+        val metadata = input.review.toVector.flatMap(_.metadata)
+        val context = if (metadata.isEmpty) progress else progress.add("validationMetadata", metadata.asJson)
+        if (checks.isEmpty) context else context.add("testChecks", Json.fromValues(checks.map(_check_target)))
       }
   def goalReviewVerdict(result: GoalPhaseNativeWork.Result): Json =
     Json.obj("outcome" -> Json.fromString(result.outcome), "findings" -> result.findings.asJson,
       "repairSummary" -> (if (result.outcome == "repair") Json.fromString(result.summary) else Json.Null))
-      .mapObject(fields => result.acceptance.fold(fields)(value => fields.add("acceptance", value.asJson)))
+      .mapObject { fields =>
+        val acceptance = result.acceptance.fold(fields)(value => fields.add("acceptance", value.asJson))
+        val issues = result.issueReport.fold(acceptance)(value => acceptance.add("issueReport", value.asJson))
+        val observations = result.reviewObservations.fold(issues)(value => issues.add("reviewObservations", value.asJson))
+        result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
+      }
   def repositoryReviewBindingC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
     submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] = {
     Consequence.success(_review_target(core, "repository-review", repositoryReviewTarget(input), submitted,

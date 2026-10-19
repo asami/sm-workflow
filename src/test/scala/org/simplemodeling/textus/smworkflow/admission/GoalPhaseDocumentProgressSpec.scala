@@ -153,10 +153,10 @@ final class GoalPhaseDocumentProgressSpec extends AnyWordSpec with GivenWhenThen
       val state = _close(_close(_initial, 'c', 'd'), 'e', 'f')
       val snapshot = O.Snapshot(state.tipSnapshot.head, _oid('1'))
       When("the dedicated bounded event or the old general event observes that changed tree")
-      val admitted = take(state.acceptC(O.PhaseDocumentCandidateObserved(snapshot, _paths)))
+      val admitted = take(state.acceptC(O.PhaseManagementCandidateObserved(snapshot, _paths)))
       val general = state.acceptC(O.CandidateObserved(snapshot))
       val invalid = Vector(Vector.empty[String], Vector("../escape"), Vector("other.txt"), _paths ++ _paths)
-        .map(paths => state.acceptC(O.PhaseDocumentCandidateObserved(snapshot, paths)))
+        .map(paths => state.acceptC(O.PhaseManagementCandidateObserved(snapshot, paths)))
       Then("only distinct valid explicitly all-Step owned management paths enter PhaseValidation")
       admitted.stage shouldBe O.Stage.PhaseValidation
       admitted.candidate shouldBe Some(snapshot)
@@ -164,7 +164,7 @@ final class GoalPhaseDocumentProgressSpec extends AnyWordSpec with GivenWhenThen
       admitted.completed shouldBe state.completed
       _reject(general)
       invalid.foreach(_reject)
-      _reject(state.acceptC(O.PhaseDocumentCandidateObserved(state.tipSnapshot, _paths)))
+      _reject(state.acceptC(O.PhaseManagementCandidateObserved(state.tipSnapshot, _paths)))
       take(state.acceptC(O.CandidateObserved(state.tipSnapshot))).stage shouldBe O.Stage.PhaseValidation
     }
 

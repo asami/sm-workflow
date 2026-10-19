@@ -48,7 +48,8 @@ private[admission] object NativeHostReviewEvidenceFixture {
 /** Real target/disposition selection, not whole input or transport certification.
   * @since   Oct.  8, 2026
   *  version Oct. 11, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -60,7 +61,183 @@ final class NativeHostReviewScopeSpec extends AnyWordSpec with Matchers with Giv
   private def read(purpose: Purpose, binding: Json) = decodeStorageC(encodeStorageC(record(purpose, binding)).toOption.get).toOption.get
   private def observe(value: Evidence, purpose: Purpose, binding: Json) = observeC(value, declared, purpose, "result-at-1", binding, now)
 
+  "Structured Goal issue scope" should afterWord(
+    "in spec:goal-phase-fix-issues, failure:P62-C-REVIEW-SCOPE-01, phase:6.2"
+  ) {
+    "retain complete issue state and report meaning and refuse crossed selected values" in {
+      Given("docs/spec/goal-phase-fix-issues.md; P62-C-REVIEW-SCOPE-01; a specification-issued review with actual issue state and explicit recurring coverage")
+      val issue = GoalPhaseFixIssues.Issue("issue-1", "repository", "step", "REVIEW", Some("review-finding"),
+        "Selected required behavior", "prior-review", "REOPENED", Some("RECURRING"))
+      val state = GoalPhaseFixIssues.State(Vector(issue), Vector(
+        GoalPhaseFixIssues.Transition(issue.identity, None, "OPEN", "first-review"),
+        GoalPhaseFixIssues.Transition(issue.identity, Some("OPEN"), "RESOLVED", "passing-review"),
+        GoalPhaseFixIssues.Transition(issue.identity, Some("RESOLVED"), "REOPENED", "prior-review")),
+        Some(GoalPhaseFixIssues.Movement("prior-review", 1, 0, 0, 1, true)))
+      val report = GoalPhaseFixIssues.Report(Vector(GoalPhaseFixIssues.Disposition(
+        issue.identity, "RECURRING", "Independent review observed the selected recurrence", Some(1))))
+      val target = goalInput.mapObject(_.add("issues", state.asJson))
+      val verdict = Json.obj("outcome" -> Json.fromString("repair"), "repairSummary" -> Json.fromString("Repair the selected recurrence"),
+        "findings" -> Json.arr(Json.fromString("Observed recurring required behavior")), "issueReport" -> report.asJson)
+      val original = binding(Purpose.GoalReview, Some(target), Some(verdict))
+      When("normal evidence storage encodes and decodes the selected issue state and independent report")
+      val saved = read(Purpose.GoalReview, original)
+      val accepted = observe(saved, Purpose.GoalReview, original)
+      Then("all issue fields, transitions, movement, disposition rationale and finding ordinal survive and apply to the same review")
+      saved.binding.hcursor.downField("attestation").downField("target").downField("issues").focus shouldBe Some(state.asJson)
+      saved.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("issueReport").focus shouldBe Some(report.asJson)
+      accepted.isSuccess shouldBe true
+
+      Given("the same stored independent result with separately changed issue meaning, history or movement")
+      val states = Vector(
+        state.copy(issues = Vector(issue.copy(summary = "Different required behavior"))),
+        state.copy(issues = Vector(issue.copy(repository = "other-repository"))),
+        state.copy(issues = Vector(issue.copy(step = "other-step"))),
+        state.copy(issues = Vector(issue.copy(sourceIdentity = None))),
+        state.copy(issues = Vector(issue.copy(latestDisposition = Some("NOT_REVIEWED")))),
+        state.copy(history = state.history.updated(1, state.history(1).copy(evidenceReference = "different-review"))),
+        state.copy(movement = state.movement.map(_.copy(reopenedIssues = 0))),
+        state.copy(movement = state.movement.map(_.copy(correspondenceKnown = false))))
+      When("each changed issue target is presented against that stored independent review")
+      val crossedstates = states.map(changed => observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview,
+        Some(target.mapObject(_.add("issues", changed.asJson))), Some(verdict))))
+      Then("a different issue context cannot reuse the row")
+      crossedstates.foreach(_.isSuccess shouldBe false)
+
+      Given("the same stored result with separately changed coverage disposition, rationale or finding correspondence")
+      val disposition = report.dispositions.head
+      val reports = Vector(disposition.copy(disposition = "NOT_REVIEWED", findingOrdinal = None),
+        disposition.copy(rationale = "Different independent explanation"), disposition.copy(findingOrdinal = Some(2)))
+        .map(entry => report.copy(dispositions = Vector(entry)))
+      When("each changed report is presented against the stored independent review")
+      val crossedreports = reports.map(changed => observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview,
+        Some(target), Some(verdict.mapObject(_.add("issueReport", changed.asJson))))))
+      Then("different independent coverage cannot reuse the row")
+      crossedreports.foreach(_.isSuccess shouldBe false)
+    }
+
+    "apply valid empty and absent coverage to the same selected issue context" in {
+      Given("docs/spec/goal-phase-fix-issues.md; P62-C-EMPTY-COVERAGE-02; the same review with a resolved TEST issue and no required REVIEW coverage")
+      val issue = GoalPhaseFixIssues.Issue("issue-1", "repository", "step", "TEST", Some("focused"),
+        "Selected tested behavior", "passing-check", "RESOLVED", None)
+      val state = GoalPhaseFixIssues.State(Vector(issue), Vector(
+        GoalPhaseFixIssues.Transition(issue.identity, None, "OPEN", "failing-check"),
+        GoalPhaseFixIssues.Transition(issue.identity, Some("OPEN"), "RESOLVED", "passing-check")),
+        Some(GoalPhaseFixIssues.Movement("passing-check", 0, 1, 0, 0, true)))
+      val target = goalInput.mapObject(_.add("issues", state.asJson))
+      val verdict = Json.obj("outcome" -> Json.fromString("accept"), "findings" -> Json.arr())
+      val empty = GoalPhaseFixIssues.Report(Vector.empty)
+      val absent = binding(Purpose.GoalReview, Some(target), Some(verdict))
+      val supplied = binding(Purpose.GoalReview, Some(target), Some(verdict.mapObject(_.add("issueReport", empty.asJson))))
+      When("normal storage selects either valid no-coverage representation and observation receives either representation")
+      val saved = Vector(absent, supplied).map(read(Purpose.GoalReview, _))
+      val accepted = saved.flatMap(value => Vector(absent, supplied).map(observe(value, Purpose.GoalReview, _)))
+      Then("both apply to one selected meaning while the complete actual issue state remains bound")
+      saved.map(_.binding).distinct.size shouldBe 1
+      accepted.foreach(_.isSuccess shouldBe true)
+      saved.foreach { value =>
+        value.binding.hcursor.downField("attestation").downField("target").downField("issues").focus shouldBe Some(state.asJson)
+        value.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("issueReport").focus shouldBe None
+      }
+
+      Given("the same no-coverage review row with a different selected issue history")
+      val changed = state.copy(history = state.history.updated(1, state.history(1).copy(evidenceReference = "other-check")))
+      When("observation compares that changed issue context with the stored empty-coverage review")
+      val crossed = observe(saved.last, Purpose.GoalReview, binding(Purpose.GoalReview,
+        Some(target.mapObject(_.add("issues", changed.asJson))), Some(verdict)))
+      Then("empty coverage cannot erase the actual selected issue context")
+      crossed.isSuccess shouldBe false
+
+      Given("a valid nonempty report claims actual coverage of the selected TEST issue")
+      val report = GoalPhaseFixIssues.Report(Vector(GoalPhaseFixIssues.Disposition(
+        issue.identity, "RESOLVED", "Independent review observed the selected resolution", None)))
+      val covered = binding(Purpose.GoalReview, Some(target), Some(verdict.mapObject(_.add("issueReport", report.asJson))))
+      When("normal storage and observation select the nonempty report")
+      val nonempty = read(Purpose.GoalReview, covered)
+      val crossedreports = Vector(observe(saved.last, Purpose.GoalReview, covered), observe(nonempty, Purpose.GoalReview, supplied))
+      Then("the actual report remains selected and neither coverage claim can reuse the other row")
+      nonempty.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("issueReport").focus shouldBe Some(report.asJson)
+      crossedreports.foreach(_.isSuccess shouldBe false)
+    }
+
+    "keep missing issue fields absent for existing Goal and Repository reviews" in {
+      Given("docs/spec/goal-phase-fix-issues.md; P62-C-REVIEW-SCOPE-01; existing Goal and Repository review fixtures without issue fields")
+      Vector(Purpose.GoalReview, Purpose.RepositoryReview).foreach { purpose =>
+        val original = binding(purpose)
+        When("normal evidence storage and observation consume a review with no issue claim")
+        val saved = read(purpose, original)
+        val accepted = observe(saved, purpose, original)
+        Then("the original review remains applicable and no empty issue state or report is fabricated")
+        accepted.isSuccess shouldBe true
+        saved.binding.hcursor.downField("attestation").downField("target").downField("issues").focus shouldBe None
+        saved.binding.hcursor.downField("attestation").downField("result").downField("verdict").downField("issueReport").focus shouldBe None
+      }
+    }
+
+    "reject present null malformed and invalid issue values during encoding decoding and observation" in {
+      Given("docs/spec/goal-phase-fix-issues.md; P62-C-REVIEW-SCOPE-01; an existing independent review and present invalid issue state or report values")
+      val original = binding(Purpose.GoalReview)
+      val saved = read(Purpose.GoalReview, original)
+      val wire = encodeStorageC(saved).toOption.get
+      val payload = io.circe.parser.parse(wire.substring(schema.length + 1)).toOption.get
+      val issue = GoalPhaseFixIssues.Issue("issue-1", "repository", "step", "REVIEW", None,
+        "Required behavior", "prior-review", "OPEN", None)
+      val state = GoalPhaseFixIssues.State(Vector(issue), Vector.empty, None)
+      val disposition = GoalPhaseFixIssues.Disposition(issue.identity, "RESOLVED", "Observed actual resolution", None)
+      val report = GoalPhaseFixIssues.Report(Vector(disposition))
+      val badstates = Vector(Json.Null, Json.True, Json.obj(),
+        state.copy(issues = Vector(issue.copy(status = "UNKNOWN"))).asJson,
+        state.copy(issues = Vector(issue, issue)).asJson,
+        state.copy(history = Vector(GoalPhaseFixIssues.Transition("issue-2", None, "OPEN", "unrelated"))).asJson,
+        state.copy(movement = Some(GoalPhaseFixIssues.Movement("prior-review", -1, 0, 0, 0, false))).asJson,
+        state.asJson.mapObject(_.add("movement", Json.Null)))
+      val badreports = Vector(Json.Null, Json.True, Json.obj(),
+        report.copy(dispositions = Vector(disposition.copy(disposition = "UNKNOWN"))).asJson,
+        report.copy(dispositions = Vector(disposition.copy(rationale = ""))).asJson,
+        report.copy(dispositions = Vector(disposition.copy(findingOrdinal = Some(0)))).asJson,
+        report.copy(dispositions = Vector(disposition, disposition)).asJson,
+        Json.obj("dispositions" -> Json.arr(disposition.asJson.mapObject(_.add("findingOrdinal", Json.Null)))))
+      val invalid = badstates.map(value => binding(Purpose.GoalReview,
+        Some(goalInput.mapObject(_.add("issues", value))))) ++ badreports.map(value => binding(Purpose.GoalReview,
+        verdict = Some(Json.obj("outcome" -> Json.fromString("accept"), "findings" -> Json.arr(), "issueReport" -> value))))
+      When("each invalid presence reaches storage encoding, stored-row decoding and independent review observation")
+      val encoded = invalid.map(value => encodeStorageC(record(Purpose.GoalReview, value)))
+      val decoded = invalid.map(value => decodeStorageC(schema + ":" + payload.mapObject(_.add("binding", value)).noSpaces))
+      val observed = invalid.map(observe(saved, Purpose.GoalReview, _))
+      Then("all three consumers reject rather than silently omitting the malformed issue claim")
+      encoded.foreach(_.isSuccess shouldBe false)
+      decoded.foreach(_.isSuccess shouldBe false)
+      observed.foreach(_.isSuccess shouldBe false)
+    }
+  }
+
   "Independent review attestation" should {
+    "retain actual validation metadata as selected independent review context and reject malformed presence" in {
+      Given("a real fixture Batch and the same ordinary review assignment with that selected metadata context")
+      val batch = GoalPhaseNativeMetadataFixture.batch
+      val metadata = Vector(batch).asJson
+      val target = NativeHostReviewEvidenceFixture.goalInput.mapObject(_.add("validationMetadata", metadata))
+      val binding = NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview, Some(target))
+      When("the host scope selects and encodes the actual metadata context and a different real subset selection")
+      val selected = NativeHostReviewScope.select(Purpose.GoalReview, binding).toOption.get
+      val retained = read(Purpose.GoalReview, binding)
+      val originalcheck = GoalPhaseNativeMetadataFixture.check
+      val changedcheck = originalcheck.copy(metadata = originalcheck.metadata.map(_.copy(supplemental = Vector.empty)))
+      val changed = SplitPhaseExplicitPartitionFixture.take(GoalPhaseNativeMetadata.prepareC(
+        Vector(changedcheck), GoalPhaseNativeMetadataFixture.loader))._2.asJson
+      val crossed = NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview,
+        Some(target.mapObject(_.add("validationMetadata", changed))))
+      Then("the selected scope retains the full canonical Batch and another valid selection cannot reuse that evidence")
+      selected.hcursor.downField("attestation").downField("target").get[Vector[Json]]("validationMetadata") shouldBe
+        Right(Vector(batch.asJson))
+      retained.binding shouldBe selected
+      observe(retained, Purpose.GoalReview, binding).isSuccess shouldBe true
+      observe(retained, Purpose.GoalReview, crossed).isSuccess shouldBe false
+      Vector(Json.Null, Json.True, Json.arr(Json.Null), Json.arr(Json.obj())).foreach { malformed =>
+        NativeHostReviewScope.select(Purpose.GoalReview, NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview,
+          Some(target.mapObject(_.add("validationMetadata", malformed))))).isLeft shouldBe true
+      }
+    }
+
     "retain actual effective conditions and report meaning while refusing contradictory quality targets or dispositions" in {
       Given("spec:goal-phase-acceptance-boundary E5 R6; actual selected effective quality and report values in a fixture independent review")
       val boundary = GoalPhaseAcceptanceBoundary.Effective(Some("Explicit selected usage"), Vector(

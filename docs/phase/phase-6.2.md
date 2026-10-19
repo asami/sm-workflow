@@ -1,6 +1,6 @@
 # Phase 6.2: FIX, Finding Recording and Dependency Decisions
 
-status=planned
+status=in_progress
 split_full_test_policy=final-only
 split_full_validation_method=sbt-full-suite
 split_validation_bootstrap=none
@@ -11,7 +11,46 @@ depends_on=phase-6.1.md
 Planned: 2026-10-13. Split from Phase 6.
 Owner: sm-workflow. Predecessor: [6.1](phase-6.1.md). Successor: [6.3](phase-6.3.md).
 
+Current status: P62-FIX has passed its integrated Step acceptance review and
+parent-verified mechanical naming closure; its local Step commit is pending. Actual
+isolated runs have exercised authored validation inputs, adopted Plan changes,
+Human-approved dependency work, repair continuation, semantic REVIEW_FIX and
+reviewed local Step commits with counter reset. These scoped results do not
+accept the remaining primary Steps. Actual nonempty finding recording remains
+unfinished; P62-RECORD/P62-DECISION acceptance, the primary Step commits and
+Phase review/release remain open.
+The developer adopted the selected STALLED warning's no-additional-change
+proposal on 2026-10-19: preserve Plan, metadata, test conditions, product code,
+repair allowance and history. Earlier successful runs are diagnostic context,
+not a later measurement of improvement. P6-TS04 still receives its ordinary
+integrated acceptance assessment. Existing Goal, base, PLAN epoch and repair
+history continue; full-suite validation remains deferred-not-run to Phase 6.3.
+Update rule: update from actual results and the owning Step/Phase acceptance;
+preserve prior failures, evidence limits, concurrent changes and other Phases.
+
+P62-FIX acceptance, 2026-10-19: the original independent protected Step review
+covered 115 sm-workflow paths, 14 CNCF paths and 9 Cozy paths. Its sole blocker,
+CPB-P62-FIX-001, was resolved by 24 private/local lexical renames in 12 primary
+paths under the existing M0 waiver gate. The original sealed FINDINGS result
+and the parent's distinct mechanical amendment remain separate records;
+HYG-P62-FIX-001 is retained as open baseline debt in the
+[Hygiene journal](../journal/2026/10/2026-10-18-phase-6.2-hygiene-follow-up.md).
+Validation includes the applicable 19-suite/312-test accumulator, the later
+14 affected suites/286 passing tests, and final compile/Test compilation.
+Earlier failures and actual command/Human/review/commit evidence retain their
+individual scopes. Strict CAR lint remains exit 1 (95 OK, 437 WARN, 0 FAIL),
+not a strict pass. Shared recording and dependency foundations receive source
+acceptance here; their remaining connected outcomes belong to P62-RECORD and
+P62-DECISION. Repair accounting remains 39/Phase 0 until actual Step closure.
+
 ## Goal and connected implementation order
+
+The [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+defers CBD review integration to [Phase 10](phase-10.md). This Phase uses 6.1's
+accepted ordinary reviewer-result route for affected REVIEW_FIX/re-review,
+findings and dependency decisions. It does not wait for CBD15/15.1. Preserve
+actual result/finding references, applicable evidence and required independent
+review. No dummy CBD PASS, alternate evaluator or reset of current work/history.
 
 On the accepted 6/6.1 request/result, execution/live-plan and Step-Admission
 interfaces, deliver validation design, TEST_FIX/REVIEW_FIX, human-selected

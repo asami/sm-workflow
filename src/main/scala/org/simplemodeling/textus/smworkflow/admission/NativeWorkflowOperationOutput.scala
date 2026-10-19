@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.{WorkflowInstancePersistence, ContextReference}
@@ -13,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 17, 2026
+  *  version Oct. 17, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -23,6 +25,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   import SplitPhasePlanningSnapshot as R
 
   type SubmissionValue = V.GoalPhaseWorkSubmissionResult | V.GoalPhaseOrderedDecisionSubmissionResult |
+    V.GoalPhaseFindingRecordingSubmissionResult |
     V.SplitPhaseSemanticSubmissionResult | V.SplitPhaseScopeSubmissionResult | V.SplitPhaseReasoningSubmissionResult |
     V.SplitPhaseHumanDirectionSubmissionResult | V.RepositorySyncConflictSubmissionResult |
     V.RepositorySyncNativeMergeReviewSubmissionResult | V.RepositorySyncHumanConflictSubmissionResult |
@@ -37,28 +40,42 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseWorkView(value.kind, value.purpose, value.stepIdentity, _goal_plan(value.selectedPlan),
       _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.candidate.map(_goal_snapshot),
       value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
-      value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), hostContext)),
-      value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale)),
-      value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))))
+      value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), hostContext,
+        r.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))),
+      value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
+        d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
+      value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))),
+      GoalPhaseFixIssues.publicState(value.issues))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView =
     V.GoalPhaseNativeValidationView(payload.sourceRevision, payload.step, _goal_snapshot(payload.candidate),
-      payload.selected.map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.kind.wire)),
-      payload.receipts.map(_goal_check), payload.outcome)
+      payload.selected.map(c => V.GoalPhaseNativeValidationCheck(c.identity, c.kind.wire, c.hostIdentity,
+        c.operation.map { operation =>
+          import GoalPhaseNativeMetadata.given
+          GoalPhaseNativeMetadata.record(operation.asJson)
+        })), payload.receipts.map(_goal_check), payload.outcome,
+      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
     value <- workInputC(work)
+    _ <- if (value != null) Consequence.unit else Consequence.stateConflict("Issued Goal work has no business input")
+    progress <- GoalPhaseRepairProgress.publicOptionC(value.repairProgress)
     mode <- NativeWorkflowIssuedWorkContext.goalModeC(value.kind)
     issuedContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, mode, GoalPhaseNativeWork.inputCodec)
     hostContext <- NativeHostReviewContext.goalC(core, work)
   } yield V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
       Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
-      None, None, Some(goalWork(value, hostContext)), None, None, None, None, None, None, Some(issuedContext), None, None)
+      None, None, Some(goalWork(value, hostContext)), None, None, None, None, None, None, Some(issuedContext), None, None, progress, None)
 
   def goalHumanC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing], core: ActionCall.Core):
     Consequence[V.GoalPhaseAdvanceResult] = for {
-    context <- NativeHostHumanContext.goalC(core, question)
     value <- decisionInputC(question)
+    _ <- if (value != null && value.work != null) Consequence.unit
+      else Consequence.stateConflict("Issued Goal Human has no business input")
+    progress <- GoalPhaseRepairProgress.publicOptionC(value.repairProgress)
+    _ <- GoalPhaseRepairProgress.validateOptionC(value.work.repairProgress)
+    context <- NativeHostHumanContext.goalC(core, question)
+    choices <- GoalPhaseOrderedHumanDecision.issuedChoicesC(question)
     _ <- if (value != null && value.work != null && value.result != null && value.work.completed != null &&
         value.work.review != null && value.work.decisionContext != null && value.work.repairDirective != null &&
         value.work.checkFailure != null) Consequence.unit
@@ -67,16 +84,16 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       Some(GoalPhaseOrderedHumanDecision.completionOperation.operation), Some(question.handle.instanceIdentity.value),
       Some("GoalPhaseOrderedDecisionAnswer"), None, None, None,
       Some(V.GoalPhaseHumanQuestion(goalWork(value.work), _goal_result(value.result), value.reason,
-        GoalPhaseOrderedHumanDecision.choices, Some(context))), None, None, None, None, None, None, None, None)
+        choices, Some(context), GoalPhasePlanRevision.publicCaptured(value.planRevision))), None, None, None, None, None, None, None, None, progress, None)
 
   def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,
-      None, None, None, None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, None, None, None, None)
 
   def goalChild(session: String, child: V.RepositorySyncAdvanceResult): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, child.kind, child.message, child.submitOperation, child.submitSessionId,
       child.resultType, child.condition, child.outcome, None, None, child.conflict, child.review, child.human, None, None,
-      child.issuedWorkContext, child.repair, None)
+      child.issuedWorkContext, child.repair, None, None, None)
 
   def goalComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
     completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
@@ -84,7 +101,44 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseAdvanceResult(session, "Terminal", "The ordered Phase and repository synchronization completed.",
       None, None, None, None, Some("completed"), None, None, None, None, None,
       Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
-        _goal_snapshot(candidate), repository)), None, None, None, None)
+        _goal_snapshot(candidate), repository)), None, None, None, None, None, None)
+
+  def goalRecordingResult(value: GoalPhaseFindingRecording.Result): V.GoalPhaseFindingRecordingResult =
+    V.GoalPhaseFindingRecordingResult(value.outcome, value.summary, value.items.map(item =>
+      V.GoalPhaseFindingRecordingItemResult(V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision),
+        item.identity, item.outcome, item.records.map(r => V.GoalPhaseFindingSavedSection(r.file, r.section)), item.rationale)))
+
+  def goalRecordingRequest(value: GoalPhaseFindingRecording.Request): V.GoalPhaseFindingRecordingRequest =
+    V.GoalPhaseFindingRecordingRequest(value.instanceIdentity, value.sourceRevision, value.batchIdentity,
+      _goal_plan(value.selectedPlan), _goal_snapshot(value.originalBase), value.completed.map(_goal_closed), value.stepIdentity,
+      value.items.map(item => V.GoalPhaseFindingRecordingItem(
+        V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
+        V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale),
+        item.destination)), GoalPhaseFixIssues.publicState(value.requiredIssues), value.repairProgress.map(GoalPhaseRepairProgress.publicSnapshot))
+
+  def goalFindingRecording(state: GoalPhaseNativeFindingRecording.State,
+    request: Option[GoalPhaseFindingRecording.Request] = None): Option[V.GoalPhaseFindingRecordingState] =
+    Option.when(state.pending.nonEmpty || state.completed.nonEmpty || request.nonEmpty)(V.GoalPhaseFindingRecordingState(
+      state.pending.map(item => V.GoalPhaseFindingObservationSource(
+        V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
+        V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale))),
+      request.map(goalRecordingRequest), state.completed.map(value => V.GoalPhaseFindingRecordingCompleted(goalRecordingRequest(value.request),
+        V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision), goalRecordingResult(value.result)))))
+
+  def withFindingRecording(value: V.GoalPhaseAdvanceResult, state: GoalPhaseNativeFindingRecording.State): V.GoalPhaseAdvanceResult =
+    value.copy(findingRecording = goalFindingRecording(state))
+
+  def goalRecordingRequestC(work: WorkflowInteraction[GoalPhaseFindingRecording.Request, Nothing],
+    state: GoalPhaseNativeFindingRecording.State): Consequence[V.GoalPhaseAdvanceResult] = for {
+    request <- workInputC(work)
+    issued <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Implementation,
+      GoalPhaseFindingRecording.inputCodec)
+  } yield goalWait(work.handle.instanceIdentity.value, "Record the finite assigned review observations in their exact Markdown destinations.",
+    "phase.finding-recording").copy(kind = "Request", condition = None,
+      submitOperation = Some(GoalPhaseNativeFindingRecording.completionOperation.operation),
+      submitSessionId = Some(work.handle.instanceIdentity.value), resultType = Some(GoalPhaseFindingRecording.resultCodec.typeIdentity),
+      issuedWorkContext = Some(issued), repairProgress = request.repairProgress.map(GoalPhaseRepairProgress.publicSnapshot),
+      findingRecording = goalFindingRecording(state, Some(request)))
 
   def repositoryConflict(value: RepositorySyncNativeConflictInput.Request): V.RepositorySyncConflictWorkView =
     V.RepositorySyncConflictWorkView(value.localTip, value.remoteTip, value.conflicts.map(c =>
@@ -173,7 +227,10 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
     V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review)
   private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
-    V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance))
+    V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance),
+      GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport),
+      GoalPhasePlanRevision.publicProposal(value.planRevision), GoalPhaseFindingRecording.publicObservations(value.reviewObservations),
+      GoalPhaseDependencyScope.publicProposal(value.dependencyProposal))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not
@@ -186,6 +243,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         V.GoalPhaseWorkSubmissionResult(session, true, "accepted", "Accepted " + value.outcome + ": " + value.summary)
       case value: GoalPhaseOrderedHumanDecision.Answer =>
         V.GoalPhaseOrderedDecisionSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
+      case value: GoalPhaseFindingRecording.Result =>
+        V.GoalPhaseFindingRecordingSubmissionResult(session, true, "accepted", "Accepted recording " + value.outcome + ": " + value.summary)
       case value: SplitPhaseExplicitPartitionSemantic.Judgment =>
         V.SplitPhaseSemanticSubmissionResult(session, true, "accepted", "Accepted partition " + value.decision + ": " + value.rationale)
       case value: SplitPhaseScopeSemantic.Judgment =>

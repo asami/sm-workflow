@@ -1,6 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.workflow.*
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -9,7 +11,8 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
+ * @author  ASAMI, Tomoharu
  */
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](c: Consequence[A]): A = c match {
@@ -40,8 +43,466 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "retain accepted Phase source checks and history while observing only the final Markdown management tree" in {
+      Given("both Steps closed through pure events and a Phase candidate independently accepted with its actual receipt")
+      val owned = plan.copy(steps = plan.steps.map(s => s.copy(ownedPaths = s.ownedPaths :+ "docs/findings.md")))
+      val first = close(take(startC(owned, base)), oid('c'), oid('d'))
+      val all = close(first, oid('e'), oid('f'))
+      val snapshot = all.tipSnapshot
+      val inspected = take(all.acceptC(CandidateObserved(snapshot)))
+      val checked = take(inspected.acceptC(ChecksObserved(snapshot, owned.phaseChecks, "phase-checks", true)))
+      val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), snapshot, "phase-checks", "phase-review", ReviewOutcome.Accept)))
+      val finalcandidate = snapshot.copy(tree = oid('9'))
+      When("the native recording owner supplies the actual final index observation for one literal shared Markdown path")
+      val observed = take(accepted.acceptC(PhaseFindingRecordsObserved(snapshot, finalcandidate, Vector("docs/findings.md"))))
+      val refreshed = take(observed.refreshedC(owned, issued = false)).toOption.get
+      val intent = take(refreshed.acceptC(ClosureIntentSaved(finalcandidate, "final-management-intent")))
+      val closed = take(intent.acceptC(PhaseRepositoryClosed("final-management-intent", base.head, snapshot.head,
+        accepted.completed.map(_.commit), "actual-child-repository")))
+      Then("only the final candidate changes and the original accepted source survives refresh intent and terminal")
+      Vector(observed, refreshed, intent, closed).foreach { state =>
+        state.candidate shouldBe Some(finalcandidate)
+        state.phaseReviewedCandidate shouldBe Some(snapshot)
+        state.phaseRecordingPaths shouldBe Vector("docs/findings.md")
+        state.plan shouldBe accepted.plan
+        state.base shouldBe accepted.base
+        state.completed shouldBe accepted.completed
+        state.generation shouldBe accepted.generation
+        state.repairs shouldBe accepted.repairs
+        state.ordinaryRepairs shouldBe accepted.ordinaryRepairs
+        state.repairDirective shouldBe accepted.repairDirective
+        state.checksReceipt shouldBe Some("phase-checks")
+        state.reviewEvidence shouldBe Some("phase-review")
+      }
+      observed.stage shouldBe Stage.PhaseClosing
+      closed.stage shouldBe Stage.Closed
+    }
+
+    "refuse premature crossed duplicate or unowned final recording observations" in {
+      Given("a fully reviewed pure Phase and literal Markdown ownership shared by all Steps")
+      val owned = plan.copy(steps = plan.steps.map(s => s.copy(ownedPaths = s.ownedPaths ++ Vector("docs/findings.md", "notes.txt"))))
+      val all = close(close(take(startC(owned, base)), oid('c'), oid('d')), oid('e'), oid('f'))
+      val source = all.tipSnapshot
+      val inspected = take(all.acceptC(CandidateObserved(source)))
+      val checked = take(inspected.acceptC(ChecksObserved(source, owned.phaseChecks, "phase-checks", true)))
+      val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), source, "phase-checks", "phase-review", ReviewOutcome.Accept)))
+      val event = PhaseFindingRecordsObserved(source, source.copy(tree = oid('9')), Vector("docs/findings.md"))
+      val observed = take(accepted.acceptC(event))
+      val intent = take(accepted.acceptC(ClosureIntentSaved(source, "already-closing")))
+      When("the event has another stage source head tree or unsupported literal path, or is submitted twice")
+      val invalid = Vector(all.acceptC(event), inspected.acceptC(event), checked.acceptC(event), initial.acceptC(event),
+        intent.acceptC(event), observed.acceptC(event),
+        accepted.acceptC(event.copy(reviewed = source.copy(tree = oid('8')))),
+        accepted.acceptC(event.copy(finalCandidate = source.copy(head = oid('8'), tree = oid('9')))),
+        accepted.acceptC(event.copy(finalCandidate = source)),
+        accepted.acceptC(event.copy(paths = Vector.empty)),
+        accepted.acceptC(event.copy(paths = Vector("docs/findings.md", "docs/findings.md"))),
+        accepted.acceptC(event.copy(paths = Vector("../findings.md"))),
+        accepted.acceptC(event.copy(paths = Vector("docs/unowned.md"))),
+        accepted.acceptC(event.copy(paths = Vector("notes.txt"))))
+      Then("all fail without replacing the accepted source, checks, review, counts or closed Step prefix")
+      invalid.foreach(_.isSuccess shouldBe false)
+      accepted.candidate shouldBe Some(source)
+      accepted.phaseReviewedCandidate shouldBe None
+      accepted.phaseRecordingPaths shouldBe empty
+      observed.acceptC(ChecksObserved(event.finalCandidate, owned.phaseChecks, "fabricated-check", true)).isSuccess shouldBe false
+      observed.acceptC(ReviewAdmitted(work(checked), event.finalCandidate, "phase-checks", "fabricated-review", ReviewOutcome.Accept)).isSuccess shouldBe false
+    }
+
+    "adopt an explicit current-Step revision at Decision while ordinary Resume retains its Plan" in {
+      Given("a first-Step review frontier with its selected candidate and check receipt")
+      val start = initial
+      val implementationkey = work(start)
+      val ready = take(start.acceptC(SemanticCompleted(implementationkey, "Original implementation ready")))
+      val snapshot = Snapshot(base.head, oid('d'))
+      val inspected = take(ready.acceptC(CandidateObserved(snapshot)))
+      val checked = take(inspected.acceptC(ChecksObserved(snapshot, Vector("focused-1"), "original-check", true)))
+      val reviewkey = work(checked)
+      val paused = take(checked.acceptC(ReviewAdmitted(reviewkey, snapshot, "original-check", "fixture-human-request", ReviewOutcome.Human)))
+      val proposed = plan.copy(revision = "5", steps = plan.steps.updated(0,
+        plan.steps.head.copy(purpose = "Revised first boundary", checks = Vector("revised-focused-1")) ))
+      When("the host admits a revision answer or separately admits an ordinary Resume fixture")
+      val adopted = take(paused.adoptRevisionC(proposed, "fixture:host-admitted-revision-answer"))
+      val resumed = take(paused.acceptC(DecisionResumptionAdmitted("fixture:ordinary-resume-answer")))
+      Then("only explicit adoption selects the new complete Plan and restarts current-Step implementation")
+      adopted.stage shouldBe Stage.Implementation
+      adopted.plan shouldBe proposed
+      adopted.cursor shouldBe paused.cursor
+      adopted.generation shouldBe paused.generation + 1
+      adopted.base shouldBe paused.base
+      adopted.completed shouldBe paused.completed
+      adopted.repairs shouldBe paused.repairs
+      adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      adopted.repositoryReceipt shouldBe paused.repositoryReceipt
+      adopted.candidate shouldBe empty
+      adopted.checksReceipt shouldBe empty
+      adopted.reviewEvidence shouldBe empty
+      adopted.closureIntent shouldBe empty
+      adopted.decision shouldBe empty
+      adopted.repairDirective shouldBe empty
+      adopted.decisionSource shouldBe empty
+      adopted.pendingRepair shouldBe empty
+      adopted.documentDecision shouldBe false
+      work(adopted).revision shouldBe "5"
+      resumed.stage shouldBe Stage.Review
+      resumed.plan shouldBe plan
+      resumed.candidate shouldBe Some(snapshot)
+      resumed.checksReceipt shouldBe Some("original-check")
+      paused.plan shouldBe plan
+      When("old implementation and review keys, premature check receipts or repeated adoption are submitted")
+      val rejected = Vector(adopted.acceptC(SemanticCompleted(implementationkey, "Old implementation")),
+        adopted.acceptC(ReviewAdmitted(reviewkey, snapshot, "original-check", "old-review", ReviewOutcome.Accept)),
+        adopted.acceptC(ChecksObserved(snapshot, Vector("revised-focused-1"), "original-check", true)),
+        adopted.adoptRevisionC(proposed.copy(revision = "6"), "fixture:repeated-answer"),
+        paused.adoptRevisionC(proposed, "bad\nanswer"))
+      Then("the new implementation requires fresh assigned work and cannot reuse old acceptance")
+      rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
+    "retain reserved repair counts on adoption and refuse exhausted document native-effect and Phase frontiers" in {
+      Given("a two-batch Step window with one genuinely reserved repair and its semantic Decision")
+      val selected = plan.copy(repairLimit = 2)
+      val start = take(startC(selected, base))
+      val snapshot = Snapshot(base.head, oid('d'))
+      def _failed_(state: State): State = {
+        val ready = take(state.acceptC(SemanticCompleted(work(state), "Assigned work completed")))
+        val inspected = take(ready.acceptC(CandidateObserved(snapshot)))
+        take(inspected.acceptC(RepairableChecksObserved(snapshot, Vector("focused-1"), "fixture-failure", directive)))
+      }
+      val reserved = _failed_(start)
+      val paused = take(reserved.acceptC(NativeFailure("Clarify current validation design")))
+      val proposed = selected.copy(revision = "5", steps = selected.steps.updated(0,
+        selected.steps.head.copy(checks = Vector("revised-focused-1"))))
+      When("an explicit adoption resumes implementation from that reserved Repair Decision")
+      val adopted = take(paused.adoptRevisionC(proposed, "fixture:reserved-repair-answer"))
+      Then("both active counts remain consumed and neither a new window nor a refund is granted")
+      paused.decisionSource shouldBe Some(Stage.Repair)
+      paused.pendingRepair shouldBe empty
+      adopted.stage shouldBe Stage.Implementation
+      adopted.repairs shouldBe 1
+      adopted.ordinaryRepairs shouldBe 1
+      adopted.generation shouldBe paused.generation + 1
+      adopted.repairDirective shouldBe empty
+      adopted.base shouldBe base
+      adopted.completed shouldBe empty
+      Given("exhaustion, a document conflict, native closure, nondecision work and whole-Phase states built by actual pure events")
+      val exhausted = _failed_(_failed_(reserved))
+      val document = take(start.acceptC(DocumentConflictObserved(Vector("issued-step"))))
+      val ready = take(start.acceptC(SemanticCompleted(work(start), "Ready")))
+      val inspected = take(ready.acceptC(CandidateObserved(snapshot)))
+      val checked = take(inspected.acceptC(ChecksObserved(snapshot, Vector("focused-1"), "fixture-check", true)))
+      val closing = take(checked.acceptC(ReviewAdmitted(work(checked), snapshot, "fixture-check", "fixture-review", ReviewOutcome.Accept)))
+      val intent = take(closing.acceptC(ClosureIntentSaved(snapshot, "fixture-intent")))
+      val all = close(close(start, oid('c'), oid('d')), oid('e'), oid('f'))
+      val phasesnapshot = Snapshot(oid('e'), oid('f'))
+      val phasevalidation = take(all.acceptC(CandidateObserved(phasesnapshot)))
+      val phasereview = take(phasevalidation.acceptC(ChecksObserved(phasesnapshot, Vector("whole-phase"), "phase-check", true)))
+      val phaseclosing = take(phasereview.acceptC(ReviewAdmitted(work(phasereview), phasesnapshot,
+        "phase-check", "phase-review", ReviewOutcome.Accept)))
+      val phaseintent = take(phaseclosing.acceptC(ClosureIntentSaved(phasesnapshot, "phase-intent")))
+      val closed = take(phaseintent.acceptC(PhaseRepositoryClosed("phase-intent", base.head, phasesnapshot.head,
+        all.completed.map(_.commit), "repository-receipt")))
+      val invalid = Vector(start, ready, inspected, checked, reserved, closing, intent, all, phasevalidation,
+        phasereview, phaseclosing, phaseintent, closed, exhausted, document,
+        take(ready.acceptC(NativeFailure("Inspection unknown"))),
+        take(inspected.acceptC(NativeFailure("Validation unknown"))),
+        take(closing.acceptC(NativeFailure("Commit unknown"))),
+        take(intent.acceptC(NativeFailure("Durable commit outcome unknown"))),
+        take(phasereview.acceptC(NativeFailure("Whole-Phase review needs direction"))))
+      When("each ineligible frontier receives an explicit revision answer")
+      val rejected = invalid.map(_.adoptRevisionC(proposed, "fixture:ineligible-answer"))
+      Then("adoption never renews exhaustion, resolves document conflicts, replays closure or reopens a Phase")
+      rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.repairs shouldBe 2
+      exhausted.ordinaryRepairs shouldBe 2
+      exhausted.pendingRepair shouldBe Some(directive)
+      exhausted.adoptRevisionC(proposed.copy(repairLimit = 3), "fixture:raise-limit") shouldBe a[Consequence.Failure[?]]
+      closed.repositoryReceipt shouldBe Some("repository-receipt")
+    }
+
+    "retain an accepted commit and select revised second-Step checks only after fresh semantic completion and inspection" in {
+      Given("S1 actually accepted and committed through pure controller events and S2 paused at review")
+      val second = close(initial, oid('c'), oid('d'))
+      val ready = take(second.acceptC(SemanticCompleted(work(second), "Second Step implemented")))
+      val snapshot = Snapshot(oid('c'), oid('f'))
+      val inspected = take(ready.acceptC(CandidateObserved(snapshot)))
+      val checked = take(inspected.acceptC(ChecksObserved(snapshot, Vector("focused-2"), "old-second-check", true)))
+      val oldreviewkey = work(checked)
+      val paused = take(checked.acceptC(NativeFailure("Second-Step check design needs revision")))
+      val proposed = plan.copy(revision = "5", steps = plan.steps.updated(1,
+        plan.steps(1).copy(purpose = "Explicit revised second boundary", checks = Vector("new-second-check", "additional-second-check"))))
+      When("the explicit fixture adoption starts the same unclosed Step")
+      val adopted = take(paused.adoptRevisionC(proposed, "fixture:second-step-answer"))
+      Then("the accepted Plan prefix, original base and original commit/review history are retained")
+      adopted.cursor shouldBe 1
+      adopted.completed shouldBe Vector(ClosedStep("S1", Commit(oid('c'), base.head, oid('d')), "independent-review"))
+      adopted.completed shouldBe second.completed
+      adopted.base shouldBe second.base
+      adopted.tipSnapshot shouldBe second.tipSnapshot
+      adopted.plan.steps.head shouldBe second.plan.steps.head
+      adopted.next.asInstanceOf[Semantic].completed shouldBe second.completed
+      work(adopted).step shouldBe Some("S2")
+      adopted.candidate shouldBe empty
+      adopted.checksReceipt shouldBe empty
+      adopted.reviewEvidence shouldBe empty
+      When("new assigned implementation completes and its actual candidate is freshly observed")
+      val fresh = take(adopted.acceptC(SemanticCompleted(work(adopted), "Revised second implementation ready")))
+      val seen = take(fresh.acceptC(CandidateObserved(snapshot)))
+      val oldchecks = seen.acceptC(ChecksObserved(snapshot, Vector("focused-2"), "old-second-check", true))
+      val oldReview = seen.acceptC(ReviewAdmitted(oldreviewkey, snapshot, "old-second-check", "old-review", ReviewOutcome.Accept))
+      Then("only future Validate selects the new literal checks and the old receipt cannot satisfy them")
+      fresh.next shouldBe Inspect(false, oid('c'))
+      seen.next shouldBe Validate(snapshot, Vector("new-second-check", "additional-second-check"), false)
+      seen.checksReceipt shouldBe empty
+      oldchecks shouldBe a[Consequence.Failure[?]]
+      oldReview shouldBe a[Consequence.Failure[?]]
+      When("the newly selected checks obtain their own admitted fixture receipt")
+      val validated = take(seen.acceptC(ChecksObserved(snapshot,
+        Vector("new-second-check", "additional-second-check"), "fresh-second-check", true)))
+      Then("fresh independent review is assigned with the retained accepted Step history")
+      validated.stage shouldBe Stage.Review
+      validated.checksReceipt shouldBe Some("fresh-second-check")
+      validated.reviewEvidence shouldBe empty
+      validated.completed shouldBe second.completed
+      work(validated).revision shouldBe "5"
+      work(validated).generation shouldBe paused.generation + 1
+    }
+
+    "default new Plans to ten batches while retaining captured zero and selected two-batch limits" in {
+      Given("a newly constructed Plan and two explicitly selected existing limits")
+      val defaulted = Plan(plan.identity, plan.revision, plan.phase, plan.repository, plan.steps, plan.phaseChecks)
+      val disabled = plan.copy(repairLimit = 0)
+      val selected = plan.copy(repairLimit = 2)
+      val starts = Vector(defaulted, disabled, selected).map(value => take(startC(value, base)))
+      When("actual selected failures reserve their available repair windows")
+      def _failed_(state: State): State = {
+        val completed = take(state.acceptC(SemanticCompleted(work(state), "Assigned work completed")))
+        val observed = take(completed.acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+        take(observed.acceptC(RepairableChecksObserved(observed.candidate.get, Vector("focused-1"), "actual-failure", directive)))
+      }
+      val first = starts.map(_failed_)
+      val second = _failed_(first(2))
+      val exhausted = _failed_(second)
+      Then("the default is ten, zero stays disabled, and the selected two-batch Plan never changes")
+      starts.map(_.plan.repairLimit) shouldBe Vector(10, 0, 2)
+      first.map(_.stage) shouldBe Vector(Stage.Repair, Stage.Decision, Stage.Repair)
+      first.map(_.repairs) shouldBe Vector(1, 0, 1)
+      first.map(_.ordinaryRepairs) shouldBe Vector(1, 0, 1)
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.repairs shouldBe 2
+      exhausted.ordinaryRepairs shouldBe 2
+      exhausted.plan shouldBe selected
+      starts.map(_.plan) shouldBe Vector(defaulted, disabled, selected)
+    }
+
+    "refund only the matching minor repair ordinary reservation once and retain checks review continuation and Step reset" in {
+      Given("a two-batch Step window and an actual TEST-sourced repair reservation")
+      val selected = plan.copy(repairLimit = 2)
+      val start = take(startC(selected, base))
+      val snap = Snapshot(base.head, oid('d'))
+      val inspected = take(take(start.acceptC(SemanticCompleted(work(start), "Initial implementation completed")))
+        .acceptC(CandidateObserved(snap)))
+      val repair = take(inspected.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "failed-check", directive)))
+      val assessment = GoalPhaseFixAssessment.Report(
+        GoalPhaseFixAssessment.Change("SIMPLE_LOGIC", Vector("one.validate"), false, true,
+          "Correct the agreed local boundary", false, false),
+        GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "The actual failure is addressed; fresh checks remain required"))
+      val semantic = repair.next.asInstanceOf[Semantic]
+      val failure = GoalPhaseNativeValidation.Payload("failed-revision", "S1", snap,
+        Vector(GoalPhaseNativeValidation.Check("focused-1", 1, WorkflowSbtValidation.Kind.Compile)),
+        Vector(RepositorySyncNativeMergeValidation.Receipt("focused-1", "exited", Some(1), "Actual stdout", "Actual failure",
+          Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Outcome.Failed, None, None)))),
+        Some("repair-required"))
+      val assigned = GoalPhaseNativeWork.Request("actual-instance", "repair-revision", "RepairStep", work(repair).step,
+        work(repair).generation, semantic.purpose, selected, base, Vector.empty, None, None, Some(directive),
+        checkFailure = Some(take(GoalPhaseNativeWork.checkFailureContextC(Vector("src/one.scala"), "Actual failed diff", failure))))
+      val actual = GoalPhaseNativeWork.Result("completed", "Local correction completed", Vector.empty,
+        fixAssessment = Some(assessment))
+      When("the native completion owner derives the flag from that admitted actual Request and Result")
+      val exempt = take(GoalPhaseFixAssessment.ordinaryCountExemptC(assigned, actual))
+      val completion = SemanticCompleted(work(repair), actual.summary, exempt)
+      val completed = take(repair.acceptC(completion))
+      val reconstructed = take(repair.acceptC(completion))
+      Then("only this batch's ordinary reservation is removed and reconstructing the same actual completion agrees")
+      exempt shouldBe true
+      repair.repairs shouldBe 1
+      repair.ordinaryRepairs shouldBe 1
+      completed.repairs shouldBe 1
+      completed.ordinaryRepairs shouldBe 0
+      reconstructed.repairs shouldBe completed.repairs
+      reconstructed.ordinaryRepairs shouldBe completed.ordinaryRepairs
+      completed.acceptC(completion) shouldBe a[Consequence.Failure[?]]
+      completed.next shouldBe Inspect(false, base.head)
+      completed.acceptC(ClosureIntentSaved(snap, "premature")) shouldBe a[Consequence.Failure[?]]
+      When("fresh checks pass but independent review requests a substantive repair")
+      val fresh = take(completed.acceptC(CandidateObserved(snap)))
+      val checked = take(fresh.acceptC(ChecksObserved(snap, Vector("focused-1"), "fresh-checks", true)))
+      val second = take(checked.acceptC(ReviewAdmitted(work(checked), snap, "fresh-checks", "actual-review",
+        ReviewOutcome.Repair, Some(directive))))
+      val ordinary = take(second.acceptC(SemanticCompleted(work(second), "Substantive repair without assessment completed")))
+      val seenAgain = take(ordinary.acceptC(CandidateObserved(snap)))
+      val exhausted = take(seenAgain.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "failed-again", directive)))
+      Then("the next dispatch reserves both counts and the unchanged automatic bound still exhausts")
+      checked.stage shouldBe Stage.Review
+      checked.reviewEvidence shouldBe empty
+      second.repairs shouldBe 2
+      second.ordinaryRepairs shouldBe 1
+      ordinary.repairs shouldBe 2
+      ordinary.ordinaryRepairs shouldBe 1
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.repairs shouldBe 2
+      exhausted.ordinaryRepairs shouldBe 1
+      When("one verified ContinueRepairs answer renews the window and the accepted Step later commits")
+      val renewed = take(exhausted.acceptC(RepairContinuationAdmitted("actual-human-approval")))
+      val nextStep = close(renewed, oid('c'), snap.tree)
+      Then("continuation reserves its new first batch and only the accepted commit starts the next Step at zero")
+      renewed.repairs shouldBe 1
+      renewed.ordinaryRepairs shouldBe 1
+      renewed.plan shouldBe selected
+      renewed.completed shouldBe exhausted.completed
+      nextStep.repairs shouldBe 0
+      nextStep.ordinaryRepairs shouldBe 0
+      nextStep.completed.map(_.step) shouldBe Vector("S1")
+      work(nextStep).step shouldBe Some("S2")
+    }
+
+    "reject ordinary exemptions at implementation crossed keys and already completed frontiers" in {
+      Given("an initial implementation with no reservation and a current reserved repair")
+      val start = initial
+      val seen = take(take(start.acceptC(SemanticCompleted(work(start), "Initial work completed")))
+        .acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+      val repair = take(seen.acceptC(RepairableChecksObserved(seen.candidate.get, Vector("focused-1"), "actual-failure", directive)))
+      val key = work(repair)
+      val crossed = Vector(key.copy(plan = "other-plan"), key.copy(revision = "other-revision"),
+        key.copy(phase = "other-phase"), key.copy(repository = "other-repository"),
+        key.copy(step = Some("S2")), key.copy(generation = key.generation + 1),
+        key.copy(kind = WorkKind.ImplementStep))
+      When("an exemption accompanies implementation or any crossed repair identity")
+      val implementation = start.acceptC(SemanticCompleted(work(start), "Impossible refund", true))
+      val rejected = crossed.map(value => repair.acceptC(SemanticCompleted(value, "Crossed refund", true)))
+      val completed = take(repair.acceptC(SemanticCompleted(key, "Matching repair completed", true)))
+      Then("invalid events fail without underflow or refunding another batch and replay cannot subtract twice")
+      implementation shouldBe a[Consequence.Failure[?]]
+      rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      start.ordinaryRepairs shouldBe 0
+      repair.repairs shouldBe 1
+      repair.ordinaryRepairs shouldBe 1
+      completed.ordinaryRepairs shouldBe 0
+      completed.repairs shouldBe 1
+      completed.acceptC(SemanticCompleted(key, "Repeated refund", true)) shouldBe a[Consequence.Failure[?]]
+      seen.acceptC(SemanticCompleted(key, "Wrong frontier", true)) shouldBe a[Consequence.Failure[?]]
+    }
+
+    "exhaust all ten automatic hygiene batches even when every ordinary reservation is exempt" in {
+      Given("the default ten-batch window and an actual hygiene completion for each dispatched batch")
+      val defaulted = Plan(plan.identity, plan.revision, plan.phase, plan.repository, plan.steps, plan.phaseChecks)
+      val start = take(startC(defaulted, base))
+      val snap = Snapshot(base.head, oid('d'))
+      val firstseen = take(take(start.acceptC(SemanticCompleted(work(start), "Initial work completed")))
+        .acceptC(CandidateObserved(snap)))
+      val first = take(firstseen.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "first-failure", directive)))
+      val hygiene = GoalPhaseNativeWork.Result("completed", "Adopted explanation corrected", Vector.empty,
+        fixAssessment = Some(GoalPhaseFixAssessment.Report(
+          GoalPhaseFixAssessment.Change("HYGIENE", Vector("one.example"), false, false,
+            "Correct the adopted meaning-dependent explanation", false, false),
+          GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "Explanation improved; actual checks remain required"))))
+      When("every admitted hygiene completion is followed by another actual selected failure")
+      val exhausted = (1 to 10).foldLeft(first) { (reserved, batch) =>
+        val semantic = reserved.next.asInstanceOf[Semantic]
+        val assigned = GoalPhaseNativeWork.Request("actual-instance", s"repair-$batch", "RepairStep", semantic.key.step,
+          semantic.key.generation, semantic.purpose, defaulted, base, Vector.empty, None, None, Some(directive),
+          review = Some(GoalPhaseNativeReview.Context(Vector("src/one.scala"), "Actual reviewed diff", Vector.empty)))
+        val exempt = take(GoalPhaseFixAssessment.ordinaryCountExemptC(assigned, hygiene))
+        val completed = take(reserved.acceptC(SemanticCompleted(semantic.key, hygiene.summary, exempt)))
+        val inspected = take(completed.acceptC(CandidateObserved(snap)))
+        take(inspected.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), s"failure-$batch", directive)))
+      }
+      Then("favorable advisory claims and zero ordinary consumption cannot dispatch an eleventh automatic batch")
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.repairs shouldBe 10
+      exhausted.ordinaryRepairs shouldBe 0
+      exhausted.pendingRepair shouldBe Some(directive)
+      exhausted.plan shouldBe defaulted
+      exhausted.acceptC(DecisionResumptionAdmitted("ordinary-resume")) shouldBe a[Consequence.Failure[?]]
+    }
+
+    "renew the same two-batch window once and consume its remaining batch without per-finding approval" in {
+      Given("a selected Step with two automatic batches in each repair window")
+      val selected = plan.copy(repairLimit = 2)
+      val start = take(startC(selected, base))
+      def _failure_(state: State, receipt: String): State = {
+        val completed = take(state.acceptC(SemanticCompleted(work(state), "Assigned source correction completed")))
+        val observed = take(completed.acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+        take(observed.acceptC(RepairableChecksObserved(observed.candidate.get, Vector("focused-1"), receipt, directive)))
+      }
+      When("the selected Step consumes both batches and a further actual failure exhausts the window")
+      val first = _failure_(start, "first-failure")
+      val second = _failure_(first, "second-failure")
+      val exhausted = _failure_(second, "exhausted-failure")
+      Then("Decision retains both consumed batches and exactly the repair continuation choices")
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.repairs shouldBe 2
+      exhausted.ordinaryRepairs shouldBe 2
+      GoalPhaseOrderedHumanDecision.choicesFor(exhausted) shouldBe Vector("ContinueRepairs", "Defer", "Cancel")
+      When("one independently admitted Human answer renews the window")
+      val renewed = take(exhausted.acceptC(RepairContinuationAdmitted("actual-renewal-answer")))
+      Then("the first renewed batch is reserved once under the same Plan and limit")
+      renewed.stage shouldBe Stage.Repair
+      renewed.repairs shouldBe 1
+      renewed.ordinaryRepairs shouldBe 1
+      renewed.plan shouldBe selected
+      renewed.base shouldBe exhausted.base
+      renewed.completed shouldBe exhausted.completed
+      renewed.generation shouldBe exhausted.generation + 1
+      renewed.acceptC(RepairContinuationAdmitted("repeated-answer")).isSuccess shouldBe false
+      When("fresh inspection and checks need one more batch within that renewed window")
+      val remaining = _failure_(renewed, "renewed-second-failure")
+      Then("the ordinary automatic transition reserves the second batch without another Human decision")
+      remaining.stage shouldBe Stage.Repair
+      remaining.repairs shouldBe 2
+      remaining.ordinaryRepairs shouldBe 2
+      remaining.pendingRepair shouldBe empty
+      When("a subsequent genuine failure exhausts that same selected limit again")
+      val again = _failure_(remaining, "renewed-exhausted-failure")
+      Then("the next window requires another actual Human decision without refunding consumed batches")
+      again.stage shouldBe Stage.Decision
+      again.repairs shouldBe 2
+      again.ordinaryRepairs shouldBe 2
+      again.plan.repairLimit shouldBe 2
+      again.pendingRepair shouldBe Some(directive)
+    }
+
+    "project only one of the two explicit issued Human choice vectors" in {
+      Given("the explicit ordinary Human question and the two declared three-choice presentations")
+      val issued = NativeHostHumanEvidenceFixture.goalQuestion
+      val decision = issued.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]]
+      def _presentation_(raw: String) = issued.copy(current = decision.copy(
+        presentation = MinimalPresentation("Actual question", raw)))
+      val ordinary = Vector("ResumeAssignedWork", "Defer", "Cancel")
+      val continued = Vector("ContinueRepairs", "Defer", "Cancel")
+      def _json_(choices: Vector[String]) = io.circe.Json.obj(
+        "choices" -> io.circe.Json.arr(choices.map(io.circe.Json.fromString)*)).noSpaces
+      When("the owning projection reads each actual issued presentation")
+      val ordinaryprojection = GoalPhaseOrderedHumanDecision.issuedChoicesC(issued)
+      val budgetprojection = GoalPhaseOrderedHumanDecision.issuedChoicesC(_presentation_(_json_(continued)))
+      Then("each question displays exactly its own three choices")
+      take(ordinaryprojection) shouldBe ordinary
+      take(budgetprojection) shouldBe continued
+      Given("absent, malformed, extra, duplicate and unknown choice declarations")
+      val invalid = Vector(null, "Original notice", "{}", "{\"choices\":null}", "{\"choices\":true}",
+        _json_(Vector.empty), _json_(ordinary :+ "ContinueRepairs"), _json_(continued :+ "Cancel"),
+        _json_(Vector("Unknown", "Defer", "Cancel")))
+      invalid.foreach { raw =>
+        When("a public projection consumes the unusable issued choices")
+        val result = GoalPhaseOrderedHumanDecision.issuedChoicesC(_presentation_(raw))
+        Then("it fails without replacing them with the global codec choices")
+        result.isSuccess shouldBe false
+      }
+    }
+
     "assign one fresh semantic repair for admitted known Step check failure and require fresh review" in {
-      Given("S1 is closed and S2 has its actual selected candidate with one remaining lifetime repair")
+      Given("S1 is closed and S2 has its actual selected candidate with one remaining window repair")
       val second = close(initial, oid('c'), oid('d'))
       val assigned = work(second)
       val ready = take(second.acceptC(SemanticCompleted(assigned, "S2 implementation ready")))
@@ -52,6 +513,7 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       Then("one allowance and generation are consumed while original plan, base and closed history remain")
       repair.stage shouldBe Stage.Repair
       repair.repairs shouldBe 1
+      repair.ordinaryRepairs shouldBe 1
       repair.generation shouldBe inspected.generation + 1
       repair.plan shouldBe plan
       repair.base shouldBe base
@@ -81,7 +543,7 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       accepted.repairs shouldBe 1
     }
 
-    "reject crossed or incomplete known failure repair events and exhausted allowances" in {
+    "reject crossed repair events and retain exhausted failure for one verified continuation" in {
       Given("a selected current Step Validation frontier")
       val ready = take(initial.acceptC(SemanticCompleted(work(initial), "ready")))
       val snap = Snapshot(base.head, oid('d'))
@@ -104,11 +566,39 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       val repair = take(inspected.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "first", directive)))
       val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "repaired")))
       val again = take(repaired.acceptC(CandidateObserved(snap)))
-      val exhausted = again.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "second", directive))
-      Then("the exhausted repair is rejected without resetting the lifetime count")
-      exhausted.isSuccess shouldBe false
+      val exhausted = take(again.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "second", directive)))
+      Then("the exhausted window retains the actual failure and cannot use ordinary resumption")
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.pendingRepair shouldBe Some(directive)
+      exhausted.candidate shouldBe Some(snap)
+      exhausted.checksReceipt shouldBe Some("second")
+      exhausted.repairs shouldBe 1
+      exhausted.ordinaryRepairs shouldBe 1
+      exhausted.acceptC(DecisionResumptionAdmitted("forged-resume")).isSuccess shouldBe false
       again.repairs shouldBe 1
       again.completed shouldBe empty
+      When("a verified continuation event renews only that exhausted window")
+      val continued = take(exhausted.acceptC(RepairContinuationAdmitted("verified-human-answer")))
+      Then("the new generation reserves its first batch once and clears stale acceptance")
+      continued.stage shouldBe Stage.Repair
+      continued.repairs shouldBe 1
+      continued.ordinaryRepairs shouldBe 1
+      continued.generation shouldBe exhausted.generation + 1
+      continued.pendingRepair shouldBe empty
+      continued.repairDirective shouldBe Some(directive)
+      continued.candidate shouldBe empty
+      continued.checksReceipt shouldBe empty
+      continued.reviewEvidence shouldBe empty
+      continued.acceptC(RepairContinuationAdmitted("same-answer")).isSuccess shouldBe false
+      When("the resumed repair completes but its fresh selected check fails again")
+      val fresh = take(take(continued.acceptC(SemanticCompleted(work(continued), "resumed repair")))
+        .acceptC(CandidateObserved(snap)))
+      val limited = take(fresh.acceptC(RepairableChecksObserved(snap, Vector("focused-1"), "third", directive)))
+      Then("the unchanged configured limit exhausts the renewed bounded window")
+      limited.stage shouldBe Stage.Decision
+      limited.repairs shouldBe 1
+      limited.ordinaryRepairs shouldBe 1
+      limited.plan shouldBe plan
     }
 
     "refuse to turn whole-Phase check failure into Step repair" in {
@@ -205,20 +695,27 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       checkedAgain.acceptC(ReviewAdmitted(oldReview, snap, "checks-2", "stale", ReviewOutcome.Accept))
         .shouldBe(a[Consequence.Failure[?]])
       val exhausted = take(checkedAgain.acceptC(ReviewAdmitted(work(checkedAgain), snap,
-        "checks-2", "second-repair-review", ReviewOutcome.Repair)))
+        "checks-2", "second-repair-review", ReviewOutcome.Repair, Some(directive))))
       exhausted.next shouldBe a[Decision]
       exhausted.repairs shouldBe 1
-      When("verified Human direction asks for the same semantic review again")
-      val resumed = take(exhausted.acceptC(DecisionResumptionAdmitted("actual-human-answer")))
-      Then("only review is assigned at a new generation; the exhausted repair allowance is not refunded")
-      resumed.stage shouldBe Stage.Review
+      exhausted.reviewEvidence shouldBe Some("second-repair-review")
+      exhausted.pendingRepair shouldBe Some(directive)
+      When("verified Human continuation renews that exhausted review repair window")
+      val resumed = take(exhausted.acceptC(RepairContinuationAdmitted("actual-human-answer")))
+      Then("the first resumed repair is reserved at a new generation without retaining review acceptance")
+      resumed.stage shouldBe Stage.Repair
       resumed.repairs shouldBe 1
+      resumed.ordinaryRepairs shouldBe 1
       resumed.plan shouldBe plan
-      resumed.candidate shouldBe exhausted.candidate
-      resumed.checksReceipt shouldBe exhausted.checksReceipt
+      resumed.candidate shouldBe empty
+      resumed.checksReceipt shouldBe empty
+      resumed.reviewEvidence shouldBe empty
       work(resumed).generation shouldBe exhausted.generation + 1
-      val stillExhausted = take(resumed.acceptC(ReviewAdmitted(work(resumed), snap,
-        "checks-2", "third-repair-review", ReviewOutcome.Repair)))
+      val inspectedagain = take(take(resumed.acceptC(SemanticCompleted(work(resumed), "continued repair")))
+        .acceptC(CandidateObserved(snap)))
+      val reviewedagain = take(inspectedagain.acceptC(ChecksObserved(snap, Vector("focused-1"), "checks-3", true)))
+      val stillExhausted = take(reviewedagain.acceptC(ReviewAdmitted(work(reviewedagain), snap,
+        "checks-3", "third-repair-review", ReviewOutcome.Repair, Some(directive))))
       stillExhausted.stage shouldBe Stage.Decision
       stillExhausted.repairs shouldBe 1
     }
@@ -232,6 +729,64 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       Then("the native effect must remain subject to observation instead of replay")
       result.isSuccess shouldBe false
       uncertain.decisionSource shouldBe Some(Stage.Closing)
+    }
+
+    "preserve consumed counts across ordinary decisions and invalid closure observations" in {
+      Given("a selected Step with one reserved repair batch")
+      val seen = take(take(initial.acceptC(SemanticCompleted(work(initial), "ready")))
+        .acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+      val repair = take(seen.acceptC(RepairableChecksObserved(seen.candidate.get, Vector("focused-1"), "failed", directive)))
+      When("semantic repair needs direction and an ordinary verified Resume repeats that work")
+      val decision = take(repair.acceptC(NativeFailure("Need semantic clarification")))
+      val resumed = take(decision.acceptC(DecisionResumptionAdmitted("verified-resume")))
+      Then("Resume and unrelated continuation events cannot refund the reserved batch")
+      resumed.repairs shouldBe 1
+      resumed.ordinaryRepairs shouldBe 1
+      decision.pendingRepair shouldBe empty
+      decision.acceptC(RepairContinuationAdmitted("foreign-answer")).isSuccess shouldBe false
+      decision.repairs shouldBe 1
+      decision.ordinaryRepairs shouldBe 1
+      When("the repeated repair obtains fresh acceptance but a checkpoint or crossed commit is offered")
+      val accepted = reviewed(resumed, oid('d'))
+      val commit = Commit(oid('c'), base.head, oid('d'))
+      accepted.acceptC(StepCommitObserved("unverified-checkpoint", commit)).isSuccess shouldBe false
+      val closing = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "actual-intent")))
+      closing.acceptC(StepCommitObserved("actual-intent", commit.copy(tree = oid('e')))).isSuccess shouldBe false
+      closing.acceptC(ClosureUnknown("actual-intent")).isSuccess shouldBe true
+      Then("only the matching accepted commit can reset both counters")
+      closing.repairs shouldBe 1
+      closing.ordinaryRepairs shouldBe 1
+      val closed = take(closing.acceptC(StepCommitObserved("actual-intent", commit)))
+      closed.repairs shouldBe 0
+      closed.ordinaryRepairs shouldBe 0
+      closed.completed shouldBe Vector(ClosedStep("S1", commit, "independent-review"))
+    }
+
+    "deny repair continuation for zero allowance, Phase failure and foreign generations" in {
+      Given("a genuine selected Step failure with zero automatic allowance")
+      val zero = take(startC(plan.copy(repairLimit = 0), base))
+      val seen = take(take(zero.acceptC(SemanticCompleted(work(zero), "ready")))
+        .acceptC(CandidateObserved(Snapshot(base.head, oid('d')))))
+      When("a direct repairable event and then a continuation are presented")
+      val decision = take(seen.acceptC(RepairableChecksObserved(seen.candidate.get, Vector("focused-1"), "zero", directive)))
+      Then("the failure stays Decision without continuation eligibility or a reserved batch")
+      decision.stage shouldBe Stage.Decision
+      decision.pendingRepair shouldBe empty
+      decision.repairs shouldBe 0
+      decision.ordinaryRepairs shouldBe 0
+      decision.acceptC(RepairContinuationAdmitted("answer")).isSuccess shouldBe false
+      Given("a whole-Phase failure after both accepted Step commits")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val phase = take(all.acceptC(CandidateObserved(Snapshot(oid('e'), oid('f')))))
+      val failed = take(phase.acceptC(ChecksObserved(phase.candidate.get, Vector("whole-phase"), "failed", false)))
+      When("continuation or a forged maximum-generation assignment tries to select new work")
+      val foreign = initial.acceptC(SemanticCompleted(work(initial).copy(generation = Long.MaxValue), "foreign"))
+      Then("neither grants repair authority or changes counters/history")
+      failed.acceptC(RepairContinuationAdmitted("answer")).isSuccess shouldBe false
+      failed.completed shouldBe all.completed
+      failed.repairs shouldBe 0
+      foreign.isSuccess shouldBe false
+      initial.repairs shouldBe 0
     }
 
     "retain an uncertain closure intent for observation without producing another command" in {
@@ -276,8 +831,8 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       pending.next shouldBe ObserveClosure("phase-intent", true)
     }
 
-    "carry consumed automatic repair allowance into the next Step without a reset" in {
-      Given("one automatic repair is allowed for the whole selected Phase")
+    "reset both active counters only when an accepted Step commit starts the next Step" in {
+      Given("one automatic repair is allowed in the active Step window")
       val ready = take(initial.acceptC(SemanticCompleted(work(initial), "ready")))
       val snap = Snapshot(base.head, oid('d'))
       val seen = take(ready.acceptC(CandidateObserved(snap)))
@@ -285,19 +840,22 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       When("S1 consumes its repair and later closes with a fresh review and actual admitted commit")
       val repair = take(checked.acceptC(ReviewAdmitted(work(checked), snap, "checks", "repair", ReviewOutcome.Repair, Some(directive))))
       val nextStep = close(repair, oid('c'), oid('d'))
-      Then("S2 retains the consumed allowance")
-      nextStep.repairs shouldBe 1
+      Then("S2 starts both counters at zero while retaining the accepted S1 reference")
+      nextStep.repairs shouldBe 0
+      nextStep.ordinaryRepairs shouldBe 0
+      nextStep.completed.map(_.step) shouldBe Vector("S1")
       nextStep.repairDirective shouldBe empty
       When("S2 independent review also requests repair")
       val ready2 = take(nextStep.acceptC(SemanticCompleted(work(nextStep), "ready")))
       val snap2 = Snapshot(oid('c'), oid('f'))
       val seen2 = take(ready2.acceptC(CandidateObserved(snap2)))
       val checked2 = take(seen2.acceptC(ChecksObserved(snap2, Vector("focused-2"), "checks2", true)))
-      val decision = take(checked2.acceptC(ReviewAdmitted(work(checked2), snap2, "checks2", "repair2", ReviewOutcome.Repair)))
-      Then("Workflow requests a decision rather than allocating another repair")
-      decision.next shouldBe a[Decision]
-      decision.repairs shouldBe 1
-      decision.completed shouldBe nextStep.completed
+      val repair2 = take(checked2.acceptC(ReviewAdmitted(work(checked2), snap2, "checks2", "repair2", ReviewOutcome.Repair, Some(directive))))
+      Then("the new Step owns its own single reserved repair")
+      repair2.stage shouldBe Stage.Repair
+      repair2.repairs shouldBe 1
+      repair2.ordinaryRepairs shouldBe 1
+      repair2.completed shouldBe nextStep.completed
     }
 
     "keep failed checks and Human-required review nonterminal" in {

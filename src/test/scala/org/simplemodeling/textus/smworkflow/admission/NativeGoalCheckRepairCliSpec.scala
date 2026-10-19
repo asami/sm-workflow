@@ -10,7 +10,7 @@ import NativeWorkflowCliFixture as F
 /** Separate ordinary commands retain actual failed checks and fresh validation.
   * Assigned semantic edits are specification data, not external provider proof.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -20,8 +20,15 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
     if (Files.exists(marker)) Files.readString(marker).linesIterator.map(_.toLong).toVector else Vector.empty
   }
   private def _submit(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,
-    reference: V.WorkflowArtifactReference): F.Result = {
-    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None)
+    reference: V.WorkflowArtifactReference, disposition: String = "FIXED"): F.Result = {
+    // The specification explicitly authors its intended claim for each actual
+    // issued repair ID. Production never supplies these claims on its behalf.
+    val work = request.work.get
+    val report = if (work.kind != "RepairStep") None else Some(V.GoalPhaseIssueReport(
+      work.issues.toVector.flatMap(_.issues).filter(i => i.repository == work.selectedPlan.repository &&
+        work.stepIdentity.contains(i.step) && i.status != "RESOLVED").map(i =>
+          V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None))))
+    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", NativeHostExecutionFixture.json(result.toRecord()).noSpaces,
       "--resultReference", NativeHostExecutionFixture.json(reference.toRecord()).noSpaces))
@@ -29,6 +36,76 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
 
   "Ordinary GoalPhase check repair commands" should afterWord(
     "in spec:normal-typed-sbt-validation, example:P61-COMMAND-B3, rule:owning-workflow") {
+    "retain an exhausted actual Test failure at the same ContinueRepairs question across separate commands" in {
+      Given("an isolated normal CLI task with one positive selected repair allowance")
+      val scenario = F.fresh("goal-check-repair-exhausted", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
+      val task = scenario.ownTask("check-repair-exhausted-task")
+      val value = Path.of(scenario.host.target.root).resolve("value.txt")
+      val started = scenario.start().business[V.GoalPhaseStartResult]
+      scenario.retain(task, started)
+      val implementation = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val original = implementation.work.get
+      original.selectedPlan.repairLimit shouldBe 1
+      When("the assigned implementation submits incorrect source and owning Advance runs actual Test")
+      Files.writeString(value, "incorrect\n")
+      _submit(scenario, implementation, V.WorkflowArtifactReference("fixture-cli-exhausted-implementation", "1"))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val repair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      Then("the first repair is assigned from a genuine typed failure")
+      repair.work.get.kind shouldBe "RepairStep"
+      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+      val firstpids = _executions(scenario.root)
+      firstpids.size shouldBe 1
+
+      Given("the only automatic repair batch still leaves the selected product input incorrect")
+      When("a separate Submit records that semantic repair and a separate Advance runs the fresh selected check")
+      Files.writeString(value, "still-incorrect\n")
+      _submit(scenario, repair, V.WorkflowArtifactReference("fixture-cli-exhausted-repair", "1"), "UNRESOLVED")
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      _executions(scenario.root) shouldBe firstpids
+      val question = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      Then("the actual public Human question offers exactly the bounded continuation choices")
+      question.kind shouldBe "Human"
+      question.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      question.sessionId shouldBe started.sessionId
+      question.submitOperation shouldBe Some(GoalPhaseOrderedHumanDecision.completionOperation.operation)
+      question.issuedWorkContext shouldBe None
+      val human = question.human.get
+      human.choices shouldBe Vector("ContinueRepairs", "Defer", "Cancel")
+      human.hostContext should not be empty
+      human.work.kind shouldBe "RepairStep"
+      human.work.selectedPlan shouldBe original.selectedPlan
+      human.work.originalBase shouldBe original.originalBase
+      human.work.completed shouldBe original.completed
+      human.requestingResult.outcome shouldBe "completed"
+      human.requestingResult.issueReport.get.dispositions.map(_.disposition) shouldBe Vector("UNRESOLVED")
+      human.work.issues.get.issues.map(_.identity) shouldBe repair.work.get.issues.get.issues.map(_.identity)
+      human.work.issues.get.issues.head.status shouldBe "OPEN"
+      human.work.issues.get.issues.head.latestDisposition shouldBe Some("UNRESOLVED")
+      human.work.issues.get.history shouldBe repair.work.get.issues.get.history
+      human.work.issues.get.movement.get.newIssues shouldBe 0
+      human.work.issues.get.movement.get.resolvedIssues shouldBe 0
+      human.rationale should include("repair window")
+      val failedpids = _executions(scenario.root)
+      failedpids.size shouldBe 2
+      failedpids.distinct.size shouldBe 2
+      failedpids.head shouldBe firstpids.head
+      failedpids should not contain ProcessHandle.current().pid()
+
+      Given("no Human answer or consent has been supplied to the exhausted repair window")
+      When("two further separate ordinary Advance commands redisplay the pending question")
+      val repeated = Vector.fill(2)(scenario.advance(task).business[V.GoalPhaseAdvanceResult])
+      Then("the exact question and host context persist without another check or fresh work")
+      repeated.foreach(_ shouldBe question)
+      repeated.map(_.repairProgress) shouldBe Vector.fill(2)(question.repairProgress)
+      _executions(scenario.root) shouldBe failedpids
+      Files.readString(value) shouldBe "still-incorrect\n"
+      scenario.retrieve(task) shouldBe started.sessionId
+      scenario.invocations.map(_.pid).distinct.size shouldBe scenario.invocations.size
+    }
+
     "carry actual failed checks through ordinary CLI repair and fresh validation" in {
       Given("an isolated selected normal SBT build, initial value.txt and one repair allowance in an owned task")
       val scenario = F.fresh("goal-check-repair", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
@@ -47,6 +124,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val implementation = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("the public Request belongs to the retained task and no product check has run")
       implementation.kind shouldBe "Request"
+      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
       implementation.sessionId shouldBe started.sessionId
       scenario.retrieve(task) shouldBe started.sessionId
       implementation.work.get.kind shouldBe "ImplementStep"
@@ -76,6 +154,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val repair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("a newly issued public Repair retains the actual failed candidate, typed receipt and original boundary")
       repair.kind shouldBe "Request"
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
       repair.sessionId shouldBe started.sessionId
       val failedwork = repair.work.get
       failedwork.kind shouldBe "RepairStep"
@@ -85,6 +164,15 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       failedwork.selectedPlan shouldBe original.selectedPlan
       failedwork.completed shouldBe original.completed
       failedwork.review shouldBe None
+      val tracked = failedwork.issues.get
+      tracked.issues.size shouldBe 1
+      tracked.issues.head.source shouldBe "TEST"
+      tracked.issues.head.status shouldBe "OPEN"
+      tracked.issues.head.step shouldBe failedwork.stepIdentity.get
+      tracked.issues.head.repository shouldBe failedwork.selectedPlan.repository
+      tracked.issues.head.sourceIdentity shouldBe Some("test:test")
+      tracked.movement.get.newIssues shouldBe 1
+      tracked.movement.get.resolvedIssues shouldBe 0
       failedwork.candidate shouldBe None
       failedwork.checksReceipt shouldBe None
       repair.submitOperation shouldBe implementation.submitOperation
@@ -121,9 +209,11 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val repeatedrepair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("the same public repair work and context retain the failure without another check")
       repeatedrepair shouldBe repair
+      repeatedrepair.repairProgress shouldBe repair.repairProgress
       repeatedrepair.work shouldBe repair.work
       repeatedrepair.issuedWorkContext shouldBe repair.issuedWorkContext
       repeatedrepair.work.get.checkFailure shouldBe Some(failure)
+      repeatedrepair.work.get.issues shouldBe Some(tracked)
       _executions(scenario.root) shouldBe failedpids
 
       Given("only the issued semantic repair of value.txt is assigned to the fixture")
@@ -146,7 +236,15 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       review.sessionId shouldBe started.sessionId
       val reviewedwork = review.work.get
       reviewedwork.kind shouldBe "ReviewStep"
+      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
       reviewedwork.checkFailure shouldBe None
+      val revalidated = reviewedwork.issues.get
+      revalidated.issues.map(_.identity) shouldBe tracked.issues.map(_.identity)
+      revalidated.issues.head.status shouldBe "RESOLVED"
+      revalidated.issues.head.latestDisposition shouldBe Some("FIXED")
+      revalidated.issues.head.evidenceReference should not be tracked.issues.head.evidenceReference
+      revalidated.movement.get.resolvedIssues shouldBe 1
+      revalidated.movement.get.newIssues shouldBe 0
       reviewedwork.stepIdentity shouldBe original.stepIdentity
       reviewedwork.originalBase shouldBe base
       reviewedwork.selectedPlan shouldBe original.selectedPlan

@@ -9,7 +9,9 @@ import NativeHostEvidence.Purpose
 /** Selected Human direction, not a question/result copy certificate.
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
-  * @version Oct. 14, 2026
+  *  version Oct. 14, 2026
+  * @version Oct. 19, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHostHumanScope {
   def supports(purpose: Purpose): Boolean = Set(Purpose.GoalHuman, Purpose.RepositoryHuman)(purpose)
@@ -51,10 +53,42 @@ private[smworkflow] object NativeHostHumanScope {
       case Some(value) => snapshotTarget(value)
     }
     checks <- optionalText(work, "checksReceipt")
-  } yield Json.obj("requestingResult" -> reference, "assignment" -> Json.fromJsonObject(fields
-    .add("stepIdentity", step.map(Json.fromString).getOrElse(Json.Null)).add("generation", Json.fromLong(generation))
-    .add("selectedPlan", Json.fromJsonObject(plan)).add("originalBase", base).add("candidate", candidate)
-    .add("checksReceipt", checks.map(Json.fromString).getOrElse(Json.Null))))
+    currentprogress <- GoalPhaseRepairProgress.selectOption(input)
+    assignedprogress <- GoalPhaseRepairProgress.selectOption(work)
+    observations <- input("result") match {
+      case None => Right(None)
+      case Some(value) => for {
+        result <- obj(value)
+        _ <- Either.cond(result.nonEmpty && result.keys.forall(Set("reviewObservations", "dependencyProposal")), (),
+          "Human result requires exact nonempty observations or dependency proposal fields")
+        observed <- result("reviewObservations") match {
+          case None => Right(None)
+          case Some(value) => GoalPhaseFindingRecording.normalizeObservations(value).map(Some(_))
+        }
+        dependency <- result("dependencyProposal") match {
+          case None => Right(None)
+          case Some(value) => value.as[GoalPhaseDependencyScope.Proposal].left.map(_.message)
+            .map(value => Some(summon[io.circe.Encoder[GoalPhaseDependencyScope.Proposal]].apply(value)))
+        }
+        selected = observed.fold(JsonObject.empty)(value => JsonObject("reviewObservations" -> value))
+      } yield Some(Json.fromJsonObject(dependency.fold(selected)(value => selected.add("dependencyProposal", value))))
+    }
+    revision <- input("planRevision") match {
+      case None => Right(None)
+      case Some(value) => value.as[GoalPhasePlanRevision.Captured].left.map(_.message)
+        .map(value => Some(summon[io.circe.Encoder[GoalPhasePlanRevision.Captured]].apply(value)))
+    }
+    assigned = fields.add("stepIdentity", step.map(Json.fromString).getOrElse(Json.Null))
+      .add("generation", Json.fromLong(generation)).add("selectedPlan", Json.fromJsonObject(plan))
+      .add("originalBase", base).add("candidate", candidate)
+      .add("checksReceipt", checks.map(Json.fromString).getOrElse(Json.Null))
+    selected = Json.obj("requestingResult" -> reference, "assignment" -> Json.fromJsonObject(
+      assignedprogress.fold(assigned)(value => assigned.add("repairProgress", value))))
+  } yield selected.mapObject { fields =>
+    val progress = currentprogress.fold(fields)(value => fields.add("repairProgress", value))
+    val revised = revision.fold(progress)(value => progress.add("planRevision", value))
+    observations.fold(revised)(value => revised.add("result", value))
+  }
 
   private def repositorySource(input: JsonObject): Either[String, Json] = for {
     reference <- at(input, "requestingResult").flatMap(referenceTarget)

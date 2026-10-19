@@ -173,6 +173,8 @@ OperationResult
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | repositoryRepair | RepositorySyncNativeMergeRepairRequest | ? |
 | validation | GoalPhaseNativeValidationView | ? |
+| repairProgress | GoalPhaseRepairProgress | ? |
+| findingRecording | GoalPhaseFindingRecordingState | ? |
 
 ## GoalPhaseOrderedStep
 
@@ -300,6 +302,16 @@ OperationResult
 | reason | string | 1 |
 | findings | string | * |
 
+## GoalPhaseRepairProgress
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| automaticCount | int | 1 |
+| ordinaryCount | int | 1 |
+| limit | int | 1 |
+
 ## GoalPhaseWorkRequest
 
 - input-kind :: COMMAND
@@ -323,6 +335,8 @@ OperationResult
 | review | GoalPhaseNativeReviewContext | ? |
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
 | checkFailure | GoalPhaseCheckFailureContext | ? |
+| issues | GoalPhaseIssueState | ? |
+| repairProgress | GoalPhaseRepairProgress | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -333,6 +347,7 @@ OperationResult
 | requestingResult | GoalPhaseWorkResult | 1 |
 | choice | string | 1 |
 | rationale | string | 1 |
+| decisionReference | WorkflowArtifactReference | ? |
 
 ## GoalPhaseOrderedDecisionResultReference
 
@@ -355,6 +370,7 @@ OperationResult
 | requestingResult | GoalPhaseOrderedDecisionResultReference | 1 |
 | result | GoalPhaseWorkResult | 1 |
 | reason | string | 1 |
+| repairProgress | GoalPhaseRepairProgress | ? |
 
 ## GoalPhaseOrderedDecisionAnswer
 
@@ -424,6 +440,8 @@ OperationResult
 |------+------|--------------|
 | identity | string | 1 |
 | kind | string | 1 |
+| hostIdentity | string | ? |
+| operation | org.goldenport.record.Record | ? |
 
 ## GoalPhaseNativeValidationView
 
@@ -437,6 +455,7 @@ OperationResult
 | selectedChecks | GoalPhaseNativeValidationCheck | * |
 | checks | GoalPhaseNativeCheckReceipt | * |
 | outcome | string | ? |
+| metadata | org.goldenport.record.Record | * |
 
 ## GoalPhaseNativeReviewContext
 
@@ -448,6 +467,7 @@ OperationResult
 | diff | string | 1 |
 | checks | GoalPhaseNativeCheckReceipt | * |
 | hostContext | WorkflowHostReviewContext | ? |
+| metadata | org.goldenport.record.Record | * |
 
 ## GoalPhaseCheckFailureContext
 
@@ -471,8 +491,244 @@ OperationResult
 | summary | string | 1 |
 | findings | string | * |
 | acceptance | GoalPhaseAcceptanceReport | ? |
+| fixAssessment | GoalPhaseFixAssessment | ? |
+| issueReport | GoalPhaseIssueReport | ? |
+| planRevision | org.goldenport.record.Record | ? |
+| reviewObservations | GoalPhaseReviewObservations | ? |
+| dependencyProposal | org.goldenport.record.Record | ? |
+
+## GoalPhaseReviewObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| category | string | 1 |
+| summary | string | 1 |
+| rationale | string | 1 |
+
+## GoalPhaseReviewObservations
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| items | GoalPhaseReviewObservation | * |
+
+## GoalPhaseTrackedIssue
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| repository | string | 1 |
+| step | string | 1 |
+| source | string | 1 |
+| sourceIdentity | string | ? |
+| summary | string | 1 |
+| evidenceReference | string | 1 |
+| status | string | 1 |
+| latestDisposition | string | ? |
+
+## GoalPhaseIssueTransition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issueIdentity | string | 1 |
+| previousStatus | string | ? |
+| status | string | 1 |
+| evidenceReference | string | 1 |
+
+## GoalPhaseIssueMovement
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| evidenceReference | string | 1 |
+| openIssues | int | 1 |
+| resolvedIssues | int | 1 |
+| newIssues | int | 1 |
+| reopenedIssues | int | 1 |
+| correspondenceKnown | boolean | 1 |
+
+## GoalPhaseIssueState
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issues | GoalPhaseTrackedIssue | * |
+| history | GoalPhaseIssueTransition | * |
+| movement | GoalPhaseIssueMovement | ? |
+
+## GoalPhaseIssueDisposition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issueIdentity | string | 1 |
+| disposition | string | 1 |
+| rationale | string | 1 |
+| findingOrdinal | int | ? |
+
+## GoalPhaseIssueReport
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| dispositions | GoalPhaseIssueDisposition | * |
+
+## GoalPhaseFixChangeAssessment
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| changeClass | string | 1 |
+| affectedLogicalUnits | string | * |
+| crossFileLogic | boolean | 1 |
+| minorBugFix | boolean | 1 |
+| rationale | string | 1 |
+| requirementChanged | boolean | 1 |
+| contractChanged | boolean | 1 |
+
+## GoalPhaseFixConvergenceAssessment
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| confidence | string | 1 |
+| rationale | string | 1 |
+
+## GoalPhaseFixAssessment
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| change | GoalPhaseFixChangeAssessment | 1 |
+| convergence | GoalPhaseFixConvergenceAssessment | 1 |
 
 ## GoalPhaseWorkSubmissionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
+## GoalPhaseFindingObservationSource
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceReference | WorkflowArtifactReference | 1 |
+| sourceKind | string | 1 |
+| stepIdentity | string | ? |
+| observation | GoalPhaseReviewObservation | 1 |
+
+## GoalPhaseFindingRecordingItem
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceReference | WorkflowArtifactReference | 1 |
+| sourceKind | string | 1 |
+| stepIdentity | string | ? |
+| observation | GoalPhaseReviewObservation | 1 |
+| destination | string | 1 |
+
+## GoalPhaseFindingRecordingRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| instanceIdentity | string | 1 |
+| sourceRevision | string | 1 |
+| batchIdentity | string | 1 |
+| selectedPlan | GoalPhaseOrderedPlan | 1 |
+| originalBase | GoalPhaseNativeSnapshot | 1 |
+| completed | GoalPhaseClosedStep | * |
+| stepIdentity | string | ? |
+| items | GoalPhaseFindingRecordingItem | * |
+| requiredIssues | GoalPhaseIssueState | ? |
+| repairProgress | GoalPhaseRepairProgress | ? |
+
+## GoalPhaseFindingSavedSection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| file | string | 1 |
+| section | string | 1 |
+
+## GoalPhaseFindingRecordingItemResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceReference | WorkflowArtifactReference | 1 |
+| identity | string | 1 |
+| outcome | string | 1 |
+| records | GoalPhaseFindingSavedSection | * |
+| rationale | string | 1 |
+
+## GoalPhaseFindingRecordingResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| summary | string | 1 |
+| items | GoalPhaseFindingRecordingItemResult | * |
+
+## GoalPhaseFindingRecordingCompleted
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| request | GoalPhaseFindingRecordingRequest | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| result | GoalPhaseFindingRecordingResult | 1 |
+
+## GoalPhaseFindingRecordingState
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| pending | GoalPhaseFindingObservationSource | * |
+| request | GoalPhaseFindingRecordingRequest | ? |
+| completed | GoalPhaseFindingRecordingCompleted | * |
+
+## GoalPhaseFindingRecordingSubmissionResult
 
 ### EXTENDS
 
@@ -819,7 +1075,7 @@ OperationResult
 
 ## GoalPhaseWorkflow
 
-version = goal-phase-business-operation-v6
+version = goal-phase-business-operation-v7
 
 ### COMPOSITE-STATEMACHINE
 
@@ -836,6 +1092,12 @@ subject-type = GoalPhaseWorkRequest
 state-machine = GoalPhaseOrderedDecisionContext
 subject = orderedQuestion
 subject-type = GoalPhaseOrderedDecisionRequest
+
+##### findingRecords
+
+state-machine = GoalPhaseFindingRecordingContext
+subject = findingBatch
+subject-type = GoalPhaseFindingRecordingRequest
 
 #### STATE
 
@@ -870,71 +1132,71 @@ subject-type = GoalPhaseOrderedDecisionRequest
 ##### pending
 
 state = Pending
-when = phase.Idle, orderedDecision.Retained
+when = phase.Idle, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-implementation
 
 state = OrderedImplementation
-when = phase.Implementation, orderedDecision.Retained
+when = phase.Implementation, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-inspection
 
 state = OrderedInspectCandidate
-when = phase.InspectCandidate, orderedDecision.Retained
+when = phase.InspectCandidate, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-validation
 
 state = OrderedValidation
-when = phase.Validation, orderedDecision.Retained
+when = phase.Validation, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-review
 
 state = OrderedReview
-when = phase.Review, orderedDecision.Retained
+when = phase.Review, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-repair
 
 state = OrderedRepair
-when = phase.Repair, orderedDecision.Retained
+when = phase.Repair, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-closing
 
 state = OrderedClosing
-when = phase.Closing, orderedDecision.Retained
+when = phase.Closing, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-inspection
 
 state = PhaseInspection
-when = phase.PhaseInspection, orderedDecision.Retained
+when = phase.PhaseInspection, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-validation
 
 state = PhaseValidation
-when = phase.PhaseValidation, orderedDecision.Retained
+when = phase.PhaseValidation, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-review
 
 state = PhaseReview
-when = phase.PhaseReview, orderedDecision.Retained
+when = phase.PhaseReview, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-closing
 
 state = PhaseClosing
-when = phase.PhaseClosing, orderedDecision.Retained
+when = phase.PhaseClosing, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-decision
 
 state = PhaseDecision
-when = phase.Decision, orderedDecision.Retained
+when = phase.Decision, orderedDecision.Retained, findingRecords.Retained
 
 ##### phase-closed
 
 state = PhaseClosed
-when = phase.Closed, orderedDecision.Retained
+when = phase.Closed, orderedDecision.Retained, findingRecords.Retained
 
 #### INITIAL
 
-phase.Idle, orderedDecision.Retained
+phase.Idle, orderedDecision.Retained, findingRecords.Retained
 
 #### ACTION
 
@@ -992,6 +1254,12 @@ kind = OPERATION
 operation = presentOrderedGoalDecision
 input = orderedDecision.subject
 
+##### RecordGoalFindings
+
+kind = OPERATION
+operation = recordGoalFindings
+input = findingRecords.subject
+
 ### REQUIRED-OPERATION
 
 #### goal-phase-implementation-capability
@@ -1014,6 +1282,10 @@ action = ReviewWholePhase
 
 action = PresentOrderedGoalDecision
 
+#### goal-phase-finding-recording-capability
+
+action = RecordGoalFindings
+
 ### OPERATION
 
 #### advanceGoalPhase
@@ -1028,9 +1300,21 @@ operation = GoalPhaseService.submitGoalPhaseWorkResult
 
 operation = GoalPhaseService.submitGoalPhaseOrderedDecision
 
+#### submitGoalPhaseFindingRecording
+
+operation = GoalPhaseService.submitGoalPhaseFindingRecording
+
 #### startGoalPhase
 
 operation = GoalPhaseService.startGoalPhase
+
+# STATE-MACHINE
+
+## GoalPhaseFindingRecordingContext
+
+### STATE
+
+#### Retained
 
 # STATE-MACHINE
 
@@ -1311,6 +1595,11 @@ to = Closed
 on = phase-repository-closed
 
 #### Decision
+
+##### TRANSITION
+
+to = Implementation
+on = human-plan-revision-adopted
 
 ##### TRANSITION
 
@@ -3315,11 +3604,43 @@ GoalPhaseWorkResult
 
 GoalPhaseWorkSubmissionResult
 
+#### submitGoalPhaseFindingRecording
+
+##### DESCRIPTION
+
+Consume the exact finite recording result for the pending accepted review observations. Return committed acceptance only. File edits are the assigned semantic task; Submit runs no File, Git or SBT effect, changes no repair counts and issues no next work. Partial and failed outcomes remain visible without automatic retry.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseFindingRecordingResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | GoalPhaseFindingRecordingResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseFindingRecordingSubmissionResult
+
 #### submitGoalPhaseOrderedDecision
 
 ##### DESCRIPTION
 
-Consume the pending ordered Human choice/rationale and actual evidence reference. Independent host Human evidence owns consent; authentication or AI output is not consent. ResumeAssignedWork, Defer and Cancel preserve their existing meaning without amending the plan or refunding repairs. Return actual committed acceptance/message; following work requires explicit Advance.
+Consume the pending ordered Human choice/rationale and actual evidence reference. Independent host Human evidence owns consent; authentication or AI output is not consent. The actual question admits ResumeAssignedWork, Defer and Cancel for semantic/document decisions; ContinueRepairs, Defer and Cancel for an exhausted positive Step repair window; or AdoptPlanRevision, RejectPlanRevision, Defer and Cancel for a saved complete bounded Plan revision. ContinueRepairs renews only that window and reserves its first repair batch. AdoptPlanRevision selects only the captured proposal; RejectPlanRevision resumes the original Plan with explicit rejection context. Counts and history remain. No answer executes work, broadens a host profile, accepts review or closes work. Return actual committed acceptance/message; following work requires explicit Advance.
 
 ##### TYPE
 
@@ -3844,6 +4165,38 @@ RepositorySyncConflictResult
 
 # SERVICE
 
+## GoalPhaseFindingRecordingService
+
+### DESCRIPTION
+
+Finite clerical recording of accepted nonblocking review observations. The issued Request owns exact Markdown destinations; this declaration grants no executor or repository authority.
+
+### OPERATION
+
+#### recordGoalFindings
+
+##### DESCRIPTION
+
+Record the finite assigned nonblocking observations in literal selected Markdown destinations, preserving existing content. Return honest saved file/section outcomes. This declaration installs no executor or authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseFindingRecordingRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseFindingRecordingResult
+
+# SERVICE
+
 ## GoalPhaseImplementationService
 
 ### DESCRIPTION
@@ -3891,7 +4244,10 @@ GoalPhaseWorkResult
 Required Human channel for a Workflow-issued ordered GoalPhase semantic decision.
 Return only an exact declared answer through its assigned completion Operation.
 The question retains the original work and requesting semantic result; neither
-presentation nor an answer selects commands, another Plan or new repair authority.
+presentation nor an answer selects commands. Only admitted ContinueRepairs
+renews an exhausted positive Step repair window. Only an offered and independently
+admitted AdoptPlanRevision selects the saved captured complete bounded Plan.
+RejectPlanRevision retains the original Plan and explicit rejection rationale.
 
 ### OPERATION
 
@@ -3900,7 +4256,8 @@ presentation nor an answer selects commands, another Plan or new repair authorit
 ##### DESCRIPTION
 
 Present the original assigned work, retained requesting result and Workflow
-choices to the Human. Return ResumeAssignedWork, Defer or Cancel with rationale
+choices to the Human. Return the exact offered ResumeAssignedWork, ContinueRepairs,
+AdoptPlanRevision, RejectPlanRevision, Defer or Cancel with rationale
 as GoalPhaseOrderedDecisionAnswer. Do not forge consent, choose a successor
 stage, approve a review, edit files or execute commands. Independent Human
 evidence admission remains the owning host's responsibility.
@@ -5071,6 +5428,7 @@ GoalPhaseWorkSubmissionResult
 | review | GoalPhaseNativeReviewContext | ? |
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
 | checkFailure | GoalPhaseCheckFailureContext | ? |
+| issues | GoalPhaseIssueState | ? |
 
 ## GoalPhaseHumanQuestion
 
@@ -5083,6 +5441,7 @@ GoalPhaseWorkSubmissionResult
 | rationale | string | 1 |
 | choices | string | * |
 | hostContext | WorkflowHostHumanContext | ? |
+| planRevision | org.goldenport.record.Record | ? |
 
 ## GoalPhaseCompletionResult
 

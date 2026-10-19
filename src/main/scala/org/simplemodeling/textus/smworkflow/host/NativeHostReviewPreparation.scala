@@ -4,7 +4,7 @@ import io.circe.Json
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseNativeWork, NativeHostEvidence,
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhaseRepairProgress, NativeHostEvidence,
   RepositorySyncNativeMergeReview, ThreeWorkflowHostEvidencePorts, WorkflowSbtValidation}
 import io.circe.syntax.*
 import org.simplemodeling.textus.smworkflow.value as V
@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent host owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeHostReviewPreparation {
@@ -23,7 +24,7 @@ object NativeHostReviewPreparation {
     "instanceIdentity" -> "instance_identity", "protocolVersion" -> "protocol_version")
   private val _goal_names = Vector("sourceRevision" -> "source_revision", "workKind" -> "work_kind",
     "checksReceipt" -> "checks_receipt", "changedPaths" -> "changed_paths",
-    "effectiveAcceptance" -> "effective_acceptance")
+    "effectiveAcceptance" -> "effective_acceptance", "validationMetadata" -> "validation_metadata")
   private val _repository_names = Vector("validatedRevision" -> "validated_revision", "localTip" -> "local_tip",
     "remoteTip" -> "remote_tip", "indexTree" -> "index_tree", "validationMode" -> "validation_mode",
     "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks")
@@ -40,10 +41,17 @@ object NativeHostReviewPreparation {
     else if (result.acceptance == null) Consequence.stateConflict("Goal review preparation has no report option")
     else {
       val report = GoalPhaseAcceptanceBoundary.internalReport(result.acceptance)
-      report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC).flatMap(_ =>
-        _prepare_c(context, NativeHostEvidence.Purpose.GoalReview, GoalPhaseNativeWork.resultCodec.typeIdentity,
+      for {
+        _ <- report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC)
+        assessment <- GoalPhaseFixAssessment.internalReportC(result.fixAssessment)
+        issues <- GoalPhaseFixIssues.internalReportC(result.issueReport)
+        revision <- GoalPhasePlanRevision.fromPublicProposalC(result.planRevision)
+        observations <- GoalPhaseFindingRecording.internalObservationsC(result.reviewObservations)
+        dependency <- GoalPhaseDependencyScope.fromPublicProposalC(result.dependencyProposal)
+        prepared <- _prepare_c(context, NativeHostEvidence.Purpose.GoalReview, GoalPhaseNativeWork.resultCodec.typeIdentity,
           resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowHostEvidencePorts.goalReviewVerdict(
-            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report))))
+            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report, assessment, issues, revision, observations, dependency)))
+      } yield prepared
     }
 
   def repositoryC(context: V.WorkflowHostReviewContext, result: V.RepositorySyncNativeMergeReviewResult,
@@ -103,6 +111,11 @@ object NativeHostReviewPreparation {
   private def _target_c(value: Json, purpose: NativeHostEvidence.Purpose): Consequence[Json] =
     if (purpose == NativeHostEvidence.Purpose.GoalReview) for {
       selected <- _project_c(value, _goal_names)
+      metadata <- selected.hcursor.downField("validationMetadata").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => GoalPhaseNativeMetadata.normalizeBatches(value).fold(
+          Consequence.stateConflict(_), normalized => Consequence.success(Some(normalized)))
+      }
       declaration <- selected.hcursor.downField("testChecks").focus match {
         case None => Consequence.success(Option.empty[Json])
         case Some(value) => _checks_c(value).map(Some(_))
@@ -113,9 +126,27 @@ object NativeHostReviewPreparation {
       }
       _ <- if (declaration.nonEmpty && wire.nonEmpty && declaration != wire)
         Consequence.stateConflict("Review preparation has contradictory names for testChecks") else Consequence.unit
+      progressdeclaration <- selected.hcursor.downField("repairProgress").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => _progress_c(value).map(Some(_))
+      }
+      progresswire <- selected.hcursor.downField("repair_progress").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => _progress_c(value).map(Some(_))
+      }
+      _ <- if (progressdeclaration.nonEmpty && progresswire.nonEmpty && progressdeclaration != progresswire)
+        Consequence.stateConflict("Review preparation has contradictory names for repairProgress") else Consequence.unit
+      issues <- selected.hcursor.downField("issues").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => _issues_c(value).map(Some(_))
+      }
     } yield selected.mapObject { fields =>
-      val canonical = fields.remove("test_checks")
-      declaration.orElse(wire).fold(canonical)(checks => canonical.add("testChecks", checks))
+      val canonical = metadata.fold(fields.remove("test_checks"))(
+        value => fields.remove("test_checks").add("validationMetadata", value))
+      val checks = declaration.orElse(wire).fold(canonical)(checks => canonical.add("testChecks", checks))
+      val withissues = issues.fold(checks)(value => checks.add("issues", value))
+      progressdeclaration.orElse(progresswire).fold(withissues.remove("repair_progress"))(
+        value => withissues.remove("repair_progress").add("repairProgress", value))
     }
     else for {
       selected <- _project_c(value, _repository_names)
@@ -123,6 +154,12 @@ object NativeHostReviewPreparation {
         .getOrElse(Consequence.stateConflict("Review preparation requires a checks array"))
       projected <- _checks_c(checks)
     } yield selected.mapObject(_.add("checks", projected))
+
+  private def _progress_c(value: Json): Consequence[Json] = for {
+    normalized <- _project_c(value, Vector("automaticCount" -> "automatic_count", "ordinaryCount" -> "ordinary_count"))
+    snapshot <- normalized.as[GoalPhaseRepairProgress.Snapshot].fold(
+      error => Consequence.stateConflict(error.message), Consequence.success)
+  } yield snapshot.asJson
 
   private def _checks_c(value: Json): Consequence[Json] = for {
     checks <- value.asArray.map(Consequence.success)
@@ -139,6 +176,34 @@ object NativeHostReviewPreparation {
         }))
       } yield values :+ sbt.fold(selected)(facts => selected.mapObject(_.add("sbt", facts))) }
   } yield Json.fromValues(projected)
+
+  // Opaque Record projection may use declaration or wire names. Normalize
+  // only those names, then apply the same strict business-state decoder.
+  private def _issues_c(value: Json): Consequence[Json] = for {
+    fields <- value.asObject.map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Review preparation requires structured issues"))
+    issues <- _issue_array_c(fields("issues"), Vector("sourceIdentity" -> "source_identity",
+      "evidenceReference" -> "evidence_reference", "latestDisposition" -> "latest_disposition"))
+    history <- _issue_array_c(fields("history"), Vector("issueIdentity" -> "issue_identity",
+      "previousStatus" -> "previous_status", "evidenceReference" -> "evidence_reference"))
+    movement <- fields("movement") match {
+      case None => Consequence.success(Option.empty[Json])
+      case Some(value) => _project_c(value, Vector("evidenceReference" -> "evidence_reference",
+        "openIssues" -> "open_issues", "resolvedIssues" -> "resolved_issues", "newIssues" -> "new_issues",
+        "reopenedIssues" -> "reopened_issues", "correspondenceKnown" -> "correspondence_known")).map(Some(_))
+    }
+    normalized = Json.fromJsonObject(movement.fold(fields.add("issues", issues).add("history", history))(
+      m => fields.add("issues", issues).add("history", history).add("movement", m)))
+    state <- normalized.as[GoalPhaseFixIssues.State].fold(error => Consequence.stateConflict(error.message), Consequence.success)
+  } yield state.asJson
+
+  private def _issue_array_c(value: Option[Json], names: Vector[(String, String)]): Consequence[Json] =
+    value.flatMap(_.asArray).map { array =>
+      array.foldLeft(Consequence.success(Vector.empty[Json])) { (prior, entry) => for {
+        entries <- prior
+        projected <- _project_c(entry, names)
+      } yield entries :+ projected }.map(Json.fromValues)
+    }.getOrElse(Consequence.stateConflict("Review preparation requires issue arrays"))
 
   private def _sbt_c(value: Json): Consequence[Json] = for {
     fields <- value.asObject.map(Consequence.success)

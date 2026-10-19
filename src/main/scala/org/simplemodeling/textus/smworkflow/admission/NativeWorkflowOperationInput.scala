@@ -10,7 +10,9 @@ import org.goldenport.record.{Record, RecordPresentable}
 /** Named business values at the Operation boundary. JSON is a representation
   * of the named value, never a universal command or completion envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 12, 2026
+  *  version Oct. 12, 2026
+  * @version Oct. 18, 2026
+  * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInput {
   def valueC[A](request: Request, name: String)(using reader: ValueReader[A]): Consequence[A] =
@@ -84,8 +86,8 @@ private[smworkflow] object NativeWorkflowOperationInput {
   }
 
   private def _json_record_c(value: Json, name: String): Consequence[Record] =
-    value.asObject.map(fields => Consequence.success(Record.dataAuto(
-      fields.toVector.map((key, value) => key -> _json_value(value))*)))
+    value.asObject.map(fields => Consequence.success(Record.createFull(
+      fields.toVector.map((key, value) => key -> _json_value(value)))))
       .getOrElse(_invalid("Workflow named parameter " + name + " requires an object"))
 
   // Record's existing transport vocabulary contains heterogeneous primitive
@@ -93,7 +95,7 @@ private[smworkflow] object NativeWorkflowOperationInput {
   private def _json_value(value: Json): Any = value.fold(
     null, identity, number => number.toBigDecimal.fold[Any](number.toString)(identity), identity,
     values => values.map(_json_value).toVector,
-    fields => Record.dataAuto(fields.toVector.map((key, value) => key -> _json_value(value))*))
+    fields => Record.createFull(fields.toVector.map((key, value) => key -> _json_value(value))))
 
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict(reason)
 }

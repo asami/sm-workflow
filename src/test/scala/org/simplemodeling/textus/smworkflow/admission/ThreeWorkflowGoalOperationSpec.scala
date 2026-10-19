@@ -28,8 +28,8 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  *  version Oct. 15, 2026
-  * @version Oct. 16, 2026
+  *  version Oct. 16, 2026
+  * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -127,14 +127,15 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         current(ids.head).revision shouldBe afterfirst.head.revision
       }
     }
-    for ((withDecisions, mapped, boundary) <- Vector((false, false, false), (true, false, false),
-      (true, true, false), (true, true, true))) {
+    for ((withDecisions, mapped, boundary, renewWindow) <- Vector((false, false, false, false), (true, false, false, false),
+      (true, true, false, false), (true, true, true, false), (false, false, false, true))) {
     "Public Goal review and closing authority preparation" should afterWord(
       "in spec:native-host-review-preparation, example:E1, rules:R1,R3,R4,R5, phase:6; spec:native-host-authority-preparation, example:E5, rules:R1,R4,R5, phase:6; spec:native-host-authority-preparation, example:E6, rules:R1,R4,R5, phase:6" +
         (if (mapped) "; spec:goal-phase-native-execution, example:E5,E6, rules:R1,R2,R3,R4,R5,R6, phase:6; spec:native-host-execution, example:E7,E8,E9, rules:R1,R2,R3,R4,R5, phase:6" else "") +
         (if (boundary) "; spec:goal-phase-acceptance-boundary, example:E7,E8,E9, rules:R1,R2,R3,R4,R5,R6, phase:6" else "")
     ) {
-    (if (boundary) "close the configured fixture Phase with saved explicit exclusions and independently prepared bounded repair"
+    (if (renewWindow) "retain exhausted independent review and renew one bounded repair window through the actual Human question"
+      else if (boundary) "close the configured fixture Phase with saved explicit exclusions and independently prepared bounded repair"
       else if (mapped) "close the mapped fixture Phase with saved dispositions, replacement mapping and verified Human resumption"
       else if (withDecisions) "close the whole ordered Phase after verified Human resumption of implementation, review, repair and Phase review"
       else "close the whole ordered two-Step Phase after assigned repair, checks, reviews and actual repository closure") in {
@@ -218,7 +219,9 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
       var hostsessions = Map.empty[String, NativeWorkflowHostExecution.Prepared]
       var usedreviewalternate = false
       val sessions = Vector("issue") ++ (if (mapped) Vector("pending-replacement") else Vector.empty) ++
-        Vector("implement-1", "review-repair", "repair", "review-1", "implement-2", "review-2", "phase-review", "repository-close")
+        Vector("implement-1", "review-repair", "repair") ++
+        (if (renewWindow) Vector("review-exhausted", "repair-continued") else Vector.empty) ++
+        Vector("review-1", "implement-2", "review-2", "phase-review", "repository-close")
       for (session <- sessions) _with_runtime_(root, "Goal", Some(host), _episode_parameters_(session)) { (owner, component, actor, prepare) =>
         val invocationcontext = actor
         Given("every normal episode uses the actual invocation session across managed SQLite runtimes")
@@ -308,7 +311,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           else reviewcontext shouldBe empty
           work.get
         }
-        def _question_(): WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing] = {
+        def _question_(continuing: Boolean = false): WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing] = {
           Given("O-Goal: a native ordered Human question after the assigned semantic result")
           When("normal Advance displays that question without a WorkOrder context")
           val response = _invoke_[V.GoalPhaseAdvanceResult]("advanceGoalPhase", advance)
@@ -316,6 +319,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           response.kind shouldBe "Human"
           response.issuedWorkContext shouldBe None
           response.human.get.work.kind shouldBe _input_(assigned.get).kind
+          response.human.get.choices shouldBe Vector(if (continuing) "ContinueRepairs" else "ResumeAssignedWork", "Defer", "Cancel")
           humancontext = response.human.get.hostContext
           humancontext should not be empty
           var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
@@ -386,8 +390,27 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               B.Observation(condition.identity, status, detail)
             }, Vector("Consider extra robustness as a separate future task"))
           }
+          // These are explicit specification claims about the actual assignment,
+          // never production-generated FIXED or independent coverage defaults.
+          val issues = input.issues.map { state =>
+            val relevant = state.issues.filter(GoalPhaseFixIssues.relevant(input, _))
+            val entries = if (input.kind == "RepairStep") relevant.filter(GoalPhaseFixIssues.unresolved).map(i =>
+              GoalPhaseFixIssues.Disposition(i.identity, if (outcome == "completed") "FIXED" else "UNRESOLVED",
+                "Specification-owned repair of this exact assigned issue", None))
+            else if (input.kind.startsWith("Review")) {
+              val covered = relevant.filter(_.source == "REVIEW")
+              covered.zipWithIndex.map { (issue, index) =>
+                val recurring = outcome == "repair" && index == 0 && findings.nonEmpty
+                GoalPhaseFixIssues.Disposition(issue.identity, if (recurring) "RECURRING"
+                  else if (outcome == "accept") "RESOLVED" else "NOT_REVIEWED",
+                  "Specification-owned independent observation of this exact issue", if (recurring) Some(1) else None)
+              }
+            } else Vector.empty
+            GoalPhaseFixIssues.Report(entries)
+          }.filter(_ => input.kind != "ImplementStep")
           ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
-            TypedValue(S.resultCodec.typeIdentity, S.Result(outcome, "Specification-owned response to only the assigned work", findings, report)),
+            TypedValue(S.resultCodec.typeIdentity, S.Result(outcome, "Specification-owned response to only the assigned work", findings,
+              report, issueReport = issues)),
             reference, Vector.empty, evidence)
         }
         def _complete_(result: ContinuationResult[S.Result]): Unit = {
@@ -428,7 +451,8 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val plain = io.circe.Json.obj("outcome" -> io.circe.Json.fromString(value.outcome),
             "summary" -> io.circe.Json.fromString(value.summary), "findings" -> io.circe.Json.fromValues(value.findings.map(io.circe.Json.fromString)),
             "command" -> io.circe.Json.True, "grant" -> io.circe.Json.True)
-          val business = value.acceptance.fold(plain)(report => plain.mapObject(_.add("acceptance", report.asJson)))
+          val acceptance = value.acceptance.fold(plain)(report => plain.mapObject(_.add("acceptance", report.asJson)))
+          val business = value.issueReport.fold(acceptance)(report => acceptance.mapObject(_.add("issueReport", report.asJson)))
           val properties = take(NativeWorkflowOperationInputFixture.submissionC(result)).map {
             case p if p.name == "result" => Property("result", business, None)
             case p => p
@@ -508,34 +532,46 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           When("the public passive preparation produces a managed record input and the specification provisions it through existing Create")
           prepare(call => for {
             prepared <- NativeHostReviewPreparation.goalC(reviewcontext.get,
-              V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, B.publicReport(value.acceptance)), reference, evidence,
+              V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, B.publicReport(value.acceptance),
+                GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
+                GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None), reference, evidence,
               "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
             _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
           } yield ())
           Then("preparation has supplied only specification input and the pending native revision is unchanged")
           _current_().revision shouldBe saved.get.revision
         }
-        def _human_roundtrip_(): Unit = {
+        def _human_roundtrip_(continuation: Option[ContinuationResult[S.Result]] = None): Unit = {
           Given("Spec: docs/spec/native-host-human-preparation.md; Example: E6; Rules: R1,R3,R4,R5; the actual assigned fixture work and explicit decision-needed response")
           val previous = assigned.get
           val prior = _input_(previous)
-          val requesting = _result_("decision-needed")
-          if (prior.kind.startsWith("Review")) _prepare_review_(requesting)
-          When("only the assigned " + prior.kind + " result reports a semantic decision, not consent or new repair authority")
-          _complete_(requesting)
-          val question = _question_()
+          val requesting = continuation.getOrElse(_result_("decision-needed"))
+          if (continuation.isEmpty) {
+            if (prior.kind.startsWith("Review")) _prepare_review_(requesting)
+            When("only the assigned " + prior.kind + " result reports a semantic decision, not consent or new repair authority")
+            _complete_(requesting)
+          }
+          val choice = if (continuation.nonEmpty) "ContinueRepairs" else "ResumeAssignedWork"
+          val question = _question_(continuation.nonEmpty)
           val decision = question.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request
           Then("the issued Human question retains the original work and supplied result reference")
-          decision.input.get.value.work shouldBe prior
+          val expectedissues = take(GoalPhaseFixIssues.completedC(prior, requesting.result.value, requesting.resultReference.identity))
+          decision.input.get.value.work shouldBe prior.copy(issues = expectedissues)
           decision.input.get.value.requestingResult shouldBe requesting.resultReference
           decision.input.get.value.result shouldBe requesting.result.value
           val pending = _current_()
           pending.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
           pending.suspension should not be empty
+          Given("the actual question is already pending")
+          When("another public Advance reads the pending decision")
+          val repeatedquestion = _question_(continuation.nonEmpty)
+          Then("the same native question and entire history remain without another validation or question issuance")
+          repeatedquestion shouldBe question
+          _assert_unchanged_(pending)
           val reference = ContextReference("specification-human-" + prior.kind, decision.expectedRevision.value)
           val answer = ContinuationResult(question.handle, decision.runId, decision.continuationId, decision.expectedRevision,
             decision.context.snapshot, TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
-              GoalPhaseOrderedHumanDecision.Answer("ResumeAssignedWork", "Continue only the same original assigned semantic work")),
+              GoalPhaseOrderedHumanDecision.Answer(choice, "Continue only the same original assigned boundary")),
             reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-human")))
           Given("the actual Human answer carries only choice/rationale plus an inert command annotation")
           val wire = take(NativeWorkflowOperationInputFixture.submissionC(answer)) :+
@@ -544,39 +580,70 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           _call_("submitGoalPhaseOrderedDecision", wire).isSuccess shouldBe false
           Then("the actual question, repository and original allowance remain unchanged")
           _current_().revision shouldBe pending.revision
+          def _prepare_human_(value: ContinuationResult[GoalPhaseOrderedHumanDecision.Answer]): Unit =
+            prepare(call => for {
+              prepared <- NativeHostHumanPreparation.goalC(humancontext.get,
+                V.GoalPhaseOrderedDecisionAnswer(value.result.value.choice, value.result.value.rationale),
+                V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision),
+                V.WorkflowExecutionEvidence(Vector.empty, value.evidence.workerIdentity, None, None),
+                selection.participantIdentity, "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+              _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+            } yield ())
+          Given("a separately prepared specification-owned answer choosing the other resumption kind")
+          val wrongreference = ContextReference(reference.identity + "-wrong-choice", reference.revision)
+          val wrong = answer.copy(result = TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
+            answer.result.value.copy(choice = if (continuation.nonEmpty) "ResumeAssignedWork" else "ContinueRepairs")),
+            resultReference = wrongreference, evidence = answer.evidence.copy(references = Vector(wrongreference)))
+          _prepare_human_(wrong)
+          When("actual Submit receives that evidenced choice which this question did not admit")
+          val refusedchoice = _call_("submitGoalPhaseOrderedDecision", take(NativeWorkflowOperationInputFixture.submissionC(wrong)))
+          Then("independent evidence cannot turn another question's choice into authority")
+          refusedchoice.isSuccess shouldBe false
+          _assert_unchanged_(pending)
           Given("Spec: docs/spec/native-host-human-preparation.md; Example: E6; Rules: R4,R5; explicit specification-owned Human evidence bound to that exact question and answer")
           When("public Human preparation consumes the retained issued context and the supplied fixture answer before managed Create")
-          prepare(call => for {
-            prepared <- NativeHostHumanPreparation.goalC(humancontext.get,
-              V.GoalPhaseOrderedDecisionAnswer(answer.result.value.choice, answer.result.value.rationale),
-              V.WorkflowArtifactReference(reference.identity, reference.revision),
-              V.WorkflowExecutionEvidence(Vector.empty, answer.evidence.workerIdentity, None, None),
-              selection.participantIdentity, "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
-            _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
-          } yield ())
+          _prepare_human_(answer)
           Then("passive preparation and fixture provisioning preserve the pending native revision")
           _current_().revision shouldBe pending.revision
           When("only the public ordered Decision completion records the verified answer")
           val acknowledgement = _invoke_[V.GoalPhaseOrderedDecisionSubmissionResult]("submitGoalPhaseOrderedDecision", wire)
-          Then("normal Submit acknowledges only the supplied ResumeAssignedWork answer")
+          Then("normal Submit acknowledges only the supplied " + choice + " answer")
           acknowledgement.accepted shouldBe true
-          acknowledgement.message should include("ResumeAssignedWork")
+          acknowledgement.message should include(choice)
           val answered = _current_()
           answered.suspension shouldBe empty
           answered.history.size shouldBe pending.history.size + 1
+          answered.history.take(pending.history.size) shouldBe pending.history
           When("owning advance issues only fresh-generation work for the same semantic task")
           _retain_(_next_())
           Then("the next assignment preserves the original semantic task and allowance")
           val resumed = _input_(assigned.get)
-          resumed.kind shouldBe prior.kind
+          resumed.kind shouldBe (if (continuation.nonEmpty) "RepairStep" else prior.kind)
           resumed.stepIdentity shouldBe prior.stepIdentity
           resumed.selectedPlan shouldBe prior.selectedPlan
           resumed.originalBase shouldBe prior.originalBase
           resumed.completed shouldBe prior.completed
-          resumed.repairDirective shouldBe prior.repairDirective
+          resumed.issues shouldBe expectedissues
+          if (continuation.nonEmpty) {
+            resumed.repairDirective.get.findings shouldBe requesting.result.value.findings
+            resumed.review shouldBe prior.review
+            resumed.checkFailure shouldBe None
+            resumed.candidate shouldBe None
+            resumed.checksReceipt shouldBe None
+            _current_().history.take(answered.history.size) shouldBe answered.history
+            Given("the first renewed repair is already issued with its saved independent review context")
+            val freshrepair = assigned.get
+            val issued = _current_()
+            When("a further Advance traverses the retained Human answer and pending repair")
+            val repeated = _next_()
+            Then("no second generation, reset or repair reservation is issued")
+            repeated shouldBe freshrepair
+            _input_(repeated).issues shouldBe expectedissues
+            _assert_unchanged_(issued)
+          } else resumed.repairDirective shouldBe prior.repairDirective
           resumed.generation shouldBe prior.generation + 1
           resumed.decisionContext.get.requestingResult shouldBe requesting.result.value
-          resumed.decisionContext.get.choice shouldBe "ResumeAssignedWork"
+          resumed.decisionContext.get.choice shouldBe choice
           resumed.selectedPlan.repairLimit shouldBe 1
           if (boundary) {
             Given("E8: explicit Human resumption of the same configured semantic task")
@@ -719,26 +786,69 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           val input = _input_(assigned.get)
           input.selectedPlan shouldBe plan
           input.originalBase shouldBe firstbase.get
-          if (session.startsWith("implement") || session == "repair") {
-            input.kind shouldBe (if (session == "repair") "RepairStep" else "ImplementStep")
+          if (session.startsWith("implement") || session == "repair" || session == "repair-continued") {
+            input.kind shouldBe (if (session.startsWith("repair")) "RepairStep" else "ImplementStep")
             val path = if (session == "implement-2") "two.scala" else "one.scala"
-            val content = if (session == "implement-2") "object Second\n" else if (session == "repair") "object FirstRepaired\n" else "object First\n"
+            val content = if (session == "implement-2") "object Second\n" else if (session.startsWith("repair")) "object FirstRepaired\n" else "object First\n"
             if (session == "repair") {
+              Given("the admitted independent review created the required business issue on this actual request path")
+              val tracked = input.issues.get
+              When("the selected repair consumes its issued unresolved issue context")
+              Then("every current unresolved issue is assigned once with its independent finding evidence")
+              tracked.issues.filter(GoalPhaseFixIssues.unresolved).map(_.source).distinct shouldBe Vector("REVIEW")
+              tracked.issues.filter(GoalPhaseFixIssues.unresolved).map(_.identity).distinct.size shouldBe
+                tracked.issues.count(GoalPhaseFixIssues.unresolved)
               input.repairDirective.get.findings shouldBe Vector("Repair the assigned first boundary")
               input.completed shouldBe empty
               input.generation shouldBe (if (withDecisions) 5L else 2L)
             }
+            if (session == "repair-continued") {
+              Given("the first repair of the renewed window with original independent review context")
+              input.decisionContext.get.choice shouldBe "ContinueRepairs"
+              input.review should not be empty
+              input.candidate shouldBe None
+              input.checksReceipt shouldBe None
+            }
             Files.writeString(root.resolve("repository").resolve(path), content)
-            _complete_(_result_("completed"))
+            val semantic = _result_("completed")
+            if (input.kind == "RepairStep") {
+              Given("the fixture explicitly claims FIXED for each actual issued unresolved ID")
+              val claims = semantic.result.value.issueReport.get.dispositions
+              When("the claim is reconciled before any fresh check or independent review")
+              val claimed = take(GoalPhaseFixIssues.completedC(input, semantic.result.value, semantic.resultReference.identity)).get
+              Then("accounting is exact and FIXED leaves every tracked issue unresolved")
+              claims.map(_.issueIdentity).toSet shouldBe GoalPhaseFixIssues.assigned(input).map(_.identity).toSet
+              claims.map(_.disposition).distinct shouldBe Vector("FIXED")
+              claimed.issues.filter(GoalPhaseFixIssues.relevant(input, _)).forall(GoalPhaseFixIssues.unresolved) shouldBe true
+            }
+            _complete_(semantic)
             _current_().lifecycle shouldBe Lifecycle.Active
             _retain_(_next_())
             _input_(assigned.get).kind shouldBe "ReviewStep"
+            if (input.kind == "RepairStep") {
+              Given("fresh native checks passed but the preceding REVIEW issue still needs independent coverage")
+              When("owning Advance issues the actual re-review request")
+              val rereview = _input_(assigned.get)
+              Then("the same REVIEW IDs persist and passing TEST alone has not silently resolved them")
+              rereview.issues.get.issues.filter(_.source == "REVIEW").map(_.identity) shouldBe
+                input.issues.get.issues.filter(_.source == "REVIEW").map(_.identity)
+              rereview.issues.get.issues.filter(i => i.source == "REVIEW" && GoalPhaseFixIssues.relevant(rereview, i))
+                .forall(GoalPhaseFixIssues.unresolved) shouldBe true
+            }
             Then("the issued review carries actual SBT cwd, pass output, external PID and the selected diff")
             _assert_product_check_(root, _input_(assigned.get).review.get.checks.last.stdout)
             _input_(assigned.get).review.get.changedPaths shouldBe Vector(path)
+            if (session == "repair-continued") {
+              Then("fresh selected checks and a distinct independent review are required after renewed semantic completion")
+              val fresh = _input_(assigned.get)
+              fresh.review.get.checks should not be input.review.get.checks
+              fresh.decisionContext shouldBe None
+              fresh.generation shouldBe input.generation
+              assigned.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].requirement.reviewRequired shouldBe true
+            }
           } else {
             input.kind shouldBe (if (session == "phase-review") "ReviewPhase" else "ReviewStep")
-            val repair = session == "review-repair"
+            val repair = session == "review-repair" || session == "review-exhausted"
             val result = _result_(if (repair) "repair" else "accept", if (repair) Vector("Repair the assigned first boundary") else Vector.empty)
             if (boundary) {
               Given("E9: an actual independent review slot with required observations satisfied and excluded robustness unsatisfied")
@@ -764,7 +874,8 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             _prepare_review_(result)
             _complete_(result)
             if (repair) {
-              _retain_(_next_())
+              if (session == "review-exhausted") _human_roundtrip_(Some(result))
+              else _retain_(_next_())
               _input_(assigned.get).kind shouldBe "RepairStep"
             } else if (session != "phase-review") {
               Given("E5: the actual accepted Step review and current Closing frontier without a recorded commit grant")

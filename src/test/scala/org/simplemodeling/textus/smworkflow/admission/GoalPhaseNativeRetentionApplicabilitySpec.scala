@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -16,13 +17,28 @@ import RepositorySyncNativeProgressStore as N
 
 /** Native saved inputs are scoped facts, not complete host-declaration witnesses.
   * @since   Oct.  8, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 18, 2026
   */
 final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val candidate = O.Snapshot("a" * 40, "b" * 40)
   private def candidateJson = Json.obj("head" -> Json.fromString(candidate.head), "tree" -> Json.fromString(candidate.tree))
   private def payload(value: Json) = value.hcursor.downField("payload").focus.get
   private def replace(value: Json, nested: Json) = value.mapObject(_.add("payload", nested))
+  private def _prefix_frontier: InstanceRecord = {
+    val initial = SplitPhaseExplicitPartitionFixture.take(InstanceRecord(InstanceIdentity("prefix-retention"),
+      SplitPhaseExplicitPartitionFixture.take(GoalPhaseRuntimeCatalog.loadC()).definition, initialRevision, Lifecycle.NotStarted, None,
+      CorrelationReference("prefix-correlation"), CausationReference("prefix-start"),
+      None, None, None, Vector.empty).validateC)
+    _prefix_append(initial)
+  }
+  private def _prefix_append(from: InstanceRecord): InstanceRecord =
+    SplitPhaseExplicitPartitionFixture.take(from.appendC(from.revision,
+      GoalPhaseNativeRun.history(from, "phase.Validation", "prefix-retention-entry")))
+  private def _prefix_payload(source: String): V.Payload = V.Payload(source, "S1", candidate,
+    Vector(V.Check("build-tests", 1, WorkflowSbtValidation.Kind.Test)), Vector.empty, None)
+  private def _prefix_receipt(outcome: WorkflowSbtValidation.Outcome, exit: Int): RepositorySyncNativeMergeValidation.Receipt =
+    RepositorySyncNativeMergeValidation.Receipt("build-tests", "exited", Some(exit), "actual-shaped build output", "",
+      Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Test, outcome, None, None)))
 
   "Native candidate retained format" should {
     "read current typed candidate facts without host-path witnesses or unused-field refusals" in {
@@ -53,6 +69,107 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
   }
 
   "Native validation retained format" should {
+    "roundtrip only the actual ordinary prefix result without inventing future metadata selection" in {
+      Given("a current v2 typed failed Test prefix with actual source, Step and candidate but no discovered metadata")
+      val original = _prefix_payload("8").copy(
+        receipts = Vector(_prefix_receipt(WorkflowSbtValidation.Outcome.Failed, 1)), outcome = Some("repair-required"))
+      val wire = V.codec.encode(original)
+      val nested = payload(wire)
+      When("the unchanged current validation codec retains that performed prefix")
+      val restored = V.codec.decode(wire)
+      Then("only the performed check and raw receipt survive with their exact source and candidate")
+      restored shouldBe Right(original)
+      restored.toOption.get.selected.map(_.identity) shouldBe Vector("build-tests")
+      restored.toOption.get.receipts shouldBe original.receipts
+      restored.toOption.get.sourceRevision shouldBe "8"
+      restored.toOption.get.step shouldBe "S1"
+      restored.toOption.get.candidate shouldBe candidate
+      restored.toOption.get.metadata shouldBe empty
+      nested.hcursor.downField("metadata").focus shouldBe None
+      wire.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.goal-phase-native-validation.v2")
+
+      Given("the prefix wire with missing or malformed consumed identities, candidate, receipt kind or source fields")
+      val check = nested.hcursor.downField("selected").focus.get.asArray.get.head
+      val receipt = nested.hcursor.downField("receipts").focus.get.asArray.get.head
+      val facts = receipt.hcursor.downField("sbt").focus.get
+      def _with_check_(value: Json): Json = nested.mapObject(_.add("selected", Json.arr(value)))
+      def _with_receipt_(value: Json): Json = nested.mapObject(_.add("receipts", Json.arr(value)))
+      val invalid = Vector(nested.mapObject(_.remove("sourceRevision")), nested.mapObject(_.add("sourceRevision", Json.True)),
+        nested.mapObject(_.remove("step")), nested.mapObject(_.add("step", Json.True)),
+        nested.mapObject(_.add("candidate", Json.True)),
+        nested.mapObject(_.add("candidate", candidateJson.mapObject(_.add("head", Json.fromString("wrong-head"))))),
+        _with_check_(check.mapObject(_.add("identity", Json.fromString("wrong check")))),
+        _with_check_(check.mapObject(_.add("kind", Json.True))),
+        _with_receipt_(receipt.mapObject(_.add("identity", Json.fromString("another-check")))),
+        _with_receipt_(receipt.mapObject(_.add("sbt", facts.mapObject(_.add("kind", Json.fromString("compile")))))))
+      When("the current typed codec consumes each contradiction")
+      val rejected = invalid.map(value => V.codec.decode(replace(wire, value)))
+      Then("prefix retention does not loosen required source fields, typed kinds or exact receipt identity")
+      rejected.foreach(_.isLeft shouldBe true)
+    }
+
+    "reconcile the actual contiguous prefix pair and leave an intent without result pending" in {
+      Given("a Validation frontier and two genuine native append entries for one ordinary check")
+      val frontier = _prefix_frontier
+      val initial = _prefix_payload(frontier.revision.value.toString)
+      val intent = V.Saved(_prefix_append(frontier), initial)
+      val result = V.Saved(_prefix_append(intent.record), initial.copy(
+        receipts = Vector(_prefix_receipt(WorkflowSbtValidation.Outcome.Succeeded, 0))))
+      When("pure reconciliation consumes the saved pair and separately the pending intent")
+      val complete = V.reconcilePrefixC(frontier, initial, Vector((Some(intent), Some(result))), true)
+      val pending = V.reconcilePrefixC(frontier, initial, Vector((Some(intent), None)), false)
+      val pendingcomplete = V.reconcilePrefixC(frontier, initial, Vector((Some(intent), None)), true)
+      Then("the exact last result becomes the discovery source while an unknown result cannot complete the prefix")
+      SplitPhaseExplicitPartitionFixture.take(complete) shouldBe result
+      SplitPhaseExplicitPartitionFixture.take(pending) shouldBe intent
+      pendingcomplete.isSuccess shouldBe false
+      result.record.revision.value shouldBe frontier.revision.value + 2
+      result.payload.receipts.size shouldBe 1
+    }
+
+    "refuse missing crossed or failed prefix records as the source of metadata selection" in {
+      Given("an actual-shaped successful ordinary pair and malformed retained alternatives")
+      val frontier = _prefix_frontier
+      val initial = _prefix_payload(frontier.revision.value.toString)
+      val intent = V.Saved(_prefix_append(frontier), initial)
+      val result = V.Saved(_prefix_append(intent.record), initial.copy(
+        receipts = Vector(_prefix_receipt(WorkflowSbtValidation.Outcome.Succeeded, 0))))
+      val failed = result.copy(payload = result.payload.copy(receipts = Vector(_prefix_receipt(WorkflowSbtValidation.Outcome.Failed, 1))))
+      val crossed = Vector(result.copy(payload = result.payload.copy(sourceRevision = "999")),
+        result.copy(payload = result.payload.copy(step = "S2")),
+        result.copy(payload = result.payload.copy(candidate = O.Snapshot("c" * 40, "d" * 40))),
+        result.copy(payload = result.payload.copy(selected = Vector(V.Check("other", 1)))),
+        result.copy(payload = result.payload.copy(receipts = Vector(result.payload.receipts.head.copy(identity = "other")))),
+        result.copy(record = result.record.copy(identity = InstanceIdentity("foreign-prefix"))),
+        result.copy(record = intent.record),
+        result.copy(record = _prefix_append(result.record)),
+        result.copy(record = result.record.copy(currentProgression = Some(ProgressionReference("phase.Repair")))))
+      When("selection reconciliation requires the actual complete successful prefix")
+      val rejected = crossed.map(saved => V.reconcilePrefixC(frontier, initial, Vector((Some(intent), Some(saved))), true)) ++
+        Vector(V.reconcilePrefixC(frontier, initial, Vector((None, Some(result))), true),
+          V.reconcilePrefixC(frontier, initial, Vector((None, None)), true),
+          V.reconcilePrefixC(frontier, initial, Vector((Some(intent), Some(failed))), true))
+      Then("no missing pair, substituted fact, record discontinuity or failed build can authorize discovery")
+      rejected.foreach(_.isSuccess shouldBe false)
+
+      Given("the same actual failed result before any metadata selection exists")
+      When("reconciliation retains the performed prefix without requiring successful completion")
+      val stopped = V.reconcilePrefixC(frontier, initial, Vector((Some(intent), Some(failed))), false)
+      Then("the exact failed result remains available for the ordinary failure disposition without discovery")
+      SplitPhaseExplicitPartitionFixture.take(stopped) shouldBe failed
+
+      Given("a pending first intent followed by an invented later ordinary result")
+      val secondcheck = V.Check("second-build", 2, WorkflowSbtValidation.Kind.Test)
+      val two = initial.copy(selected = initial.selected :+ secondcheck)
+      val firstintent = intent.copy(payload = two)
+      val later = result.copy(payload = two.copy(receipts = result.payload.receipts))
+      When("pure reconciliation sees that noncontiguous prefix")
+      val noncontiguous = V.reconcilePrefixC(frontier, two,
+        Vector((Some(firstintent), None), (Some(later), Some(later))), false)
+      Then("an outstanding intent stops the actual prefix without inferring its result")
+      noncontiguous.isSuccess shouldBe false
+    }
+
     "read current check results without policy copies or nested key preflights" in {
       Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R2; Example: E2; actual selected check bindings and result facts")
       val saved = V.Payload("8", "S1", candidate, Vector(V.Check("focused", 1)),
