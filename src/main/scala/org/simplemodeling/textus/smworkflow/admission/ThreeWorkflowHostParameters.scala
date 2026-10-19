@@ -21,7 +21,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * @since   Oct.  7, 2026
   *  version Oct. 14, 2026
   *  version Oct. 16, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
@@ -99,7 +99,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
         Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
-        executionprofiles, executionorigin, projectacceptance, findingpolicy)
+        executionprofiles, executionorigin, projectacceptance, findingpolicy,
+        Some(GoalPhaseValidationRecovery.Installation(ports.validationRecovery)))
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

@@ -11,7 +11,7 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 15, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -36,6 +36,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
+    "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
     "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",

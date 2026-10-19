@@ -25,7 +25,7 @@ import RepositorySyncManagedGitObservation as G
   * @since   Oct.  6, 2026
   *  version Oct. 17, 2026
   *  version Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -44,7 +44,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
     projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None,
-    findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None)
+    findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None,
+    validationRecovery: Option[GoalPhaseValidationRecovery.Installation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -143,6 +144,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
+        d.validationRecovery == null || d.validationRecovery.exists(_ == null) ||
         d.findingRecordingPolicy.exists(p => p == null || !RepositorySyncNativeConflictInput.relative(p.hygiene) ||
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
@@ -161,12 +163,14 @@ private[smworkflow] object GoalPhaseNativeRun {
           else p.validateC)).flatMap(_ => d.repositoryClosure.fold(Consequence.unit)(r =>
           if (r == null) invalid("repository closure host is missing") else r.validateC(d))).flatMap(_ =>
             d.humanDecision.fold(Consequence.unit)(h =>
-              if (h == null) invalid("ordered Human decision installation is missing") else h.validateC))
+              if (h == null) invalid("ordered Human decision installation is missing") else h.validateC)).flatMap(_ =>
+                d.validationRecovery.fold(Consequence.unit)(_.validateC))
   def bindC(d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
     validateC(d).flatMap { _ =>
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
           !core.action.request.service.contains("GoalPhaseService") ||
           !Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
+            GoalPhaseValidationRecovery.describeOperation, GoalPhaseValidationRecovery.recoveryOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation) ||
           !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))

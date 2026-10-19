@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Finite conversion of explicit issued output and supplied host facts to
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHostEvidenceInput {
@@ -22,8 +22,11 @@ private[smworkflow] object NativeHostEvidenceInput {
     for {
       options <- NativeHostPreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human")(options("kind")) && !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (if (options("kind") == "human") options.contains("participant") else !options.contains("participant"))) Consequence.unit
+          Set("review", "human", "validation-recovery")(options("kind")) &&
+          !(options("family") == "SplitPhase" && options("kind") == "review") &&
+          (options("kind") != "validation-recovery" || options("family") == "GoalPhase") &&
+          (if (options("kind") == "human" || options("kind") == "validation-recovery") options.contains("participant")
+            else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativeHostPreparationInput.instantC(options("occurred-at"))
       _ <- NativeHostPreparationInput.collectionC(options("collection"))
@@ -64,6 +67,12 @@ private[smworkflow] object NativeHostEvidenceInput {
       prepared <- NativeHostHumanPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "GoalPhase" if options("kind") == "validation-recovery" => for {
+        description <- summon[ValueReader[V.GoalPhaseValidationRecoveryDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.GoalPhaseValidationRecoveryAnswer]].readC(result)
+        prepared <- NativeHostValidationRecoveryPreparation.prepareC(description, answer, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" => for {
         output <- summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(request)
         _ <- _kind_c(output.kind, human)

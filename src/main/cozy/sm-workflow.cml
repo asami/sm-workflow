@@ -176,6 +176,72 @@ OperationResult
 | repairProgress | GoalPhaseRepairProgress | ? |
 | findingRecording | GoalPhaseFindingRecordingState | ? |
 
+## GoalPhaseValidationRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseValidationRecoveryDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| recoveryOperation | string | 1 |
+
+## GoalPhaseValidationRecoveryAnswer
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| rationale | string | 1 |
+
+## GoalPhaseValidationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseValidationRecoveryResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseOrderedStep
 
 ### ATTRIBUTE
@@ -1293,6 +1359,14 @@ action = RecordGoalFindings
 #### advanceGoalPhase
 
 operation = GoalPhaseService.advanceGoalPhase
+
+#### describeGoalPhaseValidationRecovery
+
+operation = GoalPhaseService.describeGoalPhaseValidationRecovery
+
+#### recoverGoalPhaseValidation
+
+operation = GoalPhaseService.recoverGoalPhaseValidation
 
 #### submitGoalPhaseWorkResult
 
@@ -3538,7 +3612,7 @@ on = native-convergence-observed
 
 ### DESCRIPTION
 
-Own the selected Phase's entry, assigned semantic/Human completion and mechanical progression. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult and submitGoalPhaseOrderedDecision. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
+Own the selected Phase's entry, assigned semantic/Human completion, mechanical progression and explicit validation recovery description/direction. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult, submitGoalPhaseOrderedDecision, describeGoalPhaseValidationRecovery and recoverGoalPhaseValidation. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
 
 ### OPERATION
 
@@ -3573,6 +3647,62 @@ GoalPhaseAdvanceInput
 ###### TYPE
 
 GoalPhaseAdvanceResult
+
+#### describeGoalPhaseValidationRecovery
+
+##### DESCRIPTION
+
+Read only the exact currently unresolved selected native Validation check for sessionId. Return decision-required, its complete current target, choices AuthorizeNewAttempt and Defer, and recoveryOperation recoverGoalPhaseValidation. HumanNewAttempt direction leaves the old outcome unknown: a NEW attempt can execute the SAME fixed selected SBT check with current host permissions and possible repeat effects. Original history, Plan, base, candidate and counters remain retained. Description acquires no authority, mutates no storage and performs no effect. Non-unresolved state refuses. Historical provider-observation mode is unsupported; absence of a result or stderr prose cannot establish NotExecuted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseValidationRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseValidationRecoveryDescriptionResult
+
+#### recoverGoalPhaseValidation
+
+##### DESCRIPTION
+
+Accept explicit HumanNewAttempt direction AuthorizeNewAttempt or Defer for the complete current described target, rationale and actual reference. Independent host Human evidence is required for both choices; authentication or AI output is not consent. AuthorizeNewAttempt appends one authorization while retaining every old unknown intent/outcome and original Plan/counters. A later ordinary advanceGoalPhase creates the new attempt under current host permissions. This Operation executes no check, calls no Advance, is not semantic Submit and does not renew a repair window. Defer preserves the unknown intent and grants no retry. Missing, crossed, stale or duplicated direction refuses. This API does not accept provider observation or manufacture process receipts, NotExecuted, success, review acceptance or closure.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseValidationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseValidationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseValidationRecoveryResult
 
 #### submitGoalPhaseWorkResult
 
@@ -6023,7 +6153,7 @@ WorkflowPreparedImport
 
 ##### DESCRIPTION
 
-Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. It encodes HumanNewAttempt direction only; the trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no recovery or execution.
 
 ##### TYPE
 

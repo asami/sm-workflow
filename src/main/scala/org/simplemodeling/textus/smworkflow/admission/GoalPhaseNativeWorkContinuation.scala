@@ -55,6 +55,54 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       F.sessionC(identity, d, definition, core).flatMap(_advance_session_c(_, core))
 
+    def describeValidationRecoveryC(identity: String, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult] = for {
+      located <- _validation_recovery_source_c(identity, core)
+      (source, cursor, frontier) = located
+      target <- GoalPhaseNativeValidation.recoveryTargetC(source, d, core, cursor.candidate.get,
+        cursor.controller, frontier, cursor.documentpolicy, N.managementPaths(cursor.findings))
+    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(identity,
+      "decision-required", GoalPhaseValidationRecovery.message, core.component.get.core.instanceId.canonicalKey,
+      GoalPhaseValidationRecovery.targetRecord(target), GoalPhaseValidationRecovery.choices, GoalPhaseValidationRecovery.recoveryOperation)
+
+    def recoverValidationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult] = for {
+      supplied <- GoalPhaseValidationRecovery.targetC(input.target)
+      located <- _validation_recovery_source_c(input.sessionId, core)
+      (source, cursor, frontier) = located
+      actual <- GoalPhaseNativeValidation.recoveryTargetC(source, d, core, cursor.candidate.get,
+        cursor.controller, frontier, cursor.documentpolicy, N.managementPaths(cursor.findings))
+      _ <- if (supplied == actual) Consequence.unit else F.invalid("Human new-attempt input crosses its exact current recovery target")
+      _ <- GoalPhaseValidationRecovery.admitC(d, core, actual, input, source.participantIdentity)
+      _ <- if (input.choice == "Defer") Consequence.unit else if (input.choice == "AuthorizeNewAttempt") {
+        val authorization = GoalPhaseNativeValidation.NewAttempt(actual.checkIdentity, actual.attempt, actual.intentRevision,
+          input.reference.identity, input.reference.revision, source.participantIdentity, input.rationale)
+        GoalPhaseNativeValidation.appendRecoveryC(source, d, core, cursor.candidate.get, cursor.controller, frontier,
+          cursor.documentpolicy, N.managementPaths(cursor.findings), actual, authorization).map(_ => ())
+      } else F.invalid("validation recovery choice is undeclared")
+    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult(input.sessionId, true,
+      if (input.choice == "Defer") "deferred" else "new-attempt-authorized",
+      if (input.choice == "Defer") "Independent Human deferred validation recovery. The old unknown outcome and intent remain; no retry is granted."
+      else "Independent HumanNewAttempt authorization was appended. The old outcome remains unknown and every prior fact, Plan and repair count remains. Call ordinary advanceGoalPhase to attempt the same selected check under current host permissions.")
+
+    private def _validation_recovery_source_c(identity: String, core: ActionCall.Core):
+      Consequence[(F.Session, Cursor, InstanceRecord)] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core)
+      cursor <- located match {
+        case Paused(value, _, false) if Set(O.Stage.Validation, O.Stage.PhaseValidation)(value.controller.stage) &&
+            value.validation.nonEmpty && value.candidate.nonEmpty => Consequence.success(value)
+        case _ => F.invalid("validation recovery requires the actual paused unresolved Validation check")
+      }
+      revision <- cursor.validation.get.payload.sourceRevision.toLongOption
+        .filter(n => n > 0 && n.toString == cursor.validation.get.payload.sourceRevision)
+        .map(n => Consequence.success(InstanceRevision(n))).getOrElse(F.invalid("validation recovery source revision is invalid"))
+      // Paused.from is the current native record. The original Validation source
+      // remains the payload's admitted history prefix, including selected metadata.
+      frontier <- GoalPhaseNativeHistory.prefixC(source.current, revision)
+    } yield (source, cursor, frontier)
+
     private def _initial_cursor_c(source: F.Session): Consequence[Cursor] = for {
       from <- GoalPhaseNativeHistory.prefixC(source.current, source.started.receipt.next.revision)
       controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
@@ -457,10 +505,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else cursor.candidate.map(candidate => GoalPhaseNativeValidation.advanceC(source, d, core, candidate,
           cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings))
           .flatMap { result =>
-            if (result.validation.exists(view => view.outcome.isEmpty && view.checks.lastOption.exists(receipt =>
-                receipt.termination == "not-started" && receipt.exitCode.isEmpty &&
-                  receipt.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.NotExecuted.wire))))
-              Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(result, cursor.findings))
+            if (result.validation.exists(_.outcome.isEmpty))
+              Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(result.copy(repairProgress =
+                Some(GoalPhaseRepairProgress.publicSnapshot(GoalPhaseRepairProgress.snapshot(cursor.controller)))), cursor.findings))
             else _after_native_c(source, cursor, result, core)
           })
           .getOrElse(F.invalid("selected checks have no actual current candidate"))
@@ -737,6 +784,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else Consequence.unit
             _ <- if (_is_review(plan.input)) d.reviewInstallation.get.evidence.admitC(call, plan.input, submitted)
               else Consequence.unit
+            _ <- GoalPhaseNativeReview.retainPriorC(Vector.empty, plan.input, submitted)
             state <- _completed_state_c(plan, submitted)
             next <- _completed_c(plan, submitted, state)
           } yield {

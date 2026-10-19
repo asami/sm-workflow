@@ -334,6 +334,9 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   def normalizeBatches(value: Json): Either[String, Json] =
     _normalize_public_json(value).flatMap(_.as[Vector[Batch]].left.map(_.message)).map(_.asJson)
 
+  def normalizePublicJson(value: Json): Either[String, Json] =
+    _normalize_public_json(value)
+
   private def _parameter_path(path: Vector[String]): Boolean =
     path == Vector("plan", "executionParameters") || path == Vector("plan", "additionalOperations", "parameters")
 

@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -42,14 +42,15 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
         "GoalPhaseService.submitGoalPhaseOrderedDecision",
         "GoalPhaseService.submitGoalPhaseFindingRecording",
+        "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
         "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
         "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-      Then("exactly the seventeen native operations have generated counterparts and each owning advance has its paired Start")
+      Then("exactly the nineteen native operations have generated counterparts and each owning advance has its paired Start")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations shouldBe expected
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 17
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 19
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")

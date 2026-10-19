@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct.  5, 2026
  *  version Oct. 15, 2026
  *  version Oct. 16, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -35,7 +35,8 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "prepareExecution", "recordExecution"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
-      "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording"
+      "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
+      "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation"
     ),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
       "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
