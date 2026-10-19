@@ -24,7 +24,7 @@ import GoalPhaseSliceValidationPlan as L
 /** Private configuration and retained selection codecs. CNCF owns discovery,
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
