@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Specification worker labels/evidence grant no independence, native completion
   * or installed acceptance.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -115,12 +115,27 @@ final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers wi
       val repair = implementation.copy(kind = "RepairStep", repairDirective = Some(O.RepairDirective("Assigned correction", Vector("Fix S1"))),
         review = Some(_context.copy(priorReviews = priors)))
       Vector(implementation, repair).foreach { request =>
-        Given("the assigned " + request.kind + " completion with no independent review result")
-        When("the retention helper consumes the already-admitted semantic completion")
-        val retained = take(R.retainPriorC(priors, request,
-          _submitted(request, S.Result("completed", "Assigned work completed", Vector.empty), "semantic-result", "9")))
-        Then("it creates no review and preserves the entire prior vector")
-        retained shouldBe priors
+        Vector("9", "p64-e1-proposal-2026-10-20-1").foreach { revision =>
+          Given("the assigned " + request.kind + " completion with result revision " + revision)
+          val submitted = _submitted(request, S.Result("completed", "Assigned work completed", Vector.empty), "semantic-result", revision)
+          val reference = submitted.resultReference
+          When("the retention helper consumes the already-admitted semantic completion")
+          val retained = take(R.retainPriorC(priors, request, submitted))
+          Then("it creates no review, preserves the entire prior vector and leaves the supplied reference exact")
+          retained shouldBe priors
+          submitted.resultReference shouldBe reference
+          submitted.resultReference.revision shouldBe revision
+        }
+        Vector("", " ", "bad\nrevision", "bad\u0000revision").foreach { revision =>
+          Given("the assigned " + request.kind + " completion with a blank or control-bearing result revision")
+          val submitted = _submitted(request, S.Result("completed", "Assigned work completed", Vector.empty), "semantic-result", revision)
+          When("the retention helper validates that exact semantic completion reference")
+          val refused = R.retainPriorC(priors, request, submitted)
+          Then("it refuses the invalid reference while preserving every prior report")
+          refused.isSuccess shouldBe false
+          priors shouldBe Vector(_prior(reviewed, _accepted(reviewed, "review-before-work", "8")))
+          submitted.resultReference.revision shouldBe revision
+        }
       }
     }
 
@@ -226,7 +241,8 @@ final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers wi
       }
       val references = Vector(ContextReference("", "8"), ContextReference("r" * 16385, "8"),
         ContextReference("review-reference", "0"), ContextReference("review-reference", "01"),
-        ContextReference("review-reference", "invalid"), null)
+        ContextReference("review-reference", "invalid"),
+        ContextReference("review-reference", "p64-e1-proposal-2026-10-20-1"), null)
       references.zipWithIndex.foreach { (reference, index) =>
         Given("an invalid actual completion result reference case " + index)
         When("retention reads that exact submitted result reference")
