@@ -222,6 +222,47 @@ retain their original definition and scope; there is no migration, alias or
 silent replay under V7. Declarations, generated metadata and specification-owned
 file edits do not prove installed-skill AI execution or Step acceptance.
 
+## Dependency decisions and bounded improvement
+
+Ordinary public Usage Contract use and inspection need no dependency-change
+question. To change another Component, including one in the same repository,
+propose the exact scope: logical requester and dependency identities, repository
+and workspace identities, the selected Usage Contract, reason, exact files
+relative to the dependency workspace, acceptance conditions and dependent work.
+Directories and prefixes do not expand the selected files. Report discovered
+unapproved edits honestly; independent review reports their exact paths and
+remains read-only, without silently undoing or approving them.
+
+Submit the proposal with the matching assigned semantic result and outcome
+`decision-needed`. The next explicit Advance exposes the saved Human question
+with exactly `ApproveDependencyScope`, `RejectDependencyScope`, `Defer` and
+`Cancel`. Have the developer answer through the independent Human channel;
+actual admitted Human evidence and the saved answer/result reference determine
+the direction. A proposal or self-asserted choice supplies no consent. Human
+Submit and the following explicit Advance are separate actions; Defer and Cancel
+retain the pause without automatically dispatching or changing work.
+
+Use the saved answer for that single linked unit, including its exact scope,
+acceptance and dependent work, without asking again for each selected file.
+A new out-of-scope change requires another question. Continuation retains the
+same Plan, original base, completed Steps, issues, execution history and repair
+progress. Approval does not execute the work, grant File, Git, SBT or remote
+effect authority, or make a reviewer an editor. Existing execution permissions,
+independent review and acceptance gates still apply.
+
+For improvement, first select a recorded warning as the developer. Ask the AI
+for a bounded assessment of its cause, the proposed change or reason no change
+is needed, and the expected impact. Then separately adopt or decline that
+assessment. Additional change being unnecessary is a valid outcome. This is a
+developer decision process within the existing workflow; there is no automatic
+warning-selection or improvement-adoption operation.
+
+A proposal does not automatically change the Plan, tests, code or repair
+allowance. Retain the selected warning, assessment, decision, supporting evidence
+and existing history. Expected impact is a proposal, not a measured effect;
+claim improvement effects only after actual later measurement. Adopted work
+still follows the normal workflow and acceptance requirements.
+
 ## Failure and recovery
 
 The three public advance routes consume the explicit `sessionId` and resolve
