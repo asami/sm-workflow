@@ -3,14 +3,24 @@
 status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
 
-All items are open. This is newly planned work; no existing Phase evidence is
-transferred or claimed as acceptance. The main route is established before
-failure and operational branches. Check each outcome only from actual evidence.
+E1's contract scope is accepted from this Phase's own actual evidence. E2
+through E4 remain open; no evidence from another Phase supplies their acceptance.
+The main route is established before failure and operational branches. Check
+each outcome only from actual evidence.
 
-Execution began on 2026-10-20. The runtime issued `ImplementStep / P64-E1`;
-its [proposed minimum contract](../spec/evidence-storage.md) is ready for semantic
-handoff and the owning native checks/review.
-No checklist outcome has yet been accepted.
+Execution began on 2026-10-20. The [minimum contract](../spec/evidence-storage.md)
+passed the selected Compile, genuine independent review and native local Step
+commit `07a97986cbee9ffe71fdf69b89a60eff98768134`. The runtime subsequently issued
+`ImplementStep / P64-E2`. Its public resolved-location prerequisite is proposed
+through the ordinary dependency-scope route; its design motivation is now
+superseded by Phase 12 adoption, while the native history remains. E2 is not
+implemented or accepted.
+
+2026-10-21: native remaining-Plan adoption accepted revision 2 and retained the
+old question as superseded without an answer. Normal Advance has reissued E2
+under the common Evidence contract. Consumer host setup is prepared; actual
+selected validation, public ID retrieval and independent acceptance are still
+required. All existing flags below remain unchanged.
 
 ## Phase 12 allocation — 2026-10-20
 
@@ -22,11 +32,11 @@ are reusable at their actual scope, not a claim of consumer acceptance.
 
 ## E1: minimum contract (original acceptance scope retained)
 
-- [ ] P64-01: Classify disposable work, execution evidence and canonical
+- [x] P64-01: Classify disposable work, execution evidence and canonical
       development/management artifacts without putting evidence payloads in Git.
-- [ ] P64-02: Record existing Artifact/Blob/host-storage reuse and the minimal
+- [x] P64-02: Record existing Artifact/Blob/host-storage reuse and the minimal
       public allocate/archive/lookup contract, identity and actual effect scope.
-- [ ] P64-03: Return an exact destination before storage and define distinct
+- [x] P64-03: Return an exact destination before storage and define distinct
       allocation/storage/availability outcomes and the AI journal response.
 
 ## E2: working main route

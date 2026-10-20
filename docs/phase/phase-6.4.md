@@ -7,7 +7,32 @@ checklist=[Phase 6.4 Checklist](phase-6.4-checklist.md)
 
 Owner: sm-workflow. Predecessor: [6.3](phase-6.3.md). Successor: [7](phase-7.md).
 
-## Current execution — 2026-10-20
+## Current execution — 2026-10-21
+
+The existing Session `96c294d73be3d48067f3721d8a2abf33` has adopted
+`phase-6.4-evidence-storage@2` through the supported remaining-Plan operation.
+The old unanswered dependency question is retained as superseded-by-adoption.
+Normal Advance has issued `ImplementStep / P64-E2` at evidence revision 28;
+E1, original base and repair history remain. The producer's Phase 12 is closed
+and normally published. The consumer host now declares the separate Evidence
+collection/archive workspace and E2's selected TestOnly program. Validation,
+fresh-process ID retrieval, independent review and Step acceptance remain open.
+Historical statements below about Plan revision 1 describe the original Start.
+
+E1's contract documentation is now accepted through actual selected Compile,
+genuine independent review and normal local native commit
+`07a97986cbee9ffe71fdf69b89a60eff98768134`. The same Session issued E2 at source
+revision 24 without replaying the accepted implementation, review or Compile.
+Under the earlier design, E2's inspection discovered that the selected public File result does not expose
+the actual resolved absolute location. The exact upstream scope proposal is
+recorded in the [contract](../spec/evidence-storage.md#e2-discovered-public-location-prerequisite).
+The new common-Evidence allocation below supersedes that design prerequisite,
+without submitting an answer to its retained native question.
+E2 through E4 and all connected Phase acceptance remain open; no storage success
+is claimed from this design prerequisite.
+
+The initial E1 delivery record follows; its pending statements describe that
+earlier handoff rather than the current accepted E1 frontier.
 
 The installed command successfully started this Phase in the development host
 and issued `ImplementStep / P64-E1` through its first explicit Advance.
