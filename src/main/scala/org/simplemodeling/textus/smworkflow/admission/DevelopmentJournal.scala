@@ -226,23 +226,23 @@ private[smworkflow] object DevelopmentJournal {
       "Journal boundary interrupted: " + error.getClass.getSimpleName)) }
   }
   def readC(policy: Option[Policy], core: ActionCall.Core, input: V.JournalReadInput): Consequence[V.JournalReadResult] = {
-    def result(status: String, message: String) = V.JournalReadResult(status, message, None, None)
+    def _result_(status: String, message: String) = V.JournalReadResult(status, message, None, None)
     val finding = input != null && DevelopmentJournalFinding.sourceC(input.identity).isSuccess
     if (input == null || input.revision == null || !(finding || sourceC(input.identity).isSuccess))
-      Consequence.success(result("invalid", "Journal identity is invalid or noncanonical"))
-    else if (input.revision.exists(_ != "1")) Consequence.success(result("unsupportedRevision", "Journal supports revision 1 only"))
+      Consequence.success(_result_("invalid", "Journal identity is invalid or noncanonical"))
+    else if (input.revision.exists(_ != "1")) Consequence.success(_result_("unsupportedRevision", "Journal supports revision 1 only"))
     else policy match {
-      case None => Consequence.success(result("disabled", "Journal is disabled by the host"))
+      case None => Consequence.success(_result_("disabled", "Journal is disabled by the host"))
       case Some(p) =>
         try {
           val loaded = _bind_c(core, p, input.identity).flatMap(_.loadC()).flatMap {
-            case None => Consequence.success(result("absent", "Journal entry is absent"))
+            case None => Consequence.success(_result_("absent", "Journal entry is absent"))
             case Some(row) if finding => DevelopmentJournalFinding.storedC(row, input.identity).map(e =>
               V.JournalReadResult("found", "Journal entry found", Some(DevelopmentJournalFinding.publicEntry(e)), Some(DevelopmentJournalFinding.view(e))))
             case Some(row) => storedC(row, input.identity).map(e => V.JournalReadResult("found", "Journal entry found", Some(publicEntry(e)), Some(view(e))))
           }
-          Consequence.success(loaded.fold(f => result("unavailable", _diagnostic("Journal read unavailable", f)), v => v))
-        } catch { case NonFatal(error) => Consequence.success(result("unavailable", "Journal read interrupted: " + error.getClass.getSimpleName)) }
+          Consequence.success(loaded.fold(f => _result_("unavailable", _diagnostic("Journal read unavailable", f)), v => v))
+        } catch { case NonFatal(error) => Consequence.success(_result_("unavailable", "Journal read interrupted: " + error.getClass.getSimpleName)) }
     }
   }
   def publicEntry(e: Entry): V.JournalEntry = V.JournalEntry(e.identity, e.revision, e.kind, e.repositoryIdentity,

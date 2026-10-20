@@ -51,7 +51,8 @@ object GoalPhaseCmlDerivationProbe {
     require(recording.action.operation.inputType == Some("GoalPhaseFindingRecordingRequest"), "Recording input differs")
     require(recording.action.operation.outputType == Some("GoalPhaseFindingRecordingResult"), "Recording result differs")
     require(workflow.providedOperations.map(_.operation.name).toSet == Set("startGoalPhase", "advanceGoalPhase",
-      "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording"), "Provided Operations differ")
+      "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
+      "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation"), "Provided Operations differ")
     println("accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v7 combinations=13 phaseClosure=1")
   }
 }

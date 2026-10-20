@@ -1057,22 +1057,23 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the seventeen installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the nineteen installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
+          "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
           "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
           "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 17
-        published.map(_._1).distinct should have size 17
+        published should have size 19
+        published.map(_._1).distinct should have size 19
         published.map(_._1).toSet shouldBe expected
         published.foreach { (_, operation) =>
           operation.specification.request.parameters.head.name shouldBe
-            (if (operation.name.startsWith("start")) "input" else "sessionId")
+            (if (operation.name.startsWith("start") || operation.name == "recoverGoalPhaseValidation") "input" else "sessionId")
           operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
         }
         val beforeinvalid = current()

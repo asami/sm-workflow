@@ -32,12 +32,13 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
 
   "Native three-workflow launcher composition" should {
     "publish only actual generated native operation identities rather than guessed skill-stage names" in {
-      Given("the three generated CML provided-operation declarations")
+      Given("the three generated CML provided-operation declarations and generated Journal service declaration")
       val generated = Vector(domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1.workflow,
         domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2.workflow,
         domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow)
       When("the native launcher publication set is compared with the generated operations")
-      val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet
+      val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
+        SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}")
       val expected = Set(
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
         "GoalPhaseService.submitGoalPhaseOrderedDecision",
@@ -47,10 +48,11 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
-        "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-      Then("exactly the nineteen native operations have generated counterparts and each owning advance has its paired Start")
+        "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
+        "JournalService.readJournalEntry")
+      Then("exactly the twenty native operations have generated counterparts and each owning advance has its paired Start")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations shouldBe expected
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 19
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 20
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")

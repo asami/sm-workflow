@@ -564,7 +564,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
               receipts.last.exitCode shouldBe Some(1)
               (receipts.last.stdout + receipts.last.stderr) should include("actual repaired product input fails")
             } else {
-              receipts.last.termination shouldBe "indeterminate"
+              receipts.last.termination shouldBe "timed-out"
               receipts.last.exitCode shouldBe None
             }
           }

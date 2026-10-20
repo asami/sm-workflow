@@ -525,7 +525,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else cursor.candidate.map(candidate => GoalPhaseNativeValidation.advanceC(source, d, core, candidate,
           cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings))
           .flatMap { result =>
-            if (result.validation.exists(_.outcome.isEmpty))
+            if (result.validation.exists(validation => validation.outcome.isEmpty ||
+                validation.outcome.contains("failed") && validation.checks.lastOption.exists(check =>
+                  Set("cancelled", "timed-out", "termination-unconfirmed")(check.termination) &&
+                    check.exitCode.isEmpty && check.sbt.exists(_.outcome == "incomplete"))))
               Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(result.copy(repairProgress =
                 Some(GoalPhaseRepairProgress.publicSnapshot(GoalPhaseRepairProgress.snapshot(cursor.controller)))), cursor.findings))
             else _after_native_c(source, cursor, result, core)

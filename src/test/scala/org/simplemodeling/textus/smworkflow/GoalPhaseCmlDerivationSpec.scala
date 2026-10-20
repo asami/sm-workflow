@@ -39,7 +39,7 @@ final class GoalPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with Gi
       When("the real Scala2.12 producer derives every phase with retained Decision/recording roles and resolves the recording SPI")
       val output = execute(Vector(javaExecutable, "-cp", classes.toString + java.io.File.pathSeparator + cp,
         "cozy.modeler.GoalPhaseCmlDerivationProbe", "src/main/cozy/sm-workflow.cml"), work.resolve("probe.log"))
-      Then("the13 configurations are unique, all five Provided and six Required typed contracts resolve, and only whole-Phase closure derives PhaseClosed")
+      Then("the13 configurations are unique, all seven Provided and six Required typed contracts resolve, and only whole-Phase closure derives PhaseClosed")
       output.linesIterator.exists(_ ==
         "accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v7 combinations=13 phaseClosure=1") shouldBe true
     }

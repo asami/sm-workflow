@@ -21,7 +21,9 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseFindingRecordingOperation)
+    SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseFindingRecordingOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseValidationRecoveryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseValidationOperation)
   private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "GoalPhaseService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -42,15 +44,17 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       absent.foreach(_.isSuccess shouldBe false)
       val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("all five Provided operations declare their business inputs, without a universal argument")
+      And("all seven Provided operations declare their business inputs, without a universal argument")
       operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
         "advanceGoalPhase" -> Some("GoalPhaseAdvanceInput"),
         "submitGoalPhaseWorkResult" -> Some("GoalPhaseWorkResult"),
         "submitGoalPhaseOrderedDecision" -> Some("GoalPhaseOrderedDecisionAnswer"),
-        "submitGoalPhaseFindingRecording" -> Some("GoalPhaseFindingRecordingResult"))
-      operations.last.specification.request.parameters.map(_.name) shouldBe Vector(
+        "submitGoalPhaseFindingRecording" -> Some("GoalPhaseFindingRecordingResult"),
+        "describeGoalPhaseValidationRecovery" -> Some("GoalPhaseValidationRecoveryDescriptionInput"),
+        "recoverGoalPhaseValidation" -> Some("GoalPhaseValidationRecoveryInput"))
+      operations.find(_.name == "submitGoalPhaseFindingRecording").get.specification.request.parameters.map(_.name) shouldBe Vector(
         "sessionId", "result", "resultReference", "completionFacts", "executionEvidence")
       provided.find(_.name == "submitGoalPhaseFindingRecording").get.resultType shouldBe
         Some("GoalPhaseFindingRecordingSubmissionResult")

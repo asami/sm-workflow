@@ -46,6 +46,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
+    SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
     SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
