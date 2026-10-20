@@ -1,5 +1,18 @@
 # sm-workflow incremental-use roadmap
 
+Journal delivery priority, adopted 2026-10-20: [Phase 11](phase-11.md) is a short
+independent delivery before the remaining Phase 6.4 work: common structured
+record/read/find, accepted-finding recording and installed trial-skill connection.
+It does not depend on 6.4 archival or on Phases 7–10. Phase numbering does not
+set execution order. Phase 6.4 consumes this shared Journal through its normal
+adoption boundary while retaining ongoing work, issued requests and evidence.
+[Phase 11.1](phase-11.1.md) adds decisions/issues/handoffs and revision/batch
+management separately; it does not delay the 6.4 trial. The main rollout below
+remains, with this selected prerequisite delivery inserted before 6.4's remaining
+integration. No active Goal or closed Phase is reset by this planning decision.
+See the [design](../design/development-journal.md) and
+[handoff](../journal/2026/10/2026-10-20-common-journal-phases-handoff.md).
+
 File Workspace clarification adopted 2026-10-15: Phase 6 P6-SBX03 uses protected
 `file_read_text` / `file_write_text` for development-file manipulation and retains
 ordinary `read_resource` / `read_resource_text` with runtime-owned limits for
@@ -149,6 +162,8 @@ in Phase 6, using the corrected runtime contract.
 | [6.4: Local Evidence storage and AI recording](phase-6.4.md) | Notification -> exact destination -> local archival -> actual AI journal record -> fresh-process lookup; then bounded failure/batch/retention branches | Newly planned after 6.3 and before 7; own [checklist](phase-6.4-checklist.md) and validation/closure, outside the 6–6.3 aggregate chain |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
+| [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
+| [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |
 
 
 ## Applied Phase 6 split — 2026-10-13
