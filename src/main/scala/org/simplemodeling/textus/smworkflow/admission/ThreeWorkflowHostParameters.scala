@@ -21,7 +21,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * @since   Oct.  7, 2026
   *  version Oct. 14, 2026
   *  version Oct. 16, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLauncherAssembly.HostDecoder {
@@ -66,7 +66,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
-      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration)
+      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -85,6 +85,8 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       _ <- SplitPhaseNativeExecution.validateC(splitclassifications, executionprofiles, executionorigin)
       projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
       findingpolicy <- GoalPhaseFindingRecording.resolvePolicyC(parameters)
+      journalpolicy <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
+      evidencepolicy <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection))
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
@@ -99,7 +101,9 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
         Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
-        executionprofiles, executionorigin, projectacceptance, findingpolicy)
+        executionprofiles, executionorigin, projectacceptance, findingpolicy,
+        Some(GoalPhaseValidationRecovery.Installation(ports.validationRecovery)), journalpolicy, evidencepolicy,
+        Some(GoalPhaseRemainingPlanAdoption.Installation(ports.remainingPlanAdoption)))
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

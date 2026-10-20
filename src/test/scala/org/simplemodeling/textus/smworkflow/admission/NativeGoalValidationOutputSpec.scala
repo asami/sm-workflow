@@ -129,17 +129,17 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
     }
 
     "O3 retain typed incomplete TestOnly facts, diagnostic captures and an absent raw exit" in {
-      Given("a typed TestOnly result with indeterminate termination and complete bounded diagnostics")
+      Given("a typed TestOnly result with actual timeout termination and complete bounded diagnostics")
       val receipt = _receipt(_focused, ProcessExecutionTermination.TimedOut)
       val payload = _retained(_payload(Vector(_focused), Vector(receipt), Some("failed")))
 
       When("public validation projects and serializes that actual failed result")
       val actual = _wire(_wait(payload))
 
-      Then("incomplete remains incomplete and neither raw exit nor selected success is invented")
+      Then("actual timeout remains timed-out and incomplete, and neither raw exit nor selected success is invented")
       actual.validation.get.outcome shouldBe Some("failed")
       val check = actual.validation.get.checks.head
-      check.termination shouldBe "indeterminate"
+      check.termination shouldBe "timed-out"
       check.exitCode shouldBe None
       check.stdout shouldBe _stdout
       check.stderr shouldBe _stderr

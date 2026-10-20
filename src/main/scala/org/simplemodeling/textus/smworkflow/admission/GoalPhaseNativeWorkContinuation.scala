@@ -55,6 +55,72 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       F.sessionC(identity, d, definition, core).flatMap(_advance_session_c(_, core))
 
+    def describeRemainingPlanC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanDescriptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanDescriptionResult] =
+      _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.describeC(_, d, core, input.proposal))
+
+    def adoptRemainingPlanC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanAdoptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanAdoptionResult] =
+      _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.adoptC(_, d, core, input))
+
+    private def _remaining_plan_source_c(identity: String, core: ActionCall.Core): Consequence[H.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core)
+      selected <- located match {
+        case Human(value, _) => Consequence.success(value)
+        case _ => F.invalid("remaining Plan adoption requires its actual unanswered semantic Human frontier")
+      }
+    } yield selected
+
+    def describeValidationRecoveryC(identity: String, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult] = for {
+      located <- _validation_recovery_source_c(identity, core)
+      (source, cursor, frontier) = located
+      target <- GoalPhaseNativeValidation.recoveryTargetC(source, d, core, cursor.candidate.get,
+        cursor.controller, frontier, cursor.documentpolicy, N.managementPaths(cursor.findings))
+    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(identity,
+      "decision-required", GoalPhaseValidationRecovery.message, core.component.get.core.instanceId.canonicalKey,
+      GoalPhaseValidationRecovery.targetRecord(target), GoalPhaseValidationRecovery.choices, GoalPhaseValidationRecovery.recoveryOperation)
+
+    def recoverValidationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult] = for {
+      supplied <- GoalPhaseValidationRecovery.targetC(input.target)
+      located <- _validation_recovery_source_c(input.sessionId, core)
+      (source, cursor, frontier) = located
+      actual <- GoalPhaseNativeValidation.recoveryTargetC(source, d, core, cursor.candidate.get,
+        cursor.controller, frontier, cursor.documentpolicy, N.managementPaths(cursor.findings))
+      _ <- if (supplied == actual) Consequence.unit else F.invalid("Human new-attempt input crosses its exact current recovery target")
+      _ <- GoalPhaseValidationRecovery.admitC(d, core, actual, input, source.participantIdentity)
+      _ <- if (input.choice == "Defer") Consequence.unit else if (input.choice == "AuthorizeNewAttempt") {
+        val authorization = GoalPhaseNativeValidation.NewAttempt(actual.checkIdentity, actual.attempt, actual.intentRevision,
+          input.reference.identity, input.reference.revision, source.participantIdentity, input.rationale)
+        GoalPhaseNativeValidation.appendRecoveryC(source, d, core, cursor.candidate.get, cursor.controller, frontier,
+          cursor.documentpolicy, N.managementPaths(cursor.findings), actual, authorization).map(_ => ())
+      } else F.invalid("validation recovery choice is undeclared")
+    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryResult(input.sessionId, true,
+      if (input.choice == "Defer") "deferred" else "new-attempt-authorized",
+      if (input.choice == "Defer") "Independent Human deferred validation recovery. The old unknown outcome and intent remain; no retry is granted."
+      else "Independent HumanNewAttempt authorization was appended. The old outcome remains unknown and every prior fact, Plan and repair count remains. Call ordinary advanceGoalPhase to attempt the same selected check under current host permissions.")
+
+    private def _validation_recovery_source_c(identity: String, core: ActionCall.Core):
+      Consequence[(F.Session, Cursor, InstanceRecord)] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core)
+      cursor <- located match {
+        case Paused(value, _, false) if Set(O.Stage.Validation, O.Stage.PhaseValidation)(value.controller.stage) &&
+            value.validation.nonEmpty && value.candidate.nonEmpty => Consequence.success(value)
+        case _ => F.invalid("validation recovery requires the actual paused unresolved Validation check")
+      }
+      revision <- cursor.validation.get.payload.sourceRevision.toLongOption
+        .filter(n => n > 0 && n.toString == cursor.validation.get.payload.sourceRevision)
+        .map(n => Consequence.success(InstanceRevision(n))).getOrElse(F.invalid("validation recovery source revision is invalid"))
+      // Paused.from is the current native record. The original Validation source
+      // remains the payload's admitted history prefix, including selected metadata.
+      frontier <- GoalPhaseNativeHistory.prefixC(source.current, revision)
+    } yield (source, cursor, frontier)
+
     private def _initial_cursor_c(source: F.Session): Consequence[Cursor] = for {
       from <- GoalPhaseNativeHistory.prefixC(source.current, source.started.receipt.next.revision)
       controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
@@ -65,6 +131,19 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughthuman: Option[ContinuationIdentity], soughtrecording: Option[ContinuationIdentity], core: ActionCall.Core): Consequence[Located] = for {
       following <- GoalPhaseNativeHistory.nextC(source.current, cursor.from)
       located <- following match {
+        case Some(entry) if Set("ordered-journal-findings-intent", "ordered-journal-findings-result")(entry.causation.value) => for {
+          retained <- GoalPhaseNativeJournalFinding.retainedC(_recording_source(source, cursor), d, core)
+            .flatMap(_.map(Consequence.success).getOrElse(F.invalid("actual Journal Finding history has no retained intent")))
+          result <- if (!retained.policyMatches) _paused_c(source, cursor,
+            "Journal Finding policy conflicts with the retained intent. No automatic replay or destination change.")
+          else retained.payload.outcomes match {
+            case None => _paused_c(source, cursor,
+              "Journal Finding intent has an unknown recording outcome. No automatic append replay or further work.")
+            case Some(_) => _walk_c(source, cursor.copy(from = retained.record,
+              findings = N.journaled(cursor.findings, GoalPhaseNativeJournalFinding.completed(retained))),
+              soughtwork, soughthuman, soughtrecording, core)
+          }
+        } yield result
         case Some(entry) if Set("ordered-document-progress-intent", "ordered-document-progress-result")(entry.causation.value) =>
           cursor.documents match {
             case None => F.invalid("document progress has no actual selected source")
@@ -113,7 +192,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             _ <- if (boundary.continuationIdentity.value == H.identity(decision).value) Consequence.unit
               else F.invalid("actual Human suspension differs from its Decision source")
             port <- _human_port_c
-            result <- if (soughthuman.contains(H.identity(decision))) Consequence.success[Located](Human(decision, cursor.findings))
+            adopted <- GoalPhaseRemainingPlanAdoption.retainedC(decision, core)
+            result <- adopted match {
+              case Some(value) => for {
+                policy <- value.documents.map(documents => P.policyC(value.controller.plan, documents, d.candidatePaths).map(Some(_)))
+                  .getOrElse(Consequence.success(Option.empty[P.Policy]))
+                result <- _walk_c(source, cursor.copy(from = value.record, controller = value.controller,
+                  documents = value.documents, documentpolicy = policy, candidate = None, validation = None,
+                  decisioncontext = None, recordingCandidate = None), soughtwork, soughthuman, soughtrecording, core)
+              } yield result
+              case None => if (soughthuman.contains(H.identity(decision))) Consequence.success[Located](Human(decision, cursor.findings))
               else port.retainedC(decision, core).flatMap {
                 case None => Consequence.success[Located](Human(decision, cursor.findings))
                 case Some((state, next, answer, input)) => for {
@@ -137,6 +225,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     else "Human cancelled this decision path. Repository state and history remain; the Phase is not completed."))
                 } yield result
               }
+            }
           } yield result else for {
             prepared <- _retained_work_c(source, cursor, pending, core)
             identity = ContinuationIdentity(boundary.continuationIdentity.value)
@@ -394,7 +483,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = {
       val recording = _recording_source(source, cursor)
-      if (N.eligible(recording)) N.selectC(recording, d).flatMap {
+      if (N.eligible(recording) && d.journalPolicy.nonEmpty) {
+        if (cursor.findings.pending.size > 256) _wait_cursor_c(cursor,
+          "The accumulated recording batch exceeds the bounded 256-item input. All pending observations are retained; no subset is recorded.")
+        else GoalPhaseNativeJournalFinding.advanceC(recording, d, core, acknowledgement).flatMap(value =>
+          F.waitC(value.record, "Automatic Finding recording", "Actual Journal Finding intent/result is retained.")
+            .flatMap(_after_native_c(source, cursor, _, core)))
+      }
+      else if (N.eligible(recording)) N.selectC(recording, d).flatMap {
         case Left(reason) => _wait_cursor_c(cursor, reason)
         case Right(request) => _recording_port.advanceC(recording, request, core)
       }
@@ -457,10 +553,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else cursor.candidate.map(candidate => GoalPhaseNativeValidation.advanceC(source, d, core, candidate,
           cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings))
           .flatMap { result =>
-            if (result.validation.exists(view => view.outcome.isEmpty && view.checks.lastOption.exists(receipt =>
-                receipt.termination == "not-started" && receipt.exitCode.isEmpty &&
-                  receipt.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.NotExecuted.wire))))
-              Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(result, cursor.findings))
+            if (result.validation.exists(validation => validation.outcome.isEmpty ||
+                validation.outcome.contains("failed") && validation.checks.lastOption.exists(check =>
+                  Set("cancelled", "timed-out", "termination-unconfirmed")(check.termination) &&
+                    check.exitCode.isEmpty && check.sbt.exists(_.outcome == "incomplete"))))
+              Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(result.copy(repairProgress =
+                Some(GoalPhaseRepairProgress.publicSnapshot(GoalPhaseRepairProgress.snapshot(cursor.controller)))), cursor.findings))
             else _after_native_c(source, cursor, result, core)
           })
           .getOrElse(F.invalid("selected checks have no actual current candidate"))
@@ -537,7 +635,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       fallback: org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       F.sessionC(source.current.identity.value, d, definition, core).flatMap { current =>
-        if (current.current.revision.value > cursor.from.revision.value) _advance_session_c(current, core)
+        if (current.current.revision.value > cursor.from.revision.value) _advance_session_c(current, core).map { result =>
+          fallback.validation.filter(_.evidenceRecording.nonEmpty).fold(result) { original =>
+            val projected = result.validation.filter(v => v.sourceRevision == original.sourceRevision &&
+              v.scopeIdentity == original.scopeIdentity).getOrElse(original)
+            result.copy(validation = Some(projected.copy(evidenceRecording = original.evidenceRecording)))
+          }
+        }
         else Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(fallback, cursor.findings))
       }
 
@@ -737,6 +841,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else Consequence.unit
             _ <- if (_is_review(plan.input)) d.reviewInstallation.get.evidence.admitC(call, plan.input, submitted)
               else Consequence.unit
+            _ <- GoalPhaseNativeReview.retainPriorC(Vector.empty, plan.input, submitted)
             state <- _completed_state_c(plan, submitted)
             next <- _completed_c(plan, submitted, state)
           } yield {

@@ -70,7 +70,10 @@ lazy val root = project
         "docs/spec/native-host-execution.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-dependency-scope.md",
-        "docs/spec/goal-phase-validation-metadata.md"
+        "docs/spec/goal-phase-validation-metadata.md",
+        "docs/spec/native-goal-command-task.md",
+        "scripts/native-goal-command.py",
+        "scripts/native-goal-authority.py"
       ).map { relativepath =>
         val source = baseDirectory.value / relativepath
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)

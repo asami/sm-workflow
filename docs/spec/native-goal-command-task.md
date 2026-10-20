@@ -9,14 +9,126 @@ AiRunner/TextusAI invocation is not a prerequisite.
 The historical filename also covers the finite standalone Split and Repository actions below;
 the Goal paths and Goal-owned Repository child boundaries remain in force.
 
+## Installed finite caller distribution
+
+The component-owned source is `scripts/native-goal-command.py`; its adjacent
+`native-goal-authority.py` uses the same installed command contract. `skillBundle`
+contains both scripts, this contract and the existing skill contracts. These
+files are also resources under `META-INF/sm-workflow/` in the component main jar.
+The workstation's selected tools bundle deploys the scripts as regular files at
+`development-workstation/common/codex/scripts/`. Installed skills resolve them
+relative to their shared directory. Use that deployed helper, with an explicitly
+selected absolute `--executable` pointing to the normal installed sm-workflow.
+Keep the operational checkout and feature checkout out of runtime selection.
+
+The owning parent invokes the finite caller directly with scoped escalation for
+the exact managed Python command, deployed script, installed executable, host,
+task, action and selected inputs/output. The approved effect scope remains the
+issued native pair; no generic interpreter prefix or command-runner child is
+admitted. This is the existing finite completion transport, not an alternate
+Workflow or a new wrapper around business policy. A platform denial stops it.
+
 ## Prepare the owning task
+
+### Mandatory actual exchange display
+
+Display each helper invocation's actual operation, outer Session and target
+Session (including a distinct Repository child), issued work kind and Step,
+actual returned repair counters, validation observations and retained output
+references whenever those values are present. The helper emits separate JSON
+objects with `recordType: "native-command-progress"` for invocation, finite
+running activity, actual CNCF SBT/runtime events, cancellation requests, process termination and the acknowledged
+response. Its `issuedObservation` and response `observation` project actual
+status, work kind/Step/source revision, repair counts and supplied validation
+metadata. Bounded projections omit Plans, scoped input payloads, argv,
+environment and source logs; omitted or shortened metadata is marked and the
+complete DTO remains in the raw response. Absent data stays absent or null. Hosts must display these
+records alongside the returned business response, including during long calls.
+
+The raw business DTO bytes remain in `response.json`; stderr remains complete
+in `stderr.log`. Business response objects keep their native schema. The stdout
+exchange is a stream of JSON objects: identify progress by `recordType` and
+consume business objects separately. Actual `[cncf-sbt-event]` lines are forwarded
+to stderr and included verbatim as `rawEvent` in stdout progress while the
+process runs only when they fit the finite line bound and decode as strict CNCF
+event objects with operation, workspace, program and lifecycle state. Malformed
+or oversized lines remain complete in `stderr.log` without structured display.
+Actual `[cncf-runtime-event]` objects use only required lifecycle `state`
+(runtime-started, cancellation-requested, settled or uncertain), positive runtime
+`pid`, and optional nonnegative `elapsedMillis`; foreign/private payloads are
+retained raw without structured display.
+Ordinary file sinks drain both native streams without pipe backpressure.
+Each Popen owns a new POSIX session so terminal Ctrl-C is not broadcast to its
+runtime child. The caller waits for the actual exit and response, without a
+fixed execution timeout or a deadline derived from telemetry. Short observation
+waits and programmatic heartbeat expose activity, including waits over an hour;
+they do not require repeated AI wait turns.
+
+A scoped SIGTERM handler forwards SIGTERM once to the exact owned Popen PID,
+handles a child already exited or a launch race, and restores the previous
+handler on return. It never signals a PID selected from untrusted event text.
+Runtime closes launch admission, cancels active handles, settles its managed
+descendants and persists actual captures, result and Workflow interruption state
+before closing storage/resources and exiting. Runtime configuration alone owns
+grace and escalation. The caller adds no group kill, escalation, grace timer or
+fallback. Existing KeyboardInterrupt and observation-error handling request the
+same runtime termination, wait for actual exit, retain raw files and propagate
+the original error; no SIGINT handback/resumption protocol is introduced.
+Interruption returns status 130 with no acknowledgement from that call and no
+further Advance. An earlier accepted Submit remains retained.
+
+A forwarded signal or root exit alone proves no cancellation, descendant
+settlement or durable state. Require actual runtime observations and the saved
+result. Nonzero exit, including a runtime's signal exit, remains a transport
+error even if raw response bytes exist; it does not become Workflow acceptance.
+After a zero-exit termination request, the actual decoded response is displayed
+once, then the caller stops with a termination-requested error before any
+following Advance, even if that response accepted Submit. The actual accepted
+value is retained unchanged. Absent response or unconfirmed termination/effects
+stay unknown without retry.
+Running activity reports elapsed time only. It supplies no Workflow
+Wait, progress percentage, safe replay, success, acceptance or authority. No
+extra runtime Operation is called to obtain display information.
+
+Native SBT execution belongs to CNCF's UnitOfWork and existing local process
+driver with ordinary V1–V3 grants. Retired V4 manual registered-host rendezvous,
+per-check AI runners and per-check response scripts are not continuation steps.
+The installed CLI itself continues to emit its single business JSON response
+on stdout and actual CNCF event lines on stderr; this helper's exchange records
+are a caller display contract.
+
+The opt-in NativeGoalValidationRecoveryCliSpec case named
+"prepare a fresh authorized installed SIGTERM fixture without advancing or claiming cancellation"
+requires smworkflow.spec.installed to identify an absolute installed CLI and the
+existing smworkflow.spec.sbt prerequisite. It prepares only a NEW ordinary
+authorized two-Compile fixture and exact metadata pointer. The first source
+generator starts a test-owned TERM-resistant managed descendant, records its
+PID and the SBT JVM PID, emits capture markers and sleeps 60 seconds. No Python
+harness or installed Advance runs inside that Scala preparation.
+
+After preparation, the parent invokes the literal installed executable directly
+with --host <new-root> command
+org.simplemodeling.textus.SmWorkflow.GoalPhaseService.advanceGoalPhase
+--sessionId <new-session> --json, retaining the metadata's exact output files.
+Only after actual runtime-started telemetry, both live PID markers and logs does
+the parent send SIGTERM to the exact observed owned runtime. A separate
+test_native_installed_sigterm.py --fixture <exact-metadata> unittest reads raw
+response/runtime observations and SQLite read-only, compares the retained
+baseline/history/Plan/base, requires actual cancelled Incomplete captures and
+unchanged zero repair counts, and checks all three exact PIDs are no longer
+live with no next check. It launches no Workflow and sends no signal. Missing
+actual response or settlement fails qualification and remains unknown.
+This authored proof establishes no installed result until the parent executes it.
 
 Follow [native installation](native-client-installation.md) and the
 [normal host contract](normal-three-workflow-host.md). Select absolute normalized
-primary, host and already-owned task paths. The task must be a direct child of
+installed executable, host and already-owned task paths. The task must be a direct child of
 `<host>/target/sm-workflow/tasks`; each call selects an existing empty output
-directory beneath that task. The current runtime/classpath, component descriptor,
-CAR manifest, host configuration/assembly and installed skill bundle must exist.
+directory beneath that task. The explicit executable must be an available executable file; the ordinary host
+configuration/assembly and installed skills must exist. The caller requires no
+checkout launcher, generated classpath, component descriptor or CAR manifest.
+The installed CLI alone selects the published artifact. There is no source
+fallback, PATH search or legacy --primary alias.
 
 The host records attributable actual human intent and its complete selected
 ordered Plan independently before provisioning. Record a parent-selected subplan
@@ -40,10 +152,14 @@ normal `complete` action joins one Submit observation to one explicit outer
 Advance. Other actions retain their single-call behavior for diagnostics and
 explicit operations. The owning host prepares each empty output directory;
 `complete` exclusively prepares its `advance` child before making Submit.
+After matching accepted Submit it rereads the exact original task routing and
+requires the same family and outer Session before one Advance. If routing is
+missing, invalid or changed, accepted raw output remains retained and no Advance
+occurs. Never rerun complete after an accepted Submit or uncertain result.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action prepare-goal-input \
@@ -82,8 +198,8 @@ The six canonical business fields are `repositoryIdentity`, `localBranch`,
 `trackingRemote`, `trackingBranch`, `remoteEndpointIdentity` and `syncMode`.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action prepare-repository-input \
@@ -169,7 +285,7 @@ preparation does not supply native checks, independent review or closure.
 
 Use finite action `prepare-repository-effect` for the existing generated
 `WorkflowRepositoryEffectPreparationInput` contract. The same five common
-`primary`, `host`, `task`, `action` and `output` options and owned task/output
+`executable`, `host`, `task`, `action` and `output` options and owned task/output
 preflight apply. Alongside them, all nine fields below are required named pairs;
 none has a default or optional form.
 
@@ -186,8 +302,8 @@ none has a default or optional form.
 | `collection` | `collection` | Strict three-label dotted `entity:` address |
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action prepare-repository-effect \
@@ -273,8 +389,8 @@ Before Goal Start, require the following, using the preparation contracts above:
 ## Start once, then explicitly Advance
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action start \
@@ -300,8 +416,8 @@ routing is an error. Never search other tasks, reconstruct an ID from prose or
 private Workflow storage, or replace an occupied route.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action advance \
@@ -361,7 +477,7 @@ availability, independence or permission.
    acceptance boundary for this assigned kind.
 2. At first issue, the host selects explicit original mapping/origin snapshots.
    The existing caller's `prepare-execution` action takes `--request`,
-   `--mapping` and `--origin` alongside common primary/host/task/action/output
+   `--mapping` and `--origin` alongside common executable/host/task/action/output
    options and calls normal `NativeHostPreparationService.prepareExecution`.
    Prepare once and retain the returned opaque `execution-session.json` and
    `execution-selection.json` unchanged. Pending/reopened work uses that original
@@ -432,8 +548,8 @@ when genuinely supplied and required/consumed by the issued contract. Never
 derive observations from model, profile, task or context labels.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action complete \
@@ -484,15 +600,16 @@ Their examples describe those individual actions. Normal supported semantic
 handoffs use the host's `complete` action; a semantic skill returns its typed
 result and control and gains no Advance or caller-loop authority.
 
-The caller allows a finite outer observation wait of 240 seconds for each
-explicit Advance (including the Advance inside `complete`) and 60 seconds for
-Submit and every other native call. These bounds are fixed
-by the action, with no caller timeout option. CNCF owns the shorter effect
-execution and cleanup limits, including the selected SBT execution limit of
-120000 milliseconds; the outer wait does not extend those limits or grant
-effects. An expired outer wait leaves the result uncertain: retain available
-raw output and the existing route, stop with nonzero exit, and do not retry,
-restart, Submit or automatically Advance.
+Every caller action waits for its actual response without an execution cutoff,
+including an Advance lasting over an hour. Runtime monitoring and heartbeat
+continue without an AI wait loop. Telemetry creates no caller deadline and no
+configuration parsing or additional Operation is used to derive one. Runtime
+retains per-check execution, validation and termination limits under the
+[product SBT lifecycle](native-host-execution.md#product-sbt-lifecycle). A transport
+or UI observation limit grants no kill, relaunch or next-Advance authority.
+Explicit SIGTERM requests runtime-owned cancellation and persistence; a missing
+or uncertain result retains raw output and the current route without retry,
+restart, Submit or automatic Advance.
 
 Failure, rejection, malformed/duplicate-key/nonfinite JSON, conversion error,
 timeout, incompatible principal/dependency, contradictory route or uncertain
@@ -538,8 +655,8 @@ The host supplies the real issuer and occurrence time; the caller mints no
 artifact, reference, worker, time or provenance from labels or defaults.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action prepare-repository-review-input \
@@ -581,8 +698,8 @@ Reuse the actual review result/reference values; preserve a repair decision
 and its findings. These values remain opaque to the caller's semantic admission.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action submit-repository-review \
@@ -633,8 +750,8 @@ crossed route facts fail before launch. Original outer-only actions retain
 their own scope.
 
 ```sh
-/absolute/path/to/managed-uv run --script /absolute/path/to/sm-workflow/scripts/native-goal-command.py \
-  --primary /absolute/path/to/sm-workflow \
+/absolute/path/to/managed-uv run --no-cache --managed-python --no-python-downloads --script /absolute/path/to/development-workstation/common/codex/scripts/native-goal-command.py \
+  --executable /absolute/path/to/installed/sm-workflow \
   --host /absolute/path/to/host \
   --task /absolute/path/to/host/target/sm-workflow/tasks/owned-task \
   --action submit-repository-repair \
@@ -663,7 +780,7 @@ Source and specification fixtures do not deliver the original live task repair.
 
 ## Standalone Split preparation, lifecycle and semantic result
 
-Use the same five common `primary`, `host`, `task`, `action` and `output`
+Use the same five common `executable`, `host`, `task`, `action` and `output`
 options and existing owned task/output preflight for a separate Split execution.
 Follow [Split Start preparation](native-host-start-preparation.md), the
 [canonical preparation contract](normal-host-preparation-operations.md) and the
@@ -713,8 +830,9 @@ Existing or concurrently occupied routing is never overwritten. `advance-split`
 has no action fields and rereads only that retained Split route before calling
 fixed `SplitPhaseService.advanceSplitPhase` with its `--sessionId`. Require the
 same actual response ID, nonblank message and one of `Request`, `Human`, `Wait`
-or `Terminal`. The fixed outer observation timeout is 240 seconds for Goal,
-Split or Repository Advance, 60 seconds otherwise. Display the original response and
+or `Terminal`. Every action waits for its actual response without a caller
+execution cutoff under the [product SBT lifecycle](native-host-execution.md#product-sbt-lifecycle).
+Display the original response and
 return control after that single call. Human handling, Submit and any later
 Advance are independently selected actions.
 
@@ -775,7 +893,7 @@ establishes no installed provider, genuine two-chat work or Phase acceptance.
 
 ## Standalone Repository lifecycle and semantic result
 
-The same five common `primary`, `host`, `task`, `action` and `output` options
+The same five common `executable`, `host`, `task`, `action` and `output` options
 and owned task/output preflight apply to an independently selected Repository
 execution. Existing `prepare-repository-input` remains passive and independent
 of routing. Its original explicit URI/metadata, native acquisition, trusted
@@ -806,7 +924,8 @@ Repository route and calls fixed `RepositorySyncService.advanceRepositorySync`
 with that `--sessionId`, using the same full component prefix. Require matching
 actual response ID, nonblank message and kind `Request`, `Human`, `Wait` or
 `Terminal`. Advance does not interpret an opaque outcome as Submit acceptance.
-Its fixed outer bound is 240 seconds; Start and other actions use 60 seconds.
+Every action waits for its actual response without a caller execution cutoff under the
+[product SBT lifecycle](native-host-execution.md#product-sbt-lifecycle).
 One call displays the unchanged response and returns control to the host. Native
 principal, scope, consent and checks remain with that current call's owner.
 
@@ -1147,7 +1266,7 @@ The existing caller input/output ownership rules retain exact argument pairs,
 explicit normalized input paths, symlink-free owned directories, exclusive raw
 outputs, strict bounded acknowledgements and one native call. E15–E18 in
 `scripts/tests/test_native_goal_command.py` bind adjacent Given/When/Then and
-unittest observations to those rules. Only `subprocess.run` is mocked; fixtures
+unittest observations to those rules. Only the native-call transport boundary is mocked; fixtures
 claim no actual native provenance or installed acceptance. This mapping records
 obligations, not executed results.
 
@@ -1166,7 +1285,7 @@ that child's acknowledgement. Native semantic/context/evidence/effect admission
 retains its existing owners; original outer-only actions remain outer-only.
 
 E19–E23 in the same executable specification retain the fixture provenance
-disclaimer and mock only `subprocess.run`. Every behavior leaf/subtest has
+disclaimer and mock only the native-call transport boundary. Every behavior leaf/subtest has
 adjacent Given/When/Then; this mapping describes obligations, not executed
 results or genuine child delivery.
 
@@ -1188,7 +1307,7 @@ P1 in `scripts/tests/test_native_repository_repair_command.py` has separate
 adjacent Given/When/Then leaves for proper child submission, aliases/inert
 annotations, wrong/missing/crossed route facts, finite action pairs, child
 acknowledgement and native failure/timeout without extra calls. It mocks only
-`subprocess.run`; these authored obligations record no validation PASS or native
+the native-call transport boundary; these authored obligations record no validation PASS or native
 task delivery.
 
 R10: `submit-repository-conflict` consumes exactly the forwarded conflict route
@@ -1201,7 +1320,7 @@ independent review and explicit Advance retain their separate owners.
 E25/E26 add Goal/review/repair/conflict routes with declared, snake and agreeing
 dual consumed aliases to the existing whole-context and opaque-retention
 assertions. E30–E33 in `scripts/tests/test_native_goal_command.py` bind adjacent
-Given/When/Then to the following obligations. Only `subprocess.run` is mocked;
+Given/When/Then to the following obligations. Only the native-call transport boundary is mocked;
 these examples establish neither installed provider/task delivery nor genuine
 two-chat work, and this mapping asserts no successful execution.
 
@@ -1220,7 +1339,7 @@ resultReference. Native semantic, Human, effects, independent review and
 Preview/Apply retain their separate owners. R1–R10 remain in force.
 
 E34–E40 in `scripts/tests/test_native_goal_command.py` add adjacent
-Given/When/Then executable expectations, mocking only `subprocess.run` and
+Given/When/Then executable expectations, mocking only the native-call transport boundary and
 preserving the earlier examples. These observations require parent validation;
 they claim no actual installed task, provider, consent, two-chat or Phase
 acceptance.
@@ -1228,7 +1347,7 @@ acceptance.
 | Example | Rules | Observable behavior |
 | --- | --- | --- |
 | E34 | R1,R2,R3,R5,R11 | Exact nine-field passive Split mapping and fixed one-call datastore acknowledgement; opaque selected files/config and absent or existing routing stay unchanged |
-| E35 | R2,R3,R5,R11 | Canonical returned Start ID, optional proposal, exclusive no-overwrite routing and four one-call Split Advance observations with fixed 240-second bound |
+| E35 | R2,R3,R5,R11 | Canonical returned Start ID, optional proposal, exclusive no-overwrite routing and four one-call Split Advance observations without a caller execution cutoff |
 | E36 | R2,R3,R5,R11 | Three exact semantic action/pair routes and agreeing aliases forward opaque result and absent/present optional facts/evidence once, without resultReference, requiring same Split ID |
 | E37 | R2,R3,R5,R11 | All three Split execution routes and aliases forward whole context and original explicit Session, retaining actual opaque artifacts despite changed configuration |
 | E38 | R2,R3,R4,R11 | Missing/wrong/crossed family/session/type/operation/child/kind/context or contradictory aliases refuse before process/output; old Goal actions retain their boundary |
@@ -1242,14 +1361,14 @@ whole issued context and explicit original execution Session remain as described
 above. R1–R11 retain their scopes and obligations.
 
 E41–E47 in `scripts/tests/test_native_goal_command.py` add exactly seven methods
-with adjacent Given/When/Then, mocking only caller `subprocess.run`. The original
+with adjacent Given/When/Then, mocking only the native-call transport boundary. The original
 58 method names and assertions remain. These authored expectations establish
 finite caller behavior only when validated; they assert no successful installed
 provider/task execution, genuine two-chat work or Step/Phase acceptance.
 
 | Example | Rules | Observable behavior |
 | --- | --- | --- |
-| E41 | R2,R3,R5,R12 | Canonical Repository Start with omitted/same/different proposal and declared/snake/agreeing dual ID aliases; occupied/raced routes survive; four explicit kinds use fixed 240-second Advance and reread actual ID |
+| E41 | R2,R3,R5,R12 | Canonical Repository Start with omitted/same/different proposal and declared/snake/agreeing dual ID aliases; occupied/raced routes survive; four explicit kinds await the actual Advance response without a caller execution cutoff and reread actual ID |
 | E42 | R2,R3,R5,R12 | Three exact semantic pairs and consumed aliases forward supplied opaque result/reference and absent/present optional facts/evidence once, requiring canonical same-ID acknowledgement |
 | E43 | R2,R3,R5,R12 | Standalone/Goal-child review preparation selects fixed family from saved route and forwards whole explicit URIs/metadata, preserving streams, inputs, configuration and routing |
 | E44 | R2,R3,R5,R12 | Three execution pairs and aliases preserve whole context, explicit original Session after mapping changes and opaque returned artifacts |
@@ -1266,7 +1385,7 @@ execution. R1–R12 retain their existing scopes.
 
 `scripts/tests/test_native_repository_effect_command.py` specifies PHASE-6.3 /
 SYNC with adjacent Given/When/Then clauses at every scenario leaf. Only the
-subprocess boundary is mocked. Its temporary files and native-shaped streams
+native-call transport boundary is mocked. Its temporary files and native-shaped streams
 are executable specification fixtures, never actual consent, Human provenance,
 imported authority or installed execution. These authored obligations claim no
 validation result or Phase acceptance.
@@ -1410,3 +1529,8 @@ availability. Parent-selected focused validation and the actual installed
 selected staging → EOF failure → correction → one commit → next Step proof,
 available cost observations, aggregate validation and comprehensive Phase review
 remain with their existing owners.
+
+The finite completion specification also executes a test-owned installed executable
+without replacing the subprocess transport. It checks literal argv, Submit/Advance
+order and raw streams. That child is a fixture, not a real Workflow acceptance.
+Changed, missing or corrupt routing after accepted Submit stops before Advance.

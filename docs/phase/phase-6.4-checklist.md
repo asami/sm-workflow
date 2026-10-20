@@ -1,4 +1,4 @@
-# Phase 6.4 Checklist: Local Evidence Storage and AI Recording
+# Phase 6.4 Checklist: Common Evidence Adoption and Development Operation
 
 status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
@@ -12,7 +12,15 @@ its [proposed minimum contract](../spec/evidence-storage.md) is ready for semant
 handoff and the owning native checks/review.
 No checklist outcome has yet been accepted.
 
-## E1: minimum contract
+## Phase 12 allocation — 2026-10-20
+
+Phase 12 owns the common runtime and minimum automatic save/Journal/read route;
+E2 adopts it and E3/E4 complete operational use on the same service. The revised
+future criteria below require normal adoption by the current execution owner.
+All existing P64 IDs, flags, E1 acceptance and evidence remain. Producer results
+are reusable at their actual scope, not a claim of consumer acceptance.
+
+## E1: minimum contract (original acceptance scope retained)
 
 - [ ] P64-01: Classify disposable work, execution evidence and canonical
       development/management artifacts without putting evidence payloads in Git.
@@ -23,14 +31,16 @@ No checklist outcome has yet been accepted.
 
 ## E2: working main route
 
-- [ ] P64-04: An actual AI/client notification selects one completed local test
-      log and receives its Evidence ID and final reserved filename.
+- [ ] P64-04: Advance selects one actual completed test Action's released log
+      under its declared producer policy, using Phase 12's shared service and
+      stable source-associated Evidence ID without recording-only AI work.
 - [ ] P64-05: Runtime archives that released file beneath the configured
       `~/backup/journal/YYYY/MM/` root and records the actual storage result.
-- [ ] P64-06: Actual AI recording saves the returned ID, host/location, state
-      and retention date in the selected project journal without embedding logs.
-- [ ] P64-07: A fresh process resolves the same Evidence ID and reads the
-      archived log through the supported service/storage path.
+- [ ] P64-06: Common Journal records the actual storage observation and Evidence
+      reference; AI consumes actual Entry/Evidence IDs and separate outcomes
+      without Markdown transcription, absolute display paths or embedded logs.
+- [ ] P64-07: A fresh process reads that Journal entry, resolves its Evidence ID
+      and reads the archived log through the public supported storage path.
 - [ ] P64-08: Work files and evidence remain outside the selected Git delta;
       canonical decisions, accepted inputs and source artifacts are preserved.
 
@@ -43,19 +53,22 @@ No checklist outcome has yet been accepted.
 - [ ] P64-11: Live/unreleased inputs, unavailable sources and conflicting
       destinations produce explicit outcomes without relocation or overwrite.
 - [ ] P64-12: Journal-write failure remains distinct from successful storage;
-      a later record uses the stored result without rerunning tests or moving again.
+      Journal-only continuation uses the stored observation without rerunning
+      the Action, reallocating Evidence, moving again or AI transcription.
 
 ## E4: operational branches and closure
 
 - [ ] P64-13: Multiple files retain exact per-file source/destination/status
       mapping, including partial storage outcomes.
-- [ ] P64-14: Selected large text compression returns the final `.gz` path
-      before storage and archived decompression remains readable.
+- [ ] P64-14: Selected large text compression retains its exact internal `.gz`
+      destination before storage; the same Evidence ID resolves to readable
+      decompressed content without requiring an absolute path in the response.
 - [ ] P64-15: Completion-based 30-day retention, active no-expiry, explicit
       hold/review and due-material queries work without automatic deletion.
 - [ ] P64-16: Expired/missing evidence is reported truthfully without revoking
       prior acceptance or treating a saved reference as a new successful test.
 - [ ] P64-17: Focused connected validation, independent Phase review and final
-      full serialized validation establish the Phase's own accepted boundary.
-- [ ] P64-18: Documentation, AI recording instructions and Phase 7 handoff are
-      reconciled and ordinary local release closure records the accepted scope.
+      full validation using sbt-native locks establish the Phase's own accepted boundary.
+- [ ] P64-18: Documentation, automatic Evidence/Journal consumption instructions
+      and successor handoff are reconciled; ordinary local release closure records
+      the actual accepted scope without claiming unfinished producer capabilities.

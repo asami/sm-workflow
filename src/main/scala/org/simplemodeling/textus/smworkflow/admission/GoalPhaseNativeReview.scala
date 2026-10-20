@@ -14,7 +14,7 @@ import GoalPhaseOrderedProgression as O
 /** Actual selected semantic review context and independent host admission.
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
@@ -58,7 +58,7 @@ private[smworkflow] object GoalPhaseNativeReview {
     _ <- _check(request != null && submitted != null && submitted.result != null &&
       submitted.result.typeIdentity == S.resultCodec.typeIdentity && submitted.result.value != null &&
       submitted.resultReference != null && _reference(submitted.resultReference.identity) &&
-      _revision(submitted.resultReference.revision), "actual completion input or result reference is invalid")
+      _reference(submitted.resultReference.revision), "actual completion input or result reference is invalid")
     retained <- request.kind match {
       case "ReviewStep" | "ReviewPhase" => for {
         _ <- _check(request.candidate != null && request.candidate.nonEmpty &&

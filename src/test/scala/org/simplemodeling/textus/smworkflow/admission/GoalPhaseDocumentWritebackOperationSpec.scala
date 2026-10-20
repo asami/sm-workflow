@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -173,11 +173,12 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
       } yield ())
       result
     }
-    def submit(work: WorkflowInteraction[S.Request, Nothing], displayed: Option[V.GoalPhaseAdvanceResult] = None): ContinuationResult[S.Result] = {
+    def submit(work: WorkflowInteraction[S.Request, Nothing], displayed: Option[V.GoalPhaseAdvanceResult] = None,
+      resultRevision: Option[String] = None, expectedRejection: Boolean = false): ContinuationResult[S.Result] = {
       val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request
       val input = order.input.get.value
       val review = input.kind.startsWith("Review")
-      val reference = ContextReference("specification-writeback-" + input.kind, order.expectedRevision.value)
+      val reference = ContextReference("specification-writeback-" + input.kind, resultRevision.getOrElse(order.expectedRevision.value))
       val value = S.Result(if (review) "accept" else "completed", "Specification-owned assigned semantic result", Vector.empty)
       val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty,
@@ -193,8 +194,12 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
       } yield ())
-      invoke[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(result)))
-        .accepted shouldBe true
+      val submitted = call("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(result)))
+      if (expectedRejection) {
+        submitted.isSuccess shouldBe false
+        submitted.toString should include("actual review report or original target is invalid")
+      }
+      else read_value[V.GoalPhaseWorkSubmissionResult](take(submitted)).accepted shouldBe true
       result
     }
     def authority(identity: String, waiting: V.GoalPhaseAdvanceResult, child: Boolean = false): Unit = {
@@ -238,6 +243,57 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
     take(P.mergeC(text, desired.phase, Some(desired), desired)) shouldBe P.Merged(true, None)
 
   "Tracked document progress through normal GoalPhase Operations" should {
+    "advance an opaque implementation reference and reject an opaque review revision before consuming its pending work" in {
+      Given("Spec: docs/spec/native-goal-command-task.md; a disposable tracked first Step with normal Operations and explicit specification review evidence")
+      val root = _root()
+      val revision = "p64-e1-proposal-2026-10-20-1"
+      _with_episode(root, initialize = true) { episode =>
+        val identity = episode.start()
+        episode.advance(identity).kind shouldBe "Request"
+        val implementation = episode.work(identity)
+        _request(implementation).kind shouldBe "ImplementStep"
+        Files.writeString(root.resolve("repository/step-1.txt"), "First assigned boundary.\n")
+        When("normal Submit accepts the assigned implementation with its opaque result revision and ordinary Advance reconstructs it")
+        val completed = episode.submit(implementation, resultRevision = Some(revision))
+        val displayed = episode.advance(identity)
+        val pending = episode.work(identity)
+        val before = episode.current(identity)
+        Then("the original reference stays exact and successful candidate checks reach the independent Step review")
+        completed.resultReference.revision shouldBe revision
+        displayed.kind shouldBe "Request"
+        _request(pending).kind shouldBe "ReviewStep"
+        _assert_product_check_(root, _request(pending).review.get.checks.last.stdout)
+        _request(pending).review.get.checks.last.exitCode shouldBe Some(0)
+
+        When("normal review preparation supplies actual host evidence and Submit receives an opaque review revision")
+        episode.submit(pending, Some(displayed), resultRevision = Some(revision), expectedRejection = true)
+        Then("Submit refuses before changing the current instance, history or pending continuation")
+        val after = episode.current(identity)
+        (after.definition.workflowIdentity, after.definition.workflowRevision, after.definition.sourceCorrelation,
+          after.definition.producerAbiIdentity, after.definition.workflowAbiIdentity, after.definition.bootstrapAbiIdentity,
+          after.definition.producerRevision) shouldBe
+          (before.definition.workflowIdentity, before.definition.workflowRevision, before.definition.sourceCorrelation,
+            before.definition.producerAbiIdentity, before.definition.workflowAbiIdentity, before.definition.bootstrapAbiIdentity,
+            before.definition.producerRevision)
+        after.copy(definition = before.definition) shouldBe before
+        after.history shouldBe before.history
+        episode.work(identity) shouldBe pending
+
+        When("the same pending review is submitted with its valid numeric revision and ordinary authority and Advance continue")
+        val accepted = episode.submit(pending, Some(displayed))
+        val waiting = episode.advance(identity)
+        episode.authority(identity, waiting)
+        val next = episode.advance(identity)
+        val second = _request(episode.work(identity))
+        Then("the unconsumed review completes normally and the committed first Step reaches the next implementation")
+        next.kind shouldBe "Request"
+        second.kind shouldBe "ImplementStep"
+        second.stepIdentity shouldBe Some("step-2")
+        second.completed.size shouldBe 1
+        second.completed.head.review shouldBe accepted.resultReference.identity
+      }
+    }
+
     "select the added second Step after the actual first commit, preserve latest edits, detect overlap and close the staged full Phase" in {
       Given("tracked Phase/checklist documents, an empty opt-in, fixed Git programs and a normal selected ProductCheck build")
       val root = _root()

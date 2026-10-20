@@ -14,7 +14,7 @@ import NativeHostEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHostEvidence.Reader) {
@@ -58,6 +58,14 @@ private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHos
       _ <- _admit_evidence_c(core, Purpose.GoalHuman,
         key(submitted.resultReference.identity, submitted.resultReference.revision), binding)
     } yield ()
+  }
+  val validationRecovery: GoalPhaseValidationRecovery.EvidencePort = new GoalPhaseValidationRecovery.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.ValidationRecovery, key(reference.identity, reference.revision), binding)
+  }
+  val remainingPlanAdoption: GoalPhaseRemainingPlanAdoption.EvidencePort = new GoalPhaseRemainingPlanAdoption.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.RemainingPlanAdoption, key(reference.identity, reference.revision), binding)
   }
   val repositoryReview: RepositorySyncNativeMergeReview.EvidencePort = new RepositorySyncNativeMergeReview.EvidencePort {
     def admitC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,

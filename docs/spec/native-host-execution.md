@@ -7,6 +7,148 @@ driver, invoke tools, dispatch an application command or advance a Workflow.
 Actual installed host/tool/provider availability, all three skill families and
 genuine separate chat/session observations remain Phase 6 acceptance obligations.
 
+For the supported finite paired completion, the parent directly executes the
+deployed `../../scripts/native-goal-command.py --action complete` relative to an
+installed sm skill, passing `--executable <absolute installed sm-workflow>` and
+the explicit host/task/request/submission/fresh-output paths. Use managed Python
+and scoped escalation for this exact finite invocation, with no general shell or
+interpreter approval prefix. This is the existing host-owned pair, not a command
+subagent or a substitute Workflow. The helper launches only the selected
+installed executable with `--host <host> command <fixed Operation>`; it never
+constructs a development classpath or selects an artifact. It retains/displays
+actual accepted Submit before reopening the original family/Session routing for
+one explicit outer Advance. Changed routing, rejection or uncertainty stops with
+raw outputs preserved and no replay. See the
+[installed finite caller contract](native-goal-command-task.md).
+
+## Product SBT lifecycle
+
+The installed sm-workflow CLI's native local driver executes ordinary SBT
+inside its already escalated, admitted UoW. The execution platform owns launch,
+waiting, timeout, bounded stdout/stderr capture, termination and validation
+interpretation. Its actual program-produced observations supply skill display
+data. Skills do not create a per-check AI runner, prepare native SBT bridge
+requests, launch/wait for a child or manufacture/publish completion responses.
+
+The ordinary installed CLI call waits for its actual response, including when
+Advance takes an hour or longer. There is no caller-owned execution cutoff,
+fixed startup cutoff or telemetry-derived deadline extension. Runtime programs
+own execution deadlines, monitoring, heartbeat and result collection; waiting
+does not require repeated AI calls or extra per-check agents/operations. A
+transport/UI wait limit does not authorize killing the runtime, relaunching it
+or issuing another Advance. CNCF retains per-check deadlines and checks.
+
+An explicit SIGTERM is forwarded once to the exact owned runtime as a
+termination request. Runtime closes new-launch admission, cancels active
+operations, verifies managed-child/descendant termination and preserves logs,
+actual results and durable Workflow interruption state before closing runtime
+storage/resources and exiting. Grace and any required escalation belong solely
+to existing runtime configuration. The caller adds no TERM/KILL process-group
+fallback or cleanup timer and never scans or signals unrelated user processes.
+Sending TERM is only a request: runtime-confirmed settlement and the actual
+durable result are required to establish cancellation. SIGKILL, missing evidence
+or unconfirmed termination/effects remain unknown, without fabricated success,
+cancellation or automatic replay. No universal termination guarantee is made
+for escaped, detached or uninterruptible processes.
+
+Use the existing normal continuation policy: confirmed non-execution permits
+preparation correction or executor replacement under unchanged target,
+operation and authority; await running work, collect applicable completed
+results and observe unknown work without blind replay. A caller change creates
+no new execution or approval requirement. Cancellation neither turns validation
+into a product-test failure nor resets/refunds/renews repair counts. Preserve
+existing interrupt handling; a new SIGINT handback/resumption protocol is a
+deferred candidate, without new tests, acceptance or Phase-plan obligations.
+
+This product execution belongs to the platform program within the installed
+CLI call. Independent AI-owned top-level development tests and publication
+retain `cncf_command_runner`, the shared wrapper, normal caches and sbt-native
+locking. This distinction changes no general development execution policy.
+
+The former manual registered SBT host bridge is rejected and retired, including
+current typed `registered_sbt` execution; there is no V8 execution promise.
+V4 host configuration requires explicit migration to V3 with
+`registeredSbtHost` removed. No automatic fallback, stored Session edits or
+relabeling of historical accepted evidence is permitted. Historical schemas and
+decoding remain readable. See the [selected validation recovery contract](goal-phase-validation-recovery.md).
+
+## Visible sm-workflow exchanges
+
+During `sm-goal-phase`, `sm-repository-sync` and `sm-split-phase`, the owning host narrates command exchanges in the user's
+language through chat commentary, without requiring a verbose/debug option.
+Show each call when it happens, including preparation, Start, Submit and Advance;
+do not defer all reporting to the final answer or leave it only in tool output.
+
+- Before invoking the command, use a short `sm-workflow →` message naming the
+  actual operation, selected Phase/Step, known target session and input purpose.
+  For a substantial input, summarize its intended result and link the exact
+  selected input file instead of dumping its JSON. A Start proposal is only a
+  proposal until its response supplies the actual ID.
+- After return, use `sm-workflow ←` to report the actual response's `kind` and `outcome`,
+  `accepted` when present, and runtime `message`. Quote the message as data and
+  explain its practical meaning briefly when needed. For Advance, name the
+  actual Request/Human/Wait/Terminal kind and any issued work kind/Step or
+  waiting condition. Show the actual session ID at Start or when the target
+  changes, distinguishing a Goal-owned child from its outer Goal.
+- For preparation responses without business status fields, describe the
+  actual returned artifact/record kind. Do not invent accepted, completed or
+  next-work claims from process exit alone. On rejection, nonzero exit,
+  malformed output or transport uncertainty, report the observed failure and
+  bounded relevant diagnostic, with links to retained response/stderr files.
+  Explain whether the command is still running or has stopped using only
+  observed process state; no response yet is not a Workflow Wait.
+
+The host's existing `complete` action keeps Submit and the permitted explicit
+Advance in one invocation. Announce that pair before the call and report both
+actual responses in order when returned, distinguishing result acceptance from
+the next Workflow instruction. Do not insert a continuation prompt or extra AI
+turn between them, split the action, replay a call, or query status solely to
+produce commentary. While a call is running, keep normal progress updates using
+available output without claiming an unobserved internal state.
+
+Use the existing retained raw outputs as detail links; this display adds no
+event store, wrapper, control state or runtime operation. Keep credentials and
+private input contents out of commentary. Reporting does not change effect
+authority, independent review or the original stop/continuation rules.
+
+The same concise checklist is mandatory in all three skills, in normal mode:
+
+| Moment | Required commentary using actual data |
+| --- | --- |
+| Before | `sm-workflow → <operation>; purpose=<purpose>; Session=<known ID or unknown>; Step=<known Step or unknown>`; include the known Phase/target and exact selected input link when useful. |
+| During | `sm-workflow … <actual [cncf-sbt-event] observation>; transport=<observed running/stopped/unknown>`; surface program-emitted SBT events promptly as output becomes available, including actual validation/runtime observations and supplied repair counts. |
+| After | `sm-workflow ← kind=<actual or unknown>; outcome=<actual or unknown>; accepted=<actual or unknown>; message=<actual or unknown>; work=<issued work or unknown>; next=<actual waiting/continuation condition or unknown>`; include supplied current/cumulative repair counts and validation/runtime observations with exact retained-output links. |
+| Failure/uncertainty | State the observed rejection, transport/nonzero/parse failure or missing output and what remains unknown; link exact retained response/stderr. State running/stopped only from observations, without inferring success or a Workflow Wait. |
+
+Optional fields and counters absent from the actual program response stay
+`unknown` (or explicitly absent); never fabricate zero, acceptance, a Step or
+completion. Keep the outer Session and actual child target distinct. A running
+transport with no response is not Workflow `Wait`; display Wait only from its
+actual returned kind and condition. The existing `native-goal-command.py`
+supplies program-produced exchange/event data; skill prose alone does not
+guarantee that a terminal/tool transport exposes live OS output. If output is
+buffered or unavailable, report that visibility limit, then display the actual
+observations when available without claiming earlier delivery.
+
+The before/after checklist applies to every call, including preparation and
+paired `complete`; display its actual Submit and permitted Advance responses
+in order. Narration must appear in chat commentary even without debug flags;
+raw tool output, a detail link or the final answer alone is insufficient.
+Use exact returned/retained raw-output paths as links. Do not dump secret source
+contents, full argv or environment. Do not add state queries, Submit or Advance
+solely to obtain display data, split the paired completion, replay calls or
+alter continuation/stop rules.
+
+Include supplied actual runtime deadlines, heartbeat, termination/descendant
+settlement observations and durable result references in during/after/failure
+commentary. Runtime telemetry is observation, not a caller deadline or effect
+authority. Distinguish a forwarded SIGTERM request from runtime-confirmed
+settlement and the durable actual result. Missing observations remain unknown;
+a requested signal, elapsed time or root-process exit alone establishes neither
+descendant cleanup, durable interruption state nor validation success. Preserve
+the actual response/uncertainty and existing normal continuation authority;
+invent no extra approval or AI wait loop and no automatic replay.
+
 ## R1 — First issued input and retained scope
 
 `prepareC(issued, mapping, origin)` accepts the actual public Request context,
@@ -189,30 +331,20 @@ response has no issued work context. This binding installs no provider.
 ## R9 — Ordinary command and caller loop
 
 Select complete concrete input files yourself from the actual Request and
-explicit artifacts. With the existing normal host launcher, the two commands are:
+explicit artifacts. With the explicitly selected installed executable, the two commands are:
 
 ```sh
-"$primary/bin/launcher" \
-  --classpath-file "$primary/target/cncf.d/runtime-classpath.txt" \
-  --main-class org.goldenport.cncf.CncfMain -- --force-exit \
-  --component-dev-dir "$primary" \
-  --textus.assembly.descriptor="$host/.textus/assembly.yaml" \
-  command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareExecution \
+"$installed_executable" --host "$host" command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareExecution \
   --input "$(cat "$task/prepare-execution-input.json")" --json
 
-"$primary/bin/launcher" \
-  --classpath-file "$primary/target/cncf.d/runtime-classpath.txt" \
-  --main-class org.goldenport.cncf.CncfMain -- --force-exit \
-  --component-dev-dir "$primary" \
-  --textus.assembly.descriptor="$host/.textus/assembly.yaml" \
-  command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.recordExecution \
+"$installed_executable" --host "$host" command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.recordExecution \
   --input "$(cat "$task/record-execution-input.json")" --json
 ```
 
 The existing finite `native-goal-command.py` offers `prepare-execution` with
 `request,mapping,origin`, and `record-execution` with
 `request,execution-session,observation` plus optional `reference`, in addition to
-the shared primary/host/task/action/output options. It checks the retained outer
+the shared executable/host/task/action/output options. It checks the retained outer
 Goal ID against Request.sessionId, accepts the existing Goal-owned Repository
 review/repair/conflict child routes, and forwards the whole nonempty issued DTO unchanged.
 The conflict pair is exactly `submitRepositorySyncWorkResult` with
@@ -278,7 +410,7 @@ review. Prepare/record perform none of those steps.
 
 The historical `native-goal-command.py` filename also covers standalone
 Repository. The fixed ordinary CncfMain bootstrap, full component FQN,
-primary/host/task/action/output pairs, owned directories and exclusive outputs
+executable/host/task/action/output pairs, owned directories and exclusive outputs
 remain the same. `start-repository` requires input and permits optional proposal;
 it forwards the whole strict input object text and supplied `--sessionId` proposal
 to `org.simplemodeling.textus.SmWorkflow.RepositorySyncService.startRepositorySync`.
@@ -292,8 +424,10 @@ Original Goal and Split actions keep their exact family checks.
 `advance-repository` has no additional action options and rereads the saved
 Repository route for fixed `RepositorySyncService.advanceRepositorySync` with
 the actual retained ID. Require the same actual response ID, nonblank message
-and kind Request, Human, Wait or Terminal. All three Advance actions have the
-fixed 240-second outer bound; all other actions have 60 seconds. No public family,
+and kind Request, Human, Wait or Terminal. Every action waits for its actual
+response without a caller execution cutoff, including an Advance lasting an
+hour or longer. Monitoring, deadlines and SIGTERM settlement belong to runtime
+under the [product SBT lifecycle](#product-sbt-lifecycle). No public family,
 operation, service, target or timeout selector is introduced.
 
 Three existing semantic actions accept only these exact Repository pairs:
@@ -382,7 +516,7 @@ and mocks only caller subprocess.run. Their R12 mapping is:
 
 | Example | Observable caller obligation |
 | --- | --- |
-| E41 | Canonical Start/proposals/ID aliases, occupied/raced routing and four explicit 240-second Advance kinds |
+| E41 | Canonical Start/proposals/ID aliases, occupied/raced routing and four explicit Advance kinds; caller waits for the actual response without an execution cutoff |
 | E42 | Three same-ID semantic pairs/aliases, opaque required result/reference and absent/present optional metadata with canonical acknowledgement |
 | E43 | Saved standalone/Goal-child review family and whole explicit URI metadata, without input/configuration/routing changes |
 | E44 | Three execution pairs/aliases, whole context, original Session after mapping changes and opaque returned artifacts |

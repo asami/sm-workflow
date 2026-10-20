@@ -1,5 +1,28 @@
 # sm-workflow incremental-use roadmap
 
+Common Evidence adopted 2026-10-20: [Phase 12](phase-12.md), owned by
+sm-workflow開発, delivers one automatic Action -> actual archive -> common
+Journal -> fresh-process read route before Phase 6.4 E2 adoption. Phase 6.4,
+owned by sm-workflow-dev開発, reuses it for operational acceptance and extends
+the same service for failure/batch/compression/retention. No absolute display-path
+API, AI journal transcription or duplicate service is required. Phase 11's
+accepted Journal is reused; 11.1 and 7–10 are not prerequisites. Preserve ongoing
+6.4 execution and all accepted results. See the [shared specification](../spec/common-evidence.md)
+and [both-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+
+Journal delivery priority, adopted 2026-10-20: [Phase 11](phase-11.md) is a short
+independent delivery before the remaining Phase 6.4 work: common structured
+record/read/find, accepted-finding recording and installed trial-skill connection.
+It does not depend on 6.4 archival or on Phases 7–10. Phase numbering does not
+set execution order. Phase 6.4 consumes this shared Journal through its normal
+adoption boundary while retaining ongoing work, issued requests and evidence.
+[Phase 11.1](phase-11.1.md) adds decisions/issues/handoffs and revision/batch
+management separately; it does not delay the 6.4 trial. The main rollout below
+remains, with this selected prerequisite delivery inserted before 6.4's remaining
+integration. No active Goal or closed Phase is reset by this planning decision.
+See the [design](../design/development-journal.md) and
+[handoff](../journal/2026/10/2026-10-20-common-journal-phases-handoff.md).
+
 File Workspace clarification adopted 2026-10-15: Phase 6 P6-SBX03 uses protected
 `file_read_text` / `file_write_text` for development-file manipulation and retains
 ordinary `read_resource` / `read_resource_text` with runtime-owned limits for
@@ -146,9 +169,12 @@ in Phase 6, using the corrected runtime contract.
 | [6.1: Runtime commands, live plans and Step Admission](phase-6.1.md) | Actual command lifecycle, document sync, deterministic maintenance and ordinary review/commit | Consume Phase 6 typed effects/evidence; no CBD review handoff wait |
 | [6.2: FIX, recording and dependency decisions](phase-6.2.md) | Correction/improvement/reset, semantic maintenance, actual discovery recording and Human dependency decisions | Consume Phase 6.1; recording does not adopt repairs |
 | [6.3: Integrated quality/Final and start of use](phase-6.3.md) | Three-family connected acceptance (P63-USE01..03), PHASE/FINAL and aggregate repository-full validation | Ordinary SplitPhase and single-repository RepositorySync; limited single-repository GoalPhase; no wait for 6.4/7/8/9/10 |
-| [6.4: Local Evidence storage and AI recording](phase-6.4.md) | Notification -> exact destination -> local archival -> actual AI journal record -> fresh-process lookup; then bounded failure/batch/retention branches | Newly planned after 6.3 and before 7; own [checklist](phase-6.4-checklist.md) and validation/closure, outside the 6–6.3 aggregate chain |
+| [6.4: Common Evidence adoption and development operation](phase-6.4.md) | Adopt Phase 12 automatic archive/Journal/read; complete failure/batch/compression/retention use | Preserve active E1/history and all P64 IDs; own consumer validation/closure |
+| [12: Common Evidence and automatic Action recording](phase-12.md) | Actual common identity/save/read and Advance-to-Journal connection for one log producer | Short priority runtime delivery before 6.4 E2, independent of 11.1 and 7–10; [checklist](phase-12-checklist.md) |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
+| [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
+| [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |
 
 
 ## Applied Phase 6 split — 2026-10-13
@@ -166,7 +192,7 @@ provides every feature. Initial production use starts after 6.3 acceptance;
 | 6.1 | Runtime command/result ownership, live plan/writeback, maintenance and ordinary review/Admission/local Step commit | Basic development route; no mandatory CBD review |
 | 6.2 | TEST_FIX/REVIEW_FIX, affected validation, findings/recording, continuation/reset and dependency decisions | Repair-inclusive development route ready for integrated acceptance |
 | 6.3 | Installed skills, integrated review/Final and aggregate validation | `sm-split-phase` and single-repository `sm-repository-sync`: ordinary production use. `sm-goal-phase`: limited production use within one selected repository, through development/repair/validation/review/local closure |
-| 6.4 | Git-excluded evidence archive, exact destination for AI recording, durable lookup and retention | Adds storage to the 6.3 use tiers; does not postpone ordinary split/sync use or expand GoalPhase to related-project management |
+| 6.4 | Adopt shared Evidence/Journal references and real storage; batch, compression and retention operation | Adds operation to existing use tiers; no duplicate store or new initial-use gate |
 | 7 | Root/related-repository dependency-aware sync, dedicated worktrees and development artifact publish/select/verify/detach/prune | Full practical adoption of GoalPhase together with related-project management. GoalPhase still closes locally; RepositorySync and artifact operations own cross-project synchronization and artifact selection |
 | 8 | Finite extensions selected from observed use and retained needs, potentially additional transports/providers/management and sandbox scopes | Actual delivered features depend on explicit scenario selection; no blanket promise of all server/MCP/local-LLM features |
 | 9 | Detect non-convergence from validation/repair history and switch admitted provider/profile within the acceptance boundary | Adds observed routing and cost/convergence improvement to existing role selection and repair |
@@ -262,7 +288,7 @@ The detailed 2026-10-07 execution plans preserve the accepted scope:
 | [6.1](phase-6.1.md#goal-and-connected-implementation-order) | Runtime commands/live plans/maintenance and ordinary Step review/Admission | Actual CBD-independent Step Admission/commit and execution/plan/evidence handoff |
 | [6.2](phase-6.2.md#goal-and-connected-implementation-order) | FIX/improvement/reset, recording and dependency decisions | Accepted connected branches and complete contracts |
 | [6.3](phase-6.3.md#goal-and-connected-implementation-order) | Integrated PHASE/repair/FINAL and setup/use acceptance | Aggregate full validation and gradual-use eligibility |
-| [6.4](phase-6.4.md#main-route-first) | First archive one released file, return its exact path to actual AI recording and read it after restart; then add failure/batch/compression/retention branches | Accepted local storage interface, separate Phase validation and Phase 7 handoff |
+| [6.4](phase-6.4.md#main-route-first) | Adopt Phase 12 real automatic one-log route, then failure/batch/compression/retention | Consumer acceptance on the common service; preserve accepted E1 and existing history |
 | [7](phase-7.md#execution-plan--2026-10-07) | A: native publish/select/status through actual SBT resolution; B: Cozy generation/selection lifecycle; C: workspace sync using the same resources and validation runtime | D: combined overlay/workspace acceptance, CNCF Phase 101 full closure, then Phase 7 closure |
 
 These letters are work ordering, not new tracking IDs or approval/review gates.

@@ -66,11 +66,7 @@ binding, Reader admission, trust and authority meaning remain unchanged.
 Use `org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority` with one named `input` of generated type `WorkflowAuthorityPreparationInput`. Select actual host values and absolute local file: URI references; the following values illustrate the concrete schema:
 
 ```sh
-"$primary/bin/launcher" \
-  --classpath-file "$primary/target/cncf.d/runtime-classpath.txt" \
-  --main-class org.goldenport.cncf.CncfMain -- --force-exit \
-  --component-dev-dir "$primary" \
-  --textus.assembly.descriptor="$host/.textus/assembly.yaml" \
+"$installed_executable" --host "$host" \
   command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority \
   --input '{"request":"file:///absolute/host/full-goal-wait.json","reference":"file:///absolute/host/authority-reference.json","participant":"actual-operator","issuer":"configured-host","occurredAt":"2026-10-14T00:00:00Z","collection":"entity:smworkflow.cli.host_evidence"}' --json
 ```
@@ -85,16 +81,16 @@ The raw successful `--json` response is the direct structured `WorkflowPreparedI
 
 ## Finite retained-task caller
 
-`scripts/native-goal-authority.py` wraps that same six-option Main for one selected
+`scripts/native-goal-authority.py` calls that same normal installed Operation for one selected
 retained Goal task. It uses managed Python 3.12 or newer without dependencies and
 loads the fixed sibling `native-goal-command.py` for the existing path, routing,
-launcher, strict JSON and bounded subprocess utilities. Run it with all ten
+installed executable, strict JSON and bounded subprocess utilities. Run it with all ten
 explicit named pairs:
 
 ```sh
 uv run --no-cache --managed-python --no-python-downloads --script \
-  "$primary/scripts/native-goal-authority.py" \
-  --primary "$primary" \
+  "$shared_root/scripts/native-goal-authority.py" \
+  --executable "$installed_executable" \
   --host "$host" \
   --task "$task" \
   --output "$empty_output_directory" \
@@ -106,12 +102,12 @@ uv run --no-cache --managed-python --no-python-downloads --script \
   --collection entity:smworkflow.cli.host_evidence
 ```
 
-`primary`, `host`, `task`, `output`, `request` and `reference` must be absolute
+`executable`, `host`, `task`, `output`, `request` and `reference` must be absolute
 normalized paths. The task is an existing direct child of
 `$host/target/sm-workflow/tasks`; output is an existing empty directory beneath
 that task. The caller pins its directories through symlink-free ancestors and
-requires the same existing launcher, runtime files and host configuration as
-the command caller. It does not create prerequisites or select a new task.
+requires an executable installed CLI and the same existing host configuration as
+the command caller. No source checkout, generated classpath or fallback is selected. It does not create prerequisites or select a new task.
 
 The task's retained `workflow-session.json` must contain exactly `family` set to
 `GoalPhase` and the actual `sessionId` returned by its real Start. The selected
@@ -126,7 +122,8 @@ the generated Scala readers and existing native authority consumers own those.
 Unknown, duplicate, missing, blank, control-containing and action-inapplicable
 flags fail. The collection uses the strict dotted grammar above. No action,
 proposal, result or approval flag exists. Exactly one inherited-environment
-subprocess runs with the host as its working directory and a 60-second timeout.
+subprocess runs with the host as its working directory. The installed runtime owns
+execution deadlines; the caller introduces no separate execution timeout.
 The caller exclusively creates mode-0600 `response.json` and `stderr.log` in the
 selected output directory, using the existing 8 MiB response and 1 MiB stderr
 bounds. It prints the actual response once only after zero process exit, strict
@@ -227,7 +224,7 @@ table specifies behavior obligations and makes no validation or acceptance claim
 Direct execution of the managed `test_native_goal_authority.py` discovers
 `test_native_goal_*.py` under its own `scripts/tests` directory, including the
 complete unchanged command caller suite and the new authority caller suite.
-Those Python examples mock subprocess only; Scala retains typed native authority
+Those Python examples mock the native-call transport boundary only; Scala retains typed native authority
 admission. Discovery and fixture rows make no actual validation or task claim.
 
 Distinct Split Start consent preparation and RepositoryEffect permission

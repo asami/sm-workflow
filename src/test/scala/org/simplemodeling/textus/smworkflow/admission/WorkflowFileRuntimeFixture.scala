@@ -83,10 +83,13 @@ private[admission] object WorkflowFileRuntimeFixture {
         |  ordering:
         |    mode: deterministic
         |""".stripMargin, StandardCharsets.UTF_8)
+    val testhome = Files.createTempDirectory(root, "test-home-").toRealPath()
     val runtime = new CncfRuntime()
     val handle = try take(runtime.initializeHandle(BootstrapConfig(cwd = root, args = Array(
       s"--textus.assembly.descriptor=${directory.resolve("assembly.yaml")}",
-      s"--textus.test.descriptor=${directory.resolve("test.yaml")}"))))
+      s"--textus.test.descriptor=${directory.resolve("test.yaml")}",
+      s"--textus.test.home.path=$testhome",
+      "--textus.test.home.inherit.runtime=false"))))
       catch { case error: Throwable => runtime.closeEmbedding(); throw error }
     try {
       val owner = RuntimeBindingAdmissionFixture.admit(handle.subsystem)

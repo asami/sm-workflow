@@ -975,3 +975,16 @@ Within sm-workflow, AI work should have one of two reasons:
 Mechanical progression, durable state carrying, retry loops, routing, authorization, validation and already-known external effects are not reasons to invoke AI. They belong to the runtime or typed Operations.
 
 The two roles can reinforce each other: semantic coding/design AI can inspect evidence from exploratory execution and generate candidate Workflow/StateMachine/Operation/Executable Specification assets, which are then reviewed and admitted as ordinary software assets.
+
+## 21. 共通開発Journalの先行実用化 — 2026-10-20
+
+意味判断と記録を分離し、受理済みの実行結果・指摘を共通Operationで管理する。
+記録のための別AI作業を要求せず、通常応答は短い要約とEntry参照、詳細は有限検索とする。
+業務結果とJournal書込み結果は分離し、記録失敗を理由に業務効果を再実行しない。
+
+[Phase 11](../phase/phase-11.md)で実記録・読取・Finding・検索・試用スキルを短く先行開発し、
+6.4のsm-workflow試用へ渡す。6.4のarchive完成や7〜10の完了を待たない。
+[Phase 11.1](../phase/phase-11.1.md)で判断・課題・引継ぎと訂正／batchを拡張する。
+進行中の6.4は既存Goal・履歴・修正回数・検証結果を保持し、採用可能な境界で利用する。
+設計詳細は[共通Journal](../design/development-journal.md)、分割理由は
+[先行開発ノート](development-journal-delivery.md)に記す。現在の実装済み機能の宣言ではない。

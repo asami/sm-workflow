@@ -14,7 +14,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -82,6 +82,47 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation result differs from its exact selected target or operation")
   } yield result
 
+  /** Admission and uncertain execution remain distinct from observed process facts. */
+  def repositoryValidationAttemptC(core: ActionCall.Core, ordinal: Int,
+    kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Consequence[SbtExecutionAttempt] = for {
+    _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0 && ordinal <= 16) Consequence.unit
+      else Consequence.stateConflict("Workflow repository validation selection is incomplete")
+    workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
+    target = SbtTarget(workspace)
+    operation = kind match {
+      case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
+      case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
+      case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+    }
+    execution = new Execution(core)
+    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))
+    _ <- _attempt_target_c(result, target, operation)
+  } yield result
+
+  def validationOperationAttemptC(core: ActionCall.Core, bound: B.BoundOperation): Consequence[SbtExecutionAttempt] = for {
+    _ <- if (core != null && core.executionContext != null && bound != null && bound.operation != null &&
+        bound.operation.selector != null && bound.intent != null && bound.intent.target != null &&
+        bound.intent.target.workspaceId != null.asInstanceOf[WorkspaceId] && bound.intent.target.scenario != null &&
+        bound.intent.operation == SbtOperation.TestOnly && bound.intent.target.scenario.exists(s => s != null &&
+          s.suiteClassName == bound.operation.selector.suiteClassName && s.testName == bound.operation.selector.testName))
+      Consequence.unit else Consequence.stateConflict("Workflow metadata validation requires its exact bound TestOnly selector")
+    _ <- WorkspaceId.parseC(bound.intent.target.workspaceId.value)
+    execution = new Execution(core)
+    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(bound.intent.target, WorkflowSbtValidation.Kind.TestOnly))
+    _ <- _attempt_target_c(result, bound.intent.target, bound.intent.operation)
+  } yield result
+
+  private def _attempt_target_c(value: SbtExecutionAttempt, target: SbtTarget, operation: SbtOperation): Consequence[Unit] = {
+    val matches = value match {
+      case SbtExecutionAttempt.Observed(result) => result != null && result.target == target && result.operation == operation
+      case SbtExecutionAttempt.AdmissionRejected(actual, selected, conclusion) => actual == target && selected == operation && conclusion != null
+      case SbtExecutionAttempt.Uncertain(actual, selected, conclusion) => actual == target && selected == operation && conclusion != null
+      case _ => false
+    }
+    if (matches) Consequence.unit
+    else Consequence.stateConflict("Workflow validation attempt differs from its exact selected target or operation")
+  }
+
   /** The host fixes the selected Step's message and commit identity. */
   def commitGoalStepC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
     _ <- _ordinal_c(ordinal, 64)
@@ -114,6 +155,12 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
     }
     def runSbtC(program: ExecUowM[SbtExecutionResult]): Consequence[SbtExecutionResult] = executeProgram(program)
+    def prepareSbtAttempt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionAttempt] = kind match {
+      case WorkflowSbtValidation.Kind.Compile => sbt_compile_attempt(target)
+      case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target)
+      case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only_attempt(target)
+    }
+    def runSbtAttemptC(program: ExecUowM[SbtExecutionAttempt]): Consequence[SbtExecutionAttempt] = executeProgram(program)
     def prepareGit[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {
       case GitOperation.Branch => git_branch(target)
       case GitOperation.Root => git_root(target)

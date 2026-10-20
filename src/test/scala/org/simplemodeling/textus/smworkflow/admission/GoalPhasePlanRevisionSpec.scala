@@ -20,7 +20,7 @@ import GoalPhaseDocumentPlan as P
 /** Pure proposal/controller examples with explicit fixture answer references.
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -105,6 +105,70 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
   }
 
   "Pure complete Plan revision" should {
+    "apply an explicit remaining contract only to future work while preserving accepted prefix and nonzero repair counts" in {
+      Given("an accepted first Step and a second-Step repair Decision with retained original acceptance")
+      val third = _raw.steps.last.copy(identity = "S3", dependencies = Vector("S1", "S2"), ownedPaths = Vector("src/three.scala"))
+      val start = _take(O.startC(_take(A.captureC(Some(_project), _raw.copy(steps = _raw.steps :+ third))), _base))
+      val accepted = _close_first(start)
+      val implemented = _take(accepted.acceptC(O.SemanticCompleted(_key(accepted), "Second Step implemented")))
+      val candidate = O.Snapshot(accepted.tipSnapshot.head, "e" * 40)
+      val observed = _take(implemented.acceptC(O.CandidateObserved(candidate)))
+      val repaired = _take(observed.acceptC(O.RepairableChecksObserved(candidate, Vector("original-2"),
+        "failed-second-check", O.RepairDirective("Correct the actual failure", Vector("Observed failure")))))
+      val paused = _decision(repaired)
+      val revised = paused.plan.copy(revision = "remaining-2", effectiveAcceptance = None,
+        acceptance = Some(_adoption.copy(usage = "Automatic managed Evidence for future work")),
+        steps = paused.plan.steps.zipWithIndex.map { (step, index) =>
+          if (index == 0) step else step.copy(purpose = "Future requirement " + index, checks = Vector("future-" + index))
+        })
+      val captured = _take(A.captureC(Some(_project), revised))
+      When("the separately admitted new directive selects remaining-work adoption")
+      val adopted = _take(paused.adoptRemainingRevisionC(captured, "fixture-independent-new-directive"))
+      val ordinary = paused.adoptRevisionC(captured, "fixture-independent-new-directive")
+      Then("only the suffix and future contract change, with accepted work and both repair counts retained")
+      adopted.stage shouldBe O.Stage.Implementation
+      adopted.cursor shouldBe 1
+      adopted.completed shouldBe paused.completed
+      adopted.base shouldBe paused.base
+      adopted.plan.steps.head shouldBe paused.plan.steps.head
+      adopted.plan.steps.tail.map(_.purpose) shouldBe Vector("Future requirement 1", "Future requirement 2")
+      adopted.plan.acceptance shouldBe revised.acceptance
+      adopted.repairs shouldBe 1
+      adopted.ordinaryRepairs shouldBe 1
+      adopted.generation shouldBe paused.generation + 1
+      ordinary.isSuccess shouldBe false
+      paused.plan.acceptance shouldBe start.plan.acceptance
+      When("a new request changes accepted work, Step ownership, order or closure policy")
+      val crossed = Vector(captured.copy(steps = captured.steps.updated(0, captured.steps.head.copy(purpose = "Rewrite accepted work"))),
+        captured.copy(steps = captured.steps.updated(1, captured.steps(1).copy(ownedPaths = Vector("outside.scala")))),
+        captured.copy(steps = captured.steps.reverse), captured.copy(repairLimit = 3)).map(paused.adoptRemainingRevisionC(_, "fixture-directive"))
+      Then("every crossed request refuses without changing the old Decision")
+      crossed.foreach(_.isSuccess shouldBe false)
+      paused.stage shouldBe O.Stage.Decision
+      paused.completed shouldBe accepted.completed
+    }
+
+    "preserve accepted document meaning and every checked flag when capturing a remaining contract" in {
+      Given("accepted first-Step document items and unchecked remaining items with the same source and bindings")
+      val paused = _decision(_close_first(_start))
+      val proposal = _proposal(_revised(paused))
+      val plan = _take(A.captureC(Some(_project), proposal.plan))
+      val previous = _documents(firstChecked = true)
+      val selected = previous.copy(items = previous.items.updated(1, previous.items(1).copy(acceptance = "New future acceptance")))
+      val captured = Captured(proposal, plan, Some(selected))
+      When("remaining-work document admission checks changed semantics and hostile historical rewrites")
+      val accepted = GoalPhaseRemainingPlanAdoption.validateDocumentsC(paused, captured, Some(previous))
+      val crossed = Vector(selected.copy(items = selected.items.updated(0, selected.items.head.copy(acceptance = "Rewrite accepted meaning"))),
+        selected.copy(items = selected.items.updated(1, selected.items(1).copy(checked = true))),
+        selected.copy(source = selected.source.copy(phasePath = "docs/other.md"))).map(documents =>
+          GoalPhaseRemainingPlanAdoption.validateDocumentsC(paused, captured.copy(documents = Some(documents)), Some(previous)))
+      Then("unchecked future acceptance is admitted and historical or ownership changes refuse")
+      accepted.isSuccess shouldBe true
+      crossed.foreach(_.isSuccess shouldBe false)
+      previous.items.head.checked shouldBe true
+      previous.items(1).checked shouldBe false
+    }
+
     "retain the actual integrated Phase proposal and adopt exactly one corrective Step without reopening accepted Steps" in {
       Given("two pure closed Steps, their real controller PhaseReview frontier and an actual-shaped integrated finding with a complete raw proposal")
       val closed = _two_closed_steps

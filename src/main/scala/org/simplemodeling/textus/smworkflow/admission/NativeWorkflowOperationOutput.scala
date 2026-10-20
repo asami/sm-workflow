@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -55,7 +55,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
           import GoalPhaseNativeMetadata.given
           GoalPhaseNativeMetadata.record(operation.asJson)
         })), (payload.receipts ++ stopped).map(_goal_check), payload.outcome,
-      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))
+      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty)
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
@@ -120,12 +120,17 @@ private[smworkflow] object NativeWorkflowOperationOutput {
 
   def goalFindingRecording(state: GoalPhaseNativeFindingRecording.State,
     request: Option[GoalPhaseFindingRecording.Request] = None): Option[V.GoalPhaseFindingRecordingState] =
-    Option.when(state.pending.nonEmpty || state.completed.nonEmpty || request.nonEmpty)(V.GoalPhaseFindingRecordingState(
+    Option.when(state.pending.nonEmpty || state.completed.nonEmpty || state.journaled.nonEmpty || request.nonEmpty)(V.GoalPhaseFindingRecordingState(
       state.pending.map(item => V.GoalPhaseFindingObservationSource(
         V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
         V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale))),
       request.map(goalRecordingRequest), state.completed.map(value => V.GoalPhaseFindingRecordingCompleted(goalRecordingRequest(value.request),
-        V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision), goalRecordingResult(value.result)))))
+        V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision), goalRecordingResult(value.result))),
+      state.journaled.map(value => V.JournalFindingBatch(value.sourceRevision, value.committedRevision,
+        value.pending.map(item => V.GoalPhaseFindingObservationSource(
+          V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
+          V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale))),
+        value.outcomes.map(_.publicValue)))))
 
   def withFindingRecording(value: V.GoalPhaseAdvanceResult, state: GoalPhaseNativeFindingRecording.State): V.GoalPhaseAdvanceResult =
     value.copy(findingRecording = goalFindingRecording(state))
@@ -239,7 +244,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     * native closing result remains its real type/reference pair; it is not
     * an empty business DTO or a substitute for this public result. */
   def accepted[A <: NativeWorkflowResultInput.Value](submitted: ContinuationResult[A],
-    completed: WorkflowInstancePersistence.InstanceRecord): SubmissionValue = {
+    completed: WorkflowInstancePersistence.InstanceRecord,
+    journalRecording: Option[V.JournalRecordingState] = None): SubmissionValue = {
     val session = completed.identity.value
     submitted.result.value match {
       case value: GoalPhaseNativeWork.Result =>
@@ -247,7 +253,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       case value: GoalPhaseOrderedHumanDecision.Answer =>
         V.GoalPhaseOrderedDecisionSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
       case value: GoalPhaseFindingRecording.Result =>
-        V.GoalPhaseFindingRecordingSubmissionResult(session, true, "accepted", "Accepted recording " + value.outcome + ": " + value.summary)
+        V.GoalPhaseFindingRecordingSubmissionResult(session, true, "accepted", "Accepted recording " + value.outcome + ": " + value.summary,
+          journalRecording)
       case value: SplitPhaseExplicitPartitionSemantic.Judgment =>
         V.SplitPhaseSemanticSubmissionResult(session, true, "accepted", "Accepted partition " + value.decision + ": " + value.rationale)
       case value: SplitPhaseScopeSemantic.Judgment =>

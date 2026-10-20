@@ -178,7 +178,7 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
     }
 
     "retain admitted actual negative captures and leave malformed captures uncertain" in {
-      Given("R4: complete raw results from an ordinary failed or indeterminate selected check")
+      Given("R4: complete raw results from an ordinary failed or actually timed-out selected check")
       def _capture_(text: String): ProcessExecutionCapture = {
         val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
         ProcessExecutionCapture(bytes, bytes.size.toLong, false)
@@ -193,9 +193,9 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
         failed.copy(stdout = failed.stdout.copy(byteCount = 0L)),
         failed.copy(stdout = _capture_("x" * 65537)), failed.copy(stdout = _capture_("\u0000")),
         failed.copy(stdout = ProcessExecutionCapture(Vector(0xff.toByte), 1L, false)))
-      Then("negative results keep their real receipt while refused capture supplies no fabricated result for replay")
+      Then("failure and actual timeout retain their real termination and captures while refused capture supplies no fabricated result for replay")
       failedreceipt shouldBe V.Receipt("index-local", "exited", Some(7), "actual failure\n", "diagnostic\n")
-      unknownreceipt shouldBe V.Receipt("index-local", "indeterminate", None, "actual failure\n", "diagnostic\n")
+      unknownreceipt shouldBe V.Receipt("index-local", "timed-out", None, "actual failure\n", "diagnostic\n")
       V.successful(Vector(failedreceipt)) shouldBe false
       V.successful(Vector(unknownreceipt)) shouldBe false
       malformed.foreach(result => V.receiptC("index-local", result).isSuccess shouldBe false)

@@ -15,7 +15,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SOURCE = Path(__file__).resolve().parents[1] / "native-goal-command.py"
 SPEC = importlib.util.spec_from_file_location("native_repository_repair_caller", SOURCE)
@@ -28,15 +28,14 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.primary = self.root / "primary"
+        self.executable = self.root / "installed CLI" / "sm-workflow"
         self.host = self.root / "host"
         self.task = self.host / "target/sm-workflow/tasks/owned"
         self.task.mkdir(parents=True)
-        for path in (self.primary / "bin/launcher", self.primary / "target/cncf.d/runtime-classpath.txt",
-                     self.primary / "target/cncf.d/component-descriptor.json", self.primary / "target/cncf.d/car-runtime-manifest.json",
-                     self.host / ".textus/config.json", self.host / ".textus/assembly.yaml"):
+        for path in (self.executable, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml"):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("Specification prerequisite", encoding="utf-8")
+        self.executable.chmod(0o755)
         self.route = self.task / "workflow-session.json"
         self.route.write_text(json.dumps({"family": "GoalPhase", "sessionId": "outer"}))
         self.request = self.root / "request.json"
@@ -58,7 +57,7 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         self.counter += 1
         self.output = self.task / ("call-" + str(self.counter))
         self.output.mkdir()
-        return ["--primary", str(self.primary), "--host", str(self.host), "--task", str(self.task),
+        return ["--executable", str(self.executable), "--host", str(self.host), "--task", str(self.task),
                 "--action", action, "--output", str(self.output), "--request", str(self.request),
                 "--submission", str(self.submission)]
 
@@ -70,10 +69,29 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
             kwargs["stdout"].write(raw)
             kwargs["stderr"].write(b"native diagnostic\n")
             if timeout:
-                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                raise OSError("fixture runtime disconnected")
             return subprocess.CompletedProcess(command, code)
         out, err = io.StringIO(), io.StringIO()
-        with patch.object(CALLER.subprocess, "run", side_effect=process) as native:
+        native = Mock(side_effect=process)
+
+        def fixture(command, host, descriptor, context):
+            # A route-only native boundary supplies raw observations. Real
+            # process ownership/interruption is covered by transport scenarios.
+            CALLER.progress("invocation", context)
+            with CALLER.new_file(descriptor, "response.json") as stdout:
+                with CALLER.new_file(descriptor, "stderr.log") as stderr:
+                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+            CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
+            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
+                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
+                               "native output exceeds its bound; retain output")
+            with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
+                                               dir_fd=descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+            return text, CALLER.json_object(text)
+
+
+        with patch.object(CALLER, "native_call", side_effect=fixture), patch.object(CALLER, "progress"):
             with redirect_stdout(out), redirect_stderr(err):
                 status = CALLER.main(args)
         return status, out.getvalue(), err.getvalue(), native, raw
@@ -96,15 +114,13 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         native.assert_called_once()
         argv, kwargs = native.call_args
         command = argv[0]
-        self.assertEqual(command[command.index("--java-opt"):command.index("--")],
-                         ["--java-opt", "-Dstdout.encoding=UTF-8"])
+        self.assertEqual(command[:4], [str(self.executable), "--host", str(self.host), "command"])
         self.assertIn("org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitNativeMergeRepair", command)
         self.assertEqual(command[command.index("--sessionId") + 1], "child")
         for name, value in self.value.items():
             self.assertEqual(json.loads(command[command.index("--" + name) + 1]), value)
         self.assertEqual(command[-1], "--json")
         self.assertEqual(kwargs["cwd"], str(self.host))
-        self.assertEqual(kwargs["timeout"], 60)
         self.assertEqual(self.route.read_bytes(), before)
 
     def test_p1_aliases_and_inert_annotations_keep_the_same_child(self):
@@ -193,9 +209,9 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
             self.assertEqual((self.output / "response.json").read_bytes(), raw)
             self.assertEqual(self.route.read_bytes(), before)
 
-    def test_p1_native_failure_and_timeout_never_make_an_extra_call(self):
+    def test_p1_native_failure_and_disconnection_never_make_an_extra_call(self):
         for code, timeout in ((2, False), (0, True)):
-            # Given P1/R6 an actual-shape assignment and a native failure/timeout.
+            # Given P1/R6 an actual-shape assignment and a native failure/disconnection.
             self.request.write_text(json.dumps(self.request_value()))
             before = self.route.read_bytes()
             # When the one selected process fails.

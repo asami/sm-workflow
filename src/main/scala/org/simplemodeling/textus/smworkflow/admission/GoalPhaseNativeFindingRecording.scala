@@ -19,14 +19,18 @@ import GoalPhaseOrderedProgression as O
 /** Finite clerical work reconstructed from actual accepted review completions.
   * Canonical suspension/completion owns persistence; submission has no effects.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeFindingRecording {
   final case class Pending(sourceReference: ContextReference, sourceKind: String,
     stepIdentity: Option[String], observation: R.Observation)
   final case class Completed(request: R.Request, resultReference: ContextReference, result: R.Result)
-  final case class State(pending: Vector[Pending] = Vector.empty, completed: Vector[Completed] = Vector.empty)
+  final case class Journaled(sourceRevision: String, committedRevision: String, pending: Vector[Pending],
+    outcomes: Vector[DevelopmentJournalFinding.RecordingState])
+  final case class State(pending: Vector[Pending] = Vector.empty, completed: Vector[Completed] = Vector.empty,
+    journaled: Vector[Journaled] = Vector.empty)
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
     findings: State, issues: Option[GoalPhaseFixIssues.State])
   final case class Retained(completed: Completed, record: InstanceRecord, submitted: ContinuationResult[R.Result])
@@ -39,7 +43,7 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
     _ <- R.admitObservationsC(input.kind, submitted.result.value.reviewObservations)
     added = submitted.result.value.reviewObservations.toVector.flatMap(_.items).map(observation =>
       Pending(submitted.resultReference, input.kind, input.stepIdentity, observation))
-    all = state.pending ++ state.completed.flatMap(_.request.items.map(_pending)) ++ added
+    all = state.pending ++ state.completed.flatMap(_.request.items.map(_pending)) ++ state.journaled.flatMap(_.pending) ++ added
     _ <- if (all.map(_key).distinct.size == all.size) Consequence.unit
       else F.invalid("review observation source keys are duplicated or conflicting")
   } yield state.copy(pending = state.pending ++ added)
@@ -99,6 +103,11 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
   def consumed(state: State, value: Completed): State = {
     val keys = value.request.items.map(_pending).map(_key).toSet
     state.copy(pending = state.pending.filterNot(p => keys(_key(p))), completed = state.completed :+ value)
+  }
+
+  def journaled(state: State, value: Journaled): State = {
+    val keys = value.pending.map(_key).toSet
+    state.copy(pending = state.pending.filterNot(p => keys(_key(p))), journaled = state.journaled :+ value)
   }
 
   def requiredC: Consequence[StateMachineRequiredOperation] = {
@@ -222,7 +231,10 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
             .flatMap(_.loadC(id)(using call.executionContext))
         }
       }
-      val codec = new WorkflowCompletionServiceOperation.Codec[R.Result] {
+      final class RecordingCodec extends WorkflowCompletionServiceOperation.Codec[R.Result] {
+        // This codec belongs to this invocation, never to a retained workflow.
+        private var _admitted_request = Option.empty[R.Request]
+        def capture(request: R.Request): Unit = { _admitted_request = Some(request) }
         val resultTypeIdentity = R.resultCodec.typeIdentity
         def decodeC(request: ProtocolRequest) = result.map(NativeWorkflowResultInput.typedC(_, R.resultCodec))
           .getOrElse(F.invalid("recording completion has no resolved result"))
@@ -231,9 +243,21 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
           actual <- completed.map(Consequence.success).getOrElse(
             org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate("recording has no native committed state"))
+          journal <- core match {
+            case Some(call) => _admitted_request match {
+              case Some(request) => DevelopmentJournal.recordAfterCommitC(d.journalPolicy, call, request, submitted, actual)
+              case None => Consequence.success(org.simplemodeling.textus.smworkflow.value.JournalRecordingState(
+                "indeterminate", "Journal has no admitted invocation request", None,
+                org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision)))
+            }
+            case None => Consequence.success(org.simplemodeling.textus.smworkflow.value.JournalRecordingState(
+              "unavailable", "Journal requires the owning committed call", None,
+              org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision)))
+          }
           _ <- acknowledge("goal-recording-completed")
-        } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, actual))
+        } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, actual, Some(journal)))
       }
+      val codec = new RecordingCodec
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[R.Result] {
         def selectC(submitted: ContinuationResult[R.Result], current: InstanceRecord) = core match {
           case None => F.invalid("recording closing requires the current owning call")
@@ -244,6 +268,7 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
             work <- issuedC(source, call)
             request <- NativeWorkflowOperationOutput.workInputC(work)
             _ <- R.admitResultC(request, submitted.result.value)
+            _ = codec.capture(request)
             pending <- GoalPhaseNativeHistory.prefixC(source.session.current, source.from.revision.next)
             next <- pending.appendC(pending.revision, F.history(pending, "phase." + source.controller.stage.toString,
               submitted.resultReference.identity))

@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "native-goal-authority.py"
@@ -38,21 +38,19 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.primary = self.root / "primary"
+        self.executable = self.root / "installed CLI" / "sm-workflow"
         self.host = self.root / "host"
         self.task = self.host / "target/sm-workflow/tasks/selected-task"
         self.task.mkdir(parents=True)
         self.prerequisites = (
-            self.primary / "bin/launcher",
-            self.primary / "target/cncf.d/runtime-classpath.txt",
-            self.primary / "target/cncf.d/component-descriptor.json",
-            self.primary / "target/cncf.d/car-runtime-manifest.json",
+            self.executable,
             self.host / ".textus/config.json",
             self.host / ".textus/assembly.yaml",
         )
         for path in self.prerequisites:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("specification prerequisite", encoding="utf-8")
+        self.executable.chmod(0o755)
         self.request = self.root / "closing-wait.json"
         self.reference = self.root / "operator-reference.json"
         self.reference.write_text('{ "identity": "explicit reference", "revision": "7" }\n')
@@ -78,7 +76,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         return output
 
     def args(self, output, task=None):
-        return ["--primary", str(self.primary), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--host", str(self.host),
                 "--task", str(task or self.task), "--output", str(output),
                 "--request", str(self.request), "--reference", str(self.reference),
                 "--participant", "explicit operator", "--issuer", "explicit host issuer",
@@ -91,12 +89,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         value = {"request": Path(option("request")).as_uri(), "reference": Path(option("reference")).as_uri(),
                  "participant": option("participant"), "issuer": option("issuer"),
                  "occurredAt": option("occurred-at"), "collection": option("collection")}
-        return [str(self.primary / "bin/launcher"), "--classpath-file",
-                str(self.primary / "target/cncf.d/runtime-classpath.txt"), "--main-class",
-                "org.goldenport.cncf.CncfMain", "--java-opt", "-Dstdout.encoding=UTF-8", "--", "--force-exit",
-                "--component-dev-dir", str(self.primary),
-                "--textus.assembly.descriptor=" + str(self.host / ".textus/assembly.yaml"),
-                "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority",
+        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority",
                 "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
     def process_output(self, response, stderr=b"", returncode=0, timeout=False):
@@ -106,14 +99,33 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
             kwargs["stdout"].write(raw)
             kwargs["stderr"].write(stderr)
             if timeout:
-                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                raise OSError("fixture runtime disconnected")
             return subprocess.CompletedProcess(command, returncode)
 
         return invoke, raw
 
     def call(self, argv, process):
         printed, diagnostic = io.StringIO(), io.StringIO()
-        with patch.object(CALLER.COMMAND.subprocess, "run", side_effect=process) as native:
+        native = Mock(side_effect=process)
+
+        def fixture(command, host, descriptor, context):
+            # A route-only native boundary supplies raw observations. Real
+            # process ownership/interruption is covered by transport scenarios.
+            CALLER.COMMAND.progress("invocation", context)
+            with CALLER.COMMAND.new_file(descriptor, "response.json") as stdout:
+                with CALLER.COMMAND.new_file(descriptor, "stderr.log") as stderr:
+                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+            CALLER.COMMAND.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
+            for name, limit in (("response.json", CALLER.COMMAND.RESPONSE_LIMIT), ("stderr.log", CALLER.COMMAND.STDERR_LIMIT)):
+                CALLER.COMMAND.require(CALLER.COMMAND.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
+                               "native output exceeds its bound; retain output")
+            with CALLER.COMMAND.os.fdopen(CALLER.COMMAND.os.open("response.json", CALLER.COMMAND.os.O_RDONLY | CALLER.COMMAND.os.O_NOFOLLOW,
+                                               dir_fd=descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read(CALLER.COMMAND.RESPONSE_LIMIT + 1)
+            return text, CALLER.COMMAND.json_object(text)
+
+
+        with patch.object(CALLER.COMMAND, "native_call", side_effect=fixture), patch.object(CALLER.COMMAND, "progress"):
             with redirect_stdout(printed), redirect_stderr(diagnostic):
                 status = CALLER.main(argv)
         return status, printed.getvalue(), diagnostic.getvalue(), native
@@ -122,9 +134,8 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         native.assert_called_once()
         args, kwargs = native.call_args
         self.assertEqual(args, (command,))
-        self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr", "timeout"})
+        self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
         self.assertEqual(kwargs["cwd"], str(self.host))
-        self.assertEqual(kwargs["timeout"], 60)
         self.assertTrue(kwargs["stdout"].closed)
         self.assertTrue(kwargs["stderr"].closed)
 
@@ -274,7 +285,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
     def test_a5_selected_directories_and_output_refusal(self):
         """A5 / R4,R6 / native-host-authority-preparation; selected symlink-free empty write directory."""
         for case in ("missing-output", "occupied-output", "symlink-output", "symlink-ancestor", "foreign-task",
-                     "output-is-task", "foreign-output", "relative-primary", "unnormalized-host"):
+                     "output-is-task", "foreign-output", "relative-executable", "unnormalized-host"):
             with self.subTest(case=case):
                 # Given a missing/occupied/symlinked output or a path outside the exact selected host task.
                 route = self.retain()
@@ -305,8 +316,8 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                     argv[argv.index("--output") + 1] = str(self.task)
                 elif case == "foreign-output":
                     argv[argv.index("--output") + 1] = str(self.root)
-                elif case == "relative-primary":
-                    argv[argv.index("--primary") + 1] = "primary"
+                elif case == "relative-executable":
+                    argv[argv.index("--executable") + 1] = "sm-workflow"
                 else:
                     argv[argv.index("--host") + 1] = str(self.host) + "/../host"
                 process, _raw = self.process_output({"datastore": []})
@@ -356,7 +367,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 if kind == "prerequisite":
                     value.write_text("specification prerequisite", encoding="utf-8")
 
-    def test_a7_native_failure_and_timeout_retain_streams_without_retry(self):
+    def test_a7_native_failure_and_disconnection_retain_streams_without_retry(self):
         """A7 / R4,R6 / native-host-authority-preparation; bounded strict response and failure retention."""
         cases = (
             ("nonzero", b'{"datastore":[]}\n', b"native diagnostic\n", 2, False),
@@ -368,7 +379,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
             ("nonarray-datastore", b'{"datastore":{}}', b"", 0, False),
             ("oversized-response", b"x" * (CALLER.COMMAND.RESPONSE_LIMIT + 1), b"", 0, False),
             ("oversized-stderr", b'{"datastore":[]}', b"x" * (CALLER.COMMAND.STDERR_LIMIT + 1), 0, False),
-            ("timeout", b"partial stdout", b"partial stderr", 0, True),
+            ("disconnected", b"partial stdout", b"partial stderr", 0, True),
         )
         for name, response, stderr, returncode, timeout in cases:
             with self.subTest(case=name):

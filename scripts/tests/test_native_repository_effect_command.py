@@ -21,7 +21,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "native-goal-command.py"
@@ -35,19 +35,17 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.primary = self.root / "primary"
+        self.executable = self.root / "installed CLI" / "sm-workflow"
         self.host = self.root / "host"
         self.task = self.host / "target/sm-workflow/tasks/owned"
         self.task.mkdir(parents=True)
         self.prerequisites = (
-            self.primary / "bin/launcher", self.primary / "target/cncf.d/runtime-classpath.txt",
-            self.primary / "target/cncf.d/component-descriptor.json",
-            self.primary / "target/cncf.d/car-runtime-manifest.json",
-            self.host / ".textus/config.json", self.host / ".textus/assembly.yaml",
+            self.executable, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml",
         )
         for path in self.prerequisites:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("Specification prerequisite", encoding="utf-8")
+        self.executable.chmod(0o755)
         self.files = {}
         for name in ("selection", "target", "reference"):
             path = self.root / (name + " 選択 %23.data")
@@ -63,7 +61,7 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
         self.counter += 1
         self.output = self.task / ("call-" + str(self.counter))
         self.output.mkdir()
-        values = {"primary": str(self.primary), "host": str(self.host), "task": str(self.task),
+        values = {"executable": str(self.executable), "host": str(self.host), "task": str(self.task),
                   "action": "prepare-repository-effect", "output": str(self.output),
                   **self.metadata, **{name: str(path) for name, path in self.files.items()},
                   "effect": effect}
@@ -80,11 +78,30 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
             kwargs["stdout"].write(raw)
             kwargs["stderr"].write(stderr)
             if timeout:
-                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                raise OSError("fixture runtime disconnected")
             return subprocess.CompletedProcess(command, returncode)
 
         out, err = io.StringIO(), io.StringIO()
-        with patch.object(CALLER.subprocess, "run", side_effect=process) as native:
+        native = Mock(side_effect=process)
+
+        def fixture(command, host, descriptor, context):
+            # A route-only native boundary supplies raw observations. Real
+            # process ownership/interruption is covered by transport scenarios.
+            CALLER.progress("invocation", context)
+            with CALLER.new_file(descriptor, "response.json") as stdout:
+                with CALLER.new_file(descriptor, "stderr.log") as stderr:
+                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+            CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
+            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
+                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
+                               "native output exceeds its bound; retain output")
+            with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
+                                               dir_fd=descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+            return text, CALLER.json_object(text)
+
+
+        with patch.object(CALLER, "native_call", side_effect=fixture), patch.object(CALLER, "progress"):
             with redirect_stdout(out), redirect_stderr(err):
                 status = CALLER.main(args)
         return status, out.getvalue(), err.getvalue(), native, raw, stderr
@@ -117,17 +134,11 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
                         "collection": self.metadata["collection"],
                     }
                     self.assertEqual(json.loads(command[-2]), expected_value)
-                    self.assertEqual(command, [
-                        str(self.primary / "bin/launcher"), "--classpath-file",
-                        str(self.primary / "target/cncf.d/runtime-classpath.txt"), "--main-class",
-                        "org.goldenport.cncf.CncfMain", "--java-opt", "-Dstdout.encoding=UTF-8", "--",
-                        "--force-exit", "--component-dev-dir", str(self.primary),
-                        "--textus.assembly.descriptor=" + str(self.host / ".textus/assembly.yaml"),
-                        "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect",
+                    self.assertEqual(command, [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect",
                         "--input", command[-2], "--json",
                     ])
-                    self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr", "timeout"})
-                    self.assertEqual((kwargs["cwd"], kwargs["timeout"]), (str(self.host), 60))
+                    self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
+                    self.assertEqual(kwargs["cwd"], str(self.host))
                     self.assertTrue(kwargs["stdout"].closed and kwargs["stderr"].closed)
                     self.assertEqual({path.name for path in self.output.iterdir()}, {"response.json", "stderr.log"})
                     self.assertEqual((self.output / "response.json").read_bytes(), raw)
@@ -136,7 +147,7 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
                     self.assertEqual(self.route.read_bytes() if self.route.exists() else None, before_route)
 
     def test_sync_effect_exact_required_pairs_effects_and_collections_refuse_before_native(self):
-        required = ("primary", "host", "task", "action", "output", "component-instance", "selection",
+        required = ("executable", "host", "task", "action", "output", "component-instance", "selection",
                     "target", "effect", "reference", "participant", "issuer", "occurred-at", "collection")
         cases = [(kind, name, None) for kind in ("missing", "duplicate", "blank", "unpaired") for name in required]
         cases += [("extra", name, "supplied") for name in
@@ -194,7 +205,7 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
 
     def test_sync_effect_native_failure_and_non_datastore_response_retain_actual_streams(self):
         cases = [("nonzero", {"datastore": []}, 2, False),
-                 ("timeout", b"partial actual stdout", 0, True),
+                 ("disconnected", b"partial actual stdout", 0, True),
                  ("malformed", b"not-json", 0, False), ("nonobject", b"[]", 0, False),
                  ("duplicate", b'{"datastore":[],"datastore":[]}', 0, False),
                  ("nonfinite", b'{"datastore":[],"value":NaN}', 0, False)]

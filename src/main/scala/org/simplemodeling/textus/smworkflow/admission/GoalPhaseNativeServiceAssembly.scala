@@ -16,7 +16,7 @@ import GoalPhaseNativeRun as F
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
   *  version Oct. 12, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 20, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -33,7 +33,8 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
   } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.GoalPhaseServiceService,
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
     new Operation(true, d, definition, plans, port),
-    new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector)))
+    new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
+      GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
     * belong to the trusted host; stored Plan data cannot install them.

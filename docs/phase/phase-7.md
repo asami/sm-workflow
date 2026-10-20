@@ -1,5 +1,12 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+Evidence ownership update (2026-10-20): consume [Phase 6.4](phase-6.4.md)'s
+accepted operational use of [Phase 12](phase-12.md)'s common Evidence service.
+Use Evidence/Journal IDs and automatic result recording; earlier references to
+AI recording or exact destinations do not require Markdown edits or public
+absolute paths. Shared storage remains one service. Existing work IDs, overlay
+scope and evidence remain unchanged.
+
 Production-first revision (2026-10-18): references below to Phase 6 delivery of
 CBD-backed P6-SQ01..05 are superseded by [Phase 10](phase-10.md). Consume the
 accepted ordinary review/Admission route for this Phase; do not wait for Phase

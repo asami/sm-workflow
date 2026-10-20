@@ -6,7 +6,9 @@
 
 Temporary prerequisites and subprocess responses are fixtures, not installed
 native execution, genuine provenance, authority or task/Phase acceptance.
-Only subprocess.run is patched; real caller routing, files and output are used.
+Route examples supply native-call boundary fixtures and capture telemetry separately; transport
+examples use finite owned Python children to observe live streams and runtime termination.
+Real caller routing, files and output are used.
 @since   Oct. 19, 2026
 @version Oct. 19, 2026
 @author  ASAMI, Tomoharu
@@ -16,11 +18,15 @@ from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
 import io
 import json
+import os
+import signal
 from pathlib import Path
 import subprocess
+import sys
+import time
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "native-goal-command.py"
@@ -61,20 +67,18 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
-        self.primary = self.root / "primary"
+        self.executable = self.root / "installed CLI" / "sm-workflow"
         self.host = self.root / "host"
         self.task = self.host / "target/sm-workflow/tasks/owned-task"
         self.task.mkdir(parents=True)
         for path in (
-            self.primary / "bin/launcher",
-            self.primary / "target/cncf.d/runtime-classpath.txt",
-            self.primary / "target/cncf.d/component-descriptor.json",
-            self.primary / "target/cncf.d/car-runtime-manifest.json",
+            self.executable,
             self.host / ".textus/config.json",
             self.host / ".textus/assembly.yaml",
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture prerequisite", encoding="utf-8")
+        self.executable.chmod(0o755)
         self.route = self.task / "workflow-session.json"
         self.request = self.root / "request.json"
         self.submission = self.root / "submission.json"
@@ -115,7 +119,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         return output
 
     def args(self, output):
-        return ["--primary", str(self.primary), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--host", str(self.host),
                 "--task", str(self.task), "--action", "complete", "--output", str(output),
                 "--request", str(self.request), "--submission", str(self.submission)]
 
@@ -136,31 +140,44 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         def invoke(command, **kwargs):
             index = len(calls)
             calls.append(command)
-            self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr", "timeout"})
+            self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
             self.assertEqual(kwargs["cwd"], str(self.host))
-            self.assertEqual(kwargs["timeout"], 60 if index == 0 else 240)
             if during is not None:
                 during(index, observations)
             kwargs["stdout"].write(self.raw(responses[index]))
             kwargs["stderr"].write(("fixture stderr " + str(index)).encode("utf-8"))
-            if fault == (index, "timeout"):
-                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+            if fault == (index, "disconnected"):
+                raise OSError("fixture runtime disconnected")
             if fault == (index, "transport"):
                 raise OSError("fixture transport failure")
             return subprocess.CompletedProcess(command, 7 if fault == (index, "nonzero") else 0)
 
-        with patch.object(CALLER.subprocess, "run", side_effect=invoke) as native:
-            with redirect_stdout(observations), redirect_stderr(diagnostic):
+        native = Mock(side_effect=invoke)
+
+        def fixture(command, host, descriptor, context):
+            CALLER.progress("invocation", context)
+            with CALLER.new_file(descriptor, "response.json") as stdout:
+                with CALLER.new_file(descriptor, "stderr.log") as stderr:
+                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+            CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
+            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
+                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
+                               "native output exceeds its bound; retain output")
+            with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
+                                               dir_fd=descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+            return text, CALLER.json_object(text)
+
+        with patch.object(CALLER, "native_call", side_effect=fixture):
+            # Keep business DTO assertions independent of the additional,
+            # separately tested progress records.
+            with patch.object(CALLER, "progress") as telemetry, redirect_stdout(observations), redirect_stderr(diagnostic):
                 status = CALLER.main(self.args(output) if argv is None else argv)
+            native.telemetry = telemetry.call_args_list
         return status, observations, diagnostic.getvalue(), calls, native
 
     def expected_command(self, service, operation, pairs):
-        return [str(self.primary / "bin/launcher"), "--classpath-file",
-                str(self.primary / "target/cncf.d/runtime-classpath.txt"), "--main-class",
-                "org.goldenport.cncf.CncfMain", "--java-opt", "-Dstdout.encoding=UTF-8", "--",
-                "--force-exit", "--component-dev-dir", str(self.primary),
-                "--textus.assembly.descriptor=" + str(self.host / ".textus/assembly.yaml"),
-                "command", SERVICES[service] + operation, *pairs, "--json"]
+        return [str(self.executable), "--host", str(self.host), "command", SERVICES[service] + operation, *pairs, "--json"]
 
     def assert_success(self, output, responses, during=None):
         # Given the selected issued route, prepared output and native response fixtures,
@@ -227,6 +244,81 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 # followed by one outer Repository Advance.
                 self.assert_success(self.output(), [self.submit_response(), self.advance_response()])
 
+    def test_installed_child_transport_completes_without_development_artifacts(self):
+        # Given one explicitly selected executable in a spaced path and no checkout runtime artifacts,
+        output = self.output()
+        calls = self.root / "installed-calls.jsonl"
+        responses = [self.submit_response(), self.advance_response("Wait")]
+        program = ("#!" + sys.executable + "\n"
+                   "import json, pathlib, sys, os\n"
+                   "calls = pathlib.Path(" + repr(str(calls)) + ")\n"
+                   "prior = calls.read_text().splitlines() if calls.exists() else []\n"
+                   "responses = " + repr(responses) + "\n"
+                   "assert len(prior) < 2\n"
+                   "assert sys.argv[1:4] == " + repr(["--host", str(self.host), "command"]) + "\n"
+                   "assert sys.argv[4] == " + repr(SERVICES["GoalPhase"]) + " + ['submitGoalPhaseWorkResult', 'advanceGoalPhase'][len(prior)]\n"
+                   "with calls.open('a') as stream: stream.write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}) + '\\n')\n"
+                   "sys.stderr.write('installed fixture diagnostic\\n')\n"
+                   "print(json.dumps(responses[len(prior)], ensure_ascii=False))\n")
+        self.executable.write_text(program)
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        originalroute = self.route.read_bytes()
+        # When the real finite caller launches the selected test executable twice with no native-call mock,
+        with redirect_stdout(observed), redirect_stderr(diagnostic):
+            status = CALLER.main(self.args(output))
+        # Then exact Submit/Advance transport, flushed actual observations and raw results are retained.
+        self.assertEqual(status, 0, diagnostic.getvalue())
+        actual = [json.loads(line) for line in calls.read_text().splitlines()]
+        self.assertEqual(len(actual), 2)
+        self.assertTrue(all(call["cwd"] == str(self.host) for call in actual))
+        self.assertEqual(actual[0]["argv"][:4], ["--host", str(self.host), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
+        self.assertEqual(actual[1]["argv"], ["--host", str(self.host), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
+        business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
+        self.assertEqual(business, responses)
+        self.assertEqual(json.loads((output / "response.json").read_text()), responses[0])
+        self.assertEqual(json.loads((output / "advance/response.json").read_text()), responses[1])
+        self.assertEqual(self.route.read_bytes(), originalroute)
+
+    def test_changed_routing_after_accepted_submit_stops_before_advance(self):
+        # Given accepted Submit and a route removed, corrupted or changed during its return,
+        for replacement in (None, b"invalid", {"family": "SplitPhase", "sessionId": self.outer_id},
+                            {"family": "GoalPhase", "sessionId": "other-session"}):
+            with self.subTest(replacement=replacement):
+                self.select()
+                output = self.output()
+                def during(index, _observations):
+                    if index == 0:
+                        if replacement is None:
+                            self.route.unlink()
+                        elif isinstance(replacement, bytes):
+                            self.route.write_bytes(replacement)
+                        else:
+                            self.save(self.route, replacement)
+                # When complete reopens the original task route after actual acceptance,
+                status, observed, _diagnostic, calls, _native = self.call(output, [self.submit_response()], during=during)
+                # Then accepted output remains visible and retained without any second call or route reconstruction.
+                self.assertEqual(status, 2)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], [self.submit_response()])
+                self.assertEqual(json.loads((output / "response.json").read_text()), self.submit_response())
+                self.assertEqual(list((output / "advance").iterdir()), [])
+
+    def test_unavailable_installed_executable_never_uses_a_source_fallback(self):
+        # Given a missing or nonexecutable explicit CLI and a valid retained issued route,
+        for available in (True, False):
+            with self.subTest(available=available):
+                if available:
+                    self.executable.chmod(0o644)
+                else:
+                    self.executable.unlink()
+                output = self.output()
+                # When complete checks its explicit installed entry,
+                status, _observed, _diagnostic, calls, _native = self.call(output, [])
+                # Then no native call, fallback or output file is produced.
+                self.assertEqual(status, 2)
+                self.assertEqual(calls, [])
+                self.assertEqual(list(output.iterdir()), [])
+
     def test_goal_child_submit_preserves_outer_advance_identity(self):
         # Given each Repository child pair forwarded by its distinct owning Goal,
         for pair in REPOSITORY_PAIRS:
@@ -235,6 +327,371 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 # Shared completion action and expectations check Submit with the child ID
                 # followed by Advance with the retained outer Goal ID.
                 self.assert_success(self.output(), [self.submit_response(), self.advance_response()])
+
+    def test_exchange_reports_actual_child_route_work_and_repair_counts(self):
+        # Given an issued Goal-owned Repository child and an actual-shaped next Step,
+        self.select("GoalPhase", REPOSITORY_PAIRS[0], child=True)
+        request = json.loads(self.request.read_text())
+        request["work"] = {"kind": "ReviewRepository", "step": "step-4", "selectedPlan": {"privateInput": "omitted"}}
+        self.save(self.request, request)
+        response = dict(self.advance_response(), work={"kind": "ReviewStep", "stepIdentity": "step-4"},
+                        repairProgress={"automaticCount": 0, "ordinaryCount": 1, "limit": 2})
+        output = self.output()
+        # When complete performs its exact Submit then outer Advance,
+        status, _observed, diagnostic, calls, native = self.call(output, [self.submit_response(), response])
+        # Then telemetry preserves actual identities and business fields without another call.
+        self.assertEqual(status, 0, diagnostic)
+        self.assertEqual(len(calls), 2)
+        invocations = [call for call in native.telemetry if call.args[0] == "invocation"]
+        self.assertEqual(invocations[0].args[1]["outerSessionId"], self.outer_id)
+        self.assertEqual(invocations[0].args[1]["targetSessionId"], self.submit_id)
+        self.assertEqual(invocations[0].args[1]["issuedObservation"]["work"], {"kind": "ReviewRepository", "step": "step-4"})
+        self.assertNotIn("selectedPlan", invocations[0].args[1]["issuedObservation"]["work"])
+        self.assertNotIn("submitOperation", invocations[0].args[1]["issuedObservation"])
+        self.assertEqual(invocations[1].args[1]["targetSessionId"], self.outer_id)
+        responses = [call for call in native.telemetry if call.args[0] == "response"]
+        self.assertEqual(responses[-1].kwargs["observation"], response)
+        self.assertEqual(responses[-1].args[1]["responseReference"], str(output / "advance/response.json"))
+
+    def test_live_sbt_events_are_visible_before_process_exit_with_large_raw_streams(self):
+        # Given an owned child that waits for observation of its real stderr event,
+        output = self.output()
+        signal = output / "event-observed"
+        response = {"sessionId": self.outer_id, "message": "日本語" + "x" * 200000,
+                    "kind": "Request", "work": {"kind": "ReviewStep", "step": "step-2"}}
+        raw = json.dumps(response, ensure_ascii=False).encode("utf-8")
+        event = '[cncf-sbt-event] {"operation":"compile","workspaceId":"fixture","programIdentity":"owned-fixture","state":"started"}'
+        program = ("import json,pathlib,sys,time\n"
+                   "response = " + repr(dict(response, message="")) + "\n"
+                   "response['message'] = '日本語' + 'x' * 200000\n"
+                   "sys.stdout.buffer.write(json.dumps(response, ensure_ascii=False).encode('utf-8')); sys.stdout.flush()\n"
+                   "sys.stderr.write('z' * 100000 + '\\n' + " + repr(event + "\n") + "); sys.stderr.flush()\n"
+                   "deadline = time.monotonic() + 3\n"
+                   "while not pathlib.Path(" + repr(str(signal)) + ").exists() and time.monotonic() < deadline: time.sleep(.01)\n"
+                   "sys.exit(0 if pathlib.Path(" + repr(str(signal)) + ").exists() else 9)\n")
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        context = {"operation": "transport-fixture", "outerSessionId": self.outer_id,
+                   "responseReference": str(output / "response.json"), "stderrReference": str(output / "stderr.log")}
+        original = CALLER.progress
+
+        def display(event_name, selected, **facts):
+            original(event_name, selected, **facts)
+            if event_name == "sbt-event":
+                signal.write_text("observed while child waits")
+
+        # When the real finite file-backed transport runs with telemetry displayed,
+        with CALLER.selected_directory(output) as descriptor:
+            with patch.object(CALLER, "progress", side_effect=display), redirect_stdout(observed), redirect_stderr(diagnostic):
+                text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, context)
+        # Then the event is flushed before termination, raw bytes are complete and no Workflow status is invented.
+        records = [json.loads(line) for line in observed.getvalue().splitlines()]
+        self.assertEqual([record["event"] for record in records], ["invocation", "sbt-event", "process-terminated"])
+        self.assertTrue(all(record["recordType"] == "native-command-progress" for record in records))
+        self.assertEqual(records[1]["rawEvent"], event)
+        self.assertEqual(records[-1]["exitCode"], 0)
+        self.assertEqual(diagnostic.getvalue(), event + "\n")
+        self.assertEqual(actual, response)
+        self.assertEqual(text.encode("utf-8"), raw)
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+        self.assertEqual((output / "stderr.log").read_bytes(), ("z" * 100000 + "\n" + event + "\n").encode())
+
+    def test_sigterm_forwards_once_to_runtime_and_collects_actual_response(self):
+        # Given a real runtime-shaped child whose handler writes its actual cancellation response,
+        output = self.output()
+        program = ("import json,os,signal,sys,time\n"
+                   "def cancel(sig,frame):\n"
+                   " print('actual runtime cancellation log',file=sys.stderr,flush=True)\n"
+                   " print(json.dumps({'kind':'Request','message':'actual cancelled receipt','accepted':False}),flush=True)\n"
+                   " print('[cncf-runtime-event] '+json.dumps({'state':'settled','pid':os.getpid()}),file=sys.stderr,flush=True)\n"
+                   " sys.exit(0)\n"
+                   "signal.signal(signal.SIGTERM,cancel)\n"
+                   "print('[cncf-runtime-event] '+json.dumps({'state':'runtime-started','pid':os.getpid()}),file=sys.stderr,flush=True)\n"
+                   "time.sleep(5)\n")
+        originalprogress = CALLER.progress
+        realkill = os.kill
+        previous = signal.getsignal(signal.SIGTERM)
+        forwarded = []
+        observed = io.StringIO()
+
+        def record_signal(pid, selected):
+            forwarded.append((pid, selected))
+            return realkill(pid, selected)
+
+        def cancel(event_name, context, **facts):
+            originalprogress(event_name, context, **facts)
+            if event_name == "runtime-event" and '"runtime-started"' in facts["rawEvent"]:
+                realkill(os.getpid(), signal.SIGTERM)
+                realkill(os.getpid(), signal.SIGTERM)
+
+        # When the scoped caller handler receives SIGTERM twice, only its exact runtime is requested once.
+        with CALLER.selected_directory(output) as descriptor:
+            with patch.object(CALLER.os, "kill", side_effect=record_signal), patch.object(CALLER, "progress", side_effect=cancel):
+                with redirect_stdout(observed), redirect_stderr(io.StringIO()):
+                    with self.assertRaisesRegex(CALLER.CallerError, "termination requested; actual result retained"):
+                        CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+        # Then actual runtime settlement and response survive, with no kill escalation or caller cutoff.
+        displayed = [json.loads(line) for line in observed.getvalue().splitlines()]
+        records = [value for value in displayed if value.get("recordType") == "native-command-progress"]
+        actual = [value for value in displayed if "recordType" not in value]
+        runtime = [json.loads(record["rawEvent"].split("] ", 1)[1]) for record in records if record["event"] == "runtime-event"]
+        self.assertEqual(forwarded, [(runtime[0]["pid"], signal.SIGTERM)])
+        self.assertEqual([value["state"] for value in runtime], ["runtime-started", "settled"])
+        self.assertEqual(actual, [{"kind": "Request", "message": "actual cancelled receipt", "accepted": False}])
+        self.assertEqual(sum(record["event"] == "cancellation-requested" for record in records), 1)
+        self.assertEqual(records[-2]["event"], "process-terminated")
+        self.assertEqual(records[-2]["exitCode"], 0)
+        self.assertEqual(records[-1]["event"], "response")
+        self.assertIn("actual runtime cancellation log", (output / "stderr.log").read_text())
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_sigterm_after_actual_accepted_submit_displays_it_once_and_stops_before_advance(self):
+        # Given a real Submit child returning actual acceptance after its runtime receives termination,
+        output = self.output()
+        raw = self.raw(self.submit_response())
+        program = ("import json,os,signal,sys,time\n"
+                   "def cancel(sig,frame):\n"
+                   " sys.stdout.buffer.write(" + repr(raw) + "); sys.stdout.flush()\n"
+                   " sys.exit(0)\n"
+                   "signal.signal(signal.SIGTERM,cancel)\n"
+                   "print('[cncf-runtime-event] '+json.dumps({'state':'runtime-started','pid':os.getpid()}),file=sys.stderr,flush=True)\n"
+                   "time.sleep(5)\n")
+        realpopen = CALLER.subprocess.Popen
+        realkill = os.kill
+        originalprogress = CALLER.progress
+        commands, children = [], []
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        previous = signal.getsignal(signal.SIGTERM)
+
+        def launch(command, **kwargs):
+            commands.append(command)
+            child = realpopen([sys.executable, "-c", program], **kwargs)
+            children.append(child)
+            self.addCleanup(child.wait, timeout=6)
+            return child
+
+        def terminate(event_name, context, **facts):
+            originalprogress(event_name, context, **facts)
+            if event_name == "runtime-event":
+                realkill(os.getpid(), signal.SIGTERM)
+
+        # When paired completion observes SIGTERM during that one real Submit,
+        with patch.object(CALLER.subprocess, "Popen", side_effect=launch):
+            with patch.object(CALLER, "progress", side_effect=terminate), redirect_stdout(observed), redirect_stderr(diagnostic):
+                status = CALLER.main(self.args(output))
+        # Then accepted Submit remains actual and visible once, but the stop request forbids the following Advance.
+        values = [json.loads(line) for line in observed.getvalue().splitlines()]
+        business = [value for value in values if "recordType" not in value]
+        self.assertEqual(status, 2)
+        self.assertEqual(business, [self.submit_response()])
+        self.assertEqual(len(commands), 1)
+        self.assertIn(SERVICES["GoalPhase"] + GOAL_PAIR[0], commands[0])
+        self.assertEqual(children[0].returncode, 0)
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+        self.assertEqual(list((output / "advance").iterdir()), [])
+        self.assertIn("termination requested; actual result retained; no following Advance", diagnostic.getvalue())
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_keyboard_interrupt_reaps_only_owned_child_without_acceptance_or_advance(self):
+        # Given an owned live Submit child with raw bytes and an actual CNCF event,
+        output = self.output()
+        raw = self.raw(self.submit_response())
+        event = '[cncf-sbt-event] {"operation":"compile","workspaceId":"fixture","programIdentity":"owned-fixture","state":"started"}'
+        program = ("import sys,time; sys.stdout.buffer.write(" + repr(raw) + "); sys.stdout.flush(); "
+                   "print(" + repr(event) + ", file=sys.stderr, flush=True); time.sleep(10)")
+        realpopen = CALLER.subprocess.Popen
+        originalprogress = CALLER.progress
+        children = []
+        commands = []
+        originalroute = self.route.read_bytes()
+        observed, diagnostic = io.StringIO(), io.StringIO()
+
+        def launch(command, **kwargs):
+            commands.append(command)
+            child = realpopen([sys.executable, "-c", program], **kwargs)
+            children.append(child)
+
+            def cleanup():
+                if child.poll() is None:
+                    child.kill()
+                child.wait()
+
+            self.addCleanup(cleanup)
+            return child
+
+        def interrupt(event_name, context, **facts):
+            originalprogress(event_name, context, **facts)
+            if event_name == "sbt-event":
+                self.assertIsNone(children[0].poll())
+                raise KeyboardInterrupt
+
+        # When the main-thread observer is interrupted before interpreting Submit,
+        with patch.object(CALLER.subprocess, "Popen", side_effect=launch):
+            with patch.object(CALLER, "progress", side_effect=interrupt), redirect_stdout(observed), redirect_stderr(diagnostic):
+                status = CALLER.main(self.args(output))
+        # Then the direct child is already reaped, raw bytes remain and no success or Advance occurs.
+        self.assertEqual(status, 130)
+        self.assertEqual(len(commands), 1)
+        self.assertIn(SERVICES["GoalPhase"] + GOAL_PAIR[0], commands[0])
+        self.assertIsNotNone(children[0].returncode)
+        self.assertNotEqual(children[0].wait(timeout=0), 0)
+        records = [json.loads(line) for line in observed.getvalue().splitlines()]
+        self.assertEqual([record["event"] for record in records], ["invocation", "sbt-event", "cancellation-requested", "process-terminated"])
+        self.assertTrue(records[-2]["forwarded"])
+        self.assertTrue(all(record["recordType"] == "native-command-progress" for record in records))
+        self.assertIn("interrupted; business outcome remains unknown", diagnostic.getvalue())
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+        self.assertEqual((output / "stderr.log").read_text(), event + "\n")
+        self.assertEqual(list((output / "advance").iterdir()), [])
+        self.assertEqual(self.route.read_bytes(), originalroute)
+
+    def test_event_display_refuses_malformed_oversized_and_foreign_payloads_but_retains_raw_bytes(self):
+        # Given real-shaped metadata plus malformed, oversized and payload-bearing event lines,
+        output = self.output()
+        valid = {"operation": "compile", "workspaceId": "fixture", "programIdentity": "fixture", "state": "terminal", "exitCode": 1}
+        line = "[cncf-sbt-event] " + json.dumps(valid)
+        raw = ("[cncf-sbt-event] not-json\n"
+               + "[cncf-sbt-event] " + json.dumps(dict(valid, argv=["private-source"])) + "\n"
+               + "[cncf-sbt-event] " + json.dumps(dict(valid, programIdentity="x" * 20000)) + "\n"
+               + "[cncf-sbt-event] " + json.dumps(dict(valid, state="accepted")) + "\n"
+               + line + "\n").encode()
+
+        program = "import sys; sys.stdout.buffer.write(b'{}'); sys.stderr.buffer.write(" + repr(raw) + ")"
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        # When the observer consumes the actual raw file sink,
+        with CALLER.selected_directory(output) as descriptor:
+            with redirect_stdout(observed), redirect_stderr(diagnostic):
+                CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+        # Then only valid bounded metadata is displayed, and every original byte is retained.
+        events = [json.loads(item) for item in observed.getvalue().splitlines() if json.loads(item)["event"] == "sbt-event"]
+        self.assertEqual([item["rawEvent"] for item in events], [line])
+        self.assertEqual(diagnostic.getvalue(), line + "\n")
+        self.assertEqual((output / "stderr.log").read_bytes(), raw)
+        self.assertEqual((output / "response.json").read_bytes(), b"{}")
+
+    def test_controlled_clock_over_one_hour_keeps_waiting_with_heartbeat_and_no_signal(self):
+        # Given a real finite child awaiting a heartbeat acknowledgement and a controlled parent clock,
+        output = self.output()
+        acknowledgement = output / "heartbeat-observed"
+        event = '[cncf-sbt-event] {"operation":"compile","workspaceId":"fixture","programIdentity":"fixture","state":"waiting"}'
+        program = ("import pathlib,sys,time\n"
+                   "print(" + repr(event) + ",file=sys.stderr,flush=True)\n"
+                   "deadline=time.monotonic()+5\n"
+                   "while not pathlib.Path(" + repr(str(acknowledgement)) + ").exists():\n"
+                   " if time.monotonic()>=deadline: raise RuntimeError('heartbeat unavailable')\n"
+                   " time.sleep(.01)\n"
+                   "print('{}',flush=True)\n")
+        clock = [1000.0]
+        clocksource = Mock(monotonic=lambda: clock[0], sleep=time.sleep)
+        originalprogress = CALLER.progress
+        observed = io.StringIO()
+
+        def observe(event_name, context, **facts):
+            originalprogress(event_name, context, **facts)
+            if event_name == "sbt-event":
+                clock[0] = 5001.0
+            if event_name == "running":
+                acknowledgement.write_text("controlled clock; no measured hour claim")
+
+        # When the observer clock passes 4001 seconds, actual subprocess waiting remains unpatched.
+        with CALLER.selected_directory(output) as descriptor:
+            with patch.object(CALLER, "time", clocksource), patch.object(CALLER, "progress", side_effect=observe):
+                with patch.object(CALLER.os, "kill") as signals, redirect_stdout(observed), redirect_stderr(io.StringIO()):
+                    _text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                    signals.assert_not_called()
+        # Then the actual later response is collected without any timer, synthetic deadline or cancellation.
+        records = [json.loads(line) for line in observed.getvalue().splitlines()]
+        self.assertEqual(actual, {})
+        self.assertEqual(next(record for record in records if record["event"] == "running")["elapsedSeconds"], 4001.0)
+        self.assertNotIn("deadline-adjusted", [record["event"] for record in records])
+        self.assertNotIn("cancellation-requested", [record["event"] for record in records])
+        self.assertNotIn("timeoutSeconds", records[0])
+        self.assertEqual(records[-1]["exitCode"], 0)
+        self.assertEqual((output / "stderr.log").read_text(), event + "\n")
+
+    def test_runtime_events_display_only_closed_bounded_metadata_and_keep_all_raw_bytes(self):
+        # Given actual runtime-shaped metadata plus foreign, malformed and oversized private payloads,
+        output = self.output()
+        program = ("import json,os,sys\n"
+                   "valid={'state':'runtime-started','pid':os.getpid(),'elapsedMillis':0}\n"
+                   "for value in [dict(valid,argv=['private']),dict(valid,pid=True),dict(valid,state='accepted'),"
+                   "dict(valid,message='x'*20000),valid]:\n"
+                   " print('[cncf-runtime-event] '+json.dumps(value),file=sys.stderr,flush=True)\n"
+                   "print('{}',flush=True)\n")
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        # When one actual file-backed runtime response is collected,
+        with CALLER.selected_directory(output) as descriptor:
+            with redirect_stdout(observed), redirect_stderr(diagnostic):
+                _text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+        # Then only the strict metadata is forwarded while original private lines remain solely in the raw sink.
+        records = [json.loads(line) for line in observed.getvalue().splitlines()]
+        runtime = [record for record in records if record["event"] == "runtime-event"]
+        self.assertEqual(len(runtime), 1)
+        self.assertEqual(actual, {})
+        self.assertEqual(diagnostic.getvalue(), runtime[0]["rawEvent"] + "\n")
+        self.assertNotIn("private", observed.getvalue())
+        raw = (output / "stderr.log").read_text()
+        self.assertIn("private", raw)
+        self.assertEqual(len(raw.splitlines()), 5)
+
+    def test_observation_error_requests_runtime_termination_then_awaits_actual_exit(self):
+        # Given a real live child and an observer that fails after its first actual event,
+        output = self.output()
+        event = '[cncf-runtime-event] {"state":"runtime-started","pid":1}'
+        program = "import sys,time; print(" + repr(event) + ",file=sys.stderr,flush=True); time.sleep(5)"
+        originalprogress = CALLER.progress
+        observations = io.StringIO()
+        realpopen = CALLER.subprocess.Popen
+
+        def fail_observer(event_name, context, **facts):
+            originalprogress(event_name, context, **facts)
+            if event_name == "runtime-event":
+                raise ValueError("test observer failure")
+
+        # When observation raises, the error path requests only runtime SIGTERM and waits for its exit.
+        with CALLER.selected_directory(output) as descriptor:
+            with patch.object(CALLER.subprocess, "Popen", wraps=realpopen) as launched:
+                with patch.object(CALLER, "progress", side_effect=fail_observer), redirect_stdout(observations), redirect_stderr(io.StringIO()):
+                    with self.assertRaisesRegex(ValueError, "test observer failure"):
+                        CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                self.assertEqual(launched.call_count, 1)
+        # Then original raw bytes and error survive, with an actual exit observation and no accepted response.
+        records = [json.loads(line) for line in observations.getvalue().splitlines()]
+        self.assertEqual(records[-1]["event"], "process-terminated")
+        self.assertEqual(records[-1]["exitCode"], -signal.SIGTERM)
+        self.assertEqual(sum(record["event"] == "cancellation-requested" for record in records), 1)
+        self.assertEqual((output / "stderr.log").read_text(), event + "\n")
+
+    def test_projection_bounds_text_and_omits_plan_source_and_environment_payloads(self):
+        # Given supplied counts and a native DTO with extensive scope and source payloads,
+        native = {"message": "x" * 3000, "repairProgress": {"automatic_count": 0, "ordinary_count": 1, "limit": 2},
+                  "work": {"kind": "ReviewStep", "step": "step-2", "sourceRevision": "14",
+                           "selectedPlan": {"source": "private"}, "environment": {"secret": "private"}},
+                  "stdout": "private source log", "argv": ["private input"]}
+        # When telemetry projects only the admitted display metadata,
+        actual = CALLER.observation_projection(native)
+        # Then raw business data is unchanged while the projection is bounded and explicit about shortened text.
+        self.assertEqual(actual["repairProgress"], native["repairProgress"])
+        self.assertEqual(actual["work"], {"kind": "ReviewStep", "step": "step-2", "sourceRevision": "14"})
+        self.assertTrue(actual["message"]["truncated"])
+        self.assertEqual(len(actual["message"]["preview"]), 1024)
+        self.assertNotIn("stdout", actual)
+        self.assertNotIn("argv", actual)
+        self.assertEqual(len(native["message"]), 3000)
+
+    def test_projection_keeps_separate_evidence_and_journal_outcomes_with_public_references(self):
+        # Given real-shaped producer outcomes and raw material that must remain outside display.
+        state = {"status": "stored", "evidence": {"identity": "evidence:source", "revision": "1"},
+                 "observation": {"status": "stored", "observedAt": "2026-10-20T00:00:00Z"},
+                 "journal": {"status": "unavailable", "entry": None}, "text": "private captured stdout"}
+        # When a final Advance response is projected for the skill.
+        actual = CALLER.observation_projection({"validation": {"outcome": "passed", "evidenceRecording": [state]}})
+        displayed = actual["validation"]["evidenceRecording"][0]
+        # Then Test, storage and Journal facts remain distinct and the usable ID survives nesting.
+        self.assertEqual(actual["validation"]["outcome"], "passed")
+        self.assertEqual(displayed["status"], "stored")
+        self.assertEqual(displayed["evidence"], state["evidence"])
+        self.assertEqual(displayed["journal"], {"status": "unavailable", "entry": None})
+        self.assertNotIn("text", displayed)
 
     def test_all_advance_frontiers_stop_after_two_calls(self):
         # Given accepted Submit followed by each native frontier kind,
@@ -279,9 +736,9 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 self.assertEqual((output / "response.json").read_bytes(), self.raw(response))
                 self.assertEqual(list((output / "advance").iterdir()), [])
 
-    def test_submit_transport_failure_timeout_and_nonzero_stop(self):
-        # Given uncertain Submit transport, timeout or nonzero native exit with available output,
-        for failure in ("transport", "timeout", "nonzero"):
+    def test_submit_transport_failure_disconnect_and_nonzero_stop(self):
+        # Given uncertain Submit transport, disconnect or nonzero native exit with available output,
+        for failure in ("transport", "disconnected", "nonzero"):
             with self.subTest(failure=failure):
                 output = self.output()
                 response = self.submit_response()
@@ -311,7 +768,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
 
     def test_accepted_submit_then_failed_advance_preserves_first_observation(self):
         # Given an accepted Submit followed by failed or uncertain Advance transport,
-        for failure in ("transport", "timeout", "nonzero"):
+        for failure in ("transport", "disconnected", "nonzero"):
             with self.subTest(failure=failure):
                 output = self.output()
                 responses = [self.submit_response(), self.advance_response()]

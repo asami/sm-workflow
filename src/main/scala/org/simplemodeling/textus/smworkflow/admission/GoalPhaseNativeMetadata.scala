@@ -24,7 +24,7 @@ import GoalPhaseSliceValidationPlan as L
 /** Private configuration and retained selection codecs. CNCF owns discovery,
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
@@ -333,6 +333,9 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   /** Public Record naming projection followed by the unchanged exact domain codec. */
   def normalizeBatches(value: Json): Either[String, Json] =
     _normalize_public_json(value).flatMap(_.as[Vector[Batch]].left.map(_.message)).map(_.asJson)
+
+  def normalizePublicJson(value: Json): Either[String, Json] =
+    _normalize_public_json(value)
 
   private def _parameter_path(path: Vector[String]): Boolean =
     path == Vector("plan", "executionParameters") || path == Vector("plan", "additionalOperations", "parameters")

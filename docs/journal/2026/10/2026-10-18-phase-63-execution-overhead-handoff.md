@@ -421,3 +421,128 @@ are normal continuation under standing authority; neither promises arbitrary
 replay or general recovery of unknown effects. This is a planning update only:
 no product implementation, active 6.2 change, runtime validation or acceptance is
 claimed, and no live execution records are modified.
+
+
+## Long Advance and runtime-owned SIGTERM handling — 2026-10-20
+
+Latest user direction: do not modify the Phase 6.3 development plan or checklist.
+Share this policy with the existing development chat **sm-workflow開発**, which
+is already implementing the affected route. This journal is a coordination
+handoff only; it neither reopens the closed Phase nor adds acceptance to its
+existing closure. Preserve ongoing work, original Goal/base/Plan, all history,
+repair counts, applicable verification results and existing completion records.
+
+Advance may take an hour or longer. Remove skill/caller-owned fixed 60/240-second
+execution cutoffs. Extending the caller deadline from observed SBT budgets still
+leaves monitoring and termination in the wrong owner and does not meet this
+latest decision. The normal caller waits for the actual response; waiting does
+not require repeated AI invocations. Runtime owns execution deadlines, monitoring
+and result collection. A transport/UI wait limit is not authority to kill the
+underlying execution or start another Advance.
+
+On an explicit interruption, deliver SIGTERM as a termination request to the
+sm-workflow/CNCF execution owner. The owner stops scheduling new work, propagates
+cancellation to active operations, confirms termination of its managed child and
+descendant processes, and preserves logs, actual outcomes and Workflow interruption
+state before exit. Grace periods and any required escalation belong to the
+execution infrastructure, not a second timer in the skill helper. Merely killing
+the caller or sending TERM/KILL to a process group does not establish completed
+cancellation, descendant termination or durable state preservation. Signals apply
+only to the owned execution, never unrelated user processes.
+
+SIGKILL cannot run receiver cleanup. If termination or effects cannot be confirmed,
+retain an unknown outcome without success or automatic replay. Connect to the
+existing policy: confirmed unexecuted work can continue under unchanged authority;
+running work is awaited, completed results are collected, and unknown work is
+observed. Cancellation itself neither resets/refunds repair counts nor turns a
+canceled validation into a product-test failure. Preserve prior evidence with its
+actual scope and normal accounting for genuine product repairs/Step closure.
+
+Development handoff: reuse ongoing implementation and applicable tests without
+rollback. Align the caller, installed skill instructions and CNCF lifecycle at
+their existing owners. Verify that a normal Advance can outlast 240 seconds and
+support an hour or longer without a caller cutoff, and exercise actual SIGTERM
+propagation, managed-descendant termination and retained cancellation/result state
+through the connected route. Reuse existing cases; distinguish controlled-clock
+or shortened-duration coverage from a genuinely measured hour-long execution.
+No new framework, waiting-only AI loop or separate full-test campaign is implied.
+Current SBT policy uses the registered runner and sbt-native boot/dependency/workspace
+locks; this handoff does not introduce machine-wide serialization.
+
+The user explicitly authorized notification of **sm-workflow開発**. The policy and
+the instruction not to edit the 6.3 plan/checklist were sent to that chat
+(`01a13249-14e0-7470-8144-f9af8145cec6`). Delivery is not a claim of adoption,
+implementation completion or successful runtime validation. This chat edits only
+this journal; product code, plans, checklists and live execution records remain
+owned by their current work.
+
+
+## Future candidate: SIGINT return of control to the skill — 2026-10-20
+
+The user wants a future mechanism that interrupts sm-workflow with SIGINT and
+returns control to the calling skill. Defer this feature to avoid mixing its
+semantics into the current SIGTERM cancellation/cleanup work. No Phase is
+allocated, and no Phase 6.3 plan/checklist, current acceptance obligation or live
+execution state changes as a result of this record.
+
+Current scope remains long-running Advance without a caller-owned timeout and
+runtime-owned SIGTERM cancellation, cleanup and truthful outcome retention.
+The preceding handoff's "explicit interruption" refers to that termination
+request; it does not require a new SIGINT handback/resumption protocol now.
+This deferral does not instruct removal of existing interrupt handling.
+
+Future design must specify the interruption boundary, the returned outcome and
+control context, treatment of in-flight effects/child processes, and whether/how
+the same workflow may resume without duplicate execution. These remain open
+questions, not present guarantees of suspension, recovery or automatic resume.
+Preserve Goal/history/repair counts and applicable evidence in that design.
+The development chat should record this candidate and continue its current work
+without adding SIGINT implementation, tests or a release dependency now.
+
+
+## JVM shutdown hook to CNCF termination — 2026-10-20
+
+The user adopts the standard JVM shutdown hook as the entry to CNCF's existing
+termination lifecycle. Append this direction to the development handoff only;
+do not edit the Phase 6.3 plan/checklist or reopen its closure. Preserve ongoing
+implementation, Goal/base/Plan, history, repair counters and applicable test/review
+results. SIGINT return of control to the skill remains the future candidate above.
+
+Use `Runtime.getRuntime.addShutdownHook(...)` to connect JVM shutdown to one
+coordinated CNCF termination operation. For the normal supported JVM launch,
+SIGTERM delivered to the owning JVM initiates its shutdown hooks. A launcher
+must deliver the request to that owner; registration alone does not establish
+signal forwarding through an outer process. Do not reintroduce a skill-owned
+watchdog or deadline-based kill. Reuse the existing lifecycle/registration if
+present instead of adding competing cleanup implementations.
+
+CNCF owns the ordered shutdown: stop admission of new work, request cancellation
+of active operations, confirm managed child/descendant termination, retain actual
+outcomes and Workflow interruption state, flush logs and close resources. Keep
+storage and logging usable until dependent result recording finishes. Hooks and
+ordinary threads may run concurrently; coordinate cleanup with normal completion
+and make repeated termination requests safe. Do not depend on registration order
+of separate JVM hooks. Runtime owns bounded cleanup/grace and escalation, with
+unknown outcomes retained when termination or effects cannot be confirmed.
+
+The hook supplies an execution opportunity, not automatic business compensation,
+transaction rollback or a guarantee that every cleanup finishes. Reuse existing
+operation-specific cancellation/compensation where applicable; no general new
+compensation engine is requested. SIGKILL cannot run a shutdown hook. Ordinary
+`finally` blocks alone do not establish shutdown completion. Observe the actual
+supported JVM configuration: `-Xrs` changes normal signal handling, so a hook
+must not be assumed to receive SIGTERM under that configuration.
+
+References: [Runtime shutdown API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Runtime.html)
+and [Java launcher signal handling](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html#standard-options-for-java).
+These explain the mechanism, not acceptance of the local CNCF integration.
+Reuse ongoing SIGTERM lifecycle work and applicable tests; fill the actual
+signal-to-hook-to-CNCF connection gap and report its observed outcomes. Do not
+rerun unrelated validation or add an independent review campaign for this entry.
+A shutdown hook ends in JVM termination; it does not implement the deferred
+SIGINT protocol for returning control while preserving a running JVM. Existing
+interrupt handling is not removed by this deferral.
+
+This entry is a direction for **sm-workflow開発**, not a claim that implementation
+or connected validation has completed. Only this journal is changed here; all
+live execution and product changes stay with the ongoing development work.

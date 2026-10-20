@@ -24,7 +24,7 @@ SPEC = importlib.util.spec_from_file_location("native_goal_command_authority_uti
 COMMAND = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMAND)
 
-OPTIONS = {"primary", "host", "task", "output", "request", "reference",
+OPTIONS = {"executable", "host", "task", "output", "request", "reference",
            "participant", "issuer", "occurred-at", "collection"}
 
 
@@ -47,7 +47,7 @@ def parse_options(argv):
     return options
 
 
-def preparation_command(options, primary, task_fd):
+def preparation_command(options, executable, task_fd):
     """Check only selected routing; forward opaque authority files unchanged."""
     session_id = COMMAND.routing(task_fd)
     _text, request = COMMAND.read_object(COMMAND.explicit_path(options["request"]))
@@ -57,26 +57,27 @@ def preparation_command(options, primary, task_fd):
              "reference": COMMAND.existing_file(COMMAND.explicit_path(options["reference"])).as_uri(),
              "participant": options["participant"], "issuer": options["issuer"],
              "occurredAt": options["occurred-at"], "collection": options["collection"]}
-    return COMMAND.command_prefix(primary, COMMAND.explicit_path(options["host"])) + [
+    return COMMAND.command_prefix(executable, COMMAND.explicit_path(options["host"])) + [
         "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority",
         "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
 
 def execute(options):
-    primary, host, task, output = (COMMAND.explicit_path(options[name])
-                                   for name in ("primary", "host", "task", "output"))
+    executable, host, task, output = (COMMAND.explicit_path(options[name])
+                                   for name in ("executable", "host", "task", "output"))
     COMMAND.require(task.parent == host / "target/sm-workflow/tasks", "task must be a direct owned host task")
     COMMAND.require(output != task and task in output.parents, "output must be beneath the selected task")
-    with COMMAND.selected_directory(primary), COMMAND.selected_directory(host):
-        for path in (primary / "bin/launcher", host / ".textus/config.json", host / ".textus/assembly.yaml"):
+    COMMAND.installed_executable(executable)
+    with COMMAND.selected_directory(host):
+        for path in (host / ".textus/config.json", host / ".textus/assembly.yaml"):
             COMMAND.existing_file(path)
-        for name in ("runtime-classpath.txt", "component-descriptor.json", "car-runtime-manifest.json"):
-            COMMAND.existing_file(primary / "target/cncf.d" / name)
         with COMMAND.selected_directory(task) as task_fd, COMMAND.selected_directory(output) as output_fd:
             COMMAND.require(not os.listdir(output_fd), "output directory must be empty")
-            command = preparation_command(options, primary, task_fd)
-            text, response = COMMAND.native_call(command, host, output_fd, 60)
+            command = preparation_command(options, executable, task_fd)
+            context = COMMAND.exchange_context(command, host, output, COMMAND.routing(task_fd))
+            text, response = COMMAND.native_call(command, host, output_fd, context)
             COMMAND.require(isinstance(response.get("datastore"), list), "preparation must return a datastore array")
+            COMMAND.response_progress(response, context)
             sys.stdout.write(text)
 
 
@@ -87,8 +88,6 @@ def main(argv=None):
         return 0
     except COMMAND.CallerError as error:
         diagnostic = str(error)
-    except subprocess.TimeoutExpired:
-        diagnostic = "native process timed out; retain output and stop"
     except (OSError, ValueError, RecursionError, TypeError):
         diagnostic = "invalid file, JSON or response contract; retain available output and stop"
     safe = "".join(c for c in diagnostic if c.isprintable())[:512]

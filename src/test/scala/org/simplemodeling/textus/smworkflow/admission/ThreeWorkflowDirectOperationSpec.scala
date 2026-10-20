@@ -42,9 +42,7 @@ import SplitPhaseTypedStartFixture as F
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  *  version Oct. 15, 2026
-  *  version Oct. 16, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1057,22 +1055,25 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the seventeen installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the twenty-one installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
+          "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
+          "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
           "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
           "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 17
-        published.map(_._1).distinct should have size 17
+        published should have size 21
+        published.map(_._1).distinct should have size 21
         published.map(_._1).toSet shouldBe expected
         published.foreach { (_, operation) =>
           operation.specification.request.parameters.head.name shouldBe
-            (if (operation.name.startsWith("start")) "input" else "sessionId")
+            (if (operation.name.startsWith("start") || Set("recoverGoalPhaseValidation",
+              "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan").contains(operation.name)) "input" else "sessionId")
           operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
         }
         val beforeinvalid = current()
