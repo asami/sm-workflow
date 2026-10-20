@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  */
 final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
@@ -22,7 +22,12 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "docs/spec/goal-phase-dependency-scope.md",
     "docs/spec/goal-phase-validation-metadata.md"
   )
-  private val _distribution_paths = _skill_paths ++ _contract_paths
+  private val _caller_paths = Vector(
+    "docs/spec/native-goal-command-task.md",
+    "scripts/native-goal-command.py",
+    "scripts/native-goal-authority.py"
+  )
+  private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths
 
   "Component-owned skill resources" should {
     "retain exactly the three public semantic skill sources in the actual component JAR" in {
@@ -49,7 +54,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       } finally jar.close()
     }
 
-    "retain identical bytes for exactly seven distribution files in the standalone ZIP and component JAR" in {
+    "retain identical bytes for exactly ten distribution files in the standalone ZIP and component JAR" in {
       Given("the actual skillBundle ZIP, packageBin JAR and independent authoring sources")
       val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
@@ -68,7 +73,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           val packagedpaths = jar.entries().asScala
             .filter(entry => !entry.isDirectory && entry.getName.startsWith("META-INF/sm-workflow/"))
             .map(_.getName.stripPrefix("META-INF/sm-workflow/")).toVector
-          Then("both distribution namespaces contain exactly seven files with authoring and JAR byte equality")
+          Then("both distribution namespaces contain exactly ten files with authoring and JAR byte equality")
           entries.map(_.getName).sorted shouldBe _distribution_paths.sorted
           packagedpaths.sorted shouldBe _distribution_paths.sorted
           _distribution_paths.foreach { path =>
@@ -116,7 +121,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       val probe = probeRoot.resolve("repacked.zip")
       Files.isRegularFile(original) shouldBe true
       withClue("Run checkSkillBundleReproducibility before this scenario: ")(Files.isRegularFile(probe) shouldBe true)
-      When("the complete ZIP bytes and all seven copied sources, timestamps and original authoring bytes are read")
+      When("the complete ZIP bytes and all ten copied sources, timestamps and original authoring bytes are read")
       val originalBytes = Files.readAllBytes(original).toVector
       val probeBytes = Files.readAllBytes(probe).toVector
       val copies = _distribution_paths.map { path =>
@@ -130,7 +135,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           val input = zip.getInputStream(zip.getEntry(path))
           try path -> input.readAllBytes().toVector finally input.close()
         }.toMap
-        Then("all seven copies have the changed timestamp, authoring bytes remain original, and full ZIP bytes are equal")
+        Then("all ten copies have the changed timestamp, authoring bytes remain original, and full ZIP bytes are equal")
         copies.foreach { case (path, regular, timestamp, copiedbytes, authoringbytes) =>
           regular shouldBe true
           timestamp shouldBe 946684800000L

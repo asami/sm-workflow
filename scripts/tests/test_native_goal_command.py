@@ -8,7 +8,8 @@ S6-01D14 E30–E33, S6-01D15 E34–E40 and S6-01D16 E41–E47.
 
 Temporary files and mocked native output are specification data, never actual
 task execution, authenticated selection, consent, installed work or acceptance.
-Only the caller subprocess invocation is patched. Native payload semantics,
+Route examples supply a native-call boundary fixture and capture telemetry separately.
+Native payload semantics,
 permissions and provenance remain with their existing owners.
 @since   Oct. 14, 2026
 @version Oct. 15, 2026
@@ -24,7 +25,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "native-goal-command.py"
@@ -40,20 +41,18 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.primary = self.root / "primary"
+        self.executable = self.root / "installed CLI" / "sm-workflow"
         self.host = self.root / "host"
         self.task = self.host / "target/sm-workflow/tasks/selected-task"
         self.task.mkdir(parents=True)
         for path in (
-            self.primary / "bin/launcher",
-            self.primary / "target/cncf.d/runtime-classpath.txt",
-            self.primary / "target/cncf.d/component-descriptor.json",
-            self.primary / "target/cncf.d/car-runtime-manifest.json",
+            self.executable,
             self.host / ".textus/config.json",
             self.host / ".textus/assembly.yaml",
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("specification prerequisite", encoding="utf-8")
+        self.executable.chmod(0o755)
         self.input = self.write_json("selected-input.json", {
             "phaseIdentity": "phase-6", "repositoryIdentity": "sm-workflow",
             "nativeOwnedField": {"kept": True},
@@ -93,7 +92,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         return path
 
     def args(self, action, output, *pairs, task=None):
-        return ["--primary", str(self.primary), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--host", str(self.host),
                 "--task", str(task or self.task), "--action", action,
                 "--output", str(output), *pairs]
 
@@ -112,12 +111,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                          "--selection-collection", "entity:smworkflow.cli.repository_selections")
 
     def preparation_command(self, operation, value):
-        return [str(self.primary / "bin/launcher"), "--classpath-file",
-                str(self.primary / "target/cncf.d/runtime-classpath.txt"), "--main-class",
-                "org.goldenport.cncf.CncfMain", "--java-opt", "-Dstdout.encoding=UTF-8", "--", "--force-exit",
-                "--component-dev-dir", str(self.primary),
-                "--textus.assembly.descriptor=" + str(self.host / ".textus/assembly.yaml"),
-                "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService." + operation,
+        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService." + operation,
                 "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
     def repository_command(self, argv):
@@ -165,7 +159,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         return {"sessionId": session_id, "accepted": True, "outcome": "accepted",
                 "message": "Actual native acknowledgement"}
 
-    def process_output(self, response, stderr=b"", returncode=0, timeout=False, during=None):
+    def process_output(self, response, stderr=b"", returncode=0, disconnected=False, during=None):
         raw = response if isinstance(response, bytes) else (json.dumps(response) + "\n").encode("utf-8")
 
         def invoke(command, **kwargs):
@@ -173,39 +167,50 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             kwargs["stderr"].write(stderr)
             if during is not None:
                 during()
-            if timeout:
-                raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+            if disconnected:
+                raise OSError("fixture runtime disconnected")
             return subprocess.CompletedProcess(command, returncode)
 
         return invoke, raw
 
     def call(self, argv, process):
         output, diagnostic = io.StringIO(), io.StringIO()
-        with patch.object(CALLER.subprocess, "run", side_effect=process) as native:
-            with redirect_stdout(output), redirect_stderr(diagnostic):
+        native = Mock(side_effect=process)
+
+        def fixture(command, host, descriptor, context):
+            # A route-only native boundary supplies raw observations. Real
+            # process ownership/interruption is covered by transport scenarios.
+            CALLER.progress("invocation", context)
+            with CALLER.new_file(descriptor, "response.json") as stdout:
+                with CALLER.new_file(descriptor, "stderr.log") as stderr:
+                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+            CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
+            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
+                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
+                               "native output exceeds its bound; retain output")
+            with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
+                                               dir_fd=descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+            return text, CALLER.json_object(text)
+
+        with patch.object(CALLER, "native_call", side_effect=fixture):
+            # Route specifications capture the separate telemetry channel; the
+            # transport specifications below exercise its actual stdout display.
+            with patch.object(CALLER, "progress") as telemetry, redirect_stdout(output), redirect_stderr(diagnostic):
                 status = CALLER.main(argv)
+            native.telemetry = telemetry.call_args_list
         return status, output.getvalue(), diagnostic.getvalue(), native
 
     def command(self, operation, *pairs):
-        return [str(self.primary / "bin/launcher"), "--classpath-file",
-                str(self.primary / "target/cncf.d/runtime-classpath.txt"),
-                "--main-class", "org.goldenport.cncf.CncfMain",
-                "--java-opt", "-Dstdout.encoding=UTF-8", "--", "--force-exit",
-                "--component-dev-dir", str(self.primary),
-                "--textus.assembly.descriptor=" + str(self.host / ".textus/assembly.yaml"),
-                "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
+        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
                 *pairs, "--json"]
 
     def assert_one_call(self, native, command):
         native.assert_called_once()
         args, kwargs = native.call_args
         self.assertEqual(args, (command,))
-        self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr", "timeout"})
+        self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
         self.assertEqual(kwargs["cwd"], str(self.host))
-        expected_timeout = 240 if (CALLER.FQN + "advanceGoalPhase" in command
-                                   or "org.simplemodeling.textus.SmWorkflow.SplitPhaseService.advanceSplitPhase" in command
-                                   or "org.simplemodeling.textus.SmWorkflow.RepositorySyncService.advanceRepositorySync" in command) else 60
-        self.assertEqual(kwargs["timeout"], expected_timeout)
         self.assertTrue(kwargs["stdout"].closed)
         self.assertTrue(kwargs["stderr"].closed)
 
@@ -219,7 +224,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         # When the explicitly selected Start is acknowledged once.
         status, printed, diagnostic, native = self.call(
             self.args("start", start_output, "--input", str(self.input)), process)
-        # Then Start has a 60-second bound, raw native naming displays unchanged and only the canonical local ID is retained.
+        # Then Start has no execution cutoff, raw native naming displays unchanged and only the canonical local ID is retained.
         self.assertEqual(status, 0)
         self.assertEqual(printed, start_raw.decode())
         self.assertEqual(diagnostic, "")
@@ -239,7 +244,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         process, advance_raw = self.process_output(request)
         # When the selected task is explicitly advanced once.
         status, printed, diagnostic, native = self.call(self.args("advance", advance_output), process)
-        # Then Advance has a 240-second bound and preserves the whole response without Submit or routing change.
+        # Then Advance has no execution cutoff and preserves the whole response without Submit or routing change.
         self.assertEqual(status, 0)
         self.assertEqual(printed, advance_raw.decode())
         self.assertEqual(diagnostic, "")
@@ -259,7 +264,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         status, printed, diagnostic, native = self.call(
             self.args("submit", submit_output, "--request", str(advance_output / "response.json"),
                       "--submission", str(self.submission)), process)
-        # Then Submit has a 60-second bound and sends the issued route and supplied values in declared parameters once.
+        # Then Submit has no execution cutoff and sends the issued route and supplied values in declared parameters once.
         self.assertEqual(status, 0)
         self.assertEqual(printed, submit_raw.decode())
         self.assertEqual(diagnostic, "")
@@ -271,20 +276,20 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.assertEqual((advance_output / "response.json").read_bytes(), advance_raw)
         self.assertEqual(route.read_bytes(), retained)
 
-    def test_e24_advance_timeout_retains_partial_streams_and_outer_route(self):
+    def test_e24_advance_disconnect_retains_partial_streams_and_outer_route(self):
         """E24 / R2,R3,R4,R5 / PHASE-6 S6-01D6T3; native-goal-command."""
-        # Given E24: an existing outer Goal route and partial native streams before an Advance timeout.
+        # Given E24: an existing outer Goal route and partial native streams before an Advance disconnect.
         route = self.retain()
         retained = route.read_bytes()
         output = self.output()
         stderr = b"native Advance still uncertain\n"
-        process, raw = self.process_output(b'{"session_id":"actual-goal",', stderr, timeout=True)
-        # When one explicit Advance raises TimeoutExpired using its selected observation bound.
+        process, raw = self.process_output(b'{"session_id":"actual-goal",', stderr, disconnected=True)
+        # When one explicit Advance observes a disconnected runtime.
         status, printed, diagnostic, native = self.call(self.args("advance", output), process)
-        # Then its 240-second single call fails, retaining both streams and the route without success or Submit/retry.
+        # Then its single call fails without a caller deadline, retaining both streams and the route without success or Submit/retry.
         self.assertNotEqual(status, 0)
         self.assertEqual(printed, "")
-        self.assertIn("native process timed out; retain output and stop", diagnostic)
+        self.assertIn("retain available output and stop", diagnostic)
         self.assert_one_call(native, self.command("advanceGoalPhase", "--sessionId", "actual-goal"))
         self.assertEqual((output / "response.json").read_bytes(), raw)
         self.assertEqual((output / "stderr.log").read_bytes(), stderr)
@@ -467,15 +472,15 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             ("wrong-id", self.acknowledged("other-goal"), 0, False),
             ("wrong-outcome", dict(self.acknowledged(), outcome="rejected"), 0, False),
             ("blank-message", dict(self.acknowledged(), message="  "), 0, False),
-            ("timeout", b"partial-native-response", 0, True),
+            ("disconnected", b"partial-native-response", 0, True),
         ]
-        for name, response, returncode, timeout in cases:
+        for name, response, returncode, disconnected in cases:
             with self.subTest(case=name):
                 # Given retained routing and one failing native response.
                 route = self.retain()
                 before = route.read_bytes()
                 output = self.output()
-                process, raw = self.process_output(response, b"native diagnostic\n", returncode, timeout)
+                process, raw = self.process_output(response, b"native diagnostic\n", returncode, disconnected)
                 # When the selected Submit is called once.
                 status, printed, diagnostic, native = self.call(
                     self.args("submit", output, "--request", str(self.request), "--submission", str(self.submission)), process)
@@ -946,10 +951,10 @@ class NativeGoalCommandSpecification(unittest.TestCase):
 
     def test_e12_review_passive_failures_retain_streams_and_stop(self):
         """E12 / R4 / PHASE-6 S6-01D3F; one call without import/progression."""
-        cases = (("nonzero", {"datastore": []}, 2, False), ("timeout", b"partial", 0, True),
+        cases = (("nonzero", {"datastore": []}, 2, False), ("disconnected", b"partial", 0, True),
                  ("malformed", b"not-json", 0, False), ("nonobject", b"[]", 0, False),
                  ("absent-datastore", {}, 0, False), ("nonarray-datastore", {"datastore": {}}, 0, False))
-        for name, response, returncode, timeout in cases:
+        for name, response, returncode, disconnected in cases:
             with self.subTest(case=name):
                 # Given a failing passive process/response and unchanged routing/import configuration.
                 route = self.retain()
@@ -959,7 +964,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.request.write_text(json.dumps(self.review_request(wire=True)))
                 output = self.output()
                 argv = self.review_args(output)
-                process, raw = self.process_output(response, b"passive diagnostic\n", returncode, timeout)
+                process, raw = self.process_output(response, b"passive diagnostic\n", returncode, disconnected)
                 # When the caller receives the actual failing streams from its one passive invocation.
                 status, printed, diagnostic, native = self.call(argv, process)
                 # Then failure retains both logs, route and config and stops without another action.
@@ -1136,12 +1141,12 @@ class NativeGoalCommandSpecification(unittest.TestCase):
 
     def test_e18_repository_failures_retain_streams_without_retry(self):
         """E18 / R2,R3,R5,R7 / PHASE-6 S6-01D3S; passive failure ends this call."""
-        cases = (("nonzero", {"datastore": []}, 2, False), ("timeout", b"partial", 0, True),
+        cases = (("nonzero", {"datastore": []}, 2, False), ("disconnected", b"partial", 0, True),
                  ("malformed", b"not-json", 0, False), ("nonobject", b"[]", 0, False),
                  ("duplicate", b'{"datastore":[],"datastore":[]}', 0, False),
                  ("nonfinite", b'{"datastore":[],"value":NaN}', 0, False),
                  ("missing-datastore", {}, 0, False), ("nonarray-datastore", {"datastore": {}}, 0, False))
-        for name, response, returncode, timeout in cases:
+        for name, response, returncode, disconnected in cases:
             with self.subTest(case=name):
                 # Given a failing native process or strict acknowledgement and existing selected files/route/config.
                 route = self.retain()
@@ -1149,7 +1154,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_args(output)
-                process, raw = self.process_output(response, b"repository diagnostic\n", returncode, timeout)
+                process, raw = self.process_output(response, b"repository diagnostic\n", returncode, disconnected)
                 # When the one selected passive invocation returns or times out with available streams.
                 status, printed, diagnostic, native = self.call(argv, process)
                 # Then both raw streams remain and failure stops without retry, import or routing/config effects.
@@ -1436,7 +1441,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         """E23 / R2,R3,R5,R8 / S6-01D4K; one native call and child acknowledgement."""
         for action in ("prepare-repository-review-input", "submit-repository-review"):
             good = {"datastore": []} if action.startswith("prepare") else self.acknowledged("issued-child")
-            cases = [("nonzero", good, 2, False), ("timeout", b"partial response", 0, True),
+            cases = [("nonzero", good, 2, False), ("disconnected", b"partial response", 0, True),
                      ("malformed", b"not-json", 0, False), ("nonobject", b"[]", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', 0, False),
                      ("nonfinite", b'{"value":NaN}', 0, False)]
@@ -1450,7 +1455,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     ("nonboolean", {"accepted": 1}), ("wrong-outcome", {"outcome": "rejected"}),
                     ("blank-message", {"message": " "}))]
             cases += [("stdout-bound", b" " * (8 * 1024 * 1024 + 1), 0, False)]
-            for name, response, returncode, timeout in cases:
+            for name, response, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
                     # Given native failure or a strict/bounded acknowledgement violation for the selected child action.
                     route = self.retain()
@@ -1460,7 +1465,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     before = {path: path.read_bytes() for path in files}
                     output = self.output()
                     argv = self.repository_review_args(action, output)
-                    process, raw = self.process_output(response, b"child diagnostic\n", returncode, timeout)
+                    process, raw = self.process_output(response, b"child diagnostic\n", returncode, disconnected)
                     # When the one selected native invocation returns or times out.
                     status, printed, diagnostic, native = self.call(argv, process)
                     # Then failure retains raw streams/config/outer route, without retry, Advance or success display.
@@ -1613,7 +1618,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
     def test_e28_execution_transport_and_consumed_response_failures_promote_no_completion(self):
         """S6-01D10 R6/R10: uncertainty and contradictions stop without retries."""
         good = {"session": '{"retained":"canonical"}', "next_selection": '{"attempt":2}'}
-        cases = [("nonzero", good, 2, False), ("timeout", b"partial", 0, True),
+        cases = [("nonzero", good, 2, False), ("disconnected", b"partial", 0, True),
                  ("malformed", b"not-json", 0, False), ("missing-session", {}, 0, False),
                  ("structured-session", {"session": {}}, 0, False),
                  ("selection-alias", dict(good, nextSelection='{"attempt":1}'), 0, False),
@@ -1621,7 +1626,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                  ("structured-selection", dict(good, next_selection={"attempt": 2}), 0, False),
                  ("invalid-evidence", dict(good, completion_evidence=[]), 0, False)]
         for action in ("prepare-execution", "record-execution"):
-            for name, response, returncode, timeout in cases:
+            for name, response, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
                     # Given an actual-shape current Request but a failed, uncertain or contradictory passive native response.
                     route = self.retain()
@@ -1629,7 +1634,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     self.request.write_text(json.dumps(request))
                     before = route.read_bytes()
                     output = self.output()
-                    process, raw = self.process_output(response, b"native diagnostic\n", returncode, timeout)
+                    process, raw = self.process_output(response, b"native diagnostic\n", returncode, disconnected)
                     # When exactly one selected execution action returns or times out.
                     status, printed, diagnostic, native = self.call(self.execution_args(action, output), process)
                     # Then only raw streams remain; no Session/selection/evidence is promoted, and no retry/Submit/Advance occurs.
@@ -1796,7 +1801,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         for action in ("submit-repository-conflict", "prepare-execution", "record-execution"):
             good = self.acknowledged("issued-child") if action.startswith("submit") else {"session": '{"original":"retained"}'}
             cases = [("nonzero", good, b"diagnostic", 2, False),
-                     ("timeout", b"partial response", b"diagnostic", 0, True),
+                     ("disconnected", b"partial response", b"diagnostic", 0, True),
                      ("malformed", b"not-json", b"diagnostic", 0, False),
                      ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
@@ -1810,15 +1815,15 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     ("alias", {"session_id": "other-child"}), ("rejected", {"outcome": "rejected"}))]
             else:
                 cases += [("missing-session", {}, b"diagnostic", 0, False)]
-            for name, response, stderr, returncode, timeout in cases:
+            for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
-                    # Given E32: valid conflict scope but failed/nonzero/timeout/strict/bounded or unaccepted/wrong-child native output.
+                    # Given E32: valid conflict scope but failed/nonzero/disconnected/strict/bounded or unaccepted/wrong-child native output.
                     route = self.retain()
                     self.request.write_text(json.dumps(self.conflict_request("snake")))
                     files = (route, self.request, self.submission, self.host / ".textus/config.json")
                     before = {path: path.read_bytes() for path in files}
                     output = self.output()
-                    process, raw = self.process_output(response, stderr, returncode, timeout)
+                    process, raw = self.process_output(response, stderr, returncode, disconnected)
                     # When the selected conflict action makes its single native call.
                     status, printed, diagnostic, native = self.call(self.conflict_args(action, output), process)
                     # Then failure retains both streams and routing, with no promoted artifact, second call, Submit or Advance.
@@ -2037,7 +2042,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     "kind": kind, "message": "Actual " + kind, "native_display": {"kept_field": True}}, b"warning\n")
                 # When the host explicitly selects advance-split once.
                 status, printed, diagnostic, native = self.call(self.split_args("advance-split", output), process)
-                # Then fixed Split Advance waits at most 240 seconds and displays only the original observation.
+                # Then fixed Split Advance awaits the actual response and displays only the original observation.
                 self.assertEqual((status, diagnostic), (0, ""))
                 self.assertEqual(printed, raw.decode())
                 self.assert_one_call(native, self.split_command("advanceSplitPhase", "--sessionId", "actual-split"))
@@ -2284,16 +2289,16 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     invalid += (dict(good, kind="Unknown"),)
                 elif action != "start-split":
                     invalid += (dict(good, accepted=False), dict(good, accepted=1))
-            cases = [("nonzero", good, b"diagnostic", 2, False), ("timeout", b"partial", b"diagnostic", 0, True),
+            cases = [("nonzero", good, b"diagnostic", 2, False), ("disconnected", b"partial", b"diagnostic", 0, True),
                      ("malformed", b"not-json", b"diagnostic", 0, False), ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
                      ("nonfinite", b'{"value":NaN}', b"diagnostic", 0, False),
                      ("stdout-bound", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False),
                      ("stderr-bound", good, b"x" * (1024 * 1024 + 1), 0, False)]
             cases += [("invalid-ack-" + str(i), value, b"diagnostic", 0, False) for i, value in enumerate(invalid)]
-            for name, response, stderr, returncode, timeout in cases:
+            for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
-                    # Given E39: valid explicit Split inputs but nonzero/timeout/strict/bounded/contradictory native acknowledgement.
+                    # Given E39: valid explicit Split inputs but nonzero/disconnected/strict/bounded/contradictory native acknowledgement.
                     route = self.retain_split()
                     if action == "start-split":
                         route.unlink()
@@ -2305,7 +2310,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     before = {path: path.read_bytes() for path in files}
                     before_route = route.read_bytes() if route.exists() else None
                     output = self.output()
-                    process, raw = self.process_output(response, stderr, returncode, timeout)
+                    process, raw = self.process_output(response, stderr, returncode, disconnected)
                     # When the one explicitly selected native action returns or times out.
                     status, printed, diagnostic, native = self.call(self.split_args(action, output), process)
                     # Then only available raw streams remain, with no retry, routing promotion, execution artifact, Submit or Advance.
@@ -2314,7 +2319,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     self.assertTrue(diagnostic.startswith("native-goal-command: "))
                     self.assertLessEqual(len(diagnostic), 535)
                     native.assert_called_once()
-                    self.assertEqual(native.call_args.kwargs["timeout"], 240 if action == "advance-split" else 60)
+                    self.assertNotIn("timeout", native.call_args.kwargs)
                     self.assertEqual({path.name for path in output.iterdir()}, {"response.json", "stderr.log"})
                     self.assertEqual((output / "response.json").read_bytes(), raw)
                     self.assertEqual((output / "stderr.log").read_bytes(), stderr)
@@ -2491,7 +2496,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     "kind": kind, "message": "Actual " + kind, "outcome": "opaque native outcome"})
                 # When advance-repository explicitly observes once.
                 status, printed, diagnostic, native = self.call(self.standalone_repository_args("advance-repository", output), process)
-                # Then the fixed Advance uses that exact ID/240-second bound without interpreting opaque outcome or progressing.
+                # Then the fixed Advance uses that exact ID without an execution cutoff without interpreting opaque outcome or progressing.
                 self.assertEqual((status, diagnostic), (0, ""))
                 self.assertEqual(printed, raw.decode())
                 self.assert_one_call(native, self.standalone_repository_command("advanceRepositorySync", "--sessionId", actual_id))
@@ -2778,14 +2783,14 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     invalid += (dict(good, kind="Unknown"), dict(good, kind=None))
                 elif action != "start-repository":
                     invalid += (dict(good, accepted=False), dict(good, accepted=1))
-            cases = [("nonzero", good, b"diagnostic", 2, False), ("timeout", b"partial", b"diagnostic", 0, True),
+            cases = [("nonzero", good, b"diagnostic", 2, False), ("disconnected", b"partial", b"diagnostic", 0, True),
                      ("malformed", b"not-json", b"diagnostic", 0, False), ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
                      ("nonfinite", b'{"value":NaN}', b"diagnostic", 0, False),
                      ("stdout-bound", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False),
                      ("stderr-bound", good, b"x" * (1024 * 1024 + 1), 0, False)]
             cases += [("invalid-ack-" + str(i), value, b"diagnostic", 0, False) for i, value in enumerate(invalid)]
-            for name, response, stderr, returncode, timeout in cases:
+            for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
                     # Given E46: valid Repository inputs but failed/uncertain/strict/bounded or invalid native acknowledgement.
                     route = self.retain_repository()
@@ -2799,8 +2804,8 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     before = {path: path.read_bytes() for path in files}
                     before_route = route.read_bytes() if route.exists() else None
                     output = self.output()
-                    process, raw = self.process_output(response, stderr, returncode, timeout)
-                    # When the selected native action returns or times out after its one invocation.
+                    process, raw = self.process_output(response, stderr, returncode, disconnected)
+                    # When the selected native action returns or disconnects after its one invocation.
                     status, printed, diagnostic, native = self.call(self.standalone_repository_args(action, output), process)
                     # Then only available raw streams survive; no retry, promoted Session, route or success progression follows.
                     self.assertEqual(status, 2)
@@ -2808,7 +2813,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     self.assertTrue(diagnostic.startswith("native-goal-command: "))
                     self.assertLessEqual(len(diagnostic), 535)
                     native.assert_called_once()
-                    self.assertEqual(native.call_args.kwargs["timeout"], 240 if action == "advance-repository" else 60)
+                    self.assertNotIn("timeout", native.call_args.kwargs)
                     self.assertEqual({path.name for path in output.iterdir()}, {"response.json", "stderr.log"})
                     self.assertEqual((output / "response.json").read_bytes(), raw)
                     self.assertEqual((output / "stderr.log").read_bytes(), stderr)

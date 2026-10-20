@@ -35,8 +35,9 @@ native owners and business contracts.
 
 ## Complete one issued semantic handoff
 
-The installed host uses `scripts/native-goal-command.py --action complete` with
-the usual `--primary`, `--host`, exact already-owned `--task`, fresh empty
+The installed host uses the shared deployed `common/codex/scripts/native-goal-command.py
+--action complete --executable <absolute installed sm-workflow>` with
+the usual `--executable`, `--host`, exact already-owned `--task`, fresh empty
 `--output`, and required absolute `--request`/`--submission` files. Follow the
 [normal host completion recipe](native-goal-command-task.md#return-the-scoped-semantic-result).
 Load the actual installed semantic skill for the issued work, obtain its genuine
@@ -76,7 +77,7 @@ supports two additional finite actions through the ordinary preparation service:
 | `prepare-execution` | `--request`, `--mapping`, `--origin` | none | `NativeHostPreparationService.prepareExecution` |
 | `record-execution` | `--request`, `--execution-session`, `--observation` | `--reference` | `NativeHostPreparationService.recordExecution` |
 
-Both also require the existing `--primary`, `--host`, `--task`, `--action` and
+Both also require the existing `--executable`, `--host`, `--task`, `--action` and
 `--output` options, as exact named pairs. Paths are explicit absolute normalized
 existing files/directories. Output is a selected fresh directory beneath the
 selected already-owned task. Mapping and origin select the original canonical
