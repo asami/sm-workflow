@@ -16,6 +16,8 @@ import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 import RepositorySyncNativeMergeValidation as V
+import GoalPhaseNativeCandidateBoundary as B
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import GoalPhaseNativeMetadata as N
 import GoalPhaseSliceValidationPlan as L
 import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
@@ -24,7 +26,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -328,7 +330,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val selectionRecord: Option[InstanceRecord], acknowledgement: String => Consequence[Unit],
     val documentPolicy: Option[GoalPhaseDocumentProgress.Policy], val recordingPaths: Vector[String]) {
     val plan = controller.plan
-    val base = controller.tipSnapshot
+    val base = candidate.payload.continuation.map(_.parent).getOrElse(controller.candidateBase)
     val whole = controller.cursor == plan.steps.size
     val checks = if (whole) plan.phaseChecks else plan.steps(controller.cursor).checks
     val ownedPaths = if (whole) plan.steps.flatMap(_.ownedPaths).distinct else plan.steps(controller.cursor).ownedPaths
@@ -523,21 +525,29 @@ private[smworkflow] object GoalPhaseNativeValidation {
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
     def preconditionsC: Consequence[Unit] = for {
+      parent <- B.parentC(controller.tipSnapshot, candidate.payload.continuation)
+      _ <- if (parent == base && (controller.candidateParent.isEmpty || controller.candidateBase == parent)) Consequence.unit
+        else F.invalid("native validation candidate parent differs from its retained proof")
+      root <- G.rootC(core)
       actual <- G.observeC(core)
       tree <- G.indexTreeC(core)
-      _ <- if (actual.branch == d.target.localBranch && actual.head == initial.candidate.head && actual.tree == base.tree &&
-          tree == initial.candidate.tree && (if (whole) {
-            if (candidate.payload.selectedPaths.isEmpty) actual.dirty.isEmpty
-            else candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
-              candidate.payload.selectedPaths.distinct == candidate.payload.selectedPaths &&
-              candidate.payload.selectedPaths.forall(managementPaths.contains) && actual.dirty.forall(p =>
-                !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
-                candidate.payload.selectedPaths.contains(p.path) &&
-                p.renamedFrom.forall(candidate.payload.selectedPaths.contains))
-          } else actual.dirty.forall(p => !p.unmerged && p.worktree == ' ' &&
-            p.index != '?' && p.index != '!' && ownedPaths.exists(covers(_, p.path)) &&
-            p.renamedFrom.forall(x => ownedPaths.exists(covers(_, x)))))) Consequence.unit
+      scoped = if (whole) candidate.payload.selectedPaths else ownedPaths
+      _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
+          actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
+          tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
+          (!whole || candidate.payload.selectedPaths.forall(managementPaths.contains)) &&
+          B.scopedDirty(actual.dirty, scoped, true)) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")
+      oid <- GitObjectId.parseC(parent.head)
+      paths <- E.executeGitC(core, GitOperation.PendingPaths(oid)).flatMap(_.valueC)
+      _ <- if (B.pathsOwned(paths.map(_.value), scoped)) Consequence.unit
+        else F.invalid("native validation includes an unrelated index delta")
+      after <- G.observeC(core)
+      index <- G.indexTreeC(core)
+      afterroot <- G.rootC(core)
+      _ <- if (afterroot == root && after.branch == actual.branch && after.head == parent.head && after.tree == parent.tree &&
+          index == initial.candidate.tree && B.scopedDirty(after.dirty, scoped, true)) Consequence.unit
+        else F.invalid("native validation frontier drifted during observation")
     } yield ()
     def acknowledgeC(stage: String): Consequence[Unit] = acknowledgement(stage) match {
       case Consequence.Success(_) => Consequence.unit

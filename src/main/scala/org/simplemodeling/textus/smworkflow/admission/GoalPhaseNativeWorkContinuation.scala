@@ -25,7 +25,7 @@ import GoalPhaseNativeReviewCompletion as Q
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -42,7 +42,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     decisioncontext: Option[S.DecisionContext], progress: Option[P.Projection] = None,
     documentpolicy: Option[P.Policy] = None, issues: Option[GoalPhaseFixIssues.State] = None,
     findings: N.State = N.State(), recordingCandidate: Option[C.Saved] = None,
-    priorReviews: Vector[GoalPhaseNativeReview.Prior] = Vector.empty)
+    priorReviews: Vector[GoalPhaseNativeReview.Prior] = Vector.empty,
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload] = Vector.empty)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -267,7 +268,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       core: ActionCall.Core): Consequence[Located] = cursor.controller.stage match {
       case O.Stage.InspectCandidate | O.Stage.PhaseInspection => for {
         retained <- GoalPhaseNativeCandidate.retainedOptionC(source, d, core, cursor.from, cursor.controller,
-          cursor.documentpolicy, N.managementPaths(cursor.findings))
+          cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
         result <- retained match {
           case None => _paused_c(source, cursor, "Candidate inspection has an actual partial or unknown result; no automatic replay.")
           case Some(value) => for {
@@ -325,7 +326,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Some(value) => for {
             record <- _native_record_c(source, cursor.from, value.record, "ordered-step-closure:", value.controller.stage)
             result <- _walk_c(source, cursor.copy(from = record, controller = value.controller,
-              candidate = None, validation = None), soughtwork, soughthuman, soughtrecording, core)
+              candidate = None, validation = None,
+              completedCandidates = cursor.completedCandidates ++ cursor.candidate.map(_.payload)), soughtwork, soughthuman, soughtrecording, core)
           } yield result
         }
       } yield result
@@ -546,7 +548,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _wait_cursor_c(cursor, "Native candidate inspection is not installed; selected work and Phase remain open.")
         else GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
           runValidation = false, documentPolicy = cursor.documentpolicy,
-          recordingPaths = N.managementPaths(cursor.findings)).flatMap(_after_native_c(source, cursor, _, core))
+          recordingPaths = N.managementPaths(cursor.findings), completedCandidates = cursor.completedCandidates)
+          .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation | O.Stage.PhaseValidation =>
         if ((if (cursor.controller.stage == O.Stage.PhaseValidation) d.phaseValidationPolicy else d.validationPolicy).isEmpty)
           _wait_cursor_c(cursor, "Actual candidate is retained; selected native check policy remains unavailable.")

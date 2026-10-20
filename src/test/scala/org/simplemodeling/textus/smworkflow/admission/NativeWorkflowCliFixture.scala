@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -187,6 +187,52 @@ private[admission] object NativeWorkflowCliFixture {
     }
     def preparationHelp(): Result = _run(_launcher ++ Vector("command", s"$_component.meta.help",
       s"$_component.NativeHostPreparationService"))
+
+    /** Finite test-owned Git arrangement and observation only. Workflow candidate
+      * staging, checks and Step commits always use normal typed host programs.
+      */
+    private def _candidate_git(arguments: Vector[String]): String = {
+      require(repairContinuation, "Candidate continuation requires the isolated two-Step host")
+      val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
+        "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root,
+        "-c", "user.name=Candidate Fixture", "-c", "user.email=candidate@example.invalid",
+        "-c", "user.useConfigOnly=true")
+      val result = _run(prefix ++ arguments)
+      require(result.exitCode == 0, result.invocation.logs)
+      Files.readString(result.invocation.stdout).trim
+    }
+    def prepareCandidateBaseline(): Unit = {
+      Files.writeString(Path.of(host.target.root).resolve("docs/user.md"), "Original user document\n")
+      _candidate_git(Vector("add", "--", "docs/user.md"))
+      _candidate_git(Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Independent user document baseline"))
+    }
+    def integrateCandidateDocument(anchor: String): String = {
+      require(anchor.matches("[0-9a-f]{40}"), "Select the fixture's actual original base")
+      _candidate_git(Vector("checkout", "-b", "candidate-import", anchor))
+      Files.writeString(Path.of(host.target.root).resolve("docs/imported.md"), "Imported main contribution\n")
+      _candidate_git(Vector("add", "--", "docs/imported.md"))
+      _candidate_git(Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Independent imported contribution"))
+      _candidate_git(Vector("checkout", "main"))
+      _candidate_git(Vector("merge", "--no-ff", "--no-edit", "--no-verify", "--no-gpg-sign", "candidate-import"))
+      candidateHead
+    }
+    def replaceCandidateHistory(): String = {
+      _candidate_git(Vector("checkout", "--orphan", "candidate-unrelated"))
+      _candidate_git(Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Unrelated isolated fixture root"))
+      _candidate_git(Vector("branch", "-M", "main"))
+      candidateHead
+    }
+    def stageForeignCandidateDocument(): Unit = { _candidate_git(Vector("add", "--", "docs/user.md")); () }
+    def moveCandidateHead(anchor: String): Unit = {
+      require(anchor.matches("[0-9a-f]{40}"), "Select an actual isolated fixture commit")
+      _candidate_git(Vector("update-ref", "refs/heads/main", anchor))
+      ()
+    }
+    def candidateHead: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD"))
+    def candidateParent: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD^"))
+    def candidateIndex: String = _candidate_git(Vector("diff", "--cached", "--name-only", "--"))
+    def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
 
     /** A fixed, test-owned unfinished checkpoint is never a Workflow Step commit. */
     def commitUnfinishedRepairCheckpoint(): String = {

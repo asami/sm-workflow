@@ -11,7 +11,7 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -43,6 +43,76 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "preserve the accepted prefix and counters while an integrated candidate closes against its proven actual parent" in {
+      Given("an accepted first Step followed by an independently integrated descendant before the second inspection")
+      val first = close(initial, oid('c'), oid('d'))
+      val ready = take(first.acceptC(SemanticCompleted(work(first), "Second Step ready")))
+      val parent = Snapshot(oid('1'), oid('2'))
+      val proof = CandidateContinuation(parent, Vector(
+        HistoryCommit(parent.head, parent.tree, Vector(oid('3'), first.tipSnapshot.head)),
+        HistoryCommit(first.tipSnapshot.head, first.tipSnapshot.tree, Vector(base.head))))
+      val snapshot = Snapshot(parent.head, oid('4'))
+      When("the pure controller admits the proof, fresh checks and independent Step review")
+      val seen = take(ready.acceptC(CandidateContinuationObserved(snapshot, proof)))
+      val checked = take(seen.acceptC(ChecksObserved(snapshot, plan.steps(1).checks, "integrated-checks", true)))
+      val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), snapshot,
+        "integrated-checks", "integrated-review", ReviewOutcome.Accept)))
+      val pending = take(accepted.acceptC(ClosureIntentSaved(snapshot, "integrated-intent")))
+      Then("the original Phase base and completed Step facts persist without another generation or repair charge")
+      Vector(seen, checked, accepted, pending).foreach { state =>
+        state.base shouldBe base
+        state.tipSnapshot shouldBe first.tipSnapshot
+        state.completed shouldBe first.completed
+        state.candidateBase shouldBe parent
+        state.candidateParent shouldBe Some(parent)
+        state.generation shouldBe ready.generation
+        state.repairs shouldBe ready.repairs
+        state.ordinaryRepairs shouldBe ready.ordinaryRepairs
+      }
+      ready.acceptC(CandidateObserved(snapshot)).isSuccess shouldBe false
+      pending.acceptC(StepCommitObserved("integrated-intent", Commit(oid('5'), first.tipSnapshot.head, snapshot.tree))).isSuccess shouldBe false
+      When("the actual new Step commit names the integrated parent instead of the old accepted tip")
+      val commit = Commit(oid('5'), parent.head, snapshot.tree)
+      val closed = take(pending.acceptC(StepCommitObserved("integrated-intent", commit)))
+      Then("the next Phase frontier retains the exact accepted prefix and actual noncontiguous Step parent")
+      closed.completed shouldBe first.completed :+ ClosedStep("S2", commit, "integrated-review")
+      closed.base shouldBe base
+      closed.candidate shouldBe None
+      closed.candidateParent shouldBe None
+      closed.stage shouldBe Stage.PhaseInspection
+      closed.generation shouldBe ready.generation + 1
+      closed.repairs shouldBe 0
+    }
+
+    "retain a verified parent through decisions and refresh and clear it when a repair discards the candidate" in {
+      Given("a proven integrated first candidate and a complete unchanged selected Plan")
+      val ready = take(initial.acceptC(SemanticCompleted(work(initial), "Ready")))
+      val parent = Snapshot(oid('1'), oid('2'))
+      val proof = CandidateContinuation(parent, Vector(HistoryCommit(parent.head, parent.tree, Vector(base.head)),
+        HistoryCommit(base.head, base.tree, Vector.empty)))
+      val snapshot = Snapshot(parent.head, oid('4'))
+      val seen = take(ready.acceptC(CandidateContinuationObserved(snapshot, proof)))
+      val checked = take(seen.acceptC(ChecksObserved(snapshot, plan.steps.head.checks, "integrated-checks", true)))
+      When("document conflict and refresh retain the candidate while an admitted repair discards it")
+      val decision = take(checked.acceptC(DocumentConflictObserved(Vector("changed-document"))))
+      val resumed = take(decision.acceptC(DecisionResumptionAdmitted("actual-answer")))
+      val refreshed = take(checked.refreshedC(plan, issued = true)).toOption.get
+      val repair = take(checked.acceptC(ReviewAdmitted(work(checked), snapshot,
+        "integrated-checks", "repair-review", ReviewOutcome.Repair, Some(directive))))
+      Then("parent lifetime follows candidate lifetime with original base and completed history intact")
+      Vector(decision, resumed, refreshed).foreach { state =>
+        state.candidate shouldBe Some(snapshot)
+        state.candidateParent shouldBe Some(parent)
+        state.base shouldBe base
+        state.completed shouldBe empty
+      }
+      repair.candidate shouldBe None
+      repair.candidateParent shouldBe None
+      repair.candidateBase shouldBe base
+      repair.repairs shouldBe 1
+      repair.generation shouldBe checked.generation + 1
+    }
+
     "admit a proven covered repair into ordinary Closing with current checks and the original review reference" in {
       Given("docs/spec/native-goal-command-task.md; an original Step repair review, one consumed repair and a distinct freshly checked candidate")
       val implemented = take(initial.acceptC(SemanticCompleted(work(initial), "Initial selected change")))

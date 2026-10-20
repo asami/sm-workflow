@@ -20,7 +20,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -162,7 +162,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       Consequence.unit else F.invalid("Step closure has no actual accepted review and native Closing frontier")
     step = controller.plan.steps(controller.cursor)
   } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
-    step.identity, controller.generation, controller.tipSnapshot, controller.candidate.get, controller.reviewEvidence.get)
+    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence.get)
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
@@ -286,6 +286,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
       _ <- _successor_c(pending.record, result.record, "committed", next.stage.toString)
     } yield Saved(result.record, result.payload, next)
     def commitC(checked: InstanceRecord, payload: Payload): Consequence[Saved] = for {
+      _ <- preconditionsC
+      differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
+      progress <- progressC
+      admitted <- admitChangesC(progress.failed, differences)
+      _ <- if (admitted == payload.changes) Consequence.unit
+        else F.invalid("selected Step index changed after its admitted precheck")
       intent <- saveC(_attempt_key("intent", payload.attempt), checked, "Closing", payload)
       _ <- ackC("goal-step-commit-prepared:" + input.step)
       actual <- E.commitGoalStepC(core, ordinal)
@@ -295,11 +301,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
       commit <- G.commitC(core, observed.observed.head)
       _ <- if (observed.mergeHead.isEmpty && observed.observed.branch == d.target.localBranch &&
           observed.observed.tree == commit.tree &&
-          !observed.observed.dirty.exists(_touches_owned)) Consequence.unit
+          !observed.observed.dirty.exists(_touches_owned) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, _owned_paths, true)) Consequence.unit
         else F.invalid("actual selected Step commit leaves selected dirty data or a different native frontier")
       completed = payload.copy(commit = Some(O.Commit(commit.identity, input.parent.head, commit.tree)))
-      progress <- progressC
-      _ <- _verified_commit_c(completed, progress.failed)
+      retained <- progressC
+      _ <- _verified_commit_c(completed, retained.failed)
       next <- _closed_state_c(completed)
       event = if (next.stage == O.Stage.Implementation) "step-next-closed" else "last-step-closed"
       _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Closing", event, next.stage.toString))
@@ -311,13 +318,25 @@ private[smworkflow] object GoalPhaseNativeClosure {
     private def _touches_owned(value: G.DirtyPath): Boolean = _owned_paths.exists(owner =>
       covers(owner, value.path) || value.renamedFrom.exists(covers(owner, _)))
     def preconditionsC: Consequence[Unit] = for {
+      root <- G.rootC(core)
       native <- G.inspectC(core)
       actual = native.observed
-      _ <- if (native.mergeHead.isEmpty && actual.branch == d.target.localBranch && actual.head == input.parent.head &&
-          actual.tree == input.parent.tree && actual.dirty.filter(_touches_owned).forall(p =>
-            p.worktree == ' ' && !p.unmerged && p.index != '?' && p.index != '!' &&
-            _owned_paths.exists(covers(_, p.path)) && p.renamedFrom.forall(x => _owned_paths.exists(covers(_, x))))) Consequence.unit
+      _ <- if (root == d.target.root.toString && native.mergeHead.isEmpty && actual.branch == d.target.localBranch &&
+          actual.head == input.parent.head && actual.tree == input.parent.tree &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, _owned_paths, true)) Consequence.unit
         else F.invalid("actual Step commit candidate or selected ownership has changed")
+      parent <- GitObjectId.parseC(input.parent.head)
+      paths <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
+      _ <- if (GoalPhaseNativeCandidateBoundary.pathsOwned(paths.map(_.value), _owned_paths)) Consequence.unit
+        else F.invalid("actual Step commit includes an unrelated index delta")
+      differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
+      progress <- progressC
+      _ <- admitChangesC(progress.failed, differences)
+      after <- G.observeC(core)
+      afterroot <- G.rootC(core)
+      _ <- if (afterroot == root && after.branch == actual.branch && after.head == input.parent.head && after.tree == input.parent.tree &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(after.dirty, _owned_paths, true)) Consequence.unit
+        else F.invalid("actual Step parent drifted during closure observation")
     } yield ()
     def ackC(stage: String): Consequence[Unit] = acknowledge(stage) match {
       case Consequence.Success(_) => Consequence.unit

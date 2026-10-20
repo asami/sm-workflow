@@ -129,6 +129,60 @@ stage or security matrix. Existing Phase 6.1/6.2/6.3 responsibilities remain.
 
 ## Executable specifications
 
+### Candidate continuation after independent local integration
+
+The original Phase base and accepted Step commits are immutable. Before a new
+Step candidate is staged, native inspection may capture a different actual HEAD
+only when typed Git commit metadata proves a complete parent path to the exact
+accepted Step tip and its tree. The path includes both ends, contains at most
+256 unique commits, and follows actual parent edges (including merge second
+parents). Shallow, replaced, unresolved, unrelated, malformed or truncated
+history cannot establish this proof. Inspection pins the actual root, branch,
+parent HEAD and parent tree through staging. Validation and Step closure use
+that verified parent; the resulting Step commit names the actual integrated
+HEAD as its parent without rewriting the accepted Step prefix.
+
+The internal candidate v2 receipt may retain an optional continuation proof.
+Absent extensions preserve strict old-tip semantics; reconstruction never
+infers a proof for an old receipt. Historical proof admission uses immutable
+accepted facts, while an operation about to check, review or commit rechecks
+the current candidate HEAD, parent tree and global index. This adds no CML
+stage, semantic assignment, generation increment, repair charge or consent.
+
+Unrelated unstaged tracked, untracked and ignored files may coexist with a
+candidate. Every unmerged entry, unsupported status, cross-ownership rename or
+foreign staged index delta is rejected before the first selected staging
+effect. Both sides of a selected rename must be owned. After staging, selected
+entries must be fully staged; global pending index paths must be unique and
+wholly owned. Unrelated worktree bytes are excluded from selected paths,
+source-history normalization, candidate diff, checks context, review and commit.
+No reset, stash or unstage is introduced.
+
+If any successfully closed Step used a continuation, whole-Phase review retains
+ordered evidence from those exact successful Step candidates and their actual
+Step commits, plus the current management delta against the final accepted tip.
+Permitted native EOF corrections are identified separately from prior reviewed
+diffs. Imported commits are excluded from Phase changed paths and diff. Failed
+and discarded repair attempts contribute no accepted Step evidence. The
+original Phase base, completed Step vector and their review references remain
+unchanged. A legacy whole-Phase receipt keeps its original full-diff semantics;
+without a Step continuation, the existing original-base diff remains in use.
+
+Whole-Phase inspection still requires actual HEAD to equal the final accepted
+Step tip. Scoped coexistence also applies to Phase validation and final finding
+recording. Repository child authority, RepositorySync staging and remote rules,
+and the clean-target prerequisite for Phase repository closure are unchanged;
+unrelated edits require the repository operation's own resolution before sync.
+
+`GoalPhaseNativeCandidateBoundarySpec`, `GoalPhaseOrderedProgressionSpec` and
+`GoalPhaseNativeClosureSpec` cover retained proof, v2 compatibility, ownership
+and actual-parent progression. `GoalPhaseNativeCandidateCliSpec` uses fresh
+isolated normal launcher/host fixtures, specification-owned review attestations
+and explicit local grants to cover accepted Step continuation after a merge,
+unrelated edits, repeated reconstruction, scoped Phase review, foreign index
+refusal, unrelated history and later HEAD/index drift. These fixtures make no
+claim of external AI provenance or acceptance of a live consumer Session.
+
 `GoalPhaseNativeExecutionSpec` covers E1 (R1–R2: canonical structured/string
 origin, inert diagnostics, absence and malformed consumed input), E2 (R1,R3:
 placement, independence, contradictions, generic descriptor observations), E3
