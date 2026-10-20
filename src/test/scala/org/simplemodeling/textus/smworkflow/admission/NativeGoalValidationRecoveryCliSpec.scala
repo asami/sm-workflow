@@ -99,7 +99,8 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       V.GoalPhaseValidationRecoveryInput(sessionId, description.target, choice, answer.rationale, reference)
     }
     def retainPointer(name: String, description: Invocation, authorization: Option[Invocation],
-      recoveryInput: V.GoalPhaseValidationRecoveryInput): Unit = {
+      recoveryInput: V.GoalPhaseValidationRecoveryInput, expectedChecks: Vector[String] = Vector("compile"),
+      expectedOutcome: String = "ReviewStep"): Unit = {
       val inputFile = root.resolve("caller/recovery-input.json")
       Files.writeString(inputFile, json(recoveryInput))
       val fields = Vector("fixtureKind" -> Json.fromString("test-owned-validation-recovery"),
@@ -109,17 +110,26 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
         "configuration" -> Json.fromString(root.resolve(".textus/config.json").toString),
         "assembly" -> Json.fromString(root.resolve(".textus/assembly.yaml").toString),
         "database" -> Json.fromString(root.resolve("operation.sqlite").toString),
-        "productionHumanEvidence" -> Json.False, "registeredRunnerObserved" -> Json.False) ++
+        "productionHumanEvidence" -> Json.False, "registeredRunnerObserved" -> Json.False,
+        "platformExecutionObserved" -> Json.False,
+        "expectedChecks" -> Json.fromValues(expectedChecks.map(Json.fromString)),
+        "expectedOutcome" -> Json.fromString(expectedOutcome),
+        "pointerAuthority" -> Json.False) ++
         authorization.map(value => "authorizationResult" -> Json.fromString(value.stdout.toString)).toVector
       Files.createDirectories(fixtureDirectory)
       Files.writeString(fixtureDirectory.resolve(name), Json.obj(fields*).spaces2 + "\n")
     }
   }
   private def json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
-  private def unknown(root: Path): (String, Vector[org.goldenport.cncf.workflow.WorkflowInstancePersistence.HistoryEntry]) = {
+  private def unknown(root: Path, sequential: Boolean = false, successful: Boolean = true):
+    (String, Vector[org.goldenport.cncf.workflow.WorkflowInstancePersistence.HistoryEntry]) = {
+    if (!successful) {
+      TypedSbtHostPlanFixture.build(root, true)
+      TypedSbtHostPlanFixture.buildCompile(root, false)
+    }
     var identity = ""
     var history = Vector.empty[org.goldenport.cncf.workflow.WorkflowInstancePersistence.HistoryEntry]
-    withRecoveryEpisode(root, initialize = true, interrupt = true) { episode =>
+    withRecoveryEpisode(root, initialize = true, interrupt = true, sequential = sequential) { episode =>
       identity = episode.start().sessionId
       val request = episode.advance(identity)
       episode.submitImplementation(request).accepted shouldBe true
@@ -207,33 +217,111 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       cli.invocations.map(_.pid).distinct.size shouldBe cli.invocations.size
     }
 
-    "retain a separate newly authorized isolated Session for later external registered-host observation" in {
-      Given("R6: a separate test-owned normal Session whose original intent was committed before acknowledgement interruption")
-      val root = freshRecoveryRoot("registered-host")
-      val (identity, originalHistory) = unknown(root)
+    "prepare a fresh authorized installed SIGTERM fixture without advancing or claiming cancellation" in {
+      Given("SBTR-06 final policy: an explicit installed CLI identity and a new ordinary two-check recovery fixture")
+      val configured = sys.props.getOrElse("smworkflow.spec.installed",
+        cancel("Opt-in SIGTERM fixture preparation requires -Dsmworkflow.spec.installed=<absolute installed sm-workflow>"))
+      val supplied = Path.of(configured)
+      supplied.isAbsolute shouldBe true
+      val installed = supplied.toRealPath()
+      Files.isRegularFile(installed) shouldBe true
+      Files.isExecutable(installed) shouldBe true
+      val root = freshRecoveryRoot("platform-installed-sigterm")
+      TypedSbtHostPlanFixture.build(root, true)
+      TypedSbtHostPlanFixture.buildCompile(root, true)
+      val buildfile = root.resolve("repository/build.sbt")
+      val originalbuild = Files.readString(buildfile)
+      val markerline = "  IO.append(root.getParentFile / \"compile-generations.txt\""
+      originalbuild should include(markerline)
+      val managed = """  val descendant = new java.lang.ProcessBuilder("/bin/sh", "-c",
+        |    "trap '' TERM; echo $$ > \"$1\"; echo TERM_RESISTANT_DESCENDANT_READY; exec /bin/sleep 60",
+        |    "test-owned-descendant", (root.getParentFile / "managed-descendant.pid").getCanonicalPath).inheritIO().start()
+        |  val ready = root.getParentFile / "managed-descendant.pid"
+        |  val until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        |  while (!ready.isFile && System.nanoTime() < until) Thread.sleep(10L)
+        |  require(ready.isFile, "Test-owned managed descendant did not record its PID")
+        |  require(IO.read(ready).trim == descendant.pid().toString, "Managed descendant identity differs")
+        |  System.out.println("COMPILE_BEFORE_CANCEL_STDOUT")
+        |  System.err.println("COMPILE_BEFORE_CANCEL_STDERR")
+        |""".stripMargin
+      Files.writeString(buildfile, originalbuild.replace(markerline, managed + markerline)
+        .replace("  Seq(generated)", "  Thread.sleep(60000L)\n  Seq(generated)"))
+      val (identity, _) = unknown(root, sequential = true)
+      val cli = new Cli(root, identity)
+      val (descriptioncall, description) = cli.describe()
+      val target = take(R.targetC(description.target))
+      val input = cli.prepareDirection(description, descriptioncall.stdout, "AuthorizeNewAttempt",
+        V.WorkflowArtifactReference("installed-sigterm-fixture-human-direction", "1"))
+      When("normal recovery accepts only the new test-owned authorization and all runtime processes close")
+      val authorizationcall = cli.recover(input)
+      val authorized = authorizationcall.business[V.GoalPhaseValidationRecoveryResult]
+      Then("the fixture retains actual baseline bytes and references, with neither Compile nor cancellation performed")
+      authorized.accepted shouldBe true
+      authorized.outcome shouldBe "new-attempt-authorized"
+      compileExecutions(root) shouldBe empty
+      Files.exists(root.resolve("managed-descendant.pid")) shouldBe false
+      val baseline = root.resolve("caller/installed-sigterm-before.sqlite")
+      Files.copy(root.resolve("operation.sqlite"), baseline)
+      val output = Files.createDirectory(root.resolve("caller/installed-sigterm-output"))
+      val metadata = root.resolve("caller/installed-sigterm-fixture.json")
+      val value = Json.obj("schema" -> Json.fromString("sm-workflow.installed-sigterm-fixture.v1"),
+        "root" -> Json.fromString(root.toString), "sessionId" -> Json.fromString(identity),
+        "installed" -> Json.fromString(installed.toString), "baselineDatabase" -> Json.fromString(baseline.toString),
+        "descriptionReference" -> Json.fromString(descriptioncall.stdout.toString),
+        "authorizationReference" -> Json.fromString(authorizationcall.stdout.toString),
+        "sourceRevision" -> Json.fromString(target.sourceRevision), "planIdentity" -> Json.fromString(target.planIdentity),
+        "planRevision" -> Json.fromString(target.planRevision),
+        "base" -> Json.obj("head" -> Json.fromString(target.base.head), "tree" -> Json.fromString(target.base.tree)),
+        "responseReference" -> Json.fromString(output.resolve("response.json").toString),
+        "stderrReference" -> Json.fromString(output.resolve("stderr.log").toString),
+        "pointerAuthority" -> Json.False)
+      Files.writeString(metadata, value.spaces2 + "\n")
+      Files.writeString(fixtureDirectory.resolve("latest-installed-sigterm-fixture.json"), value.spaces2 + "\n")
+    }
+
+    for (successful <- Vector(true, false)) {
+      val scenario = if (successful) "sequential Compile" else "nonzero Compile"
+      s"prepare a fresh authorized normal-platform $scenario fixture without advancing or claiming execution" in {
+      Given("R6: a new test-owned normal Session with ordinary v3 process grants and an interrupted original selected intent")
+      val root = freshRecoveryRoot(if (successful) "platform-sequential" else "platform-nonzero")
+      val (identity, originalhistory) = unknown(root, sequential = successful, successful = successful)
       val cli = new Cli(root, identity)
       When("fresh normal commands describe and authorize one explicit test-owned HumanNewAttempt direction")
-      val (descriptionCall, description) = cli.describe()
-      val input = cli.prepareDirection(description, descriptionCall.stdout, "AuthorizeNewAttempt",
-        V.WorkflowArtifactReference("registered-host-fixture-human-direction", "1"))
-      val authorizationCall = cli.recover(input)
-      val accepted = authorizationCall.business[V.GoalPhaseValidationRecoveryResult]
-      cli.retainPointer("registered-host-episode.json", descriptionCall, Some(authorizationCall), input)
-      Then("the target remains durable and no next Advance, SBT effect or registered-runner observation is claimed")
+      val (descriptioncall, description) = cli.describe()
+      val input = cli.prepareDirection(description, descriptioncall.stdout, "AuthorizeNewAttempt",
+        V.WorkflowArtifactReference("normal-platform-fixture-human-direction", "1"))
+      val authorizationcall = cli.recover(input)
+      val accepted = authorizationcall.business[V.GoalPhaseValidationRecoveryResult]
+      val pointername = if (successful) "latest-platform-episode.json" else "latest-platform-failure-episode.json"
+      val checks = if (successful) Vector("compile", "compile-second") else Vector("compile")
+      cli.retainPointer(pointername, descriptioncall, Some(authorizationcall), input, checks,
+        if (successful) "ReviewStep" else "failed-selected-check")
+      Then("the original history and authorization are durable while the new installed-platform Advance remains unperformed")
       accepted.accepted shouldBe true
       accepted.outcome shouldBe "new-attempt-authorized"
       compileExecutions(root) shouldBe empty
       Files.isRegularFile(root.resolve(".textus/config.json")) shouldBe true
       Files.isRegularFile(root.resolve(".textus/assembly.yaml")) shouldBe true
       Files.isRegularFile(root.resolve("operation.sqlite")) shouldBe true
-      val pointer = parse(Files.readString(fixtureDirectory.resolve("registered-host-episode.json"))).toOption.get
+      val pointer = parse(Files.readString(fixtureDirectory.resolve(pointername))).toOption.get
       pointer.hcursor.get[String]("root").toOption shouldBe Some(root.toString)
       pointer.hcursor.get[String]("sessionId").toOption shouldBe Some(identity)
-      pointer.hcursor.get[Boolean]("registeredRunnerObserved").toOption shouldBe Some(false)
-      withRecoveryEpisode(root) { episode =>
+      pointer.hcursor.get[Boolean]("platformExecutionObserved").toOption shouldBe Some(false)
+      pointer.hcursor.get[Boolean]("pointerAuthority").toOption shouldBe Some(false)
+      pointer.hcursor.get[Vector[String]]("expectedChecks").toOption shouldBe Some(checks)
+      val configuration = Files.readString(root.resolve(".textus/config.json"))
+      val config = parse(configuration).toOption.get
+      val plan = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      plan.hcursor.get[String]("schema").toOption shouldBe Some("cncf.runtime-process-execution.v3")
+      plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.size shouldBe checks.size
+      withRecoveryEpisode(root, sequential = successful) { episode =>
         val retained = episode.current(identity)
-        retained.history.dropRight(1) shouldBe originalHistory
+        retained.history.dropRight(1) shouldBe originalhistory
         retained.causation.value shouldBe "ordered-validation:check-recovery-0"
+      }
+      // Reopening verifies native history only; preserve the independently
+      // provisioned StartupImport selection for the later installed CLI call.
+      Files.writeString(root.resolve(".textus/config.json"), configuration)
       }
     }
   }

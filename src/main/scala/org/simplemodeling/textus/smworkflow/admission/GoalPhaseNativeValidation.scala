@@ -293,7 +293,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _outcome_c(store: Store, current: Saved): Consequence[Saved] =
       if (current.payload.receipts.size == store.initial.selected.size || !successful(current.payload.receipts, store.initial.selected)) for {
-        _ <- store.preconditionsC
+        // A returned interruption settles the already admitted candidate. Runtime
+        // stop closes process admission, including Git, before this durable result.
+        _ <- if (store.compatible(current.payload) && _returned_interruption(current.payload)) Consequence.unit
+          else store.preconditionsC
         passed = successful(current.payload.receipts, store.initial.selected)
         inspected <- if (store.controller.stage.toString == store.validationStage &&
             store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
@@ -740,6 +743,13 @@ private[smworkflow] object GoalPhaseNativeValidation {
       value.uncertainties.take(prefix.uncertainties.size) == prefix.uncertainties &&
       value.newAttempts.take(prefix.newAttempts.size) == prefix.newAttempts
 
+  /** Only an actual typed interrupted prefix can settle without a fresh host process. */
+  private def _returned_interruption(payload: Payload): Boolean =
+    _returned_failure(payload) && payload.outcome.isEmpty && payload.receipts.lastOption.exists { last =>
+      Set("cancelled", "timed-out", "termination-unconfirmed")(last.termination) &&
+        last.exitCode.isEmpty && last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Incomplete)
+    }
+
   private def _returned_failure(payload: Payload): Boolean =
     _valid_payload(payload) && payload.receipts.nonEmpty &&
       payload.receipts.forall(_.sbt.nonEmpty) && successful(payload.receipts.dropRight(1), payload.selected) && {
@@ -747,7 +757,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         val facts = last.sbt.get
         (last.termination, last.exitCode, facts.outcome) match {
           case ("exited", Some(exit), WorkflowSbtValidation.Outcome.Failed) => exit != 0
-          case ("indeterminate", None, WorkflowSbtValidation.Outcome.Incomplete) => true
+          case ("indeterminate" | "cancelled" | "timed-out" | "termination-unconfirmed", None, WorkflowSbtValidation.Outcome.Incomplete) => true
           case ("exited", Some(0), WorkflowSbtValidation.Outcome.Unverified) => facts.kind == WorkflowSbtValidation.Kind.TestOnly
           case _ => false
         }

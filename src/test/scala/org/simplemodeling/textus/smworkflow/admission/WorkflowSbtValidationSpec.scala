@@ -13,7 +13,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -55,20 +55,23 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       }
     }
 
-    "keep launch failure and timeout incomplete for every selected kind" in {
-      Given("actual-shaped LaunchFailed and TimedOut typed results for each selected SBT operation")
+    "keep launch failure cancellation timeout and unconfirmed termination incomplete for every selected kind" in {
+      Given("actual-shaped LaunchFailed, Cancelled, TimedOut and TerminationUnconfirmed typed results for each selected SBT operation")
       val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
         Kind.TestOnly -> SbtOperation.TestOnly)
       When("native receipts project those actual uncertain terminations")
       val receipts = kinds.flatMap { (kind, operation) =>
-        Vector(ProcessExecutionTermination.LaunchFailed, ProcessExecutionTermination.TimedOut).map(termination =>
-          take(V.sbtReceiptC("selected", kind, _result(operation, termination))))
+        Vector(ProcessExecutionTermination.LaunchFailed -> "indeterminate", ProcessExecutionTermination.Cancelled -> "cancelled",
+          ProcessExecutionTermination.TimedOut -> "timed-out", ProcessExecutionTermination.TerminationUnconfirmed -> "termination-unconfirmed")
+          .map { (termination, expected) => take(V.sbtReceiptC("selected", kind, _result(operation, termination))) -> expected }
       }
-      Then("each remains indeterminate and incomplete without becoming confirmed nonexecution")
-      receipts.foreach { receipt =>
-        receipt.termination shouldBe "indeterminate"
+      Then("each retains its actual termination and captured text without success or confirmed nonexecution")
+      receipts.foreach { (receipt, expected) =>
+        receipt.termination shouldBe expected
         receipt.exitCode shouldBe None
         receipt.sbt.get.outcome shouldBe Outcome.Incomplete
+        receipt.stdout shouldBe "actual output\r\n日本語\n"
+        receipt.stderr shouldBe "actual diagnostic\n"
         V.productSuccessful(receipt, receipt.sbt.get.kind) shouldBe false
       }
     }
@@ -84,7 +87,7 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       restored shouldBe receipts
       restored.map(V.productSuccessful(_, Kind.Compile)) shouldBe Vector(true, false, false)
       restored.map(_.sbt.get.outcome) shouldBe Vector(Outcome.Succeeded, Outcome.Failed, Outcome.Incomplete)
-      restored.map(_.termination) shouldBe Vector("exited", "exited", "indeterminate")
+      restored.map(_.termination) shouldBe Vector("exited", "exited", "timed-out")
       restored.map(_.exitCode) shouldBe Vector(Some(0), Some(7), None)
       restored.foreach { receipt =>
         receipt.sbt.get.kind shouldBe Kind.Compile

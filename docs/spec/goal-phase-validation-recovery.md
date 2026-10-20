@@ -31,13 +31,31 @@ Only `SbtExecutionAttempt.Observed` is converted to the existing real SBT receip
 `AdmissionRejected` records its diagnostic without inventing a process. A later
 ordinary Advance may create the next attempt after host preparation correction.
 `Uncertain` records its diagnostic and blocks automatic replay. A real observed
-timeout or incomplete process remains its real failed/indeterminate outcome; it
-cannot silently become a successful check or safe replay authorization.
+timeout, cancellation or unconfirmed termination retains its actual captured
+text and explicit `timed-out`, `cancelled` or `termination-unconfirmed` receipt
+with no exit code and Incomplete SBT facts. Historical `indeterminate` receipts
+remain readable. These outcomes stay at Decision without another check,
+automatic replay or repair-count increment; only Exited nonzero remains a
+repairable product failure. No outcome silently becomes success or safe replay.
 
 Application code supplies no executable, argument vector or generic Process
-fallback. The optional CNCF V4 registered host owns the registered runner bridge,
-invocation details and actual execution observation. This document and the
-isolated tests do not establish that external integration was observed.
+fallback. CNCF's owning UnitOfWork executes the existing local process driver
+under ordinary V1–V3 typed process grants. It owns launch, finite waiting,
+termination and result capture. The former V4 manual registered-host rendezvous
+is retired; no per-check AI runner, response file or execution script is needed.
+Actual `[cncf-sbt-event]` JSON stderr observations expose process activity without
+changing the Workflow frontier or granting acceptance. This document and the
+isolated fixtures alone do not establish installed execution.
+
+The ordinary caller has no execution cutoff or telemetry-derived deadline. It
+waits for the actual response with programmatic monitoring/heartbeat. Explicit
+SIGTERM requests termination once from the exact owned runtime; runtime closes
+launch admission, settles managed descendants and saves actual result/captures
+and Workflow interruption state before storage/resource shutdown and exit.
+Only existing runtime configuration owns grace/escalation. There is no caller
+kill-group fallback or new SIGINT handback protocol. Missing response or
+unconfirmed termination stays unknown without acceptance or automatic replay.
+See the [product SBT lifecycle](native-host-execution.md#product-sbt-lifecycle).
 
 ### R3 — Explicit HumanNewAttempt direction
 
@@ -186,15 +204,35 @@ actual generated description and caller Session route. No private native row is
 patched, and no `NotExecuted` receipt is manufactured. Test-owned Human evidence
 does not claim independent production Human provenance.
 
-The separate registered-host fixture intentionally stops after test-owned
-authorization, before any next Advance or SBT. When the parent runs that spec,
-the non-authoritative pointer
-`target/sm-workflow/work/validation-recovery/registered-host-episode.json` supplies
-the exact generated isolated `root`, `sessionId`, task route, description,
-authorization result, recovery input, `.textus/config.json`,
-`.textus/assembly.yaml` and ordinary `operation.sqlite` paths. These roots are
-retained for reopening. The full Compile episode has its separate pointer at
-`latest-cli-episode.json`. Neither pointer grants authority or claims a registered
-runner observation. The parent separately selects CNCF V4 in that isolated host
-and performs actual installed-CLI/registered-runner integration outside any
-enclosing SBT process. The actual feature Session remains outside these fixtures.
+The preparation-only normal-platform scenarios create new isolated roots and
+stop after test-owned authorization, before any next Advance or SBT. They use
+the ordinary existing host policy: the passing fixture selects distinct ordered
+`compile` and `compile-second` checks with two ordinary Compile targets; the
+nonzero fixture selects one Compile against deliberately ill-typed generated
+Scala. The source-owned build generator records its actual process ID each time
+Compile runs. Fixture preparation claims no process result.
+
+After the selected preparation spec, the non-authoritative pointer
+`target/sm-workflow/work/validation-recovery/latest-platform-episode.json` supplies
+the newly generated root, Session ID, task route, description, authorization,
+recovery input, normal config/assembly/database paths and expected check order.
+The separate nonzero root is selected by `latest-platform-failure-episode.json`.
+Both retain the original accepted test-owned semantic work and unknown old
+intent. The pointer is metadata, never authority; the independently provisioned
+test-owned direction and native recovery record remain the actual fixture inputs.
+The full historical Compile episode keeps `latest-cli-episode.json` separately.
+Older fixture roots and the actual feature Session are never reused or advanced
+by this preparation.
+
+The parent selects `runtimeTestOnly
+org.simplemodeling.textus.smworkflow.admission.NativeGoalValidationRecoveryCliSpec
+-- -z "prepare a fresh authorized normal-platform"` to prepare both new roots.
+It then invokes the normal installed `sm-workflow --host <new-root>
+sm-workflow.GoalPhaseService.advanceGoalPhase --sessionId <new-session> --json`
+once per separately selected fixture, outside the enclosing SBT invocation.
+No component development directory, source classpath override or per-check
+execution helper is used for this installed progression. The passing result
+must reach `Request` / `ReviewStep` with two actual ordered Compile receipts;
+the nonzero result must retain its real compiler diagnostic and unsuccessful
+receipt. Neither preparation nor process success supplies independent review
+or Workflow acceptance.

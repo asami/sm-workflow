@@ -7,7 +7,9 @@ import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.processexecution.SbtOperation
+import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination,
+  SbtExecutionResult, SbtOperation, SbtTarget}
+import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -33,16 +35,20 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
   private var _admission = "allowed"
-  protected val recoveryPlan = O.Plan("validation-recovery-plan", "1", "phase-2", "sm-workflow",
-    Vector(O.Step("step-1", "Implement selected compile boundary", Vector("value.txt"), Vector.empty, Vector("compile"))),
-    Vector("compile"), repairLimit = 2)
+  private var _sequential = false
+  private def _check_names: Vector[String] = if (_sequential) Vector("compile", "compile-second") else Vector("compile")
+  protected def _recovery_plan = O.Plan("validation-recovery-plan", "1", "phase-2", "sm-workflow",
+    Vector(O.Step("step-1", "Implement selected compile boundary", Vector("value.txt"), Vector.empty, _check_names)),
+    _check_names, repairLimit = 2)
 
   protected def recoveryHost(root: Path): ThreeWorkflowHostParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
-    val check = N.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+    val checks = _check_names.zipWithIndex.map { case (name, index) =>
+      N.Check(name, index + 1, WorkflowSbtValidation.Kind.Compile)
+    }
     original.copy(goal = original.goal.copy(candidatePaths = Vector("value.txt"),
-      stepValidation = N.Policy("recovery-step-checks", 1, Vector(check)),
-      phaseValidation = N.Policy("recovery-phase-checks", 1, Vector(check))))
+      stepValidation = N.Policy("recovery-step-checks", 1, checks),
+      phaseValidation = N.Policy("recovery-phase-checks", 1, checks)))
   }
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit =
     if (!Files.exists(root.resolve("repository/src/main/scala/CompileConsumer.scala"))) {
@@ -58,7 +64,8 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), goalPaths = goal.candidatePaths,
       goalMessages = goal.closure.programs.map(p => "Goal Step " + p.step), goalSelections = Vector(goal.candidatePaths))
-    val actual = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git),
+    val actual = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable,
+      goal.stepValidation.checks.map(_.ordinal), Some(git),
       operation = SbtOperation.Compile)
     if (_admission == "allowed") actual
     else {
@@ -84,9 +91,11 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     if (Files.exists(marker)) Files.readString(marker).linesIterator.map(_.toLong).toVector else Vector.empty
   }
   protected def withRecoveryEpisode(root: Path, initialize: Boolean = false, interrupt: Boolean = false,
-    admission: String = "allowed")(task: RecoveryEpisode => Unit): Unit = {
+    admission: String = "allowed", sequential: Boolean = false)(task: RecoveryEpisode => Unit): Unit = {
     val previous = _admission
+    val previoussequence = _sequential
     _admission = admission
+    _sequential = sequential
     val acknowledgement: String => Consequence[Unit] = point =>
       if (interrupt && point == "goal-check-prepared:compile")
         Consequence.stateConflict("Test-owned acknowledgement failure immediately after actual check intent commit, before effect")
@@ -102,10 +111,13 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
               take(ProfileSelectionJsonV1.encodeStorageC(selection)))).flatMap(_ =>
             call.createC("goal_plans", selection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
               take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(selection.selectionId,
-                selection.participantIdentity, recoveryPlan))))))
+                selection.participantIdentity, _recovery_plan))))))
         })
         task(new RecoveryEpisode(root, owner, component, actor, prepare))
-    } finally _admission = previous
+    } finally {
+      _admission = previous
+      _sequential = previoussequence
+    }
   }
 
   protected final class RecoveryEpisode(val root: Path, val owner: Subsystem, val component: Component,
@@ -168,6 +180,117 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
 final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {
   "Public validation recovery Operations" should {
+    "settle an actual cancelled Compile at Decision after runtime process admission closes" in {
+      Given("a fresh normal two-check recovery episode and a Compile source generator that waits after emitting captures")
+      val root = freshRecoveryRoot("closed-admission-cancelled")
+      TypedSbtHostPlanFixture.build(root, true)
+      TypedSbtHostPlanFixture.buildCompile(root, true)
+      val build = root.resolve("repository/build.sbt")
+      Files.writeString(build, Files.readString(build).replace("  Seq(generated)", """  println("CANCELLED_COMPILE_STDOUT")
+        |  System.err.println("CANCELLED_COMPILE_STDERR")
+        |  IO.write(root.getParentFile / "cancel-ready.txt", "ready")
+        |  Thread.sleep(60000L)
+        |  Seq(generated)""".stripMargin))
+      withRecoveryEpisode(root, initialize = true, sequential = true) { episode =>
+        val identity = episode.start().sessionId
+        val work = episode.advance(identity)
+        episode.submitImplementation(work).accepted shouldBe true
+        val before = episode.current(identity)
+        val driver = episode.actor.scope.processExecutionDriverOption.get match {
+          case local: LocalProcessExecutionDriver => local
+          case other => fail("Normal fixture requires its actual local process driver: " + other.safeIdentity)
+        }
+        val stopped = new java.util.concurrent.atomic.AtomicReference[Option[Consequence[Unit]]](None)
+        val finished = new java.util.concurrent.atomic.AtomicBoolean(false)
+        val cancellation = new Thread(() => {
+          val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(120L)
+          while (!finished.get && !Files.exists(root.resolve("cancel-ready.txt")) && System.nanoTime() < deadline)
+            Thread.sleep(25L)
+          if (!finished.get && Files.exists(root.resolve("cancel-ready.txt"))) stopped.set(Some(driver.requestStopC()))
+        }, "test-owned-compile-cancellation")
+        cancellation.setDaemon(true)
+        cancellation.start()
+        When("ordinary Advance awaits the real Compile while the test requests runtime stop and closes all further process admission")
+        val waiting = try episode.advance(identity) finally {
+          finished.set(true)
+          cancellation.join(2000L)
+        }
+        Then("the actual incomplete receipt and failed outcome commit to Decision and return Wait without another process or repair")
+        stopped.get.map(_.isSuccess) shouldBe Some(true)
+        cancellation.isAlive shouldBe false
+        driver.terminationConfirmed shouldBe true
+        waiting.kind shouldBe "Wait"
+        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+        val current = episode.current(identity)
+        current.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
+        current.history.take(before.history.size) shouldBe before.history
+        workBase(current) shouldBe workBase(before)
+        val source = current.history.find(_.currentProgression.contains(ProgressionReference("phase.Validation"))).get.revision.value.toString
+        val result = episode.retained(identity, source, "check-result-0").get
+        val validation = episode.retained(identity, source, "validation").get
+        val receipt = result.payload.receipts.head
+        receipt.identity shouldBe "compile"
+        receipt.termination shouldBe "cancelled"
+        receipt.exitCode shouldBe None
+        receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+        receipt.stdout should include("CANCELLED_COMPILE_STDOUT")
+        receipt.stderr should include("CANCELLED_COMPILE_STDERR")
+        validation.payload shouldBe result.payload.copy(outcome = Some("failed"))
+        validation.payload.selected.map(_.identity) shouldBe Vector("compile", "compile-second")
+        validation.payload.receipts.map(_.identity) shouldBe Vector("compile")
+        N.repairable(validation.payload) shouldBe false
+        episode.retained(identity, source, "check-intent-1") shouldBe None
+        compileExecutions(root).size shouldBe 1
+      }
+    }
+
+    "retain cancelled timed-out and unconfirmed Compile captures at Decision without repair or another selected check" in {
+      Given("a selected two-check Plan with an actual-shaped incomplete first Compile result and unchanged zero repair counts")
+      val base = O.Snapshot("a" * 40, "b" * 40)
+      val candidate = O.Snapshot(base.head, "c" * 40)
+      val plan = O.Plan("cancelled-plan", "1", "phase-2", "sm-workflow",
+        Vector(O.Step("step-1", "Selected work", Vector("value.txt"), Vector.empty, Vector("compile", "after"))),
+        Vector("compile", "after"), repairLimit = 2)
+      val initial = take(O.startC(plan, base))
+      val implemented = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "Actual-shaped implementation")))
+      val validating = take(implemented.acceptC(O.CandidateObserved(candidate)))
+      val bytes = "COMPILE_BEFORE_CANCEL 日本語\n".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+      val capture = ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+      val terminations = Vector(ProcessExecutionTermination.Cancelled -> "cancelled", ProcessExecutionTermination.TimedOut -> "timed-out",
+        ProcessExecutionTermination.TerminationUnconfirmed -> "termination-unconfirmed")
+      When("the normal typed receipt boundary and selected controller consume each actual incomplete prefix")
+      val observed = terminations.map { (termination, expected) =>
+        val process = ProcessExecutionResult(termination, capture, capture, Vector.empty, 7L, "selected-sbt")
+        val result = SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))),
+          SbtOperation.Compile, process, None)
+        val receipt = take(RepositorySyncNativeMergeValidation.sbtReceiptC("compile", WorkflowSbtValidation.Kind.Compile, result))
+        val payload = N.Payload("12", "step-1", candidate, Vector(N.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)),
+          Vector(receipt), Some("failed"))
+        (receipt, payload, take(N.observedStateC(validating, payload, "actual-incomplete-receipt")), expected)
+      }
+      Then("Decision retains logs, Plan/base/candidate and zero counts without Repair, review or an automatic next check")
+      observed.foreach { (receipt, payload, state, expected) =>
+        receipt.termination shouldBe expected
+        receipt.exitCode shouldBe None
+        receipt.stdout shouldBe "COMPILE_BEFORE_CANCEL 日本語\n"
+        receipt.stderr shouldBe receipt.stdout
+        receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+        N.codec.decode(N.codec.encode(payload)) shouldBe Right(payload)
+        N.repairable(payload) shouldBe false
+        state.stage shouldBe O.Stage.Decision
+        state.plan shouldBe plan
+        state.base shouldBe base
+        state.candidate shouldBe Some(candidate)
+        state.repairs shouldBe 0
+        state.ordinaryRepairs shouldBe 0
+        state.pendingRepair shouldBe empty
+        state.reviewEvidence shouldBe empty
+        N.observedStateC(state, payload, "forbidden-retry").isSuccess shouldBe false
+        N.observedStateC(validating, payload.copy(outcome = Some("repair-required")), "forbidden-repair").isSuccess shouldBe false
+        payload.receipts.map(_.identity) shouldBe Vector("compile")
+      }
+    }
+
     for (missing <- Vector("missing-workspace", "missing-program")) {
       s"save actual $missing admission separately and use a new attempt after host correction" in {
         Given("docs/spec/goal-phase-validation-recovery.md R1,R2: normal Operations with a real selected Compile and " + missing)
@@ -205,7 +328,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           Then("normal Compile succeeds and independent review is pending without Start, Submit or repair renewal")
           reviewed.kind shouldBe "Request"
           reviewed.work.get.kind shouldBe "ReviewStep"
-          reviewed.work.get.selectedPlan.identity shouldBe recoveryPlan.identity
+          reviewed.work.get.selectedPlan.identity shouldBe _recovery_plan.identity
           reviewed.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
           actual.payload.admissionFailures shouldBe failed.get.payload.admissionFailures
           actual.payload.receipts.map(_.termination) shouldBe Vector("exited")
@@ -254,8 +377,8 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         actual.message should include("old selected check outcome remains unknown")
         actual.message should include("repeat effects")
         target.sessionId shouldBe identity
-        target.planIdentity shouldBe recoveryPlan.identity
-        target.planRevision shouldBe recoveryPlan.revision
+        target.planIdentity shouldBe _recovery_plan.identity
+        target.planRevision shouldBe _recovery_plan.revision
         target.sourceRevision.toLong should be < target.intentRevision.toLong
         target.frontierRevision shouldBe before.get.revision.value.toString
         target.intentRevision shouldBe target.frontierRevision
@@ -340,7 +463,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         review.sessionId shouldBe identity
         review.kind shouldBe "Request"
         review.work.get.kind shouldBe "ReviewStep"
-        review.work.get.selectedPlan.identity shouldBe recoveryPlan.identity
+        review.work.get.selectedPlan.identity shouldBe _recovery_plan.identity
         review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
         val result = episode.retained(identity, target.sourceRevision, "check-result-0-retry-1").get
         result.payload.newAttempts shouldBe saved.payload.newAttempts
