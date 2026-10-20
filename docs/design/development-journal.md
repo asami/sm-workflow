@@ -67,10 +67,17 @@ Phase 11ではExecutionObservationとFindingのみを実装する。他の型は
 
 ## Phase 6.4との独立性
 
+2026-10-20の責務更新: [Phase 12](../phase/phase-12.md)が
+[共通Evidence](../spec/common-evidence.md)の保存・取得とAdvanceからの自動記録を先行所有する。
+6.4はその採用・運用検証とbatch/圧縮/保持拡張を行う。Phase 11の既存producerと受入れは
+保持し、12がEvidence保存観測の正規producerを同じJournalへ接続する。
+Journal自体はEvidence完成を待たず利用でき、Evidence参照なしの既存Entryもそのまま有効。
+AI直接Markdown編集や絶対表示パス取得を新経路の必須条件にしない。
+
 Phase 11は既存のOperation結果やreview参照だけで成立させ、6.4のEvidenceRecord、
 archive、実保存先取得、圧縮、保持管理の完成を要求しない。
 Evidence参照がなければ不在のまま保持し、未実装archiveや架空のEvidence IDを作らない。
-6.4は引渡されたJournalを再利用してarchive結果を記録する。
+Phase 12は引渡されたJournalを再利用してarchive結果を記録し、6.4がその実経路を採用する。
 既存のpending Humanや発行済みfile-edit-only要求は書き換えず、通常の契約採用境界で接続する。
 
 ## スキルと配備

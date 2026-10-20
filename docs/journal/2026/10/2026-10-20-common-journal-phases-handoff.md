@@ -87,3 +87,14 @@ Journal自体の保存・検索・読取は公開Entry IDと設定済みDataStor
 6.4のEvidence保存・圧縮・保持管理と11.1のDecision／Issue／Handoff管理は未実装の
 後続範囲として残す。RepositorySync／SplitPhaseに新しい自動producerを追加したとは
 表示しない。AIコスト削減量は未測定である。
+
+## 後続採用: 共通Evidence Phase 12 — 2026-10-20
+
+ユーザーは[Phase 12](../../../phase/phase-12.md)をsm-workflow開発で先行実装し、
+6.4が採用・運用検証する方針を採用した。既知のAction生成物をAdvanceから自動保存し、
+その実観測とEvidence参照を既存Journalへ記録する。Evidence用の正規producerは12で追加する。
+上記の「absolute保存先を表示する要件は別に残る」は当時の整理であり、新しい契約では
+必須条件から外す。Journal/Evidence IDで読取できるため、追加の絶対表示パスAPIと
+AIによるMarkdown転記は不要。実ファイル保存・命名・取得は必要なままである。
+11の受入れ・検証履歴と6.4のnative履歴を変更せず、通常の採用境界で接続する。
+詳しくは[両開発チャット向けhandoff](2026-10-20-phase-12-common-evidence-handoff.md)を参照。

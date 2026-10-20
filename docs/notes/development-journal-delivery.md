@@ -13,7 +13,8 @@ status=planned
 | 所有 | 範囲 |
 | --- | --- |
 | Phase 11 | 共通Entry、実結果／Findingの記録、read／find、同梱・配備スキル、6.4試用への引渡し。 |
-| Phase 6.4 | Evidenceファイルの場所・移動・圧縮・保持管理。Journalは先行成果を利用する。 |
+| Phase 12 | 共通EvidenceのID・保存・取得とAdvanceからの自動記録。Phase 11のJournalへ実保存観測を接続する。 |
+| Phase 6.4 | Phase 12の採用・実運用検証。共通サービス上でbatch・圧縮・保持管理を拡張する。 |
 | Phase 11.1 | Decision／Issue／Handoff、関係検索、訂正・状態更新・batch管理。 |
 
 ## この分割の理由
@@ -28,6 +29,12 @@ review／Operation結果参照でJournalを使える。偽のEvidence IDを挿�
 実際の入力token／呼出し／転記回数を既存の利用結果から確認し、削減量の未測定値は示さない。
 
 ## 保持と採用
+
+2026-10-20の追加採用: [Phase 12](../phase/phase-12.md)をsm-workflow開発で先行実施し、
+6.4のE2へ実保存まで通った最小経路を渡す。全Action・媒体・管理機能の完成を待たない。
+AIからの通知・転記は既知のAction生成物には不要。明示登録は外部資料などに残し、
+公開参照はJournal/Evidence ID、物理保存は既存CNCF管理I/Oとする。
+[両開発チャット向けhandoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md)を参照。
 
 これは設計と計画の記録であり、6.4の現在の質問へ回答したりSessionを変更したりしない。
 開発checkout／試用hostの実際の進捗を所有チャットで確認し、既存Goal／E1受入れ／
