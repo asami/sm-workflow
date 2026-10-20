@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -55,6 +55,44 @@ private[admission] object NativeWorkflowCliFixture {
 
   enum MetadataDenial {
     case Allowed, MissingSbtCapability, MissingWorkspaceManage, WrongSuiteAllowlist
+  }
+
+  /** Explicit specification host option; policy does not imply a Create grant.
+    * The existing named managed SQL purpose is selected independently in the
+    * ordinary storage plan. No operation input carries these selectors.
+    */
+  final case class JournalHost(policy: DevelopmentJournal.Policy, grantCreate: Boolean = true) {
+    def values: Map[String, String] = {
+      val declared = Json.obj("schemaVersion" -> Json.fromString(DevelopmentJournal.schemaVersion),
+        "storeName" -> Json.fromString(policy.storeName), "collection" -> Json.fromString(policy.collection.print))
+      val plan = ThreeWorkflowNormalHostFixture.storagePlan.mapObject { fields =>
+        if (!grantCreate) fields else fields.add("records", Json.fromValues(fields("records").get.asArray.get :+
+          Json.obj("componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
+            "storeName" -> Json.fromString(policy.storeName), "collection" -> Json.fromString(policy.collection.print))))
+      }
+      Map(DevelopmentJournal.declaration.name -> declared.noSpaces,
+        "textus.subsystem.storage.plan" -> plan.noSpaces)
+    }
+  }
+
+  /** Reopen only an actual producer's retained normal host configuration.
+    * This changes component loading in the fixture descriptor, never records,
+    * workflow envelopes, store purpose, provider, collection or database path.
+    */
+  def journalReader(root: Path, plan: GoalPhaseOrderedProgression.Plan): Scenario = {
+    require(root.isAbsolute && root.normalize == root && Files.isDirectory(root), "Select the actual producer root")
+    val config = _take(parse(Files.readString(root.resolve(".textus/config.json")))
+      .fold(error => Consequence.stateConflict(error.message), Consequence.success), "Retained producer host")
+    val host = _take(config.hcursor.get[String]("sm-workflow.host.definition")
+      .left.map(_.message).flatMap(raw => parse(raw).left.map(_.message))
+      .fold(Consequence.stateConflict(_), ThreeWorkflowHostParameters.decodeDefinitionC), "Retained producer definition")
+    require(config.hcursor.get[String](DevelopmentJournal.declaration.name).isRight, "Producer must explicitly configure Journal")
+    val descriptor = root.resolve(".textus/assembly.yaml")
+    val original = Files.readString(descriptor)
+    require(original.contains("components: []"), "Only the direct producer fixture descriptor is selected")
+    Files.writeString(descriptor, original.replace("components: []",
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+    new Scenario(root, host, plan, None, None)
   }
 
   final class Scenario private[NativeWorkflowCliFixture] (
@@ -127,6 +165,9 @@ private[admission] object NativeWorkflowCliFixture {
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
+    def readJournalEntry(input: V.JournalReadInput): Result =
+      _run(_launcher ++ Vector("command", s"$_component.JournalService.readJournalEntry", "--input",
+        _take(input.toRecord().toJsonStringC, "Public Journal read input")) ++ _output)
 
     def prepareHostInput(operation: String, input: org.goldenport.record.Record): Result = {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",

@@ -19,7 +19,8 @@ import GoalPhaseOrderedProgression as O
 /** Finite clerical work reconstructed from actual accepted review completions.
   * Canonical suspension/completion owns persistence; submission has no effects.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  *  version Oct. 18, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeFindingRecording {
@@ -222,7 +223,10 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
             .flatMap(_.loadC(id)(using call.executionContext))
         }
       }
-      val codec = new WorkflowCompletionServiceOperation.Codec[R.Result] {
+      final class RecordingCodec extends WorkflowCompletionServiceOperation.Codec[R.Result] {
+        // This codec belongs to this invocation, never to a retained workflow.
+        private var _admitted_request = Option.empty[R.Request]
+        def capture(request: R.Request): Unit = { _admitted_request = Some(request) }
         val resultTypeIdentity = R.resultCodec.typeIdentity
         def decodeC(request: ProtocolRequest) = result.map(NativeWorkflowResultInput.typedC(_, R.resultCodec))
           .getOrElse(F.invalid("recording completion has no resolved result"))
@@ -231,9 +235,21 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
           actual <- completed.map(Consequence.success).getOrElse(
             org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate("recording has no native committed state"))
+          journal <- core match {
+            case Some(call) => _admitted_request match {
+              case Some(request) => DevelopmentJournal.recordAfterCommitC(d.journalPolicy, call, request, submitted, actual)
+              case None => Consequence.success(org.simplemodeling.textus.smworkflow.value.JournalRecordingState(
+                "indeterminate", "Journal has no admitted invocation request", None,
+                org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision)))
+            }
+            case None => Consequence.success(org.simplemodeling.textus.smworkflow.value.JournalRecordingState(
+              "unavailable", "Journal requires the owning committed call", None,
+              org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision)))
+          }
           _ <- acknowledge("goal-recording-completed")
-        } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, actual))
+        } yield NativeWorkflowOperationOutput.response(NativeWorkflowOperationOutput.accepted(submitted, actual, Some(journal)))
       }
+      val codec = new RecordingCodec
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[R.Result] {
         def selectC(submitted: ContinuationResult[R.Result], current: InstanceRecord) = core match {
           case None => F.invalid("recording closing requires the current owning call")
@@ -244,6 +260,7 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
             work <- issuedC(source, call)
             request <- NativeWorkflowOperationOutput.workInputC(work)
             _ <- R.admitResultC(request, submitted.result.value)
+            _ = codec.capture(request)
             pending <- GoalPhaseNativeHistory.prefixC(source.session.current, source.from.revision.next)
             next <- pending.appendC(pending.revision, F.history(pending, "phase." + source.controller.stage.toString,
               submitted.resultReference.identity))

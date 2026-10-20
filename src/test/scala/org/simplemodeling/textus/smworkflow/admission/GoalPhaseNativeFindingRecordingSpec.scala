@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -19,6 +20,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.host.{NativeHostAuthorityPreparation, NativeHostReviewPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
+import org.simplemodeling.model.datatype.EntityCollectionId
 import GoalPhaseFindingRecording as R
 import GoalPhaseNativeFindingRecording as N
 import GoalPhaseNativeWork as S
@@ -29,7 +31,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  *  version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWhenThen
@@ -38,6 +41,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private val _candidates = "docs/candidates.md"
   private val _paths = Vector("step-1.txt", "step-2.txt", _hygiene, _candidates)
   private val _policy = R.Policy(_hygiene, _candidates)
+  private val _journal = DevelopmentJournal.Policy("workflow",
+    DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", "development_journal")))
   private val _input = V.GoalPhaseStartInput("verification-p62-recording", "sm-workflow")
   private def _plan(two: Boolean = false): O.Plan = O.Plan("verification-recording-plan", "1", _input.phaseIdentity,
     _input.repositoryIdentity, Vector("step-1", "step-2").take(if (two) 2 else 1).zipWithIndex.map { (id, index) =>
@@ -105,11 +110,12 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     } yield ()
   }
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
-    selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false)(task: Episode => Unit): Unit = {
+    selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
+    journal: Option[NativeWorkflowCliFixture.JournalHost] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:"))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
-    val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ (if (!denygit) Map.empty else Map(
+    val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces))
     _with_runtime_(directory, "FindingRecording", Some(_host(directory)), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
@@ -203,6 +209,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     }
     def submitRecording(value: ContinuationResult[R.Result]): V.GoalPhaseFindingRecordingSubmissionResult =
       invoke[V.GoalPhaseFindingRecordingSubmissionResult]("submitGoalPhaseFindingRecording", take(NativeWorkflowOperationInputFixture.submissionC(value)))
+    def readJournal(input: V.JournalReadInput): V.JournalReadResult = read_value[V.JournalReadResult](take(
+      owner.executeOperationResponseInContext(Request.of(component = component.name, service = "JournalService",
+        operation = "readJournalEntry", properties = List(Property("input", input.toRecord(), None))), actor)))
     def writeAssigned(work: WorkflowInteraction[R.Request, Nothing], indices: Set[Int] = Set.empty): Unit =
       _business(work).items.zipWithIndex.filter((_, index) => indices.isEmpty || indices(index)).foreach { (item, _) =>
       val file = directory.resolve("repository").resolve(item.destination)
@@ -249,6 +258,76 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     e.authority(id, wait)
     val phase = e.advance(id)
     (id, phase, e.work(id))
+  }
+
+  /** Reusable real Operation episode for the fresh-process public read spec.
+    * Closing _episode closes the producer runtime before this method returns.
+    */
+  private[admission] def produceJournalForCli(): (Path, O.Plan, V.JournalEntry) = {
+    Given("a normal managed producer with separately declared Journal Create and specification-owned accepted Phase review")
+    val directory = _root()
+    var saved = Option.empty[V.JournalEntry]
+    _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      val (id, phase, review) = _phase_review(e)
+      e.submit(review, Some(phase), "accept", Some(R.Observations(Vector(_idea))))
+      e.advance(id)
+      val assigned = e.recording(id)
+      val reply = e.response(assigned, Vector("recorded"))
+      val proposed = DevelopmentJournal.identity(reply.resultReference)
+      Then("the proposed Journal entry is absent before the recording completion")
+      e.readJournal(V.JournalReadInput(proposed, None)).status shouldBe "absent"
+      e.writeAssigned(assigned)
+      When("the actual recording completion submits through the managed Operation")
+      val ack = e.submitRecording(reply)
+      Then("the committed business result is accepted and its Journal append reports recorded")
+      ack.accepted shouldBe true
+      ack.journalRecording.get.status shouldBe "recorded"
+      val actual = e.current(id)
+      val read = e.readJournal(V.JournalReadInput(ack.journalRecording.get.entry.get.identity, None))
+      Then("a separate public read returns the actual committed revision source and admitted observation")
+      read.status shouldBe "found"
+      read.entry.get.recording.committedRevision shouldBe actual.revision.value.toString
+      read.entry.get.sourceReference shouldBe V.WorkflowArtifactReference(reply.resultReference.identity, reply.resultReference.revision)
+      read.entry.get.recording.items.head.observation.identity shouldBe _idea.identity
+      saved = read.entry
+    }
+    (directory, _plan(), saved.get)
+  }
+
+  "Connected development Journal recording" should {
+    "append only after actual managed completion and read the exact admitted observation and result" in {
+      When("the shared producer episode commits the actual recording completion and closes its runtime")
+      val (_, _, entry) = produceJournalForCli()
+      Then("the separately read entry contains the original review meaning, requested destination, saved section and honest outcome")
+      entry.kind shouldBe "ExecutionObservation"
+      entry.recording.items.head.observation shouldBe V.GoalPhaseReviewObservation(_idea.identity, _idea.category, _idea.summary, _idea.rationale)
+      entry.recording.items.head.requestedDestination shouldBe _candidates
+      entry.recording.items.head.records shouldBe Vector(V.GoalPhaseFindingSavedSection(_candidates, "Recorded " + _idea.identity))
+      entry.recording.items.head.outcome shouldBe "recorded"
+    }
+
+    "retain actual business acceptance when the separate Journal Create scope is unavailable" in {
+      Given("a configured Journal whose host has deliberately withheld its separate Create grant")
+      val directory = _root()
+      _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal, grantCreate = false))) { e =>
+        val (id, phase, review) = _phase_review(e)
+        e.submit(review, Some(phase), "accept", Some(R.Observations(Vector(_idea))))
+        e.advance(id)
+        val work = e.recording(id)
+        val reply = e.response(work, Vector("failed"))
+        val prior = e.current(id)
+        When("actual managed completion commits and the after-commit Journal bind fails")
+        val ack = e.submitRecording(reply)
+        val committed = e.current(id)
+        Then("the business result remains accepted with one actual completion and no stored Journal claim")
+        ack.accepted shouldBe true
+        ack.journalRecording.get.status shouldBe "unavailable"
+        ack.journalRecording.get.entry shouldBe None
+        committed.revision shouldBe prior.revision.next
+        committed.suspension shouldBe None
+        committed.history.count(_.causation.value == reply.resultReference.identity) shouldBe 1
+      }
+    }
   }
 
   "Native recording through normal public Operations" should {

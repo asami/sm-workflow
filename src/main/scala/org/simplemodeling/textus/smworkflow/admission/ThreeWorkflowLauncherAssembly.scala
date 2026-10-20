@@ -33,6 +33,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "JournalService.readJournalEntry",
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
@@ -81,5 +82,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         creation, host.split, host.splitCatalog.definition),
       NativeWorkflowSessionInput.repository(NativeWorkflowResultInput.repository(sync, creation, repository.declaration, repositoryDefinition),
         creation, repository.declaration, repositoryDefinition),
-      NativeHostPreparationServiceAssembly.bind)
+      NativeHostPreparationServiceAssembly.bind,
+      DevelopmentJournalService.bind(host.goal.journalPolicy))
 }

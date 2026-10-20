@@ -66,7 +66,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
-      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration)
+      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -85,6 +85,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
       _ <- SplitPhaseNativeExecution.validateC(splitclassifications, executionprofiles, executionorigin)
       projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
       findingpolicy <- GoalPhaseFindingRecording.resolvePolicyC(parameters)
+      journalpolicy <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
       target <- targetC(settings.target)
       evidence <- NativeHostEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
@@ -100,7 +101,7 @@ private[smworkflow] object ThreeWorkflowHostParameters extends ThreeWorkflowLaun
         Some(GoalPhaseNativeClosure.Installation(settings.goal.closure, ports.stepClosure)),
         Some(settings.goal.phaseValidation), Some(closure), Some(GoalPhaseOrderedHumanDecision.Installation(ports.goalHuman)),
         executionprofiles, executionorigin, projectacceptance, findingpolicy,
-        Some(GoalPhaseValidationRecovery.Installation(ports.validationRecovery)))
+        Some(GoalPhaseValidationRecovery.Installation(ports.validationRecovery)), journalpolicy)
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

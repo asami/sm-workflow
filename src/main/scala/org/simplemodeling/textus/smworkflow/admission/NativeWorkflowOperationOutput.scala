@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -239,7 +239,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     * native closing result remains its real type/reference pair; it is not
     * an empty business DTO or a substitute for this public result. */
   def accepted[A <: NativeWorkflowResultInput.Value](submitted: ContinuationResult[A],
-    completed: WorkflowInstancePersistence.InstanceRecord): SubmissionValue = {
+    completed: WorkflowInstancePersistence.InstanceRecord,
+    journalRecording: Option[V.JournalRecordingState] = None): SubmissionValue = {
     val session = completed.identity.value
     submitted.result.value match {
       case value: GoalPhaseNativeWork.Result =>
@@ -247,7 +248,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       case value: GoalPhaseOrderedHumanDecision.Answer =>
         V.GoalPhaseOrderedDecisionSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
       case value: GoalPhaseFindingRecording.Result =>
-        V.GoalPhaseFindingRecordingSubmissionResult(session, true, "accepted", "Accepted recording " + value.outcome + ": " + value.summary)
+        V.GoalPhaseFindingRecordingSubmissionResult(session, true, "accepted", "Accepted recording " + value.outcome + ": " + value.summary,
+          journalRecording)
       case value: SplitPhaseExplicitPartitionSemantic.Judgment =>
         V.SplitPhaseSemanticSubmissionResult(session, true, "accepted", "Accepted partition " + value.decision + ": " + value.rationale)
       case value: SplitPhaseScopeSemantic.Judgment =>

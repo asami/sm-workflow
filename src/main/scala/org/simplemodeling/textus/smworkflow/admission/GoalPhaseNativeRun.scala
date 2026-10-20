@@ -45,7 +45,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
     projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None,
     findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None,
-    validationRecovery: Option[GoalPhaseValidationRecovery.Installation] = None)
+    validationRecovery: Option[GoalPhaseValidationRecovery.Installation] = None,
+    journalPolicy: Option[DevelopmentJournal.Policy] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -149,7 +150,8 @@ private[smworkflow] object GoalPhaseNativeRun {
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
-    else GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance).flatMap(_ =>
+    else DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations).flatMap(_ =>
+      GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance)).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
       d.configuration.validateC).flatMap(_ => d.validationPolicy.fold(Consequence.unit)(p =>
       if (p == null) invalid("native ordered validation policy is missing") else p.validateC)).flatMap(_ =>

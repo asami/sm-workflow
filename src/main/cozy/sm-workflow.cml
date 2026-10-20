@@ -810,6 +810,99 @@ OperationResult
 | accepted | boolean | 1 |
 | outcome | string | 1 |
 | message | string | 1 |
+| journalRecording | JournalRecordingState | ? |
+
+## JournalEntryReference
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | 1 |
+
+## JournalRecordingState
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| entry | JournalEntryReference | ? |
+| sourceReference | WorkflowArtifactReference | 1 |
+
+## JournalFindingRecordingDetail
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceReference | WorkflowArtifactReference | 1 |
+| sourceKind | string | 1 |
+| stepIdentity | string | ? |
+| observation | GoalPhaseReviewObservation | 1 |
+| requestedDestination | string | 1 |
+| outcome | string | 1 |
+| records | GoalPhaseFindingSavedSection | * |
+| rationale | string | 1 |
+
+## JournalExecutionObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| batchIdentity | string | 1 |
+| sourceRevision | string | 1 |
+| committedRevision | string | 1 |
+| outcome | string | 1 |
+| summary | string | 1 |
+| items | JournalFindingRecordingDetail | * |
+
+## JournalEntry
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | 1 |
+| kind | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+| stepIdentity | string | ? |
+| sessionIdentity | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| recordedAt | string | 1 |
+| summary | string | 1 |
+| recording | JournalExecutionObservation | 1 |
+
+## JournalReadInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | ? |
+
+## JournalReadResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| entry | JournalEntry | ? |
+| view | string | ? |
 
 ## SplitPhaseStartInput
 
@@ -5998,6 +6091,42 @@ Opaque canonical session JSON and optional nextSelection JSON strings retain the
 | completionEvidence | WorkflowExecutionEvidence | ? |
 
 # SERVICE
+
+## JournalService
+
+### DESCRIPTION
+
+Read an immutable development Journal entry from the exact host-declared managed collection. This command records no Journal and accepts no storage selectors or arbitrary Entry data. Only ExecutionObservation revision 1 is supported.
+
+### OPERATION
+
+#### readJournalEntry
+
+##### DESCRIPTION
+
+Return the actual retained entry and a bounded derived Markdown view, or a typed absent, unavailable, invalid, unsupportedRevision or disabled result. A successful business recording completion precedes its separate Journal append.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalReadInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalReadResult
 
 ## NativeHostPreparationService
 
