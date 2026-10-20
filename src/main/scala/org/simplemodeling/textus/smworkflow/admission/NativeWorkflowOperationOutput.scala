@@ -120,12 +120,17 @@ private[smworkflow] object NativeWorkflowOperationOutput {
 
   def goalFindingRecording(state: GoalPhaseNativeFindingRecording.State,
     request: Option[GoalPhaseFindingRecording.Request] = None): Option[V.GoalPhaseFindingRecordingState] =
-    Option.when(state.pending.nonEmpty || state.completed.nonEmpty || request.nonEmpty)(V.GoalPhaseFindingRecordingState(
+    Option.when(state.pending.nonEmpty || state.completed.nonEmpty || state.journaled.nonEmpty || request.nonEmpty)(V.GoalPhaseFindingRecordingState(
       state.pending.map(item => V.GoalPhaseFindingObservationSource(
         V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
         V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale))),
       request.map(goalRecordingRequest), state.completed.map(value => V.GoalPhaseFindingRecordingCompleted(goalRecordingRequest(value.request),
-        V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision), goalRecordingResult(value.result)))))
+        V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision), goalRecordingResult(value.result))),
+      state.journaled.map(value => V.JournalFindingBatch(value.sourceRevision, value.committedRevision,
+        value.pending.map(item => V.GoalPhaseFindingObservationSource(
+          V.WorkflowArtifactReference(item.sourceReference.identity, item.sourceReference.revision), item.sourceKind, item.stepIdentity,
+          V.GoalPhaseReviewObservation(item.observation.identity, item.observation.category, item.observation.summary, item.observation.rationale))),
+        value.outcomes.map(_.publicValue)))))
 
   def withFindingRecording(value: V.GoalPhaseAdvanceResult, state: GoalPhaseNativeFindingRecording.State): V.GoalPhaseAdvanceResult =
     value.copy(findingRecording = goalFindingRecording(state))

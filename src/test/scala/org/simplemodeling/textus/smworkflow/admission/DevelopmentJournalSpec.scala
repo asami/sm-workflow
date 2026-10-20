@@ -85,6 +85,8 @@ final class DevelopmentJournalSpec extends AnyWordSpec with Matchers with GivenW
       Then("time alone does not change content and all admitted detail survives")
       equal shouldBe true
       decoded shouldBe _entry
+      J.publicEntry(decoded).recording.nonEmpty shouldBe true
+      J.publicEntry(decoded).finding shouldBe None
       J.semanticEquals(_entry, _entry.copy(sourceReference = _source.copy(revision = "99"))) shouldBe false
       J.semanticEquals(_entry, _entry.copy(recording = _entry.recording.copy(summary = "Different honest content"))) shouldBe false
     }

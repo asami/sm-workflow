@@ -795,6 +795,18 @@ OperationResult
 | pending | GoalPhaseFindingObservationSource | * |
 | request | GoalPhaseFindingRecordingRequest | ? |
 | completed | GoalPhaseFindingRecordingCompleted | * |
+| journaled | JournalFindingBatch | * |
+
+## JournalFindingBatch
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceRevision | string | 1 |
+| committedRevision | string | 1 |
+| sources | GoalPhaseFindingObservationSource | * |
+| items | JournalRecordingState | * |
 
 ## GoalPhaseFindingRecordingSubmissionResult
 
@@ -860,6 +872,24 @@ OperationResult
 | summary | string | 1 |
 | items | JournalFindingRecordingDetail | * |
 
+## JournalFinding
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sourceKind | string | 1 |
+| observation | GoalPhaseReviewObservation | 1 |
+| sourceRevision | string | 1 |
+| planIdentity | string | 1 |
+| planRevision | string | 1 |
+| eligibilityStage | string | 1 |
+| originalBase | GoalPhaseNativeSnapshot | 1 |
+| completed | GoalPhaseClosedStep | * |
+| candidate | GoalPhaseNativeSnapshot | ? |
+| checksReceipt | string | ? |
+| reviewEvidence | string | ? |
+
 ## JournalEntry
 
 ### ATTRIBUTE
@@ -876,7 +906,8 @@ OperationResult
 | sourceReference | WorkflowArtifactReference | 1 |
 | recordedAt | string | 1 |
 | summary | string | 1 |
-| recording | JournalExecutionObservation | 1 |
+| recording | JournalExecutionObservation | ? |
+| finding | JournalFinding | ? |
 
 ## JournalReadInput
 
@@ -888,6 +919,55 @@ OperationResult
 |------+------|--------------|
 | identity | string | 1 |
 | revision | string | ? |
+
+## JournalFindInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | ? |
+| sessionIdentity | string | ? |
+| kind | string | ? |
+| sourceReference | WorkflowArtifactReference | ? |
+| recordedFrom | string | ? |
+| recordedBefore | string | ? |
+| limit | int | ? |
+
+## JournalEntrySummary
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| entry | JournalEntryReference | 1 |
+| kind | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+| stepIdentity | string | ? |
+| sessionIdentity | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| recordedAt | string | 1 |
+| summary | string | 1 |
+| summaryTruncated | boolean | 1 |
+
+## JournalFindResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| entries | JournalEntrySummary | * |
+| hasMore | boolean | 1 |
 
 ## JournalReadResult
 
@@ -1503,6 +1583,16 @@ on = ordered-plan-selected
 ##### TRANSITION
 
 to = Implementation
+on = journal-findings-intent
+
+##### TRANSITION
+
+to = Implementation
+on = journal-findings-result
+
+##### TRANSITION
+
+to = Implementation
 on = document-progress-intent
 
 ##### TRANSITION
@@ -1660,6 +1750,16 @@ on = last-step-closed
 ##### TRANSITION
 
 to = PhaseInspection
+on = journal-findings-intent
+
+##### TRANSITION
+
+to = PhaseInspection
+on = journal-findings-result
+
+##### TRANSITION
+
+to = PhaseInspection
 on = document-progress-intent
 
 ##### TRANSITION
@@ -1742,6 +1842,16 @@ to = Decision
 on = phase-review-decision-needed
 
 #### PhaseClosing
+
+##### TRANSITION
+
+to = PhaseClosing
+on = journal-findings-intent
+
+##### TRANSITION
+
+to = PhaseClosing
+on = journal-findings-result
 
 ##### TRANSITION
 
@@ -6096,7 +6206,7 @@ Opaque canonical session JSON and optional nextSelection JSON strings retain the
 
 ### DESCRIPTION
 
-Read an immutable development Journal entry from the exact host-declared managed collection. This command records no Journal and accepts no storage selectors or arbitrary Entry data. Only ExecutionObservation revision 1 is supported.
+Read an immutable development Journal entry or find finite summaries from the exact host-declared managed collection. These commands record no Journal and accept no storage selectors or arbitrary Entry data. Finding and ExecutionObservation revision 1 are supported, with exactly one content variant selected by kind and canonical identity prefix.
 
 ### OPERATION
 
@@ -6127,6 +6237,34 @@ JournalReadInput
 ###### TYPE
 
 JournalReadResult
+
+#### findJournalEntries
+
+##### DESCRIPTION
+
+Find at most 20 immutable Journal summaries in required repository scope through the fixed host-declared managed collection. Optional exact Phase, session, kind and complete source filters and whole-second UTC time bounds are pushed into the query before its limit. Physical ID ascending order is stable, not time ranking. hasMore asks the caller to refine filters and makes no count or completeness claim. Only found returns summaries; invalid, disabled and unavailable return none. Select readJournalEntry for complete detail. No Journal or Work is created.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalFindInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalFindInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalFindResult
 
 ## NativeHostPreparationService
 

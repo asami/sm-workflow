@@ -113,6 +113,19 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughthuman: Option[ContinuationIdentity], soughtrecording: Option[ContinuationIdentity], core: ActionCall.Core): Consequence[Located] = for {
       following <- GoalPhaseNativeHistory.nextC(source.current, cursor.from)
       located <- following match {
+        case Some(entry) if Set("ordered-journal-findings-intent", "ordered-journal-findings-result")(entry.causation.value) => for {
+          retained <- GoalPhaseNativeJournalFinding.retainedC(_recording_source(source, cursor), d, core)
+            .flatMap(_.map(Consequence.success).getOrElse(F.invalid("actual Journal Finding history has no retained intent")))
+          result <- if (!retained.policyMatches) _paused_c(source, cursor,
+            "Journal Finding policy conflicts with the retained intent. No automatic replay or destination change.")
+          else retained.payload.outcomes match {
+            case None => _paused_c(source, cursor,
+              "Journal Finding intent has an unknown recording outcome. No automatic append replay or further work.")
+            case Some(_) => _walk_c(source, cursor.copy(from = retained.record,
+              findings = N.journaled(cursor.findings, GoalPhaseNativeJournalFinding.completed(retained))),
+              soughtwork, soughthuman, soughtrecording, core)
+          }
+        } yield result
         case Some(entry) if Set("ordered-document-progress-intent", "ordered-document-progress-result")(entry.causation.value) =>
           cursor.documents match {
             case None => F.invalid("document progress has no actual selected source")
@@ -442,7 +455,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = {
       val recording = _recording_source(source, cursor)
-      if (N.eligible(recording)) N.selectC(recording, d).flatMap {
+      if (N.eligible(recording) && d.journalPolicy.nonEmpty) {
+        if (cursor.findings.pending.size > 256) _wait_cursor_c(cursor,
+          "The accumulated recording batch exceeds the bounded 256-item input. All pending observations are retained; no subset is recorded.")
+        else GoalPhaseNativeJournalFinding.advanceC(recording, d, core, acknowledgement).flatMap(value =>
+          F.waitC(value.record, "Automatic Finding recording", "Actual Journal Finding intent/result is retained.")
+            .flatMap(_after_native_c(source, cursor, _, core)))
+      }
+      else if (N.eligible(recording)) N.selectC(recording, d).flatMap {
         case Left(reason) => _wait_cursor_c(cursor, reason)
         case Right(request) => _recording_port.advanceC(recording, request, core)
       }

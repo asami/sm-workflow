@@ -172,9 +172,9 @@ private[smworkflow] object DevelopmentJournal {
     "phaseIdentity" -> entry.phaseIdentity, "sessionIdentity" -> entry.sessionIdentity,
     "sourceIdentity" -> entry.sourceReference.identity, "sourceRevision" -> entry.sourceReference.revision,
     "recordedAt" -> entry.recordedAt, "revision" -> entry.revision))
-  private def _stored_c(record: Record, id: String): Consequence[Entry] = for {
+  def storedC(record: Record, selectedIdentity: String): Consequence[Entry] = for {
     raw <- record.getString(storageField).map(Consequence.success).getOrElse(Consequence.stateConflict("Journal payload is absent"))
-    entry <- decodeStorageC(raw, id)
+    entry <- decodeStorageC(raw, selectedIdentity)
     expected <- rowC(entry)
     _ <- if (expected.fields.forall(f => record.getString(f.key.toString) == expected.getString(f.key.toString))) Consequence.unit
       else Consequence.stateConflict("Journal stored scope differs")
@@ -197,7 +197,7 @@ private[smworkflow] object DevelopmentJournal {
 
   /** The initial lookup owns idempotence; the create outcome owns this append's result. */
   def appendC(storage: Storage, entry: Entry): Consequence[V.JournalRecordingState] = {
-    def _retained_(record: Record): V.JournalRecordingState = _stored_c(record, entry.identity).map(
+    def _retained_(record: Record): V.JournalRecordingState = storedC(record, entry.identity).map(
       saved => if (semanticEquals(saved, entry)) _state("alreadyRecorded", "Journal entry retained", entry.sourceReference, Some(saved))
         else _failure("conflict", entry.sourceReference, "Journal source already has different content")).fold(
       _ => _failure("conflict", entry.sourceReference, "Journal retained row is invalid or conflicting"), v => v)
@@ -227,16 +227,19 @@ private[smworkflow] object DevelopmentJournal {
   }
   def readC(policy: Option[Policy], core: ActionCall.Core, input: V.JournalReadInput): Consequence[V.JournalReadResult] = {
     def result(status: String, message: String) = V.JournalReadResult(status, message, None, None)
-    if (input == null || input.revision == null || !sourceC(input.identity).isSuccess)
+    val finding = input != null && DevelopmentJournalFinding.sourceC(input.identity).isSuccess
+    if (input == null || input.revision == null || !(finding || sourceC(input.identity).isSuccess))
       Consequence.success(result("invalid", "Journal identity is invalid or noncanonical"))
-    else if (input.revision.exists(_ != "1")) Consequence.success(result("unsupportedRevision", "J1 supports revision 1 only"))
+    else if (input.revision.exists(_ != "1")) Consequence.success(result("unsupportedRevision", "Journal supports revision 1 only"))
     else policy match {
       case None => Consequence.success(result("disabled", "Journal is disabled by the host"))
       case Some(p) =>
         try {
           val loaded = _bind_c(core, p, input.identity).flatMap(_.loadC()).flatMap {
             case None => Consequence.success(result("absent", "Journal entry is absent"))
-            case Some(row) => _stored_c(row, input.identity).map(e => V.JournalReadResult("found", "Journal entry found", Some(publicEntry(e)), Some(view(e))))
+            case Some(row) if finding => DevelopmentJournalFinding.storedC(row, input.identity).map(e =>
+              V.JournalReadResult("found", "Journal entry found", Some(DevelopmentJournalFinding.publicEntry(e)), Some(DevelopmentJournalFinding.view(e))))
+            case Some(row) => storedC(row, input.identity).map(e => V.JournalReadResult("found", "Journal entry found", Some(publicEntry(e)), Some(view(e))))
           }
           Consequence.success(loaded.fold(f => result("unavailable", _diagnostic("Journal read unavailable", f)), v => v))
         } catch { case NonFatal(error) => Consequence.success(result("unavailable", "Journal read interrupted: " + error.getClass.getSimpleName)) }
@@ -244,12 +247,12 @@ private[smworkflow] object DevelopmentJournal {
   }
   def publicEntry(e: Entry): V.JournalEntry = V.JournalEntry(e.identity, e.revision, e.kind, e.repositoryIdentity,
     e.phaseIdentity, e.stepIdentity, e.sessionIdentity, V.WorkflowArtifactReference(e.sourceReference.identity, e.sourceReference.revision),
-    e.recordedAt, e.summary, V.JournalExecutionObservation(e.recording.batchIdentity, e.recording.sourceRevision,
+    e.recordedAt, e.summary, Some(V.JournalExecutionObservation(e.recording.batchIdentity, e.recording.sourceRevision,
       e.recording.committedRevision, e.recording.outcome, e.recording.summary, e.recording.items.map(i =>
         V.JournalFindingRecordingDetail(V.WorkflowArtifactReference(i.sourceReference.identity, i.sourceReference.revision),
           i.sourceKind, i.stepIdentity, V.GoalPhaseReviewObservation(i.observation.identity, i.observation.category,
             i.observation.summary, i.observation.rationale), i.requestedDestination, i.outcome,
-          i.records.map(r => V.GoalPhaseFindingSavedSection(r.file, r.section)), i.rationale))))
+          i.records.map(r => V.GoalPhaseFindingSavedSection(r.file, r.section)), i.rationale)))), None)
   def view(e: Entry): String = {
     val text = s"# ${e.summary}\n\n${e.repositoryIdentity} / ${e.phaseIdentity}${e.stepIdentity.fold("")(s => " / " + s)}\n" +
       s"\nSource: ${e.sourceReference.identity}@${e.sourceReference.revision}\nRecorded: ${e.recordedAt}\n" +

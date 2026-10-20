@@ -111,9 +111,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   }
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
-    journal: Option[NativeWorkflowCliFixture.JournalHost] = None)(task: Episode => Unit): Unit = {
+    journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
+    journalInterruption: Option[String] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
-      if (interrupt && point.startsWith("goal-recording-candidate-prepared:"))
+      if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
     val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces))
@@ -260,23 +261,39 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     (id, phase, e.work(id))
   }
 
-  /** Reusable real Operation episode for the fresh-process public read spec.
-    * Closing _episode closes the producer runtime before this method returns.
-    */
-  private[admission] def produceJournalForCli(): (Path, O.Plan, V.JournalEntry) = {
-    Given("a normal managed producer with separately declared Journal Create and specification-owned accepted Phase review")
-    val directory = _root()
-    var saved = Option.empty[V.JournalEntry]
-    _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+  /** Capture a real file-only contract before host adoption, then close its runtime. */
+  private def _capture_legacy_recording(directory: Path, outcomes: Vector[String]):
+      (String, WorkflowInteraction[R.Request, Nothing], ContinuationResult[R.Result], InstanceRecord) = {
+    var captured = Option.empty[(String, WorkflowInteraction[R.Request, Nothing], ContinuationResult[R.Result], InstanceRecord)]
+    _episode(directory, initialize = true, journal = None) { e =>
       val (id, phase, review) = _phase_review(e)
       e.submit(review, Some(phase), "accept", Some(R.Observations(Vector(_idea))))
       e.advance(id)
       val assigned = e.recording(id)
-      val reply = e.response(assigned, Vector("recorded"))
+      val reply = e.response(assigned, outcomes)
+      if (outcomes.head == "recorded") e.writeAssigned(assigned)
+      captured = Some((id, assigned, reply, e.current(id)))
+    }
+    captured.get
+  }
+
+  /** Reusable real Operation episode for the fresh-process public read spec.
+    * Closing _episode closes the producer runtime before this method returns.
+    */
+  private[admission] def produceJournalForCli(): (Path, O.Plan, V.JournalEntry) = {
+    Given("a normal managed producer issuing an actual file-only recording with Journal disabled before host adoption")
+    val directory = _root()
+    val (id, assigned, reply, pending) = _capture_legacy_recording(directory, Vector("recorded"))
+    var saved = Option.empty[V.JournalEntry]
+    _episode(directory, initialize = false, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      Given("the closed runtime reopened on the same managed SQL Session with Journal declared and its captured file request intact")
+      _same_instance(e.current(id), pending)
+      e.recording(id) shouldBe assigned
       val proposed = DevelopmentJournal.identity(reply.resultReference)
+      When("the adopted host publicly reads the proposed result key before fulfilling the captured recording")
+      val absent = e.readJournal(V.JournalReadInput(proposed, None))
       Then("the proposed Journal entry is absent before the recording completion")
-      e.readJournal(V.JournalReadInput(proposed, None)).status shouldBe "absent"
-      e.writeAssigned(assigned)
+      absent.status shouldBe "absent"
       When("the actual recording completion submits through the managed Operation")
       val ack = e.submitRecording(reply)
       Then("the committed business result is accepted and its Journal append reports recorded")
@@ -286,9 +303,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val read = e.readJournal(V.JournalReadInput(ack.journalRecording.get.entry.get.identity, None))
       Then("a separate public read returns the actual committed revision source and admitted observation")
       read.status shouldBe "found"
-      read.entry.get.recording.committedRevision shouldBe actual.revision.value.toString
+      read.entry.get.recording.get.committedRevision shouldBe actual.revision.value.toString
       read.entry.get.sourceReference shouldBe V.WorkflowArtifactReference(reply.resultReference.identity, reply.resultReference.revision)
-      read.entry.get.recording.items.head.observation.identity shouldBe _idea.identity
+      read.entry.get.recording.get.items.head.observation.identity shouldBe _idea.identity
       saved = read.entry
     }
     (directory, _plan(), saved.get)
@@ -300,21 +317,21 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val (_, _, entry) = produceJournalForCli()
       Then("the separately read entry contains the original review meaning, requested destination, saved section and honest outcome")
       entry.kind shouldBe "ExecutionObservation"
-      entry.recording.items.head.observation shouldBe V.GoalPhaseReviewObservation(_idea.identity, _idea.category, _idea.summary, _idea.rationale)
-      entry.recording.items.head.requestedDestination shouldBe _candidates
-      entry.recording.items.head.records shouldBe Vector(V.GoalPhaseFindingSavedSection(_candidates, "Recorded " + _idea.identity))
-      entry.recording.items.head.outcome shouldBe "recorded"
+      entry.recording.get.items.head.observation shouldBe V.GoalPhaseReviewObservation(_idea.identity, _idea.category, _idea.summary, _idea.rationale)
+      entry.recording.get.items.head.requestedDestination shouldBe _candidates
+      entry.recording.get.items.head.records shouldBe Vector(V.GoalPhaseFindingSavedSection(_candidates, "Recorded " + _idea.identity))
+      entry.recording.get.items.head.outcome shouldBe "recorded"
+      entry.finding shouldBe None
     }
 
     "retain actual business acceptance when the separate Journal Create scope is unavailable" in {
-      Given("a configured Journal whose host has deliberately withheld its separate Create grant")
+      Given("a captured real file-only recording issued before Journal adoption and now closed")
       val directory = _root()
-      _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal, grantCreate = false))) { e =>
-        val (id, phase, review) = _phase_review(e)
-        e.submit(review, Some(phase), "accept", Some(R.Observations(Vector(_idea))))
-        e.advance(id)
-        val work = e.recording(id)
-        val reply = e.response(work, Vector("failed"))
+      val (id, work, reply, pending) = _capture_legacy_recording(directory, Vector("failed"))
+      _episode(directory, initialize = false, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal, grantCreate = false))) { e =>
+        Given("the same Session reopened with Journal declared and its separate Create grant withheld")
+        _same_instance(e.current(id), pending)
+        e.recording(id) shouldBe work
         val prior = e.current(id)
         When("actual managed completion commits and the after-commit Journal bind fails")
         val ack = e.submitRecording(reply)
@@ -326,6 +343,191 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         committed.revision shouldBe prior.revision.next
         committed.suspension shouldBe None
         committed.history.count(_.causation.value == reply.resultReference.identity) shouldBe 1
+      }
+    }
+  }
+
+  "Automatic native Finding recording" should {
+    "record an actual accepted Phase review through normal Advance and publicly read its full original context" in {
+      Given("a normal managed Phase, a configured Journal and specification-owned accepted Phase review observations")
+      val directory = _root()
+      _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+        val (id, display, review) = _phase_review(e)
+        val submitted = e.submit(review, Some(display), "accept", Some(R.Observations(Vector(_idea, _observation))))
+        val accepted = e.current(id)
+        val key = DevelopmentJournalFinding.identity(submitted.resultReference, _idea.identity)
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+        val files = Vector(_hygiene, _candidates).map(p => p -> Files.readString(directory.resolve("repository").resolve(p))).toMap
+        val count = _checks(directory)
+        When("normal Advance automatically records the eligible Findings without a clerical Submit")
+        val next = e.advance(id)
+        val actual = e.current(id)
+        val batch = next.findingRecording.get.journaled.head
+        val read = e.readJournal(V.JournalReadInput(key, Some("1")))
+        Then("the actual immutable Finding, every honest per-item state and accepted Phase source are exposed")
+        next.findingRecording.get.pending shouldBe empty
+        next.findingRecording.get.completed shouldBe empty
+        next.findingRecording.get.request shouldBe None
+        batch.sourceRevision shouldBe accepted.revision.value.toString
+        batch.committedRevision shouldBe accepted.revision.next.next.value.toString
+        batch.sources.map(_.observation.identity) shouldBe Vector(_idea.identity, _observation.identity)
+        batch.items.map(_.status) shouldBe Vector("recorded", "recorded")
+        batch.items.head.entry shouldBe Some(V.JournalEntryReference(key, "1"))
+        read.status shouldBe "found"
+        val entry = read.entry.get
+        entry.identity shouldBe key
+        entry.kind shouldBe "Finding"
+        entry.revision shouldBe "1"
+        entry.recording shouldBe None
+        entry.sessionIdentity shouldBe id
+        entry.repositoryIdentity shouldBe _input.repositoryIdentity
+        entry.phaseIdentity shouldBe _input.phaseIdentity
+        entry.stepIdentity shouldBe None
+        entry.sourceReference shouldBe V.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision)
+        entry.finding.get.observation shouldBe V.GoalPhaseReviewObservation(_idea.identity, _idea.category, _idea.summary, _idea.rationale)
+        entry.finding.get.sourceKind shouldBe "ReviewPhase"
+        entry.finding.get.eligibilityStage shouldBe "PhaseClosing"
+        entry.finding.get.sourceRevision shouldBe accepted.revision.value.toString
+        entry.finding.get.completed.map(_.commit.identity) shouldBe _business(review).completed.map(_.commit.identity)
+        entry.finding.get.candidate shouldBe _business(review).candidate.map(c => V.GoalPhaseNativeSnapshot(c.head, c.tree))
+        entry.finding.get.reviewEvidence shouldBe Some(submitted.resultReference.identity)
+        read.view.get should include(_idea.rationale)
+        actual.history.take(accepted.history.size) shouldBe accepted.history
+        actual.history.count(_.causation.value == "ordered-journal-findings-intent") shouldBe 1
+        actual.history.count(_.causation.value == "ordered-journal-findings-result") shouldBe 1
+        actual.history.exists(_.causation.value.startsWith("ordered-recording-issued:")) shouldBe false
+        files.foreach((path, text) => Files.readString(directory.resolve("repository").resolve(path)) shouldBe text)
+        When("normal Advance reconstructs the known batch again")
+        val repeated = e.advance(id)
+        Then("it consumes the batch once and neither appends nor requests clerical recording again")
+        repeated.findingRecording shouldBe next.findingRecording
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-intent") shouldBe 1
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-result") shouldBe 1
+        e.readJournal(V.JournalReadInput(key, None)).entry shouldBe read.entry
+        _checks(directory) shouldBe count
+      }
+    }
+
+    "wait for the actual reviewed Step commit before automatically recording and issuing the next Step" in {
+      Given("a real two-Step managed Phase with Journal declared and a specification-owned nonblocking Step review observation")
+      val directory = _root()
+      _episode(directory, initialize = true, selected = _plan(two = true), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+        val id = e.start()
+        e.advance(id)
+        Files.writeString(directory.resolve("repository/step-1.txt"), "Assigned required implementation.\n")
+        e.submit(e.work(id))
+        val display = e.advance(id)
+        val review = e.submit(e.work(id), Some(display), "accept", Some(R.Observations(Vector(_observation))))
+        val key = DevelopmentJournalFinding.identity(review.resultReference, _observation.identity)
+        When("normal Advance reaches the separate Step commit authority frontier")
+        val waiting = e.advance(id)
+        Then("review acceptance alone has neither appended a Finding nor consumed the pending observation")
+        waiting.findingRecording.get.pending.map(_.observation.identity) shouldBe Vector(_observation.identity)
+        waiting.findingRecording.get.journaled shouldBe empty
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+        e.current(id).history.exists(_.causation.value == "ordered-journal-findings-intent") shouldBe false
+        When("actual authority admits the reviewed Step commit and normal Advance reaches its eligible frontier")
+        e.authority(id, waiting)
+        val next = e.advance(id)
+        val assigned = _business(e.work(id))
+        val actualcommit = assigned.completed.last
+        val entry = e.readJournal(V.JournalReadInput(key, None)).entry.get
+        Then("the automatically recorded context contains that actual commit and the original workflow continues at Step two")
+        assigned.kind shouldBe "ImplementStep"
+        assigned.stepIdentity shouldBe Some("step-2")
+        actualcommit.commit.identity shouldBe e.observe().head
+        entry.stepIdentity shouldBe Some("step-1")
+        entry.finding.get.completed.last.commit.identity shouldBe actualcommit.commit.identity
+        entry.finding.get.completed.last.review shouldBe review.resultReference.identity
+        entry.finding.get.eligibilityStage shouldBe "Implementation"
+        next.findingRecording.get.pending shouldBe empty
+        next.findingRecording.get.journaled.flatMap(_.items).map(_.status) shouldBe Vector("recorded")
+        next.findingRecording.get.completed shouldBe empty
+        e.current(id).history.exists(_.causation.value.startsWith("ordered-recording-issued:")) shouldBe false
+      }
+    }
+
+    "surface unavailable automatic recording once while preserving the actual accepted Phase business state" in {
+      Given("an actual accepted Phase review and a Journal whose independent Create grant is withheld")
+      val directory = _root()
+      _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal, grantCreate = false))) { e =>
+        val (id, display, review) = _phase_review(e)
+        val submitted = e.submit(review, Some(display), "accept", Some(R.Observations(Vector(_idea))))
+        val accepted = e.current(id)
+        When("ordinary Advance attempts automatic recording through the current managed capability")
+        val next = e.advance(id)
+        val actual = e.current(id)
+        val result = next.findingRecording.get.journaled.head.items.head
+        Then("business acceptance survives with a truthful unavailable outcome, no Entry claim and no legacy work")
+        result.status shouldBe "unavailable"
+        result.entry shouldBe None
+        next.findingRecording.get.pending shouldBe empty
+        next.findingRecording.get.completed shouldBe empty
+        next.findingRecording.get.request shouldBe None
+        actual.history.take(accepted.history.size) shouldBe accepted.history
+        actual.history.count(_.causation.value == submitted.resultReference.identity) shouldBe 1
+        actual.currentProgression shouldBe Some(ProgressionReference("phase.PhaseClosing"))
+        actual.history.exists(_.causation.value.startsWith("ordered-recording-issued:")) shouldBe false
+        When("another ordinary Advance reconstructs the terminal non-success batch")
+        val repeated = e.advance(id)
+        Then("the known non-success outcome is consumed once without retry or invalidation of accepted review")
+        repeated.findingRecording shouldBe next.findingRecording
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-intent") shouldBe 1
+        e.current(id).history.count(_.causation.value == "ordered-journal-findings-result") shouldBe 1
+      }
+    }
+
+    "retain an interrupted durable intent as unknown after reopening without another append or review" in {
+      Given("a real managed accepted Phase review and a specification acknowledgement hook interrupting after durable Journal intent")
+      val directory = _root()
+      var id = ""
+      var key = ""
+      var saved = Option.empty[InstanceRecord]
+      var accepted = Option.empty[InstanceRecord]
+      var count = 0
+      _episode(directory, initialize = true, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal)),
+        journalInterruption = Some("goal-journal-findings-prepared")) { e =>
+        val (identity, display, review) = _phase_review(e)
+        id = identity
+        val submitted = e.submit(review, Some(display), "accept", Some(R.Observations(Vector(_idea))))
+        key = DevelopmentJournalFinding.identity(submitted.resultReference, _idea.identity)
+        accepted = Some(e.current(id))
+        When("normal Advance commits the exact intent and is interrupted before the Journal effect")
+        val interrupted = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
+        saved = Some(e.current(id))
+        count = _checks(directory)
+        Then("the actual native intent survives with no terminal result or stored Finding")
+        interrupted.isSuccess shouldBe false
+        saved.get.history.last.causation.value shouldBe "ordered-journal-findings-intent"
+        saved.get.history.init shouldBe accepted.get.history
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+      }
+      _episode(directory, initialize = false, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+        Given("the same managed SQL Session reopened with its original Journal declaration and no interruption hook")
+        When("two ordinary Advances reconstruct the actual intent without a terminal receipt")
+        val first = e.advance(id)
+        val second = e.advance(id)
+        Then("both remain paused with all pending source keys and no second append or consumed review replay")
+        first.kind shouldBe "Wait"
+        first.message should include("unknown recording outcome")
+        first.condition shouldBe Some("phase.PhaseClosing")
+        first.findingRecording.get.pending.map(_.observation.identity) shouldBe Vector(_idea.identity)
+        first.findingRecording.get.journaled shouldBe empty
+        second.findingRecording shouldBe first.findingRecording
+        _same_instance(e.current(id), saved.get)
+        e.readJournal(V.JournalReadInput(key, None)).status shouldBe "absent"
+        _checks(directory) shouldBe count
+      }
+      _episode(directory, initialize = false, journal = None) { e =>
+        Given("the same retained intent reopened after the host removes its Journal declaration")
+        When("ordinary Advance reconstructs the frozen policy")
+        val conflict = e.advance(id)
+        Then("policy mismatch pauses without switching to file recording or reinterpreting the original destination")
+        conflict.kind shouldBe "Wait"
+        conflict.message should include("policy conflicts")
+        conflict.findingRecording.get.request shouldBe None
+        conflict.findingRecording.get.pending.size shouldBe 1
+        _same_instance(e.current(id), saved.get)
       }
     }
   }
@@ -498,10 +700,12 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       }
     }
 
-    "retain every item at truthful Wait when accumulated real reviews exceed the finite recording bound" in {
+    Vector(false, true).foreach { automatic =>
+    s"retain every item at truthful Wait when accumulated real reviews exceed the finite recording bound with automatic Journal $automatic" in {
       Given("a fresh isolated V7 Step with two allowed repair batches and 128 observations in each actual review result")
       val directory = _root()
-      _episode(directory, initialize = true) { e =>
+      _episode(directory, initialize = true,
+        journal = Option.when(automatic)(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
         val id = e.start()
         e.advance(id)
         Files.writeString(directory.resolve("repository/step-1.txt"), "Initial assigned source.\n")
@@ -537,12 +741,15 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
           references.map(r => r.identity -> r.revision)
         wait.findingRecording.get.request shouldBe None
         wait.findingRecording.get.completed shouldBe empty
+        wait.findingRecording.get.journaled shouldBe empty
         again.findingRecording shouldBe wait.findingRecording
         e.current(id).history shouldBe retained.history
         e.current(id).suspension shouldBe None
         e.current(id).history.exists(_.causation.value.startsWith("ordered-recording-issued:")) shouldBe false
+        e.current(id).history.exists(_.causation.value == "ordered-journal-findings-intent") shouldBe false
         _checks(directory) shouldBe count
       }
+    }
     }
 
     Vector(Vector("recorded", "recorded"), Vector("partial", "failed"), Vector("failed", "failed")).foreach { outcomes =>

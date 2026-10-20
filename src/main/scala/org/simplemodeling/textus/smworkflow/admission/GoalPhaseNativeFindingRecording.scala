@@ -27,7 +27,10 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
   final case class Pending(sourceReference: ContextReference, sourceKind: String,
     stepIdentity: Option[String], observation: R.Observation)
   final case class Completed(request: R.Request, resultReference: ContextReference, result: R.Result)
-  final case class State(pending: Vector[Pending] = Vector.empty, completed: Vector[Completed] = Vector.empty)
+  final case class Journaled(sourceRevision: String, committedRevision: String, pending: Vector[Pending],
+    outcomes: Vector[DevelopmentJournalFinding.RecordingState])
+  final case class State(pending: Vector[Pending] = Vector.empty, completed: Vector[Completed] = Vector.empty,
+    journaled: Vector[Journaled] = Vector.empty)
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
     findings: State, issues: Option[GoalPhaseFixIssues.State])
   final case class Retained(completed: Completed, record: InstanceRecord, submitted: ContinuationResult[R.Result])
@@ -40,7 +43,7 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
     _ <- R.admitObservationsC(input.kind, submitted.result.value.reviewObservations)
     added = submitted.result.value.reviewObservations.toVector.flatMap(_.items).map(observation =>
       Pending(submitted.resultReference, input.kind, input.stepIdentity, observation))
-    all = state.pending ++ state.completed.flatMap(_.request.items.map(_pending)) ++ added
+    all = state.pending ++ state.completed.flatMap(_.request.items.map(_pending)) ++ state.journaled.flatMap(_.pending) ++ added
     _ <- if (all.map(_key).distinct.size == all.size) Consequence.unit
       else F.invalid("review observation source keys are duplicated or conflicting")
   } yield state.copy(pending = state.pending ++ added)
@@ -100,6 +103,11 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
   def consumed(state: State, value: Completed): State = {
     val keys = value.request.items.map(_pending).map(_key).toSet
     state.copy(pending = state.pending.filterNot(p => keys(_key(p))), completed = state.completed :+ value)
+  }
+
+  def journaled(state: State, value: Journaled): State = {
+    val keys = value.pending.map(_key).toSet
+    state.copy(pending = state.pending.filterNot(p => keys(_key(p))), journaled = state.journaled :+ value)
   }
 
   def requiredC: Consequence[StateMachineRequiredOperation] = {

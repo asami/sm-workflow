@@ -168,6 +168,9 @@ private[admission] object NativeWorkflowCliFixture {
     def readJournalEntry(input: V.JournalReadInput): Result =
       _run(_launcher ++ Vector("command", s"$_component.JournalService.readJournalEntry", "--input",
         _take(input.toRecord().toJsonStringC, "Public Journal read input")) ++ _output)
+    def findJournalEntries(input: V.JournalFindInput): Result =
+      _run(_launcher ++ Vector("command", s"$_component.JournalService.findJournalEntries", "--input",
+        _take(input.toRecord().toJsonStringC, "Public Journal find input")) ++ _output)
 
     def prepareHostInput(operation: String, input: org.goldenport.record.Record): Result = {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
