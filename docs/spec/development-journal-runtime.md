@@ -1,4 +1,4 @@
-# Development Journal runtime, J1 and J2 Finding and Find
+# Development Journal runtime, Finding, Find and skill delivery
 
 The retained Phase 11 J1 producer is the actual
 `GoalPhaseService.submitGoalPhaseFindingRecording` Operation. Its canonical
@@ -39,8 +39,8 @@ recording and reading while preserving existing callers. Its exact structure is:
 ```json
 {
   "schemaVersion": "sm-workflow.journal.v1",
-  "storeName": "workflow",
-  "collection": "entity:smworkflow.cli.development_journal"
+  "storeName": "journal",
+  "collection": "smworkflow-cli-entity_collection-ec1_10_smworkflow_3_cli_19_development_journal-0-stable"
 }
 ```
 
@@ -50,6 +50,21 @@ The host separately declares that named managed SQL purpose and the existing
 `ComponentRecordStorage` Create grant for this Component and collection. The
 parameter grants no write permission. Operations accept no provider, purpose,
 collection, path, environment variable, System property or SQL selector.
+
+The example collection is the canonical
+`EntityCollectionId("smworkflow", "cli", "development_journal").print`, not an
+`entity:` import address. Configure the separate `journal` purpose through the
+existing `ComponentDataStore.Request.forComponent(SmWorkflowComponent.componentId,
+"journal")` host binding. Its ordinary canonical selector is
+`textus.component.org.simplemodeling.textus.sm-workflow.datastores.journal`
+(or the existing `cncf.component` equivalent), with the host's selected managed
+SQL policy and resource. Declare the matching Component record Create scope and
+normal collection read access. This is host configuration, not new CLI parsing
+or an operation-supplied storage selector. It leaves the Workflow purpose,
+instances, continuations, definitions and existing Sessions unchanged. The
+specification fixture independently retains its already declared `workflow`
+purpose and separate Journal collection for the isolated continuation below;
+that fixture does not migrate a trial host's Workflow store.
 
 Both append and read bind `ComponentRecordStorage.bindForCallC` using the current
 owning `ActionCall.Core`. Its current managed lease and host declarations own
@@ -230,6 +245,77 @@ it offers no total count, cursor, ranking or completeness guarantee. Selected
 `readJournalEntry` returns complete typed content and its bounded view. Neither
 query nor read records a Journal or issues Work.
 
+## Current skill support
+
+`sm-goal-phase`, `sm-repository-sync` and `sm-split-phase` contain the same inline
+Journal consumer guidance. They show supplied optional `journalRecording` and
+automatic `findingRecording.journaled` status, actual Entry identity/revision and
+short message/source without changing actual business acceptance. Only supplied
+real references support `recorded` or `alreadyRecorded`; unavailable, conflict,
+indeterminate, disabled, absent and unknown values stay honest. RepositorySync
+and SplitPhase have no new automatic producer in this Phase and gain no recording
+duty. Previously issued file-only work and its exact typed completion remain.
+
+Lookup uses the ordinary provided JournalService operations with `--input` JSON:
+required repository, selected exact scope/kind/complete source tuple, whole-second
+UTC `recordedFrom` inclusive and `recordedBefore` exclusive, and limit 1–20.
+Callers narrow filters when `hasMore` is true and read a selected actual Entry
+reference only when the task needs detail. They reuse supplied bounded summaries,
+truncation metadata and read views. No extra query is required merely for display.
+There is no journaling-only AI work, clerical transcription, Markdown dual write,
+storage fallback, replay or automatic Submit/Advance. Decision, Issue, Handoff
+and Journal management remain Phase 11.1.
+
+The existing P `skillBundle` contains these three skills and seven supporting
+docs/scripts. It contains no five-agent definition set. This delivery changes
+neither the bundle membership, installer nor product agents. Journal guidance is
+inline, so it creates no relative runtime-spec link unavailable in W's installed
+skill tree. Direct installed CLI first-attempt scoped escalation, visible actual
+exchanges, original consent/host controls and independent acceptance remain.
+
+## Installed-CLI adoption validation procedure
+
+This is a procedure for parent execution, not an unexecuted success claim:
+
+1. Compile and run the parent-selected `DevelopmentJournalCliSpec` through the
+   registered SBT runner with the existing runtime-test executable property.
+   Its first scenario retains the existing connected producer/public find/read
+   checks. Its second prepares a separate normal isolated workflow with real
+   specification-owned Step/review work and actual assigned file edits, then
+   stops before submitting the issued legacy recording reply. Reopening with
+   Journal configured verifies the same pending instance and issued request;
+   the producer closes before normal component loading is selected.
+2. Use normal `publishLocal` and the existing packaged `skillBundle` to refresh
+   the selected current artifacts and three skill consumers through the normal
+   parent-owned delivery route. This is artifact refresh, not acceptance or a
+   change to product agents or the install protocol.
+3. Consume `target/sm-workflow/journal-installed-handoff.json` as downstream
+   command input. Its absolute `hostRoot`, actual `sessionId`, repository/Phase,
+   actual result-derived `entryIdentity`, complete `sourceReference` and generated
+   public `submission` come from that unconsumed isolated episode. Provenance is
+   `SPECIFICATION-OWNED`; it claims no real external reviewer/provider evidence.
+   Keep the produced fixture files and SQLite in place. Do not seed/copy rows,
+   manufacture Workflow envelopes/history or reconstruct a replacement reply.
+4. The parent directly invokes the normal escalated installed
+   `GoalPhaseService.submitGoalPhaseFindingRecording` command once against that
+   actual isolated host/session, supplying only the retained public submission
+   fields. Show the actual acceptance/outcome/message and optional
+   `journalRecording` separately. A failed or uncertain transport does not
+   authorize replay, Submit/Advance chaining or invented success.
+5. Consume the actual returned Entry reference through ordinary public
+   `JournalService.findJournalEntries` and `readJournalEntry` on the configured
+   trial host, using the actual repository/Phase/session/source filters and
+   selected reference. If that host differs from the isolated producer, its
+   existing Journal purpose must actually expose the same retained Journal
+   resource; a missing host binding is a limitation, not permission to copy
+   SQLite, rewrite Workflow configuration or infer an Entry. These explicit
+   adoption lookup checks do not add post-write readback to the append contract.
+
+The parent records the actual deployment and handoff after execution. The
+procedure grants no P64 operation, Start, Human answer or effect authority and
+does not alter business/Journal failure separation, single Create without
+post-write verification, or the legacy recording contract.
+
 ## Executable specifications
 
 `DevelopmentJournalSpec` authors canonical identity, corruption, semantic
@@ -282,6 +368,16 @@ identical Entry reference, summary, source and recording time. A separate fresh
 process publicly reads that selected reference and returns the identical full
 detail; another process repeats the public read. There is no direct SQL seeding,
 custom product main, reflected state or hand-built Workflow envelope.
+
+Its second connected scenario calls the reusable
+`prepareJournalForInstalledCli` fixture once to retain a real unsubmitted
+recording reply. The same managed instance and issued request remain pending
+after Journal adoption; generated result/reference/evidence values supply the
+exact public submission fields. The scenario checks actual session/source/item
+identity and persists the downstream input at
+`target/sm-workflow/journal-installed-handoff.json`. It neither consumes that
+reply nor executes the installed CLI; publication and the single actual Submit
+belong to the parent procedure above.
 
 The parent owns compilation, the selected focused accumulator runtime validation,
 independent review and transitions. Spec authoring alone is not a PASS claim.

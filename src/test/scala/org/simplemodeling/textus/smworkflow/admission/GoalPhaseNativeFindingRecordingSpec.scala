@@ -277,6 +277,36 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     captured.get
   }
 
+  /** Leave the actual issued recording unconsumed for the parent's installed CLI.
+    * All semantic responses and assigned file edits are SPECIFICATION-OWNED.
+    */
+  private[admission] def prepareJournalForInstalledCli(): GoalPhaseNativeFindingRecordingSpec.InstalledHandoff = {
+    val directory = _root()
+    val (id, assigned, reply, pending) = _capture_legacy_recording(directory, Vector("recorded"))
+    _episode(directory, initialize = false, journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      When("the same closed producer reopens with Journal configured without consuming its captured recording")
+      val retained = e.current(id)
+      val issued = e.recording(id)
+      Then("the actual pending instance and exact issued file-only request remain unchanged")
+      _same_instance(retained, pending)
+      issued shouldBe assigned
+    }
+    NativeWorkflowCliFixture.journalReader(directory, _plan())
+    val reference = V.WorkflowArtifactReference(reply.resultReference.identity, reply.resultReference.revision)
+    val evidence = V.WorkflowExecutionEvidence(reply.evidence.references.map(r =>
+      V.WorkflowArtifactReference(r.identity, r.revision)), reply.evidence.workerIdentity, None,
+      reply.evidence.execution.map(e => V.WorkflowExecutionObservation(e.placement.value,
+        e.originContextIdentity, e.executorContextIdentity, e.profileIdentity)))
+    val publicrecord = Record.dataAuto(
+      "sessionId" -> reply.handle.instanceIdentity.value,
+      "result" -> NativeWorkflowOperationOutput.goalRecordingResult(reply.result.value).toRecord(),
+      "completionFacts" -> reply.completionFacts.map(r => V.WorkflowArtifactReference(r.identity, r.revision).toRecord()),
+      "executionEvidence" -> evidence.toRecord(),
+      "resultReference" -> reference.toRecord())
+    val submission = io.circe.parser.parse(take(publicrecord.toJsonStringC)).toOption.get
+    GoalPhaseNativeFindingRecordingSpec.InstalledHandoff(directory, id, _business(assigned), reply, pending, submission)
+  }
+
   /** Reusable real Operation episode for the fresh-process public read spec.
     * Closing _episode closes the producer runtime before this method returns.
     */
@@ -1029,4 +1059,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       }
     }
   }
+}
+
+private[admission] object GoalPhaseNativeFindingRecordingSpec {
+  final case class InstalledHandoff(root: Path, sessionId: String, request: R.Request,
+    reply: ContinuationResult[R.Result], pending: InstanceRecord, submission: Json)
 }
