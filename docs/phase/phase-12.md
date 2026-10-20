@@ -1,7 +1,7 @@
 # Phase 12: Common Evidence and automatic Action recording
 
-status=minimum-route-delivered-local-closure-pending
-Current status: in-progress
+status=closed
+Current status: closed
 Owner: sm-workflow
 Update rule: close only after accepted Step commits, the sole Phase full review, required full validation and successful local release.
 planned_at=2026-10-20
@@ -81,3 +81,19 @@ The receiving owner validates only changed/missing consumer connections.
 Initial delivery excludes full media coverage, broad search/management, batch,
 compression, automatic deletion, generic interrupted-workflow recovery and Phase
 11.1's Journal management. See the [two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+
+## Local completion
+
+The accepted P12-DELIVERY Step and its original three commits remain intact.
+The sole Phase full review is closed by the independent focused repair chain;
+the final local release includes the bounded HTTP 409, shared-resume and GWT
+corrections. Required Core, CNCF and sm-workflow repository-full tests and the
+declared workstation full driver passed. Applicable installed runtime evidence
+is reused at its original scope. See the producer delivery journal for the
+completion boundary and retained limits.
+
+Original Goal, bases, PLAN epoch and histories are preserved: Step repairs 0,
+Phase repairs 5. Retained nonblocking Hygiene findings remain in their canonical
+journal. No new Start, Submit, live Phase 6.4 action or remote push is performed.
+The Phase index is preserved with concurrent planning; this document and its
+checklist are the canonical completed Phase status.

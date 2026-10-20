@@ -15,7 +15,7 @@ producerは6.4の実Session、E1受入れ、base、pending Human、履歴、修�
 末尾の追記を現在のconsumer境界とする。
 
 これは先行producerの実装・配備引渡しであり、6.4 E2〜E4受入れでも、Phase 12の
-最終ローカルclosureでもない。今回のソースはsm-workflow main、CNCF mainと
+最終ローカルclosureでもない。初回引渡し時点のソースはsm-workflow main、CNCF mainと
 development-workstationの未コミット差分に保持されている。既存コミットを今回の
 実装コミットとは表示しない。別作業の変更も保持し、今回のGitHub同期は行っていない。
 
@@ -146,3 +146,50 @@ consumer継続チャットは停止した。producerもこの停止をnative記�
 consumer Session操作・再開依頼は行わず、その所有者の新しい再開指示まで保持する。
 これはconsumer側の停止であり、producerのPhase 12作業停止とは解釈しない。
 共通Evidenceの先行配備・実Plan採用成功と、未実施の6.4実開発受入れを区別する。
+
+## Producer update: formal Step accepted
+
+2026-10-20、正式なPhase 12 Goalで、先行実装・成功/失敗・修正履歴・
+通常installed接続結果を保持してP12-DELIVERY（V1〜V3）を独立レビューで受け入れた。
+通常ローカルStep commitは依存順で、CNCF `1fb606ee`、development-workstation
+`7dce3736`、sm-workflow `4657ef7f`。別作業の未コミット変更は保持し、pushはしていない。
+Phase全体レビュー・最終全体検証・別のPhase release commitはこの時点で未完了。
+上記consumer停止と6.4の未受入れ境界は引き続き保持する。
+
+## Producer update: final validation stopped before release
+
+2026-10-20、唯一のPhase全体レビューで指摘されたテストのGWT表示先1件を修正し、
+既存シナリオ1/1成功・12句の実表示・独立focused再レビューで解消した。
+正式Step修正0／Phase修正1、Goal・base・PLAN epoch・履歴を保持する。
+
+最終全体検証ではCNCFが864スイート／6,256テスト中2件失敗（HTTP競合の409期待に
+400が返る既存2シナリオ）。共有ツールは16スイート中2スイート失敗
+（登録role数21期待に26、source-build fixtureのcheckout配置不整合による8エラー）。
+sm-workflowの最終全体テストは未起動。既存の対象検証・実installed接続結果は保持する。
+これらの失敗を成功扱いにせず、Phase release commit・pushは行っていない。
+
+現行cncf-goal-phaseの最終検証失敗時の開発者判断規約により、具体的な限定修復案を
+ローカル管理記録release-gate-assessment.jsonへ保存して判断待ちとする。
+Phase12を閉じず、consumer6.4の停止・受理済みE1・未受入れE2–E4も保持する。
+
+## Producer update: local Phase closure
+
+2026-10-21、既存Goal・Session・base・PLAN epoch・受理済みP12-DELIVERYと
+成功/失敗/修正履歴を保持し、承認済み限定修復と既定のローカル完了条件を満たした。
+CoreのConflict 409と通常parser回帰仕様、CNCFの型付きConflict応答、共有スキルの
+明示的なblocked継続契約、実行可能仕様の記述と受理済み宣言の期待一覧を対象とする。
+製品の宣言・検証条件を弱めず、通常の依存公開・配布物生成・必要な全体検証と
+既存の唯一のPhase全体レビューから続く独立focused closureを通した。
+
+正式Step修正0／Phase修正5、既存の非blocking Hygieneを既定journalへ保持する。
+以前のCARのABI baseline不在、開発用sbt-cozy SNAPSHOT、および任意設定が必要な
+installed CLIのSIGTERM確認未実施という検証限界は、そのまま残す。
+実行ログ・結果・レビュー本文はGitに取り込まず、ローカル管理領域に保存する。
+既存のproducer backupと保留中のconsumer用証跡は移動・置換しない。
+完了記録の保存期限は2026-11-20とし、6.4で必要な証跡は用途と次回確認日を伴うholdで保持する。
+
+通常のローカル完了commitはCore、CNCF、development-workstation、sm-workflowの
+依存順で、この限定修復とPhase closureだけを対象とする。実commit IDはローカル
+管理記録に保持し、別作業の未コミット変更と共有Phase indexはそのまま残す。
+push、remote公開、再Start、再Submit、停止中6.4 Sessionの操作は行わない。
+6.4の既存E1・採用済みPlanと履歴を保持し、E2–E4の実開発受入れはその所有者へ残す。

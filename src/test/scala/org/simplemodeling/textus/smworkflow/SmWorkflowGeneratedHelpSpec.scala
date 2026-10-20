@@ -17,9 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- *  version Oct. 15, 2026
- *  version Oct. 16, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -36,7 +34,8 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
-      "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation"
+      "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
+      "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan"
     ),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
       "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
@@ -47,6 +46,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
+    SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal"),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
     SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),

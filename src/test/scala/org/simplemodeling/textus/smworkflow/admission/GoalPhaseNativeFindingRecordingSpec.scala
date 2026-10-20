@@ -192,8 +192,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     * The directive, review and dependency request are specification-owned inputs.
     * The first Step commit, pending question and native SQL history are actual.
     */
-  private[admission] def qualifyRemainingPlanAdoption(): Unit = {
-    Given("an actual two-Step Session with its first Step accepted and committed")
+  private[admission] def qualifyRemainingPlanAdoption(narrator: GivenWhenThen): Unit = {
+    narrator.Given("an actual two-Step Session with its first Step accepted and committed")
     val directory = _root()
     val initial = _plan(two = true)
     var session = ""
@@ -229,12 +229,12 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
       val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal(
         "spec-new-contract", "2", "Actual new direction replaces the unaccepted future contract", raw))).get
-      When("public description captures the actual unanswered frontier and proposed remaining contract")
+      narrator.When("public description captures the actual unanswered frontier and proposed remaining contract")
       val description = e.invoke[V.GoalPhaseRemainingPlanDescriptionResult](GoalPhaseRemainingPlanAdoption.describeOperation,
         List(Property("input", V.GoalPhaseRemainingPlanDescriptionInput(session, proposal).toRecord(), None)))
       val captured = take(GoalPhaseRemainingPlanAdoption.targetC(description.target))
       target = Some(captured)
-      Then("the target includes the actual accepted commit, unchanged base and nonzero repair history")
+      narrator.Then("the target includes the actual accepted commit, unchanged base and nonzero repair history")
       captured.completed.size shouldBe 1
       captured.completed.head.commit.identity shouldBe e.observe().head
       captured.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(1, 1, 2)
@@ -244,19 +244,19 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         V.WorkflowArtifactReference("spec-new-human-directive", "1"))
       def _request_(value: V.GoalPhaseRemainingPlanAdoptionInput) = e.call(GoalPhaseRemainingPlanAdoption.adoptionOperation,
         List(Property("input", value.toRecord(), None)))
-      When("a caller supplies the proposal without independent Human provenance")
+      narrator.When("a caller supplies the proposal without independent Human provenance")
       val missing = _request_(input)
-      Then("it refuses and leaves the old question and actual native history intact")
+      narrator.Then("it refuses and leaves the old question and actual native history intact")
       missing.isSuccess shouldBe false
       _same_instance(e.current(session), before)
       e.question(session) shouldBe question.get
-      When("the specification host records the matching separately observed directive and public adoption runs")
+      narrator.When("the specification host records the matching separately observed directive and public adoption runs")
       e.prepareRemaining(description, input)
       val crossed = _request_(input.copy(rationale = "A different unobserved directive"))
       val result = e.invoke[V.GoalPhaseRemainingPlanAdoptionResult](GoalPhaseRemainingPlanAdoption.adoptionOperation,
         List(Property("input", input.toRecord(), None)))
       val after = e.current(session)
-      Then("only that directive succeeds once and the native transaction appends one adjacent history entry")
+      narrator.Then("only that directive succeeds once and the native transaction appends one adjacent history entry")
       crossed.isSuccess shouldBe false
       result.accepted shouldBe true
       result.outcome shouldBe "remaining-plan-adopted"
@@ -268,12 +268,12 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _request_(input).isSuccess shouldBe false
       _same_instance(e.current(session), after)
     }
-    Given("the producer runtime has closed and the same managed SQL Session reopens")
+    narrator.Given("the producer runtime has closed and the same managed SQL Session reopens")
     _episode(directory, selected = initial) { e =>
-      When("ordinary Advance reconstructs the retained adoption and issues only the unaccepted second Step")
+      narrator.When("ordinary Advance reconstructs the retained adoption and issues only the unaccepted second Step")
       val next = e.advance(session)
       val assigned = _business(e.work(session))
-      Then("the new work preserves the accepted prefix, its commit and repairs without answering the old Human")
+      narrator.Then("the new work preserves the accepted prefix, its commit and repairs without answering the old Human")
       next.sessionId shouldBe session
       assigned.kind shouldBe "ImplementStep"
       assigned.stepIdentity shouldBe Some("step-2")
@@ -286,7 +286,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       e.observe().head shouldBe target.get.completed.head.commit.identity
       e.current(session).history.take(original.get.history.size) shouldBe original.get.history
       e.retainedQuestion(session, target.get.questionIdentity) shouldBe question.get
-      When("the old issued Human answer is submitted after the separate adoption")
+      narrator.When("the old issued Human answer is submitted after the separate adoption")
       val old = question.get.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request
       val answer = ContinuationResult(question.get.handle, old.runId, old.continuationId, old.expectedRevision, old.context.snapshot,
         TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity, GoalPhaseOrderedHumanDecision.Answer(
@@ -294,7 +294,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         Vector.empty, ExecutionEvidence(Vector(ContextReference("spec-stale-answer", "1")), Some("participant")))
       val before = e.current(session)
       val stale = e.call(GoalPhaseOrderedHumanDecision.completionOperation.operation, take(NativeWorkflowOperationInputFixture.submissionC(answer)))
-      Then("the stale answer refuses without changing the resumed native history")
+      narrator.Then("the stale answer refuses without changing the resumed native history")
       stale.isSuccess shouldBe false
       _same_instance(e.current(session), before)
     }

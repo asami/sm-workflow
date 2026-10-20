@@ -1,13 +1,13 @@
 # Phase 12 Checklist: Common Evidence
 
-status=minimum-route-delivered-local-closure-pending
-Current status: in-progress
+status=closed
+Current status: closed
 Owner: sm-workflow
 Update rule: check P12-09 only when Phase review, integrated full validation and local release prerequisites have passed.
 phase=[Phase 12](phase-12.md)
 
-V1/V2 and the minimum installed interface are qualified. Phase-wide local closure
-remains pending; producer evidence does not complete Phase 6.4 items. See the
+V1/V2 and the minimum installed interface are qualified. The local Phase release
+records the completed review and validation; producer evidence does not complete Phase 6.4 items. See the
 [delivery boundary](../journal/2026/10/2026-10-20-phase-12-producer-delivery.md).
 
 ## V1: actual automatic storage route
@@ -37,7 +37,7 @@ remains pending; producer evidence does not complete Phase 6.4 items. See the
 
 - [x] P12-08: Affected skill/client projections consume short references and
       actual statuses with no Markdown dual write or duplicate AI recording call.
-- [ ] P12-09: Required focused/integrated validation, Phase review and ordinary
+- [x] P12-09: Required focused/integrated validation, Phase review and ordinary
       local closure record actual results while preserving prior evidence.
 - [x] P12-10: Accepted code/artifact, public contract, configured host/root setup,
       working example and supported limits are delivered to the 6.4 owner. Actual
