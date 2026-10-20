@@ -1,11 +1,16 @@
 # Phase 6.4 Checklist: Local Evidence Storage and AI Recording
 
-status=planned
+status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
 
 All items are open. This is newly planned work; no existing Phase evidence is
 transferred or claimed as acceptance. The main route is established before
 failure and operational branches. Check each outcome only from actual evidence.
+
+Execution began on 2026-10-20. The runtime issued `ImplementStep / P64-E1`;
+its [proposed minimum contract](../spec/evidence-storage.md) is ready for semantic
+handoff and the owning native checks/review.
+No checklist outcome has yet been accepted.
 
 ## E1: minimum contract
 

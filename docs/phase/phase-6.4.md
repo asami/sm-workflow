@@ -1,11 +1,30 @@
 # Phase 6.4: Local Evidence Storage and AI Recording
 
-status=planned
+status=in_progress
 planned_at=2026-10-13
 depends_on=phase-6.3.md
 checklist=[Phase 6.4 Checklist](phase-6.4-checklist.md)
 
 Owner: sm-workflow. Predecessor: [6.3](phase-6.3.md). Successor: [7](phase-7.md).
+
+## Current execution — 2026-10-20
+
+The installed command successfully started this Phase in the development host
+and issued `ImplementStep / P64-E1` through its first explicit Advance.
+The selected Plan is `phase-6.4-evidence-storage`, revision `1`, with the
+existing E1 -> E2 -> E3 -> E4 sequence and all P64-01..18 requirements retained.
+The original source base is `d35d6d237ea57d77181aeee10902eeae085dbd9d`.
+The Start-captured Usage Contract requires actual connected evidence at Phase
+review, including the one-file route, AI recording and fresh-process lookup.
+
+The [E1 proposed contract](../spec/evidence-storage.md) records inspected reuse,
+minimum public types, durable records and the managed text File route with its
+explicit host-prepared directory prerequisite. Later directory/compression
+producer delivery remains required. This semantic handoff does not accept E1
+or check any outcome; storage implementation, native validation, independent
+review and closure retain their own gates.
+See the [execution record](../journal/2026/10/2026-10-20-phase-6.4-evidence-storage.md)
+for the actual session and host-owned routing location.
 
 ## Goal
 
