@@ -34,7 +34,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
     new Operation(true, d, definition, plans, port),
     new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
-      GoalPhaseValidationRecovery.operations(port))))
+      GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
     * belong to the trusted host; stored Plan data cannot install them.

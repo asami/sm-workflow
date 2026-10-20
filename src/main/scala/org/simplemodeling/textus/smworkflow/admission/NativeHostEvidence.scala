@@ -37,6 +37,7 @@ private[smworkflow] object NativeHostEvidence {
     case RepositoryHuman extends Purpose(RepositorySyncHumanConflict.purpose)
     case GoalHuman extends Purpose(GoalPhaseOrderedHumanDecision.purpose)
     case ValidationRecovery extends Purpose(GoalPhaseValidationRecovery.purpose)
+    case RemainingPlanAdoption extends Purpose(GoalPhaseRemainingPlanAdoption.purpose)
   }
   final case class Declaration(storeName: String, collection: DataStore.CollectionId, issuer: String)
   final case class Evidence(schemaVersion: String, purpose: String, lookupIdentity: String,
@@ -145,8 +146,9 @@ private[smworkflow] object NativeHostEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
-    } else if (purpose == Purpose.ValidationRecovery) {
-      val answer = selected.hcursor.downField("validationRecovery").downField("answer")
+    } else if (purpose == Purpose.ValidationRecovery || purpose == Purpose.RemainingPlanAdoption) {
+      val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
+        else selected.hcursor.downField("remainingPlanAdoption").downField("directive")
       if (answer.get[String]("participant").contains(value.participant) &&
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
@@ -172,6 +174,7 @@ private[smworkflow] object NativeHostEvidence {
       case Purpose.SplitStart => NativeHostSplitStartScope.select(purpose, value)
       case Purpose.SplitAnswer => NativeHostSplitAnswerScope.select(purpose, value)
       case Purpose.ValidationRecovery => GoalPhaseValidationRecovery.selectBinding(value)
+      case Purpose.RemainingPlanAdoption => GoalPhaseRemainingPlanAdoption.selectBinding(value)
     }
     selected.fold(Consequence.stateConflict(_), Consequence.success)
   }

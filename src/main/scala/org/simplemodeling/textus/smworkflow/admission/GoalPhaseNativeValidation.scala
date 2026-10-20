@@ -152,6 +152,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case Some(value) => store.completedC(value)
       case None => _checks_c(store)
     }
+    evidence <- store.evidenceC(actual.payload)
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
       case Some("passed") => "Actual required native checks passed. Independent review work, acceptance and Step/Phase closure remain unfinished."
@@ -170,7 +171,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           ". No automatic replay. Describe validation recovery for an explicit independent Human decision about a NEW attempt."
       case _ => "A native check intent has no recorded result. Observe or request a genuine decision; checks are not automatically replayed."
     })
-  } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)))
+  } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload).copy(evidenceRecording = evidence)))
 
   private[admission] def recoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
@@ -268,6 +269,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
             payload <- attemptPayloadC(progress.saved.payload, check, attempt, actual)
             saved <- store.saveC(_attempt_key("result", index, attempt), prepared.record, payload)
             _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
+            _ <- store.evidenceC(saved.payload)
           } yield saved
       }}
     }}
@@ -320,7 +322,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       } yield saved else Consequence.success(current)
 
   private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,
-    d: F.Declaration, val core: ActionCall.Core, val candidate: GoalPhaseNativeCandidate.Saved,
+    val d: F.Declaration, val core: ActionCall.Core, val candidate: GoalPhaseNativeCandidate.Saved,
     val frontier: InstanceRecord,
     val controller: O.State, val requested: Vector[Check], val initial: Payload,
     val selectionRecord: Option[InstanceRecord], acknowledgement: String => Consequence[Unit],
@@ -333,6 +335,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val validationStage = if (whole) "PhaseValidation" else "Validation"
     val reviewStage = if (whole) "PhaseReview" else "Review"
+    private var _evidence = Option.empty[Vector[org.simplemodeling.textus.smworkflow.value.EvidenceRecordingState]]
+    def evidenceC(payload: Payload): Consequence[Vector[org.simplemodeling.textus.smworkflow.value.EvidenceRecordingState]] =
+      _evidence.fold(GoalPhaseNativeEvidence.recordC(d, core, session.current.identity.value, payload).map { value =>
+        if (value.exists(_.evidence.nonEmpty)) _evidence = Some(value)
+        value
+      })(Consequence.success)
     private val _prefix = if (requested.exists(_.metadata.nonEmpty)) requested.takeWhile(_.metadata.isEmpty) else Vector.empty
     def _selection_pending: Boolean = selectionRecord.isEmpty && requested.exists(_.metadata.nonEmpty)
     private def _prefix_saved_c(complete: Boolean): Consequence[Saved] =

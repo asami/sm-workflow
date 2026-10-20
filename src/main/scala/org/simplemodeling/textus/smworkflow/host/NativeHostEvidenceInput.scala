@@ -22,10 +22,10 @@ private[smworkflow] object NativeHostEvidenceInput {
     for {
       options <- NativeHostPreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "validation-recovery")(options("kind")) &&
+          Set("review", "human", "validation-recovery", "remaining-plan-adoption")(options("kind")) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (options("kind") != "validation-recovery" || options("family") == "GoalPhase") &&
-          (if (options("kind") == "human" || options("kind") == "validation-recovery") options.contains("participant")
+          (!Set("validation-recovery", "remaining-plan-adoption")(options("kind")) || options("family") == "GoalPhase") &&
+          (if (Set("human", "validation-recovery", "remaining-plan-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativeHostPreparationInput.instantC(options("occurred-at"))
@@ -67,6 +67,12 @@ private[smworkflow] object NativeHostEvidenceInput {
       prepared <- NativeHostHumanPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "GoalPhase" if options("kind") == "remaining-plan-adoption" => for {
+        description <- summon[ValueReader[V.GoalPhaseRemainingPlanDescriptionResult]].readC(request)
+        input <- summon[ValueReader[V.GoalPhaseRemainingPlanAdoptionInput]].readC(result)
+        prepared <- NativeHostRemainingPlanPreparation.prepareC(description, input, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "validation-recovery" => for {
         description <- summon[ValueReader[V.GoalPhaseValidationRecoveryDescriptionResult]].readC(request)
         answer <- summon[ValueReader[V.GoalPhaseValidationRecoveryAnswer]].readC(result)

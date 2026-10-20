@@ -168,6 +168,12 @@ private[admission] object NativeWorkflowCliFixture {
     def readJournalEntry(input: V.JournalReadInput): Result =
       _run(_launcher ++ Vector("command", s"$_component.JournalService.readJournalEntry", "--input",
         _take(input.toRecord().toJsonStringC, "Public Journal read input")) ++ _output)
+    def readEvidence(input: V.EvidenceReadInput): Result =
+      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.readEvidence", "--input",
+        _take(input.toRecord().toJsonStringC, "Public Evidence read input")) ++ _output)
+    def recordEvidenceJournal(input: V.EvidenceReadInput): Result =
+      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.recordEvidenceJournal", "--input",
+        _take(input.toRecord().toJsonStringC, "Public Evidence Journal input")) ++ _output)
     def findJournalEntries(input: V.JournalFindInput): Result =
       _run(_launcher ++ Vector("command", s"$_component.JournalService.findJournalEntries", "--input",
         _take(input.toRecord().toJsonStringC, "Public Journal find input")) ++ _output)

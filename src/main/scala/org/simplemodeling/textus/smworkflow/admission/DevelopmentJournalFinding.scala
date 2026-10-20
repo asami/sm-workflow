@@ -198,7 +198,7 @@ private[smworkflow] object DevelopmentJournalFinding {
         V.GoalPhaseReviewObservation(entry.observation.identity, entry.observation.category, entry.observation.summary, entry.observation.rationale),
         context.sourceRevision, context.planIdentity, context.planRevision, context.eligibilityStage, _snapshot_(context.originalBase),
         context.completed.map(c => V.GoalPhaseClosedStep(c.step, V.GoalPhaseNativeCommit(c.commit.identity, c.commit.parent, c.commit.tree), c.review)),
-        context.candidate.map(_snapshot_), context.checksReceipt, context.reviewEvidence)))
+        context.candidate.map(_snapshot_), context.checksReceipt, context.reviewEvidence)), None)
   }
   def view(entry: FindingEntry): String = {
     val context = entry.context

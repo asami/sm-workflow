@@ -26,7 +26,7 @@ private[smworkflow] object DevelopmentJournalFind {
       input != null && _exact(input.repositoryIdentity) &&
         Vector(input.phaseIdentity, input.sessionIdentity, input.kind, input.recordedFrom, input.recordedBefore)
           .forall(o => o != null && o.forall(_exact)) &&
-        input.kind.forall(k => k == DevelopmentJournal.kind || k == DevelopmentJournalFinding.kind) &&
+        input.kind.forall(k => k == DevelopmentJournal.kind || k == DevelopmentJournalFinding.kind || k == DevelopmentJournalEvidence.kind) &&
         input.sourceReference != null && input.sourceReference.forall(s => s != null && _exact(s.identity) && _exact(s.revision)) &&
         input.limit != null && input.limit.forall(n => n >= 1 && n <= 20) &&
         input.recordedFrom.forall(_second) && input.recordedBefore.forall(_second) &&
@@ -81,6 +81,8 @@ private[smworkflow] object DevelopmentJournalFind {
         DevelopmentJournal.storedC(row, id).map(DevelopmentJournal.publicEntry)
       case Some(id) if DevelopmentJournalFinding.sourceC(id).isSuccess =>
         DevelopmentJournalFinding.storedC(row, id).map(DevelopmentJournalFinding.publicEntry)
+      case Some(id) if DevelopmentJournalEvidence.validIdentity(id) =>
+        DevelopmentJournalEvidence.storedC(row, id).map(DevelopmentJournalEvidence.publicEntry)
       case _ => Consequence.stateConflict("Journal physical identity is invalid")
     }
   private def _summary(entry: V.JournalEntry): V.JournalEntrySummary = {

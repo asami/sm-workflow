@@ -63,6 +63,10 @@ private[smworkflow] final class ThreeWorkflowHostEvidencePorts(reader: NativeHos
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.ValidationRecovery, key(reference.identity, reference.revision), binding)
   }
+  val remainingPlanAdoption: GoalPhaseRemainingPlanAdoption.EvidencePort = new GoalPhaseRemainingPlanAdoption.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.RemainingPlanAdoption, key(reference.identity, reference.revision), binding)
+  }
   val repositoryReview: RepositorySyncNativeMergeReview.EvidencePort = new RepositorySyncNativeMergeReview.EvidencePort {
     def admitC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
       submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]) = for {

@@ -55,7 +55,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
           import GoalPhaseNativeMetadata.given
           GoalPhaseNativeMetadata.record(operation.asJson)
         })), (payload.receipts ++ stopped).map(_goal_check), payload.outcome,
-      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)))
+      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty)
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {

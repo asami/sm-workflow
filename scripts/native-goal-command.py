@@ -96,6 +96,8 @@ DISPLAY_KEYS = frozenset({
     "selectedChecks", "selected_checks", "metadata", "scopeIdentity", "scope_identity", "sbt", "testSelection", "test_selection",
     "completedSuites", "completed_suites", "testsRun", "tests_run",
     "stdoutReference", "stdout_reference", "stderrReference", "stderr_reference", "outputReference", "output_reference",
+    "evidenceRecording", "evidence_recording", "evidence", "observation", "journal", "entry",
+    "sourceReference", "source_reference", "observedAt", "observed_at",
 })
 
 
@@ -542,7 +544,7 @@ def display_value(value, depth=0):
         return value if len(value) <= 1024 else {"preview": value[:1024], "truncated": True}
     if value is None or isinstance(value, (bool, int, float)):
         return value
-    if depth >= 4:
+    if depth >= 6:
         return {"displayOmitted": "nested metadata; see raw response"}
     if isinstance(value, list):
         selected = [display_value(item, depth + 1) for item in value[:16]]

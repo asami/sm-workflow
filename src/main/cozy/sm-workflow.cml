@@ -242,6 +242,63 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseRemainingPlanDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| proposal | record | 1 |
+
+## GoalPhaseRemainingPlanDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseRemainingPlanAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| proposal | record | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseRemainingPlanAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseOrderedStep
 
 ### ATTRIBUTE
@@ -522,6 +579,112 @@ OperationResult
 | checks | GoalPhaseNativeCheckReceipt | * |
 | outcome | string | ? |
 | metadata | org.goldenport.record.Record | * |
+| evidenceRecording | EvidenceRecordingState | * |
+
+## EvidenceReference
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | 1 |
+
+## EvidenceMetadata
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| evidence | EvidenceReference | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| outputIdentity | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+| stepIdentity | string | ? |
+| sessionIdentity | string | 1 |
+| actionOutcome | string | 1 |
+| mediaType | string | 1 |
+| encoding | string | 1 |
+| hostIdentity | string | 1 |
+| workspaceIdentity | string | 1 |
+| relativePath | string | 1 |
+| allocatedAt | string | 1 |
+| retentionBasis | string | 1 |
+
+## EvidenceStorageObservation
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| evidence | EvidenceReference | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| status | string | 1 |
+| observedAt | string | 1 |
+| message | string | 1 |
+
+## EvidenceRecordingState
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| evidence | EvidenceReference | ? |
+| observation | EvidenceStorageObservation | ? |
+| journal | JournalRecordingState | ? |
+
+## EvidenceReadInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | ? |
+
+## EvidenceJournalInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | ? |
+
+## EvidenceReadResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| metadata | EvidenceMetadata | ? |
+| observation | EvidenceStorageObservation | ? |
+| text | string | ? |
+
+## EvidenceRecordingResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| state | EvidenceRecordingState | 1 |
 
 ## GoalPhaseNativeReviewContext
 
@@ -908,6 +1071,7 @@ OperationResult
 | summary | string | 1 |
 | recording | JournalExecutionObservation | ? |
 | finding | JournalFinding | ? |
+| evidenceStorage | EvidenceStorageObservation | ? |
 
 ## JournalReadInput
 
@@ -1536,6 +1700,14 @@ operation = GoalPhaseService.advanceGoalPhase
 #### describeGoalPhaseValidationRecovery
 
 operation = GoalPhaseService.describeGoalPhaseValidationRecovery
+
+#### describeGoalPhaseRemainingPlan
+
+operation = GoalPhaseService.describeGoalPhaseRemainingPlan
+
+#### adoptGoalPhaseRemainingPlan
+
+operation = GoalPhaseService.adoptGoalPhaseRemainingPlan
 
 #### recoverGoalPhaseValidation
 
@@ -3815,7 +3987,7 @@ on = native-convergence-observed
 
 ### DESCRIPTION
 
-Own the selected Phase's entry, assigned semantic/Human completion, mechanical progression and explicit validation recovery description/direction. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult, submitGoalPhaseOrderedDecision, describeGoalPhaseValidationRecovery and recoverGoalPhaseValidation. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
+Own the selected Phase's entry, assigned semantic/Human completion, mechanical progression, explicit validation recovery and independently directed remaining-Plan adoption. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult, submitGoalPhaseOrderedDecision, describeGoalPhaseValidationRecovery, recoverGoalPhaseValidation, describeGoalPhaseRemainingPlan and adoptGoalPhaseRemainingPlan. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
 
 ### OPERATION
 
@@ -3906,6 +4078,62 @@ GoalPhaseValidationRecoveryInput
 ###### TYPE
 
 GoalPhaseValidationRecoveryResult
+
+#### describeGoalPhaseRemainingPlan
+
+##### DESCRIPTION
+
+Read the actual unanswered implementation or repair Decision and the supplied raw complete Plan proposal. Capture the effective future contract and actual selected documents into the exact remaining-Plan adoption target. Return the retained complete Plan, accepted Step prefix, original base, repair counters and source references as business data. This operation does not answer the old question, issue work, execute checks or grant adoption. Only a separate independently admitted Human directive may select that compatible remaining Plan. Unknown effects, exhausted repair windows and closed or incompatible frontiers refuse.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseRemainingPlanDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseRemainingPlanDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseRemainingPlanDescriptionResult
+
+#### adoptGoalPhaseRemainingPlan
+
+##### DESCRIPTION
+
+Adopt a raw complete remaining Plan for the exact described same-Session target after independent admission of its actual Human directive, rationale and reference. Preserve accepted Steps, commits, reviews, original base and all repair counts. Only unaccepted Step purpose and declared checks plus future acceptance may change; Step identities, scope, membership and closure policy remain. Load selected documents through File UoW. Atomically retain a separate superseded-by-adoption disposition for the original unanswered question without manufacturing an answer. No Advance, Submit, check, review or commit runs here. The next ordinary advanceGoalPhase continues the same remaining Step; stale, duplicate or crossed requests refuse.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseRemainingPlanAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseRemainingPlanAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseRemainingPlanAdoptionResult
 
 #### submitGoalPhaseWorkResult
 
@@ -6202,11 +6430,75 @@ Opaque canonical session JSON and optional nextSelection JSON strings retain the
 
 # SERVICE
 
+## EvidenceService
+
+### DESCRIPTION
+
+Read the selected common UTF-8 Evidence and its actual current availability, or continue only the Journal recording of a retained storage observation. Configuration owns the managed collection and File workspace. No test, Workflow transition or archive write is performed by these read/record commands.
+
+### OPERATION
+
+#### readEvidence
+
+##### DESCRIPTION
+
+Read a common Evidence by its public identity and optional revision. Return retained source/storage metadata and the currently available UTF-8 payload through the configured File workspace. Missing, unavailable and indeterminate payloads remain explicit; reading never repeats the original Test or repairs storage.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+EvidenceReadInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | EvidenceReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+EvidenceReadResult
+
+#### recordEvidenceJournal
+
+##### DESCRIPTION
+
+Continue only the common Journal append for an Evidence identity with a retained actual storage observation. Return the existing Entry when already recorded, and keep Journal failure separate from Action and File outcomes. No archive write, Test, Workflow Submit or Advance is performed.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+EvidenceJournalInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | EvidenceJournalInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+EvidenceRecordingResult
+
 ## JournalService
 
 ### DESCRIPTION
 
-Read an immutable development Journal entry or find finite summaries from the exact host-declared managed collection. These commands record no Journal and accept no storage selectors or arbitrary Entry data. Finding and ExecutionObservation revision 1 are supported, with exactly one content variant selected by kind and canonical identity prefix.
+Read an immutable development Journal entry or find finite summaries from the exact host-declared managed collection. These commands record no Journal and accept no storage selectors or arbitrary Entry data. Finding, ExecutionObservation and EvidenceStorageObservation revision 1 are supported, with exactly one content variant selected by kind and canonical identity prefix.
 
 ### OPERATION
 
@@ -6420,7 +6712,7 @@ WorkflowPreparedImport
 
 ##### DESCRIPTION
 
-Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. It encodes HumanNewAttempt direction only; the trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no recovery or execution.
+Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. It encodes HumanNewAttempt direction only. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 
 ##### TYPE
 

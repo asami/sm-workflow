@@ -46,7 +46,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     projectAcceptance: Option[GoalPhaseAcceptanceBoundary.Project] = None,
     findingRecordingPolicy: Option[GoalPhaseFindingRecording.Policy] = None,
     validationRecovery: Option[GoalPhaseValidationRecovery.Installation] = None,
-    journalPolicy: Option[DevelopmentJournal.Policy] = None)
+    journalPolicy: Option[DevelopmentJournal.Policy] = None,
+    evidencePolicy: Option[CommonEvidence.Policy] = None,
+    remainingPlanAdoption: Option[GoalPhaseRemainingPlanAdoption.Installation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -145,12 +147,15 @@ private[smworkflow] object GoalPhaseNativeRun {
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
-        d.validationRecovery == null || d.validationRecovery.exists(_ == null) ||
+        d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||
+        d.journalPolicy.exists(_ == null) || d.evidencePolicy == null ||
+        d.remainingPlanAdoption == null || d.remainingPlanAdoption.exists(_ == null) ||
         d.findingRecordingPolicy.exists(p => p == null || !RepositorySyncNativeConflictInput.relative(p.hygiene) ||
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
-    else DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations).flatMap(_ =>
+    else CommonEvidence.validatePolicyC(d.evidencePolicy, Vector(d.instances, d.continuations) ++ d.journalPolicy.map(_.collection)).flatMap(_ =>
+      DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)).flatMap(_ =>
       GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance)).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
       d.configuration.validateC).flatMap(_ => d.validationPolicy.fold(Consequence.unit)(p =>
@@ -166,13 +171,15 @@ private[smworkflow] object GoalPhaseNativeRun {
           if (r == null) invalid("repository closure host is missing") else r.validateC(d))).flatMap(_ =>
             d.humanDecision.fold(Consequence.unit)(h =>
               if (h == null) invalid("ordered Human decision installation is missing") else h.validateC)).flatMap(_ =>
-                d.validationRecovery.fold(Consequence.unit)(_.validateC))
+                d.validationRecovery.fold(Consequence.unit)(_.validateC)).flatMap(_ =>
+                  d.remainingPlanAdoption.fold(Consequence.unit)(_.validateC))
   def bindC(d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
     validateC(d).flatMap { _ =>
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
           !core.action.request.service.contains("GoalPhaseService") ||
           !Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
             GoalPhaseValidationRecovery.describeOperation, GoalPhaseValidationRecovery.recoveryOperation,
+            GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation) ||
           !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))

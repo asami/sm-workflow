@@ -33,11 +33,13 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
     "JournalService.readJournalEntry",
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
     "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
+    "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
     "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
@@ -83,5 +85,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       NativeWorkflowSessionInput.repository(NativeWorkflowResultInput.repository(sync, creation, repository.declaration, repositoryDefinition),
         creation, repository.declaration, repositoryDefinition),
       NativeHostPreparationServiceAssembly.bind,
-      DevelopmentJournalService.bind(host.goal.journalPolicy))
+      DevelopmentJournalService.bind(host.goal.journalPolicy),
+      CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy))
 }

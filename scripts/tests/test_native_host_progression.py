@@ -678,6 +678,21 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertNotIn("argv", actual)
         self.assertEqual(len(native["message"]), 3000)
 
+    def test_projection_keeps_separate_evidence_and_journal_outcomes_with_public_references(self):
+        # Given real-shaped producer outcomes and raw material that must remain outside display.
+        state = {"status": "stored", "evidence": {"identity": "evidence:source", "revision": "1"},
+                 "observation": {"status": "stored", "observedAt": "2026-10-20T00:00:00Z"},
+                 "journal": {"status": "unavailable", "entry": None}, "text": "private captured stdout"}
+        # When a final Advance response is projected for the skill.
+        actual = CALLER.observation_projection({"validation": {"outcome": "passed", "evidenceRecording": [state]}})
+        displayed = actual["validation"]["evidenceRecording"][0]
+        # Then Test, storage and Journal facts remain distinct and the usable ID survives nesting.
+        self.assertEqual(actual["validation"]["outcome"], "passed")
+        self.assertEqual(displayed["status"], "stored")
+        self.assertEqual(displayed["evidence"], state["evidence"])
+        self.assertEqual(displayed["journal"], {"status": "unavailable", "entry": None})
+        self.assertNotIn("text", displayed)
+
     def test_all_advance_frontiers_stop_after_two_calls(self):
         # Given accepted Submit followed by each native frontier kind,
         for kind in ("Request", "Human", "Wait", "Terminal"):

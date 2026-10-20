@@ -10,7 +10,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 20, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -155,6 +155,35 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           _acceptance_conditions(proposed, Set("all", "step")) ==
             _acceptance_conditions(plan, Set("all", "step")))) Consequence.unit
         else invalid("Plan adoption cannot redefine accepted Step conditions or Usage Contract")
+    } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, None, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+
+    /** Separate explicit remaining-work adoption. Historical accepted Step
+      * contracts stay in their original retained native requests and results;
+      * this Plan governs only newly issued suffix work and future acceptance.
+      * The owning native operation must supersede its actual pending Decision
+      * atomically after independent admission of the new Human directive.
+      */
+    def adoptRemainingRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (text(evidence) && !evidence.exists(c => Character.isISOControl(c))) Consequence.unit
+        else invalid("Remaining Plan adoption requires its actual independent Human directive")
+      _ <- if (stage == Stage.Decision && !documentDecision && pendingRepair.isEmpty &&
+          closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && cursor < plan.steps.size &&
+          cursor == completed.size && generation < Long.MaxValue &&
+          decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
+        else invalid("Remaining Plan adoption requires an unanswered implementation or repair Decision")
+      _ <- if (proposed.revision != plan.revision && proposed.identity == plan.identity &&
+          proposed.phase == plan.phase && proposed.repository == plan.repository &&
+          proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseReviewClassification == plan.phaseReviewClassification &&
+          proposed.steps.size == plan.steps.size && proposed.steps.take(cursor) == plan.steps.take(cursor) &&
+          proposed.steps.drop(cursor).zip(plan.steps.drop(cursor)).forall { (next, prior) =>
+            next.copy(purpose = prior.purpose, checks = prior.checks) == prior
+          }) Consequence.unit
+        else invalid("Remaining Plan adoption must preserve the accepted prefix, every Step scope and closure policy")
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
