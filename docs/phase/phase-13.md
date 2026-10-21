@@ -33,3 +33,7 @@ The recursive graph is the Phase 7 **Development Workspace** dependency-edge mod
 ## Optional operation candidates — reference only (2026-10-21)
 
 See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
+
+## Candidate adoption clarification (2026-10-21)
+
+Phase 7 may naturally deliver Dependency Status, Artifact Freshness and basic Dependency Impact using its existing Operations; Phase 13 consumes those capabilities when available, without making speculative new Operations a prerequisite. Workspace Catch-up itself is Phase 13's required core function. See [candidate journal](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).
