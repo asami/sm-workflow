@@ -527,3 +527,7 @@ can yield/resume; dirty state, ambiguity, and conflicts must never be silently d
 Shared dependency discovery, visited-set/cycle handling, and Git operation boundaries
 belong to runtime services rather than duplicated skills. The existing repository-sync
 contract remains authoritative for its own remote-convergence behavior.
+
+### Clarification: development workspace dependency edges (2026-10-21)
+
+The three local dependency properties described above belong to each consumer-to-provider dependency **edge in the Phase 7 Development Workspace**, not to the provider repository as global attributes. Existing Project/Repository/Worktree graph, Consumer Binding and Artifact Selection form the single development-environment definition. No separate Workspace Profile model is proposed. `localJar` references provider-owned publications and is selected by the consumer; `localRepository` supplies the explicit recursive catch-up traversal. This clarification supersedes any ambiguous wording above suggesting intrinsic dependency-repository properties.
