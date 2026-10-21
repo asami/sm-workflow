@@ -31,3 +31,7 @@ Phase 7 defines the Development Workspace as the single development-environment 
 ## Candidate next decision
 
 During Phase 7 planning, compare Dependency Status, Artifact Freshness and basic Dependency Impact against existing Overlay status/verify and dependency-aware validation; only add uncovered requirements. During Phase 13 planning, treat Workspace Catch-up as the existing recursive workflow's root-level invocation, not another engine. Defer the rest until evidence of practical need.
+
+## Follow-up decision: ordinary Phase 7 implementation (2026-10-21)
+
+The candidate designation does **not** prevent implementation during Phase 7. Dependency Status, Artifact Freshness, and basic Dependency Impact may be implemented as part of normal Phase 7 delivery whenever they arise naturally from existing workspace graph, Overlay status/verify, provenance and dependency-aware validation. Prefer extending existing typed operations over adding new public operations. Such bounded inclusion needs no separate Phase or approval; do not add an unconditional acceptance gate or new state machinery. Material scope expansion still requires an explicit decision. Workspace Catch-up remains Phase 13's core responsibility.
