@@ -25,3 +25,7 @@ Provide a separate `sm-repository-catchup` workflow to bring a selected local de
 ## Acceptance
 
 A selected root and its registered development dependencies are brought to the chosen target without losing uncommitted work or rewriting shared history unexpectedly. Human merge decisions can suspend and resume through the common Continuation protocol. Partial/blocked results are truthful, and artifact publication is unchanged unless separately requested. No implementation or tests are claimed by this plan.
+
+## Workspace model clarification (2026-10-21)
+
+The recursive graph is the Phase 7 **Development Workspace** dependency-edge model. `localRepository`, `localJar`, and `localProject` describe each consumer-to-provider relationship, not global provider properties. Only registered `localRepository` edges are traversed for catch-up. Do not introduce a separate Workspace Profile configuration or infer Git dependencies from `localJar`/`localProject`. Artifact selection remains explicit and provider publication remains independent.
