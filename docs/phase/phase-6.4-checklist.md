@@ -3,8 +3,8 @@
 status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
 
-E1 and E2 are accepted from this Phase's own actual evidence. E3
-and E4 remain open; no evidence from another Phase supplies their acceptance.
+E1, E2 and E3 are accepted from this Phase's own actual evidence. E4
+remains open; no evidence from another Phase supplies its acceptance.
 The main route is established before failure and operational branches. Check
 each outcome only from actual evidence.
 
@@ -29,7 +29,27 @@ Evidence payload; exact UTF-8 equality was verified against the retained Test
 stdout. Independent review accepted E2, and ordinary native closure committed
 `f4f9d3c2b13fd3a14ff6c8ea93894e98478ff3b0`. E3 is now issued in the same
 Session, selected Plan revision 2, source revision 48. No Start or replay of an
-accepted result occurred. E3 flags remain pending its own validation/review.
+accepted result occurred. E3 flags were pending its own validation/review at
+that assignment point; the closure below supersedes that pending status.
+
+## E3 closure and E4 assignment — 2026-10-21
+
+The existing Session accepted the actual Human `AuthorizeNewAttempt` for the
+retained source-history question. Normal continuation preserved the old unknown
+effect, accepted implementation, Plan revision 2, original base and earlier
+results. The runtime launched, awaited and collected the selected TestOnly
+`CommonEvidenceSpec`: one suite, thirteen tests passed. Its log was stored by
+common Evidence and its observation recorded by common Journal. Independent
+`sm_workflow_review` accepted the exact candidate; normal Step closure committed
+`da280ab77a771f728b4e7b0a043c38a8a4dc1962` and issued `ImplementStep / P64-E4`
+at source revision 76. No Start, accepted-result replay or E1 Compile rerun
+occurred; supplied repair progress remains automatic 0, ordinary 0, limit 10.
+
+P64-09..12 acceptance includes the explicitly bounded specification seams in
+the [E3 coverage matrix](../spec/evidence-storage.md#e3-bounded-consumer-failure-coverage--2026-10-21).
+It does not claim a real SQL outage, network packet loss or kernel crash.
+P64-13..18 require their own common-service extensions, connected evidence and
+Phase closure; the successful recovery does not satisfy those items.
 
 ## Phase 12 allocation — 2026-10-20
 
@@ -65,13 +85,13 @@ are reusable at their actual scope, not a claim of consumer acceptance.
 
 ## E3: failure and observation
 
-- [ ] P64-09: Archive failure or uncertain completion preserves the original
+- [x] P64-09: Archive failure or uncertain completion preserves the original
       evidence and reports storage failure independently of test outcome.
-- [ ] P64-10: After a lost archive response, lookup of the existing allocation
+- [x] P64-10: After a lost archive response, lookup of the existing allocation
       reports actual state without a second archive or blind destructive retry.
-- [ ] P64-11: Live/unreleased inputs, unavailable sources and conflicting
+- [x] P64-11: Live/unreleased inputs, unavailable sources and conflicting
       destinations produce explicit outcomes without relocation or overwrite.
-- [ ] P64-12: Journal-write failure remains distinct from successful storage;
+- [x] P64-12: Journal-write failure remains distinct from successful storage;
       Journal-only continuation uses the stored observation without rerunning
       the Action, reallocating Evidence, moving again or AI transcription.
 

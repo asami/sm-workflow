@@ -238,7 +238,8 @@ E2 adopts those actual contracts and checks the consumer connection. Inspect the
 actual installed versions at their usage boundary; this source inventory is
 not an installed-capability or producer-delivery certificate. Retain P64-09..18
 for their E3/E4 owners, including partial batches, conflicts, failure observation,
-retention, independent Phase review and final serialized full validation.
+retention, independent Phase review and final full validation using sbt-native
+locks.
 
 The inspected producer lacks two later prerequisites: managed preparation of
 ordinary nested archive directories beneath an admitted root, and bounded
@@ -247,8 +248,8 @@ filename without overwrite. Before adopting those branches, request their
 separately owned CNCF contract/delivery with current-UoW admission, real conflicts,
 finite acquisition/representation limits and truthful failure/uncertainty.
 The producer chooses its concrete API. sm-workflow retains naming, identity,
-durable observations and retention meaning. Do not edit CNCF/Cozy, create an
-application filesystem interpreter, use shell compression or silently weaken
+durable observations and retention meaning. Do not make unapproved CNCF/Cozy
+changes, create an application filesystem interpreter, use shell compression or silently weaken
 P64-14 to proceed. The complete Phase stays open until its actual requirements
 and upstream delivery are satisfied.
 
@@ -309,3 +310,31 @@ not create another Evidence writer, storage interpreter, public upload API or
 runtime repair. Public invalid/unsupported reads preserve their actual outcomes.
 Test success, historical storage status, current payload availability, Journal
 outcome and Step acceptance remain separate. P64-13..18 are still E4 work.
+
+## E4 consumer verification boundary — 2026-10-21
+
+Status: planned; producer implementation, delivery and consumer execution remain
+pending. The existing Session has accepted the actual Human approval of
+`P64-E4-managed-file-compression@1` for twelve literal CNCF files. The selected
+proposal and independent Human reference are retained in its ordinary E4
+`decisionContext`. This is one bounded dependency scope, not execution evidence
+or E4 acceptance. CNCF owns the existing File DSL/UoW/adapter extension;
+sm-workflow development owns the common Evidence producer and normal local
+publication. This consumer owns the following observations and Phase acceptance.
+The producer's delivered public DTOs determine concrete calls; this table adds
+no public API or separate implementation.
+
+| P64 | Consumer observation required | Boundary to preserve |
+| --- | --- | --- |
+| 13 | At least two released materials retain exact source/output-to-Evidence and destination/representation/status mapping. A bounded isolated mixed-success case reports partial and preserves both individual outcomes. Later lookup reuses the saved association. | Keep partial distinct from all-stored; never rerun a completed source Action or an uncertain archive to manufacture a passing batch. Controlled failure fixtures remain identified. |
+| 14 | The admitted allocation retains the final `.gz` name before its write. A fresh installed process reads the returned Evidence ID and obtains exactly the released UTF-8 material after bounded decompression. | No path guessing, absolute-path response requirement, shell compressor or application filesystem reader; limits apply during acquisition and expansion. Existing uncompressed Evidence stays readable. |
+| 15 | An actually active producing workflow has no expiry. A real supported completion observation supplies its retention basis; controlled-time qualification proves completion plus thirty days, hold reason/review date and bounded due queries. | Do not substitute allocation, storage, test completion or Step closure for workflow/Phase completion. Controlled clocks establish their declared test scope and never alter production timestamps. A hold changes management state without deleting payloads. |
+| 16 | Public lookup reports retention state and current payload availability separately, including expired and stored-but-missing material in isolated qualification. | An old storage success, retained Journal Entry or accepted review remains historical; current absence is neither a new validation result nor revocation of past acceptance. No production Evidence is removed to create this case. |
+| 17 | The existing Session runs its declared `evidence-operational-route`; inspect actual typed results and automatic Evidence/Journal outcomes, then perform the required fresh-process public reads. After all Steps, execute the selected Phase full validation and genuine independent Phase review. | Reuse applicable producer qualification at its stated scope. Producer tests, local source edits, a raw zero exit or an unverified TestOnly selection do not supply consumer/Phase acceptance. |
+| 18 | Reconcile the Phase checklist, supported automatic-consumption instructions and successor handoff against actual delivered capabilities and accepted results; complete ordinary local release closure. | Retain E1/E2/E3, original base, unknown earlier effects and repair history. No new Start, accepted-result replay, remote push or evidence payload in Git. |
+
+Use the same common Evidence and Journal collections and their public IDs.
+Keep raw qualification records and host configuration outside the selected Git
+delta. Delivery identifies exact versions, public fields, configuration and
+limits before consumer calls are prepared. No automatic deletion or scheduler
+is part of this verification boundary.

@@ -15,12 +15,27 @@ The old unanswered dependency question is retained as superseded-by-adoption.
 E2 completed the real automatic Test-log Evidence/Journal route, fresh-process
 public retrieval and independent review. Native local Step closure committed
 `f4f9d3c2b13fd3a14ff6c8ea93894e98478ff3b0` and issued `ImplementStep / P64-E3`
-at evidence revision 48. E1, E2, original base and repair history remain.
+at evidence revision 48.
 The E3 selected `evidence-failure-route` check exercises `CommonEvidenceSpec`:
 actual typed File conflicts/denials and payload preservation are combined with
 explicit specification-owned metadata failure injection. Public Journal-only
-continuation is checked against E2's real retained Evidence. E3 validation,
-independent review and acceptance remain pending at implementation preparation.
+continuation is checked against E2's real retained Evidence. After the actual
+Human authorized one new source-history attempt, ordinary continuation completed
+the selected thirteen-test suite, automatic Evidence/Journal capture, genuine
+independent review and local Step commit
+`da280ab77a771f728b4e7b0a043c38a8a4dc1962`. The same Session now issues
+`ImplementStep / P64-E4` at evidence revision 76. E1/E2/E3, original base,
+unknown earlier effects and repair history remain; supplied repair progress is
+automatic 0, ordinary 0, limit 10. No Start or accepted-result replay occurred.
+The [checklist](phase-6.4-checklist.md#e3-closure-and-e4-assignment--2026-10-21)
+records the accepted E3 scope and its explicit failure-injection limits.
+
+E4 owns the remaining batch, optional compression, completion-based retention,
+hold/due and expired/missing behavior, then connected Phase acceptance and
+ordinary local closure. Current common Evidence and CNCF File capabilities
+provide the text route; additional producer capabilities and shared-code
+ownership must be agreed before extending that route. No duplicate writer or
+application filesystem interpreter is permitted. E4 remains open.
 Historical statements below about Plan revision 1 describe the original Start.
 
 E1's contract documentation is now accepted through actual selected Compile,
@@ -32,8 +47,9 @@ the actual resolved absolute location. The exact upstream scope proposal is
 recorded in the [contract](../spec/evidence-storage.md#e2-discovered-public-location-prerequisite).
 The new common-Evidence allocation below supersedes that design prerequisite,
 without submitting an answer to its retained native question.
-E2 through E4 and all connected Phase acceptance remain open; no storage success
-is claimed from this design prerequisite.
+At that earlier design-prerequisite point, E2 through E4 and connected Phase
+acceptance remained open; no storage success was claimed from the prerequisite.
+The current E2/E3 closure above supersedes only that historical pending status.
 
 The initial E1 delivery record follows; its pending statements describe that
 earlier handoff rather than the current accepted E1 frontier.

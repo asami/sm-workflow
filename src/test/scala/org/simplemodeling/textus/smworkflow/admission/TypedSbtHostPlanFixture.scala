@@ -10,14 +10,14 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  *  version Oct. 18, 2026
-  * @version Oct. 19, 2026
+ * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
   def normalExecutable: Path = {
-    val path = Path.of(sys.props.getOrElse("smworkflow.spec.sbt",
-      throw new IllegalArgumentException("Missing normal smworkflow.spec.sbt executable")))
+    val path = Path.of(sys.props.get("smworkflow.spec.sbt")
+      .orElse(sys.env.get("SM_WORKFLOW_SPEC_SBT"))
+      .getOrElse(throw new IllegalArgumentException("Missing normal smworkflow.spec.sbt or SM_WORKFLOW_SPEC_SBT executable")))
     require(path.isAbsolute, "The normal SBT executable must be absolute")
     val actual = path.toRealPath()
     require(Files.isRegularFile(actual) && Files.isExecutable(actual),

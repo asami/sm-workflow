@@ -31,8 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
-  *  version Oct. 19, 2026
-  * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWhenThen
@@ -150,11 +149,12 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       "textus.subsystem.process-execution.plan" -> process.noSpaces)
   }
 
-  private[admission] def produceEvidenceForCli(): (Path, O.Plan, V.EvidenceRecordingState) = {
+  private[admission] def produceEvidenceForCli(startSuffix: String = ""): (Path, O.Plan, V.EvidenceRecordingState) = {
+    require(startSuffix.matches("[A-Za-z0-9-]*"), "Use only a literal specification-owned Start suffix")
     val directory = _root()
     var saved = Option.empty[V.EvidenceRecordingState]
     _episode(directory, initialize = true, evidence = true) { e =>
-      val id = e.start()
+      val id = e.start(Option.when(startSuffix.nonEmpty)("specification-recording" + startSuffix))
       e.advance(id).work.get.kind shouldBe "ImplementStep"
       Files.writeString(directory.resolve("repository/step-1.txt"), "actual test input\n")
       e.submit(e.work(id))
@@ -316,7 +316,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     def call(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
       Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor)
     def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(call(operation, properties)))
-    def start(): String = invoke[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(_input)).sessionId
+    def start(proposal: Option[String] = None): String = invoke[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(_input, proposal)).sessionId
     def advance(id: String): V.GoalPhaseAdvanceResult = invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
     def current(id: String): InstanceRecord = {
       var value = Option.empty[InstanceRecord]

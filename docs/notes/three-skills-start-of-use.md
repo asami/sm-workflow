@@ -17,10 +17,11 @@ connection qualification; follow the exact
 ## Prepare and start one task
 
 1. Prepare the current component using `cozyPrepareRuntime`,
-   `Compile/packageBin` and `skillBundle` through the registered serial SBT
+   `Compile/packageBin` and `skillBundle` through the registered SBT command
    runner. Follow [component preparation](../spec/native-client-installation.md#prepare-the-current-component)
    for the exact argument vector, current runtime artifacts and selected ZIP.
-   Wait for the runner's terminal receipt and lock release.
+   Wait for the invocation's actual termination and retained receipt
+   (`process=terminated serialization=sbt-native`).
 2. Admit the owning host's normal configuration, assembly, persistence and
    actual subject using [host admission](../spec/native-client-installation.md#admit-the-owning-host)
    and [host configuration](../spec/normal-three-workflow-host.md#host-configuration).
@@ -29,8 +30,9 @@ connection qualification; follow the exact
    for the selected workspace, branches, endpoint and checks. CNCF and the
    current ExecutionContext own configuration and grants; Operation parameter
    parsing does not install them. Native UoW owns typed `git_`/`sbt_` work using
-   normal binaries and native locks. The developer SBT runner's machine-wide
-   serialization is distinct from those product locks.
+   normal binaries and sbt-native locks. Independent development SBT invocations
+   use the registered runner and those native locks; there is no machine-wide
+   wrapper lock. Product SBT launch, waiting and collection remain runtime-owned.
 3. Obtain genuine Start selection and, for Goal, its complete ordered Plan.
    Use the existing [Goal](../spec/native-client-installation.md#prepare-actual-selected-goal-input-and-plan),
    [Repository](../spec/native-client-installation.md#prepare-actual-selected-repository-start)
@@ -88,6 +90,44 @@ can continue after the selected correction under standing scope and authority.
 Retain earlier failures, counters and applicable checks. Missing success alone
 establishes neither case. A real scope change or remote effect still needs its
 actual authority.
+
+## Consume common Evidence and manage retention
+
+The minimum automatic Evidence/Journal route is adopted by Phase 6.4 E2/E3.
+The operational extensions below are prepared for E4 producer delivery and
+consumer qualification; this text does not claim their publication or E4/Phase
+acceptance. See the current [Evidence verification boundary](../spec/evidence-storage.md#e4-consumer-verification-boundary--2026-10-21).
+
+Use the actual business response's Evidence and Journal references. Keep the
+Action outcome, archive outcome, Journal outcome and current availability
+separate. Read a returned Entry with `JournalService.readJournalEntry`, then its
+Evidence with `EvidenceService.readEvidence` through the installed ordinary
+command. The Evidence ID is the lookup key for both UTF-8 text and its selected
+gzip representation. A caller needs no absolute archive path. Reading a saved
+reference neither reruns validation nor establishes a new successful result.
+Automatic recording needs no AI transcription or separate archive task.
+
+The E4 public operations use that same common service and configured collection:
+
+| Operation | Intended use and boundary |
+|---|---|
+| `archiveEvidenceBatch` | Explicit supplementary registration of bounded, released text material. Retain every returned source/output, Evidence and individual storage/Journal result; a partial batch is not all-stored. It grants no Action provenance, acceptance or retry authority. |
+| `describeEvidence` | Observe lifecycle and payload-read results separately. An expired item can still be found; a previously stored item can now be missing. Preserve the historical storage observation, Journal and accepted work. |
+| `manageEvidenceRetention` | `track` explicitly enrolls an existing legacy ID without copying its payload; `hold` requires a reason and future review instant; `release` requires a reason. A review date does not release a hold automatically. No caller action sets workflow completion. |
+| `findDueEvidence` | Query `expiry` or `holdReview` using the exact repository and optional Phase/Session filters. Keep the bounded limit, actual `hasMore` and returned continuation identity; an unavailable query is not an empty successful result. |
+
+Retention starts from the supported runtime's actual producing workflow/Phase
+completion, with thirty days after that recorded instant. Active work has no
+expiry; an untracked legacy ID remains explicitly unmanaged until supported
+tracking. Step closure, a completed test, storage and lookup do not substitute
+for producing workflow completion. Holds and due queries delete no material.
+Use the normal host's managed File workspace and datastore; Operation inputs
+provide no alternate storage selector, arbitrary path or filesystem permission.
+
+Consume a Journal-only continuation only for its retained actual storage
+observation. It must preserve the existing Evidence identity and payload and
+must not repeat the Action or an uncertain archive. A storage/read/Journal
+failure retains its actual outcome for the owning recovery path.
 
 ## Review, effects and completion
 
