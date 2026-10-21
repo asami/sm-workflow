@@ -287,3 +287,25 @@ Scala package roots. No producer file has been changed or implicitly approved.
 Normal Human scope admission, separate owner delivery and actual consumer
 verification remain required. This proposal does not deliver the later
 directory/compression requirements or change the selected Plan/checks.
+
+
+## E3 bounded consumer failure coverage — 2026-10-21
+
+The selected `evidence-failure-route` check is ordinal 3, TestOnly,
+`CommonEvidenceSpec`. It extends the existing failure specifications through
+an isolated admitted typed File/UoW host without creating a Workflow Session.
+Physical files and File authority are real; allocation and observation metadata
+in these injected cases remain explicitly specification-owned memory seams.
+
+| P64 | Selected observation | Limit |
+| --- | --- | --- |
+| 09 | Actual read-only authority denies an archive write; original released text survives and Action outcome stays separate from indeterminate storage | Does not simulate a kernel crash or establish every permission failure |
+| 10 | Actual File creation followed by injected observation-publication failure; later File/UoW reads the original allocation/payload, keeps observation unknown and attempts no second write | Models loss of published storage observation, not a network packet drop; metadata persistence is a specification seam |
+| 11 | Actual occupied CreateNew destination is retained unchanged; incomplete/unreleased Test and completed Compile do not supply automatic producer material; invalid source is refused before allocation | No live production Evidence is deleted, relocated or overwritten to manufacture failure |
+| 12 | Existing Journal seam fails append, then records/already-records only the retained observation; the installed public Journal-only command is also exercised using E2's actual retained Evidence | Failure injection is bounded specification coverage; the public retained Entry path proves actual continuation, not a forced production Journal outage |
+
+Producer qualification is reused only at its existing scope. These cases do
+not create another Evidence writer, storage interpreter, public upload API or
+runtime repair. Public invalid/unsupported reads preserve their actual outcomes.
+Test success, historical storage status, current payload availability, Journal
+outcome and Step acceptance remain separate. P64-13..18 are still E4 work.

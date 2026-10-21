@@ -12,11 +12,15 @@ Owner: sm-workflow. Predecessor: [6.3](phase-6.3.md). Successor: [7](phase-7.md)
 The existing Session `96c294d73be3d48067f3721d8a2abf33` has adopted
 `phase-6.4-evidence-storage@2` through the supported remaining-Plan operation.
 The old unanswered dependency question is retained as superseded-by-adoption.
-Normal Advance has issued `ImplementStep / P64-E2` at evidence revision 28;
-E1, original base and repair history remain. The producer's Phase 12 is closed
-and normally published. The consumer host now declares the separate Evidence
-collection/archive workspace and E2's selected TestOnly program. Validation,
-fresh-process ID retrieval, independent review and Step acceptance remain open.
+E2 completed the real automatic Test-log Evidence/Journal route, fresh-process
+public retrieval and independent review. Native local Step closure committed
+`f4f9d3c2b13fd3a14ff6c8ea93894e98478ff3b0` and issued `ImplementStep / P64-E3`
+at evidence revision 48. E1, E2, original base and repair history remain.
+The E3 selected `evidence-failure-route` check exercises `CommonEvidenceSpec`:
+actual typed File conflicts/denials and payload preservation are combined with
+explicit specification-owned metadata failure injection. Public Journal-only
+continuation is checked against E2's real retained Evidence. E3 validation,
+independent review and acceptance remain pending at implementation preparation.
 Historical statements below about Plan revision 1 describe the original Start.
 
 E1's contract documentation is now accepted through actual selected Compile,

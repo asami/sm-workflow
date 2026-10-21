@@ -3,8 +3,8 @@
 status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
 
-E1's contract scope is accepted from this Phase's own actual evidence. E2
-through E4 remain open; no evidence from another Phase supplies their acceptance.
+E1 and E2 are accepted from this Phase's own actual evidence. E3
+and E4 remain open; no evidence from another Phase supplies their acceptance.
 The main route is established before failure and operational branches. Check
 each outcome only from actual evidence.
 
@@ -13,14 +13,23 @@ passed the selected Compile, genuine independent review and native local Step
 commit `07a97986cbee9ffe71fdf69b89a60eff98768134`. The runtime subsequently issued
 `ImplementStep / P64-E2`. Its public resolved-location prerequisite is proposed
 through the ordinary dependency-scope route; its design motivation is now
-superseded by Phase 12 adoption, while the native history remains. E2 is not
-implemented or accepted.
+superseded by Phase 12 adoption, while the native history remains. That historical prerequisite did not establish E2 acceptance.
 
 2026-10-21: native remaining-Plan adoption accepted revision 2 and retained the
 old question as superseded without an answer. Normal Advance has reissued E2
 under the common Evidence contract. Consumer host setup is prepared; actual
 selected validation, public ID retrieval and independent acceptance are still
-required. All existing flags below remain unchanged.
+required at that preparation point. The later E2 closure below supersedes that pending status.
+
+## E2 closure and E3 assignment — 2026-10-21
+
+E2 passed its selected six-test File suite and the enclosing native automatic
+Evidence/Journal route. Fresh installed processes read the Journal and the same
+Evidence payload; exact UTF-8 equality was verified against the retained Test
+stdout. Independent review accepted E2, and ordinary native closure committed
+`f4f9d3c2b13fd3a14ff6c8ea93894e98478ff3b0`. E3 is now issued in the same
+Session, selected Plan revision 2, source revision 48. No Start or replay of an
+accepted result occurred. E3 flags remain pending its own validation/review.
 
 ## Phase 12 allocation — 2026-10-20
 
@@ -41,17 +50,17 @@ are reusable at their actual scope, not a claim of consumer acceptance.
 
 ## E2: working main route
 
-- [ ] P64-04: Advance selects one actual completed test Action's released log
+- [x] P64-04: Advance selects one actual completed test Action's released log
       under its declared producer policy, using Phase 12's shared service and
       stable source-associated Evidence ID without recording-only AI work.
-- [ ] P64-05: Runtime archives that released file beneath the configured
+- [x] P64-05: Runtime archives that released file beneath the configured
       `~/backup/journal/YYYY/MM/` root and records the actual storage result.
-- [ ] P64-06: Common Journal records the actual storage observation and Evidence
+- [x] P64-06: Common Journal records the actual storage observation and Evidence
       reference; AI consumes actual Entry/Evidence IDs and separate outcomes
       without Markdown transcription, absolute display paths or embedded logs.
-- [ ] P64-07: A fresh process reads that Journal entry, resolves its Evidence ID
+- [x] P64-07: A fresh process reads that Journal entry, resolves its Evidence ID
       and reads the archived log through the public supported storage path.
-- [ ] P64-08: Work files and evidence remain outside the selected Git delta;
+- [x] P64-08: Work files and evidence remain outside the selected Git delta;
       canonical decisions, accepted inputs and source artifacts are preserved.
 
 ## E3: failure and observation

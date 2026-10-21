@@ -1,10 +1,12 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.time.Instant
+import java.nio.file.Files
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.ContextReference
-import org.goldenport.cncf.workspace.FileWriteOutcome
+import org.goldenport.cncf.workspace.{FileTarget, FileWriteMode, FileWriteOutcome, WorkspaceFilePath, WorkspaceId}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
@@ -13,10 +15,11 @@ import org.scalatest.wordspec.AnyWordSpec
 import SplitPhaseExplicitPartitionFixture.take
 import CommonEvidence as E
 
-/** Storage-failure branches use explicitly specification-owned observations.
-  * Real File/UoW/SQL and fresh-process retrieval have separate connected coverage.
+/** Metadata-failure branches use explicitly specification-owned observations.
+  * Consumer cases below connect those observations to actual typed File/UoW;
+  * SQL and fresh-process public retrieval have separate connected coverage.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -44,6 +47,140 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       else { files += path -> text; Consequence.success(FileWriteOutcome.Created) }
     }
     def readC(workspace: String, path: String): Consequence[Option[String]] = { reads += 1; Consequence.success(files.get(path)) }
+  }
+
+  // Metadata is specification-owned; physical writes, conflicts and permission
+  // refusal use the real typed File/UoW owner, without creating a Workflow.
+  private def _managed_store(core: ActionCall.Core, metadata: Memory): E.Storage = new E.Storage {
+    def allocateNameC() = metadata.allocateNameC()
+    def loadC(key: String) = metadata.loadC(key)
+    def createC(key: String, value: String) = metadata.createC(key, value)
+    def writeC(workspace: String, path: String, text: String): Consequence[FileWriteOutcome] = {
+      metadata.writes += 1
+      for {
+        target <- WorkspaceId.parseC(workspace)
+        file <- WorkspaceFilePath.parseC(path)
+        result <- WorkflowFileExecution.writeTextC(core, FileTarget(target), file, text, FileWriteMode.CreateNew)
+      } yield result.outcome
+    }
+    def readC(workspace: String, path: String): Consequence[Option[String]] = {
+      metadata.reads += 1
+      for {
+        target <- WorkspaceId.parseC(workspace)
+        file <- WorkspaceFilePath.parseC(path)
+        result <- WorkflowFileExecution.readTextC(core, FileTarget(target), file)
+      } yield result.text
+    }
+  }
+
+  "Consumer failure boundaries through the actual typed File UoW" should {
+    "preserve the released source and occupied destination and observe the same conflict without another write" in {
+      Given("a released Unicode source and an occupied exact destination in an isolated admitted workspace")
+      val root = WorkflowFileRuntimeFixture.fresh()
+      Files.createDirectories(root.resolve("logs"))
+      Files.writeString(root.resolve("source.log"), "released 日本語 stdout\n")
+      Files.writeString(root.resolve("logs/spec-file-1.log"), "unrelated existing payload\n")
+      val metadata = new Memory
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _policy.workspaceIdentity) { core =>
+        val store = _managed_store(core, metadata)
+        val source = take(store.readC(_policy.workspaceIdentity, "source.log")).get
+        When("CreateNew encounters the existing destination and the caller later observes the same source association")
+        val first = take(E.archiveC(store, _policy, _source, source, _now))
+        val retained = take(E.loadedC(store, first._1.evidence.get.identity)).get
+        val repeated = take(E.archiveC(store, _policy, _source, source, _now.plusSeconds(5)))
+        Then("the Action stays passed while storage stays conflict with the original allocation and neither file is overwritten")
+        first._1.status shouldBe "conflict"
+        repeated shouldBe first
+        retained._1.source.actionOutcome shouldBe "passed"
+        retained._1.path shouldBe "logs/spec-file-1.log"
+        retained._2.get.status shouldBe "conflict"
+        metadata.writes shouldBe 1
+        Files.readString(root.resolve("source.log")) shouldBe source
+        Files.readString(root.resolve(retained._1.path)) shouldBe "unrelated existing payload\n"
+      }
+    }
+
+    "keep a denied save indeterminate and preserve its intent when a later host permits writing" in {
+      Given("a released source under actual read-only File authority and specification-owned durable metadata")
+      val root = WorkflowFileRuntimeFixture.fresh()
+      Files.createDirectories(root.resolve("logs"))
+      Files.writeString(root.resolve("source.log"), "original retained after denied archive\n")
+      val metadata = new Memory
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _policy.workspaceIdentity, access = Some("read-only")) { core =>
+        val store = _managed_store(core, metadata)
+        val source = take(store.readC(_policy.workspaceIdentity, "source.log")).get
+        When("the real typed File owner refuses the archive write")
+        val result = take(E.archiveC(store, _policy, _source, source, _now))
+        Then("storage is honestly indeterminate while the original Action and complete source remain retained")
+        result._1.status shouldBe "indeterminate"
+        result._2.get._1.source.actionOutcome shouldBe "passed"
+        result._1.observation.get.status shouldBe "indeterminate"
+        metadata.writes shouldBe 1
+        Files.readString(root.resolve("source.log")) shouldBe source
+        Files.exists(root.resolve("logs/spec-file-1.log")) shouldBe false
+      }
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _policy.workspaceIdentity) { core =>
+        val store = _managed_store(core, metadata)
+        When("a later admitted host reads the same association after the earlier denied save")
+        val retained = take(E.loadedC(store, E.identity(_source))).get
+        val payload = take(store.readC(retained._1.workspace, retained._1.path))
+        val repeated = take(E.archiveC(store, _policy, _source, Files.readString(root.resolve("source.log")), _now.plusSeconds(5)))
+        Then("the original observation and missing payload remain separate and new authority does not authorize replay")
+        retained._2.get.status shouldBe "indeterminate"
+        payload shouldBe None
+        repeated._1.status shouldBe "indeterminate"
+        metadata.writes shouldBe 1
+        Files.exists(root.resolve(retained._1.path)) shouldBe false
+      }
+    }
+
+    "find the saved payload after observation publication fails without repeating its physical write" in {
+      Given("an admitted File workspace and a specification-owned failure to publish the storage observation")
+      val root = WorkflowFileRuntimeFixture.fresh()
+      Files.createDirectories(root.resolve("logs"))
+      Files.writeString(root.resolve("source.log"), "saved 日本語 despite missing observation\n")
+      val metadata = new Memory(failObservation = true)
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _policy.workspaceIdentity) { core =>
+        val store = _managed_store(core, metadata)
+        val source = take(store.readC(_policy.workspaceIdentity, "source.log")).get
+        When("the actual File creation succeeds but storage-observation publication fails")
+        val first = take(E.archiveC(store, _policy, _source, source, _now))
+        Then("the allocation survives with an unknown observation and the source and destination both retain the released text")
+        first._1.status shouldBe "indeterminate"
+        first._1.evidence.get.identity shouldBe E.identity(_source)
+        take(E.loadedC(store, E.identity(_source))).get._2 shouldBe None
+        Files.readString(root.resolve("source.log")) shouldBe source
+        Files.readString(root.resolve("logs/spec-file-1.log")) shouldBe source
+      }
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _policy.workspaceIdentity) { core =>
+        val store = _managed_store(core, metadata)
+        When("the later caller resolves the original source association and reads that exact retained allocation")
+        val retained = take(E.loadedC(store, E.identity(_source))).get
+        val payload = take(store.readC(retained._1.workspace, retained._1.path))
+        val repeated = take(E.archiveC(store, _policy, _source, "must not replace retained text", _now.plusSeconds(5)))
+        Then("the real payload is readable without promoting the unknown observation or attempting another write")
+        payload shouldBe Some(Files.readString(root.resolve("source.log")))
+        retained._2 shouldBe None
+        repeated._1.status shouldBe "indeterminate"
+        repeated._1.evidence.get.identity shouldBe E.identity(_source)
+        metadata.writes shouldBe 1
+      }
+    }
+
+    "exclude unreleased Test material and completed Compile from the automatic producer" in {
+      Given("a selected Test without a completed receipt, an incomplete receipt and a completed Compile receipt")
+      val test = GoalPhaseNativeValidation.Check("selected-test", 1, WorkflowSbtValidation.Kind.TestOnly)
+      val receipt = RepositorySyncNativeMergeValidation.Receipt("selected-test", "incomplete", None, "live stdout", "", None)
+      val pending = GoalPhaseNativeValidation.Payload("consumer-failure", "P64-E3",
+        GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40), Vector(test), Vector.empty, None)
+      val incomplete = pending.copy(receipts = Vector(receipt))
+      val compile = pending.copy(selected = Vector(test.copy(kind = WorkflowSbtValidation.Kind.Compile)),
+        receipts = Vector(receipt.copy(termination = "exited", exitCode = Some(0))))
+      When("the declared native producer selects released material at each unsupported boundary")
+      val selected = Vector(pending, incomplete, compile).map(GoalPhaseNativeEvidence.selected(_, "consumer", "sm-workflow", "6.4"))
+      Then("none supplies an Evidence source or archive input and live stdout is not promoted to completion")
+      selected shouldBe Vector(None, None, None)
+    }
   }
 
   "Common Evidence source association and one completed text" should {
