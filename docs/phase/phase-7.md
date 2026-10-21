@@ -611,3 +611,7 @@ The discussion concerns the **development environment definition itself**, not a
 ## Optional operation candidates — reference only (2026-10-21)
 
 See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
+
+## Natural inclusion of operation candidates (2026-10-21)
+
+During ordinary Phase 7 implementation, include Dependency Status, Artifact Freshness, and basic Dependency Impact when they follow naturally from the existing Development Workspace graph, Artifact Overlay status/verify, publication provenance, and dependency-aware validation. Prefer enriching existing typed operations/results rather than introducing separate operations, duplicate state, approval steps, or a new Phase. No additional approval is needed for such bounded implementation within Phase 7's existing acceptance boundary. Do not interpret the candidate journal as an unconditional new checklist or broaden Phase 7 into a general dependency-management system; materially larger scope requires a separate decision. See [candidate journal](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).
