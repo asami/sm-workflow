@@ -29,3 +29,7 @@ A selected root and its registered development dependencies are brought to the c
 ## Workspace model clarification (2026-10-21)
 
 The recursive graph is the Phase 7 **Development Workspace** dependency-edge model. `localRepository`, `localJar`, and `localProject` describe each consumer-to-provider relationship, not global provider properties. Only registered `localRepository` edges are traversed for catch-up. Do not introduce a separate Workspace Profile configuration or infer Git dependencies from `localJar`/`localProject`. Artifact selection remains explicit and provider publication remains independent.
+
+## Optional operation candidates — reference only (2026-10-21)
+
+See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
