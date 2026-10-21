@@ -416,3 +416,7 @@ retains the subsequently adopted Phase 5.2/5.3 and Phase 6–9 directions.
 >
 > The [manual local LLM trial](phase-8-local-llm-reference.md) is reference
 > information. It is not a completion condition for any of these phases.
+
+## 2026-10-21 repository catch-up planning
+
+[Phase 7](phase-7.md) owns the shared dependency-property model and provider-owned `localJar` publication boundary. New [Phase 13](phase-13.md) owns separate recursive repository catch-up to GitHub or same-machine main, including rebase and human-intervenable merge. Phase 13 reuses Phase 7 graph/typed Git/Continuation facilities and does not modify the existing RepositorySyncWorkflow remote convergence contract. Both remain planned; numbering does not mandate immediate execution.
