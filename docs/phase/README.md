@@ -420,3 +420,13 @@ retains the subsequently adopted Phase 5.2/5.3 and Phase 6–9 directions.
 ## 2026-10-21 repository catch-up planning
 
 [Phase 7](phase-7.md) owns the shared dependency-property model and provider-owned `localJar` publication boundary. New [Phase 13](phase-13.md) owns separate recursive repository catch-up to GitHub or same-machine main, including rebase and human-intervenable merge. Phase 13 reuses Phase 7 graph/typed Git/Continuation facilities and does not modify the existing RepositorySyncWorkflow remote convergence contract. Both remain planned; numbering does not mandate immediate execution.
+
+## User-facing workflow expansion (2026-10-21)
+
+Three thematic phases are planned, rather than one phase per candidate skill:
+
+- [Phase 14: Development Investigation](phase-14.md) — investigate, diagnose and change-impact analysis. Highest user-value priority; may begin using existing Git/lint/validation/Evidence contracts without waiting for Phase 7 or 13.
+- [Phase 15: Development Workspace Operations](phase-15.md) — workspace status and optional bootstrap/upgrade routes. Reuse Phase 7's workspace graph/Artifact Overlay and Phase 13 catch-up; avoid duplicate configuration or operations.
+- [Phase 16: Development Experimentation](phase-16.md) — bounded implementation and AI-model A/B comparison, with reproducible evidence/corpus candidates.
+
+Priority is not a forced execution order. Begin each theme with one practical user scenario and reuse existing Operations; listed additional skills are candidates, not a requirement to build separate workflow engines. Refactor, migrate and release should initially reuse existing GoalPhase/close/release capabilities rather than proliferating dedicated workflows. These phases are planned, not started or accepted.
