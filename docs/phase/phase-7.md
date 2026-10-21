@@ -599,3 +599,7 @@ plus explicit supplemental operation references/typed parameters tied to accepta
 conditions. Resolve them in the selected repository/overlay context and record
 plan revision, selection origin and actual invocation inputs in evidence. A plan
 supplement neither changes source metadata nor replaces required project FULL.
+
+## Dependency property ownership clarification (2026-10-21)
+
+Phase 7's shared workspace/repository graph must represent each development dependency with independent `localRepository`, `localJar`, and `localProject` properties (P7-DEP01). The dependency repository owns building, validating and publishing `localJar`; the consumer only resolves the published artifact. Git repository-sync and catch-up must not trigger producer builds or republish JARs implicitly (P7-DEP02). Preserve explicit publish/select/status and per-consumer artifact selection already planned in A/B. Distinguish Git source revision from published artifact version; use development-scoped artifact repositories to avoid global Ivy pollution (P7-DEP03). Reuse this graph for Phase 13 catch-up rather than introducing another dependency configuration model. These are planned requirements, not completed work.
