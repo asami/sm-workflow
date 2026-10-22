@@ -79,6 +79,17 @@ BLOCKED remains distinct: it represents missing authority/input/design/context w
 
 ## Feedback loop
 
+Incremental diagnosis allocation (2026-10-23): [Phase 6.6](phase-6.6.md) owns the
+[D1–D4 diagnostic delivery](../notes/incremental-sbt-failure-diagnosis-plan.md)
+and its [information contract](../spec/incremental-sbt-failure-diagnosis.md).
+Structured facts → batched information requests → AI repair proposal → existing
+repair/focused validation is delivered before model-switch optimization. Do not
+rebuild extraction or demand LLM evaluation before that main route works.
+Information reads and hypothesis clarification are not automatic Fix cycles;
+actual repair assignments retain existing counts. This Phase keeps the convergence
+and provider-routing policy below; Phase 6.6 introduces no competing
+counter, hard limit or routing policy and does not reopen active 6.4/6.5 work.
+
 Consume Phase 6's command-execution and Phase-plan synchronization contracts.
 Compile/tests/lint and their result collection remain runtime-owned even when
 the semantic provider changes; no provider must execute commands or retranscribe
