@@ -15,15 +15,55 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outputs. No production Session, accepted result or timestamp is changed.
   * New producer DTOs and implementation classes are deliberately not imported.
   * @since   Oct. 21, 2026
- * @version Oct. 21, 2026
+  * @version Oct. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 final class Phase64EvidenceConsumerCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  /** Explicitly cut over the two completed local producers' configuration at
+    * this installed-consumer boundary. Retain original bytes; never rewrite
+    * their Workflow, Common Evidence or Journal records or accept old aliases.
+    */
+  private def _configureInstalledRuntime(root: Path): Unit = {
+    val path = root.resolve(".textus/config.json")
+    val original = Files.readString(path)
+    val settings = parse(original).fold(error => fail(error.message), identity).asObject.get
+    val renamed = Vector(
+      "sm-workflow.host.definition" -> "sm-workflow.runtime.definition",
+      "sm-workflow.host.evidence.store-name" -> "sm-workflow.external-evidence.store-name",
+      "sm-workflow.host.evidence.record-collection" -> "sm-workflow.external-evidence.record-collection",
+      "sm-workflow.host.evidence.issuer" -> "sm-workflow.external-evidence.issuer") ++
+      Vector("store-name", "selection-collection", "plan-collection", "association-collection",
+        "authorization-collection", "decision-collection").map(key =>
+        s"sm-workflow.goal-phase.host-records.$key" -> s"sm-workflow.goal-phase.input-records.$key") ++
+      Vector("repository-sync", "split-phase").flatMap(family =>
+        Vector("store-name", "selection-collection").map(key =>
+          s"sm-workflow.$family.host-records.$key" -> s"sm-workflow.$family.input-records.$key"))
+    renamed should have size 14
+    val definition = parse(settings("sm-workflow.host.definition").flatMap(_.asString).get)
+      .fold(error => fail(error.message), identity)
+    definition.hcursor.get[String]("schemaVersion").toOption.get shouldBe "sm-workflow.three-workflow-host.v1"
+    val currentDefinition = definition.mapObject(_.add("schemaVersion",
+      Json.fromString("sm-workflow.three-workflow-runtime.v1")))
+    val current = renamed.foldLeft(settings) { case (values, (oldName, newName)) =>
+      values.contains(oldName) shouldBe true
+      values.contains(newName) shouldBe false
+      values.remove(oldName).add(newName, values(oldName).get)
+    }.add("sm-workflow.runtime.definition", Json.fromString(currentDefinition.noSpaces))
+    Files.writeString(root.resolve(".textus/config-before-installed-consumer.json"), original)
+    Files.writeString(root.resolve("installed-consumer-configuration-cutover.json"), Json.obj(
+      "provenance" -> Json.fromString("SPECIFICATION-OWNED ISOLATED PRODUCER CONFIGURATION ONLY"),
+      "renamedSettings" -> Json.fromValues(renamed.map { case (from, to) =>
+        Json.obj("from" -> Json.fromString(from), "to" -> Json.fromString(to)) }),
+      "originalDefinitionSchema" -> Json.fromString("sm-workflow.three-workflow-host.v1"),
+      "currentDefinitionSchema" -> Json.fromString("sm-workflow.three-workflow-runtime.v1")).spaces2 + "\n")
+    Files.writeString(path, Json.fromJsonObject(current).noSpaces)
+  }
+
   private def _call(executable: Path, root: Path, operation: String, input: Json): NativeWorkflowCliFixture.Result = {
     val directory = Files.createTempDirectory(root, "consumer-evidence-call-")
     val stdout = directory.resolve("response.json")
     val stderr = directory.resolve("stderr.log")
-    val argv = Vector(executable.toString, "--host", root.toString, "command",
+    val argv = Vector(executable.toString, "--runtime-root", root.toString, "command",
       "org.simplemodeling.textus.SmWorkflow.EvidenceService." + operation,
       "--input", input.noSpaces, "--json")
     val process = new ProcessBuilder(argv.asJava).directory(root.toFile)
@@ -80,6 +120,7 @@ final class Phase64EvidenceConsumerCliSpec extends AnyWordSpec with Matchers wit
       val (other, otherplan, second) = new GoalPhaseNativeFindingRecordingSpec().produceEvidenceForCli("-p64-e4-second")
       NativeWorkflowCliFixture.journalReader(root, plan)
       NativeWorkflowCliFixture.journalReader(other, otherplan)
+      Vector(root, other).foreach(_configureInstalledRuntime)
       val originalcalls = Vector(
         _call(executable, root, "readEvidence", _readInput(first.evidence.get)),
         _call(executable, other, "readEvidence", _readInput(second.evidence.get)))
