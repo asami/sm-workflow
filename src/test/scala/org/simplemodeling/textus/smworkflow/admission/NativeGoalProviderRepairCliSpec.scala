@@ -15,12 +15,12 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary command stages around genuine external semantic repair.
   * Supplied observations check coherence and authenticate no provider provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, record, take}
+  import NativeCallerExecutionFixture.{json, record, take}
 
   private val _provider = WorkflowConcreteExecutionProfile("p61-provider-sol-medium", "openai", "gpt-6.1-sol",
     Map("reasoning-effort" -> "medium"))
@@ -44,13 +44,13 @@ final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers wi
   private def _mapping: Json = Json.obj(
     "schemaVersion" -> Json.fromString(WorkflowExecutionProfileParameters.schemaVersion),
     "identity" -> Json.fromString("p61-provider-repair-mapping"), "revision" -> Json.fromString("1"),
-    "profiles" -> Json.arr(NativeHostExecutionFixture.profile(_provider), NativeHostExecutionFixture.profile(_parent)),
+    "profiles" -> Json.arr(NativeCallerExecutionFixture.profile(_provider), NativeCallerExecutionFixture.profile(_parent)),
     "classes" -> Json.fromValues(Vector("CodingProgrammingStandard", "ReviewStandard").map(name =>
       Json.obj("reasoningClass" -> Json.fromString(name), "profile" -> Json.fromString(_provider.identity)))),
     "fallbacks" -> Json.arr())
   private def _origin(context: String): Json = Json.obj(
     "schemaVersion" -> Json.fromString(GoalPhaseNativeExecution.schemaVersion),
-    "current" -> NativeHostExecutionFixture.executor(_parent, context),
+    "current" -> NativeCallerExecutionFixture.executor(_parent, context),
     "preference" -> Json.obj("forceInline" -> Json.False, "isolateContext" -> Json.True))
   private def _ordinary(scenario: F.Scenario): Unit = {
     scenario.invocations.map(_.pid).distinct.size shouldBe scenario.invocations.size
@@ -168,7 +168,7 @@ final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers wi
       Given("the actual issued context and original mapping/origin business input URIs")
       When("normal prepareExecution returns its actual opaque execution session for external consumption")
       val prepared = scenario.prepareHostInput("prepareExecution",
-        V.WorkflowHostExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowHostExecutionState]
+        V.WorkflowCallerExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("the actual medium selection is saved with pending work while the incorrect semantic input remains untouched")
       prepared.completionEvidence shouldBe None
       val session = take(H.decodeC(prepared.session))
@@ -200,7 +200,7 @@ final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers wi
       val task = scenario.root.resolve("target/sm-workflow/tasks/provider-repair-task")
       val value = Path.of(scenario.host.target.root).resolve("value.txt")
       val issued = _load[V.GoalPhaseAdvanceResult](scenario.root, "provider-issued.json")
-      val prepared = _load[V.WorkflowHostExecutionState](scenario.root, "provider-prepared.json")
+      val prepared = _load[V.WorkflowCallerExecutionState](scenario.root, "provider-prepared.json")
       val sessionfile = scenario.root.resolve("provider-session.json")
       val sessiontext = Files.readString(sessionfile, UTF_8)
       val session = take(H.decodeC(sessiontext))
@@ -241,9 +241,9 @@ final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers wi
       Given("the actual issued context, saved opaque session and supplied completed provider observation and semantic reference")
       val referenceuri = _save(scenario.root, "provider-reference.json", json(reference.toRecord()).noSpaces)
       When("normal recordExecution consumes those business inputs without running SBT or implicitly submitting")
-      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowHostExecutionRecordInput(
+      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowCallerExecutionRecordInput(
         issued.issuedWorkContext.get, sessionfile.toUri.toASCIIString, observationfile.toUri.toASCIIString,
-        Some(referenceuri)).toRecord()).business[V.WorkflowHostExecutionState]
+        Some(referenceuri)).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("the actual returned state has final completion evidence and no next selection while only one SBT PID exists")
       recorded.nextSelection shouldBe None
       recorded.completionEvidence should not be empty

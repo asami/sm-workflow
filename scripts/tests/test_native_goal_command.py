@@ -42,13 +42,13 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.executable = self.root / "installed CLI" / "sm-workflow"
-        self.host = self.root / "host"
-        self.task = self.host / "target/sm-workflow/tasks/selected-task"
+        self.runtime_root = self.root / "runtime_root"
+        self.task = self.runtime_root / "target/sm-workflow/tasks/selected-task"
         self.task.mkdir(parents=True)
         for path in (
             self.executable,
-            self.host / ".textus/config.json",
-            self.host / ".textus/assembly.yaml",
+            self.runtime_root / ".textus/config.json",
+            self.runtime_root / ".textus/assembly.yaml",
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("specification prerequisite", encoding="utf-8")
@@ -92,7 +92,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         return path
 
     def args(self, action, output, *pairs, task=None):
-        return ["--executable", str(self.executable), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--runtime-root", str(self.runtime_root),
                 "--task", str(task or self.task), "--action", action,
                 "--output", str(output), *pairs]
 
@@ -111,7 +111,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                          "--selection-collection", "entity:smworkflow.cli.repository_selections")
 
     def preparation_command(self, operation, value):
-        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService." + operation,
+        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService." + operation,
                 "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
     def repository_command(self, argv):
@@ -131,7 +131,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
     def review_request(self, wire=False):
         request = self.issued_request()
         request["work"] = {"kind": "ReviewStep", "purpose": "Supplied review target",
-                           "review": {"host_context": {"native_owned": "fixture context"}}}
+                           "review": {"review_context": {"native_owned": "fixture context"}}}
         if wire:
             for name, alias in (("sessionId", "session_id"), ("submitOperation", "submit_operation"),
                                 ("submitSessionId", "submit_session_id"), ("resultType", "result_type")):
@@ -143,7 +143,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                          "--request", str(self.request), "--result", str(self.review_result),
                          "--reference", str(self.review_reference),
                          "--execution-evidence", str(self.review_execution),
-                         "--issuer", "supplied-host", "--occurred-at", "2026-10-14T06:00:00Z",
+                         "--issuer", "supplied-runtime_root", "--occurred-at", "2026-10-14T06:00:00Z",
                          "--collection", "entity:smworkflow.cli.host_evidence")
 
     def review_command(self, argv):
@@ -177,20 +177,17 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         output, diagnostic = io.StringIO(), io.StringIO()
         native = Mock(side_effect=process)
 
-        def fixture(command, host, descriptor, context):
+        def fixture(command, runtime_root, descriptor, context):
             # A route-only native boundary supplies raw observations. Real
             # process ownership/interruption is covered by transport scenarios.
             CALLER.progress("invocation", context)
             with CALLER.new_file(descriptor, "response.json") as stdout:
                 with CALLER.new_file(descriptor, "stderr.log") as stderr:
-                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+                    result = native(command, cwd=str(runtime_root), stdout=stdout, stderr=stderr)
             CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
-            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
-                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
-                               "native output exceeds its bound; retain output")
             with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
                                                dir_fd=descriptor), "r", encoding="utf-8") as stream:
-                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+                text = stream.read()
             return text, CALLER.json_object(text)
 
         with patch.object(CALLER, "native_call", side_effect=fixture):
@@ -202,7 +199,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         return status, output.getvalue(), diagnostic.getvalue(), native
 
     def command(self, operation, *pairs):
-        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
+        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
                 *pairs, "--json"]
 
     def assert_one_call(self, native, command):
@@ -210,7 +207,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         args, kwargs = native.call_args
         self.assertEqual(args, (command,))
         self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
-        self.assertEqual(kwargs["cwd"], str(self.host))
+        self.assertEqual(kwargs["cwd"], str(self.runtime_root))
         self.assertTrue(kwargs["stdout"].closed)
         self.assertTrue(kwargs["stderr"].closed)
 
@@ -494,12 +491,12 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.assertEqual((output / "stderr.log").read_bytes(), b"native diagnostic\n")
                 self.assertEqual(route.read_bytes(), before)
 
-    def test_e4_oversized_native_output_stops_without_discarding_it(self):
+    def test_e4_large_native_output_is_accepted_and_retained(self):
         """E4 / R2,R5 / PHASE-6 S6-01D3D."""
-        for response, stderr in ((b" " * (8 * 1024 * 1024 + 1), b""),
+        for response, stderr in ((dict(self.acknowledged(), detail="x" * (9 * 1024 * 1024)), b""),
                                  (self.acknowledged(), b"x" * (1024 * 1024 + 1))):
             with self.subTest(oversized_stream="response" if not stderr else "stderr"):
-                # Given retained routing and a stream over its declared byte bound.
+                # Given retained routing and a valid stream larger than the former byte ceiling.
                 route = self.retain()
                 before = route.read_bytes()
                 output = self.output()
@@ -507,9 +504,9 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 # When Submit consumes the final native result.
                 status, printed, _diagnostic, native = self.call(
                     self.args("submit", output, "--request", str(self.request), "--submission", str(self.submission)), process)
-                # Then it stops after one call and preserves both streams and routing.
-                self.assertEqual(status, 2)
-                self.assertEqual(printed, "")
+                # Then it accepts the acknowledgement and preserves both streams and routing.
+                self.assertEqual(status, 0)
+                self.assertEqual(json.loads(printed), json.loads(raw))
                 native.assert_called_once()
                 self.assertEqual((output / "response.json").read_bytes(), raw)
                 self.assertEqual((output / "stderr.log").read_bytes(), stderr)
@@ -628,7 +625,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
 
     def test_e5_wrong_or_redirected_task_refuses_before_native_call(self):
         """E5 / R3,R4 / PHASE-6 S6-01D3D."""
-        # Given a task outside the exact host child location or a symlink task.
+        # Given a task outside the exact runtime_root child location or a symlink task.
         wrong = self.root / "unowned-task"
         wrong.mkdir()
         link = self.task.parent / "task-link"
@@ -761,7 +758,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         value = json.loads(command[command.index("--input") + 1])
         self.assertEqual(value["input"], self.input.as_uri())
         self.assertEqual(value["plan"], self.plan.as_uri())
-        self.assertIn("org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareGoalStart", command)
+        self.assertIn("org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareGoalStart", command)
         self.assertEqual((self.input.read_bytes(), self.plan.read_bytes()), before)
 
     def test_e7_preparation_failures_stop_preserve_output_and_existing_routing(self):
@@ -923,7 +920,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
     def test_e11_review_rejects_bad_collections_and_explicit_paths(self):
         """E11 / R2,R4 / PHASE-6 S6-01D3F; canonical explicit inputs."""
         cases = [("collection", value) for value in (
-            "entity:smworkflow/cli/host_evidence", "entity:smworkflow.cli", "entity:smworkflow.cli.host.evidence",
+            "entity:smworkflow/cli/host_evidence", "entity:smworkflow.cli", "entity:smworkflow.cli.runtime_root.evidence",
             "smworkflow.cli.host_evidence", "entity:1workflow.cli.host_evidence", "entity:smworkflow..host_evidence",
         )]
         for name in ("request", "result", "reference", "execution-evidence"):
@@ -959,7 +956,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 # Given a failing passive process/response and unchanged routing/import configuration.
                 route = self.retain()
                 retained = route.read_bytes()
-                config = self.host / ".textus/config.json"
+                config = self.runtime_root / ".textus/config.json"
                 config_before = config.read_bytes()
                 self.request.write_text(json.dumps(self.review_request(wire=True)))
                 output = self.output()
@@ -1019,11 +1016,11 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.review_execution.write_text('{ "workerIdentity": "distinct supplied worker" }\n')
         files = (self.request, self.review_result, self.review_reference, self.review_execution)
         before = {path: path.read_bytes() for path in files}
-        config = self.host / ".textus/config.json"
+        config = self.runtime_root / ".textus/config.json"
         config_before = config.read_bytes()
         output = self.output()
         argv = self.review_args(output)
-        for name, value in (("issuer", "explicit host issuer"), ("occurred-at", "2026-10-14T06:07:08.123Z"),
+        for name, value in (("issuer", "explicit runtime_root issuer"), ("occurred-at", "2026-10-14T06:07:08.123Z"),
                             ("collection", "entity:Explicit.Host.review_input")):
             argv[argv.index("--" + name) + 1] = value
         process, raw = self.process_output({"datastore": [], "native_owned_display": {"kept": True}})
@@ -1052,7 +1049,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 route_before = route.read_bytes() if route.exists() else None
                 self.input.write_text('{ "repositoryIdentity": "日本語", "permission": true, "origin": "claimed" }\n',
                                       encoding="utf-8")
-                files = (self.input, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                files = (self.input, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_args(output)
@@ -1086,7 +1083,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             with self.subTest(case=case, option=name):
                 # Given a missing, duplicate, unknown, inapplicable, blank or unpaired Repository option.
                 route = self.retain()
-                files = (route, self.input, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                files = (route, self.input, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_args(output)
@@ -1123,7 +1120,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             with self.subTest(option=name, value=value):
                 # Given a malformed selected entity address or relative, unnormalized or missing business file.
                 route = self.retain()
-                files = (route, self.input, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                files = (route, self.input, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_args(output)
@@ -1150,7 +1147,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
             with self.subTest(case=name):
                 # Given a failing native process or strict acknowledgement and existing selected files/route/config.
                 route = self.retain()
-                files = (route, self.input, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                files = (route, self.input, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_args(output)
@@ -1182,7 +1179,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 "local_diff": "supplied local diff", "remote_diff": "supplied remote diff",
                 "validation_mode": "required", "selected_checks": ["fixture-check"],
                 "checks": [{"identity": "fixture-check", "termination": "exited", "exit_code": 0}],
-                "host_context": {"purpose": "repository-sync-independent-review",
+                "review_context": {"purpose": "repository-sync-independent-review",
                                  "target": {"instance": "issued-child", "validated_revision": "14"},
                                  "completion": {"run_id": "issued-child",
                                                 "type_identity": "RepositorySyncNativeMergeReviewResult"}},
@@ -1228,7 +1225,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.request.write_text(json.dumps(self.repository_review_request(spelling)) + "\n")
                 self.review_result.write_text('{ "decision": "repair", "rationale": "Supplied review", "findings": [{"identity":"fixture-finding","affectedPaths":["docs/fixture.md"],"rationale":"Supplied finding"}] }\n')
                 files = (route, self.request, self.review_result, self.review_reference, self.review_execution,
-                         self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                         self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 argv = self.repository_review_args("prepare-repository-review-input", output)
@@ -1262,8 +1259,8 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     value.update(completionFacts=[{"supplied": "fact"}],
                                  executionEvidence={"workerIdentity": "supplied independent reviewer"})
                 self.submission.write_text(json.dumps(value, ensure_ascii=False))
-                files = (route, self.request, self.submission, self.host / ".textus/config.json",
-                         self.host / ".textus/assembly.yaml")
+                files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json",
+                         self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 response = dict(self.acknowledged("issued-child"), session_id="issued-child", native_display={"kept": True})
@@ -1386,7 +1383,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 "relative.json", str(self.root) + "/../absent.json", str(self.root / "absent.json"), str(self.root))]
             if action.startswith("prepare"):
                 cases += [("collection", value) for value in (
-                    "entity:smworkflow/cli/reviews", "entity:smworkflow.cli", "entity:smworkflow.cli.host.review",
+                    "entity:smworkflow/cli/reviews", "entity:smworkflow.cli", "entity:smworkflow.cli.runtime_root.review",
                     "smworkflow.cli.reviews", "entity:1workflow.cli.reviews", "entity:smworkflow..reviews")]
             for name, value in cases:
                 with self.subTest(action=action, option=name, value=value):
@@ -1454,14 +1451,14 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     ("blank-id", {"sessionId": " "}), ("false", {"accepted": False}),
                     ("nonboolean", {"accepted": 1}), ("wrong-outcome", {"outcome": "rejected"}),
                     ("blank-message", {"message": " "}))]
-            cases += [("stdout-bound", b" " * (8 * 1024 * 1024 + 1), 0, False)]
+            cases += [("large-invalid-json", b" " * (8 * 1024 * 1024 + 1), 0, False)]
             for name, response, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
                     # Given native failure or a strict/bounded acknowledgement violation for the selected child action.
                     route = self.retain()
                     self.request.write_text(json.dumps(self.repository_review_request("snake")))
-                    files = (route, self.request, self.submission, self.host / ".textus/config.json",
-                             self.host / ".textus/assembly.yaml")
+                    files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json",
+                             self.runtime_root / ".textus/assembly.yaml")
                     before = {path: path.read_bytes() for path in files}
                     output = self.output()
                     argv = self.repository_review_args(action, output)
@@ -1718,8 +1715,8 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                             value.update(completionFacts=[{"supplied": "conflict fact"}],
                                          executionEvidence={"workerIdentity": "supplied original executor"})
                         self.submission.write_text(json.dumps(value, ensure_ascii=False))
-                        files = (route, self.request, self.submission, self.host / ".textus/config.json",
-                                 self.host / ".textus/assembly.yaml")
+                        files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json",
+                                 self.runtime_root / ".textus/assembly.yaml")
                         before = {path: path.read_bytes() for path in files}
                         output = self.output()
                         response = dict(self.acknowledged("issued-child"), session_id="issued-child",
@@ -1806,8 +1803,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                      ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
                      ("nonfinite", b'{"value":NaN}', b"diagnostic", 0, False),
-                     ("stdout-bound", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False),
-                     ("stderr-bound", good, b"x" * (1024 * 1024 + 1), 0, False)]
+                     ("large-invalid-json", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False)]
             if action.startswith("submit"):
                 cases += [(name, dict(good, **change), b"diagnostic", 0, False) for name, change in (
                     ("false", {"accepted": False}), ("nonboolean", {"accepted": 1}),
@@ -1817,10 +1813,10 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 cases += [("missing-session", {}, b"diagnostic", 0, False)]
             for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
-                    # Given E32: valid conflict scope but failed/nonzero/disconnected/strict/bounded or unaccepted/wrong-child native output.
+                    # Given E32: valid conflict scope but failed/nonzero/disconnected/strict or unaccepted/wrong-child native output.
                     route = self.retain()
                     self.request.write_text(json.dumps(self.conflict_request("snake")))
-                    files = (route, self.request, self.submission, self.host / ".textus/config.json")
+                    files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json")
                     before = {path: path.read_bytes() for path in files}
                     output = self.output()
                     process, raw = self.process_output(response, stderr, returncode, disconnected)
@@ -1973,7 +1969,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 for path in (self.input, self.plan, self.review_result, self.review_reference):
                     path.write_bytes(b"opaque native-owned selected content")
                 files = (self.input, self.plan, self.review_result, self.review_reference,
-                         self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                         self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                 before = {path: path.read_bytes() for path in files}
                 output = self.output()
                 process, raw = self.process_output(b'{ "datastore": [], "native_display": "kept" }\n', b"warning\n")
@@ -2040,7 +2036,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 output = self.output()
                 process, raw = self.process_output({"sessionId": "actual-split", "session_id": "actual-split",
                     "kind": kind, "message": "Actual " + kind, "native_display": {"kept_field": True}}, b"warning\n")
-                # When the host explicitly selects advance-split once.
+                # When the runtime_root explicitly selects advance-split once.
                 status, printed, diagnostic, native = self.call(self.split_args("advance-split", output), process)
                 # Then fixed Split Advance awaits the actual response and displays only the original observation.
                 self.assertEqual((status, diagnostic), (0, ""))
@@ -2078,7 +2074,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                         if optional:
                             value.update(completionFacts=[{"supplied": "fact"}], executionEvidence={"supplied": {"kept": True}})
                         self.submission.write_text(json.dumps(value, ensure_ascii=False))
-                        files = (route, self.request, self.submission, self.host / ".textus/config.json")
+                        files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json")
                         before = {path: path.read_bytes() for path in files}
                         output = self.output()
                         process, raw = self.process_output(dict(self.acknowledged("actual-split"), session_id="actual-split"), b"warning\n")
@@ -2293,12 +2289,11 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                      ("malformed", b"not-json", b"diagnostic", 0, False), ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
                      ("nonfinite", b'{"value":NaN}', b"diagnostic", 0, False),
-                     ("stdout-bound", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False),
-                     ("stderr-bound", good, b"x" * (1024 * 1024 + 1), 0, False)]
+                     ("large-invalid-json", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False)]
             cases += [("invalid-ack-" + str(i), value, b"diagnostic", 0, False) for i, value in enumerate(invalid)]
             for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
-                    # Given E39: valid explicit Split inputs but nonzero/disconnected/strict/bounded/contradictory native acknowledgement.
+                    # Given E39: valid explicit Split inputs but nonzero/disconnected/strict/contradictory native acknowledgement.
                     route = self.retain_split()
                     if action == "start-split":
                         route.unlink()
@@ -2306,7 +2301,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     request, _issued = self.split_request(*row[1:], spelling="snake")
                     self.request.write_text(json.dumps(request))
                     self.submission.write_text('{"result":{"opaque":true}}')
-                    files = (self.input, self.plan, self.request, self.submission, self.host / ".textus/config.json")
+                    files = (self.input, self.plan, self.request, self.submission, self.runtime_root / ".textus/config.json")
                     before = {path: path.read_bytes() for path in files}
                     before_route = route.read_bytes() if route.exists() else None
                     output = self.output()
@@ -2532,7 +2527,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                         if optional:
                             value.update(completionFacts=[{"supplied": "fact"}], executionEvidence={"worker": {"actual": "fixture"}})
                         self.submission.write_text(json.dumps(value, ensure_ascii=False))
-                        files = (route, self.request, self.submission, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                        files = (route, self.request, self.submission, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                         before = {path: path.read_bytes() for path in files}
                         output = self.output()
                         response = self.acknowledged("actual-repository")
@@ -2569,11 +2564,11 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     for path in (self.review_result, self.review_reference, self.review_execution):
                         path.write_bytes(b"opaque bytes; the native reader owns this content")
                     files = (route, self.request, self.review_result, self.review_reference, self.review_execution,
-                             self.host / ".textus/config.json", self.host / ".textus/assembly.yaml")
+                             self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml")
                     before = {path: path.read_bytes() for path in files}
                     output = self.output()
                     argv = self.standalone_repository_args("prepare-repository-review-input", output)
-                    for name, value in (("issuer", "explicit supplied host"), ("occurred-at", "2026-10-16T06:17:18.123Z"),
+                    for name, value in (("issuer", "explicit supplied runtime_root"), ("occurred-at", "2026-10-16T06:17:18.123Z"),
                                         ("collection", "entity:Explicit.Host.review_input")):
                         argv[argv.index("--" + name) + 1] = value
                     process, raw = self.process_output({"datastore": [], "native_display": {"kept": True}}, b"warning\n")
@@ -2585,7 +2580,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     self.assert_one_call(native, self.preparation_command("prepareEvidence", {
                         "family": family, "kind": "review", "request": self.request.as_uri(),
                         "result": self.review_result.as_uri(), "reference": self.review_reference.as_uri(),
-                        "executionEvidence": self.review_execution.as_uri(), "issuer": "explicit supplied host",
+                        "executionEvidence": self.review_execution.as_uri(), "issuer": "explicit supplied runtime_root",
                         "occurredAt": "2026-10-16T06:17:18.123Z", "collection": "entity:Explicit.Host.review_input"}))
                     self.assertEqual({path: path.read_bytes() for path in files}, before)
                     self.assertEqual((output / "response.json").read_bytes(), raw)
@@ -2787,12 +2782,11 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                      ("malformed", b"not-json", b"diagnostic", 0, False), ("nonobject", b"[]", b"diagnostic", 0, False),
                      ("duplicate", b'{"value":1,"value":2}', b"diagnostic", 0, False),
                      ("nonfinite", b'{"value":NaN}', b"diagnostic", 0, False),
-                     ("stdout-bound", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False),
-                     ("stderr-bound", good, b"x" * (1024 * 1024 + 1), 0, False)]
+                     ("large-invalid-json", b" " * (8 * 1024 * 1024 + 1), b"diagnostic", 0, False)]
             cases += [("invalid-ack-" + str(i), value, b"diagnostic", 0, False) for i, value in enumerate(invalid)]
             for name, response, stderr, returncode, disconnected in cases:
                 with self.subTest(action=action, case=name):
-                    # Given E46: valid Repository inputs but failed/uncertain/strict/bounded or invalid native acknowledgement.
+                    # Given E46: valid Repository inputs but failed/uncertain/strict or invalid native acknowledgement.
                     route = self.retain_repository()
                     if action == "start-repository":
                         route.unlink()
@@ -2800,7 +2794,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     request, _issued = self.standalone_repository_request(*row[1:], spelling="snake")
                     self.request.write_text(json.dumps(request))
                     self.submission.write_text(json.dumps(self.submission_value))
-                    files = (self.input, self.plan, self.request, self.submission, self.host / ".textus/config.json")
+                    files = (self.input, self.plan, self.request, self.submission, self.runtime_root / ".textus/config.json")
                     before = {path: path.read_bytes() for path in files}
                     before_route = route.read_bytes() if route.exists() else None
                     output = self.output()
@@ -2846,7 +2840,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 "relative.json", str(self.root) + "/../absent.json", str(self.root / "absent.json"), str(self.root))]
             if action == "prepare-repository-review-input":
                 cases += [("collection", "collection", value) for value in (
-                    "entity:smworkflow/cli/reviews", "entity:smworkflow.cli", "entity:smworkflow.cli.host.review",
+                    "entity:smworkflow/cli/reviews", "entity:smworkflow.cli", "entity:smworkflow.cli.runtime_root.review",
                     "smworkflow.cli.reviews", "entity:1workflow.cli.reviews", "entity:smworkflow..reviews")]
             for kind, name, value in cases:
                 with self.subTest(action=action, case=kind, option=name, value=value):
@@ -2910,6 +2904,98 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                     native.assert_not_called()
                     self.assertEqual(list(output.iterdir()), [])
                     self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+
+class CallerInformationSpecification(unittest.TestCase):
+    """Caller routing fixtures are observations, never workflow completion or Human consent."""
+
+    setUp = NativeGoalCommandSpecification.setUp
+    write_json = NativeGoalCommandSpecification.write_json
+    issued_request = NativeGoalCommandSpecification.issued_request
+    retain = NativeGoalCommandSpecification.retain
+    output = NativeGoalCommandSpecification.output
+    args = NativeGoalCommandSpecification.args
+    call = NativeGoalCommandSpecification.call
+    process_output = NativeGoalCommandSpecification.process_output
+
+    def information(self):
+        self.retain()
+        request = self.issued_request()
+        request["issuedWorkContext"] = {"sessionId": "actual-goal", "expectedRevision": "7",
+            "continuationId": "retained-continuation", "mode": "GoalPhase"}
+        self.request.write_text(json.dumps(request))
+        source = {"threadId": "thread", "turnId": "turn", "itemId": "item"}
+        locator = self.write_json("source-locator.json", source)
+        prepared = {"issuedWorkContext": request["issuedWorkContext"], "kind": "execution-terminal",
+            "source": source, "callerIdentity": "existing-caller"}
+        return request, locator, prepared
+
+    def test_prepare_returns_request_to_same_caller_without_following_operation(self):
+        # Given actual retained routing and an explicitly selected exact source locator.
+        request, locator, prepared = self.information()
+        routing = (self.task / "workflow-session.json").read_bytes()
+        output = self.output()
+        invoke, raw = self.process_output(prepared)
+        # When the caller asks the ordinary preparation Operation for information.
+        status, printed, diagnostic, native = self.call(self.args("prepare-information", output,
+            "--request", str(self.request), "--information-kind", "execution-terminal",
+            "--source-locator", str(locator), "--caller-identity", "existing-caller"), invoke)
+        # Then one passive call retains the exact issued context and does not Submit, recover or Advance.
+        self.assertEqual((status, diagnostic), (0, ""))
+        self.assertEqual(native.call_count, 1)
+        command = native.call_args.args[0]
+        self.assertIn("NativeWorkflowPreparationService.prepareCallerInformation", " ".join(command))
+        self.assertEqual(json.loads(command[command.index("--input") + 1]), prepared)
+        self.assertEqual(json.loads((output / "caller-information-request.json").read_text()), prepared)
+        self.assertEqual((self.task / "workflow-session.json").read_bytes(), routing)
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+
+    def test_returned_availability_remains_information_and_preserves_routing(self):
+        for outcome in ("available", "partial", "unavailable"):
+            with self.subTest(outcome=outcome):
+                # Given a retained information request and supplied attributable observation, including absence.
+                request, locator, prepared = self.information()
+                retained = self.write_json("information-request.json", prepared)
+                observation = self.write_json("observation.json", {"request": prepared, "outcome": outcome,
+                    "observedAt": "2026-10-23T00:00:00Z", "detail": "Actual availability"})
+                before = (self.task / "workflow-session.json").read_bytes()
+                result = {"request": prepared, "outcome": outcome, "detail": "Actual availability"}
+                invoke, raw = self.process_output(result)
+                output = self.output()
+                # When the caller returns observation through the finite ordinary Operation.
+                status, printed, diagnostic, native = self.call(self.args("record-information", output,
+                    "--request", str(self.request), "--information-request", str(retained),
+                    "--observation", str(observation)), invoke)
+                # Then each availability is displayed/retained after exactly one call with unchanged Session routing.
+                self.assertEqual((status, diagnostic), (0, ""))
+                self.assertEqual(native.call_count, 1)
+                command = native.call_args.args[0]
+                self.assertIn("NativeWorkflowPreparationService.recordCallerInformation", " ".join(command))
+                self.assertEqual(json.loads(command[command.index("--input") + 1]), {
+                    "issuedWorkContext": request["issuedWorkContext"], "request": retained.as_uri(),
+                    "observation": observation.as_uri()})
+                self.assertEqual(json.loads((output / "caller-information-result.json").read_text()), result)
+                self.assertIn(outcome, printed)
+                self.assertEqual((self.task / "workflow-session.json").read_bytes(), before)
+
+    def test_crossed_session_or_withdrawn_provider_action_refuses_before_launch(self):
+        # Given a Request from a different Session or the withdrawn provider-fetch action.
+        request, locator, prepared = self.information()
+        request["sessionId"] = "other-session"
+        self.request.write_text(json.dumps(request))
+        for action in ("prepare-information", "recover-whole-phase-from-codex"):
+            output = self.output()
+            invoke, raw = self.process_output(prepared)
+            arguments = self.args(action, output, "--request", str(self.request))
+            if action == "prepare-information":
+                arguments += ["--information-kind", "execution-terminal", "--source-locator", str(locator),
+                    "--caller-identity", "existing-caller"]
+            # When finite action validation checks the selected current task.
+            status, printed, diagnostic, native = self.call(arguments, invoke)
+            # Then neither crossing nor the withdrawn action launches any CLI process.
+            self.assertEqual(status, 2)
+            native.assert_not_called()
+            self.assertEqual(list(output.iterdir()), [])
 
 
 if __name__ == "__main__":

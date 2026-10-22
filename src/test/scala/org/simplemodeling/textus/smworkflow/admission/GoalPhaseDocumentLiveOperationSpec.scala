@@ -15,7 +15,7 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.{NativeHostGoalStartInput, NativeHostHumanPreparation}
+import org.simplemodeling.textus.smworkflow.preparation.{NativeGoalStartInput, NativeHumanDecisionPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDocumentSource as D
@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Fixture-ignored documents exercise acquisition and decisions, not tracked
   * document writeback, Step commits, SBT/provider execution or full B2 acceptance.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -39,7 +39,7 @@ final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhe
   private val _plan = O.Plan("verification-live-document-plan", "1", _input.phaseIdentity, _input.repositoryIdentity,
     Vector(_step("step-1"), _step("step-2")), Vector("test"), repairLimit = 1)
 
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json =
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations)
 
@@ -47,7 +47,7 @@ final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhe
     O.Step(identity, "Implement " + identity, Vector("value.txt"), Vector.empty, Vector("test"))
   private def _root(): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/document-live").toAbsolutePath), "episode-").toRealPath()
-  private def _host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val host = ThreeWorkflowNormalHostFixture.definition(root)
     host.copy(goal = host.goal.copy(input = _input))
   }
@@ -83,7 +83,7 @@ final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhe
     val declaration = Json.obj("schemaVersion" -> Json.fromString(D.declarationSchema),
       "phasePath" -> Json.fromString(_source.phasePath), "checklistPath" -> Json.fromString(_source.checklistPath))
     val files = Map("input.json" -> _input.asJson.noSpaces, "plan.json" -> declaration.noSpaces)
-    take(NativeHostGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
+    take(NativeGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
       "selection-id" -> "verification-live-document-selection", "participant" -> "participant", "origin" -> "ExplicitHuman",
       "idempotency-key" -> "verification-live-document-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection",
       "plan-collection" -> "entity:smworkflow.cli.goal_plans"), path =>
@@ -178,7 +178,7 @@ final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhe
         order.context.snapshot, TypedValue(H.answerCodec.typeIdentity, H.Answer(choice, "Explicit verification-owned Human direction")),
         reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-human")))
       prepare(call => for {
-        prepared <- NativeHostHumanPreparation.goalC(displayed.human.get.hostContext.get,
+        prepared <- NativeHumanDecisionPreparation.goalC(displayed.human.get.humanDecisionContext.get,
           V.GoalPhaseOrderedDecisionAnswer(choice, answer.result.value.rationale),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector.empty, answer.evidence.workerIdentity, None, None),
@@ -292,7 +292,7 @@ final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhe
         completed.currentProgression shouldBe Some(ProgressionReference("phase.InspectCandidate"))
         completed.suspension shouldBe None
         displayed.kind shouldBe "Human"
-        displayed.human.get.hostContext should not be empty
+        displayed.human.get.humanDecisionContext should not be empty
         question.input.get.value.work shouldBe _input_of(work)
         question.input.get.value.requestingResult shouldBe submitted.resultReference
         question.input.get.value.result shouldBe submitted.result.value

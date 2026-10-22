@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 @DoNotDiscover
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -43,7 +43,7 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     require(Set("Equal", "Goal")(scenario), "Only this owned selected build is admitted")
     original.take(2) ++ Vector(Vector("-C", root.resolve("repository").toString, "add", "--", ".")) ++ original.drop(2)
   }
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val compile = Set("NormalSbtCompileSuccess", "NormalSbtCompileFailure")(scenario)
     val isolated = compile || Set("NormalSbtSuccess", "NormalSbtFailure", "NormalSbtUnknown")(scenario)
     require(isolated || Set("Equal", "Goal")(scenario), "Only the selected normal SBT episodes are admitted")
@@ -679,9 +679,9 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
               plan, input().originalBase, input().completed, input().candidate.get, phaseReviewReference.get.identity, invocation)
             closuresourcerevision = Some(closure.sourceRevision)
             val child = _repository_selection_(host.repository.input, "goal-sbt-child-host-entry", invocation)
-            prepare(call => call.evidenceC(NativeHostEvidence.Purpose.PhaseClosure,
-              ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-phase-authority", "1"),
-              "participant", take(ThreeWorkflowHostEvidencePorts.phaseClosureBindingC(call.core, closure)))
+            prepare(call => call.evidenceC(NativeExternalEvidence.Purpose.PhaseClosure,
+              ThreeWorkflowExternalEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-phase-authority", "1"),
+              "participant", take(ThreeWorkflowExternalEvidencePorts.phaseClosureBindingC(call.core, closure)))
               .flatMap(_ => _prepare_input_(call, host.repository.input, child, root)))
             When("owning advance executes the installed RepositorySync Operations and their actual SBT check")
             val outcome = if (lostAcknowledgement) {
@@ -792,9 +792,9 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
               selected.kind shouldBe (if (session == "step-review") "ReviewStep" else "ReviewPhase")
               executions().size shouldBe (if (session == "step-review") 1 else 2)
               val completion = result("accept")
-              prepare(call => ThreeWorkflowHostEvidencePorts.goalReviewBindingC(call.core, selected, completion)
-                .flatMap(binding => call.evidenceC(NativeHostEvidence.Purpose.GoalReview,
-                  ThreeWorkflowHostEvidencePorts.key(completion.resultReference.identity, completion.resultReference.revision),
+              prepare(call => ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(call.core, selected, completion)
+                .flatMap(binding => call.evidenceC(NativeExternalEvidence.Purpose.GoalReview,
+                  ThreeWorkflowExternalEvidencePorts.key(completion.resultReference.identity, completion.resultReference.revision),
                   completion.resultReference, "specification-reviewer", binding)))
               When("public completion accepts only the assigned, separately evidenced review")
               invoke[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", take(NativeWorkflowOperationInputFixture.submissionC(completion))).accepted shouldBe true
@@ -802,9 +802,9 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
                 val pending = current()
                 val closure = GoalPhaseNativeClosure.Input(identity.value, pending.revision.value.toString, plan.identity, plan.revision,
                   selected.stepIdentity.get, selected.generation, selected.originalBase, selected.candidate.get, completion.resultReference.identity)
-                prepare(call => call.evidenceC(NativeHostEvidence.Purpose.StepClosure,
-                  ThreeWorkflowHostEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-step-authority", "1"),
-                  "participant", take(ThreeWorkflowHostEvidencePorts.stepClosureBindingC(call.core, closure))))
+                prepare(call => call.evidenceC(NativeExternalEvidence.Purpose.StepClosure,
+                  ThreeWorkflowExternalEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("specification-sbt-step-authority", "1"),
+                  "participant", take(ThreeWorkflowExternalEvidencePorts.stepClosureBindingC(call.core, closure))))
                 When("owning advance commits the actual Step and runs the whole-Phase SBT test")
                 next()
                 Then("whole-Phase review contains a real second check and the retained original allowance")

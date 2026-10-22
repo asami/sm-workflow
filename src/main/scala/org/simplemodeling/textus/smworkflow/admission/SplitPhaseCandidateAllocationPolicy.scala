@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPlannin
 /**
  * Explicit host policy, not an execution grant or a recovery naming guess.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhaseCandidateAllocationPolicy {
   val prefix = "sm-workflow.split-phase.candidate-allocation."
@@ -115,7 +115,7 @@ private[smworkflow] object SplitPhaseCandidateAllocationPolicy {
     }
 
   private def _string_c(host: ResolvedConfiguration, key: String, limit: Int): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if _name(value, limit) => Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase candidate allocation requires exact host policy metadata")
     }

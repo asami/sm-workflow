@@ -32,9 +32,20 @@ lazy val root = project
     }.evaluated,
     // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (Set("org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
+      if (Set("org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
         "org.simplemodeling.textus.smworkflow.admission.GoalPhaseNativeCandidateCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
+      "org.simplemodeling.textus.smworkflow.admission.NativeGoalLargeValidationCliSpec",
+      "org.simplemodeling.textus.smworkflow.admission.NativeGoalTestOutputPolicyCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalMechanicalReceiptCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalStartupRecoveryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalRuntimeStabilityCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeInstalledCarAdmissionDiagnosticSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalKnownFailedPhaseValidationCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalFailedPhaseRepairAdoptionCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalWholePhaseCandidateRecoveryCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProjectBuildCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalMetadataCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalPlanRevisionCliSpec",
@@ -69,12 +80,15 @@ lazy val root = project
       }
       val contracts = Seq(
         "docs/spec/native-host-execution.md",
+        "docs/spec/caller-information.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-dependency-scope.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
+        "docs/spec/runtime-caller-format-migration.md",
         "scripts/native-goal-command.py",
-        "scripts/native-goal-authority.py"
+        "scripts/native-goal-authority.py",
+        "scripts/migrate-runtime-caller-format.py"
       ).map { relativepath =>
         val source = baseDirectory.value / relativepath
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)

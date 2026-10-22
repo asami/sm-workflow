@@ -29,8 +29,7 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  *  version Oct. 17, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
@@ -142,7 +141,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         }
         response <- prepared match {
           case None => for {
-            context <- NativeHostAuthorityContext.phaseC(core, input)
+            context <- NativeAuthorityContext.phaseC(core, input)
             waiting <- F.waitC(from, "Whole-Phase repository closure awaits authority",
               "Review acceptance grants no RepositorySync Start or remote effects; the Phase remains open.")
           } yield waiting.copy(authorityContext = Some(context))
@@ -267,8 +266,15 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     def terminalC(saved: (InstanceRecord, Payload)): Consequence[V.GoalPhaseAdvanceResult] = for {
       completed <- closeC(saved)
       selected = saved._2.input
-    } yield NativeWorkflowOperationOutput.goalComplete(completed.identity.value, selected.plan, selected.base,
-      selected.completed, selected.reviewedCandidate.getOrElse(selected.candidate), saved._2.result.get)
+      observation = d.evidencePolicy.map { p =>
+        try CommonEvidenceLifecycle.completedC(CommonEvidence.storage(core, p), d.input.repositoryIdentity,
+          d.input.phaseIdentity, completed, core.executionContext.clock)
+        catch { case scala.util.control.NonFatal(_) => Consequence.stateConflict("Evidence completion observation interrupted") }
+      }
+      result = NativeWorkflowOperationOutput.goalComplete(completed.identity.value, selected.plan, selected.base,
+        selected.completed, selected.reviewedCandidate.getOrElse(selected.candidate), saved._2.result.get)
+    } yield if (observation.exists(!_.isSuccess)) result.copy(message = result.message +
+      " Evidence completion/lifecycle observation is unavailable; completed work remains closed.") else result
     def ackC(point: String): Consequence[Unit] = acknowledge(point) match {
       case Consequence.Success(_) => Consequence.unit
       case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(

@@ -7,7 +7,7 @@ import org.goldenport.cncf.datastore.DataStore
 /** Read-only host record adapter. No install/upsert method or physical owner.
   * The owning Subsystem must hold the normal Operation execution lease.
   * @since   Oct.  1, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object ProfileSelectionDataStorePort {
   enum Profile { case GoalPhase, SplitPhase, RepositorySync }
@@ -24,11 +24,11 @@ private[smworkflow] final class ProfileSelectionDataStorePort(
   def loadForCallC(identity: String, core: ActionCall.Core): Consequence[Option[ProfileStartAdmission.Selection]] = {
     val loaded = profile match {
       case ProfileSelectionDataStorePort.Profile.GoalPhase =>
-        ManagedHostRecordRead.loadC(core, storeName, collection, identity, GoalPhaseHostRecordReadPolicy.Purpose.Selection)
+        ManagedInputRecordRead.loadC(core, storeName, collection, identity, GoalPhaseInputRecordReadPolicy.Purpose.Selection)
       case ProfileSelectionDataStorePort.Profile.SplitPhase =>
-        ManagedHostRecordRead.loadSplitSelectionC(core, storeName, collection, identity)
+        ManagedInputRecordRead.loadSplitSelectionC(core, storeName, collection, identity)
       case ProfileSelectionDataStorePort.Profile.RepositorySync =>
-        ManagedHostRecordRead.loadRepositorySelectionC(core, storeName, collection, identity)
+        ManagedInputRecordRead.loadRepositorySelectionC(core, storeName, collection, identity)
       case null => Consequence.configurationInvalid("Host selection reader profile is absent")
     }
     loaded.flatMap { record =>

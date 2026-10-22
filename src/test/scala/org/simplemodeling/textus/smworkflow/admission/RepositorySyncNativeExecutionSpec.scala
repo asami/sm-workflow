@@ -16,7 +16,7 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.NativeWorkflowHostExecution
+import org.simplemodeling.textus.smworkflow.caller.NativeWorkflowCallerExecution
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseWorkClassification.*
 import RepositorySyncNativeExecution as P
@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification inputs only: no installed provider or authority.
   * @since   Oct. 16, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object RepositoryExecutionFixture {
@@ -55,7 +55,7 @@ private[admission] object RepositoryExecutionFixture {
   }
   val mapping = take(WorkflowExecutionProfileParameters.decodeC(take(io.circe.parser.parse(
     parameters()(WorkflowExecutionProfileParameters.declaration.name)).fold(e => Consequence.stateConflict(e.message), Consequence.success))))
-  def evidence(prepared: NativeWorkflowHostExecution.Prepared, reference: ContextReference, worker: String): ExecutionEvidence = {
+  def evidence(prepared: NativeWorkflowCallerExecution.Prepared, reference: ContextReference, worker: String): ExecutionEvidence = {
     val selection = prepared.session.nextSelection.get
     val context = if (prepared.session.requirement.disposition.get.placement == ExecutionPlacement.Inline)
       prepared.session.origin.contextIdentity else worker
@@ -174,7 +174,7 @@ final class RepositorySyncNativeExecutionSpec extends AnyWordSpec with Matchers 
         P.validateC(Some(classifications), Some(null), Some(origin)), P.validateC(Some(classifications), Some(mapping), Some(null)))
       val isolated = take(P.bindIssuedC(_work(false), P.Work.Repair, Some(classifications), Some(mapping),
         Some(origin.copy(preference = WorkflowExecutionPreference(isolateContext = true)))))
-      val prepared = take(NativeWorkflowHostExecution.prepareC(take(NativeWorkflowIssuedWorkContext.fromIssuedC(review,
+      val prepared = take(NativeWorkflowCallerExecution.prepareC(take(NativeWorkflowIssuedWorkContext.fromIssuedC(review,
         NativeWorkflowIssuedWorkContext.Mode.Review, new WorkflowResultJsonV1.PayloadCodec[String] {
           val typeIdentity = "SpecInput"
           def encode(value: String) = Json.fromString(value)

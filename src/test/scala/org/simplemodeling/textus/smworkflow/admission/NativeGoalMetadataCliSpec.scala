@@ -15,14 +15,14 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeWorkflowCliFixture as F
 import GoalPhaseNativeMetadata as N
-import NativeHostExecutionFixture.json
+import NativeCallerExecutionFixture.json
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Normal separate CLI processes execute real selected ScalaTest registrations.
   * Semantic Submit is specification-owned input, never provider, Human or
   * independent review evidence. Every successful example stops pending review.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover

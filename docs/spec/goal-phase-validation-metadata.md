@@ -72,7 +72,7 @@ compilation and focused runtime validation remain the parent's responsibility.
 The fixed native validation `Check` may declare an optional `Profile` only for
 `TestOnly`. The Profile contains an exact discovery scope, producer query and explicit
 supplemental references. It is nested structured host configuration resolved through
-`ThreeWorkflowHostParameters`, `ComponentInitializationParameters` and the actual
+`ThreeWorkflowRuntimeParameters`, `ComponentInitializationParameters` and the actual
 `ExecutionContext`. Runtime-selected `hostIdentity` and `operation` fields are rejected
 in caller policy configuration. No command, executable, argument vector, permission,
 system-property or environment parser is added. An absent historical kind retains

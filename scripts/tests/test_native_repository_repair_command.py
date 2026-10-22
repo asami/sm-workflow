@@ -29,10 +29,10 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.executable = self.root / "installed CLI" / "sm-workflow"
-        self.host = self.root / "host"
-        self.task = self.host / "target/sm-workflow/tasks/owned"
+        self.runtime_root = self.root / "runtime_root"
+        self.task = self.runtime_root / "target/sm-workflow/tasks/owned"
         self.task.mkdir(parents=True)
-        for path in (self.executable, self.host / ".textus/config.json", self.host / ".textus/assembly.yaml"):
+        for path in (self.executable, self.runtime_root / ".textus/config.json", self.runtime_root / ".textus/assembly.yaml"):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("Specification prerequisite", encoding="utf-8")
         self.executable.chmod(0o755)
@@ -57,7 +57,7 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         self.counter += 1
         self.output = self.task / ("call-" + str(self.counter))
         self.output.mkdir()
-        return ["--executable", str(self.executable), "--host", str(self.host), "--task", str(self.task),
+        return ["--executable", str(self.executable), "--runtime-root", str(self.runtime_root), "--task", str(self.task),
                 "--action", action, "--output", str(self.output), "--request", str(self.request),
                 "--submission", str(self.submission)]
 
@@ -74,20 +74,17 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         native = Mock(side_effect=process)
 
-        def fixture(command, host, descriptor, context):
+        def fixture(command, runtime_root, descriptor, context):
             # A route-only native boundary supplies raw observations. Real
             # process ownership/interruption is covered by transport scenarios.
             CALLER.progress("invocation", context)
             with CALLER.new_file(descriptor, "response.json") as stdout:
                 with CALLER.new_file(descriptor, "stderr.log") as stderr:
-                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+                    result = native(command, cwd=str(runtime_root), stdout=stdout, stderr=stderr)
             CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
-            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
-                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
-                               "native output exceeds its bound; retain output")
             with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
                                                dir_fd=descriptor), "r", encoding="utf-8") as stream:
-                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+                text = stream.read()
             return text, CALLER.json_object(text)
 
 
@@ -114,13 +111,13 @@ class NativeRepositoryRepairCommandSpecification(unittest.TestCase):
         native.assert_called_once()
         argv, kwargs = native.call_args
         command = argv[0]
-        self.assertEqual(command[:4], [str(self.executable), "--host", str(self.host), "command"])
+        self.assertEqual(command[:4], [str(self.executable), "--runtime-root", str(self.runtime_root), "command"])
         self.assertIn("org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitNativeMergeRepair", command)
         self.assertEqual(command[command.index("--sessionId") + 1], "child")
         for name, value in self.value.items():
             self.assertEqual(json.loads(command[command.index("--" + name) + 1]), value)
         self.assertEqual(command[-1], "--json")
-        self.assertEqual(kwargs["cwd"], str(self.host))
+        self.assertEqual(kwargs["cwd"], str(self.runtime_root))
         self.assertEqual(self.route.read_bytes(), before)
 
     def test_p1_aliases_and_inert_annotations_keep_the_same_child(self):

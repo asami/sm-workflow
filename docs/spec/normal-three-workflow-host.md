@@ -1,4 +1,25 @@
-# Normal three-workflow host
+# Normal three-workflow runtime composition
+
+Terminology revision 2026-10-23: apply [runtime/caller terminology](runtime-caller-terminology.md).
+The composition described here is a RuntimeComposition, not a network host or
+the Codex caller. Its configuration is selected from RuntimeRoot. Old type/key
+spellings in implementation and historical sections below identify migration
+sources only; new interfaces have no aliases or fallback readers. Adopt through
+the [same-Session plan](../notes/runtime-caller-terminology-adoption-plan.md).
+
+Planned common completion display: [AI usage accounting](ai-usage-accounting.md)
+and [Phase 13](../phase/phase-13.md) add per-invocation measured input/output
+tokens for the parent and attributed descendants across all three skills.
+It also reports observed models and model-invocation counts, keeping the parent
+chat separate from delegated agents and labeling unavailable metrics explicitly.
+Codex and local-LLM consumption are separate top-level groups by actual inference
+destination, with per-group coverage; using Codex as a local-model client does
+not count the same consumption in both groups.
+The host owns collection, deduplication, coverage state and post-response display;
+skills do not estimate usage or start another AI turn to report it. Unsupported
+or incomplete observations display unknown/partial coverage and preserve normal
+Workflow outcomes. This plan does not change ongoing Phase acceptance or imply
+that the installed host already exposes usage notifications.
 
 Use [the three-skills start-of-use guide](../notes/three-skills-start-of-use.md)
 for the connected setup and task sequence. The Phase 6.3 supported tiers are

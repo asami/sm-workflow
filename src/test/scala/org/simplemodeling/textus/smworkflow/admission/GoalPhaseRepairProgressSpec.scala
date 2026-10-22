@@ -10,12 +10,12 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseOrderedProgression as O
 import GoalPhaseRepairProgress as P
-import NativeHostHumanEvidenceFixture as H
+import NativeHumanEvidenceFixture as H
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Selected-window projections only; no external Human or review execution.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseRepairProgressSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -178,9 +178,9 @@ final class GoalPhaseRepairProgressSpec extends AnyWordSpec with Matchers with G
       val issued = H.goalQuestion.copy(current = decision.copy(request = decision.request.copy(
         input = Some(TypedValue(GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity, decoded.toOption.get)))))
       When("the native source producer and the selected Human evidence scope consume both saved snapshots")
-      val source = take(ThreeWorkflowHostEvidencePorts.goalHumanSourceC(issued))
-      val binding = take(NativeHostHumanScope.questionBindingC(issued, source))
-      val selected = NativeHostHumanScope.selectQuestion(binding, NativeHostEvidence.Purpose.GoalHuman)
+      val source = take(ThreeWorkflowExternalEvidencePorts.goalHumanSourceC(issued))
+      val binding = take(NativeHumanDecisionScope.questionBindingC(issued, source))
+      val selected = NativeHumanDecisionScope.selectQuestion(binding, NativeExternalEvidence.Purpose.GoalHuman)
       Then("the actual ordinary exemption survives selection without rewriting the prior assignment")
       selected shouldBe Right(binding)
       source.hcursor.downField("repairProgress").focus shouldBe Some(P.Snapshot(1, 0, 1).asJson)

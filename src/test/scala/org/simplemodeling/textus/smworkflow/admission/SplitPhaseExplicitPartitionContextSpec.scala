@@ -18,7 +18,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 21, 2026
  */
 private[admission] object SplitPhasePartitionContextFixture {
   val baseData = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
@@ -45,14 +45,109 @@ private[admission] object SplitPhasePartitionContextFixture {
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 21, 2026
  */
 final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePartitionContextFixture.*
-  private def json(raw: String): Json = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
-  private def raw(value: Json): String = J.schema + ":" + value.noSpaces
-  private def mapPayload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
+  private def _json(raw: String): Json = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
+  private def _raw(value: Json): String = J.schema + ":" + value.noSpaces
+  private def _map_payload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
+  private def _map_configuration(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
+    value.hcursor.downField("payload").downField("owner").downField("configuration")
+      .withFocus(_.mapObject(f)).top.get
+
+  "Mechanical receipt policy in passive partition context" should afterWord(
+    "in spec:workflow-mechanical-receipt-capacity, example:E1, rules:R1,R3, phase:capacity-repair") {
+    "E1 derive full records with absent and sixteen MiB byte selections as ordinary data" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; full records with standard optional integers")
+      val records = Vector(None, Some(16777216)).map { bytes =>
+        record.copy(owner = record.owner.copy(configuration = configuration.copy(mechanicalReceiptMaxBytes = bytes)))
+      }
+      When("the current passive context encoding and decoding retain each full record")
+      val stored = records.map(value => take(J.encodeC(value)))
+      val decoded = stored.map(value => take(J.decodeC(record.reference, value)))
+      Then("generic aggregate derivation retains all record values within the unchanged v1 context bound")
+      decoded shouldBe records
+      decoded.map(value => take(value.owner.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
+        Vector(1048576, 16777216)
+      stored.zip(records).foreach { case (encoded, expected) =>
+        val policy = _json(encoded).hcursor.downField("payload").downField("owner").downField("configuration")
+        policy.keys.get.toSet shouldBe Set("workflowStore", "migrationPolicy", "retentionPolicy", "leasePolicy",
+          "delivery", "mechanicalReceiptMaxBytes")
+        policy.downField("mechanicalReceiptMaxBytes").focus.get shouldBe
+          expected.owner.configuration.mechanicalReceiptMaxBytes.fold(Json.Null)(Json.fromInt)
+      }
+      J.schema shouldBe "sm-workflow.split-phase-partition-context.v1"
+      J.maximumPayloadBytes shouldBe 1048576
+    }
+
+    "E1 interpret absent and null optional bytes as the historical one MiB default" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; historical five-field and ordinary optional-null Configuration rows")
+      val larger = record.copy(owner = record.owner.copy(configuration = configuration.copy(
+        mechanicalReceiptMaxBytes = Some(16777216))))
+      val original = _json(take(J.encodeC(larger)))
+      val historical = _map_configuration(original)(_.remove("mechanicalReceiptMaxBytes"))
+      val optionalnull = _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", Json.Null))
+      When("the generic decoder consumes both ordinary optional representations")
+      val decoded = Vector(historical, optionalnull).map(value => take(J.decodeC(record.reference, _raw(value))))
+      Then("the original five fields survive and None resolves exactly CNCF's one MiB default")
+      decoded shouldBe Vector(record, record)
+      decoded.map(_.owner.configuration.mechanicalReceiptMaxBytes) shouldBe Vector(None, None)
+      decoded.map(value => take(value.owner.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
+        Vector(1048576, 1048576)
+    }
+
+    "E1 refuse noninteger optional data and every missing original required field" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; noninteger optional data and incomplete historical Configuration rows")
+      val original = _json(take(J.encodeC(record)))
+      val invalidvalues = Vector(Json.True, Json.fromString("not-an-integer"), Json.arr(), Json.obj(),
+        Json.fromBigDecimal(BigDecimal("1.5")), Json.fromLong(2147483648L))
+      val malformed = invalidvalues.map(value => _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", value)))
+      val incomplete = Vector("workflowStore", "migrationPolicy", "retentionPolicy", "leasePolicy", "delivery")
+        .map(field => _map_configuration(original)(_.remove("mechanicalReceiptMaxBytes").remove(field)))
+      When("the public context decoder consumes each noninteger value or incomplete historical row")
+      val refused = (malformed ++ incomplete).map(value => J.decodeC(record.reference, _raw(value)))
+      Then("ordinary generic decoding refuses malformed integer data and each original Configuration field remains required")
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
+    "E1 validate operational byte ranges at the current preparation boundary" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; passive integer snapshots outside the operational range")
+      val original = _json(take(J.encodeC(record)))
+      val invalid = Vector(0, -1, 67108865, Int.MaxValue).map { bytes =>
+        val raw = _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", Json.fromInt(bytes)))
+        take(J.decodeC(record.reference, _raw(raw)))
+      }
+      val current = take(configuration.copy(mechanicalReceiptMaxBytes = Some(16777216)).validateC)
+      When("configuration validation and preparation consume current operational selections independently of passive snapshots")
+      val refused = invalid.map { value =>
+        (value.owner.configuration.validateC,
+          C.preparePlanningC(value, facts, instance, value.owner.configuration, catalog))
+      }
+      val prepared = invalid.map(value => take(C.preparePlanningC(value, facts, instance, current, catalog)))
+      Then("invalid current ranges fail while the independently validated current policy replaces passive historical values")
+      refused.foreach { case (validated, planning) =>
+        validated.isSuccess shouldBe false
+        planning.isSuccess shouldBe false
+      }
+      prepared.foreach(_.record.owner.configuration shouldBe current)
+    }
+
+    "E1 replace the historical capacity snapshot with the current configuration during planning" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; historical one MiB context and a current sixteen MiB Configuration")
+      val historical = _map_configuration(_json(take(J.encodeC(record))))(_.remove("mechanicalReceiptMaxBytes"))
+      val decoded = take(J.decodeC(record.reference, _raw(historical)))
+      val current = take(configuration.copy(mechanicalReceiptMaxBytes = Some(16777216)).validateC)
+      When("the actual current instance and facts reach the existing planning preparation boundary")
+      val prepared = take(C.preparePlanningC(decoded, facts, instance, current, catalog))
+      Then("preparation retains the current Configuration while historical decoding retains the one MiB meaning")
+      decoded.owner.configuration.mechanicalReceiptMaxBytes shouldBe None
+      take(decoded.owner.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 1048576
+      prepared.record.owner.configuration shouldBe current
+      take(prepared.record.owner.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 16777216
+    }
+  }
 
   "Passive pre-Start template storage" should afterWord(
     "in spec:native-host-start-preparation, examples:E6,E7, rule:R7, phase:6") {
@@ -62,42 +157,42 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
         C.TemplateOwner(record.owner.requirement, record.owner.presentation), facts)
       When("the minimal current v1 template and inert execution annotations are decoded")
       val stored = take(J.encodeTemplateC(template))
-      val original = json(stored)
+      val original = _json(stored)
       val annotated = original.mapObject(_.add("admitted", Json.True))
-      val malformedunused = mapPayload(annotated)(o => o.add("owner", o("owner").get.mapObject { owner =>
+      val malformedunused = _map_payload(annotated)(o => o.add("owner", o("owner").get.mapObject { owner =>
         Vector("handle", "instanceRevision", "configuration", "start", "continuation", "completion")
           .foldLeft(owner)((value, field) => value.add(field, Json.fromBoolean(false)))
       }).add("prepared", Json.True))
       val decoded = Vector(original, annotated, malformedunused).map(value =>
-        take(J.decodeTemplateC(template.reference, raw(value))))
+        take(J.decodeTemplateC(template.reference, _raw(value))))
       Then("only the passive typed projection survives and the full retained decoder still requires its execution owner")
       decoded.foreach(_ shouldBe template)
       J.decodeC(template.reference, stored).isSuccess shouldBe false
-      J.decodeC(template.reference, raw(malformedunused)).isSuccess shouldBe false
+      J.decodeC(template.reference, _raw(malformedunused)).isSuccess shouldBe false
     }
 
     "E7 refuse missing or mistyped consumed fields and foreign references or schemas" in {
       Given("R7/E7: a current template whose consumed fields must remain typed and selected")
       val template = C.Template(record.reference,
         C.TemplateOwner(record.owner.requirement, record.owner.presentation), facts)
-      val original = json(take(J.encodeTemplateC(template)))
+      val original = _json(take(J.encodeTemplateC(template)))
       val payloadfields = Vector("reference", "owner", "facts")
       val ownerfields = Vector("requirement", "presentation")
       val malformed = payloadfields.flatMap(field => Vector(
-        mapPayload(original)(_.remove(field)),
-        mapPayload(original)(_.add(field, Json.fromString("wrong type"))))) ++
+        _map_payload(original)(_.remove(field)),
+        _map_payload(original)(_.add(field, Json.fromString("wrong type"))))) ++
         ownerfields.flatMap(field => Vector(
-          mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove(field)))),
-          mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.add(field, Json.True)))))) ++
+          _map_payload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove(field)))),
+          _map_payload(original)(o => o.add("owner", o("owner").get.mapObject(_.add(field, Json.True)))))) ++
         Vector(original.mapObject(_.remove("schemaVersion")),
           original.mapObject(_.add("schemaVersion", Json.fromString("foreign"))),
           original.mapObject(_.add("schemaVersion", Json.True)),
-          mapPayload(original)(_.add("reference", Json.obj("identity" -> Json.fromString("incomplete")))),
-          mapPayload(original)(_.add("facts", Json.obj())))
+          _map_payload(original)(_.add("reference", Json.obj("identity" -> Json.fromString("incomplete")))),
+          _map_payload(original)(_.add("facts", Json.obj())))
       When("actual current codecs decode each malformed projection and different selected address")
-      val refused = malformed.map(value => J.decodeTemplateC(template.reference, raw(value)))
+      val refused = malformed.map(value => J.decodeTemplateC(template.reference, _raw(value)))
       val foreign = Vector(template.reference.copy(identity = "other"), template.reference.copy(revision = "2"))
-        .map(reference => J.decodeTemplateC(reference, raw(original)))
+        .map(reference => J.decodeTemplateC(reference, _raw(original)))
       Then("absent or wrong consumed data and foreign selections fail without a full-record fallback")
       refused.foreach(_.isSuccess shouldBe false)
       foreign.foreach(_.isSuccess shouldBe false)
@@ -137,7 +232,7 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       prepared.request.boundaries.map(_.edge.afterItem) shouldBe Vector(P.WorkItemIdentity("item-0"))
       prepared.selection.partition.records.estimates.items.head.duration shouldBe E.Duration.Known(260)
       prepared.semantic.pending.trace.mechanicalStages shouldBe Vector(W.Stage.PartitionEnumeration)
-      json(stored).hcursor.downField("payload").keys.get.toSet shouldBe Set("reference", "owner", "facts")
+      _json(stored).hcursor.downField("payload").keys.get.toSet shouldBe Set("reference", "owner", "facts")
     }
 
     "consume current facts and reject contradictory ordered ownership or prerequisites" in {
@@ -191,10 +286,10 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       invalid.foreach(value => C.prepareC(value, facts, instance, configuration, catalog).isSuccess shouldBe false)
       C.prepareC(record, facts, instance.copy(identity = InstanceIdentity("foreign")), configuration, catalog).isSuccess shouldBe false
       C.prepareC(record, facts, instance, configuration.copy(retentionPolicy = RetentionPolicy("")), catalog).isSuccess shouldBe false
-      val otherInitial = initial.copy(definition = take(GoalPhaseRuntimeCatalog.loadC()).definition, identity = InstanceIdentity("other-profile"))
-      val other = take(otherInitial.appendC(initialRevision, instance.history.head.copy(correlation = otherInitial.correlation)))
-      val otherOwner = record.owner.copy(handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, other)))
-      C.prepareC(record.copy(owner = otherOwner), facts, other, configuration, catalog).isSuccess shouldBe false
+      val otherinitial = initial.copy(definition = take(GoalPhaseRuntimeCatalog.loadC()).definition, identity = InstanceIdentity("other-profile"))
+      val other = take(otherinitial.appendC(initialRevision, instance.history.head.copy(correlation = otherinitial.correlation)))
+      val otherowner = record.owner.copy(handle = take(WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, other)))
+      C.prepareC(record.copy(owner = otherowner), facts, other, configuration, catalog).isSuccess shouldBe false
       val known = facts.copy(partition = baseData.records, boundary = facts.boundary.copy(handoffs = facts.boundary.handoffs.copy(
         edges = facts.boundary.handoffs.edges.map(_.copy(disposition = EdgeDisposition.Either)))))
       C.prepareC(record.copy(facts = known), known, instance, configuration, catalog).isSuccess shouldBe false
@@ -224,19 +319,19 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
 
     "ignore inert context annotations while rejecting missing data and a different selected reference" in {
       Given("a current context with annotations or malformed consumed owner fields")
-      val original = json(take(J.encodeC(record)))
+      val original = _json(take(J.encodeC(record)))
       val annotated = Vector(original.mapObject(_.add("admitted", Json.True)),
-        mapPayload(original)(_.add("prepared", Json.True)),
-        mapPayload(original)(o => o.add("facts", o("facts").get.mapObject(_.add("digest", Json.fromString("legacy"))))))
+        _map_payload(original)(_.add("prepared", Json.True)),
+        _map_payload(original)(o => o.add("facts", o("facts").get.mapObject(_.add("digest", Json.fromString("legacy"))))))
       val variants = Vector(original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
-        mapPayload(original)(_.remove("owner")),
-        mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove("continuation")))),
-        mapPayload(original)(o => o.add("owner", o("owner").get.mapObject(_.add("handle", o("owner").get.hcursor
+        _map_payload(original)(_.remove("owner")),
+        _map_payload(original)(o => o.add("owner", o("owner").get.mapObject(_.remove("continuation")))),
+        _map_payload(original)(o => o.add("owner", o("owner").get.mapObject(_.add("handle", o("owner").get.hcursor
           .downField("handle").focus.get.mapObject(_.add("componentIdentity", Json.fromString("invalid component"))))))))
       When("wire data is decoded at its boundary")
-      val decoded = annotated.map(value => J.decodeC(record.reference, raw(value)))
-      val refused = variants.map(value => J.decodeC(record.reference, raw(value)))
-      val foreign = J.decodeC(record.reference.copy(revision = "2"), raw(original))
+      val decoded = annotated.map(value => J.decodeC(record.reference, _raw(value)))
+      val refused = variants.map(value => J.decodeC(record.reference, _raw(value)))
+      val foreign = J.decodeC(record.reference.copy(revision = "2"), _raw(original))
       Then("annotations give no control, direct decoding consumes the selected row, and malformed consumed data fails")
       decoded.foreach(_.toOption.get shouldBe record)
       refused.foreach(_.isSuccess shouldBe false)
@@ -252,14 +347,14 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
         proposal = facts.proposal.copy(inventory = facts.proposal.inventory.copy(occupiedPhases = phases)),
         boundary = facts.boundary.copy(boundary = facts.boundary.boundary.copy(authorizedHandoffAuthorities = authorities))))
       When("existing v1 data uses another Set presentation with repeated members")
-      val original = json(take(J.encodeC(value)))
+      val original = _json(take(J.encodeC(value)))
       val reordered = original.hcursor.downField("payload").downField("facts").downField("proposal")
         .downField("inventory").downField("occupiedPhases").withFocus(v =>
           Json.fromValues(v.asArray.get.reverse ++ v.asArray.get.take(1))).top.get
       val repeated = reordered.hcursor.downField("payload").downField("facts").downField("boundary")
         .downField("boundary").downField("authorizedHandoffAuthorities").withFocus(v =>
           Json.fromValues(v.asArray.get.reverse ++ v.asArray.get.take(1))).top.get
-      val decoded = take(J.decodeC(value.reference, raw(repeated)))
+      val decoded = take(J.decodeC(value.reference, _raw(repeated)))
       Then("typed Set meaning is retained without demanding the encoder's canonical body")
       decoded.facts.proposal.inventory.occupiedPhases shouldBe phases
       decoded.facts.boundary.boundary.authorizedHandoffAuthorities shouldBe authorities
@@ -284,7 +379,7 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
 
     "read nested annotations and absent optional values without a separate structure certificate" in {
       Given("a current context whose optional fields are absent or whose nested data has inert annotations")
-      val original = json(take(J.encodeC(record)))
+      val original = _json(take(J.encodeC(record)))
       val variants = Vector(
         original.hcursor.downField("payload").downField("owner").downField("requirement")
           .withFocus(_.mapObject(_.remove("disposition"))).top.get,
@@ -297,17 +392,17 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
         original.hcursor.downField("payload").downField("facts").downField("planning")
           .withFocus(_.mapObject(_.remove("allocations"))).top.get)
       When("these wire structures are decoded")
-      val results = variants.map(value => J.decodeC(record.reference, raw(value)))
+      val results = variants.map(value => J.decodeC(record.reference, _raw(value)))
       Then("the existing typed decoder recovers the same passive data without granting authority")
       results.foreach(_.toOption.get shouldBe record)
     }
 
     "enforce the UTF-8 byte bound and keep semantic numerical validation outside raw decoding" in {
       Given("raw structurally complete context data, not an admitted executable state")
-      val invalidRange = record.copy(facts = facts.copy(partition = facts.partition.copy(policy = facts.partition.policy.copy(phaseOverheadMinutes = -1))))
+      val invalidrange = record.copy(facts = facts.copy(partition = facts.partition.copy(policy = facts.partition.policy.copy(phaseOverheadMinutes = -1))))
       When("storage decoding and semantic construction are performed separately")
       Then("raw shape survives but the owning policy constructor rejects invalid semantics")
-      val decoded = take(J.decodeC(record.reference, take(J.encodeC(invalidRange))))
+      val decoded = take(J.decodeC(record.reference, take(J.encodeC(invalidrange))))
       C.prepareC(decoded, decoded.facts, instance, configuration, catalog).isSuccess shouldBe false
       val huge = record.copy(owner = record.owner.copy(presentation = record.owner.presentation.copy(
         currentSituation = "語" * (J.maximumPayloadBytes / 3 + 1))))

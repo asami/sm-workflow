@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Test allocations are data only, not genuine human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 21, 2026
  */
 private[admission] object SplitPhaseTypedStartFixture {
   val original = SplitPhasePartitionContextFixture
@@ -50,10 +50,102 @@ private[admission] object SplitPhaseTypedStartFixture {
 
 final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseTypedStartFixture.*
-  private def json(raw: String) = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
-  private def raw(value: Json) = J.schema + ":" + value.noSpaces
-  private def payload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
+  private def _json(raw: String) = parser.parse(raw.substring(J.schema.length + 1)).toOption.get
+  private def _raw(value: Json) = J.schema + ":" + value.noSpaces
+  private def _map_payload(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
     value.mapObject(o => o.add("payload", o("payload").get.mapObject(f)))
+  private def _map_configuration(value: Json)(f: io.circe.JsonObject => io.circe.JsonObject): Json =
+    value.hcursor.downField("payload").downField("configuration").withFocus(_.mapObject(f)).top.get
+
+  "Mechanical receipt policy in passive typed Start records" should afterWord(
+    "in spec:workflow-mechanical-receipt-capacity, example:E1, rules:R1,R3, phase:capacity-repair") {
+    "E1 derive full Start records with absent and sixteen MiB byte selections" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; test-owned Start records with standard optional integers")
+      val records = Vector(None, Some(16777216)).map { bytes =>
+        record.copy(configuration = configuration.copy(mechanicalReceiptMaxBytes = bytes))
+      }
+      When("the public typed Start encoder and decoder retain each full passive record")
+      val stored = records.map(value => take(J.encodeC(value)))
+      val decoded = stored.map(value => take(J.decodeC(record.reference, value)))
+      Then("generic aggregate derivation retains all record values within the unchanged Start storage bound")
+      decoded shouldBe records
+      decoded.map(value => take(value.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
+        Vector(1048576, 16777216)
+      stored.zip(records).foreach { case (encoded, expected) =>
+        val policy = _json(encoded).hcursor.downField("payload").downField("configuration")
+        policy.keys.get.toSet shouldBe Set("workflowStore", "migrationPolicy", "retentionPolicy", "leasePolicy",
+          "delivery", "mechanicalReceiptMaxBytes")
+        policy.downField("mechanicalReceiptMaxBytes").focus.get shouldBe
+          expected.configuration.mechanicalReceiptMaxBytes.fold(Json.Null)(Json.fromInt)
+      }
+      J.schema shouldBe "sm-workflow.split-phase-typed-start-record.v3"
+      J.maximumPayloadBytes shouldBe 1048576
+    }
+
+    "E1 interpret absent and null optional Start bytes as the historical one MiB default" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; historical five-field and ordinary optional-null Start configurations")
+      val larger = record.copy(configuration = configuration.copy(mechanicalReceiptMaxBytes = Some(16777216)))
+      val original = _json(take(J.encodeC(larger)))
+      val historical = _map_configuration(original)(_.remove("mechanicalReceiptMaxBytes"))
+      val optionalnull = _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", Json.Null))
+      When("the generic typed Start decoder consumes both ordinary optional representations")
+      val decoded = Vector(historical, optionalnull).map(value => take(J.decodeC(record.reference, _raw(value))))
+      Then("the original record values survive and None resolves exactly CNCF's one MiB default")
+      decoded shouldBe Vector(record, record)
+      decoded.map(_.configuration.mechanicalReceiptMaxBytes) shouldBe Vector(None, None)
+      decoded.map(value => take(value.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
+        Vector(1048576, 1048576)
+    }
+
+    "E1 reject noninteger Start data and missing original Configuration fields" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; noninteger optional data and incomplete historical Start configurations")
+      val original = _json(take(J.encodeC(record)))
+      val invalidvalues = Vector(Json.True, Json.fromString("not-an-integer"), Json.arr(), Json.obj(),
+        Json.fromBigDecimal(BigDecimal("1.5")), Json.fromLong(2147483648L))
+      val malformed = invalidvalues.map(value => _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", value)))
+      val incomplete = Vector("workflowStore", "migrationPolicy", "retentionPolicy", "leasePolicy", "delivery")
+        .map(field => _map_configuration(original)(_.remove("mechanicalReceiptMaxBytes").remove(field)))
+      When("the public typed Start decoder consumes each malformed or incomplete Configuration")
+      val refused = (malformed ++ incomplete).map(value => J.decodeC(record.reference, _raw(value)))
+      Then("ordinary generic decoding refuses malformed integer data and the original five fields remain required")
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
+    "E1 validate operational ranges before preparing with the independently selected current policy" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; passive Start integer snapshots outside the operational range")
+      val original = _json(take(J.encodeC(record)))
+      val invalid = Vector(0, -1, 67108865, Int.MaxValue).map { bytes =>
+        val raw = _map_configuration(original)(_.add("mechanicalReceiptMaxBytes", Json.fromInt(bytes)))
+        take(J.decodeC(record.reference, _raw(raw)))
+      }
+      val current = take(configuration.copy(mechanicalReceiptMaxBytes = Some(16777216)).validateC)
+      When("normal current configuration validation precedes typed Start preparation")
+      val refused = invalid.map { value =>
+        value.configuration.validateC.flatMap(selected =>
+          T.prepareC(value, source, Some(proposal), catalog, selected))
+      }
+      val prepared = invalid.map(value => take(T.prepareC(value, source, Some(proposal), catalog, current)))
+      Then("invalid operational selections fail while passive snapshots give no authority over the current policy")
+      refused.foreach(_.isSuccess shouldBe false)
+      prepared.foreach(_.record shouldBe record.copy(configuration = current))
+    }
+
+    "E1 use the current sixteen MiB policy during preparation of a historical Start record" in {
+      Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E1; an old passive Start configuration and a current sixteen MiB policy")
+      val historical = _map_configuration(_json(take(J.encodeC(record))))(_.remove("mechanicalReceiptMaxBytes"))
+      val decoded = take(J.decodeC(record.reference, _raw(historical)))
+      val current = take(configuration.copy(mechanicalReceiptMaxBytes = Some(16777216)).validateC)
+      When("the existing preparation boundary receives current test-owned source, proposal, catalog and Configuration")
+      val prepared = take(T.prepareC(decoded, source, Some(proposal), catalog, current))
+      Then("the passive old policy remains one MiB while the prepared record uses the full current configuration")
+      decoded.configuration.mechanicalReceiptMaxBytes shouldBe None
+      take(decoded.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 1048576
+      prepared.record shouldBe record.copy(configuration = current)
+      take(prepared.record.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 16777216
+      prepared.initial.lifecycle shouldBe Lifecycle.NotStarted
+      prepared.initial.history shouldBe Vector.empty
+    }
+  }
 
   "Typed Start construction" should {
     "preserve allocations and bind the actual Start and instance targets" in {
@@ -143,11 +235,11 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
         Set("input", "participantIdentity", "source", "proposal", "planningContext")
 
       Given("the retained execution mode with unused Start business fields and source removed")
-      val execution = json(take(J.encodeC(record)))
-      val routing = payload(execution)(_.add("input", Json.obj("invocationMode" -> Json.fromString(record.input.invocationMode)))
+      val execution = _json(take(J.encodeC(record)))
+      val routing = _map_payload(execution)(_.add("input", Json.obj("invocationMode" -> Json.fromString(record.input.invocationMode)))
         .remove("source").add("proposal", Json.False)
         .add("selection", Json.Null).add("command", Json.False))
-      val routingwire = raw(routing)
+      val routingwire = _raw(routing)
 
       When("the later owner consumes only its actual saved execution's routing")
       val route = take(J.decodeRoutingC(record.reference, routingwire))
@@ -167,27 +259,27 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
 
     "decode consumed checkpoint data without regenerating a whole-copy certificate" in {
       Given("the exact typed Start wire and variants with altered nested or root fields")
-      val original = json(take(J.encodeC(record)))
+      val original = _json(take(J.encodeC(record)))
       val variants = Vector(original.mapObject(_.add("schemaVersion", Json.fromString("legacy"))),
-        payload(original)(o => o.add("source", o("source").get.mapObject(_.remove("authority")))),
-        payload(original)(o => o.add("input", o("input").get.mapObject(_.add("invocationMode", Json.True)))))
+        _map_payload(original)(o => o.add("source", o("source").get.mapObject(_.remove("authority")))),
+        _map_payload(original)(o => o.add("input", o("input").get.mapObject(_.add("invocationMode", Json.True)))))
       variants.foreach { v =>
         When("an incompatible consumed schema or field is decoded")
-        val decoded = J.decodeC(record.reference, raw(v))
+        val decoded = J.decodeC(record.reference, _raw(v))
         Then("the actual consumed data cannot be decoded")
         decoded.isSuccess shouldBe false
       }
       Given("passive unknown members in the envelope, payload and consumed source record")
       val compatible = original.mapObject(_.add("prepared", Json.True))
-      val unknowns = Vector(compatible, payload(original)(_.add("selection", Json.False).add("workflowRevision", Json.Null)),
-        payload(original)(o => o.add("input", o("input").get.mapObject(_.add("generator", Json.True)))),
-        payload(original)(o => o.add("source", o("source").get.mapObject(_.add("digest", Json.fromString("obsolete"))))))
+      val unknowns = Vector(compatible, _map_payload(original)(_.add("selection", Json.False).add("workflowRevision", Json.Null)),
+        _map_payload(original)(o => o.add("input", o("input").get.mapObject(_.add("generator", Json.True)))),
+        _map_payload(original)(o => o.add("source", o("source").get.mapObject(_.add("digest", Json.fromString("obsolete"))))))
       When("the consumed typed record is decoded without whole JSON regeneration")
-      val actual = unknowns.map(v => take(J.decodeC(record.reference, raw(v))))
+      val actual = unknowns.map(v => take(J.decodeC(record.reference, _raw(v))))
       Then("unused passive members neither reject the data nor authorize an operation")
       actual.foreach(_ shouldBe record)
       When("the exact wire is requested with a different reference revision")
-      val revision = J.decodeC(record.reference.copy(revision = "2"), raw(original))
+      val revision = J.decodeC(record.reference.copy(revision = "2"), _raw(original))
       Then("the reference mismatch is refused")
       revision.isSuccess shouldBe false
       When("a legacy Start record schema is supplied")

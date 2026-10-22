@@ -13,7 +13,7 @@ import SplitPhaseSelectedDocumentEffect.{Observation, Status}
 /** Saved selected business edits, using actual typed File facts in the current UoW.
   * Each file installation is independent; retained partial effects are never replayed.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSelectedDocumentFiles {
@@ -89,7 +89,7 @@ private[smworkflow] object WorkflowSelectedDocumentFiles {
   } yield FileTarget(identity)
 
   private def _exact_c(values: Map[String, ConfigurationValue], key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(values, key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(values, key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => invalid("requires an explicit exact repository/workspace association")

@@ -24,7 +24,7 @@ SPEC = importlib.util.spec_from_file_location("native_goal_command_authority_uti
 COMMAND = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMAND)
 
-OPTIONS = {"executable", "host", "task", "output", "request", "reference",
+OPTIONS = {"executable", "runtime-root", "task", "output", "request", "reference",
            "participant", "issuer", "occurred-at", "collection"}
 
 
@@ -57,25 +57,25 @@ def preparation_command(options, executable, task_fd):
              "reference": COMMAND.existing_file(COMMAND.explicit_path(options["reference"])).as_uri(),
              "participant": options["participant"], "issuer": options["issuer"],
              "occurredAt": options["occurred-at"], "collection": options["collection"]}
-    return COMMAND.command_prefix(executable, COMMAND.explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority",
+    return COMMAND.command_prefix(executable, COMMAND.explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareAuthority",
         "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
 
 def execute(options):
-    executable, host, task, output = (COMMAND.explicit_path(options[name])
-                                   for name in ("executable", "host", "task", "output"))
-    COMMAND.require(task.parent == host / "target/sm-workflow/tasks", "task must be a direct owned host task")
+    executable, runtime_root, task, output = (COMMAND.explicit_path(options[name])
+                                   for name in ("executable", "runtime-root", "task", "output"))
+    COMMAND.require(task.parent == runtime_root / "target/sm-workflow/tasks", "task must be a direct owned runtime_root task")
     COMMAND.require(output != task and task in output.parents, "output must be beneath the selected task")
     COMMAND.installed_executable(executable)
-    with COMMAND.selected_directory(host):
-        for path in (host / ".textus/config.json", host / ".textus/assembly.yaml"):
+    with COMMAND.selected_directory(runtime_root):
+        for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
             COMMAND.existing_file(path)
         with COMMAND.selected_directory(task) as task_fd, COMMAND.selected_directory(output) as output_fd:
             COMMAND.require(not os.listdir(output_fd), "output directory must be empty")
             command = preparation_command(options, executable, task_fd)
-            context = COMMAND.exchange_context(command, host, output, COMMAND.routing(task_fd))
-            text, response = COMMAND.native_call(command, host, output_fd, context)
+            context = COMMAND.exchange_context(command, runtime_root, output, COMMAND.routing(task_fd))
+            text, response = COMMAND.native_call(command, runtime_root, output_fd, context)
             COMMAND.require(isinstance(response.get("datastore"), list), "preparation must return a datastore array")
             COMMAND.response_progress(response, context)
             sys.stdout.write(text)

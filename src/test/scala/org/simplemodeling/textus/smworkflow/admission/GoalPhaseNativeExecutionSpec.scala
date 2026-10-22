@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** All descriptors and observations here are specification-owned data, never
   * genuine installed executor, reviewer, permission or provider provenance.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 23, 2026
   */
 final class GoalPhaseNativeExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val profile = WorkflowConcreteExecutionProfile("spec-current", "spec-provider", "spec-model", Map("effort" -> "bounded"))
@@ -224,7 +224,7 @@ final class GoalPhaseNativeExecutionSpec extends AnyWordSpec with Matchers with 
       val partial = Vector(Map(WorkflowExecutionProfileParameters.declaration.name -> _mapping_json.noSpaces),
         Map(GoalPhaseNativeExecution.declaration.name -> _origin_json.noSpaces))
       When("the actual normal factory consumes each canonical parameter snapshot")
-      val rejected = partial.map(extra => ThreeWorkflowHostParameters.factory.primaryFactory.createPrimaryC(
+      val rejected = partial.map(extra => ThreeWorkflowRuntimeParameters.factory.primaryFactory.createPrimaryC(
         create((base ++ extra).view.mapValues(ConfigurationValue.StringValue.apply).toMap)))
       Then("both reject the missing operational half before storage or execution can be bound")
       rejected.foreach { result =>

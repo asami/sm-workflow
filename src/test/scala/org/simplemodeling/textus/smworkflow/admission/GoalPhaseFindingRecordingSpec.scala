@@ -14,7 +14,7 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire
+import org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionQuestionWire
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseFindingRecording as R
 import GoalPhaseNativeWork as S
@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure specification input and admitted controller examples, never native effect proof.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -31,9 +31,9 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
   private val _candidate = "docs/candidates.md"
   private val _policy = R.Policy(_hygiene, _candidate)
   private val _paths = Vector("one.scala", _hygiene, _candidate)
-  private val _plan = NativeHostHumanEvidenceFixture.plan.copy(steps =
-    NativeHostHumanEvidenceFixture.plan.steps.map(_.copy(ownedPaths = _paths)))
-  private val _base = NativeHostHumanEvidenceFixture.snapshot
+  private val _plan = NativeHumanEvidenceFixture.plan.copy(steps =
+    NativeHumanEvidenceFixture.plan.steps.map(_.copy(ownedPaths = _paths)))
+  private val _base = NativeHumanEvidenceFixture.snapshot
   private val _reference = ContextReference("independent-review", "7")
   private val _observation = R.Observation("hygiene:1", "HYGIENE", "Clarify a name", "The accepted behavior already satisfies the requirement")
   private val _idea = R.Observation("candidate:1", "DEVELOPMENT_CANDIDATE", "Consider a future feature", "It is outside this selected requirement")
@@ -46,7 +46,7 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
   private val _recorded = _items.map(i => R.ItemResult(i.sourceReference, i.observation.identity, "recorded",
     Vector(R.SavedSection(i.destination, "Finding " + i.observation.identity)), "Saved the assigned nonblocking finding"))
   private val _result = R.Result("completed", "All assigned findings recorded", _recorded)
-  private val _work = NativeHostHumanEvidenceFixture.work.copy(selectedPlan = _plan)
+  private val _work = NativeHumanEvidenceFixture.work.copy(selectedPlan = _plan)
   private def _payload(value: Json)(f: Json => Json): Json = value.mapObject(fields => fields.add("payload", f(fields("payload").get)))
   private def _review: O.State = {
     val initial = take(O.startC(_plan, _base))
@@ -248,30 +248,30 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
 
     "retain observations in Human selected result nodes and normalize the actual public declaration wire name" in {
       Given("an issued Human fixture question retaining a ReviewStep result with nonblocking observations")
-      val question = NativeHostHumanEvidenceFixture.goalQuestion
+      val question = NativeHumanEvidenceFixture.goalQuestion
       val decision = question.current.asInstanceOf[org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]]
       val original = decision.request.input.get
       val input = original.value.copy(work = _work.copy(kind = "ReviewStep"),
         result = S.Result("decision-needed", "Explicit review question", Vector.empty, reviewObservations = Some(_observations)))
       val issued = question.copy(current = decision.copy(request = decision.request.copy(input = Some(original.copy(value = input)))))
       When("the actual Human source and native scope select the optional result observations")
-      val source = take(ThreeWorkflowHostEvidencePorts.goalHumanSourceC(issued))
-      val binding = take(NativeHostHumanScope.questionBindingC(issued, source))
-      val selected = NativeHostHumanScope.selectQuestion(binding, NativeHostEvidence.Purpose.GoalHuman).toOption.get
+      val source = take(ThreeWorkflowExternalEvidencePorts.goalHumanSourceC(issued))
+      val binding = take(NativeHumanDecisionScope.questionBindingC(issued, source))
+      val selected = NativeHumanDecisionScope.selectQuestion(binding, NativeExternalEvidence.Purpose.GoalHuman).toOption.get
       val snake = binding.hcursor.downField("source").downField("result").withFocus(_.mapObject(fields =>
         fields.remove("reviewObservations").add("review_observations", fields("reviewObservations").get))).top.get
-      val normalized = NativeHostHumanQuestionWire.normalize(snake, NativeHostEvidence.Purpose.GoalHuman)
+      val normalized = NativeHumanDecisionQuestionWire.normalize(snake, NativeExternalEvidence.Purpose.GoalHuman)
       Then("both declaration and generated wire names retain the same exact content and absent sources remain unchanged")
       selected.hcursor.downField("source").downField("result").get[Json]("reviewObservations") shouldBe Right(_observations.asJson)
-      NativeHostHumanScope.selectQuestion(normalized, NativeHostEvidence.Purpose.GoalHuman) shouldBe Right(selected)
+      NativeHumanDecisionScope.selectQuestion(normalized, NativeExternalEvidence.Purpose.GoalHuman) shouldBe Right(selected)
       val changed = binding.hcursor.downField("source").downField("result").downField("reviewObservations")
         .downField("items").downArray.withFocus(_.mapObject(_.add("rationale", Json.fromString("Different selected rationale")))).top.get
-      NativeHostHumanScope.selectQuestion(changed, NativeHostEvidence.Purpose.GoalHuman).toOption.get should not be selected
-      val historical = take(ThreeWorkflowHostEvidencePorts.goalHumanSourceC(question))
+      NativeHumanDecisionScope.selectQuestion(changed, NativeExternalEvidence.Purpose.GoalHuman).toOption.get should not be selected
+      val historical = take(ThreeWorkflowExternalEvidencePorts.goalHumanSourceC(question))
       historical.hcursor.downField("result").focus shouldBe None
       val nullresult = binding.hcursor.downField("source").downField("result").withFocus(_.mapObject(
         _.add("reviewObservations", Json.Null))).top.get
-      NativeHostHumanScope.selectQuestion(nullresult, NativeHostEvidence.Purpose.GoalHuman).isLeft shouldBe true
+      NativeHumanDecisionScope.selectQuestion(nullresult, NativeExternalEvidence.Purpose.GoalHuman).isLeft shouldBe true
     }
   }
 }

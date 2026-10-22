@@ -19,12 +19,12 @@ import NativeWorkflowCliFixture as F
   * The parent must establish native local effect authorization before execution.
   * Saved inputs attribute observations; they authenticate no operator or provider.
   * @since   Oct. 17, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{record, take}
+  import NativeCallerExecutionFixture.{record, take}
 
   private val _source = "src/main/scala/HistoryExample.scala"
   private val _message = "P61 isolated source-history Step"
@@ -127,7 +127,7 @@ final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Match
       val referencefile = _local_file(Path.of(referenceuri), root)
       val configfile = root.resolve(".textus/config.json")
       val config = _read(configfile)
-      val issuer = _text(config, NativeHostEvidence.prefix + "issuer")
+      val issuer = _text(config, NativeExternalEvidence.prefix + "issuer")
       val startinput = _read(root.resolve("selected-input.json"))
       val selections = _array(startinput, "datastore").filter(value =>
         _text(value, "collection") == "entity:smworkflow.cli.goal_selection")
@@ -210,16 +210,16 @@ final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Match
       validation.checks shouldBe reviewed.work.get.review.get.checks
       waiting.authorityContext.size shouldBe 1
       val authority = waiting.authorityContext.get
-      authority.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+      authority.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
       authority.componentInstance.trim should not be empty
-      val scope = NativeHostExecutionFixture.json(authority.scope)
+      val scope = NativeCallerExecutionFixture.json(authority.scope)
       _text(scope, "instance") shouldBe session
       _text(scope, "plan") shouldBe reviewed.work.get.selectedPlan.identity
       _text(scope, "plan_revision") shouldBe reviewed.work.get.selectedPlan.revision
       _text(scope, "step") shouldBe "step-1"
       _text(scope, "review_evidence").trim should not be empty
-      scope.hcursor.downField("parent").focus.get shouldBe NativeHostExecutionFixture.json(reviewed.work.get.originalBase.toRecord())
-      scope.hcursor.downField("candidate").focus.get shouldBe NativeHostExecutionFixture.json(reviewed.work.get.candidate.get.toRecord())
+      scope.hcursor.downField("parent").focus.get shouldBe NativeCallerExecutionFixture.json(reviewed.work.get.originalBase.toRecord())
+      scope.hcursor.downField("candidate").focus.get shouldBe NativeCallerExecutionFixture.json(reviewed.work.get.candidate.get.toRecord())
       _git(directory, repository, "waiting", GitRead.Head).trim shouldBe beforehead
       _executions(root) shouldBe beforechecks
       Files.readAllBytes(source).toVector shouldBe beforesource

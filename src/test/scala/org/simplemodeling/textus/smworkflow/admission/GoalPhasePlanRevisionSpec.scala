@@ -20,7 +20,7 @@ import GoalPhaseDocumentPlan as P
 /** Pure proposal/controller examples with explicit fixture answer references.
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -97,7 +97,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
         "Specification-owned current combined diff", Vector.empty)))
   }
   private def _submitted(request: S.Request, result: S.Result): ContinuationResult[S.Result] = {
-    val handle = NativeHostHumanEvidenceFixture.goalQuestion.handle
+    val handle = NativeHumanEvidenceFixture.goalQuestion.handle
     val reference = ContextReference("specification-phase-review-result", "18")
     ContinuationResult(handle, StateMachineRunIdentity("specification-run"), ContinuationIdentity("specification-phase-review"),
       StateMachineRevision("18"), ContextSnapshot(handle.workflowRevision.value), TypedValue(S.resultCodec.typeIdentity, result),
@@ -348,7 +348,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       val paused = _take(GoalPhaseNativeReview.completedStateC(result, "fixture-phase-review", phase))
       val refused = invalid.map(value => GoalPhaseNativeReview.completedStateC(value, "fixture-review", phase)) ++
         invalid.map(value => GoalPhaseNativeReview.retainPriorC(Vector.empty, _review_request(phase), _submitted(_review_request(phase), value))) ++
-        invalid.map(value => ThreeWorkflowHostEvidencePorts.goalReviewBindingC(null, _review_request(phase),
+        invalid.map(value => ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(null, _review_request(phase),
           _submitted(_review_request(phase), value))) ++
         Vector(GoalPhaseNativeReview.completedStateC(result, "fixture-step-review", step))
       val documentrefused = GoalPhaseOrderedHumanDecision.admitRevisionSourceC(paused, "ReviewPhase", result,
@@ -507,7 +507,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
 
     "admit proposals only in ordinary implementation or repair decisions and preserve every existing report requirement" in {
       Given("actual typed ordinary work and repair fixtures with a raw complete bounded proposal")
-      val request = NativeHostHumanEvidenceFixture.work
+      val request = NativeHumanEvidenceFixture.work
       val proposed = _proposal(request.selectedPlan.copy(revision = "2", steps = request.selectedPlan.steps.map(_.copy(purpose = "Revised purpose"))))
       val result = S.Result("decision-needed", "Explicit selected design gap", Vector.empty, planRevision = Some(proposed))
       val repair = request.copy(kind = "RepairStep", repairDirective = Some(O.RepairDirective("Assigned finding", Vector("Finding"))),
@@ -536,7 +536,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
 
     "retain saved question capture through exact optional codecs without selecting later project configuration" in {
       Given("a typed saved revision question whose captured acceptance precedes different later host defaults")
-      val question = NativeHostHumanEvidenceFixture.revisionQuestion()
+      val question = NativeHumanEvidenceFixture.revisionQuestion()
       val input = question.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request.input.get.value
       val captured = input.planRevision.get
       val later = A.Project(Vector(A.Condition("later", "step", true, "Different later configuration")))
@@ -555,7 +555,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       GoalPhaseOrderedHumanDecision.inputCodec.encode(ordinary).hcursor.downField("planRevision").focus shouldBe None
       GoalPhaseOrderedHumanDecision.issuedChoicesC(question).toOption.get shouldBe
         Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
-      GoalPhaseOrderedHumanDecision.issuedChoicesC(NativeHostHumanEvidenceFixture.goalQuestion).toOption.get shouldBe
+      GoalPhaseOrderedHumanDecision.issuedChoicesC(NativeHumanEvidenceFixture.goalQuestion).toOption.get shouldBe
         Vector("ResumeAssignedWork", "Defer", "Cancel")
     }
 

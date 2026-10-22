@@ -19,14 +19,14 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 23, 2026
  */
 final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "checkpoint", name))
   private val declaration = SplitPhaseManagedStartAssembly.Declaration(f.configuration, collection("instances"), collection("continuations"))
   private val ip = SplitPhasePlanningInputReadPolicy.prefix
   private val cp = SplitPhasePartitionContextReadPolicy.prefix
-  private val sp = SplitPhaseHostSelectionReadPolicy.prefix
+  private val sp = SplitPhaseInputSelectionReadPolicy.prefix
   private val tp = SplitPhaseTypedStartReadPolicy.prefix
   private val ep = SplitPhasePartitionEnrichmentStorage.prefix
   private val values = Map[String, ConfigurationValue](

@@ -1,4 +1,12 @@
-# Normal native host preparation Operations
+# Normal native workflow preparation Operations
+
+Terminology revision 2026-10-23: the target service name is
+`NativeWorkflowPreparationService`, with `--runtime-root` for its configuration
+directory. Caller execution conversion uses Caller names; Human/review/authority
+preparation uses its concrete purpose. The [rename contract](runtime-caller-terminology.md)
+supersedes the old names in the current implementation examples below. These
+examples are migration inputs, not compatibility promises. Regenerate and update
+them with the connected implementation under the [adoption plan](../notes/runtime-caller-terminology-adoption-plan.md).
 
 The normal configured SmWorkflow bundle binds eight passive COMMAND Operations in NativeHostPreparationService alongside the three session workflow services: six import preparations and two host-execution conversions. Each consumes one named input of a distinct generated value type. Preparation requires the normal host context; execution conversion also consumes the actual issued context and explicitly retained host artifacts. The existing semantic MCP publication set remains unchanged; these Operations issue no WorkOrder or workflow stage.
 

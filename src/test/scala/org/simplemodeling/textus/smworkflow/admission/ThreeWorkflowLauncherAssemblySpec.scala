@@ -16,8 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- *  version Oct. 15, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -63,9 +62,9 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
 
     "bind generated passive preparation signatures without adding semantic MCP publication" in {
       Given("the six generated preparation declarations and unchanged workflow publication boundary")
-      val declared = SmWorkflowComponent.NativeHostPreparationServiceService
+      val declared = SmWorkflowComponent.NativeWorkflowPreparationServiceService
       When("the normal preparation service binds its actual generated metadata")
-      val bound = NativeHostPreparationServiceAssembly.bind
+      val bound = NativeWorkflowPreparationServiceAssembly.bind
       Then("every actual operation retains its concrete input and output contract while publication stays workflow owned")
       bound.name shouldBe declared.name
       bound.operations.operations.map(_.name) shouldBe declared.operations.operations.map(_.name)
@@ -80,7 +79,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       Given("a real canonical creation capsule and a trusted host decoder with no production verifiers installed")
       val create = creation()
       var observed = Vector.empty[(ComponentCreate, ComponentInitializationParameters, ExecutionContext)]
-      val decoder = new ThreeWorkflowLauncherAssembly.HostDecoder {
+      val decoder = new ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
         def decodeC(c: ComponentCreate, p: ComponentInitializationParameters, context: ExecutionContext) = {
           observed :+= ((c, p, context))
           Consequence.configurationInvalid("test-only independent host evidence is not installed")
@@ -99,7 +98,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       Given("an owning creation capsule without the required independent declarations or verifiers")
       val create = creation()
       given ExecutionContext = ExecutionContext.create()
-      val incomplete = ThreeWorkflowLauncherAssembly.Host(null, null, null, null, null)
+      val incomplete = ThreeWorkflowLauncherAssembly.RuntimeComposition(null, null, null, null, null)
       When("the native bundle binder receives that incomplete host")
       val result = ThreeWorkflowLauncherAssembly.bindC(create, incomplete)
       Then("it fails without manufacturing storage, Human consent, review evidence or process grants")

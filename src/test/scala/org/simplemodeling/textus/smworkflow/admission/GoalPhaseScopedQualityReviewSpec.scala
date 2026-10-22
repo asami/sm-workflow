@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Recording ports establish consumer behavior only, never actual provider acceptance.
   * @since   Oct. 17, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseScopedQualityReviewSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,7 +25,7 @@ final class GoalPhaseScopedQualityReviewSpec extends AnyWordSpec with Matchers w
   import ConfigurationValue.*
   private val _checks = Vector("semantic-consistency", "implementation-quality", "excessive-checks", "integration")
   private val _context = GoalPhaseNativeReview.Context(Vector("one.scala"), "actual candidate diff", Vector.empty)
-  private val _input = NativeHostHumanEvidenceFixture.work.copy(kind = "ReviewStep", generation = 2,
+  private val _input = NativeHumanEvidenceFixture.work.copy(kind = "ReviewStep", generation = 2,
     review = Some(_context))
   private val _handle = WorkflowHandle(SmWorkflowComponent.componentId, WorkflowDefinitionIdentity("GoalPhaseWorkflow"),
     WorkflowDefinitionRevision("specification"), InstanceIdentity("instance"))

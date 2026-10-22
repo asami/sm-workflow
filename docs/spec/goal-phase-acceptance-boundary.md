@@ -205,9 +205,9 @@ is added; unrelated Plan presentation is outside the selected target.
 | --- | --- | --- |
 | E1 | GoalPhaseAcceptanceBoundarySpec | Existing Component resolution, complete override/exclusion and untouched defaults |
 | E2 | GoalPhaseAcceptanceBoundarySpec | Duplicate/null/invalid configuration or adoption; scoped report/status/identity/bounds rejection |
-| E3 | GoalPhaseAcceptanceBoundarySpec; NativeHostReviewPreparationSpec | Saved Plan/Start/Work/Result codecs and generated Record/JSON report and effective boundary |
+| E3 | GoalPhaseAcceptanceBoundarySpec; NativeReviewPreparationSpec | Saved Plan/Start/Work/Result codecs and generated Record/JSON report and effective boundary |
 | E4 | GoalPhaseAcceptanceBoundarySpec | Initial/repair required failure versus excluded/advisory completion |
-| E5 | GoalPhaseAcceptanceBoundarySpec; NativeHostReviewScopeSpec; NativeHostReviewPreparationSpec | Owning Step/Phase dispositions, applicable subsets, scoped repair and meaningful independent target/alias admission |
+| E5 | GoalPhaseAcceptanceBoundarySpec; NativeReviewScopeSpec; NativeReviewPreparationSpec | Owning Step/Phase dispositions, applicable subsets, scoped repair and meaningful independent target/alias admission |
 | E6 | GoalPhaseAcceptanceBoundarySpec | Unconfigured compatibility and refusal of forged report or uncaptured adoption |
 | E7 | ThreeWorkflowGoalOperationSpec, fourth configured whole-Phase variant | Normal Submit required-report/failure rejection with unchanged pending state |
 | E8 | Same fourth variant | Original project/adopted meaning across changed host defaults, SQLite reopen, repair and Human |

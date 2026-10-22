@@ -1,6 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.time.Instant
+import java.time.{Clock, ZoneId}
+import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.ContextReference
@@ -12,11 +14,12 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import SplitPhaseExplicitPartitionFixture.take
 import CommonEvidence as E
+import org.simplemodeling.textus.smworkflow.value as V
 
 /** Storage-failure branches use explicitly specification-owned observations.
   * Real File/UoW/SQL and fresh-process retrieval have separate connected coverage.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -136,6 +139,336 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       invalid._1.status shouldBe "unavailable"
       store.rows shouldBe empty
       store.writes shouldBe 0
+    }
+  }
+  "Managed Evidence batches and representations" should {
+    "preserve allocation safety across metadata interruptions" which {
+      "leave no allocation when representation create fails before persistence and allow a later fresh attempt" in {
+        Given("an empty managed store whose representation create fails before persisting a row")
+        import CommonEvidenceLifecycleFixture.*
+        val store = new CommonEvidenceLifecycleFixture.Memory
+        val s = source()
+        store.failRepresentation = true
+        When("a gzip archive cannot acknowledge its representation")
+        val interrupted = take(E.archiveManagedC(store, policy, s, "original\n", "gzip", clock))
+        Then("no allocation intent directory or File effect is created")
+        interrupted._1.status shouldBe "indeterminate"
+        interrupted._1.evidence shouldBe None
+        interrupted._2 shouldBe None
+        store.rows shouldBe empty
+        store.names shouldBe 1
+        store.representationCreates shouldBe 1
+        store.allocationCreates shouldBe 0
+        store.directories shouldBe empty
+        store.files shouldBe empty
+        store.writes shouldBe 0
+        Given("the provider recovers with no durable representation allocation or File to reuse")
+        store.failRepresentation = false
+        When("a fresh identity archive is requested for the same business source")
+        val fresh = take(E.archiveManagedC(store, policy, s, "original\n", "identity", clock))
+        val saved = fresh._2.get._1
+        val representation = take(E.representationC(store, saved.identity))
+        Then("the source keeps its stable Evidence identity with a new acknowledged final path")
+        fresh._1.status shouldBe "stored"
+        saved.identity shouldBe E.identity(s)
+        saved.path shouldBe "logs/2026/10/repository/6.4/selected-goal/opaque-2.log"
+        representation shouldBe Some("identity")
+        store.names shouldBe 2
+        store.representationCreates shouldBe 2
+        store.allocationCreates shouldBe 1
+        store.files.keySet shouldBe Set(saved.path)
+        store.writes shouldBe 1
+      }
+      "keep a persisted representation with a lost acknowledgement indeterminate through every archive route" in {
+        Given("a managed store that persists the gzip representation but loses its create acknowledgement")
+        import CommonEvidenceLifecycleFixture.*
+        val store = new CommonEvidenceLifecycleFixture.Memory
+        val s = source()
+        val id = E.identity(s)
+        store.loseRepresentationAcknowledgement = true
+        When("the initial managed archive reaches the unacknowledged representation create")
+        val interrupted = take(E.archiveManagedC(store, policy, s, "original\n", "gzip", clock))
+        Then("only the representation row survives without an allocation or File effect")
+        interrupted._1.status shouldBe "indeterminate"
+        interrupted._1.evidence shouldBe None
+        interrupted._2 shouldBe None
+        store.rows.keySet shouldBe Set(id + ":representation")
+        store.allocationCreates shouldBe 0
+        store.writes shouldBe 0
+        Given("the representation provider recovers while its orphan row remains durable")
+        store.loseRepresentationAcknowledgement = false
+        val original = store.rows
+        When("the same compression another compression and the original archive API consume that source again")
+        val repeated = Vector("gzip", "identity").map(compression =>
+          take(E.archiveManagedC(store, policy, s, "original\n", compression, clock))) :+
+          take(E.archiveC(store, policy, s, "original\n", now))
+        Then("every route reports the orphan explicitly without allocating a new name row path or File")
+        repeated.foreach { result =>
+          result._1.status shouldBe "indeterminate"
+          result._1.message should include("without an allocation")
+          result._1.evidence shouldBe None
+          result._2 shouldBe None
+        }
+        store.rows shouldBe original
+        store.names shouldBe 1
+        store.representationCreates shouldBe 1
+        store.allocationCreates shouldBe 0
+        store.directories shouldBe empty
+        store.files shouldBe empty
+        store.writes shouldBe 0
+      }
+      "keep an acknowledged representation orphaned when allocation create fails without inferring a retry" in {
+        Given("a managed store that acknowledges identity representation but fails allocation create")
+        import CommonEvidenceLifecycleFixture.*
+        val store = new CommonEvidenceLifecycleFixture.Memory
+        val s = source()
+        val id = E.identity(s)
+        store.failAllocation = true
+        When("the initial managed archive crosses the allocation create boundary")
+        val interrupted = take(E.archiveManagedC(store, policy, s, "original\n", "identity", clock))
+        val representation = take(E.representationC(store, id))
+        Then("the acknowledged representation remains and no allocation intent or File exists")
+        interrupted._1.status shouldBe "indeterminate"
+        interrupted._1.evidence shouldBe None
+        interrupted._2 shouldBe None
+        representation shouldBe Some("identity")
+        store.rows.keySet shouldBe Set(id + ":representation")
+        store.allocationCreates shouldBe 1
+        store.writes shouldBe 0
+        Given("allocation storage recovers while the orphan identity representation remains")
+        store.failAllocation = false
+        val original = store.rows
+        When("identity gzip and the legacy archive API encounter the same orphan")
+        val repeated = Vector("identity", "gzip").map(compression =>
+          take(E.archiveManagedC(store, policy, s, "original\n", compression, clock))) :+
+          take(E.archiveC(store, policy, s, "original\n", now))
+        Then("all remain indeterminate without another allocation attempt or any File effect")
+        repeated.foreach { result =>
+          result._1.status shouldBe "indeterminate"
+          result._1.message should include("without an allocation")
+          result._1.evidence shouldBe None
+          result._2 shouldBe None
+        }
+        store.rows shouldBe original
+        store.names shouldBe 1
+        store.representationCreates shouldBe 1
+        store.allocationCreates shouldBe 1
+        store.directories shouldBe empty
+        store.files shouldBe empty
+        store.writes shouldBe 0
+      }
+      "keep a valid legacy allocation without representation as identity and refuse gzip conversion" in {
+        Given("a valid original allocation observation and payload with no representation side row")
+        import CommonEvidenceLifecycleFixture.*
+        val store = new CommonEvidenceLifecycleFixture.Memory
+        val s = source()
+        val legacy = take(E.archiveC(store, policy, s, "legacy 日本語\n", now))
+        val saved = legacy._2.get._1
+        val original = store.rows
+        When("managed identity and gzip requests consume that retained legacy source")
+        val identityarchive = take(E.archiveManagedC(store, policy, s, "legacy 日本語\n", "identity", clock))
+        val gziparchive = take(E.archiveManagedC(store, policy, s, "legacy 日本語\n", "gzip", clock))
+        val representation = take(E.representationC(store, saved.identity))
+        val loaded = take(E.loadedC(store, saved.identity)).get
+        val payload = take(E.payloadC(store, loaded._1))
+        Then("identity reuses the exact original path while gzip conflicts without retrofitting or another write")
+        identityarchive shouldBe legacy
+        gziparchive._1.status shouldBe "conflict"
+        gziparchive._1.evidence shouldBe legacy._1.evidence
+        representation shouldBe None
+        loaded._1 shouldBe saved
+        saved.path shouldBe "logs/opaque-1.log"
+        payload shouldBe Some("legacy 日本語\n")
+        original.foreach { (key, value) => store.rows(key) shouldBe value }
+        store.names shouldBe 1
+        store.representationCreates shouldBe 0
+        store.allocationCreates shouldBe 1
+        store.files.keySet shouldBe Set(saved.path)
+        store.writes shouldBe 1
+      }
+    }
+    "return truthful per-source partial outcomes and retain an occupied exact destination" in {
+      Given("three actual source/output items and a specification-owned occupied second destination")
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      val occupied = "logs/2026/10/repository/6.4/selected-goal/opaque-2.log"
+      val original = "foreign original".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+      store.files += occupied -> (original -> org.goldenport.cncf.workspace.FileRepresentation.Identity)
+      val inputs = Vector("first", "second", "third").map { name =>
+        val s = source(name)
+        V.EvidenceArchiveItem(V.WorkflowArtifactReference(s.reference.identity, s.reference.revision),
+          s.repository, s.phase, s.step, s.session, s.output, s.actionOutcome, name + "\n", "identity")
+      }
+      var journaled = Vector.empty[String]
+      When("the same common writer archives the batch sequentially and records each real storage observation")
+      val result = take(E.archiveBatchC(store, policy, V.EvidenceBatchArchiveInput(NonEmptyVector.fromVectorUnsafe(inputs)), clock,
+        (a, o) => {
+          journaled :+= a.identity
+          Consequence.success(V.JournalRecordingState("recorded", "SPECIFICATION-OWNED Journal observation", None,
+            V.WorkflowArtifactReference(a.source.reference.identity, a.source.reference.revision)))
+        }))
+      Then("the batch is partial and preserves every input mapping, occupied bytes and actual storage result")
+      result.status shouldBe "partial"
+      result.items.map(_.state.status) shouldBe Vector("stored", "conflict", "stored")
+      result.items.map(_.sourceReference) shouldBe inputs.map(_.sourceReference)
+      result.items.map(_.outputIdentity) shouldBe inputs.map(_.outputIdentity)
+      result.items.foreach(_.state.journal.get.status shouldBe "recorded")
+      journaled shouldBe result.items.map(_.state.evidence.get.identity)
+      store.files(occupied)._1 shouldBe original
+      store.writes shouldBe 3
+    }
+    "retain final path representation allocation and intent before managed File installation" in {
+      Given("a Tokyo clock whose UTC date is still the previous month and a gzip representation")
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      val zonedclock = Clock.fixed(Instant.parse("2026-09-30T15:00:00Z"), ZoneId.of("Asia/Tokyo"))
+      val s = source()
+      val id = E.identity(s)
+      store.beforeWrite = () => {
+        val retained = take(E.loadedC(store, id)).get._1
+        retained.path shouldBe "logs/2026/10/repository/6.4/selected-goal/opaque-1.log.gz"
+        take(E.representationC(store, id)) shouldBe Some("gzip")
+        store.rows(id + ":write-intent") shouldBe store.rows(id)
+        take(CommonEvidenceLifecycle.loadC(store, id)).get.completion shouldBe None
+      }
+      When("managed archive installs the actual canonical UTF-8 bytes through the File seam")
+      val first = take(E.archiveManagedC(store, policy, s, "日本語\n", "gzip", zonedclock))
+      val repeated = take(E.archiveManagedC(store, policy.copy(directory = "later"), s, "日本語\n", "gzip",
+        Clock.fixed(zonedclock.instant().plusSeconds(40L * 86400), zonedclock.getZone)))
+      val a = first._2.get._1
+      Then("the owning zone selects the month and repeated calls retain the exact original path and Evidence identity")
+      first._1.status shouldBe "stored"
+      repeated shouldBe first
+      store.writes shouldBe 1
+      store.reads shouldBe 0
+      store.directories shouldBe Vector("logs/2026/10/repository/6.4/selected-goal")
+      When("the retained gzip payload is explicitly read")
+      val payload = take(E.payloadC(store, a))
+      Then("the original canonical UTF-8 text remains available")
+      payload shouldBe Some("日本語\n")
+      Given("the same business source and text in a separate empty identity-representation store")
+      val identitystore = new CommonEvidenceLifecycleFixture.Memory
+      When("the source is archived with the identity representation")
+      val identityarchive = take(E.archiveManagedC(identitystore, policy, s, "日本語\n", "identity", zonedclock))
+      Then("the business Evidence identity remains independent of physical representation")
+      identityarchive._1.evidence shouldBe first._1.evidence
+      When("the same retained allocation is requested with another representation")
+      val conflict = take(E.archiveManagedC(store, policy, s, "日本語\n", "identity", zonedclock))
+      Then("the request conflicts without conversion or an additional write")
+      conflict._1.status shouldBe "conflict"
+      store.writes shouldBe 1
+    }
+    "never replay duplicate known or uncertain items and keep Journal failure independent" in {
+      Given("a duplicate source/output and a Journal callback without an acknowledgement")
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      val s = source()
+      val item = V.EvidenceArchiveItem(V.WorkflowArtifactReference(s.reference.identity, s.reference.revision),
+        s.repository, s.phase, s.step, s.session, s.output, s.actionOutcome, "original\n", "identity")
+      When("the duplicate batch is archived and its Journal is unavailable")
+      val result = take(E.archiveBatchC(store, policy, V.EvidenceBatchArchiveInput(NonEmptyVector.of(item, item)), clock,
+        (_, _) => Consequence.stateConflict("SPECIFICATION-OWNED failed Journal")))
+      Then("each item retains its stored outcome while one physical write and explicit separate Journal failures remain")
+      result.items.map(_.state.status) shouldBe Vector("stored", "stored")
+      result.items.map(_.state.journal.get.status) shouldBe Vector("unavailable", "unavailable")
+      store.writes shouldBe 1
+      Given("another archive whose File succeeded but storage observation was lost")
+      val unknown = new CommonEvidenceLifecycleFixture.Memory
+      unknown.failObservation = true
+      val initial = take(E.archiveManagedC(unknown, policy, s, item.text, "identity", clock))
+      unknown.failObservation = false
+      When("the retained source is consumed after observation storage recovers")
+      val repeated = take(E.archiveManagedC(unknown, policy, s, item.text, "identity", clock))
+      Then("the original intent remains indeterminate without a second File or allocation effect")
+      initial._1.status shouldBe "indeterminate"
+      repeated._1.status shouldBe "indeterminate"
+      repeated._1.evidence shouldBe initial._1.evidence
+      unknown.writes shouldBe 1
+    }
+    "reject unsafe literal segments invalid UTF-8 and oversized batches before any File effect" in {
+      Given("invalid repository phase session text and batch size proposals")
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      val sources = Vector(source().copy(repository = "../repository"), source().copy(phase = ".."),
+        source().copy(session = "a/b"))
+      When("managed archive admits each proposal")
+      val invalid = sources.map(s => take(E.archiveManagedC(store, policy, s, "text", "identity", clock))) ++
+        Vector("\ud800", "nul\u0000text").map(text => take(E.archiveManagedC(store, policy, source(), text, "identity", clock)))
+      val item = V.EvidenceArchiveItem(V.WorkflowArtifactReference("result", "1"), "repository", "6.4", None,
+        "selected-goal", "stdout", "passed", "original", "identity")
+      val oversized = take(E.archiveBatchC(store, policy,
+        V.EvidenceBatchArchiveInput(NonEmptyVector.fromVectorUnsafe(Vector.fill(21)(item))), clock,
+        (_, _) => throw new AssertionError("Invalid batch cannot record Journal")))
+      Then("all remain explicit invalid/unavailable with no allocation directory or write")
+      invalid.foreach(_._1.status shouldBe "unavailable")
+      oversized.status shouldBe "invalid"
+      store.rows shouldBe empty
+      store.directories shouldBe empty
+      store.writes shouldBe 0
+    }
+    "keep directory conflict and malformed current UTF-8 separate from original source and storage history" in {
+      Given("a managed archive whose parent directory preparation conflicts")
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      store.conflictDirectory = true
+      When("the released text is archived")
+      val result = take(E.archiveManagedC(store, policy, source(), "original", "identity", clock))
+      Then("the retained source and conflict observation survive without byte installation")
+      result._1.status shouldBe "conflict"
+      result._2.get._1.source shouldBe source()
+      store.writes shouldBe 0
+      Given("a different stored managed payload whose current byte read is malformed UTF-8")
+      val malformed = new CommonEvidenceLifecycleFixture.Memory
+      val a = archive(malformed)._1
+      malformed.corruptRead = true
+      When("detail retrieves current availability")
+      val detail = take(CommonEvidenceLifecycle.describeC(malformed, policy, V.EvidenceReadInput(a.identity, None), now))
+      Then("the lifetime and original metadata survive an unavailable current decode")
+      detail.status shouldBe "active"
+      detail.read.get.status shouldBe "unavailable"
+      detail.read.get.metadata.get.relativePath shouldBe a.path
+      detail.read.get.observation.get.status shouldBe "stored"
+    }
+    "preserve every completed native Test source identity while selected remains its first output" in {
+      Given("completed Compile Test and TestOnly receipts plus an unreleased Test")
+      val receipts = Vector(
+        RepositorySyncNativeMergeValidation.Receipt("compile", "exited", Some(0), "compile", ""),
+        RepositorySyncNativeMergeValidation.Receipt("test", "exited", Some(0), "test", ""),
+        RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(1), "focused failed", ""),
+        RepositorySyncNativeMergeValidation.Receipt("live", "running", None, "live", ""))
+      val checks = Vector(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Kind.Test,
+        WorkflowSbtValidation.Kind.TestOnly, WorkflowSbtValidation.Kind.Test).zip(receipts).map { (kind, receipt) =>
+        GoalPhaseNativeValidation.Check(receipt.identity, 1, kind)
+      }
+      val payload = GoalPhaseNativeValidation.Payload("17", "E4", GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40),
+        checks, receipts, Some("failed"))
+      When("native Evidence selects all actual completed Test outputs")
+      val all = GoalPhaseNativeEvidence.selectedAll(payload, "session", "repo", "6.4")
+      Then("two actual outputs retain their exact existing receipt references without Compile or live text")
+      all.map(_.receipt.identity) shouldBe Vector("test", "focused")
+      all.map(_.source.reference.identity) shouldBe Vector("session:ordered-validation:17:check-result-1", "session:ordered-validation:17:check-result-2")
+      GoalPhaseNativeEvidence.selected(payload, "session", "repo", "6.4") shouldBe all.headOption
+      all.last.source.actionOutcome shouldBe "failed"
+    }
+    "load strict legacy v1 allocation observation and Journal payload without new fields or rewrites" in {
+      Given("the original v1 archive writer and its strict Journal storage encoding")
+      val store = new Memory
+      val saved = take(E.archiveC(store, _policy, _source, "original legacy\n", _now))._2.get
+      val entry = DevelopmentJournalEvidence.Entry(DevelopmentJournalEvidence.identity(saved._1.identity),
+        E.metadata(saved._1), E.observation(saved._1, saved._2), _now.toString)
+      val encoded = take(DevelopmentJournalEvidence.rowC(entry))
+      val original = store.rows
+      When("the new reader and unchanged strict Journal validator load those original rows")
+      val loaded = take(E.loadedC(store, saved._1.identity)).get
+      val journal = take(DevelopmentJournalEvidence.storedC(encoded, entry.identity))
+      val representation = take(E.representationC(store, saved._1.identity))
+      val payload = take(E.payloadC(store, loaded._1))
+      Then("all legacy shapes and exact physical destinations remain unchanged with identity representation implied")
+      loaded shouldBe saved._1 -> Some(saved._2)
+      representation shouldBe None
+      journal shouldBe entry
+      payload shouldBe Some("original legacy\n")
+      store.rows shouldBe original
     }
   }
   "Evidence storage observation in common Journal" should {

@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Privately constructed fresh typed Start/AI result, not public human ingress
   * and not a native commit witness. Shared only by inert executable examples.
   * @since   Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[admission] object SplitPhaseAICompletionCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -52,7 +52,7 @@ private[admission] object SplitPhaseAICompletionCheckpointFixture {
   val declaration = SplitPhaseManagedStartAssembly.Declaration(f.configuration, collection("instances"), collection("continuations"))
   private val _ip = SplitPhasePlanningInputReadPolicy.prefix
   private val _cp = SplitPhasePartitionContextReadPolicy.prefix
-  private val _sp = SplitPhaseHostSelectionReadPolicy.prefix
+  private val _sp = SplitPhaseInputSelectionReadPolicy.prefix
   private val _tp = SplitPhaseTypedStartReadPolicy.prefix
   private val _ep = SplitPhasePartitionEnrichmentStorage.prefix
   val host = ResolvedConfiguration(HostConfiguration(Map[String, ConfigurationValue](

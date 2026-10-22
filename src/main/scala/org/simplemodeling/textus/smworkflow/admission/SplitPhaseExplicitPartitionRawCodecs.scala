@@ -13,7 +13,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 /**
  * One mapping for new typed raw data. Not an admitted state or legacy decoder.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 21, 2026
  */
 private[smworkflow] object SplitPhaseExplicitPartitionRawCodecs {
   given Encoder[ComponentId] = Encoder.encodeString.contramap(_.name)

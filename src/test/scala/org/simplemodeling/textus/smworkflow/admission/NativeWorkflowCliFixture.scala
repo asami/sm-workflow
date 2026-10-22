@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -83,9 +83,9 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && Files.isDirectory(root), "Select the actual producer root")
     val config = _take(parse(Files.readString(root.resolve(".textus/config.json")))
       .fold(error => Consequence.stateConflict(error.message), Consequence.success), "Retained producer host")
-    val host = _take(config.hcursor.get[String]("sm-workflow.host.definition")
+    val host = _take(config.hcursor.get[String]("sm-workflow.runtime.definition")
       .left.map(_.message).flatMap(raw => parse(raw).left.map(_.message))
-      .fold(Consequence.stateConflict(_), ThreeWorkflowHostParameters.decodeDefinitionC), "Retained producer definition")
+      .fold(Consequence.stateConflict(_), ThreeWorkflowRuntimeParameters.decodeDefinitionC), "Retained producer definition")
     require(config.hcursor.get[String](DevelopmentJournal.declaration.name).isRight, "Producer must explicitly configure Journal")
     val descriptor = root.resolve(".textus/assembly.yaml")
     val original = Files.readString(descriptor)
@@ -96,12 +96,14 @@ private[admission] object NativeWorkflowCliFixture {
   }
 
   final class Scenario private[NativeWorkflowCliFixture] (
-    val root: Path, val host: ThreeWorkflowHostParameters.Definition,
+    val root: Path, val host: ThreeWorkflowRuntimeParameters.Definition,
     val plan: GoalPhaseOrderedProgression.Plan, val port: Option[Int],
     private[NativeWorkflowCliFixture] val _sbt_repair: Option[Path], startingLogIndex: Int = 0,
     val sourceHistory: Boolean = false, val repairContinuation: Boolean = false,
-    val documentRevision: Boolean = false
+    val documentRevision: Boolean = false, val sbtDiagnosticBytes: Int = 0
   ) {
+    require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
+      (sbtDiagnosticBytes == 0 || _sbt_repair.nonEmpty), "Select a finite diagnostic fixture with normal SBT")
     require(startingLogIndex >= 0, "Select a finite nonnegative starting log index")
     require(!documentRevision || (repairContinuation && _sbt_repair.contains(TypedSbtHostPlanFixture.normalExecutable)),
       "Document revision requires the existing normal SBT continuation variant")
@@ -163,6 +165,13 @@ private[admission] object NativeWorkflowCliFixture {
     def call(mode: String, operation: String, parameters: Vector[String]): Result =
       _run(_launcher ++ Vector(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
+    /** The same isolated host can qualify a separately installed normal CLI. */
+    def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String]): Result = {
+      require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
+        "Select an actual absolute installed command")
+      _run(Vector(executable.toString, "--runtime-root", root.toString, "command", s"$_component.$service.$operation") ++
+        parameters ++ Vector("--json"))
+    }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
     def readJournalEntry(input: V.JournalReadInput): Result =
@@ -182,11 +191,11 @@ private[admission] object NativeWorkflowCliFixture {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
         "prepareAuthority", "prepareEvidence", "prepareExecution", "recordExecution")(operation),
         "Specification must select one declared preparation Operation")
-      _run(_launcher ++ Vector("command", s"$_component.NativeHostPreparationService.$operation", "--input",
+      _run(_launcher ++ Vector("command", s"$_component.NativeWorkflowPreparationService.$operation", "--input",
         _take(input.toJsonStringC, "Concrete preparation input"), "--json"))
     }
     def preparationHelp(): Result = _run(_launcher ++ Vector("command", s"$_component.meta.help",
-      s"$_component.NativeHostPreparationService"))
+      s"$_component.NativeWorkflowPreparationService"))
 
     /** Finite test-owned Git arrangement and observation only. Workflow candidate
       * staging, checks and Step commits always use normal typed host programs.
@@ -233,6 +242,20 @@ private[admission] object NativeWorkflowCliFixture {
     def candidateParent: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD^"))
     def candidateIndex: String = _candidate_git(Vector("diff", "--cached", "--name-only", "--"))
     def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
+
+    /** Arrange a completed prior-owner effect only in a fresh closure test host.
+      * Production closure and recovery continue to use their typed Git UoW.
+      */
+    def commitClosureRecoveryFixture(): Unit = {
+      require(sourceHistory && host.goal.candidatePaths == Vector("src/main/scala/HistoryExample.scala") &&
+        root.getFileName.toString.startsWith("closure-recovery-reconcile-"), "Select the explicit isolated reconciliation fixture")
+      val result = _run(Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects", "-C", host.target.root,
+        "-c", "core.hooksPath=/dev/null", "-c", "user.name=Closure Recovery Fixture",
+        "-c", "user.email=closure-recovery@example.invalid", "-c", "user.useConfigOnly=true",
+        "--literal-pathspecs", "commit", "--only", "--no-verify", "--no-gpg-sign", "-m", "Observed prior-owner fixture commit",
+        "--") ++ host.goal.candidatePaths)
+      require(result.exitCode == 0, result.invocation.logs)
+    }
 
     /** A fixed, test-owned unfinished checkpoint is never a Workflow Step commit. */
     def commitUnfinishedRepairCheckpoint(): String = {
@@ -295,6 +318,9 @@ private[admission] object NativeWorkflowCliFixture {
       require(!Files.exists(stdout) && !Files.exists(stderr), "Owned invocation logs must not replace previous outputs")
       val builder = new ProcessBuilder(argv.asJava).directory(root.toFile)
         .redirectOutput(stdout.toFile).redirectError(stderr.toFile)
+      if (sys.props.get("smworkflow.spec.installedCommand").contains(argv.head))
+        sys.props.get("smworkflow.spec.installations").foreach(value =>
+          builder.environment().put("SM_WORKFLOW_INSTALLATIONS", value))
       if (argv.head == "/usr/bin/git") {
         builder.environment().clear()
         _environment.foreach((key, value) => builder.environment().put(key, value))
@@ -482,7 +508,11 @@ private[admission] object NativeWorkflowCliFixture {
     bootstrapSelectedInput: Boolean = true, httpMethods: Option[Vector[String]] = Some(Vector("POST")),
     denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None,
     sbtRepair: Option[Path] = None, classifiedSbtRepair: Boolean = false, sourceHistory: Boolean = false,
-    repairContinuation: Boolean = false, documentRevision: Boolean = false): Scenario = {
+    repairContinuation: Boolean = false, documentRevision: Boolean = false, sbtDiagnosticBytes: Int = 0): Scenario = {
+    require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
+      (sbtDiagnosticBytes == 0 || sbtRepair.nonEmpty),
+      "Diagnostic padding requires a selected SBT build and 0..90000 or exactly 1500000 bytes")
+    require(sbtDiagnosticBytes == 0 || !sourceHistory, "Diagnostic padding selects the ordinary ProductCheck build")
     require(!documentRevision || (repairContinuation && sbtRepair.contains(TypedSbtHostPlanFixture.normalExecutable)),
       "Document revision requires the existing normal SBT continuation variant")
     require(!repairContinuation || (sbtRepair.nonEmpty && !sourceHistory && !remote &&
@@ -511,7 +541,7 @@ private[admission] object NativeWorkflowCliFixture {
     sbtRepair.foreach { _ =>
       if (sourceHistory) TypedSbtHostPlanFixture.buildSourceHistory(root)
       else {
-        TypedSbtHostPlanFixture.build(root, true)
+        TypedSbtHostPlanFixture.build(root, true, sbtDiagnosticBytes)
         Files.writeString(root.resolve("repository/value.txt"), "initial\n")
       }
     }
@@ -534,8 +564,8 @@ private[admission] object NativeWorkflowCliFixture {
       phaseReviewClassification = classification.map(_.review))
     val port = if (remote) Some(_available_port()) else None
     val scenario = new Scenario(root, host, plan, port, sbtRepair, sourceHistory = sourceHistory,
-      repairContinuation = repairContinuation, documentRevision = documentRevision)
-    _host_files(scenario, resourceRoots ++ Option.when(classifiedSbtRepair || repairContinuation)(root),
+      repairContinuation = repairContinuation, documentRevision = documentRevision, sbtDiagnosticBytes = sbtDiagnosticBytes)
+    _host_files(scenario, resourceRoots ++ Option.when(classifiedSbtRepair || repairContinuation || sbtDiagnosticBytes == 1500000)(root),
       bootstrapSelectedInput, httpMethods, denyGit, mappedExecution)
     scenario.prepareRepository()
     scenario
@@ -603,7 +633,7 @@ private[admission] object NativeWorkflowCliFixture {
     "docs/journal.md" -> "# Hygiene\n\nPreserve this original hygiene narrative.\n",
     "docs/candidates.md" -> "# Development candidates\n\nPreserve this original candidate narrative.\n")
 
-  private def _finding_recording_host(root: Path, semantic: Boolean = false, security: Boolean = false): ThreeWorkflowHostParameters.Definition = {
+  private def _finding_recording_host(root: Path, semantic: Boolean = false, security: Boolean = false): ThreeWorkflowRuntimeParameters.Definition = {
     require(!(semantic && security), "Select exactly one finding recording counterexample")
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val goal = original.goal.copy(input = V.GoalPhaseStartInput(
@@ -632,7 +662,7 @@ private[admission] object NativeWorkflowCliFixture {
     "schemaVersion" -> Json.fromString(GoalPhaseFindingRecording.schemaVersion),
     "hygiene" -> Json.fromString("docs/journal.md"), "developmentCandidate" -> Json.fromString("docs/candidates.md"))
 
-  private def _finding_recording_git(host: ThreeWorkflowHostParameters.Definition): Json = {
+  private def _finding_recording_git(host: ThreeWorkflowRuntimeParameters.Definition): Json = {
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
@@ -696,7 +726,7 @@ private[admission] object NativeWorkflowCliFixture {
     def _configured_(name: String): Json = config.hcursor.get[String](name).flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(_configured_("sm-workflow.host.definition")), "Retained recording host")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(_configured_("sm-workflow.runtime.definition")), "Retained recording host")
     require(host == _finding_recording_host(root, semantic, security), "Retain the exact dedicated one-Step host and target")
     val plan = parse(_read_("goal-plan.json")).flatMap(_.as[GoalPhaseOrderedProgression.Plan]).fold(
       error => throw new AssertionError(error.getMessage), identity)
@@ -756,7 +786,7 @@ private[admission] object NativeWorkflowCliFixture {
 
   val sliceValidationPlanPaths: Vector[String] = Vector("docs/phase.md", "docs/slice-validation.json")
 
-  private def _slice_validation_plan_host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _slice_validation_plan_host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val fixture = classOf[SelectedMetadataFixtureSpec]
     val artifact = D.ArtifactScope("component:sm-workflow-fixture", "sm-workflow-fixture-tests", "artifact-1", "source-1",
@@ -786,7 +816,7 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseOrderedProgression.Step("step-1", "Author the selected logical validation plan and its rationale",
         sliceValidationPlanPaths, Vector.empty, Vector("metadata-tests"))), Vector("metadata-tests"), repairLimit = 2)
 
-  private def _slice_validation_plan_git(host: ThreeWorkflowHostParameters.Definition): Json = {
+  private def _slice_validation_plan_git(host: ThreeWorkflowRuntimeParameters.Definition): Json = {
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
@@ -849,7 +879,7 @@ private[admission] object NativeWorkflowCliFixture {
     def configured(name: String): Json = config.hcursor.get[String](name).flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(configured("sm-workflow.host.definition")), "Retained Slice host")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(configured("sm-workflow.runtime.definition")), "Retained Slice host")
     require(host == _slice_validation_plan_host(root), "Retain exact source Step, embedded Phase, review and closure host")
     val plan = parse(read("goal-plan.json")).flatMap(_.as[GoalPhaseOrderedProgression.Plan]).fold(
       error => throw new AssertionError(error.getMessage), identity)
@@ -902,7 +932,7 @@ private[admission] object NativeWorkflowCliFixture {
 
   val typedInputsPaths: Vector[String] = Vector("docs/phase.md", "docs/typed-validation.json")
 
-  private def _typed_inputs_host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _typed_inputs_host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val scope = TypedMetadataFixture.scope
     val source = GoalPhaseSliceValidationPlan.Source("docs/typed-validation.json", "typed-validation-step-1",
@@ -925,7 +955,7 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseOrderedProgression.Step("step-1", "Author the typed input validation plan and its rationale",
         typedInputsPaths, Vector.empty, Vector("typed-input-tests"))), Vector("typed-input-tests"), repairLimit = 2)
 
-  private def _typed_inputs_git(host: ThreeWorkflowHostParameters.Definition): Json = {
+  private def _typed_inputs_git(host: ThreeWorkflowRuntimeParameters.Definition): Json = {
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
     TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
@@ -994,7 +1024,7 @@ private[admission] object NativeWorkflowCliFixture {
     def configured(name: String): Json = config.hcursor.get[String](name).flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(configured("sm-workflow.host.definition")), "Retained typed-input host")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(configured("sm-workflow.runtime.definition")), "Retained typed-input host")
     require(host == _typed_inputs_host(root), "Retain exact source Step, embedded Phase, review and closure host")
     val plan = parse(read("goal-plan.json")).flatMap(_.as[GoalPhaseOrderedProgression.Plan]).fold(
       error => throw new AssertionError(error.getMessage), identity)
@@ -1051,7 +1081,7 @@ private[admission] object NativeWorkflowCliFixture {
     "src/test/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriterSpec.scala", "docs/validation.md")
   val cmlAuthoringPaths: Vector[String] = authoringPaths :+ "docs/validation.cml"
 
-  private def _authoring_host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _authoring_host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val artifact = D.ArtifactScope("component:line-writer", "line-writer-tests", "artifact-1", "authored-step-1",
       root.resolve("repository/target/scala-3.3.8/test-classes"), "org.simplemodeling.textus.smworkflow.p62authored")
@@ -1077,7 +1107,7 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseOrderedProgression.Step("step-2", "Record the observed exact metadata selection for the authored artifact",
         Vector("docs/validation.md"), Vector.empty, Vector("metadata-tests"))), Vector("metadata-tests"), repairLimit = 2)
 
-  private def _cml_authoring_host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _cml_authoring_host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val artifact = D.ArtifactScope("component:line-writer", "line-writer-tests", "artifact-1", "authored-step-1",
       root.resolve("repository/target/scala-3.3.8/test-classes"), "org.simplemodeling.textus.smworkflow.p62authored")
@@ -1100,7 +1130,7 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseOrderedProgression.Step("step-1", "Author exact LineWriter tests, runtime anchors and CML validation declarations",
         cmlAuthoringPaths, Vector.empty, Vector("build-tests", "metadata-tests"))), Vector("metadata-tests"), repairLimit = 2)
 
-  private def _authoring_git(host: ThreeWorkflowHostParameters.Definition, paths: Vector[String] = authoringPaths): Json = {
+  private def _authoring_git(host: ThreeWorkflowRuntimeParameters.Definition, paths: Vector[String] = authoringPaths): Json = {
     require(paths == authoringPaths || paths == cmlAuthoringPaths, "Select only exact authoring Goal paths")
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
@@ -1165,7 +1195,7 @@ private[admission] object NativeWorkflowCliFixture {
     def configured(name: String): Json = config.hcursor.get[String](name).flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(configured("sm-workflow.host.definition")), "Retained authoring host")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(configured("sm-workflow.runtime.definition")), "Retained authoring host")
     require(host == (if (cml) _cml_authoring_host(root) else _authoring_host(root)),
       "Retain exact authoring target, input, checks, review and closure ownership")
     val plan = parse(read("goal-plan.json")).flatMap(_.as[GoalPhaseOrderedProgression.Plan]).fold(
@@ -1233,10 +1263,10 @@ private[admission] object NativeWorkflowCliFixture {
       Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
-    val hostjson = config.hcursor.get[String]("sm-workflow.host.definition").flatMap(value =>
+    val hostjson = config.hcursor.get[String]("sm-workflow.runtime.definition").flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing continuation host")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(hostjson), "Existing continuation host")
     val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     val paths = Vector("value.txt", "docs/phase.md")
@@ -1311,7 +1341,7 @@ private[admission] object NativeWorkflowCliFixture {
     def configured(name: String): Json = config.hcursor.get[String](name).flatMap(value =>
       parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
       error => throw new AssertionError(s"Existing document revision $name: ${error.message}"), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(configured("sm-workflow.host.definition")),
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(configured("sm-workflow.runtime.definition")),
       "Existing document revision host")
     val source = _take(GoalPhaseDocumentSource.decodeDeclarationC(read("goal-plan.json")),
       "Existing document source declaration")
@@ -1402,10 +1432,10 @@ private[admission] object NativeWorkflowCliFixture {
       Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
-    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+    val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
       error => throw new AssertionError(error.message), identity)
     val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
     val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     require(host.target.root == root.resolve("repository").toString && host.goal.input.phaseIdentity == "1" &&
@@ -1432,10 +1462,10 @@ private[admission] object NativeWorkflowCliFixture {
       "Select an absolute existing executable from smworkflow.spec.sbt")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
-    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+    val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
       error => throw new AssertionError(error.message), identity)
     val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
     val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     require(host.target.root == root.resolve("repository").toString && host.goal.input.phaseIdentity == "1" &&
@@ -1462,10 +1492,10 @@ private[admission] object NativeWorkflowCliFixture {
       Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
-    val rawhost = config.hcursor.get[String]("sm-workflow.host.definition").fold(
+    val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
       error => throw new AssertionError(error.message), identity)
     val hostjson = parse(rawhost).fold(error => throw new AssertionError(error.message), identity)
-    val host = _take(ThreeWorkflowHostParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(hostjson), "Existing normal host definition")
     val plan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     val source = Vector("src/main/scala/HistoryExample.scala")
@@ -1489,7 +1519,7 @@ private[admission] object NativeWorkflowCliFixture {
   private def _host_files(scenario: Scenario, resourceroots: Vector[Path], bootstrapselectedinput: Boolean,
     httpmethods: Option[Vector[String]], denygit: Boolean, mappedexecution: Option[(Json, Json)]): Unit = {
     import io.circe.syntax.*
-    import org.simplemodeling.textus.smworkflow.host.NativeHostGoalStartInput
+    import org.simplemodeling.textus.smworkflow.preparation.NativeGoalStartInput
     val root = scenario.root
     val host = scenario.host
     Files.createDirectories(Path.of(host.target.root))
@@ -1503,7 +1533,7 @@ private[admission] object NativeWorkflowCliFixture {
     Files.writeString(planfile, selectedplan.noSpaces)
     val seed = root.resolve("selected-input.json")
     if (bootstrapselectedinput) {
-      val prepared = NativeHostGoalStartInput.prepareC(Map("input" -> inputfile.toUri.toASCIIString,
+      val prepared = NativeGoalStartInput.prepareC(Map("input" -> inputfile.toUri.toASCIIString,
       "plan" -> planfile.toUri.toASCIIString, "selection-id" -> "native-goal-selection", "participant" -> _participant,
       "origin" -> "ExplicitHuman", "idempotency-key" -> "native-specification-input",
       "selection-collection" -> "entity:smworkflow.cli.goal_selection",
@@ -1531,12 +1561,12 @@ private[admission] object NativeWorkflowCliFixture {
       "continuation-collection" -> ThreeWorkflowNormalHostFixture.collection("continuations"))
       .map((key, value) => ("sm-workflow.goal-phase.persistence." + key) -> value)
     val values = ThreeWorkflowNormalHostFixture.values(root) ++ persistence ++ Map(
-      "sm-workflow.host.definition" -> ThreeWorkflowHostParameters.encode(host).noSpaces,
+      "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(host).noSpaces,
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
       "textus.datastore.path" -> root.resolve("workflow.sqlite").toString,
       "textus.subsystem.storage.plan" -> ThreeWorkflowNormalHostFixture.storagePlan.noSpaces,
       "textus.subsystem.process-execution.plan" -> _process_plan(root, host, denygit, scenario._sbt_repair,
-        scenario.repairContinuation).noSpaces,
+        scenario.repairContinuation, scenario.sbtDiagnosticBytes).noSpaces,
       "textus.server.host" -> "127.0.0.1",
       "textus.server.port-assignment-file" -> root.resolve("server-port-assignments.json").toString) ++
       Option.when(bootstrapselectedinput)("textus.import.data.file" -> seed.toString).toVector ++
@@ -1545,6 +1575,7 @@ private[admission] object NativeWorkflowCliFixture {
       } ++
       httpplan.toVector ++
       scenario.port.toVector.map(port => "textus.server.port" -> port.toString) ++
+      Option.when(scenario.sbtDiagnosticBytes == 1500000)("textus.resource.read.max-bytes" -> "16777216").toVector ++
       Option.when(readroots.nonEmpty)("textus.resource.url.file.roots" ->
         readroots.map(_.toAbsolutePath.normalize.toString).mkString(",")).toVector
     val directory = Files.createDirectories(root.resolve(".textus"))
@@ -1569,8 +1600,9 @@ private[admission] object NativeWorkflowCliFixture {
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin)
   }
-  private def _process_plan(root: Path, host: ThreeWorkflowHostParameters.Definition, denygit: Boolean,
-    sbtrepair: Option[Path], repaircontinuation: Boolean = false): Json = {
+  private def _process_plan(root: Path, host: ThreeWorkflowRuntimeParameters.Definition, denygit: Boolean,
+    sbtrepair: Option[Path], repaircontinuation: Boolean = false, sbtdiagnosticbytes: Int = 0): Json = {
+    val large = sbtdiagnosticbytes == 1500000
     val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
       host.target.remoteBranch, host.target.endpoint)
     val observations = TypedGitHostPlanFixture.observations
@@ -1580,14 +1612,16 @@ private[admission] object NativeWorkflowCliFixture {
       case Some(executable) =>
         val git = TypedGitHostPlanFixture.plan(target,
           kinds = observations ++ Vector(GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff) ++
-            Option.when(repaircontinuation)(GitOperationKind.CommitMetadata),
+            Option.when(repaircontinuation || large)(GitOperationKind.CommitMetadata),
           goalPaths = host.goal.candidatePaths,
           goalMessages = if (repaircontinuation) Vector("Complete selected continuation Step 1",
-            "Complete selected continuation Step 2") else Vector.empty, denied = denied,
+            "Complete selected continuation Step 2") else if (large) Vector("Complete selected continuation Step 1")
+            else Vector.empty, denied = denied,
           goalSelections = if (repaircontinuation) Vector(host.goal.candidatePaths,
             Vector("docs/phase.md") ++ Option.when(host.goal.candidatePaths.contains("docs/checklist.md"))("docs/checklist.md"))
-            else Vector.empty)
-        TypedSbtHostPlanFixture.plan(root, executable, Vector(1), Some(git))
+            else if (large) Vector(host.goal.candidatePaths) else Vector.empty)
+        TypedSbtHostPlanFixture.plan(root, executable, Vector(1), Some(git),
+          stdoutBytes = if (large) 2097152 else 131072, stderrBytes = if (large) 131072 else 16384)
     }
   }
   private def _available_port(): Int = {

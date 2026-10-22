@@ -38,7 +38,7 @@ not assume every operation in the CML is callable.
 
 ## Passive native host preparation
 
-The normal configured NativeHostPreparationService adds six COMMAND Operations:
+The normal configured NativeWorkflowPreparationService adds six COMMAND Operations:
 prepareGoalStart, prepareRepositoryStart, prepareSplitStart, prepareRepositoryEffect,
 prepareAuthority and prepareEvidence. Each consumes one distinct typed input with
 explicit absolute local file: URI fields and returns the existing direct structured
@@ -74,6 +74,11 @@ Production installation and current-contract end-to-end skill acceptance remain
 separate unfinished work. Existing legacy skills are not replaced.
 
 ## Operations and results
+
+The normal GoalPhaseService also publishes `describeGoalPhaseFailedPhaseRepair`
+and `adoptGoalPhaseFailedPhaseRepair` for a separately evidenced corrective Plan
+after one known failed whole-Phase check. Their choices are `AdoptRepairPlan`
+and `Defer`; a later ordinary Advance issues the corrective Step.
 
 Start requires a configured host's independently admitted user selection; JSON
 input does not prove consent. A WorkOrder identifies the semantic request,
@@ -160,10 +165,10 @@ definition or a recipe for the old Goal-only default factory:
 - `sm-workflow.goal-phase.persistence.`: `store-name`, `store-identity`,
   `migration-policy`, `retention-policy`, `lease-policy`, `instance-collection`
   and `continuation-collection`. The two collections must be distinct.
-- `sm-workflow.host.definition`: the closed typed three-workflow host definition
+- `sm-workflow.runtime.definition`: the closed typed three-workflow host definition
   containing the fixed repository target, Goal input/candidate/check/review/
   closure policies and RepositorySync input/check/conflict/review policies.
-- `sm-workflow.host.evidence.`: declared logical store, evidence collection and
+- `sm-workflow.external-evidence.`: declared logical store, evidence collection and
   trusted issuer for separately supplied evidence; the record codec does not
   issue consent or review acceptance.
 
@@ -171,7 +176,7 @@ These groups are not a complete host configuration example. Record readers,
 artifact access, authentication and collection permissions also require the
 host's admitted declarations. Do not guess missing policy values or use a
 configuration string to claim human or command authority.
-The normal connection also requires `sm-workflow.host.definition`, host evidence
+The normal connection also requires `sm-workflow.runtime.definition`, host evidence
 and all selected SplitPhase/RepositorySync read/allocation/checkpoint settings.
 See the repository's `docs/spec/normal-three-workflow-host.md` for the closed
 host-definition and provided Operation input/response contracts.

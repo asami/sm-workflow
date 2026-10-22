@@ -12,11 +12,12 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.goldenport.cncf.workspace.{FileTarget, WorkspaceFilePath, WorkspaceId}
 import GoalPhaseNativeRun as F
+import GoalPhaseOrderedProgression as O
 
 /** Candidate-owned history intent and actual File result, before Git staging.
   * Partial history is retained by the existing candidate continuation without replay.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeSourceHistory {
@@ -64,12 +65,57 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
       }
     }
 
+  /** Read-only reuse admission precedes fresh inspection persistence and every normalization write. */
+  def verifyCompletedPrefixC(core: ActionCall.Core,
+    target: GoalPhaseSourceHistoryRecovery.RecoveryTarget): Consequence[Vector[String]] = for {
+    _ <- if (GoalPhaseSourceHistoryRecovery.validTarget(target)) Consequence.unit
+      else F.invalid("source history prefix has no exact admitted recovery target")
+    selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
+    rule <- selection.rule.filter(rule => selection.style == "goldenport" && rule.asJson == target.historyPolicy)
+      .map(Consequence.success).getOrElse(F.invalid("source history prefix rule changed after Human direction"))
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    paths <- target.completedPrefix.foldLeft(Consequence.success(Vector.empty[String])) { (prior, entry) => for {
+      paths <- prior
+      path <- WorkspaceFilePath.parseC(entry.result.path)
+      read <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), path)
+      text <- read.text.map(Consequence.success).getOrElse(F.invalid("completed source history prefix is now missing"))
+      interpreted <- WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(entry.result.path, text,
+        LocalDate.parse(entry.result.updatedOn), None, None, entry.result.dateUncertain))
+      _ <- if (interpreted.outcome == "unchanged" && interpreted.text == text &&
+          interpreted.providerIdentity == entry.result.providerIdentity && interpreted.dateUncertain == entry.result.dateUncertain)
+        Consequence.unit else F.invalid("completed source history prefix no longer satisfies its saved rule and date")
+    } yield paths :+ entry.result.path }
+  } yield paths
+
+  /** New candidate observation rechecks completed history using only the File read DSL. */
+  def verifyCandidatePrefixC(core: ActionCall.Core,
+    target: GoalPhaseCandidateRecovery.RecoveryTarget): Consequence[Unit] = for {
+    _ <- if (GoalPhaseCandidateRecovery.validTarget(target)) Consequence.unit
+      else F.invalid("candidate history reuse has no exact admitted target")
+    selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
+    _ <- if (selection == target.historySelection) Consequence.unit
+      else F.invalid("candidate source-history selection changed after Human direction")
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    _ <- target.historyPrefix.foldLeft(Consequence.unit) { (prior, entry) => for {
+      _ <- prior
+      rule <- selection.rule.map(Consequence.success).getOrElse(F.invalid("completed candidate history rule is absent"))
+      path <- WorkspaceFilePath.parseC(entry.result.path)
+      read <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), path)
+      text <- read.text.map(Consequence.success).getOrElse(F.invalid("completed candidate source history is now missing"))
+      interpreted <- WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(entry.result.path, text,
+        LocalDate.parse(entry.result.updatedOn), None, None, entry.result.dateUncertain))
+      _ <- if (interpreted.outcome == "unchanged" && interpreted.text == text &&
+          interpreted.providerIdentity == entry.result.providerIdentity && interpreted.dateUncertain == entry.result.dateUncertain)
+        Consequence.unit else F.invalid("completed candidate history no longer satisfies its saved rule and date")
+    } yield () }
+  } yield ()
+
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    source: InstanceRecord, current: InstanceRecord, scopeIdentity: String, inspectionStage: String,
+    source: InstanceRecord, current: InstanceRecord, controller: O.State, scopeIdentity: String, inspectionStage: String,
     prepared: Option[Prepared], acknowledgement: String => Consequence[Unit]): Consequence[InstanceRecord] = prepared match {
     case None => Consequence.success(current)
     case Some(selected) => for {
-      _ <- _frontier_c(session, core, source, current, scopeIdentity, inspectionStage, acknowledgement)
+      _ <- _frontier_c(session, core, source, current, controller, scopeIdentity, inspectionStage, acknowledgement)
       _ <- if (selected != null && selected.rule != null && selected.sources != null && selected.sources.nonEmpty &&
           selected.sources.forall(s =>
             s != null && s.updatedOn != null && s.createdOn == None && s.author == None && s.dateUncertain &&
@@ -81,7 +127,7 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
       workspace <- WorkspaceId.parseC("sm-workflow-repository")
       recorded <- selected.sources.zipWithIndex.foldLeft(Consequence.success(current)) {
         case (prior, (input, index)) => prior.flatMap { from => for {
-          _ <- _frontier_c(session, core, source, from, scopeIdentity, inspectionStage, acknowledgement)
+          _ <- _frontier_c(session, core, source, from, controller, scopeIdentity, inspectionStage, acknowledgement)
           payload = Payload(source.revision.value.toString, scopeIdentity, input.path, "goldenport",
             selected.rule.identity, input.updatedOn.toString, input.dateUncertain, None)
           intent <- _save_c(adapter, d, core, source, from, inspectionStage, "source-history-intent-" + index, payload)
@@ -101,15 +147,20 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
   }
 
   private def _frontier_c(session: F.Session, core: ActionCall.Core, source: InstanceRecord,
-    current: InstanceRecord, scope: String, stage: String, acknowledgement: String => Consequence[Unit]): Consequence[Unit] =
+    current: InstanceRecord, controller: O.State, scope: String, stage: String,
+    acknowledgement: String => Consequence[Unit]): Consequence[Unit] =
     if (session == null || core == null || core.executionContext == null || source == null || current == null ||
-        acknowledgement == null || !_exact(scope, 1024) || !Set("InspectCandidate", "PhaseInspection")(stage))
+        controller == null || controller.plan == null || acknowledgement == null ||
+        !_exact(scope, 1024) || !Set("InspectCandidate", "PhaseInspection")(stage))
       F.invalid("source history has no supported owning inspection frontier")
     else for {
       _ <- source.validateC
       _ <- current.validateC
       admitted <- GoalPhaseNativeHistory.prefixC(current, source.revision)
-      plan = session.started.receipt.payload.value.plan
+      plan = controller.plan
+      _ <- O.validatePlanC(plan)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(plan)
+      original = session.started.receipt.payload.value.plan
       _ <- if (source.identity == current.identity && source.identity == session.current.identity &&
           source.definition.workflowIdentity == current.definition.workflowIdentity &&
           source.definition.workflowRevision == current.definition.workflowRevision &&
@@ -119,7 +170,11 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
           source.currentProgression.contains(ProgressionReference("phase." + stage)) &&
           current.currentProgression == source.currentProgression && admitted.currentProgression == source.currentProgression &&
           admitted.lifecycle == source.lifecycle && admitted.suspension.isEmpty &&
-          (if (stage == "PhaseInspection") scope == "phase:" + plan.phase else plan.steps.exists(_.identity == scope)))
+          plan.identity == original.identity && plan.phase == original.phase && plan.repository == original.repository &&
+          controller.stage.toString == stage &&
+          (if (stage == "PhaseInspection") controller.cursor == plan.steps.size && scope == "phase:" + plan.phase
+            else controller.cursor >= 0 && controller.cursor < plan.steps.size &&
+              scope == plan.steps(controller.cursor).identity))
         Consequence.unit else F.invalid("source history crosses its actual source, definition or selected inspection scope")
     } yield ()
 

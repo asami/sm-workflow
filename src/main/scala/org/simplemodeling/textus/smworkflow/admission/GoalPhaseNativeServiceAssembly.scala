@@ -15,8 +15,7 @@ import GoalPhaseNativeRun as F
 /** Current paired native host assembly, invoked through session-resolved inputs.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  *  version Oct. 12, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -34,12 +33,17 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
     new Operation(true, d, definition, plans, port),
     new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
-      GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port))))
+      GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseSourceHistoryRecovery.operations(port) ++
+      GoalPhaseCandidateRecovery.operations(port) ++
+      GoalPhaseCandidateObservationContinuation.operations(port) ++
+      GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
+      GoalPhaseClosureRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port) ++
+      GoalPhaseFailedPhaseRepairAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
     * belong to the trusted host; stored Plan data cannot install them.
     */
-  def bindHostC(params: ComponentCreate, declaration: F.Declaration,
+  def bindRuntimeC(params: ComponentCreate, declaration: F.Declaration,
     acknowledgement: String => Consequence[Unit] = _ => Consequence.unit): Consequence[spec.ServiceDefinition] =
     if (params == null) Consequence.configurationInvalid("Native GoalPhase requires its owning Subsystem")
     else for {

@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Separate artifact declaration does not make old host-record configuration
   * require a fifth purpose or turn its authorization collection into a catalog.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object GoalPhaseArtifactReadPolicy {
   val prefix = "sm-workflow.goal-phase.artifacts."
@@ -21,7 +21,7 @@ private[smworkflow] object GoalPhaseArtifactReadPolicy {
     else {
       val values = configuration.configuration.values
       def exactC(name: String): Consequence[String] =
-        GoalPhaseHostRecordReadPolicy.storedValue(values, prefix + name) match {
+        GoalPhaseInputRecordReadPolicy.storedValue(values, prefix + name) match {
           case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
             Consequence.success(value)
           case _ => Consequence.configurationInvalid("Artifact declaration requires exact resolved host configuration")
@@ -41,7 +41,7 @@ private[smworkflow] object GoalPhaseArtifactReadPolicy {
     else {
       val values = configuration.configuration.values
       def exactC(name: String): Consequence[String] =
-        GoalPhaseHostRecordReadPolicy.storedValue(values, prefix + name) match {
+        GoalPhaseInputRecordReadPolicy.storedValue(values, prefix + name) match {
           case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
             Consequence.success(value)
           case _ => Consequence.configurationInvalid("Artifact read requires exact resolved host configuration")
@@ -54,10 +54,10 @@ private[smworkflow] object GoalPhaseArtifactReadPolicy {
             ComponentDataStore.Request.forComponent(SmWorkflowComponent.componentId, declaredStore).normalizedName == declaredStore &&
             collection == DataStore.CollectionId.EntityStore(identity)) Consequence.unit
           else Consequence.stateConflict("Artifact read destination differs from its host declaration")
-        hasHostDeclaration = (Vector("store-name") ++ GoalPhaseHostRecordReadPolicy.Purpose.values.map(_.key)).exists(name =>
-          GoalPhaseHostRecordReadPolicy.storedValue(values, GoalPhaseHostRecordReadPolicy.prefix + name).nonEmpty)
-        _ <- if (!hasHostDeclaration) Consequence.unit
-          else GoalPhaseHostRecordReadPolicy.decodeC(configuration).flatMap { host =>
+        hasRuntimeDeclaration = (Vector("store-name") ++ GoalPhaseInputRecordReadPolicy.Purpose.values.map(_.key)).exists(name =>
+          GoalPhaseInputRecordReadPolicy.storedValue(values, GoalPhaseInputRecordReadPolicy.prefix + name).nonEmpty)
+        _ <- if (!hasRuntimeDeclaration) Consequence.unit
+          else GoalPhaseInputRecordReadPolicy.decodeC(configuration).flatMap { host =>
             if (!host.collections.exists(_._2 == collection)) Consequence.unit
             else Consequence.stateConflict("Artifact collection overlaps another host-record purpose")
           }

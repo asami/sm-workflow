@@ -17,12 +17,12 @@ import GoalPhaseFindingRecording as R
 /** Finite ordinary CLI transport around separately performed real semantic work.
   * Public files and preparation alone establish no genuine review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private val _prefix = "smworkflow.spec.p62.recording."
   private val _example = sys.props.get(_prefix + "example").filter(_.trim.nonEmpty) match {
@@ -205,7 +205,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
     work.completed shouldBe empty
     work.checkFailure shouldBe None
     work.review should not be empty
-    work.review shouldBe _saved(scenario, "review").work.get.review.map(_.copy(hostContext = None))
+    work.review shouldBe _saved(scenario, "review").work.get.review.map(_.copy(reviewContext = None))
     work.repairDirective.get.findings should not be empty
     val issues = work.issues.get
     val assigned = issues.issues.filter(issue => issue.step == "step-1" && issue.status != "RESOLVED")
@@ -483,7 +483,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             next.sessionId shouldBe retained.sessionId
             if (result.outcome == "accept") {
               next.kind shouldBe "Wait"
-              next.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+              next.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
               next.validation.get.candidate shouldBe retained.work.get.candidate.get
               next.work shouldBe None
               _progress(next)
@@ -611,7 +611,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             next.sessionId shouldBe retained.sessionId
             if (result.outcome == "accept") {
               next.kind shouldBe "Wait"
-              next.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+              next.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
               next.validation.get.candidate shouldBe retained.work.get.candidate.get
               next.work shouldBe None
               _progress(next, 1)
@@ -640,7 +640,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
             Then("StepClosure authority remains required before any completed Step or recording")
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             _progress(waiting, if (_reviewed_repair_stages) 1 else 0)
             val checks = _checks(scenario, _step_checks)
             Given("the real authority input and actual independent review observations, possibly empty")

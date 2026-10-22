@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /** Generated public completion on canonical storage. No lease/provider is
   * retained, and no historical hash-backed completion is an alternate route.
   * @since   Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
   final class ObservedCompletion private[SplitPhaseManagedTypedPartitionCompletion] (
@@ -81,7 +81,7 @@ private[smworkflow] object SplitPhaseManagedTypedPartitionCompletion {
     }
   } yield result
 
-  def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def bindRuntimeC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[Binding] =
     if (params == null || declaration == null || catalog == null)
       Consequence.configurationInvalid("SplitPhase typed completion requires complete Workflow metadata")

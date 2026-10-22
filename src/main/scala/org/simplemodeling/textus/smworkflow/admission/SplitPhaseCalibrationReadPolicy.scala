@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Composition checks the selected Workflow binding once; other workflow
   * application data roles are not prerequisites for this independent reader.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseCalibrationReadPolicy {
   val prefix = "sm-workflow.split-phase.calibration."
@@ -64,7 +64,7 @@ private[smworkflow] object SplitPhaseCalibrationReadPolicy {
   }
 
   private def stringC(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase calibration requires exact host configuration")

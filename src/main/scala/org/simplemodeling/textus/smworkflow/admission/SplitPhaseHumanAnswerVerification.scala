@@ -15,8 +15,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseNativeHumanDire
   * or complete question/frontier/result copy certification.
   * No receipt decoder, assembly clock, storage grant or command permission.
   *
-  * @since Oct.  4, 2026
-  * @version Oct.  8, 2026
+  * @since   Oct.  4, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseHumanAnswerVerification {
   val purpose = "split-phase-human-direction-answer"
@@ -46,7 +46,7 @@ private[smworkflow] object SplitPhaseHumanAnswerVerification {
       Consequence.securityPermissionDenied("SplitPhase Human answer requires its owning completion call and independent host evidence")
     else for {
       _ <- GoalPhaseParticipantAdmission.admitC(expected.submittingParticipant, core.executionContext)
-      target <- ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(expected)
+      target <- ThreeWorkflowExternalEvidencePorts.splitAnswerBindingC(expected)
       _ <- _observe_c("evidence") {
         Option(evidence.admitC(core, expected.result.resultReference, target)).getOrElse(
           Consequence.serviceUnavailable("SplitPhase Human host evidence returned no outcome"))

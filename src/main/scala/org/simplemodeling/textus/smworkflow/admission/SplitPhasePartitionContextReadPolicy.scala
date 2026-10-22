@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 /**
  * Independent data restriction, not a Create grant or semantic admission.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhasePartitionContextReadPolicy {
   val prefix = "sm-workflow.split-phase.partition-contexts."
@@ -46,7 +46,7 @@ private[smworkflow] object SplitPhasePartitionContextReadPolicy {
       else Consequence.stateConflict("SplitPhase partition context read differs from its declared purpose")
     }
   private def stringC(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase partition context requires exact host configuration")

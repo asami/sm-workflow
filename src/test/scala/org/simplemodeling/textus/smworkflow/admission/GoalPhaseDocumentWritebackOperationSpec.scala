@@ -16,7 +16,7 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.{NativeHostGoalStartInput, NativeHostReviewPreparation, NativeHostAuthorityPreparation}
+import org.simplemodeling.textus.smworkflow.preparation.{NativeGoalStartInput, NativeReviewPreparation, NativeAuthorityPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDocumentProgress as P
@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -58,7 +58,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
     commands.patch(firstcommit, Vector(Vector("-C", root.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", _source.phasePath, _source.checklistPath)), 0)
   }
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), goalPaths = goal.candidatePaths,
       goalMessages = goal.closure.programs.map(program => "Goal Step " + program.step),
@@ -68,7 +68,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
 
   private def _root(): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/document-writeback").toAbsolutePath), "episode-").toRealPath()
-  private def _host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     original.copy(goal = original.goal.copy(input = _input, candidatePaths = _paths,
       closure = original.goal.closure.copy(programs = Vector(
@@ -90,7 +90,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
     val declaration = Json.obj("schemaVersion" -> Json.fromString(D.declarationSchema),
       "phasePath" -> Json.fromString(_source.phasePath), "checklistPath" -> Json.fromString(_source.checklistPath))
     val files = Map("input.json" -> _input.asJson.noSpaces, "plan.json" -> declaration.noSpaces)
-    val prepared = take(NativeHostGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
+    val prepared = take(NativeGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
       "selection-id" -> "verification-writeback-selection", "participant" -> "participant", "origin" -> "ExplicitHuman",
       "idempotency-key" -> "verification-writeback-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection",
       "plan-collection" -> "entity:smworkflow.cli.goal_plans"), path =>
@@ -184,7 +184,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty,
         ExecutionEvidence(Vector(reference), Some(if (review) "specification-reviewer" else "participant")))
       if (review) prepare(call => for {
-        prepared <- NativeHostReviewPreparation.goalC(displayed.get.work.get.review.get.hostContext.get,
+        prepared <- NativeReviewPreparation.goalC(displayed.get.work.get.review.get.reviewContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
             GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
             GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
@@ -207,7 +207,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
       val selection = _repository_selection_(_host(root).repository.input, "verification-writeback-child",
         identity + ":repository-closure:" + from.revision.value)
       prepare(call => for {
-        prepared <- NativeHostAuthorityPreparation.goalC(waiting.authorityContext.get,
+        prepared <- NativeAuthorityPreparation.goalC(waiting.authorityContext.get,
           V.WorkflowArtifactReference("specification-writeback-authority", from.revision.value.toString),
           "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

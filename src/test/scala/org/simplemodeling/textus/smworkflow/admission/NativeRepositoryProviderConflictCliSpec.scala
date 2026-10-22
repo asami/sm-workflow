@@ -16,12 +16,12 @@ import NativeWorkflowCliFixture as F
   * Supplied observations check coherence and authenticate no provider provenance.
   * Runtime owns conflict materialization, selected staging and required checks.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, record, take}
+  import NativeCallerExecutionFixture.{json, record, take}
 
   private val _provider = WorkflowConcreteExecutionProfile("p61-git-provider-sol-medium", "openai", "gpt-6.1-sol",
     Map("reasoning-effort" -> "medium"))
@@ -45,13 +45,13 @@ final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Mat
   private def _mapping: Json = Json.obj(
     "schemaVersion" -> Json.fromString(WorkflowExecutionProfileParameters.schemaVersion),
     "identity" -> Json.fromString("p61-git-provider-mapping"), "revision" -> Json.fromString("1"),
-    "profiles" -> Json.arr(NativeHostExecutionFixture.profile(_provider), NativeHostExecutionFixture.profile(_parent)),
+    "profiles" -> Json.arr(NativeCallerExecutionFixture.profile(_provider), NativeCallerExecutionFixture.profile(_parent)),
     "classes" -> Json.fromValues(Vector("CodingProgrammingStandard", "ReviewStandard").map(name =>
       Json.obj("reasoningClass" -> Json.fromString(name), "profile" -> Json.fromString(_provider.identity)))),
     "fallbacks" -> Json.arr())
   private def _origin(context: String): Json = Json.obj(
     "schemaVersion" -> Json.fromString(GoalPhaseNativeExecution.schemaVersion),
-    "current" -> NativeHostExecutionFixture.executor(_parent, context),
+    "current" -> NativeCallerExecutionFixture.executor(_parent, context),
     "preference" -> Json.obj("forceInline" -> Json.False, "isolateContext" -> Json.True))
   private def _classifications: Json = {
     import GoalPhaseWorkClassification.*
@@ -139,7 +139,7 @@ final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Mat
       val originuri = _save(scenario.root, "git-provider-origin.json", origin.noSpaces)
       When("normal prepareExecution selects the actual first medium attempt for external semantic work")
       val prepared = scenario.prepareHostInput("prepareExecution",
-        V.WorkflowHostExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowHostExecutionState]
+        V.WorkflowCallerExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("the opaque original session is pending and its passive input names the actual files without fabricating a result or observation")
       prepared.completionEvidence shouldBe None
       val session = take(H.decodeC(prepared.session))
@@ -177,7 +177,7 @@ final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Mat
       val value = Path.of(scenario.host.target.root).resolve("value.txt")
       val started = _load[V.RepositorySyncStartResult](scenario.root, "git-provider-start.json")
       val issued = _load[V.RepositorySyncAdvanceResult](scenario.root, "git-provider-issued.json")
-      val prepared = _load[V.WorkflowHostExecutionState](scenario.root, "git-provider-prepared.json")
+      val prepared = _load[V.WorkflowCallerExecutionState](scenario.root, "git-provider-prepared.json")
       val sessionfile = scenario.root.resolve("git-provider-session.json")
       val sessiontext = Files.readString(sessionfile, UTF_8)
       val session = take(H.decodeC(sessiontext))
@@ -237,9 +237,9 @@ final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Mat
       Given("the actual original issued context, opaque session, completed observation and semantic child reference")
       val referenceuri = _save(scenario.root, "git-provider-reference.json", json(reference.toRecord()).noSpaces)
       When("normal recordExecution consumes only those inputs and returns actual completion evidence")
-      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowHostExecutionRecordInput(
+      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowCallerExecutionRecordInput(
         issued.issuedWorkContext.get, sessionfile.toUri.toASCIIString, observationfile.toUri.toASCIIString,
-        Some(referenceuri)).toRecord()).business[V.WorkflowHostExecutionState]
+        Some(referenceuri)).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("the selection completes without materializing the proposal or starting SBT")
       recorded.nextSelection shouldBe None
       recorded.completionEvidence should not be empty

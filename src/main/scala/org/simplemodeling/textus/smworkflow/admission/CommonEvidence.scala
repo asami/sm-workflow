@@ -4,14 +4,14 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
-import java.time.Instant
+import java.time.{Clock, Instant, ZoneId, ZonedDateTime}
 import java.util.Base64
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterDecoder, ComponentParameterKey}
-import org.goldenport.cncf.datastore.{ComponentDataStore, ComponentRecordStorage, DataStore}
+import org.goldenport.cncf.datastore.{ComponentDataStore, ComponentRecordStorage, DataStore, QueryDirective}
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.*
 import org.goldenport.record.Record
@@ -22,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Common immutable source association and managed one-text storage.
   * Physical I/O belongs to File intents in the current call's UoW.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object CommonEvidence {
@@ -36,6 +36,7 @@ private[smworkflow] object CommonEvidence {
   final case class Allocation(identity: String, source: Source, host: String, workspace: String,
     path: String, allocatedAt: String)
   final case class Observation(identity: String, status: String, observedAt: String, message: String)
+  final case class Representation(identity: String, compression: String)
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
   private given Encoder[Source] = deriveEncoder
@@ -44,6 +45,8 @@ private[smworkflow] object CommonEvidence {
   private given Decoder[Allocation] = deriveDecoder
   private given Encoder[Observation] = deriveEncoder
   private given Decoder[Observation] = deriveDecoder
+  private given Encoder[Representation] = deriveEncoder
+  private given Decoder[Representation] = deriveDecoder
 
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional("sm-workflow.evidence",
     ComponentParameterDecoder {
@@ -124,6 +127,18 @@ private[smworkflow] object CommonEvidence {
     def createC(key: String, value: String): Consequence[Unit]
     def writeC(workspace: String, path: String, text: String): Consequence[FileWriteOutcome]
     def readC(workspace: String, path: String): Consequence[Option[String]]
+    def prepareDirectoryC(workspace: String, path: String): Consequence[FilePrepareDirectoryOutcome] =
+      Consequence.notImplemented("Evidence directory preparation is unsupported")
+    def writeBytesC(workspace: String, path: String, bytes: Vector[Byte], representation: FileRepresentation): Consequence[FileWriteOutcome] =
+      Consequence.notImplemented("Evidence byte storage is unsupported")
+    def readBytesC(workspace: String, path: String, representation: FileRepresentation): Consequence[Option[Vector[Byte]]] =
+      Consequence.notImplemented("Evidence byte read is unsupported")
+    def createLifecycleC(key: String, row: Record): Consequence[Unit] =
+      Consequence.notImplemented("Evidence lifecycle create is unsupported")
+    def saveLifecycleC(key: String, row: Record): Consequence[Unit] =
+      Consequence.notImplemented("Evidence lifecycle save is unsupported")
+    def searchLifecycleC(directive: QueryDirective): Consequence[Vector[(String, Record)]] =
+      Consequence.notImplemented("Evidence indexed search is unsupported")
   }
   def storage(core: ActionCall.Core, p: Policy): Storage = new Storage {
     def allocateNameC() = Consequence.success(core.executionContext.idGeneration.opaqueId("sm-workflow-evidence-file"))
@@ -144,6 +159,24 @@ private[smworkflow] object CommonEvidence {
       file <- WorkspaceFilePath.parseC(path)
       result <- WorkflowFileExecution.readTextC(core, FileTarget(target), file)
     } yield result.text
+    override def prepareDirectoryC(workspace: String, path: String) = for {
+      target <- WorkspaceId.parseC(workspace)
+      file <- WorkspaceFilePath.parseC(path)
+      result <- WorkflowFileExecution.prepareDirectoryC(core, FileTarget(target), file)
+    } yield result.outcome
+    override def writeBytesC(workspace: String, path: String, bytes: Vector[Byte], representation: FileRepresentation) = for {
+      target <- WorkspaceId.parseC(workspace)
+      file <- WorkspaceFilePath.parseC(path)
+      result <- WorkflowFileExecution.writeBytesC(core, FileTarget(target), file, bytes, representation)
+    } yield result.outcome
+    override def readBytesC(workspace: String, path: String, representation: FileRepresentation) = for {
+      target <- WorkspaceId.parseC(workspace)
+      file <- WorkspaceFilePath.parseC(path)
+      result <- WorkflowFileExecution.readBytesC(core, FileTarget(target), file, representation)
+    } yield result.bytes
+    override def createLifecycleC(key: String, row: Record) = CommonEvidenceLifecycle.createRowC(core, p, key, row)
+    override def saveLifecycleC(key: String, row: Record) = CommonEvidenceLifecycle.saveRowC(core, p, key, row)
+    override def searchLifecycleC(directive: QueryDirective) = CommonEvidenceLifecycle.searchRowsC(core, p, directive)
   }
   def metadata(a: Allocation): V.EvidenceMetadata = V.EvidenceMetadata(V.EvidenceReference(a.identity, "1"),
     V.WorkflowArtifactReference(a.source.reference.identity, a.source.reference.revision), a.source.output,
@@ -167,29 +200,61 @@ private[smworkflow] object CommonEvidence {
       for { saved <- a; observed <- o } yield observation(saved, observed), journal)
 
   /** Persist source association and a write intent before touching the File.
+    * New managed allocations require an acknowledged representation first.
+    * A representation without an allocation is indeterminate and grants no retry.
     * A retained intent without an observation is unknown, never permission to write again.
     * Known Create success is consumed directly; no read-after-write confirmation gate.
     */
-  def archiveC(store: Storage, p: Policy, source: Source, text: String, now: Instant): Consequence[(V.EvidenceRecordingState, Option[(Allocation, Observation)])] = {
-    if (!validPolicy(p) || !validSource(source) || text == null || !UTF_8.newEncoder().canEncode(text) || text.contains('\u0000'))
+  def archiveC(store: Storage, p: Policy, source: Source, text: String, now: Instant): Consequence[(V.EvidenceRecordingState, Option[(Allocation, Observation)])] =
+    _archive_c(store, p, source, text, now, None, ZoneId.of("UTC"))
+
+  def archiveManagedC(store: Storage, p: Policy, source: Source, text: String,
+    compression: String, clock: Clock): Consequence[(V.EvidenceRecordingState, Option[(Allocation, Observation)])] =
+    if (clock == null) Consequence.success((_state("invalid", "Evidence requires the owning clock"), None))
+    else _archive_c(store, p, source, text, clock.instant(), Some(compression), clock.getZone)
+
+  private def _archive_c(store: Storage, p: Policy, source: Source, text: String, now: Instant,
+    compression: Option[String], zone: ZoneId): Consequence[(V.EvidenceRecordingState, Option[(Allocation, Observation)])] = {
+    if (!validPolicy(p) || !validSource(source) || !validText(text) || now == null ||
+        compression.exists(c => !Set("identity", "gzip")(c)) ||
+        compression.nonEmpty && !Vector(source.repository, source.phase, source.session).forall(_segment))
       Consequence.success((_state("unavailable", "Evidence source or text is invalid"), None))
     else {
       val id = identity(source)
       var allocated = Option.empty[Allocation]
+      var representationconflict = false
+      var representationorphan = false
       val result = for {
         existing <- store.loadC(id)
+        representation <- representationC(store, id)
+        _ = representationorphan = existing.isEmpty && representation.nonEmpty
+        _ <- if (!representationorphan) Consequence.unit
+          else Consequence.stateConflict("Evidence representation exists without an allocation")
         a <- existing match {
           case Some(raw) => _allocation_c(raw, id).flatMap(value =>
             if (value.source == source && value.host == p.hostIdentity) Consequence.success(value)
             else Consequence.stateConflict("Evidence source association conflicts"))
           case None => for {
             name <- store.allocateNameC()
-            path <- WorkspaceFilePath.parseC(p.directory + "/" + name + ".log")
+            _ <- if (_segment(name)) Consequence.unit else Consequence.stateConflict("Evidence allocated name is not literal")
+            date = ZonedDateTime.ofInstant(now, zone)
+            suffix = if (compression.contains("gzip")) ".log.gz" else ".log"
+            directory = if (compression.isEmpty) p.directory else
+              p.directory + f"/${date.getYear}%04d/${date.getMonthValue}%02d/" +
+                Vector(source.repository, source.phase, source.session).mkString("/")
+            path <- WorkspaceFilePath.parseC(directory + "/" + name + suffix)
             value = Allocation(id, source, p.hostIdentity, p.workspaceIdentity, path.value, now.toString)
+            _ <- if (compression.nonEmpty)
+              store.createC(id + ":representation", _encode(Representation(id, compression.get)).noSpaces)
+              else Consequence.unit
             _ <- store.createC(id, _encode(value).noSpaces)
           } yield value
         }
         _ = allocated = Some(a)
+        _ = representationconflict = existing.nonEmpty && representation.getOrElse("identity") != compression.getOrElse("identity")
+        _ <- if (!representationconflict) Consequence.unit
+          else Consequence.stateConflict("Evidence representation conflicts with its retained allocation")
+        lifecycle = if (compression.nonEmpty) CommonEvidenceLifecycle.trackC(store, a) else Consequence.unit
         retained <- store.loadC(id + ":storage")
         o <- retained match {
           case Some(raw) => _observation_c(raw, id).map(Some(_))
@@ -199,8 +264,15 @@ private[smworkflow] object CommonEvidence {
               else Consequence.stateConflict("Evidence retained File intent differs from its allocation")
             }
             case None => for {
+              _ <- lifecycle
               _ <- store.createC(id + ":write-intent", _encode(a).noSpaces)
-              outcome = store.writeC(a.workspace, a.path, text)
+              outcome = if (compression.isEmpty) store.writeC(a.workspace, a.path, text)
+                else store.prepareDirectoryC(a.workspace, a.path.substring(0, a.path.lastIndexOf('/'))).flatMap {
+                  case FilePrepareDirectoryOutcome.Created | FilePrepareDirectoryOutcome.AlreadyPresent =>
+                    store.writeBytesC(a.workspace, a.path, text.getBytes(UTF_8).toVector, fileRepresentation(compression.get))
+                  case FilePrepareDirectoryOutcome.Conflict => Consequence.success(
+                    FileWriteOutcome.Conflict(FileWriteConflict.AlreadyExists))
+                }
               observed = outcome.map {
                 case FileWriteOutcome.Created => Observation(id, "stored", now.toString, "Completed captured stdout saved through managed File")
                 case _ => Observation(id, "conflict", now.toString, "Evidence destination was not created; existing content is preserved")
@@ -210,10 +282,67 @@ private[smworkflow] object CommonEvidence {
           }
         }
       } yield o match {
-        case Some(observed) => (_state(observed.status, observed.message, Some(a), Some(observed)), Some((a, observed)))
+        case Some(observed) => (_state(observed.status,
+          if (lifecycle.isSuccess) observed.message else observed.message + "; lifecycle tracking unavailable",
+          Some(a), Some(observed)), Some((a, observed)))
         case None => (_state("indeterminate", "Retained File intent has no confirmed storage observation; read availability without replay", Some(a)), None)
       }
-      Consequence.success(result.fold(_ => (_state("indeterminate", "Evidence storage boundary unavailable; original Action remains retained", allocated), None), v => v))
+      Consequence.success(result.fold(_ => (_state(if (representationconflict) "conflict" else "indeterminate",
+        if (representationconflict) "Evidence representation conflicts with the retained allocation; no File effect"
+        else if (representationorphan) "Evidence representation exists without an allocation; no automatic retry or File effect"
+        else "Evidence storage boundary unavailable; original Action remains retained", allocated), None), v => v))
+    }
+  }
+
+  def validText(text: String): Boolean = text != null && UTF_8.newEncoder().canEncode(text) && !text.contains('\u0000')
+  private def _segment(value: String): Boolean = _exact(value) && value != "." && value != ".." &&
+    value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,255}")
+  def fileRepresentation(compression: String): FileRepresentation =
+    if (compression == "gzip") FileRepresentation.Gzip else FileRepresentation.Identity
+  def representationC(store: Storage, id: String): Consequence[Option[String]] = store.loadC(id + ":representation").flatMap {
+    case None => Consequence.success(None)
+    case Some(raw) => _decode_c[Representation](raw).flatMap { r =>
+      if (r.identity == id && Set("identity", "gzip")(r.compression)) Consequence.success(Some(r.compression))
+      else Consequence.stateConflict("Evidence representation is invalid")
+    }
+  }
+  def payloadC(store: Storage, a: Allocation): Consequence[Option[String]] = representationC(store, a.identity).flatMap {
+    case None => store.readC(a.workspace, a.path)
+    case Some(compression) => store.readBytesC(a.workspace, a.path, fileRepresentation(compression)).flatMap {
+      case None => Consequence.success(None)
+      case Some(bytes) => try {
+        val text = UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toArray)).toString
+        if (validText(text)) Consequence.success(Some(text)) else Consequence.stateConflict("Evidence UTF-8 payload is invalid")
+      } catch { case NonFatal(_) => Consequence.stateConflict("Evidence UTF-8 payload is invalid") }
+    }
+  }
+
+  def archiveBatchC(store: Storage, policy: Policy, input: V.EvidenceBatchArchiveInput, clock: Clock,
+    record: (Allocation, Observation) => Consequence[V.JournalRecordingState]): Consequence[V.EvidenceBatchArchiveResult] = {
+    if (input == null || input.items.toVector.size > 20 || input.items.toVector.exists(_ == null))
+      Consequence.success(V.EvidenceBatchArchiveResult("invalid", "Evidence batch requires 1 through 20 items", Vector.empty))
+    else input.items.toVector.foldLeft(Consequence.success(Vector.empty[V.EvidenceBatchItemResult])) { (acc, item) =>
+      acc.flatMap { items =>
+        val source = Option(item.sourceReference).map(r => Source(ContextReference(r.identity, r.revision),
+          item.repositoryIdentity, item.phaseIdentity, item.stepIdentity, item.sessionIdentity, item.outputIdentity, item.actionOutcome))
+        val archived = try source match {
+          case Some(s) => archiveManagedC(store, policy, s, item.text, item.compression, clock)
+          case None => Consequence.success((_state("invalid", "Evidence batch source is invalid"), None))
+        } catch { case NonFatal(_) => Consequence.success((_state("indeterminate", "Evidence item interrupted; original text retained by caller"), None)) }
+        archived.flatMap {
+          case (state, Some((allocation, observation))) =>
+            val unavailable = V.JournalRecordingState("unavailable", "Evidence Journal recording unavailable; storage observation retained",
+              None, V.WorkflowArtifactReference(observation.identity + ":storage", "1"))
+            val journal = try record(allocation, observation).fold(_ => unavailable, v => v)
+              catch { case NonFatal(_) => unavailable }
+            Consequence.success(state.copy(journal = Some(journal)))
+          case (state, None) => Consequence.success(state)
+        }.map(state => items :+ V.EvidenceBatchItemResult(item.sourceReference, item.outputIdentity, state))
+      }
+    }.map { items =>
+      val stored = items.count(_.state.status == "stored")
+      V.EvidenceBatchArchiveResult(if (stored == items.size) "stored" else if (stored == 0) "failed" else "partial",
+        "Individual storage and Journal observations retained; no batch rollback or test acceptance", items)
     }
   }
   def loadedC(store: Storage, id: String): Consequence[Option[(Allocation, Option[Observation])]] = for {
@@ -240,7 +369,7 @@ private[smworkflow] object CommonEvidence {
         val result = loadedC(store, input.identity).flatMap {
           case None => Consequence.success(_result_("absent", "Evidence association is absent"))
           case Some((a, o)) if a.host != p.hostIdentity => Consequence.success(_result_("unavailable", "Evidence belongs to another host"))
-          case Some((a, o)) => store.readC(a.workspace, a.path).map { text =>
+          case Some((a, o)) => payloadC(store, a).map { text =>
             V.EvidenceReadResult(if (text.isEmpty) "missing" else if (o.exists(_.status == "stored")) "found" else "indeterminate",
               "Current payload availability observed; historical Action and storage outcomes remain separate",
               Some(metadata(a)), o.map(observation(a, _)), text)

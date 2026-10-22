@@ -8,20 +8,20 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire
+import org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionQuestionWire
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDependencyScope as D
 import GoalPhaseNativeWork as W
 import GoalPhaseOrderedHumanDecision as H
 import GoalPhaseOrderedProgression as O
 import GoalPhaseFindingRecording as R
-import NativeHostEvidence.Purpose
-import NativeHostHumanEvidenceFixture as F
+import NativeExternalEvidence.Purpose
+import NativeHumanEvidenceFixture as F
 
 /** Specification-owned questions and references exercise contracts only.
   * These examples establish neither retained native consent nor effect authority.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -59,7 +59,7 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
   private def _input(question: WorkflowInteraction[H.Input, Nothing]): H.Input =
     question.current.asInstanceOf[WorkflowContinuation.Decision[H.Input]].request.input.get.value
   private def _target(question: WorkflowInteraction[H.Input, Nothing]): Json =
-    _take(NativeHostHumanScope.questionBindingC(question, _take(ThreeWorkflowHostEvidencePorts.goalHumanSourceC(question))))
+    _take(NativeHumanDecisionScope.questionBindingC(question, _take(ThreeWorkflowExternalEvidencePorts.goalHumanSourceC(question))))
   private def _key(state: O.State): O.WorkKey = state.next.asInstanceOf[O.Semantic].key
   private def _reviewstate: O.State = {
     val initial = _take(O.startC(F.plan, F.snapshot))
@@ -195,9 +195,9 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
     "retain both observations and the complete proposal in one Human source and distinguish every bounded selection change" in {
       Given("a specification-issued REVIEW question with both observations and an exact dependency report")
       val issued = _question(_reviewed, observe = true)
-      val source = _take(ThreeWorkflowHostEvidencePorts.goalHumanSourceC(issued))
+      val source = _take(ThreeWorkflowExternalEvidencePorts.goalHumanSourceC(issued))
       val actual = _target(issued)
-      val selected = NativeHostHumanScope.selectQuestion(actual, Purpose.GoalHuman)
+      val selected = NativeHumanDecisionScope.selectQuestion(actual, Purpose.GoalHuman)
       val changes = Vector(_reviewed.copy(dependency = _reviewed.dependency.copy(repository = "external-repository")),
         _reviewed.copy(dependency = _reviewed.dependency.copy(workspace = "dependency-code")),
         _reviewed.copy(paths = _reviewed.paths :+ "src/extra.scala"), _reviewed.copy(acceptance = Vector("Different acceptance")),
@@ -205,7 +205,7 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
         _reviewed.copy(dependentWork = Vector(ContextReference("dependent-work:other", "1"))),
         _reviewed.copy(discoveredEdits = Vector(_reviewed.paths.last)))
       When("the existing source and exact Human selector consume both optionals and crossed logical work selections")
-      val crossed = changes.map(value => NativeHostHumanScope.selectQuestion(_target(_question(value, observe = true)), Purpose.GoalHuman))
+      val crossed = changes.map(value => NativeHumanDecisionScope.selectQuestion(_target(_question(value, observe = true)), Purpose.GoalHuman))
       Then("neither optional overwrites the other and every valid changed dependency target differs")
       source.hcursor.downField("result").downField("reviewObservations").focus shouldBe Some(_observations.asJson)
       source.hcursor.downField("result").downField("dependencyProposal").focus shouldBe Some(_reviewed.asJson)
@@ -218,9 +218,9 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
       val malformed = Vector(Json.Null, Json.obj(), _field(resultjson, "unknown", Json.True),
         _field(resultjson, "dependencyProposal", Json.Null), _field(resultjson, "reviewObservations", Json.Null))
       When("the strict selector consumes malformed presence and independently dropped optionals")
-      val refused = malformed.map(value => NativeHostHumanScope.selectQuestion(_with_result_(value), Purpose.GoalHuman))
+      val refused = malformed.map(value => NativeHumanDecisionScope.selectQuestion(_with_result_(value), Purpose.GoalHuman))
       val dropped = Vector("dependencyProposal", "reviewObservations").map(name =>
-        NativeHostHumanScope.selectQuestion(_with_result_(resultjson.mapObject(_.remove(name))), Purpose.GoalHuman))
+        NativeHumanDecisionScope.selectQuestion(_with_result_(resultjson.mapObject(_.remove(name))), Purpose.GoalHuman))
       val ordinary = _target(_question().copy(current = {
         val decision = _question().current.asInstanceOf[WorkflowContinuation.Decision[H.Input]]
         val value = _input(_question()).copy(result = _result().copy(dependencyProposal = None))
@@ -229,21 +229,21 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
       Then("malformed presence fails, dropped meaning differs and existing absent-result selection remains valid")
       refused.foreach(_.isLeft shouldBe true)
       dropped.foreach { value => value.isRight shouldBe true; value should not be selected }
-      NativeHostHumanScope.selectQuestion(ordinary, Purpose.GoalHuman).isRight shouldBe true
+      NativeHumanDecisionScope.selectQuestion(ordinary, Purpose.GoalHuman).isRight shouldBe true
     }
 
     "retain complete independent review verdicts and reject malformed proposals and normalized Human name collisions" in {
       Given("the actual review verdict projection with both observations and the REVIEW dependency proposal")
       val value = _result(_reviewed).copy(reviewObservations = Some(_observations))
-      val verdict = ThreeWorkflowHostEvidencePorts.goalReviewVerdict(value)
-      def _binding_(value: Json): Json = NativeHostReviewEvidenceFixture.binding(Purpose.GoalReview, verdict = Some(value))
-      val selected = NativeHostReviewScope.select(Purpose.GoalReview, _binding_(verdict))
+      val verdict = ThreeWorkflowExternalEvidencePorts.goalReviewVerdict(value)
+      def _binding_(value: Json): Json = NativeReviewEvidenceFixture.binding(Purpose.GoalReview, verdict = Some(value))
+      val selected = NativeReviewScope.select(Purpose.GoalReview, _binding_(verdict))
       When("the existing review selector consumes exact, changed, dropped and malformed dependency verdicts")
-      val changed = NativeHostReviewScope.select(Purpose.GoalReview, _binding_(_field(verdict, "dependencyProposal",
+      val changed = NativeReviewScope.select(Purpose.GoalReview, _binding_(_field(verdict, "dependencyProposal",
         _reviewed.copy(acceptance = Vector("Different required outcome")).asJson)))
-      val dropped = NativeHostReviewScope.select(Purpose.GoalReview, _binding_(verdict.mapObject(_.remove("dependencyProposal"))))
+      val dropped = NativeReviewScope.select(Purpose.GoalReview, _binding_(verdict.mapObject(_.remove("dependencyProposal"))))
       val malformed = Vector(Json.Null, Json.obj(), _field(_reviewed.asJson, "discoveredEdits", Json.Null))
-        .map(value => NativeHostReviewScope.select(Purpose.GoalReview, _binding_(_field(verdict, "dependencyProposal", value))))
+        .map(value => NativeReviewScope.select(Purpose.GoalReview, _binding_(_field(verdict, "dependencyProposal", value))))
       Then("full review meaning is retained, changed or dropped meaning differs and malformed presence fails")
       verdict.hcursor.downField("dependencyProposal").focus shouldBe Some(_reviewed.asJson)
       verdict.hcursor.downField("reviewObservations").focus shouldBe Some(_observations.asJson)
@@ -264,11 +264,11 @@ final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers wi
       val nested = _field(exact, "dependencyProposal", _field(_reviewed.asJson, "usage_contract",
         _reviewed.asJson.hcursor.downField("usageContract").focus.get))
       When("normal wire normalization feeds the existing strict question selector")
-      val normalized = NativeHostHumanScope.selectQuestion(NativeHostHumanQuestionWire.normalize(_with_result_(alias), Purpose.GoalHuman), Purpose.GoalHuman)
-      val refused = Vector(collision, nested).map(value => NativeHostHumanScope.selectQuestion(
-        NativeHostHumanQuestionWire.normalize(_with_result_(value), Purpose.GoalHuman), Purpose.GoalHuman))
+      val normalized = NativeHumanDecisionScope.selectQuestion(NativeHumanDecisionQuestionWire.normalize(_with_result_(alias), Purpose.GoalHuman), Purpose.GoalHuman)
+      val refused = Vector(collision, nested).map(value => NativeHumanDecisionScope.selectQuestion(
+        NativeHumanDecisionQuestionWire.normalize(_with_result_(value), Purpose.GoalHuman), Purpose.GoalHuman))
       Then("the single public alias normalizes but even equal competing names fail")
-      normalized shouldBe NativeHostHumanScope.selectQuestion(wire, Purpose.GoalHuman)
+      normalized shouldBe NativeHumanDecisionScope.selectQuestion(wire, Purpose.GoalHuman)
       refused.foreach(_.isLeft shouldBe true)
     }
   }

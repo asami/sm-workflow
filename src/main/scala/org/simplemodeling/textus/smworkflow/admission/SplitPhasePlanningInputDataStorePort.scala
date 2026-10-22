@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPlannin
 /** Reconstructs current facts from nine independent rows, never the snapshot.
   * Owns no provider, current Operation, lease, cache or writer.
   * @since   Oct.  2, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] final class SplitPhasePlanningInputDataStorePort private[admission] (
   declaration: SplitPhasePlanningInputReadPolicy.Declaration
@@ -43,7 +43,7 @@ private[smworkflow] final class SplitPhasePlanningInputDataStorePort private[adm
     decode: (R, String) => Consequence[A], core: ActionCall.Core): Consequence[A] =
     if (declaration == null || reference == null)
       Consequence.stateConflict("SplitPhase current planning input reference is absent")
-    else ManagedHostRecordRead.loadSplitPlanningInputC(core, declaration.storeName,
+    else ManagedInputRecordRead.loadSplitPlanningInputC(core, declaration.storeName,
       declaration.collection(purpose), identity(reference), purpose).flatMap {
       case None => Consequence.stateConflict(s"SplitPhase current planning input is missing: $purpose")
       case Some(row) => row.getString(storageField) match {

@@ -16,12 +16,12 @@ import NativeWorkflowCliFixture as F
   * Public files retain observations; the parent establishes external provenance.
   * No stage supplies Human, independent review or effect-authority evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private val _prefix = "smworkflow.spec.p62."
   private val _stages = Set("prepare", "after-human", "after-human-renewed", "after-repair", "after-review", "after-authority", "checkpoint")
@@ -287,7 +287,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
           question.kind shouldBe "Human"
           _progress(question, 2, 2)
           question.human.get.choices shouldBe Vector("ContinueRepairs", "Defer", "Cancel")
-          question.human.get.hostContext should not be empty
+          question.human.get.humanDecisionContext should not be empty
           _retained(question.human.get.work, implementation.work.get)
           _test_issue(question.human.get.work) shouldBe issue
           question.human.get.work.issues.get.history shouldBe second.work.get.issues.get.history
@@ -417,7 +417,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
           Then("Wait retains consumed repair counts and genuine authorityContext before any Step commit")
           waiting.kind shouldBe "Wait"
           _progress(waiting, 2, 2)
-          waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+          waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
           waiting.completion shouldBe None
           waiting.work shouldBe None
           waiting.validation.get.candidate shouldBe review.work.get.candidate.get
@@ -429,7 +429,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
           waiting shouldBe _load[V.GoalPhaseAdvanceResult](scenario.root.resolve("continuation-wait.stdout.json"))
           waiting.kind shouldBe "Wait"
           _progress(waiting, 2, 2)
-          waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+          waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
           val checks = _checks(scenario, 5)
           val preparation = _load[V.WorkflowAuthorityPreparationInput](_file(Path.of(_property("preparation")), scenario.root))
           _load[V.GoalPhaseAdvanceResult](_uri(preparation.request, scenario.root)) shouldBe waiting

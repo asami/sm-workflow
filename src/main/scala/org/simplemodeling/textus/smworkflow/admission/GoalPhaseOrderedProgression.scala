@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseWorkClassification.given
 
 /** Deterministic Phase controller, not a Service or a persistence provider.
@@ -10,7 +11,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -111,6 +112,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class DecisionResumptionAdmitted(evidence: String) extends Event
   /** Host-verified consent for one exhausted positive Step repair window only. */
   final case class RepairContinuationAdmitted(evidence: String) extends Event
+  /** Eligibility only; the native owner independently verifies Human direction. */
+  final case class PhaseValidationRetryAdmitted(snapshot: Snapshot, selected: Vector[String],
+    failedReceipt: String, direction: String) extends Event
+  /** Pure eligibility only; the native owner authenticates the actual Human direction. */
+  final case class CandidateWorkRevisionAdmitted(direction: ContextReference, rationale: String) extends Event
 
   final class State private[GoalPhaseOrderedProgression] (
     val plan: Plan, val stage: Stage, val cursor: Int, val generation: Long, val repairs: Int,
@@ -206,6 +212,34 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
 
+    /** Eligibility only: the native owner must prove the original terminated
+      * failed Phase validation and independently admit the Human direction.
+      * Accepted Steps remain immutable; only one new corrective Step is added.
+      */
+    def adoptFailedPhaseRepairRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (text(evidence) && !evidence.exists(c => Character.isISOControl(c))) Consequence.unit
+        else invalid("Failed Phase repair adoption requires its independent Human direction")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseValidation) &&
+          !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty &&
+          phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && reviewEvidence.isEmpty &&
+          cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
+          plan.steps.size < 64 && plan.phaseChecks.size == 1 && candidate.exists(validSnapshot) &&
+          generation < Long.MaxValue) Consequence.unit
+        else invalid("Failed Phase repair adoption requires the original completed-Plan Phase validation Decision")
+      _ <- if (proposed.identity == plan.identity && proposed.revision != plan.revision &&
+          proposed.phase == plan.phase && proposed.repository == plan.repository &&
+          proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseReviewClassification == plan.phaseReviewClassification &&
+          proposed.acceptance == plan.acceptance && proposed.effectiveAcceptance == plan.effectiveAcceptance &&
+          proposed.steps.size == plan.steps.size + 1 && proposed.steps.take(plan.steps.size) == plan.steps &&
+          proposed.steps.last.dependencies.toSet == plan.steps.map(_.identity).toSet) Consequence.unit
+        else invalid("Failed Phase repair adoption must retain the complete accepted Plan and append exactly one dependent corrective Step")
+    } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, None, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+
     /** Compare already captured effective contracts; the declaration owner captures them. */
     def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
       _ <- validatePlanC(proposed)
@@ -273,6 +307,16 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       * storage. Owning advance will perform and persist these actions natively.
       */
     def acceptC(event: Event): Consequence[State] = event match {
+      case CandidateWorkRevisionAdmitted(direction, rationale) if stage == Stage.InspectCandidate &&
+          !phaseWide && cursor == completed.size && generation < Long.MaxValue &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          decision.isEmpty && decisionSource.isEmpty && !documentDecision && pendingRepair.isEmpty &&
+          phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && candidateParent.isEmpty &&
+          repositoryReceipt.isEmpty && direction != null && text(direction.identity) && text(direction.revision) &&
+          rationale != null && rationale.trim.nonEmpty && !rationale.contains('\u0000') =>
+        success(Stage.Implementation, newGeneration = generation + 1, clear = true,
+          newDirective = Some(RepairDirective("Human-requested reconciliation: " + direction.identity + "@" + direction.revision,
+            Vector(rationale))))
       case SemanticCompleted(value, summary, exempt) if summary != null && summary.trim.nonEmpty &&
           ((stage == Stage.Implementation && value == key(WorkKind.ImplementStep)) ||
             (stage == Stage.Repair && value == key(WorkKind.RepairStep))) &&
@@ -372,6 +416,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
           repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent))
+      case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
+          decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
+          closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
+          candidate.contains(snapshot) && validSnapshot(snapshot) && selected == plan.phaseChecks && selected.size == 1 &&
+          text(failed) && text(direction) && generation < Long.MaxValue =>
+        success(Stage.PhaseValidation, newGeneration = generation + 1, newChecks = None, newReview = None,
+          newIntent = None, reason = None, newPhaseReviewed = None, newPhasePaths = Vector.empty)
       case RepairContinuationAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
           !documentDecision && !phaseWide && plan.repairLimit > 0 && repairs >= plan.repairLimit &&
           generation < Long.MaxValue && pendingRepair.exists(_valid_directive) &&

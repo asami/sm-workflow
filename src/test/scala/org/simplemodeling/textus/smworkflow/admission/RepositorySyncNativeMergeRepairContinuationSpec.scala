@@ -12,7 +12,7 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
-import org.simplemodeling.textus.smworkflow.host.NativeWorkflowHostExecution
+import org.simplemodeling.textus.smworkflow.caller.NativeWorkflowCallerExecution
 import SplitPhaseExplicitPartitionFixture.take
 import RepositorySyncNativeMergeRepair as M
 import RepositorySyncNativeMergeReview as R
@@ -22,7 +22,7 @@ import RepositorySyncNativeProgressStore as N
   * specification-owned inputs/evidence and reads actual native records. This
   * is no genuine AI review, live task repair or Phase acceptance evidence.
   * @since   Oct. 15, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec with GivenWhenThen
@@ -69,7 +69,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         val before = current().revision
         When("normal pending Advance supplies its public context for the host prepare record and completion bridge")
         val issued = advance().issuedWorkContext.get
-        val prepared = take(NativeWorkflowHostExecution.prepareC(issued, mapping, origin.current))
+        val prepared = take(NativeWorkflowCallerExecution.prepareC(issued, mapping, origin.current))
         val observed = RepositoryExecutionFixture.evidence(prepared, ref, worker)
         Then("the bridge consumes the actual assignment and preserves the pending revision while supplying only generic execution evidence")
         issued.continuationId shouldBe order.continuationId.value
@@ -443,7 +443,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
         repository = original.repository.copy(conflicts = RepositorySyncNativeConflictInput.Policy(Set("unconfigured.txt"))))
       When("a normal host reopens the real stored completion under an explicit nonempty policy that does not allow that path")
       _with_runtime_(root, "Conflict", hostParameters = Map(
-        "sm-workflow.host.definition" -> ThreeWorkflowHostParameters.encode(selected).noSpaces)) {
+        "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(selected).noSpaces)) {
         (owner, component, actor, prepare) =>
           val call = (operation: String, fields: List[Property]) => owner.executeOperationResponseInContext(
             Request.of(component = component.name, service = "RepositorySyncService", operation = operation, properties = fields), actor)

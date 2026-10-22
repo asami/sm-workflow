@@ -11,12 +11,12 @@ import NativeWorkflowCliFixture as F
 /** Normal isolated CLI regression with explicitly specification-owned semantics,
   * review attestations and local effect grants. No live Session or external AI.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.json
+  import NativeCallerExecutionFixture.json
   private final case class Episode(scenario: F.Scenario, task: Path,
     first: V.GoalPhaseAdvanceResult, second: V.GoalPhaseAdvanceResult, accepted: String)
   private def _executions(scenario: F.Scenario): Vector[String] = {
@@ -63,7 +63,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
   private def _grant_step(scenario: F.Scenario, waiting: F.Result, name: String): Unit = {
     val result = waiting.business[V.GoalPhaseAdvanceResult]
     result.kind shouldBe "Wait"
-    result.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+    result.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
     val input = V.WorkflowAuthorityPreparationInput(waiting.invocation.stdout.toUri.toASCIIString,
       _save(scenario, name + "-authority", json(_reference(name + "-authority").toRecord()).noSpaces),
       "participant", "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence")

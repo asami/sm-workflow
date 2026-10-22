@@ -21,12 +21,12 @@ import GoalPhaseNativeMetadata as N
 /** Finite transport around external CML/test authoring and ordinary generated-artifact validation.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalCmlValidationAuthoringLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
   import N.given
 
   private val _prefix = "smworkflow.spec.p62.cml."
@@ -368,7 +368,7 @@ final class NativeGoalCmlValidationAuthoringLiveSpec extends AnyWordSpec with Ma
             waiting.kind shouldBe "Wait"
             waiting.sessionId shouldBe initial.sessionId
             waiting.sessionId shouldBe "7fc49eb892d70fba2d315c719f061556"
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             val reviewwork = _work(scenario, reviewed, initial, "step-1", "ReviewStep")
             reviewwork.selectedPlan shouldBe initial.work.get.selectedPlan
             initial.work.get.originalBase.head shouldBe "71d6d76acea95c3c33bf5ce0f985cfde2a6793f1"

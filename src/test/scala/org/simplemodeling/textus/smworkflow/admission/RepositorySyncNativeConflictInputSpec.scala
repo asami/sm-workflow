@@ -16,14 +16,14 @@ import SplitPhaseExplicitPartitionFixture.take
  * Decoder refusals for malformed, duplicate, partial, unsafe and invalid-stage
  * records reuse the qualified CNCF GitExecutionSpec producer examples.
  * @since   Oct.  6, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   override protected def conflict_path(scenario: String): Option[String] =
     if (scenario == "ConflictTyped") Some("name\nwith\ttab") else super.conflict_path(scenario)
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json =
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString))
 

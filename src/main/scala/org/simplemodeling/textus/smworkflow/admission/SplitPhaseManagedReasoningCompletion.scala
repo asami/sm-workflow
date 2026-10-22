@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedReasoningW
   * Judgment. Native completion and the deterministic successor are one UoW.
   * Metadata alone survives calls; neither Core nor a provider/pool is retained.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseManagedReasoningCompletion {
   final class Observed private[SplitPhaseManagedReasoningCompletion] (
@@ -53,7 +53,7 @@ private[smworkflow] object SplitPhaseManagedReasoningCompletion {
     }
   } yield work
 
-  def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def bindRuntimeC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog): Consequence[spec.OperationDefinition] = for {
     storage <- WorkflowComponentStorage.bindC(params, SmWorkflowComponent.componentId, declaration.configuration,
       Vector(catalog.definition), declaration.instances, declaration.continuations)

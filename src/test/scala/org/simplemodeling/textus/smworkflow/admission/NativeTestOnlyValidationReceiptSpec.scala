@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Current-schema compatibility and actual selected facts, without runtime effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -75,6 +75,100 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
     Some(if (key == "kind") kind else item))
   private def _invalid_sbt(value: Json, sbt: Json): Json = _fields(value)((key, item) =>
     Some(if (key == "sbt") sbt else item))
+  private def _capture(text: String): ProcessExecutionCapture = {
+    val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+    ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+  }
+  private def _result(exit: Int, stdout: ProcessExecutionCapture, stderr: ProcessExecutionCapture): SbtExecutionResult =
+    SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))), SbtOperation.Test,
+      ProcessExecutionResult(ProcessExecutionTermination.Exited(exit), stdout, stderr, Vector.empty, 1L, "selected-sbt"), None)
+
+  "Complete typed SBT output" should {
+    "retain large shaped successful and nonzero facts through Goal Repository and review codecs without another text ceiling" in {
+      Given("shaped managed Test captures with multibyte stdout, near-two-MiB stdout, and large stderr; these perform no execution")
+      val outputs = Vector(("日本語" * 8000, "diagnostic\n"), ("日" * 699000, "diagnostic\n"),
+        ("actual output\n", "error " * 12000))
+      val goalcheck = _goal_check.copy(kind = Kind.Test)
+      val repositorycheck = _check.copy(kind = Kind.Test)
+      val structural = V.Receipt("index-local", "exited", Some(0), "", "")
+      for ((stdout, stderr) <- outputs; exit <- Vector(0, 7)) {
+        When("the complete typed result with actual-shaped exit " + exit + " is admitted and each current codec reopens it")
+        val receipt = take(V.sbtReceiptC("focused", Kind.Test, _result(exit, _capture(stdout), _capture(stderr))))
+        val goal = _goal.copy(selected = Vector(goalcheck), receipts = Vector(receipt),
+          outcome = Some(if (exit == 0) "passed" else "failed"))
+        val state = _state.copy(selected = Vector(repositorycheck), receipts = Vector(receipt))
+        val progress = _progress.copy(validation = Some(state))
+        val work = _work.copy(review = _work.review.map(_.copy(checks = Vector(receipt))))
+        val review = _review.copy(checks = Vector(receipt))
+        val reopened = G.codec.decode(G.codec.encode(goal))
+        Then("exact complete output and exit survive while only zero succeeds and nonzero remains a typed failed repair source")
+        receipt.stdout shouldBe stdout
+        receipt.stderr shouldBe stderr
+        receipt.exitCode shouldBe Some(exit)
+        receipt.sbt shouldBe Some(Facts(Kind.Test, if (exit == 0) Outcome.Succeeded else Outcome.Failed, None, None))
+        reopened shouldBe Right(goal)
+        V.stateCodec.decode(V.stateCodec.encode(state)) shouldBe Right(state)
+        N.codec.decode(N.codec.encode(progress)) shouldBe Right(progress)
+        W.inputCodec.decode(W.inputCodec.encode(work)) shouldBe Right(work)
+        R.inputCodec.decode(R.inputCodec.encode(review)) shouldBe Right(review)
+        V.productSuccessful(receipt) shouldBe (exit == 0)
+        G.successful(reopened.toOption.get.receipts, Vector(goalcheck)) shouldBe (exit == 0)
+        V.successful(Vector(structural, receipt), merge = false, selected = Vector(repositorycheck)) shouldBe (exit == 0)
+        G.repairable(reopened.toOption.get) shouldBe (exit != 0)
+      }
+    }
+
+    "refuse incomplete mismatched negative-count invalid UTF-8 and NUL captures before retaining typed output" in {
+      Given("complete actual-shaped typed Test results and independently malformed stdout or stderr captures")
+      val ordinary = _capture("actual output\n")
+      val malformed = Vector(ordinary.copy(truncated = true), ordinary.copy(byteCount = ordinary.byteCount + 1),
+        ordinary.copy(byteCount = -1L), ProcessExecutionCapture(Vector(0xc3.toByte, 0x28.toByte), 2L, false), _capture("bad\u0000text"))
+      When("both zero and nonzero typed results try to admit each malformed stream")
+      val rejected = for (exit <- Vector(0, 7); capture <- malformed; result <- Vector(
+        _result(exit, capture, ordinary), _result(exit, ordinary, capture)))
+        yield V.sbtReceiptC("focused", Kind.Test, result).isSuccess
+      Then("no malformed capture is promoted to a passed or failed receipt and selected identity and kind remain mandatory")
+      rejected shouldBe Vector.fill(rejected.size)(false)
+      V.sbtReceiptC("invalid identity", Kind.Test, _result(0, ordinary, ordinary)).isSuccess shouldBe false
+      V.sbtReceiptC("focused", Kind.Compile, _result(0, ordinary, ordinary)).isSuccess shouldBe false
+
+      Given("stored typed output with a NUL or an unpaired UTF-16 surrogate")
+      val invalidtext = Vector("bad\u0000text", "bad\ud800text")
+      When("the product gate and Goal payload decoder inspect either stored stream")
+      val receipts = invalidtext.flatMap(text => Vector(_receipt(kind = Kind.Test).copy(stdout = text),
+        _receipt(kind = Kind.Test).copy(stderr = text)))
+      Then("typed presence cannot bypass strict ordinary text validation after persistence")
+      receipts.foreach { receipt =>
+        V.productSuccessful(receipt) shouldBe false
+        G.codec.decode(G.codec.encode(_goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)),
+          receipts = Vector(receipt)))).isLeft shouldBe true
+      }
+    }
+
+    "keep the exact 64-KiB structural and historical output bound and the Goal diagnostic bound" in {
+      Given("historical Test receipts, structural captures and recovery diagnostics at and above 65536 UTF-8 bytes")
+      val boundary = "x" * 65536
+      val over = boundary + "x"
+      val legacy = _receipt(kind = Kind.Test).copy(sbt = None, stdout = boundary)
+      val goal = _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(legacy))
+      When("the existing structural converter, product gate and Goal decoder consume those texts")
+      val structural = V.receiptC("index-local", _result(0, _capture(boundary), _capture("")).processResult)
+      Then("the historical and structural boundary remains inclusive with no typed promotion or diagnostic expansion")
+      structural.isSuccess shouldBe true
+      V.receiptC("index-local", _result(0, _capture(over), _capture("")).processResult).isSuccess shouldBe false
+      V.receiptC("index-local", _result(0, _capture(""), _capture(over)).processResult).isSuccess shouldBe false
+      V.productSuccessful(legacy) shouldBe true
+      G.codec.decode(G.codec.encode(goal)) shouldBe Right(goal)
+      Vector(legacy.copy(stdout = over), legacy.copy(stderr = over), legacy.copy(stdout = "日" * 21846)).foreach { receipt =>
+        V.productSuccessful(receipt) shouldBe false
+        G.codec.decode(G.codec.encode(goal.copy(receipts = Vector(receipt)))).isLeft shouldBe true
+      }
+      val diagnostic = _goal.copy(receipts = Vector.empty, outcome = None,
+        uncertainties = Vector(G.Uncertainty("focused", 0, boundary)))
+      G.codec.decode(G.codec.encode(diagnostic)) shouldBe Right(diagnostic)
+      G.codec.decode(G.codec.encode(diagnostic.copy(uncertainties = Vector(G.Uncertainty("focused", 0, over))))).isLeft shouldBe true
+    }
+  }
 
   "Current typed validation codecs" should {
     "roundtrip selected Compile and actual Compile facts through every current persistence review and host boundary" in {
@@ -99,7 +193,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val progress = N.codec.decode(N.codec.encode(compileprogress))
       val work = W.inputCodec.decode(W.inputCodec.encode(compilework))
       val review = R.inputCodec.decode(R.inputCodec.encode(compilereview))
-      val host = take(ThreeWorkflowHostParameters.decodeDefinitionC(ThreeWorkflowHostParameters.encode(compilehost)))
+      val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(ThreeWorkflowRuntimeParameters.encode(compilehost)))
       Then("explicit Compile selections raw output and facts survive without gaining selected-test metadata")
       goal shouldBe Right(compilegoal)
       state shouldBe Right(compilestate)
@@ -136,7 +230,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val progress = N.codec.decode(N.codec.encode(_progress))
       val work = W.inputCodec.decode(W.inputCodec.encode(_work))
       val review = R.inputCodec.decode(R.inputCodec.encode(_review))
-      val host = take(ThreeWorkflowHostParameters.decodeDefinitionC(ThreeWorkflowHostParameters.encode(_host)))
+      val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(ThreeWorkflowRuntimeParameters.encode(_host)))
       Then("kind, classes, count, actual raw output and original source and selected binding survive unchanged")
       goal shouldBe Right(_goal)
       state shouldBe Right(_state)
@@ -165,7 +259,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val progress = N.codec.decode(progresswire).toOption.get
       val work = W.inputCodec.decode(workwire).toOption.get
       val review = R.inputCodec.decode(reviewwire).toOption.get
-      val host = take(ThreeWorkflowHostParameters.decodeDefinitionC(_legacy(ThreeWorkflowHostParameters.encode(_host))))
+      val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(_legacy(ThreeWorkflowRuntimeParameters.encode(_host))))
       Then("only historical Test meaning is assigned; no receipt gains selected-suite success or a new execution")
       goal shouldBe _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None)))
       state shouldBe _state.copy(selected = Vector(_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None)))
@@ -189,7 +283,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         G.codec.decode(_invalid_kind(G.codec.encode(_goal), kind)).isLeft,
         V.stateCodec.decode(_invalid_kind(V.stateCodec.encode(_state), kind)).isLeft,
         N.codec.decode(_invalid_kind(N.codec.encode(_progress), kind)).isLeft,
-        !ThreeWorkflowHostParameters.decodeDefinitionC(_invalid_kind(ThreeWorkflowHostParameters.encode(_host), kind)).isSuccess) }
+        !ThreeWorkflowRuntimeParameters.decodeDefinitionC(_invalid_kind(ThreeWorkflowRuntimeParameters.encode(_host), kind)).isSuccess) }
       Then("every malformed present kind fails instead of obtaining the absent-field Test default")
       rejected.flatten.forall(identity) shouldBe true
       G.Policy("selected", 1, Vector(_goal_check.copy(kind = null))).validateC.isSuccess shouldBe false
@@ -214,7 +308,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       N.codec.decode(_fields(N.codec.encode(_progress))(annotation)) shouldBe Right(_progress)
       W.inputCodec.decode(_fields(W.inputCodec.encode(_work))(annotation)) shouldBe Right(_work)
       R.inputCodec.decode(_fields(R.inputCodec.encode(_review))(annotation)) shouldBe Right(_review)
-      take(ThreeWorkflowHostParameters.decodeDefinitionC(_fields(ThreeWorkflowHostParameters.encode(_host))(annotation))) shouldBe _host
+      take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(_fields(ThreeWorkflowRuntimeParameters.encode(_host))(annotation))) shouldBe _host
       G.codec.decode(G.codec.encode(_goal).mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.goal-phase-native-validation.v1")))).isLeft shouldBe true
       N.codec.decode(N.codec.encode(_progress).mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.repository-sync-native-progress.v2")))).isLeft shouldBe true
     }
@@ -247,12 +341,12 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
   "Independent review targets" should {
     "retain selected SBT facts through canonical storage and refuse crossed actual Goal and Repository observations" in {
       Given("explicit specification evidence bindings for Goal and Repository with actual typed TestOnly receipts")
-      import NativeHostEvidence.{Declaration, Evidence, Purpose}
+      import NativeExternalEvidence.{Declaration, Evidence, Purpose}
       val now = Instant.parse("2026-10-07T00:00:00Z")
       val declared = Declaration("workflow", DataStore.CollectionId.EntityStore(
         EntityCollectionId("test", "host", "review_evidence")), "specification-issuer")
       val reference = Json.obj("identity" -> Json.fromString("specification-result"), "revision" -> Json.fromString("1"))
-      val lookup = ThreeWorkflowHostEvidencePorts.key("specification-result", "1")
+      val lookup = ThreeWorkflowExternalEvidencePorts.key("specification-result", "1")
       val completion = Json.obj("handle" -> Json.obj(
         "componentIdentity" -> Json.fromString("specification-component"),
         "workflowIdentity" -> Json.fromString("specification-workflow"),
@@ -264,20 +358,20 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       Vector(Purpose.GoalReview, Purpose.RepositoryReview).foreach { purpose =>
         val checkskey = if (purpose == Purpose.GoalReview) "testChecks" else "checks"
         def _target_(receipt: V.Receipt): Json = if (purpose == Purpose.GoalReview)
-          ThreeWorkflowHostEvidencePorts.goalReviewTarget(_work.copy(review = _work.review.map(_.copy(checks = Vector(receipt)))))
-        else ThreeWorkflowHostEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(receipt)))
-        def _binding_(selected: Json): Json = ThreeWorkflowHostEvidencePorts.reviewBinding("specification-owner",
+          ThreeWorkflowExternalEvidencePorts.goalReviewTarget(_work.copy(review = _work.review.map(_.copy(checks = Vector(receipt)))))
+        else ThreeWorkflowExternalEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(receipt)))
+        def _binding_(selected: Json): Json = ThreeWorkflowExternalEvidencePorts.reviewBinding("specification-owner",
           if (purpose == Purpose.GoalReview) "goal-review" else "repository-review", selected, completion,
           reference, Json.fromString("specification-reviewer"), if (purpose == Purpose.GoalReview)
-            ThreeWorkflowHostEvidencePorts.goalReviewVerdict(W.Result("accept", "diagnostic", Vector.empty))
-          else ThreeWorkflowHostEvidencePorts.repositoryReviewVerdict(R.Result("accept", "diagnostic", Vector.empty)))
+            ThreeWorkflowExternalEvidencePorts.goalReviewVerdict(W.Result("accept", "diagnostic", Vector.empty))
+          else ThreeWorkflowExternalEvidencePorts.repositoryReviewVerdict(R.Result("accept", "diagnostic", Vector.empty)))
         val actual = _binding_(_target_(_actual))
-        val evidence = Evidence(NativeHostEvidence.schema, purpose.identity, lookup, "specification-result", "1",
+        val evidence = Evidence(NativeExternalEvidence.schema, purpose.identity, lookup, "specification-result", "1",
           declared.issuer, "specification-reviewer", actual, now.toString)
         When("the real v7 encoder and decoder select the target and observation compares its actual binding for " + purpose)
-        val raw = take(NativeHostEvidence.encodeStorageC(evidence))
-        val decoded = take(NativeHostEvidence.decodeStorageC(raw))
-        val stored = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
+        val raw = take(NativeExternalEvidence.encodeStorageC(evidence))
+        val decoded = take(NativeExternalEvidence.decodeStorageC(raw))
+        val stored = io.circe.parser.parse(raw.substring(NativeExternalEvidence.schema.length + 1)).toOption.get
           .hcursor.downField("binding").downField("attestation").downField("target")
           .downField(checkskey).downArray.downField("sbt")
         Then("explicit kind outcome classes and counts survive storage and the matching actual binding is admitted")
@@ -286,25 +380,25 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         stored.downField("selection").get[Vector[String]]("testClasses") shouldBe Right(Vector("example.SelectedSpec"))
         stored.downField("selection").get[Int]("completedSuites") shouldBe Right(1)
         stored.downField("selection").get[Long]("testsRun") shouldBe Right(3L)
-        NativeHostEvidence.observeC(decoded, declared, purpose, lookup, actual, now).isSuccess shouldBe true
+        NativeExternalEvidence.observeC(decoded, declared, purpose, lookup, actual, now).isSuccess shouldBe true
         variants.foreach { receipt =>
           Given("the same issued review with a valid changed class count outcome or kind for " + purpose)
           When("the original stored evidence is observed against those changed selected facts")
-          val crossed = NativeHostEvidence.observeC(decoded, declared, purpose, lookup, _binding_(_target_(receipt)), now)
+          val crossed = NativeExternalEvidence.observeC(decoded, declared, purpose, lookup, _binding_(_target_(receipt)), now)
           Then("that changed selected meaning cannot reuse the original evidence")
           crossed.isSuccess shouldBe false
         }
         Given("the historical target without sbt and a typed target annotated with unused logs")
         val historical = _binding_(_target_(_actual.copy(sbt = None)))
         When("historical storage is reopened and typed evidence is compared with stripped or annotated targets")
-        val legacy = take(NativeHostEvidence.decodeStorageC(take(NativeHostEvidence.encodeStorageC(evidence.copy(binding = historical)))))
+        val legacy = take(NativeExternalEvidence.decodeStorageC(take(NativeExternalEvidence.encodeStorageC(evidence.copy(binding = historical)))))
         val annotated = _binding_(_target_(_actual).mapObject(_.add(checkskey, Json.arr(
           _target_(_actual).hcursor.downField(checkskey).downArray.focus.get.mapObject(
             _.add("stdout", Json.fromString("inert log")).add("grant", Json.True))))))
         Then("absence retains its exact historical shape and cannot stand for typed facts while annotations remain inert")
-        NativeHostEvidence.observeC(decoded, declared, purpose, lookup, historical, now).isSuccess shouldBe false
-        NativeHostEvidence.observeC(legacy, declared, purpose, lookup, actual, now).isSuccess shouldBe false
-        NativeHostEvidence.observeC(decoded, declared, purpose, lookup, annotated, now).isSuccess shouldBe true
+        NativeExternalEvidence.observeC(decoded, declared, purpose, lookup, historical, now).isSuccess shouldBe false
+        NativeExternalEvidence.observeC(legacy, declared, purpose, lookup, actual, now).isSuccess shouldBe false
+        NativeExternalEvidence.observeC(decoded, declared, purpose, lookup, annotated, now).isSuccess shouldBe true
         legacy.binding shouldBe historical
         if (purpose == Purpose.GoalReview)
           legacy.binding.hcursor.downField("attestation").downField("target").downField("testChecks").focus shouldBe None
@@ -316,11 +410,11 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
             val invalid = _binding_(_target_(_actual).mapObject(_.add(checkskey, Json.arr(
               _target_(_actual).hcursor.downField(checkskey).downArray.focus.get.mapObject(_.add("sbt", malformed))))))
             When("the real storage encoder or decoder consumes that malformed selected fact")
-            val invalidraw = io.circe.parser.parse(raw.substring(NativeHostEvidence.schema.length + 1)).toOption.get
+            val invalidraw = io.circe.parser.parse(raw.substring(NativeExternalEvidence.schema.length + 1)).toOption.get
               .mapObject(_.add("binding", invalid))
             Then("both storage directions reject it instead of treating presence as historical absence")
-            NativeHostEvidence.encodeStorageC(evidence.copy(binding = invalid)).isSuccess shouldBe false
-            NativeHostEvidence.decodeStorageC(NativeHostEvidence.schema + ":" + invalidraw.noSpaces).isSuccess shouldBe false
+            NativeExternalEvidence.encodeStorageC(evidence.copy(binding = invalid)).isSuccess shouldBe false
+            NativeExternalEvidence.decodeStorageC(NativeExternalEvidence.schema + ":" + invalidraw.noSpaces).isSuccess shouldBe false
           }
       }
     }
@@ -331,11 +425,11 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val oldwork = _work.copy(review = _work.review.map(_.copy(checks = Vector(_actual.copy(sbt = None)))))
       val oldreview = _review.copy(checks = Vector(_actual.copy(sbt = None)))
       When("host evidence projects the semantic target of each actual assigned review")
-      val goals = variants.map(receipt => ThreeWorkflowHostEvidencePorts.goalReviewTarget(
+      val goals = variants.map(receipt => ThreeWorkflowExternalEvidencePorts.goalReviewTarget(
         _work.copy(review = _work.review.map(_.copy(checks = Vector(receipt))))))
-      val repositories = variants.map(receipt => ThreeWorkflowHostEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(receipt))))
-      val oldgoal = ThreeWorkflowHostEvidencePorts.goalReviewTarget(oldwork)
-      val oldrepository = ThreeWorkflowHostEvidencePorts.repositoryReviewTarget(oldreview)
+      val repositories = variants.map(receipt => ThreeWorkflowExternalEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(receipt))))
+      val oldgoal = ThreeWorkflowExternalEvidencePorts.goalReviewTarget(oldwork)
+      val oldrepository = ThreeWorkflowExternalEvidencePorts.repositoryReviewTarget(oldreview)
       Then("actual selected facts distinguish targets without copying raw logs or changing old target fields")
       goals.distinct.size shouldBe variants.size
       repositories.distinct.size shouldBe variants.size
@@ -346,7 +440,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       }
       oldgoal.asObject.get.keys.toSet shouldBe Set("instance", "sourceRevision", "workKind", "step", "generation", "plan", "base", "candidate", "checksReceipt", "changedPaths")
       oldrepository.hcursor.downField("checks").focus.get.asArray.get.head.asObject.get.keys.toSet shouldBe Set("identity", "termination", "exitCode")
-      ThreeWorkflowHostEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(_actual.copy(stdout = "changed log", stderr = "changed error")))) shouldBe repositories.head
+      ThreeWorkflowExternalEvidencePorts.repositoryReviewTarget(_review.copy(checks = Vector(_actual.copy(stdout = "changed log", stderr = "changed error")))) shouldBe repositories.head
     }
   }
 }

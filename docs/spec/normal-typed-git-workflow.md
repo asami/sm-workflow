@@ -1,5 +1,15 @@
 # Normal typed Git workflow
 
+Candidate PendingDiff byte enforcement belongs solely to CNCF's resolved
+`cncf.git.diff.maximum-bytes` property (default and finite maximum 1048576 bytes,
+1 MiB). A host must explicitly declare PendingDiff `stdoutBytes: 1048576` to
+permit that complete capture; retain `stderrBytes: 16384` and existing timeouts.
+The property only tightens the host ceiling. sm-workflow consumes complete
+successful typed diffs, rejects binary data and retains exact ownership and
+whole-Phase aggregation without a duplicate byte gate or truncation.
+See [candidate observation continuation](goal-phase-candidate-observation-continuation.md)
+for fresh independent consent following a failed authorized observation.
+
 Date: 2026-10-15 (Asia/Tokyo)
 Status: primary consumer implementation and executable specifications completed
 bounded source-level parent qualification (66 passing checks in eight suites).
@@ -95,6 +105,15 @@ Git lowering grants no primary generic Process execution, remote expansion,
 File execution or additional launch route.
 
 ## Executable examples
+
+Selected-Step complete-staging recovery is defined by
+[GoalPhase candidate recovery](goal-phase-candidate-recovery.md). Its public
+description and Human direction perform no Git/File/SBT effects. One separately
+authorized ordinary Advance persists a fresh observation intent before typed
+remaining candidate observation, including IndexTree/write-tree, and never
+repeats completed staging or source-history writes. Old process settlement stays
+UNKNOWN with termination unconfirmed; exact chain, saved history text, original
+parent, branch/root, ownership and index stability remain mandatory.
 
 - **G1-Equal, G1-LocalAhead, G1-RemoteAhead**:
   `ThreeWorkflowTypedGitOperationSpec` drives actual public Start/Advance through
@@ -235,6 +254,28 @@ identity; commit retains its independent identity and grant. Closure also needs
 fixed `blob-content` and `tree-changes` read declarations. The fixture's finite
 argument count is 512 to accommodate 256 fixed paths and their fixed prefix;
 this changes no other production limit.
+
+For each target/selection, CNCF bootstrap rejects differing vectors among the
+present `check-selected-index`, `selected-index-changes` and `commit-selected`
+declarations. A partial kind set remains valid. Actual typed results expose the
+host-selected `selectedPaths`; consumers do not inspect configuration or argv to
+reconstruct that metadata.
+
+Selected Step closure saves each new actual commit execution result before its
+executed acknowledgement and before unsuccessful `valueC` projection. Separate
+bounded execution summaries retain outcome, actual termination/exit status,
+physical selection and sanitized stderr/truncation facts. Existing `.v3` closure
+receipt bytes and historical unknown outcomes remain unchanged. An actual commit
+failure returns honest Wait without relabeling it a structural precheck failure.
+
+The normal public [selected Step closure recovery contract](goal-phase-closure-recovery.md)
+requires independent trusted Human direction for the complete current target and
+explicit prior-execution-ended attestation before a new attempt or matching-commit
+reconciliation. Authorization appends direction only; a separate ordinary Advance
+rechecks live Git and exact physical scope. Correcting a host vector alone grants
+no replay. Reconciliation verifies a real single-parent matching commit and
+records closure without another commit. Old accepted checks/review, Session,
+history, Plan, generation and counters are retained.
 
 The current native v3 closure receipt retains the original Input, ordinal and
 optional commit, plus optional attempt, actual precheck and native change facts.

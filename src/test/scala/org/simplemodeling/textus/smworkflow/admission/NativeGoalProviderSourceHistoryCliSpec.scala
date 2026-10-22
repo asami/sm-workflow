@@ -18,12 +18,12 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary commands surround genuine external semantic implementation.
   * Supplied observations check coherence; the parent establishes actual provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, record, take}
+  import NativeCallerExecutionFixture.{json, record, take}
 
   private val _path = "src/main/scala/HistoryExample.scala"
   private val _initial = "object HistoryExample { val value: Int = 0 }\n"
@@ -52,13 +52,13 @@ final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matc
   private def _mapping: Json = Json.obj(
     "schemaVersion" -> Json.fromString(WorkflowExecutionProfileParameters.schemaVersion),
     "identity" -> Json.fromString("p61-provider-source-history-mapping"), "revision" -> Json.fromString("1"),
-    "profiles" -> Json.arr(NativeHostExecutionFixture.profile(_provider), NativeHostExecutionFixture.profile(_parent)),
+    "profiles" -> Json.arr(NativeCallerExecutionFixture.profile(_provider), NativeCallerExecutionFixture.profile(_parent)),
     "classes" -> Json.fromValues(Vector("CodingProgrammingStandard", "ReviewStandard").map(name =>
       Json.obj("reasoningClass" -> Json.fromString(name), "profile" -> Json.fromString(_provider.identity)))),
     "fallbacks" -> Json.arr())
   private def _origin(context: String): Json = Json.obj(
     "schemaVersion" -> Json.fromString(GoalPhaseNativeExecution.schemaVersion),
-    "current" -> NativeHostExecutionFixture.executor(_parent, context),
+    "current" -> NativeCallerExecutionFixture.executor(_parent, context),
     "preference" -> Json.obj("forceInline" -> Json.False, "isolateContext" -> Json.True))
   private def _ordinary(scenario: F.Scenario): Unit = {
     scenario.invocations.map(_.pid).distinct.size shouldBe scenario.invocations.size
@@ -143,7 +143,7 @@ final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matc
       Given("the actual issued context and saved original mapping and origin resource inputs")
       When("normal prepareExecution prepares the opaque pending session for the external provider")
       val prepared = scenario.prepareHostInput("prepareExecution",
-        V.WorkflowHostExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowHostExecutionState]
+        V.WorkflowCallerExecutionPrepareInput(context, mappinguri, originuri).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("attempt one selects the requested medium profile without a completed observation or semantic result")
       prepared.completionEvidence shouldBe None
       val session = take(H.decodeC(prepared.session))
@@ -182,7 +182,7 @@ final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matc
       val repository = Path.of(scenario.host.target.root)
       val source = repository.resolve(_path)
       val issued = _load[V.GoalPhaseAdvanceResult](scenario.root, "provider-issued.json")
-      val prepared = _load[V.WorkflowHostExecutionState](scenario.root, "provider-prepared.json")
+      val prepared = _load[V.WorkflowCallerExecutionState](scenario.root, "provider-prepared.json")
       val sessionfile = scenario.root.resolve("provider-session.json")
       val sessiontext = Files.readString(sessionfile, UTF_8)
       val session = take(H.decodeC(sessiontext))
@@ -228,9 +228,9 @@ final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matc
       Given("the retained issued context, opaque session and actual observation and semantic reference")
       val referenceuri = _save(scenario.root, "provider-reference.json", json(reference.toRecord()).noSpaces)
       When("normal recordExecution consumes the saved public business inputs")
-      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowHostExecutionRecordInput(
+      val recorded = scenario.prepareHostInput("recordExecution", V.WorkflowCallerExecutionRecordInput(
         issued.issuedWorkContext.get, sessionfile.toUri.toASCIIString, observationfile.toUri.toASCIIString,
-        Some(referenceuri)).toRecord()).business[V.WorkflowHostExecutionState]
+        Some(referenceuri)).toRecord()).business[V.WorkflowCallerExecutionState]
       Then("actual completion evidence is returned without a next selection, source history or Test")
       recorded.nextSelection shouldBe None
       recorded.completionEvidence should not be empty

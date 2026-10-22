@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Passive storage data. Typed decoding is not executable context admission.
  * @since   Oct.  2, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 21, 2026
  */
 private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
   val schema = "sm-workflow.split-phase-partition-context.v1"
@@ -21,16 +21,16 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
   val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   import SplitPhaseExplicitPartitionRawCodecs.given
-  private given ownerEncoder: Encoder[C.Owner] = deriveEncoder[C.Owner]
-  private given ownerDecoder: Decoder[C.Owner] = deriveDecoder[C.Owner]
-  private given factsEncoder: Encoder[C.Facts] = deriveEncoder[C.Facts]
-  private given factsDecoder: Decoder[C.Facts] = deriveDecoder[C.Facts]
-  private given recordEncoder: Encoder[C.Record] = deriveEncoder[C.Record]
-  private given recordDecoder: Decoder[C.Record] = deriveDecoder[C.Record]
-  private given templateOwnerEncoder: Encoder[C.TemplateOwner] = deriveEncoder[C.TemplateOwner]
-  private given templateOwnerDecoder: Decoder[C.TemplateOwner] = deriveDecoder[C.TemplateOwner]
-  private given templateEncoder: Encoder[C.Template] = deriveEncoder[C.Template]
-  private given templateDecoder: Decoder[C.Template] = deriveDecoder[C.Template]
+  private given _owner_encoder: Encoder[C.Owner] = deriveEncoder[C.Owner]
+  private given _owner_decoder: Decoder[C.Owner] = deriveDecoder[C.Owner]
+  private given _facts_encoder: Encoder[C.Facts] = deriveEncoder[C.Facts]
+  private given _facts_decoder: Decoder[C.Facts] = deriveDecoder[C.Facts]
+  private given _record_encoder: Encoder[C.Record] = deriveEncoder[C.Record]
+  private given _record_decoder: Decoder[C.Record] = deriveDecoder[C.Record]
+  private given _template_owner_encoder: Encoder[C.TemplateOwner] = deriveEncoder[C.TemplateOwner]
+  private given _template_owner_decoder: Decoder[C.TemplateOwner] = deriveDecoder[C.TemplateOwner]
+  private given _template_encoder: Encoder[C.Template] = deriveEncoder[C.Template]
+  private given _template_decoder: Decoder[C.Template] = deriveDecoder[C.Template]
 
   def encodeC(value: C.Record): Consequence[String] = _encode_c(value)
 
