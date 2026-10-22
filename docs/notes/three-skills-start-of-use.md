@@ -93,10 +93,13 @@ actual authority.
 
 ## Consume common Evidence and manage retention
 
-The minimum automatic Evidence/Journal route is adopted by Phase 6.4 E2/E3.
-The operational extensions below are prepared for E4 producer delivery and
-consumer qualification; this text does not claim their publication or E4/Phase
-acceptance. See the current [Evidence verification boundary](../spec/evidence-storage.md#e4-consumer-verification-boundary--2026-10-21).
+Phase 6.4 E2/E3 accepted the minimum automatic Evidence/Journal route. E4's
+producer delivery and installed consumer qualification are complete and accepted
+in commit `808bc324`; batch/gzip/retention operations below are delivered.
+At the 2026-10-22 P64-E5 documentation snapshot, affected Phase review, the
+changed candidate's fixed full validation and ordinary closure retain their own
+gates. See [accepted observations and limits](../spec/evidence-storage.md#accepted-consumer-observations--2026-10-22)
+and the [Phase checklist](../phase/phase-6.4-checklist.md).
 
 Use the actual business response's Evidence and Journal references. Keep the
 Action outcome, archive outcome, Journal outcome and current availability
@@ -127,7 +130,17 @@ provide no alternate storage selector, arbitrary path or filesystem permission.
 Consume a Journal-only continuation only for its retained actual storage
 observation. It must preserve the existing Evidence identity and payload and
 must not repeat the Action or an uncertain archive. A storage/read/Journal
-failure retains its actual outcome for the owning recovery path.
+failure retains its actual outcome for the owning recovery path. For example,
+Phase 6.4's full receipt 235 is formally PASS while its stdout Evidence save is
+indeterminate and Journal recorded that observation. A Journal Entry does not
+prove payload availability; do not rerun that Test or archive to fill the gap.
+The accepted consumer scenario proves active/hold/due/release through installed
+public calls; exact completion/expiry/missing behavior reuses declared producer
+controlled-clock/specification coverage. Observe a real producing Session's
+completion basis only after its ordinary closure. No caller sets or fabricates
+that completion time, and this post-closure observation cannot precede its gate.
+Phase 6.5 deterministic assessment and three-workflow optimization remain
+successor work; their handoffs replace none of these Phase 6.4 gates.
 
 ## Review, effects and completion
 

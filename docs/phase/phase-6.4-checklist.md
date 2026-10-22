@@ -3,8 +3,10 @@
 status=in_progress
 phase=[Phase 6.4](phase-6.4.md)
 
-E1, E2 and E3 are accepted from this Phase's own actual evidence. E4
-remains open; no evidence from another Phase supplies its acceptance.
+At the 2026-10-22 E5 correction snapshot, E1–E4 are accepted from this Phase's
+own actual evidence. Human244 adopted Plan revision 3 and issued documentation
+Step P64-E5. Its acceptance and subsequent Phase gates remain separate; no
+evidence from another Phase supplies consumer or Phase acceptance.
 The main route is established before failure and operational branches. Check
 each outcome only from actual evidence.
 
@@ -48,8 +50,39 @@ occurred; supplied repair progress remains automatic 0, ordinary 0, limit 10.
 P64-09..12 acceptance includes the explicitly bounded specification seams in
 the [E3 coverage matrix](../spec/evidence-storage.md#e3-bounded-consumer-failure-coverage--2026-10-21).
 It does not claim a real SQL outage, network packet loss or kernel crash.
-P64-13..18 require their own common-service extensions, connected evidence and
-Phase closure; the successful recovery does not satisfy those items.
+At that E3 assignment, P64-13..18 still required their own extensions and
+connected evidence. Accepted E4 observations now follow; Step recovery alone
+did not satisfy those items.
+
+## E4 accepted; E5 documentation correction — 2026-10-22
+
+Ordinary native closure committed E4 `808bc32400428331ab0fc8586c421668cf586218`
+after its selected one-test consumer suite, stored Evidence/recorded Journal and
+genuine independent Step review. Two isolated producing Tests ran once each;
+ten fresh installed public calls established stored/stored/conflict per-file
+mapping, exact gzip/identity reads (942/938 bytes), active no-expiry, hold/release
+and bounded empty due queries. Precise completion-plus-thirty-days, expired and
+stored-but-missing outcomes retain producer controlled-clock/specification scope.
+E2's original 14,196-byte payload remained readable after publication.
+
+The retained full `ordered-validation:235:validation` passed for the E4 candidate:
+163 completed suites, 1,528 successes, zero failures and one cancellation. This
+does not erase unknown attempts 0–2 or the formal failed attempt 3. Its stdout
+Evidence save is indeterminate; Journal recorded that observation, not successful
+payload availability. See the [contract](../spec/evidence-storage.md#accepted-consumer-observations--2026-10-22)
+for actual public references and the complete boundary.
+
+P64-13/14/16 below are checked at those evidenced scopes. P64-15 retains a later
+actual producing-Session completion observation; P64-17/18 combine already
+observed work with Phase acceptance/closure and therefore remain unchecked in
+this implementation snapshot. That is not a claim that E4 delivery or its Step
+acceptance is pending. Human244 appended P64-E5 over exactly five documents;
+its declared Compile, independent review and commit and the changed candidate's
+fixed full check/Phase review/ordinary closure remain native responsibilities.
+The old candidate's successful validation and accepted results are preserved.
+The actual completion/retention observation follows closure at its owning gate,
+never a fabricated timestamp or a prerequisite to that same closure. Later
+native receipts supply progress beyond this dated snapshot.
 
 ## Phase 12 allocation — 2026-10-20
 
@@ -97,17 +130,26 @@ are reusable at their actual scope, not a claim of consumer acceptance.
 
 ## E4: operational branches and closure
 
-- [ ] P64-13: Multiple files retain exact per-file source/destination/status
+- [x] P64-13: Multiple files retain exact per-file source/destination/status
       mapping, including partial storage outcomes.
-- [ ] P64-14: Selected large text compression retains its exact internal `.gz`
+- [x] P64-14: Selected large text compression retains its exact internal `.gz`
       destination before storage; the same Evidence ID resolves to readable
       decompressed content without requiring an absolute path in the response.
 - [ ] P64-15: Completion-based 30-day retention, active no-expiry, explicit
       hold/review and due-material queries work without automatic deletion.
-- [ ] P64-16: Expired/missing evidence is reported truthfully without revoking
+      Producer controlled-clock and accepted active/hold/due/release scope are
+      established; observe this actual producing Session's completion basis and
+      expiry after closure, at that later gate.
+- [x] P64-16: Expired/missing evidence is reported truthfully without revoking
       prior acceptance or treating a saved reference as a new successful test.
+      Expiry/missing cases use producer controlled-clock/specification-owned
+      material; no live production payload was removed to manufacture proof.
 - [ ] P64-17: Focused connected validation, independent Phase review and final
       full validation using sbt-native locks establish the Phase's own accepted boundary.
+      E4 focused validation and full result 235 are retained; E5's changed
+      candidate still requires its fixed check and affected Phase review.
 - [ ] P64-18: Documentation, automatic Evidence/Journal consumption instructions
       and successor handoff are reconciled; ordinary local release closure records
       the actual accepted scope without claiming unfinished producer capabilities.
+      P64-E5 supplies the adopted five-document correction; its independent
+      review/commit and ordinary Phase closure must establish completion.

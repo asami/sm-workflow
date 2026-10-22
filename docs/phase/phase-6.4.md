@@ -7,7 +7,48 @@ checklist=[Phase 6.4 Checklist](phase-6.4-checklist.md)
 
 Owner: sm-workflow. Predecessor: [6.3](phase-6.3.md). Successor: [7](phase-7.md).
 
-## Current execution — 2026-10-21
+## Current execution snapshot — 2026-10-22, P64-E5 implementation
+
+The existing Session `96c294d73be3d48067f3721d8a2abf33` has genuinely adopted
+`phase-6.4-evidence-storage@3` through Human244 `AdoptPlanRevision`. The ordinary
+paired Advance issued `ImplementStep / P64-E5` at source revision 246. It adds
+one corrective Step over five existing documents to resolve the integrated
+P64-18 documentation finding; E1–E4, raw acceptance, fixed Phase checks, original
+base and all earlier outcomes remain. Supplied repair progress is automatic 0,
+ordinary 0, limit 10. No Start or accepted-result Submit was repeated.
+
+| Accepted Step | Actual local commit | Retained scope |
+| --- | --- | --- |
+| E1 | `07a97986cbee9ffe71fdf69b89a60eff98768134` | Original contract design, selected Compile and independent review. |
+| E2 | `f4f9d3c2b13fd3a14ff6c8ea93894e98478ff3b0` | Automatic completed Test-log archive/Journal and fresh-process public-ID read; 14,196 UTF-8 bytes. |
+| E3 | `da280ab77a771f728b4e7b0a043c38a8a4dc1962` | Thirteen selected failure specifications and Journal-only continuation, with declared metadata/failure-injection seams. |
+| E4 | `808bc32400428331ab0fc8586c421668cf586218` | Delivered managed File/gzip producer and accepted installed consumer operational qualification. |
+
+E4's selected check passed one suite/one test without cancellation. Two isolated
+specification-owned producers each ran once; ten fresh installed public calls
+proved per-file stored/stored/conflict mapping, gzip/identity exact reads,
+active no-expiry, hold/release and bounded due queries. Producer controlled-clock
+qualification retains its separate completion/expiry/missing scope. Directory
+and compression delivery are complete, rather than pending prerequisites.
+
+For candidate `808bc324`/tree `9697103a`, formal full receipt
+`ordered-validation:235:validation` is PASS (163 completed suites, 1,528 successes,
+zero failures, one cancellation). Earlier unknown attempts and formal failure
+remain. Its stdout Evidence save is indeterminate and Journal recorded that
+observation; payload availability was not established. The [contract's accepted
+observations](../spec/evidence-storage.md#accepted-consumer-observations--2026-10-22)
+retain the actual references, limits and no-replay boundary.
+
+This dated E5 snapshot leaves E5 check/review/commit, the changed candidate's
+fixed Phase full check, affected independent Phase review and ordinary closure
+with their owning gates. The old candidate's PASS is retained, not rerun as old
+work or treated as a certificate for a future changed candidate. Actual producing
+Session completion/retention observation belongs after closure. The checklist
+separates accepted operational behavior from those composite completion gates.
+The native completion receipts are authoritative for later progress.
+
+## Earlier E1–E3 and E4 assignment history — 2026-10-21
+
 
 The existing Session `96c294d73be3d48067f3721d8a2abf33` has adopted
 `phase-6.4-evidence-storage@2` through the supported remaining-Plan operation.
@@ -23,7 +64,7 @@ continuation is checked against E2's real retained Evidence. After the actual
 Human authorized one new source-history attempt, ordinary continuation completed
 the selected thirteen-test suite, automatic Evidence/Journal capture, genuine
 independent review and local Step commit
-`da280ab77a771f728b4e7b0a043c38a8a4dc1962`. The same Session now issues
+`da280ab77a771f728b4e7b0a043c38a8a4dc1962`. At that handoff the same Session issued
 `ImplementStep / P64-E4` at evidence revision 76. E1/E2/E3, original base,
 unknown earlier effects and repair history remain; supplied repair progress is
 automatic 0, ordinary 0, limit 10. No Start or accepted-result replay occurred.
@@ -34,8 +75,9 @@ E4 owns the remaining batch, optional compression, completion-based retention,
 hold/due and expired/missing behavior, then connected Phase acceptance and
 ordinary local closure. Current common Evidence and CNCF File capabilities
 provide the text route; additional producer capabilities and shared-code
-ownership must be agreed before extending that route. No duplicate writer or
-application filesystem interpreter is permitted. E4 remains open.
+ownership still needed agreement at that assignment point. They were later
+delivered and E4 accepted as recorded above. No duplicate writer or application
+filesystem interpreter is permitted. The earlier E4-open statement is historical.
 Historical statements below about Plan revision 1 describe the original Start.
 
 E1's contract documentation is now accepted through actual selected Compile,
@@ -49,7 +91,7 @@ The new common-Evidence allocation below supersedes that design prerequisite,
 without submitting an answer to its retained native question.
 At that earlier design-prerequisite point, E2 through E4 and connected Phase
 acceptance remained open; no storage success was claimed from the prerequisite.
-The current E2/E3 closure above supersedes only that historical pending status.
+The subsequent E2/E3/E4 closure records supersede those historical pending states.
 
 The initial E1 delivery record follows; its pending statements describe that
 earlier handoff rather than the current accepted E1 frontier.
@@ -82,9 +124,10 @@ See the [common specification](../spec/common-evidence.md) and
 One common implementation is extended; no separate 6.4 Evidence/Journal store.
 
 Existing E1 acceptance, Goal/Session/base, native Plan, pending decisions, counters,
-history and validation remain. The following E2–E4 text is the adopted future
-plan; native adoption is owned by the current execution and is not performed by
-editing these documents. Preserve all checklist IDs and checked flags. E1 text
+history and validation remain. At this 2026-10-20 allocation point the E2–E4 text
+was the future plan; subsequent actual adoption and Step acceptance are recorded
+above. Editing these documents does not perform native adoption. Preserve all
+checklist IDs and update outcomes only from their actual evidence. E1 text
 remains historical contract acceptance, not a reason to retain superseded absolute
 path display or AI Markdown transcription in the new route. The old location API
 proposal's design motivation is superseded; its actual native records remain.
@@ -137,7 +180,8 @@ compression and retention-management branches. Keep it as regression coverage.
 | E1: minimum contract | P64-01–03 | Classify evidence/work files versus canonical artifacts; reuse existing reference/storage facilities; specify one-file allocate/archive/lookup and the AI record response. |
 | E2: working main route | P64-04–08 | Adopt Phase 12 on the trial host; actual Action-driven archive, common Journal reference, fresh-process Journal/Evidence read and Git exclusion. |
 | E3: bounded failure and observation | P64-09–12 | Exercise Phase 12 failure/observation in actual development; reuse producer checks, add missing operational cases and Journal-only continuation without rerunning the Action. |
-| E4: operational branches and closure | P64-13–18 | Extend the same common service for batch, compression and retention/hold/due; coordinate runtime ownership, then integrate/validate/close and hand off. |
+| E4: operational branches and closure | P64-13–18 | Delivered and Step-accepted common-service batch, compression and retention/hold/due; Phase-level gates remain distinct. |
+| E5: adopted corrective documentation | P64-18, preserving all IDs | Reconcile five existing documents against accepted E1–E4 and formal full result 235; normal new-candidate checks/review/commit and Phase closure still apply. |
 
 Each batch specifies its behavior before implementation. E1 freezes only what
 E2 needs; detailed branch design and its matrix grow with E3/E4. No separate
@@ -245,7 +289,8 @@ not treat successful storage as product validation or archive live inputs.
 No remote transfer, distributed store, full historical migration, Git history
 repair, automatic deletion/scheduler, new worktree operation, or dependency-JAR
 publication/overlay is included. Phase 7 retains the artifact-overlay feature.
-This plan authorizes no runtime execution, installation, cleanup or commit now.
+This specification grants no effect permission by itself. Actual selected checks
+and ordinary local closure use the separately admitted host authority.
 
 Reuse accepted CNCF/Cozy contracts. If implementation needs changes to either,
 follow the existing upstream wait condition: identify the missing contract and

@@ -1,14 +1,17 @@
 # Local Evidence operation on the common Evidence service
 
-Status: E1 contract accepted and locally committed on 2026-10-20;
-E2 implementation and connected verification remain open.
-Source: [Phase 6.4](../phase/phase-6.4.md), P64-01..03.
+Status at the 2026-10-22 P64-E5 documentation correction: E1–E4 are accepted
+and locally committed. Plan revision 3 adds this five-document correction;
+its check/review/commit and subsequent Phase acceptance/closure retain their
+normal gates. Source: [Phase 6.4](../phase/phase-6.4.md), P64-01..18.
+See [accepted consumer observations](#accepted-consumer-observations--2026-10-22)
+for evidence and limits; the earlier E1 design below remains historical.
 The E2–E4 contract below adopts [Common Evidence](common-evidence.md) and
 [Phase 12](../phase/phase-12.md)'s producer delivery (2026-10-20). Phase 12 owns
 common identity/storage/read and automatic Action-to-Journal recording; Phase 6.4
 owns trial adoption and operational extensions on that same service. Neither
-this update nor the existing E1 acceptance declares installed Evidence support
-or E2 success. See the [two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+the original contract update nor E1 acceptance alone declared installed Evidence
+support or E2 success; the subsequent E2–E4 acceptance below supplies that evidence. See the [two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
 Native Plan/Usage Contract adoption remains with the existing execution owner;
 no saved request, decision, history, counter or accepted result is rewritten here.
 
@@ -30,7 +33,7 @@ An archive result records storage. Test outcome, review acceptance, applicabilit
 to another candidate and successful common Journal recording remain separate facts.
 Existing tracked evidence is not automatically migrated, unstaged or deleted.
 
-## Inspected existing interfaces
+## E1 inspected interfaces and original text-route selection (historical)
 
 | Existing owner | Reuse and actual limit |
 | --- | --- |
@@ -51,7 +54,13 @@ Do not substitute application NIO, generic Process commands or a new Blob store.
 If an additional producer contract is necessary, identify it and follow the
 Phase's existing upstream wait boundary before dependency implementation.
 
-## One-file public business boundary
+The preceding inspection describes E1's original limited File surface. The
+subsequent approved producer delivery adds managed directory preparation and
+bounded no-overwrite binary/gzip installation and readback through CNCF File/UoW.
+The current public consumer boundary is the delivered common `EvidenceService`,
+not a new implementation of the illustrative E1 names below.
+
+## One-file public business boundary (original responsibility contract)
 
 Use ordinary generated typed Operations and structured results on the configured
 host. Phase 12 owns the canonical public contracts; the names below describe
@@ -241,17 +250,16 @@ for their E3/E4 owners, including partial batches, conflicts, failure observatio
 retention, independent Phase review and final full validation using sbt-native
 locks.
 
-The inspected producer lacks two later prerequisites: managed preparation of
-ordinary nested archive directories beneath an admitted root, and bounded
-binary/compressed archive installation/readback at an already selected exact
-filename without overwrite. Before adopting those branches, request their
-separately owned CNCF contract/delivery with current-UoW admission, real conflicts,
-finite acquisition/representation limits and truthful failure/uncertainty.
-The producer chooses its concrete API. sm-workflow retains naming, identity,
-durable observations and retention meaning. Do not make unapproved CNCF/Cozy
-changes, create an application filesystem interpreter, use shell compression or silently weaken
-P64-14 to proceed. The complete Phase stays open until its actual requirements
-and upstream delivery are satisfied.
+The original inspection identified directory preparation and bounded binary/gzip
+installation/readback as producer prerequisites. They were subsequently delivered
+under the genuinely approved twelve-file `P64-E4-managed-file-compression@1`
+scope and normal `publishLocal`. E4 consumes that CNCF File/UoW delivery through
+the common Evidence owner, preserving admission, exact names, no overwrite,
+finite acquisition/expansion limits and truthful outcomes. These capabilities
+are no longer pending prerequisites. sm-workflow retains naming, identity,
+durable observations and retention meaning. The delivery does not authorize
+other CNCF/Cozy edits, an application filesystem interpreter or shell compression;
+Phase acceptance and closure still require their own actual gates.
 
 ## E2 discovered public location prerequisite
 
@@ -309,16 +317,18 @@ Producer qualification is reused only at its existing scope. These cases do
 not create another Evidence writer, storage interpreter, public upload API or
 runtime repair. Public invalid/unsupported reads preserve their actual outcomes.
 Test success, historical storage status, current payload availability, Journal
-outcome and Step acceptance remain separate. P64-13..18 are still E4 work.
+outcome and Step acceptance remain separate. At this E3 handoff, P64-13..18
+remained E4 work; subsequent accepted observations follow.
 
 ## E4 consumer verification boundary — 2026-10-21
 
-Status: planned; producer implementation, delivery and consumer execution remain
-pending. The existing Session has accepted the actual Human approval of
-`P64-E4-managed-file-compression@1` for twelve literal CNCF files. The selected
-proposal and independent Human reference are retained in its ordinary E4
-`decisionContext`. This is one bounded dependency scope, not execution evidence
-or E4 acceptance. CNCF owns the existing File DSL/UoW/adapter extension;
+Status: producer delivery and the focused E4 consumer execution are complete;
+independent Step review accepted commit
+`808bc32400428331ab0fc8586c421668cf586218`. The existing Session retains the
+actual Human approval of `P64-E4-managed-file-compression@1` for twelve literal
+CNCF files and its ordinary E4 `decisionContext`. That approval alone was not
+execution evidence; the accepted observations below establish the consumer scope.
+The table preserves the required boundaries, including later Phase gates. CNCF owns the existing File DSL/UoW/adapter extension;
 sm-workflow development owns the common Evidence producer and normal local
 publication. This consumer owns the following observations and Phase acceptance.
 The producer's delivered public DTOs determine concrete calls; this table adds
@@ -338,3 +348,63 @@ Keep raw qualification records and host configuration outside the selected Git
 delta. Delivery identifies exact versions, public fields, configuration and
 limits before consumer calls are prepared. No automatic deletion or scheduler
 is part of this verification boundary.
+
+
+## Accepted consumer observations — 2026-10-22
+
+The same Session `96c294d73be3d48067f3721d8a2abf33` retains original base
+`d35d6d237ea57d77181aeee10902eeae085dbd9d` and accepted E1 `07a97986`,
+E2 `f4f9d3c2`, E3 `da280ab7` and E4 `808bc324`. E2 established the real automatic
+completed-Test-log -> archive -> Journal route and fresh installed Entry/Evidence
+read, with exact 14,196 UTF-8 bytes. E3's thirteen-test failure coverage retains
+the explicitly bounded seams described above. Neither is a new PASS assertion.
+
+E4's actual `evidence-operational-route` receipt at source 215 records one suite,
+one successful test and no cancellations. Its independent Step review accepted
+the eight-file candidate. Two specification-owned isolated producing Tests each
+executed once; ten distinct installed public command processes all exited zero.
+The scenario observed ordered batch outcomes stored/stored/conflict, recorded
+Journals for both successful items, exact 942/938-byte public-ID reads through
+gzip/identity representations, preserved source associations, active no-expiry,
+reasoned hold/release and empty bounded expiry/hold-review due queries. The
+producer's separate controlled-clock/specification-owned qualification supplies
+completion-plus-thirty-days, precise expiry and expired/missing separation.
+It does not establish completion of this live producing Session or physical
+payload disappearance in production. The legacy E2 payload remained identical
+after publication. No successful source Action was replayed to create this proof.
+
+For the unchanged E4 candidate, `ordered-validation:235:validation` records the
+formal `repository-full` Test PASS: Exited0, 163 completed suites, 1,528 successful
+tests, zero failures and one cancellation. Earlier unknown attempts 0–2 and the
+formal failed attempt 3 remain in history; they are not erased by that PASS.
+The PASS's stdout Evidence storage observation at 2026-10-21T23:40:10.697213Z is
+**indeterminate** (`File save did not return a confirmed outcome`). Common Journal
+recorded that observation. Its public references are:
+
+- Evidence: `evidence:WyI5NmMyOTRkNzNiZTNkNDgwNjdmMzcyMWQ4YTJhYmYzMzpvcmRlcmVkLXZhbGlkYXRpb246MjM1OmNoZWNrLXJlc3VsdC0wIiwiMSIsInN0ZG91dCJd@1`.
+- Journal Entry: `evidence-storage:evidence:WyI5NmMyOTRkNzNiZTNkNDgwNjdmMzcyMWQ4YTJhYmYzMzpvcmRlcmVkLXZhbGlkYXRpb246MjM1OmNoZWNrLXJlc3VsdC0wIiwiMSIsInN0ZG91dCJd@1`.
+
+A recorded Journal observation does not establish stored/readable payload and
+an indeterminate archive does not change the formal Test result. Keep the source
+and actual observations; do not repeat the Test/archive or mint an availability
+claim. Evidence/Journal IDs suffice for supported lookup; no physical-path API
+or AI Markdown transcription is required.
+
+The genuine integrated review found stale P64-18 documentation. Human244 adopted
+`phase-6.4-p64-18-correction@1` as Plan revision 3, appending only P64-E5 over these
+five existing documents. It preserves all P64 IDs, E1–E4, original base, prior
+outcomes and counters. This section is the E5 implementation snapshot, not its
+acceptance: the changed candidate still needs declared `contract-compile`, genuine
+independent review and normal Step commit, then the fixed `repository-full`,
+affected Phase review and ordinary local closure. Consult those owning native
+receipts for subsequent progress rather than interpreting this dated snapshot
+as a new validation or closure result.
+
+After actual producing Session closure, observe its completion through the
+supported public Evidence lifecycle boundary and compare the retained completion
+basis and thirty-day expiry. Before that event, active no-expiry is the correct
+observation; no production completion instant can be fabricated. This later
+observation belongs after its owning closure gate and cannot block that same
+gate. Holds/due queries never delete material. Raw execution records, logs and
+qualification responses remain outside Git; canonical documentation retains only
+scope, references and conclusions.
