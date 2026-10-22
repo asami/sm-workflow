@@ -1,0 +1,4 @@
+# Development generators are refreshed at unchanged SNAPSHOT coordinates.
+# CML timestamps alone must not select output from an older generator artifact.
+generation:
+  skip_unchanged: false
