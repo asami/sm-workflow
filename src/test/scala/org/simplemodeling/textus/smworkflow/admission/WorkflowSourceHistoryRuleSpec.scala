@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Executable C1 contract; fixtures supply external data without file access.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 22, 2026
   */
 final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import WorkflowSourceHistoryRule.*
@@ -84,8 +84,9 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
   "External source-history rule decoding" should {
     "retain the declared external contract" in {
       Given("an explicit complete JSON rule document")
+      val document = _document.noSpaces
       When("the document is decoded")
-      val selected = _take(decodeC(_document.noSpaces))
+      val selected = _take(decodeC(document))
       Then("identity, tags, date pattern, locale, layout and cleanup policy remain external data")
       selected.identity shouldBe "external-fixture-v1"
       selected.tags shouldBe Tags("@since", "@version", "version", "@author")
@@ -146,6 +147,81 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
   }
 
   "External source-history interpretation" should {
+    "repair compact date lines into exact common columns without altering existing metadata" in {
+      Given("SOURCE-HISTORY-ALIGNMENT-01: compact since and histories with existing author and narrative bytes")
+      val original = "/**\n * Narrative retained.\n * @since Jan. 6, 2026\n * version Feb. 19, 2026\n" +
+        " * @version Mar. 24, 2026\n * @author Existing Author\n * @deprecated retained metadata\n */\n" + _code
+      When("the update rolls into April and normalizes the managed dates")
+      val result = _apply_text(original)
+      Then("since and date values share their column and history has exactly one extra leading space")
+      result.text shouldBe "/**\n * Narrative retained.\n * @since   Jan.  6, 2026\n *  version Feb. 19, 2026\n" +
+        " *  version Mar. 24, 2026\n * @version Apr.  9, 2026\n * @author Existing Author\n" +
+        " * @deprecated retained metadata\n */\n" + _code
+      result.text.linesIterator.filter(line => line.contains("Jan.") || line.contains("Feb.") ||
+        line.contains("Mar.") || line.contains("Apr.")).map(_.indexOf("2026") - 9).toVector shouldBe Vector(12, 12, 12, 12)
+      When("the same date is applied to the repaired source")
+      val repeated = _apply_text(result.text)
+      Then("canonical spacing and every retained byte stay unchanged")
+      repeated.text shouldBe result.text
+      repeated.outcome shouldBe "unchanged"
+    }
+
+    "preserve the first ordinary star indentation in nested declarations with spaces and tabs" in {
+      Given("compact dates under space-indented and tab-indented declaration comments")
+      val originals = Vector(
+        "object Container {\n  /** Summary retained.\n   * Narrative retained.\n   * @since Jan.  6, 2026\n" +
+          "   * @version Mar. 24, 2026\n   * @author Existing Author\n   */\n  object Nested\n}\n",
+        "object Container {\n\t/** Summary retained.\n\t * Narrative /* nested */ retained.\n\t * Ordinary narrative retained.\n" +
+          " * @since Jan.  6, 2026\n * @version Mar. 24, 2026\n\t * @author Existing Author\n\t */\n\tobject Nested\n}\n")
+      When("the managed blocks cross the month boundary")
+      val results = originals.map(text => _apply_text(text))
+      Then("all date lines inherit the ordinary star prefix while delimiters narrative metadata and code remain exact")
+      results.map(_.text) shouldBe Vector(
+        "object Container {\n  /** Summary retained.\n   * Narrative retained.\n   * @since   Jan.  6, 2026\n" +
+          "   *  version Mar. 24, 2026\n   * @version Apr.  9, 2026\n   * @author Existing Author\n   */\n  object Nested\n}\n",
+        "object Container {\n\t/** Summary retained.\n\t * Narrative /* nested */ retained.\n\t * Ordinary narrative retained.\n" +
+          "\t * @since   Jan.  6, 2026\n\t *  version Mar. 24, 2026\n\t * @version Apr.  9, 2026\n" +
+          "\t * @author Existing Author\n\t */\n\tobject Nested\n}\n")
+      When("the same date is reapplied to both indentation styles")
+      val repeated = results.map(result => _apply_text(result.text))
+      Then("spaces and tabs remain byte identical")
+      repeated.zip(results).foreach { (second, first) =>
+        second.text shouldBe first.text
+        second.outcome shouldBe "unchanged"
+      }
+    }
+
+    "retain an already canonical two-space star block unchanged on the same date" in {
+      Given("canonical aligned dates with an existing top-level two-space star style and compact author metadata")
+      val original = "/** Summary retained.\n  * Narrative retained.\n  * @since   Jan.  6, 2026\n" +
+        "  *  version Mar. 24, 2026\n  * @version Apr.  9, 2026\n  * @author Existing Author\n  */\n" + _code
+      When("the same update day is supplied")
+      val result = _apply_text(original)
+      Then("the configured one-space prefix does not outdent the existing managed block")
+      result.text shouldBe original
+      result.outcome shouldBe "unchanged"
+    }
+
+    "derive inline managed comment prefixes only from whitespace before the opening delimiter" in {
+      Given("inline managed dates with an indented opening or preceding code on the same line")
+      val originals = Vector("object Container {\n\t/** @version Mar. 24, 2026 */\n\tobject Nested\n}\n",
+        "val value = 1; /** @version Mar. 24, 2026 */\n")
+      When("date normalization expands each inline block without an ordinary starred line")
+      val results = originals.map(text => _apply_text(text))
+      Then("only a whitespace-only opening prefix augments the configured line prefix")
+      results.map(_.text) shouldBe Vector(
+        "object Container {\n\t/**\n\t * @since   Jan.  6, 2026\n\t *  version Mar. 24, 2026\n" +
+          "\t * @version Apr.  9, 2026\n*/\n\tobject Nested\n}\n",
+        "val value = 1; /**\n * @since   Jan.  6, 2026\n *  version Mar. 24, 2026\n * @version Apr.  9, 2026\n*/\n")
+      When("the same date is reapplied to the expanded comments")
+      val repeated = results.map(result => _apply_text(result.text))
+      Then("each expanded block and its surrounding code stay exact")
+      repeated.zip(results).foreach { (second, first) =>
+        second.text shouldBe first.text
+        second.outcome shouldBe "unchanged"
+      }
+    }
+
     "exclude unselected roots extensions and configured segments before parsing source" in {
       Given("malformed source dates in excluded or unselected paths")
       val source = "/* @version not-a-date */\n\"unterminated"
@@ -170,7 +246,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val result = _apply_text(original)
       Then("only declared cleanup changes the version block and all other source remains exact")
       result.text shouldBe _header("Narrative and origin: migrated source.", "@since   Jan.  6, 2026",
-        "version Mar. 20, 2026", "version Jan. 21, 2026", "@version Apr.  9, 2026",
+        " version Mar. 20, 2026", " version Jan. 21, 2026", "@version Apr.  9, 2026",
         "@author Existing Author", "@deprecated retained metadata") + _code
       result.outcome shouldBe "updated"
       result.dateUncertain shouldBe false
@@ -183,8 +259,8 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the update crosses the month boundary")
       val result = _apply_text(original)
       Then("existing relative history order survives and the single latest follows all histories")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Feb. 19, 2026", "version Mar. 24, 2026",
-        "version Jan. 21, 2026", "@version Apr.  9, 2026", "@author Known Author") + _code
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Feb. 19, 2026", " version Mar. 24, 2026",
+        " version Jan. 21, 2026", "@version Apr.  9, 2026", "@author Known Author") + _code
     }
 
     "remove exact since overlap but retain a different day in the since month" in {
@@ -194,7 +270,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the next month is supplied")
       val result = _apply_text(original)
       Then("only the exact since overlap is removed")
-      result.text shouldBe _header("@since Mar. 21, 2026", "version Mar. 22, 2026", "version Mar. 23, 2026",
+      result.text shouldBe _header("@since   Mar. 21, 2026", " version Mar. 22, 2026", " version Mar. 23, 2026",
         "@version Apr.  9, 2026") + _code
     }
 
@@ -207,7 +283,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule is applied in the same month")
       val result = _apply_text(original, selected)
       Then("existing histories follow both external flags while the old latest is compressed")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Jan.  6, 2026", "version Apr.  1, 2026",
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Jan.  6, 2026", " version Apr.  1, 2026",
         "@version Apr.  9, 2026") + _code
     }
 
@@ -218,8 +294,8 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("a different update day is supplied")
       val results = rules.map(selected => _apply_text(original, selected))
       Then("the different-day latest is retained as history under both external policies")
-      results.foreach(_.text shouldBe _header("@since Jan.  6, 2026", "version Apr.  1, 2026",
-        "version Apr.  3, 2026", "@version Apr.  9, 2026") + _code)
+      results.foreach(_.text shouldBe _header("@since   Jan.  6, 2026", " version Apr.  1, 2026",
+        " version Apr.  3, 2026", "@version Apr.  9, 2026") + _code)
     }
 
     "use changed external tags dates roots exclusions and layout" in {
@@ -235,8 +311,22 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("an included file without history is supplied")
       val result = _take(applyC(selected, _input(_code).copy(path = "product/Example.scala", author = Some("Known Writer"))))
       Then("new history uses the external values and the original source is preserved")
-      result.text shouldBe "/*\n  *  born 2026-01-06\n  *  latest 2026-04-09\n  *  writer Known Writer\n  */\n" + _code
+      result.text shouldBe "/*\n  * born   2026-01-06\n  * latest 2026-04-09\n  * writer Known Writer\n  */\n" + _code
       _take(applyC(selected, _input("/* latest invalid */").copy(path = "product/skip/Example.scala"))).outcome shouldBe "excluded"
+      When("a CRLF source receives the same custom layout")
+      val crlfinput = _input(_code.replace("\n", "\r\n")).copy(path = "product/Example.scala", author = Some("Known Writer"))
+      val crlfresult = _take(applyC(selected, crlfinput))
+      Then("the canonical baseline follows the custom star indentation and preserves CRLF")
+      crlfresult.text shouldBe "/*\r\n  * born   2026-01-06\r\n  * latest 2026-04-09\r\n" +
+        "  * writer Known Writer\r\n  */\r\npackage example\r\nobject Example { val answer = 42 }\r\n"
+      When("the same date is reapplied to both custom-layout results")
+      val repeated = Vector(result, crlfresult).map(value =>
+        _take(applyC(selected, _input(value.text).copy(path = "product/Example.scala", author = Some("Known Writer")))))
+      Then("the first canonical new headers remain byte identical for LF and CRLF")
+      repeated.zip(Vector(result, crlfresult)).foreach { (second, first) =>
+        second.text shouldBe first.text
+        second.outcome shouldBe "unchanged"
+      }
     }
 
     "recognize changed external date tags in existing comments" in {
@@ -246,8 +336,22 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("that external rule interprets an existing managed comment")
       val result = _apply_text(original, selected)
       Then("the changed tags and rollover govern the actual update")
-      result.text shouldBe _header("born Jan.  6, 2026", "prior Apr.  3, 2026", "latest Apr.  9, 2026",
+      result.text shouldBe _header("born   Jan.  6, 2026", " prior Apr.  3, 2026", "latest Apr.  9, 2026",
         "writer Known Writer") + _code
+    }
+
+    "align custom date tags against the longest declared author tag" in {
+      Given("custom tags whose author tag is wider than every date tag")
+      val selected = _rule.copy(tags = Tags("born", "latest", "past", "writername"))
+      val original = _header("born Jan.  6, 2026", "latest Mar. 24, 2026", "writername Existing Writer") + _code
+      When("existing history is normalized and a new header uses supplied author provenance")
+      val updated = _apply_text(original, selected)
+      val inserted = _take(applyC(selected, _input(_code).copy(author = Some("Known Writer"))))
+      Then("ordinary tags align left and history aligns right in the maximum declared tag width")
+      updated.text shouldBe "/**\n * born       Jan.  6, 2026\n *       past Mar. 24, 2026\n" +
+        " * latest     Apr.  9, 2026\n * writername Existing Writer\n */\n" + _code
+      inserted.text shouldBe "/**\n * born       Jan.  6, 2026\n * latest     Apr.  9, 2026\n" +
+        " * writername Known Writer\n */\n" + _code
     }
 
     "find a long managed comment after long package and import preambles" in {
@@ -258,8 +362,8 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the complete file is interpreted")
       val result = _apply_text(original)
       Then("the existing comment is updated in place with all narrative and preamble preserved")
-      result.text shouldBe preamble + _header((narrative ++ Vector("@since Jan.  6, 2026",
-        "version Mar. 24, 2026", "@version Apr.  9, 2026"))*) + _code
+      result.text shouldBe preamble + _header((narrative ++ Vector("@since   Jan.  6, 2026",
+        " version Mar. 24, 2026", "@version Apr.  9, 2026"))*) + _code
     }
 
     "ignore markers in strings triple strings characters backticks and line comments" in {
@@ -273,7 +377,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the lexical scanner locates actual block comments")
       val result = _apply_text(original)
       Then("only the genuine managed comment changes")
-      result.text shouldBe literals + _header("@since Jan.  6, 2026", "version Mar. 24, 2026",
+      result.text shouldBe literals + _header("@since   Jan.  6, 2026", " version Mar. 24, 2026",
         "@version Apr.  9, 2026") + _code
     }
 
@@ -285,7 +389,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule interprets the quoted interpolation")
       val result = _apply_text(original)
       Then("the genuine header alone changes and every body byte survives")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the entire result is unchanged")
@@ -308,7 +412,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule interprets all nested expression boundaries")
       val result = _apply_text(original)
       Then("only genuine code braces balance expressions and the complete body remains exact")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the complete result stays unchanged")
@@ -329,7 +433,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val results = bodies.map(body => _apply_text(header + body))
       Then("each result updates only its genuine header and preserves the complete body")
       results.zip(bodies).foreach { (result, body) =>
-        result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+        result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       }
       When("the same date is reapplied to every result")
       val repeated = results.map(result => _apply_text(result.text))
@@ -338,6 +442,37 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
         second.text shouldBe first.text
         second.outcome shouldBe "unchanged"
       }
+    }
+
+    "consume four and five terminal quotes while preserving exact JSON interpolation source" in {
+      Given("P116-SOURCE-HISTORY-001: the subsystem JSON suffix and ordinary or interpolated terminal quote runs")
+      val quotes = "\"\"\""
+      val exact = "val subsystem = subsystemname.map(name => s" + quotes + "\"subsystem\":\"$name" +
+        "\"\"\"\"" + ").getOrElse(\"\")\n"
+      val bodies = Vector(exact) ++ (for {
+        prefix <- Vector("", "s")
+        count <- Vector(4, 5)
+      } yield "val text = " + prefix + quotes + "value /* @version invalid */" + ("\"" * count) + "\n")
+      val header = _header("@since Jan.  6, 2026", "@version Mar. 24, 2026")
+      When("the pure interpreter scans each complete literal and reapplies the same date")
+      val results = bodies.map(body => _apply_text(header + body))
+      val repeated = results.map(value => _apply_text(value.text))
+      Then("only the actual header changes and each complete literal remains byte identical")
+      results.zip(bodies).foreach { (result, body) =>
+        result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      }
+      repeated.zip(results).foreach { (second, first) =>
+        second.text shouldBe first.text
+        second.outcome shouldBe "unchanged"
+      }
+
+      Given("genuinely unterminated ordinary and interpolated triple literals with only one or two terminal quotes")
+      val malformed = for { prefix <- Vector("", "s"); count <- Vector(0, 1, 2) }
+        yield header + "val text = " + prefix + quotes + "unfinished" + ("\"" * count)
+      When("the same interpreter scans the incomplete source")
+      val refused = malformed.map(body => applyC(_rule, _input(body)))
+      Then("the terminal-run correction preserves fail-closed rejection")
+      refused.foreach(_.isSuccess shouldBe false)
     }
 
     "recognize raw qualified and backtick interpolators while preserving escaped dollars" in {
@@ -350,7 +485,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val results = bodies.map(body => _apply_text(header + body))
       Then("escaped dollars remain text and nested literal contents never become managed comments")
       results.zip(bodies).foreach { (result, body) =>
-        result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+        result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       }
       When("the same date is reapplied to every custom literal")
       val repeated = results.map(result => _apply_text(result.text))
@@ -368,7 +503,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the source-history rule interprets the complete source")
       val result = _apply_text(original)
       Then("only the genuine header changes and the entire raw literal remains exact")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the complete source remains unchanged")
@@ -382,7 +517,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the source-history rule supplies the missing header")
       val result = _apply_text(body)
       Then("the deterministic initial header precedes the complete original body")
-      result.text shouldBe _header("@since Jan.  6, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the inserted header and original body remain unchanged")
@@ -397,7 +532,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the source-history rule interprets the interpolation expressions")
       val result = _apply_text(original)
       Then("only the genuine header changes and every expression and literal byte survives")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the complete nested source remains unchanged")
@@ -415,7 +550,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val results = bodies.map(body => _apply_text(header + body))
       Then("each result updates only the genuine header and retains every consecutive backslash")
       results.zip(bodies).foreach { (result, body) =>
-        result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+        result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       }
       When("the same date is reapplied to every result")
       val repeated = results.map(result => _apply_text(result.text))
@@ -434,7 +569,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule interprets strings without a directly preceding interpolator")
       val result = _apply_text(original)
       Then("the ordinary literal contents stay exact while the genuine header changes")
-      result.text shouldBe _header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + body
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + body
       When("the same date is reapplied")
       val repeated = _apply_text(result.text)
       Then("the source remains byte identical")
@@ -462,7 +597,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val result = _apply_text(original)
       Then("quote syntax cannot swallow the header and nested narrative remains exact")
       result.text shouldBe quoted + _header("Origin /* nested /* deeper */ narrative */ retained.",
-        "@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + _code
+        "@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + _code
     }
 
     "locate a nested managed block and reject competing outer managed dates" in {
@@ -474,8 +609,8 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val result = _apply_text(original)
       val ambiguous = applyC(_rule, _input(competing))
       Then("the single nested managed comment changes in place and competing blocks fail")
-      result.text shouldBe "/* Outer origin retained.\n" + _header("@since Jan.  6, 2026",
-        "version Mar. 24, 2026", "@version Apr.  9, 2026") + "End outer narrative. */\n" + _code
+      result.text shouldBe "/* Outer origin retained.\n" + _header("@since   Jan.  6, 2026",
+        " version Mar. 24, 2026", "@version Apr.  9, 2026") + "End outer narrative. */\n" + _code
       ambiguous shouldBe a[Consequence.Failure[?]]
     }
 
@@ -485,8 +620,13 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the external rule adds its declared header")
       val result = _take(applyC(_rule, original))
       Then("creation and author facts are used and every original source character follows unchanged")
-      result.text shouldBe _header("@since Jan.  6, 2026", "@version Apr.  9, 2026", "@author Known Author") + _code
+      result.text shouldBe "/**\n * @since   Jan.  6, 2026\n * @version Apr.  9, 2026\n * @author  Known Author\n */\n" + _code
       result.dateUncertain shouldBe false
+      When("the same day and provenance are supplied again")
+      val repeated = _take(applyC(_rule, original.copy(text = result.text)))
+      Then("the canonical header including supplied author alignment stays byte identical")
+      repeated.text shouldBe result.text
+      repeated.outcome shouldBe "unchanged"
     }
 
     "mark unknown creation explicitly without inventing authorship" in {
@@ -495,7 +635,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the supplied update day is used for the initial since field")
       val result = _take(applyC(_rule, original))
       Then("the fallback day is explicitly uncertain and author metadata is absent")
-      result.text shouldBe _header("@since Apr.  9, 2026", "@version Apr.  9, 2026") + _code
+      result.text shouldBe _header("@since   Apr.  9, 2026", "@version Apr.  9, 2026") + _code
       result.dateUncertain shouldBe true
       _take(applyC(_rule, _input(result.text).copy(dateUncertain = true))).dateUncertain shouldBe true
     }
@@ -508,8 +648,15 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       val updated = _apply_text(original)
       val inserted = _apply_text(bare)
       Then("both outputs use the source newline and preserve source bytes")
-      updated.text shouldBe (_header("@since Jan.  6, 2026", "version Mar. 24, 2026", "@version Apr.  9, 2026") + _code).replace("\n", "\r\n")
-      inserted.text shouldBe (_header("@since Jan.  6, 2026", "@version Apr.  9, 2026") + _code).replace("\n", "\r\n")
+      updated.text shouldBe (_header("@since   Jan.  6, 2026", " version Mar. 24, 2026", "@version Apr.  9, 2026") + _code).replace("\n", "\r\n")
+      inserted.text shouldBe (_header("@since   Jan.  6, 2026", "@version Apr.  9, 2026") + _code).replace("\n", "\r\n")
+      When("the same date is reapplied to both CRLF results")
+      val repeated = Vector(updated, inserted).map(result => _apply_text(result.text))
+      Then("the aligned headers and CRLF source bytes remain unchanged")
+      repeated.zip(Vector(updated, inserted)).foreach { (second, first) =>
+        second.text shouldBe first.text
+        second.outcome shouldBe "unchanged"
+      }
     }
 
     "insert a missing latest field into an existing since-only header" in {
@@ -518,7 +665,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule supplies the latest date")
       val result = _apply_text(original)
       Then("the existing origin author narrative and delimiters remain in place")
-      result.text shouldBe _header("Narrative retained.", "@since Jan.  6, 2026", "@version Apr.  9, 2026",
+      result.text shouldBe _header("Narrative retained.", "@since   Jan.  6, 2026", "@version Apr.  9, 2026",
         "@author Known Author") + _code
     }
 
@@ -528,7 +675,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule completes the managed date block")
       val result = _apply_text(original)
       Then("since precedes history and latest while narrative and known author remain exact")
-      result.text shouldBe _header("Origin narrative.", "@since Jan.  6, 2026", "version Mar. 24, 2026",
+      result.text shouldBe _header("Origin narrative.", "@since   Jan.  6, 2026", " version Mar. 24, 2026",
         "@version Apr.  9, 2026", "@author Existing Author") + _code
       result.dateUncertain shouldBe false
     }
@@ -539,7 +686,7 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       When("the rule supplies the absent origin from updatedOn")
       val result = _take(applyC(_rule, original))
       Then("the fallback is explicit and no author is invented")
-      result.text shouldBe _header("Origin narrative.", "@since Apr.  9, 2026", "version Mar. 24, 2026",
+      result.text shouldBe _header("Origin narrative.", "@since   Apr.  9, 2026", " version Mar. 24, 2026",
         "@version Apr.  9, 2026") + _code
       result.dateUncertain shouldBe true
       val repeated = _take(applyC(_rule, original.copy(text = result.text, dateUncertain = result.dateUncertain)))
@@ -548,14 +695,14 @@ final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with
       repeated.dateUncertain shouldBe true
     }
 
-    "place an existing since before history while retaining its exact spelling" in {
+    "place an existing since before history while preserving its semantic date and canonical alignment" in {
       Given("a managed block with since after historical dates and interleaved narrative")
       val original = _header("version Feb. 19, 2026", "Narrative retained.", "@version Mar. 24, 2026",
-        "@since   Jan.  6, 2026", "@author Existing Author") + _code
+        "@since Jan. 6, 2026", "@author Existing Author") + _code
       When("the managed date fields are normalized")
       val result = _apply_text(original)
-      Then("since keeps its exact text and precedes the preserved history order and latest")
-      result.text shouldBe _header("@since   Jan.  6, 2026", "version Feb. 19, 2026", "version Mar. 24, 2026",
+      Then("since keeps its semantic date with selected date spelling and aligned whitespace before history and latest")
+      result.text shouldBe _header("@since   Jan.  6, 2026", " version Feb. 19, 2026", " version Mar. 24, 2026",
         "@version Apr.  9, 2026", "Narrative retained.", "@author Existing Author") + _code
     }
 

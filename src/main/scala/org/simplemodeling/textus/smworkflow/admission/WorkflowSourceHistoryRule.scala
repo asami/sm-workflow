@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 
 /** Pure interpretation of caller-supplied declarative source-history data.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 22, 2026
   */
 private[smworkflow] object WorkflowSourceHistoryRule {
   final case class Input(path: String, text: String, updatedOn: LocalDate,
@@ -184,7 +184,11 @@ private[smworkflow] object WorkflowSourceHistoryRule {
       states.head match {
       case ScanState.Literal(triple, interpolated) =>
         val delimiter = if (triple) "\"\"\"" else "\""
-        if (text.startsWith(delimiter, i)) { i += delimiter.length; states = states.tail }
+        if (text.startsWith(delimiter, i)) {
+          i += delimiter.length
+          if (triple) while (i < text.length && text(i) == '"') i += 1
+          states = states.tail
+        }
         else if (!triple && (text(i) == '\n' || text(i) == '\r')) error = Some("unterminated literal")
         else if (!triple && text(i) == '\\')
           i += (if (interpolated && i + 1 < text.length && text(i + 1) == '$') 1 else 2)
@@ -326,10 +330,10 @@ private[smworkflow] object WorkflowSourceHistoryRule {
       field.date != input.updatedOn && keepperiod && (!rule.removeHistoryAtSince || since != field.date)
     }
     val newline = _source_newline(input.text)
-    val sinceline = sincefield.map(field => managed.lines(field.line).content)
-      .getOrElse(_date_line(rule, formatter, rule.tags.since, since))
-    val replacements = Vector(sinceline) ++ history.map(field => _date_line(rule, formatter, rule.tags.history, field.date)) :+
-      _date_line(rule, formatter, rule.tags.version, input.updatedOn)
+    val prefix = _managed_prefix(rule, input.text, managed)
+    val replacements = Vector(_date_line(rule, formatter, prefix, rule.tags.since, since)) ++
+      history.map(field => _date_line(rule, formatter, prefix, rule.tags.history, field.date)) :+
+      _date_line(rule, formatter, prefix, rule.tags.version, input.updatedOn)
     val removed = managed.dates.map(_.line).toSet
     val insertion = managed.dates.head.line
     val body = new StringBuilder
@@ -349,15 +353,43 @@ private[smworkflow] object WorkflowSourceHistoryRule {
     Right(input.text.substring(0, managed.block.openend) + body.toString + input.text.substring(managed.block.end - 2))
   }
 
-  private def _date_line(rule: Rule, formatter: DateTimeFormatter, tag: String, date: LocalDate): String =
-    rule.header.linePrefix + tag + " " + formatter.format(date)
+  private def _managed_prefix(rule: Rule, text: String, managed: Managed): String = {
+    val starred = managed.lines.iterator.filter(line => line.depth == 1 && line.start != managed.block.openend)
+      .map(_.content).find(content => content.dropWhile(_horizontal_space).startsWith("*"))
+    starred.map(content => content.takeWhile(_horizontal_space) + "* ").getOrElse {
+      val start = math.max(text.lastIndexOf('\n', managed.block.start - 1),
+        text.lastIndexOf('\r', managed.block.start - 1)) + 1
+      val indentation = text.substring(start, managed.block.start)
+      (if (indentation.forall(_horizontal_space)) indentation else "") + _configured_prefix(rule)
+    }
+  }
+
+  private def _horizontal_space(value: Char): Boolean = value == ' ' || value == '\t'
+
+  private def _configured_prefix(rule: Rule): String = {
+    val prefix = rule.header.linePrefix
+    val indentation = prefix.takeWhile(_horizontal_space)
+    val starred = prefix.drop(indentation.length)
+    if (starred.startsWith("*") && starred.drop(1).forall(_horizontal_space)) indentation + "* "
+    else prefix
+  }
+
+  private def _tag_line(rule: Rule, prefix: String, tag: String, value: String): String = {
+    val width = Vector(rule.tags.since, rule.tags.version, rule.tags.history, rule.tags.author).map(_.length).max
+    val padding = " " * (width - tag.length)
+    prefix + (if (tag == rule.tags.history) padding + tag else tag + padding) + " " + value
+  }
+
+  private def _date_line(rule: Rule, formatter: DateTimeFormatter, prefix: String, tag: String, date: LocalDate): String =
+    _tag_line(rule, prefix, tag, formatter.format(date))
 
   private def _new_header(rule: Rule, formatter: DateTimeFormatter, input: Input): String = {
     val newline = _source_newline(input.text)
+    val prefix = _configured_prefix(rule)
     val lines = Vector(rule.header.open,
-      _date_line(rule, formatter, rule.tags.since, input.createdOn.getOrElse(input.updatedOn)),
-      _date_line(rule, formatter, rule.tags.version, input.updatedOn)) ++
-      input.author.map(author => rule.header.linePrefix + rule.tags.author + " " + author) ++ Vector(rule.header.close)
+      _date_line(rule, formatter, prefix, rule.tags.since, input.createdOn.getOrElse(input.updatedOn)),
+      _date_line(rule, formatter, prefix, rule.tags.version, input.updatedOn)) ++
+      input.author.map(author => _tag_line(rule, prefix, rule.tags.author, author)) ++ Vector(rule.header.close)
     lines.mkString(newline) + newline
   }
 
