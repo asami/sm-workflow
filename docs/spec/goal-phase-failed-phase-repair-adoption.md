@@ -22,7 +22,12 @@ generation, current declaration `candidatePaths`, the complete current native
 Step closure policy, complete raw and effective proposal and selected corrective
 checks. New target, direction and evidence
 envelopes reject unknown, missing and explicit-null fields. Live targets are
-reconstructed from retained history and the current declaration.
+reconstructed from retained history and the current declaration, including its
+complete current closure policy. A retained Direction keeps both its complete
+original candidatePaths vector and closure policy; R6 permits only
+prefix-preserving append-only extensions of the current host paths and programs
+during historical reconstruction, without changing live description or adoption
+admission.
 
 R3. `adoptFailedPhaseRepairRevisionC` is a pure eligibility transition, never
 proof of Human consent or a successful check. Require unchanged Plan identity,
@@ -56,9 +61,28 @@ target and Human reference, participant and rationale. No File/Git/SBT/Submit/
 Advance effect executes. Neither public call itself constitutes a Human answer.
 
 R6. Retained traversal proves the original real failure and exact contiguous
-Direction successor, reconstructing and comparing the complete closure policy
-and corrective Step mapping as well as the other bound target fields. A changed
-policy or mapping refuses. It applies the same pure transition, increments generation
+Direction successor. Both recorded and current candidatePaths vectors must be
+non-null, nonempty, unique, at most 256 valid repository-relative paths and free
+of wildcards or null entries. The current paths must start with the complete
+recorded vector in the same order, preserving every original fixed path ordinal.
+Only valid exact path entries may be appended; removal, reordering, insertion
+within or before the prefix and replacement refuse. An appended path need not
+be a descendant of an original path: the explicit current host, current Plan
+admission and fixed program capabilities independently govern live scope.
+Expanding the current host requires an exact candidatePaths entry plus its
+matching fixed stage program and capability for the appended ordinal; directory
+coverage alone remains insufficient.
+Both recorded and current closure policies must validate,
+have exactly the same identity and revision, and the current programs must start
+with the complete recorded programs in the same order with the same Step identities
+and ordinals. Only a suffix of future programs may be appended. Removal, reordering,
+insertion within or before the recorded prefix, changed identity or revision,
+changed existing mappings, duplicates and null or invalid policies refuse.
+Historical target reconstruction uses the complete recorded candidatePaths and
+closure policy with the actual current closure authority and current acceptance
+and checks. The complete reconstructed target
+must still equal the stored Direction target. Live execution continues using the
+current declaration and its complete current policy. It applies the same pure transition, increments generation
 once and clears active candidate/check/review/closure/decision/directive
 projections. Original base, accepted Steps/commits/reviews, repository receipt,
 repair counts and limits remain. Native history, completedCandidates,
@@ -84,13 +108,28 @@ generation requests the exact corrective Step.
 E2 (`GoalPhaseFailedPhaseRepairAdoptionSpec`) rejects incomplete/extended/null
 new targets, missing/invalid closure policies or unmapped corrective Step
 identities, directions and evidence scope; passive preparation binds the exact
-proposal, closure policy, choice, participant and reference.
+proposal, closure policy, choice, participant and reference. Pure retained-path
+and retained-policy examples return both complete original vectors for unchanged
+and append-only hosts, preserving historical path ordinals. They refuse crossed
+order, removal, insertion, replacement, duplicates and invalid/null/empty or
+overlong paths, absolute/traversal/wildcard paths, and crossed
+identity/revision/mappings or invalid/null closure policies.
 
 E3 (`NativeGoalFailedPhaseRepairAdoptionCliSpec`) uses a new isolated native
 Store, fixed real Git/SBT UoW, actual failed whole-Phase Test, independent fixture
 evidence, reopened traversal and ordinary continuation. It includes explicitly
 selected scope outside original Step ownership and unrelated dirt. Exact-scope
 proposals with unmapped corrective identities and crossed closure policies
-refuse without history writes. Fixture
+refuse without history writes. After the real persisted Direction, a changed host
+corrective ordinal refuses without history writes or rerunning the failed Test.
+A changed candidate-path prefix also refuses on fresh ordinary CLI Advance before
+history writes, SBT or repository mutation. Restoring the original mappings and
+path prefix, appending the exact `src/main/scala/CompileConsumer.scala` entry with
+its matching fixed stage program and capability, and appending a future third
+StepProgram permits fresh CLI traversal, corrective Compile, review, commit and
+whole-Phase Test. The stored Direction still retains its original complete
+candidatePaths and closure policy. This proves historical replay and the existing
+selected corrective scope under the extended host; it does not execute a new
+future Step. Fixture
 evidence claims no production Human provenance. Existing installed CLI switches
 select the same isolated scenario; no product Phase or existing Session is used.

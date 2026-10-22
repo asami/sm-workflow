@@ -171,7 +171,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
 
   "E3 same-Session failed whole-Phase repair adoption" should afterWord(
     "in spec:goal-phase-failed-phase-repair-adoption, example:E3, rules:R1,R2,R3,R4,R5,R6,R7, phase:P116-CONT-01") {
-    "retain real failure and accepted prefix then append direction and ordinarily validate review and commit the explicitly selected repair" in {
+    "retain real failure and accepted prefix through append-only host extension then ordinarily validate review and commit the explicitly selected repair" in {
       Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R1-R7 E3: a NEW isolated native Store with the existing real Compile/Phase Test fixture")
       val root = newKnownRoot("failed-phase-repair-adoption")
       var identity = ""
@@ -287,7 +287,95 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       phaseExecutions(root).size shouldBe 1
       Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
 
-      When("a separate ordinary CLI Advance reopens the Direction and issues implementation for the appended Step")
+      Given("the actual persisted Direction and its unchanged two-program host closure policy at the current isolated frontier")
+      val currentconfig = _read(historyconfig)
+      val hostwire = parse(currentconfig.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get
+      val currenthost = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(hostwire))
+      currenthost.goal.closure shouldBe target.closurePolicy
+      currenthost.goal.candidatePaths shouldBe target.candidatePaths
+      val executions = phaseExecutions(root)
+      def _install_closure_(policy: GoalPhaseNativeClosure.Policy,
+        candidatepaths: Vector[String] = currenthost.goal.candidatePaths): Unit = {
+        val selected = currenthost.copy(goal = currenthost.goal.copy(closure = policy, candidatePaths = candidatepaths))
+        Files.writeString(historyconfig, currentconfig.mapObject(_.add("sm-workflow.runtime.definition",
+          Json.fromString(ThreeWorkflowRuntimeParameters.encode(selected).noSpaces))).noSpaces)
+      }
+      val remapped = currenthost.goal.closure.copy(programs = currenthost.goal.closure.programs.map(program =>
+        if (program.step == _step) program.copy(ordinal = 3) else program))
+      _install_closure_(remapped)
+      When("a fresh ordinary CLI Advance traverses the retained Direction under a changed corrective Step ordinal")
+      val mappingrefused = cli.advance()
+      Then("the mapping change refuses without appending history, rerunning the failed Test or changing the accepted commit")
+      mappingrefused.exit should not be 0
+      Files.readString(mappingrefused.stderr) should include("Retained failed Phase repair closure policy permits only an appended program suffix")
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        val observed = episode.current(identity)
+        (observed.definition.workflowIdentity, observed.definition.workflowRevision,
+          observed.definition.sourceCorrelation, observed.definition.producerAbiIdentity,
+          observed.definition.workflowAbiIdentity, observed.definition.bootstrapAbiIdentity,
+          observed.definition.producerRevision) shouldBe
+          (directed.get.definition.workflowIdentity, directed.get.definition.workflowRevision,
+            directed.get.definition.sourceCorrelation, directed.get.definition.producerAbiIdentity,
+            directed.get.definition.workflowAbiIdentity, directed.get.definition.bootstrapAbiIdentity,
+            directed.get.definition.producerRevision)
+        observed.copy(definition = directed.get.definition) shouldBe directed.get
+      }
+      phaseExecutions(root) shouldBe executions
+      Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+
+      Given("the persisted Direction with its original closure policy and a current host that reorders the recorded candidate-path prefix")
+      def _repository_state_(): Vector[(String, Long, Long)] = {
+        val repository = root.resolve("repository")
+        val stream = Files.walk(repository)
+        try stream.iterator().asScala.filter(Files.isRegularFile(_)).map(path =>
+          (repository.relativize(path).toString, Files.size(path), Files.getLastModifiedTime(path).toMillis))
+          .toVector.sortBy(_._1)
+        finally stream.close()
+      }
+      val repositorystate = _repository_state_()
+      _install_closure_(currenthost.goal.closure, currenthost.goal.candidatePaths.reverse)
+      When("a fresh ordinary CLI Advance traverses the retained Direction under the crossed candidate-path prefix")
+      val pathsrefused = cli.advance()
+      Then("the path-prefix change refuses before any history write, SBT build or repository mutation")
+      pathsrefused.exit should not be 0
+      Files.readString(pathsrefused.stderr) should include("Retained failed Phase repair candidatePaths permit only an appended path suffix")
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        val observed = episode.current(identity)
+        (observed.definition.workflowIdentity, observed.definition.workflowRevision,
+          observed.definition.sourceCorrelation, observed.definition.producerAbiIdentity,
+          observed.definition.workflowAbiIdentity, observed.definition.bootstrapAbiIdentity,
+          observed.definition.producerRevision) shouldBe
+          (directed.get.definition.workflowIdentity, directed.get.definition.workflowRevision,
+            directed.get.definition.sourceCorrelation, directed.get.definition.producerAbiIdentity,
+            directed.get.definition.workflowAbiIdentity, directed.get.definition.bootstrapAbiIdentity,
+            directed.get.definition.producerRevision)
+        observed.copy(definition = directed.get.definition) shouldBe directed.get
+      }
+      phaseExecutions(root) shouldBe executions
+      _repository_state_() shouldBe repositorystate
+
+      Given("the original path prefix plus one exact literal suffix with its fixed stage program and capability, and a future third StepProgram")
+      val extendedpolicy = currenthost.goal.closure.copy(programs = currenthost.goal.closure.programs :+
+        GoalPhaseNativeClosure.StepProgram("future-step", 3))
+      val extendedpaths = currenthost.goal.candidatePaths :+ "src/main/scala/CompileConsumer.scala"
+      val pathplan = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
+        root.resolve("upstream.git").toString), goalPaths = extendedpaths)
+      val pathprogram = pathplan.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.last
+      pathprogram.hcursor.get[String]("selectionId").toOption.get shouldBe "goal-path-4"
+      pathprogram.hcursor.get[String]("selectedPath").toOption.get shouldBe extendedpaths.last
+      val processplan = parse(currentconfig.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val extendedplan = processplan.mapObject(fields => fields
+        .add("gitPrograms", Json.fromValues(processplan.hcursor.get[Vector[Json]]("gitPrograms").toOption.get :+ pathprogram))
+        .add("grants", Json.fromValues(processplan.hcursor.get[Vector[Json]]("grants").toOption.get.map { grant =>
+          if (grant.hcursor.get[String]("componentId").toOption.contains(SmWorkflowComponent.componentId.name))
+            grant.mapObject(_.add("capabilities", Json.fromValues(grant.hcursor.get[Vector[Json]]("capabilities").toOption.get :+
+              pathprogram.hcursor.downField("capability").focus.get)))
+          else grant
+        })))
+      _install_closure_(extendedpolicy, extendedpaths)
+      Files.writeString(historyconfig, _read(historyconfig).mapObject(_.add("textus.subsystem.process-execution.plan",
+        Json.fromString(extendedplan.noSpaces))).noSpaces)
+      When("a separate ordinary CLI Advance reopens the historical Direction under the extended current host and issues corrective implementation")
       val implementation = cli.advance().business[V.GoalPhaseAdvanceResult]
       val reopened = cli.advance().business[V.GoalPhaseAdvanceResult]
       Then("the same Session retains original base and accepted prefix and issues a new continuation for the exact corrective Step and revision")
@@ -387,6 +475,10 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
           _ = direction = saved.map(_.receipt.payload.value)
         } yield ())
         direction.get.target shouldBe target
+        direction.get.target.closurePolicy shouldBe currenthost.goal.closure
+        direction.get.target.closurePolicy should not be extendedpolicy
+        direction.get.target.candidatePaths shouldBe currenthost.goal.candidatePaths
+        direction.get.target.candidatePaths should not be extendedpaths
         direction.get.reference shouldBe ContextReference(authorized.reference.identity, authorized.reference.revision)
         Files.writeString(root.resolve("failed-phase-repair-reopened-proof.json"), Json.obj(
           "sessionId" -> Json.fromString(identity), "originalFailure" -> N.codec.encode(oldfailed.get.payload),

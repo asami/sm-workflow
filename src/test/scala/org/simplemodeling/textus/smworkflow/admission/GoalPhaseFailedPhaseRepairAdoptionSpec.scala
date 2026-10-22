@@ -53,7 +53,82 @@ final class GoalPhaseFailedPhaseRepairAdoptionSpec extends AnyWordSpec with Matc
       participant, "fixture-independent-issuer", Instant.parse("2026-10-23T00:00:00Z"))
 
   "E2 exact failed Phase repair target and independent evidence" should afterWord(
-    "in spec:goal-phase-failed-phase-repair-adoption, example:E2, rules:R2,R4,R5, phase:P116-CONT-01") {
+    "in spec:goal-phase-failed-phase-repair-adoption, example:E2, rules:R2,R4,R5,R6, phase:P116-CONT-01") {
+    "retain the complete recorded candidate paths and historical ordinals when the host is unchanged or appends exact paths" in {
+      Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R2,R6 E2: complete recorded candidate paths with fixed ordinal mappings")
+      val recorded = _target.candidatePaths
+      val extended = recorded ++ Vector("src/main/CompileConsumer.scala", "docs/Repair.md")
+      When("retained traversal reconciles the unchanged paths and their valid append-only extension")
+      val unchanged = take(A.retainedCandidatePathsC(recorded, recorded))
+      val historical = take(A.retainedCandidatePathsC(recorded, extended))
+      Then("both return the complete original vector and every original path keeps its fixed ordinal")
+      unchanged shouldBe recorded
+      historical shouldBe recorded
+      historical should not be extended
+      recorded.zipWithIndex.foreach { case (path, index) =>
+        historical.indexOf(path) + 1 shouldBe index + 1
+        extended.indexOf(path) + 1 shouldBe index + 1
+      }
+    }
+
+    "refuse crossed order removal insertion replacement duplicate invalid null empty and overlong candidate paths" in {
+      Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R2,R6 E2: recorded paths and current vectors crossing or invalidating their complete prefix")
+      val recorded = _target.candidatePaths
+      val future = "src/main/CompileConsumer.scala"
+      val crossed = Vector(recorded.reverse, recorded.take(1), future +: recorded,
+        Vector(recorded.head, future, recorded.last), Vector(recorded.head, future))
+      val invalid = Vector(Vector.empty[String], null, recorded :+ recorded.head, recorded :+ null,
+        recorded :+ "", recorded :+ "/absolute.scala", recorded :+ "../outside.scala",
+        recorded :+ "src/../outside.scala", recorded :+ "src//Invalid.scala",
+        recorded :+ "src/./Invalid.scala", recorded :+ ".git/config", recorded :+ "src/Bad\u0000.scala",
+        recorded :+ "src/*.scala", recorded :+ "src/?.scala", recorded :+ "src/[A.scala",
+        recorded :+ "src/A].scala", Vector.tabulate(257)(index => "src/Path" + index + ".scala"))
+      When("retained traversal reconciles crossed hosts and each invalid recorded or current vector")
+      val refused = crossed.map(A.retainedCandidatePathsC(recorded, _)) ++ invalid.flatMap(paths =>
+        Vector(A.retainedCandidatePathsC(recorded, paths), A.retainedCandidatePathsC(paths, recorded)))
+      Then("every crossed or invalid vector safely refuses before historical reconstruction")
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
+    "retain the complete recorded closure policy when the current host is unchanged or only appends future programs" in {
+      Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R2,R6 E2: a complete historically bound closure policy")
+      val recorded = _target.closurePolicy
+      val extended = recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 3))
+      When("retained traversal reconciles the unchanged policy and its append-only extension")
+      val unchanged = take(A.retainedClosurePolicyC(recorded, recorded))
+      val historical = take(A.retainedClosurePolicyC(recorded, extended))
+      Then("both retain the exact complete original policy rather than the current extended policy")
+      unchanged shouldBe recorded
+      historical shouldBe recorded
+      historical.programs shouldBe Vector(GoalPhaseNativeClosure.StepProgram("S1", 1), GoalPhaseNativeClosure.StepProgram("S2", 2))
+      historical should not be extended
+    }
+
+    "refuse crossed identity revision mappings order removal insertion and invalid or null closure policies" in {
+      Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R2,R6 E2: the recorded policy and host policies crossing its fixed prefix")
+      val recorded = _target.closurePolicy
+      val future = GoalPhaseNativeClosure.StepProgram("S3", 3)
+      val crossed = Vector(recorded.copy(identity = "other-closure"), recorded.copy(revision = 2),
+        recorded.copy(programs = Vector(GoalPhaseNativeClosure.StepProgram("S1", 2), GoalPhaseNativeClosure.StepProgram("S2", 1))),
+        recorded.copy(programs = recorded.programs.reverse), recorded.copy(programs = recorded.programs.take(1)),
+        recorded.copy(programs = future +: recorded.programs),
+        recorded.copy(programs = Vector(recorded.programs.head, future, recorded.programs.last)),
+        recorded.copy(programs = Vector(recorded.programs.head, GoalPhaseNativeClosure.StepProgram("other-step", 2))))
+      val invalid = Vector(recorded.copy(identity = ""), recorded.copy(revision = 0),
+        recorded.copy(programs = Vector.empty), recorded.copy(programs = null),
+        recorded.copy(programs = recorded.programs :+ recorded.programs.head),
+        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 2)),
+        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 0)),
+        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 65)),
+        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("", 3)),
+        recorded.copy(programs = recorded.programs :+ null), null)
+      When("retained traversal reconciles each crossed host and each invalid recorded or current policy")
+      val refused = crossed.map(A.retainedClosurePolicyC(recorded, _)) ++ invalid.flatMap(policy =>
+        Vector(A.retainedClosurePolicyC(recorded, policy), A.retainedClosurePolicyC(policy, recorded)))
+      Then("every mutation or invalid policy refuses before historical target reconstruction")
+      refused.foreach(_.isSuccess shouldBe false)
+    }
+
     "retain the complete failure and captured proposal while refusing missing extended or explicitly null fields" in {
       Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R2,R5 E2: a complete passive target and Direction")
       val target = _target.asJson

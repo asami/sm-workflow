@@ -195,6 +195,30 @@ private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
         org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
   } yield ()
 
+  /** Retain the complete bound paths and their ordinals when the host appends paths. */
+  private[admission] def retainedCandidatePathsC(recorded: Vector[String],
+    current: Vector[String]): Consequence[Vector[String]] = for {
+    _ <- if (Vector(recorded, current).forall(paths => paths != null && paths.nonEmpty &&
+        paths.size <= 256 && paths.distinct == paths && paths.forall(path =>
+          RepositorySyncNativeConflictInput.relative(path) &&
+            !path.exists(c => c == '*' || c == '?' || c == '[' || c == ']')))) Consequence.unit
+      else F.invalid("Retained failed Phase repair requires complete valid recorded and current candidatePaths")
+    _ <- if (current.startsWith(recorded)) Consequence.unit
+      else F.invalid("Retained failed Phase repair candidatePaths permit only an appended path suffix")
+  } yield recorded
+
+  /** Retain the complete bound policy when the current host only appends programs. */
+  private[admission] def retainedClosurePolicyC(recorded: GoalPhaseNativeClosure.Policy,
+    current: GoalPhaseNativeClosure.Policy): Consequence[GoalPhaseNativeClosure.Policy] = for {
+    _ <- if (recorded != null && current != null) Consequence.unit
+      else F.invalid("Retained failed Phase repair requires complete recorded and current closure policies")
+    _ <- recorded.validateC
+    _ <- current.validateC
+    _ <- if (current.identity == recorded.identity && current.revision == recorded.revision &&
+        current.programs.startsWith(recorded.programs)) Consequence.unit
+      else F.invalid("Retained failed Phase repair closure policy permits only an appended program suffix")
+  } yield recorded
+
   /** Reconstruct the original proof and exact bound proposal at its historical
     * Decision; the new record must be its immediate actual native successor.
     */
@@ -206,8 +230,15 @@ private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
       .getOrElse(F.invalid("Actual failed Phase repair history has no retained direction")))
     direction = retained.receipt.payload.value
     _ <- codec.decode(codec.encode(direction)).fold(F.invalid, _ => Consequence.unit)
+    closure <- d.closureInstallation.map(Consequence.success).getOrElse(
+      F.invalid("Failed Phase repair requires the current native Step closure installation"))
+    _ <- closure.validateC
+    recordedpolicy <- retainedClosurePolicyC(direction.target.closurePolicy, closure.policy)
+    recordedpaths <- retainedCandidatePathsC(direction.target.candidatePaths, d.candidatePaths)
+    historical = d.copy(candidatePaths = recordedpaths,
+      closureInstallation = Some(closure.copy(policy = recordedpolicy)))
     captured <- _capture_c(source, d, R.publicProposal(Some(direction.target.captured.proposal)).get)
-    actual <- _target_c(source, d, recovery, captured)
+    actual <- _target_c(source, historical, recovery, captured)
     _ <- if (actual == direction.target && direction.participant == source.session.participantIdentity) Consequence.unit
       else F.invalid("Retained failed Phase repair crosses its original Plan, failure, participant, proposal or policy")
     saved = retained.receipt.next
