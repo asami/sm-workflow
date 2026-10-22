@@ -1,5 +1,44 @@
 # sm-workflow incremental-use roadmap
 
+Incremental SBT diagnosis adopted 2026-10-23: [Phase 6.6](phase-6.6.md) and its
+[P66 checklist](phase-6.6-checklist.md) own the
+[D1–D4 plan](../notes/incremental-sbt-failure-diagnosis-plan.md), prioritizing one
+failure → structured diagnostics → batched information request → repair → focused
+validation route. Reuse existing repair, Evidence/Journal and caller contracts;
+do not add gates to ongoing 6.4/6.5 or reopen accepted work. Phase 9 consumes the
+result for convergence/routing; model comparison and parallel scheduling are not
+prerequisites. Plan adoption after 6.5; 6.4/6.5 continue without waiting for 6.6.
+The caller's fixed response/stderr limits and read cap are already removed and
+are not remaining Phase 6.6 work. Preserve live Sessions, histories, repair counts
+and validation.
+See the [specification](../spec/incremental-sbt-failure-diagnosis.md) and
+[English handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+
+Terminology revision adopted 2026-10-23: `host` is limited to network connection
+destinations. [Runtime/caller specification](../spec/runtime-caller-terminology.md)
+and [N-01–04 adoption plan](../notes/runtime-caller-terminology-adoption-plan.md)
+define purpose-specific type/configuration/CLI names with no compatibility aliases.
+Integrate the caller-information main route first, preserving active Sessions,
+history, repair counts and evidence. This is not a new Phase or a reopening of
+accepted Steps. [Developer handoff](../journal/2026/10/2026-10-23-network-host-terminology-handoff.md).
+
+AI usage accounting adopted 2026-10-22: [Phase 13](phase-13.md) /
+[checklist](phase-13-checklist.md) is PLANNED. First connect one actual
+sm-goal-phase invocation plus delegated execution to measured token usage,
+retained observations and host completion display, then reuse it for
+RepositorySync/SplitPhase. Include descendants and failed/retried attempts;
+exclude overlapping/inclusive totals and distinguish complete, partial and
+unknown coverage. Also show observed model types and model-invocation counts,
+separating parent-chat self usage from delegated agents even for the same model.
+Turn counts remain a separately labeled metric where invocation counts are
+unavailable. Display Codex and local-LLM consumption separately, classified by
+actual inference destination (local inference through Codex counts only as local).
+Keep per-category coverage and parent/delegated model breakdowns. Reuse current
+execution resources and common Journal/Evidence.
+This adds no gate to ongoing 6.4/6.5, no Phase 9 evaluation prerequisite and no
+Goal/session/history reset. See [spec](../spec/ai-usage-accounting.md) and
+[handoff](../journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md).
+
 Common Evidence adopted 2026-10-20: [Phase 12](phase-12.md), owned by
 sm-workflow開発, delivers one automatic Action -> actual archive -> common
 Journal -> fresh-process read route before Phase 6.4 E2 adoption. Phase 6.4,
@@ -416,17 +455,3 @@ retains the subsequently adopted Phase 5.2/5.3 and Phase 6–9 directions.
 >
 > The [manual local LLM trial](phase-8-local-llm-reference.md) is reference
 > information. It is not a completion condition for any of these phases.
-
-## 2026-10-21 repository catch-up planning
-
-[Phase 7](phase-7.md) owns the shared dependency-property model and provider-owned `localJar` publication boundary. New [Phase 13](phase-13.md) owns separate recursive repository catch-up to GitHub or same-machine main, including rebase and human-intervenable merge. Phase 13 reuses Phase 7 graph/typed Git/Continuation facilities and does not modify the existing RepositorySyncWorkflow remote convergence contract. Both remain planned; numbering does not mandate immediate execution.
-
-## User-facing workflow expansion (2026-10-21)
-
-Three thematic phases are planned, rather than one phase per candidate skill:
-
-- [Phase 14: Development Investigation](phase-14.md) — investigate, diagnose and change-impact analysis. Highest user-value priority; may begin using existing Git/lint/validation/Evidence contracts without waiting for Phase 7 or 13.
-- [Phase 15: Development Workspace Operations](phase-15.md) — workspace status and optional bootstrap/upgrade routes. Reuse Phase 7's workspace graph/Artifact Overlay and Phase 13 catch-up; avoid duplicate configuration or operations.
-- [Phase 16: Development Experimentation](phase-16.md) — bounded implementation and AI-model A/B comparison, with reproducible evidence/corpus candidates.
-
-Priority is not a forced execution order. Begin each theme with one practical user scenario and reuse existing Operations; listed additional skills are candidates, not a requirement to build separate workflow engines. Refactor, migrate and release should initially reuse existing GoalPhase/close/release capabilities rather than proliferating dedicated workflows. These phases are planned, not started or accepted.
