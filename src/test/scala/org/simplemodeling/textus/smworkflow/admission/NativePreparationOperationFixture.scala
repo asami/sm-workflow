@@ -51,11 +51,15 @@ private[admission] trait NativePreparationOperationFixture extends ThreeWorkflow
     }
   }
 
-  protected def withPreparation(cap: Int = 1048576)(task: PreparationEpisode => Unit): Unit = {
+  protected def withPreparation(cap: Int = 1048576)(task: PreparationEpisode => Unit): Unit =
+    with_preparation_limit(Some(cap))(task)
+
+  protected def with_preparation_limit(cap: Option[Int])(task: PreparationEpisode => Unit): Unit = {
     val root = Files.createTempDirectory(Files.createDirectories(
       Path.of("target/sm-workflow/work/normal-preparation").toAbsolutePath), "明示-")
-    _with_runtime_(root, "UpToDate", hostParameters = Map("textus.resource.read.max-bytes" -> cap.toString,
-      "textus.resource.url.file.roots" -> root.toString)) {
+    val parameters = Map("textus.resource.url.file.roots" -> root.toString) ++
+      cap.map(value => "textus.resource.read.max-bytes" -> value.toString)
+    _with_runtime_(root, "UpToDate", hostParameters = parameters) {
       (owner, component, actor, project) => task(new PreparationEpisode(root, owner, component, actor, project))
     }
   }
