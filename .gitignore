@@ -3,6 +3,7 @@ target/
 .metals/
 .scala-build/
 .idea/
+/.cozy/
 .DS_Store
 __pycache__/
 *.py[cod]

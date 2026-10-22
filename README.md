@@ -148,11 +148,23 @@ not successful Start/Preview/Apply/completion or Phase acceptance. Selected
 positive direct-Operation examples do not prove production Human/review issuance
 or deployed clients. Generic installable skill wiring belongs to Phase 6.
 
-Development `.cozy/config.yaml` sets `generation.skip_unchanged: false` because
+Shared `conf/cozy/config.yaml` sets `generation.skip_unchanged: false` because
 SimpleModeler and CNCF are refreshed at unchanged SNAPSHOT coordinates. Normal
 Cozy generation must consume those artifacts even when CML timestamps have not
 changed; generated Scala is never repaired by hand. This setting does not
 redirect SBT caches, choose another runtime or grant command authority.
+
+Keep machine-specific overrides in `.cozy/config.yaml`, which is ignored by Git.
+The shared configuration is read first and the local configuration overrides it;
+`show cozyConfigSources` reports the selected files in that order. Use a
+sbt-cozy build that supports these shared/local configuration layers. A local
+configuration is optional for ordinary development. Registration of
+`publication.local_application_update` belongs only in the local file: its
+producer checkout, installation root, updater and admission host refer to the
+current machine. Configure that registration explicitly on each host; a fresh
+clone does not inherit another machine's runtime update target. When migrating
+an existing checkout, preserve its local configuration before integrating the
+change that removes it from Git, then restore it as an ignored local file.
 
 Public skills distributed with this component use only the `sm-*` namespace:
 
