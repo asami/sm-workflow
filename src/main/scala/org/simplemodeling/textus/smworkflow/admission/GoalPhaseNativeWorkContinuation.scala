@@ -579,7 +579,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       value.completion.result)
                     next <- GoalPhaseNativeHistory.completionC(source.current, pending,
                       value.completion.result.resultReference, state.stage.toString)
-                    clear = state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair
+                    clear = state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair ||
+                      (prepared.input.kind == "RepairStep" && state.stage == O.Stage.PhaseInspection)
                     result <- _walk_c(source, cursor.copy(from = next, controller = state,
                       documents = prepared.input.documents,
                       candidate = if (clear) None else cursor.candidate,
@@ -742,6 +743,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           } yield result
         }
       } yield result
+      case O.Stage.PhaseClosing if entry.causation.value.startsWith("ordered-release-closure:") => for {
+        retained <- GoalPhaseNativeReleaseClosure.retainedC(source, d, core, cursor.from, cursor.controller)
+        located <- retained match {
+          case None => _paused_c(source, cursor,
+            "Final release commit has an unresolved intent or uncollected actual result; no automatic replay.")
+          case Some(value) => _walk_c(source, cursor.copy(from = value.record, controller = value.controller),
+            soughtwork, soughthuman, soughtrecording, core, historyonly)
+        }
+      } yield located
       case O.Stage.PhaseClosing if entry.causation.value.startsWith("ordered-recording-candidate:") => for {
         retained <- C.retainedC(source, d, core, cursor.from, cursor.controller, cursor.findings)
         result <- retained match {
@@ -952,7 +962,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Left(reason) => _wait_cursor_c(cursor, reason)
         case Right(request) => _recording_port.advanceC(recording, request, core)
       }
-      else if (cursor.findings.pending.nonEmpty && Set(O.Stage.Implementation, O.Stage.PhaseInspection,
+      else if (cursor.findings.pending.nonEmpty && !N.awaitsPhaseAcceptance(recording) && Set(O.Stage.Implementation, O.Stage.PhaseInspection,
           O.Stage.PhaseClosing)(cursor.controller.stage)) F.invalid("pending observations cross the completed Step or Phase recording frontier")
       else _document_frontier_c(source, cursor, core)
     }
@@ -1052,6 +1062,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           else "Phase recording has an unknown staging intent; it is not automatically replayed.")
         output <- _after_native_c(source, cursor, fallback, core)
       } yield output
+      case O.Stage.PhaseClosing if GoalPhaseNativeReleaseClosure.needed(cursor.controller) =>
+        if (!d.closureInstallation.exists(_.policy.programs.exists(_.step == GoalPhaseNativeReleaseClosure.programIdentity)))
+          _wait_cursor_c(cursor, "Final release commit requires an explicit host-fixed phase-release program; accepted checks/review remain retained.")
+        else GoalPhaseNativeReleaseClosure.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement)
+          .map(value => value.copy(repairProgress = Some(GoalPhaseRepairProgress.publicSnapshot(
+            GoalPhaseRepairProgress.snapshot(cursor.controller)))))
+          .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.PhaseClosing if GoalPhasePostCompletionSync.usesLocalPolicy(source, cursor.completionDirection) =>
         GoalPhasePostCompletionSync.advanceC(source, d, core, cursor.from, cursor.controller,
           cursor.completionDirection, cursor.legacyClosure, cursor.findings, acknowledgement)
@@ -1209,6 +1226,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       documents <- GoalPhaseDocumentSource.instructionsC(input.documents, input.stepIdentity)
       sources <- GoalPhaseNativeValidation.sourceInstructionsC(d, input.selectedPlan, input.stepIdentity)
       bundle = ContextBundle((if (independent) "Independently review the actual candidate and selected native check outcomes"
+        else if (input.kind == "RepairStep" && input.stepIdentity.isEmpty)
+          "Repair only the assigned release delta within the original Plan ownership. Preserve closed Step commits, prior integrated review and applicable checks. Runtime owns affected revalidation and the return to Release admission/Final; this assignment is not a replacement Step or new Plan adoption."
         else if (input.kind == "RepairStep" && input.checkFailure.nonEmpty)
           "Correct semantic source only within the selected Step to fix its selected failed checks using the retained actual typed diagnostics. Runtime owns commands, fresh candidate observation and revalidation before independent review."
         else if (input.kind == "RepairStep") "Repair only the assigned Step findings from the retained independent review"
@@ -1248,6 +1267,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           bundle, required.metadata.completionContract, required.metadata.evidenceContract, F.completionOperation),
         requirement, MinimalPresentation(if (input.kind == "ReviewPhase") "Independent whole-Phase review"
             else if (independent) "Independent selected Step review"
+            else if (input.kind == "RepairStep" && input.stepIdentity.isEmpty) "Repair selected Release delta"
             else if (input.kind == "RepairStep") "Repair selected Phase Step" else "Implement selected Phase Step",
           "Return only the assigned semantic result. Workflow owns commands, validation, Step and Phase closure.")))
     } yield Prepared(source, input, Some(intent), pending, work, controller, candidate, documentpolicy, findings)

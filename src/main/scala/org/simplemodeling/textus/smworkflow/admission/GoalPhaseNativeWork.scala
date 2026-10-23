@@ -14,7 +14,7 @@ import GoalPhaseNativeRun as F
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -215,7 +215,7 @@ private[smworkflow] object GoalPhaseNativeWork {
         value.changedPaths.forall(_bounded_text) && _context_text(value.diff) && value.checks != null &&
         value.checks.forall(_ != null)) && request.checkFailure.isEmpty) ||
       (request.review.isEmpty && request.checkFailure.exists(value => admitCheckFailureContextC(value).isSuccess &&
-        request.stepIdentity != null && request.stepIdentity.contains(value.validation.step))))
+        request.stepIdentity != null && request.stepIdentity.getOrElse("phase:" + request.selectedPlan.phase) == value.validation.step)))
 
   private def _bounded_text(value: String): Boolean = value != null && value.trim.nonEmpty &&
     !value.contains('\u0000') && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384

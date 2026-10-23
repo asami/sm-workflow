@@ -15,7 +15,7 @@ import GoalPhaseAcceptanceBoundary as A
 /** Pure actual-shaped typed receipt and codec examples only. These are not
   * external command, installed task or real AI/provider execution evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -243,7 +243,11 @@ final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers wit
       decision.completed shouldBe closed.completed
       decision.repairs shouldBe 0
       decision.reviewEvidence shouldBe empty
-      N.observedStateC(phase, payload.copy(outcome = Some("repair-required")), "phase-leading-repair").isSuccess shouldBe false
+      val repair = _take(N.observedStateC(phase, payload.copy(outcome = Some("repair-required")), "phase-leading-repair"))
+      repair.stage shouldBe O.Stage.Repair
+      repair.completed shouldBe closed.completed
+      repair.repairs shouldBe 1
+      repair.cursor shouldBe repair.plan.steps.size
     }
 
     T.Kind.values.foreach { kind =>
@@ -421,8 +425,11 @@ final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers wit
       When("whole-Phase known failure is reconstructed")
       val phaserepair = N.observedStateC(phase, phasepayload, "phase-repair")
       val phasedecision = _take(N.observedStateC(phase, phasepayload.copy(outcome = Some("failed")), "phase-failed"))
-      Then("whole-Phase failure remains Decision and retains closed Step history")
-      phaserepair.isSuccess shouldBe false
+      Then("explicit known repair retains closed Steps while the legacy failed outcome remains Decision")
+      val release = _take(phaserepair)
+      release.stage shouldBe O.Stage.Repair
+      release.completed shouldBe closedstep.completed
+      release.repairs shouldBe 1
       N.observedStateC(phase, phasepayload.copy(outcome = Some("repair-limit-reached")), "phase-limit").isSuccess shouldBe false
       phasedecision.stage shouldBe O.Stage.Decision
       phasedecision.completed shouldBe closedstep.completed

@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Stage only retained Phase recording destinations after accepted source review.
   * Unknown effects retain their intent and never replay on reconstruction.
   * @since   Oct. 18, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRecordingCandidate {
@@ -77,7 +77,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   } yield new Store(adapter, session, d, core, from, controller, paths, acknowledge)
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
-    actual <- store.inspectC
+    actual <- store.inspectC(Vector.empty)
     index <- G.indexTreeC(store.core)
     _ <- if (index == store.reviewed.tree) Consequence.unit
       else F.invalid("recording candidate index differs from the actual reviewed source before staging")
@@ -86,7 +86,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       store.reviewed, store.assigned, selected, Vector.empty, None, Vector.empty))
     staged <- selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (path, index)) => for {
       current <- prior
-      _ <- store.inspectC
+      _ <- store.inspectC(current.payload.stagedPaths)
       intent <- store.saveC("stage-intent-" + index, current.record, current.payload)
       _ <- store.ackC("goal-recording-candidate-prepared:" + path)
       result <- E.stageGoalCandidateC(store.core, store.d.candidatePaths.indexOf(path) + 1)
@@ -96,8 +96,8 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
         current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
       _ <- store.ackC("goal-recording-candidate-recorded:" + path)
     } yield saved }
-    actual <- store.inspectC
-    _ <- if (GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, store.assigned, true)) Consequence.unit
+    actual <- store.inspectC(staged.payload.stagedPaths)
+    _ <- if (GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, store.stagedScope, true)) Consequence.unit
       else F.invalid("recording candidate retains unstaged or unsupported paths")
     tree <- G.indexTreeC(store.core)
     parent <- GitObjectId.parseC(store.reviewed.head)
@@ -124,6 +124,10 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     val d: F.Declaration, val core: ActionCall.Core, val from: InstanceRecord, val controller: O.State,
     val assigned: Vector[String], acknowledge: String => Consequence[Unit]) {
     val reviewed = controller.candidate.get
+    // Release FIX is already staged, checked and reviewed. It may coexist with
+    // recording edits only while its index content remains exactly that tree.
+    val stagedScope = (assigned ++ (if (controller.releaseRepairActive)
+      controller.plan.steps.flatMap(_.ownedPaths) else controller.phaseRecordingPaths)).distinct
     private def _reference(key: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-recording-candidate:" + from.revision.value + ":" + key, "1")
     private def _load_c(key: String): Consequence[Option[Saved]] = adapter.loadRetainedC(_reference(key))(using core.executionContext).flatMap {
@@ -178,13 +182,18 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
         F.history(current, "phase.PhaseClosing", "ordered-recording-candidate:" + key), TypedValue(codec.typeIdentity, payload)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield Saved(saved.receipt.next, saved.receipt.payload.value)
-    def inspectC: Consequence[G.Observed] = for {
+    def inspectC(staged: Vector[String]): Consequence[G.Observed] = for {
       root <- G.rootC(core)
       actual <- G.observeC(core)
+      baseline <- GitObjectId.parseC(reviewed.tree)
+      delta <- E.executeGitC(core, GitOperation.PendingPaths(baseline)).flatMap(_.valueC)
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree && actual.head == reviewed.head &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty,
-            (assigned ++ controller.phaseRecordingPaths).distinct, false))
+            stagedScope, false) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty.filterNot(p =>
+            GoalPhaseNativeCandidateBoundary.touches(p, assigned)), stagedScope, true) &&
+          delta.forall(p => staged.contains(p.value) && assigned.contains(p.value)))
         Consequence.unit else F.invalid("recording candidate has unexpected edits or changed root, branch or completed-Step tip")
     } yield actual
     def ackC(point: String): Consequence[Unit] = acknowledge(point) match {

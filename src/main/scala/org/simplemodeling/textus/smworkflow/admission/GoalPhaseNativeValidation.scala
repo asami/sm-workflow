@@ -353,7 +353,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         inspected <- if (store.controller.stage.toString == store.validationStage &&
             store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
           else GoalPhaseNativeCandidate.observedStateC(store.controller, store.candidate.payload, store.documentPolicy, store.recordingPaths)
-        outcome = if (passed) "passed" else if (!store.whole && inspected.plan.repairLimit > 0 &&
+        outcome = if (passed) "passed" else if (inspected.plan.repairLimit > 0 &&
           inspected.generation < Long.MaxValue && repairable(current.payload)) {
           if (inspected.repairs < inspected.plan.repairLimit) "repair-required" else "repair-limit-reached"
         } else "failed"
@@ -614,7 +614,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
           tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
-          (!whole || candidate.payload.selectedPaths.forall(managementPaths.contains)) &&
+          (!whole || (if (controller.releaseRepairActive) B.pathsOwned(candidate.payload.selectedPaths, ownedPaths)
+            else candidate.payload.selectedPaths.forall(managementPaths.contains))) &&
           B.scopedDirty(actual.dirty, scoped, true)) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")
       oid <- GitObjectId.parseC(parent.head)
@@ -897,15 +898,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
         else F.invalid("unselected assessment cannot replace the saved required-review contract")
       case Some("failed") if failurecoverage && payload.receipts.nonEmpty && !successful(payload.receipts, payload.selected) =>
         controller.acceptC(O.ChecksObserved(payload.candidate, required, receiptIdentity, false))
-      case Some(outcome) if failurecoverage && repairable(payload) && controller.cursor < controller.plan.steps.size &&
+      case Some(outcome) if failurecoverage && repairable(payload) &&
           controller.plan.repairLimit > 0 && controller.generation < Long.MaxValue &&
           ((outcome == "repair-required" && controller.repairs < controller.plan.repairLimit) ||
             (outcome == "repair-limit-reached" && controller.repairs >= controller.plan.repairLimit)) =>
         val failed = payload.selected(payload.receipts.size - 1)
         val exit = payload.receipts.last.exitCode.get
-        val directive = O.RepairDirective("Correct selected Step check " + failed.identity + " (" + failed.kind.wire +
+        val scope = if (controller.cursor == controller.plan.steps.size) "Release" else "Step"
+        val directive = O.RepairDirective("Correct selected " + scope + " check " + failed.identity + " (" + failed.kind.wire +
           ") after actual exit " + exit,
-          Vector("Correct semantic source within selected Step " + payload.step + " using the retained actual diagnostics for " +
+          Vector("Correct semantic source within selected " + scope + " " + payload.step + " using the retained actual diagnostics for " +
             failed.identity + "; runtime must inspect the fresh candidate and rerun selected checks before independent review."))
         controller.acceptC(O.RepairableChecksObserved(payload.candidate, required, receiptIdentity, directive))
       case _ => F.invalid("native check outcome is incomplete or contradicts its actual selected receipts")

@@ -473,6 +473,17 @@ those require their own genuine evidence and existing admission gates.
 
 ## Issued repair and independent review
 
+An issued `RepairStep` with no Step identity after all selected Steps have closed
+repairs the release delta within the original Plan ownership. Use its actual
+failed-check context or original integrated review and exact required issue IDs.
+Preserve the accepted Step prefix and repair window. Return the same typed repair
+result; do not create a corrective Step, propose ordinary in-scope repair for new
+adoption, execute validation or perform a Final commit. Runtime applies selected
+affected validation and issues any necessary scoped `ReviewPhase` with prior
+reports. That review judges unresolved findings, the repair delta and affected
+meaning while retaining applicable original conclusions. A real scope expansion
+or an exhausted repair window still uses its existing genuine Human route.
+
 When the issued ContextBundle supplies selected Slice validation-plan Sources,
 use only each issued exact path, identity, Slice reference and required condition
 IDs. Author or update that file as ordinary work within the issued owned

@@ -66,7 +66,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
 
   def ownershipC(session: F.Session, d: F.Declaration, core: ActionCall.Core, controller: O.State): Consequence[Unit] = for {
     actual <- G.observeC(core)
-    step = controller.plan.steps(controller.cursor)
+    owned = if (controller.releaseRepairActive) controller.plan.steps.flatMap(_.ownedPaths).distinct
+      else controller.plan.steps(controller.cursor).ownedPaths
     root <- G.rootC(core)
     _ <- B.continuationC(core, controller.tipSnapshot, actual)
     parent <- GitObjectId.parseC(actual.head)
@@ -75,7 +76,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     afterroot <- G.rootC(core)
     _ <- if (root == d.target.root.toString && afterroot == root && actual.branch == d.target.localBranch &&
         after.branch == actual.branch && after.head == actual.head && after.tree == actual.tree &&
-        B.pathsOwned(pending.map(_.value), step.ownedPaths) && B.scopedDirty(after.dirty, step.ownedPaths, false)) Consequence.unit
+        B.pathsOwned(pending.map(_.value), owned) && B.scopedDirty(after.dirty, owned, false)) Consequence.unit
       else F.invalid("actual repair crosses its original base, branch or selected Step ownership")
   } yield ()
 
@@ -177,11 +178,11 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       else B.continuationC(store.core, store.base, actual)
     parent <- B.parentC(store.base, continuation)
     _ <- store.inspectPinnedC(parent)
-    paths = if (store.whole) store.managementPaths.filter(p =>
+    paths = if (store.whole && !store.controller.releaseRepairActive) store.managementPaths.filter(p =>
       actual.dirty.exists(x => x.path == p || x.renamedFrom.contains(p)))
     else store.d.candidatePaths.filter(p => store.ownedPaths.contains(p) &&
       actual.dirty.exists(x => _covers(p, x.path) || x.renamedFrom.exists(_covers(p, _))))
-    historypaths = if (store.whole) Vector.empty[String] else actual.dirty.filter(p =>
+    historypaths = if (store.whole && !store.controller.releaseRepairActive) Vector.empty[String] else actual.dirty.filter(p =>
       p.index != 'D' && p.worktree != 'D' && paths.exists(_covers(_, p.path)) &&
         store.ownedPaths.exists(_covers(_, p.path))).map(_.path).distinct
     history <- GoalPhaseNativeSourceHistory.prepareC(store.core, historypaths.filterNot(reused.contains))
@@ -309,7 +310,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       _ <- if (expectedSnapshot.forall(_ == GoalPhaseCandidateObservationContinuation.snapshot(
           store.d.target.root.toString, actual, tree))) Consequence.unit
         else F.invalid("candidate approved repository/index snapshot changed before remaining observation")
-      management <- if (store.whole && store.managementPaths.nonEmpty) for {
+      management <- if (store.whole && !store.controller.releaseRepairActive && store.managementPaths.nonEmpty) for {
         tip <- GitObjectId.parseC(store.base.head)
         pending <- E.executeGitC(store.core, GitOperation.PendingPaths(tip)).flatMap(_.valueC)
         paths = pending.map(_.value)
@@ -339,7 +340,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         else F.invalid("candidate branch, root, parent, ownership or index changed during observation")
       snapshot = O.Snapshot(actual.head, tree)
       payload = staged.payload.copy(candidate = Some(snapshot), changedPaths = paths, diff = Some(diff), stepEvidence = evidence)
-      _ <- if (!store.whole || (management.isEmpty == (snapshot.tree == store.base.tree))) Consequence.unit
+      _ <- if (!store.whole || (if (store.controller.releaseRepairActive)
+        global.isEmpty == (snapshot.tree == store.base.tree)
+        else management.isEmpty == (snapshot.tree == store.base.tree))) Consequence.unit
         else F.invalid("whole-Phase management paths contradict the actual index tree")
       inspected <- observedStateC(store.controller, payload, store.documentPolicy, store.recordingPaths)
       _ <- if (inspected.stage.toString == store.validationStage &&
@@ -357,6 +360,13 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     if (whole && payload.continuation.nonEmpty || !whole && payload.stepEvidence.nonEmpty)
       return F.invalid("candidate extension crosses its selected Step or whole-Phase scope")
     payload.candidate match {
+      case Some(snapshot) if whole && controller.releaseRepairActive => for {
+        _ <- if (payload.selectedPaths == payload.stagedPaths &&
+          B.pathsOwned(payload.selectedPaths, controller.plan.steps.flatMap(_.ownedPaths).distinct) &&
+          B.pathsOwned(payload.changedPaths, controller.plan.steps.flatMap(_.ownedPaths).distinct)) Consequence.unit
+          else F.invalid("release repair candidate crosses the unchanged accepted Plan scope")
+        state <- controller.acceptC(O.CandidateObserved(snapshot))
+      } yield state
       case Some(snapshot) if whole && snapshot.tree != controller.tipSnapshot.tree => for {
         _ <- if (payload.selectedPaths.nonEmpty && payload.selectedPaths == payload.stagedPaths &&
           payload.selectedPaths.distinct == payload.selectedPaths && payload.selectedPaths.forall(management.contains)) Consequence.unit
@@ -387,7 +397,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         } =>
       val accepted = values.flatMap(value => value.changedPaths ++ value.eofCorrections).distinct
       if (payload.changedPaths.take(accepted.size) == accepted &&
-          payload.changedPaths.drop(accepted.size).forall(path => managementPaths.contains(path) && payload.stagedPaths.contains(path)) &&
+          payload.changedPaths.drop(accepted.size).forall(path =>
+            (if (controller.releaseRepairActive) controller.plan.steps.exists(_.ownedPaths.exists(_covers(_, path)))
+              else managementPaths.contains(path)) && payload.stagedPaths.exists(_covers(_, path))) &&
           values.forall(value => payload.diff.exists(_.contains(value.diff)))) Consequence.unit
       else F.invalid("whole-Phase evidence changes exact successful Step facts or includes imported work")
     case _ => F.invalid("whole-Phase retained Step evidence differs from actual successful replay")
@@ -407,7 +419,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val validationStage = if (whole) "PhaseValidation" else "Validation"
     val base = controller.tipSnapshot
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
-    val stagingPaths = if (whole) managementPaths else ownedPaths
+    val stagingPaths = if (whole && !controller.releaseRepairActive) managementPaths else ownedPaths
     val scopedPhase = whole && completedCandidates.exists(_.continuation.nonEmpty)
     def reusePrefixC: Consequence[Vector[String]] = sourceHistoryRecovery match {
       case None => Consequence.success(Vector.empty)
@@ -457,7 +469,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case Some(value) =>
         val p = value.receipt.payload.value
         if (p.sourceRevision == from.revision.value.toString && p.step == scopeIdentity &&
-            p.selectedPaths.distinct == p.selectedPaths && (if (whole) p.selectedPaths.isEmpty ||
+            p.selectedPaths.distinct == p.selectedPaths && (if (whole && !controller.releaseRepairActive) p.selectedPaths.isEmpty ||
               p.selectedPaths.forall(managementPaths.contains) else
               p.selectedPaths.forall(x => ownedPaths.contains(x) && d.candidatePaths.contains(x))) &&
             p.stagedPaths == p.selectedPaths.take(p.stagedPaths.size) && p.stagedPaths.size <= p.selectedPaths.size &&

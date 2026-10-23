@@ -161,6 +161,45 @@ delta and affected meaning; a settled condition verified by repair/checks needs
 no extra semantic call. Changing the candidate does not automatically replay all
 triage, lint or reviews, nor does it automatically preserve an inapplicable CLEAN.
 
+The native Release connection reuses `RepairStep` with an absent Step identity
+after every selected Step has closed. Its assignment contains the actual failed
+Phase check or the original integrated review and its unresolved issue IDs. This
+is repair of the accepted release scope, not a new Plan Step. A known terminated
+selected failure or an admitted blocking `ReviewPhase` result reserves one unit
+from the existing Release repair window. The original base, Plan, closed Step
+commits and history remain intact. Unknown process effects and old retained
+`failed` outcomes keep their existing observation/decision meaning.
+
+Ordinary Advance inspects the fresh release candidate within the original owned
+path union and applies the selected Phase checks. The selected checks are never
+waived; this minimum connection reruns that fixed affected set and retains older
+results as history rather than pretending they validate a changed tree. A scoped
+`ReviewPhase` receives prior reports and assesses the actual finding, repair delta
+and affected meaning. Exhausted repairs or a real requirement/authority expansion
+retain the genuine Human route; ordinary in-scope repair adds no adoption question.
+
+Explicit nonblocking observations from a blocking Phase review retain their
+original result reference through Release FIX, affected inspection and checks.
+They become eligible for recording only after the affected Phase review is
+accepted, together with any new Phase observations. This deferral does not
+accept Step observations at a Phase frontier or allow mixed recording scopes.
+With the existing file recording policy, the checked and reviewed Release delta
+stays staged while only the assigned Markdown additions are staged. The runtime
+pins the completed-Step parent and reviewed tree, rejects post-review changes
+outside those destinations (including unstaged changes to the Release delta),
+and proves the final recording delta against that reviewed tree. Recording
+does not replay validation or authorize an early Final commit.
+
+When that accepted release tree differs from the closed Step tip, Final requires
+the existing Phase effect authority and an explicitly configured local Git program
+named `phase-release` in the closure policy. It is a physical program binding,
+not a semantic Step. The runtime checks the index, actual selected paths and
+original parent, saves intent before execution, retains the actual result, and
+accepts only the exact candidate tree in a single-parent commit. Closed Steps and
+repair counts are unchanged. An unresolved intent is retained without replay.
+Local completion then consumes this Final commit; synchronization keeps its
+separate selected completion policy. Final launches no additional check or review.
+
 The accepted Scala lint exception route remains: user-decided rule-scoped
 suppression with source reason, actual lint recheck and applicable validation.
 Do not repeatedly escalate the same already accepted intent without new relevant

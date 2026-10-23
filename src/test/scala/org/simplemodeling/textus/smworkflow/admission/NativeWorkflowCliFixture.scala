@@ -211,9 +211,8 @@ private[admission] object NativeWorkflowCliFixture {
       * staging, checks and Step commits always use normal typed host programs.
       */
     private def _candidate_git(arguments: Vector[String]): String = {
-      require(repairContinuation || (plan.steps.exists(_.actionPolicy.nonEmpty) &&
-        arguments.headOption.exists(Set("rev-parse", "diff", "status"))),
-        "Candidate mutation requires the isolated two-Step host; assessment permits only Git observation")
+      require(repairContinuation || arguments.headOption.exists(Set("rev-parse", "diff", "status")),
+        "Candidate mutation requires the isolated two-Step host; other fixtures permit only Git observation")
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root,
@@ -254,6 +253,18 @@ private[admission] object NativeWorkflowCliFixture {
     def candidateParent: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD^"))
     def candidateIndex: String = _candidate_git(Vector("diff", "--cached", "--name-only", "--"))
     def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
+
+    /** Deliberate post-review corruption in this finite Release recording test.
+      * Never used for ordinary Workflow candidate staging or acceptance.
+      */
+    def stageReleaseRecordingCounterexample(): Unit = {
+      require(root.getFileName.toString.startsWith("p65-release-fix-recording-"),
+        "Only the isolated Release recording counterexample owns this arrangement")
+      val result = _run(Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-c", "core.hooksPath=/dev/null", "-C", host.target.root,
+        "--literal-pathspecs", "add", "--", "docs/usage.md"))
+      require(result.exitCode == 0, result.invocation.logs)
+    }
 
     /** Arrange a completed prior-owner effect only in a fresh closure test host.
       * Production closure and recovery continue to use their typed Git UoW.
@@ -580,6 +591,39 @@ private[admission] object NativeWorkflowCliFixture {
     _host_files(scenario, resourceRoots ++ Option.when(classifiedSbtRepair || repairContinuation || sbtDiagnosticBytes == 1500000)(root),
       bootstrapSelectedInput, httpMethods, denyGit, mappedExecution)
     scenario.prepareRepository()
+    scenario
+  }
+
+  /** Release FIX keeps the accepted Step and uses a distinct fixed Final program.
+    * Only ordinary public operations may populate this fixture's history.
+    */
+  def freshReleaseFix(name: String, executable: Path, recording: Boolean = false): Scenario = {
+    val original = fresh(name, sbtRepair = Some(executable))
+    val paths = if (recording) findingRecordingPaths else Vector("value.txt", "docs/usage.md")
+    val host = original.host.copy(goal = original.host.goal.copy(candidatePaths = paths,
+      closure = original.host.goal.closure.copy(programs = Vector(
+        GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)))))
+    val plan = original.plan.copy(steps = original.plan.steps.map(_.copy(ownedPaths = paths,
+      purpose = "Write expected newline and document the exact accepted product input")))
+    val scenario = new Scenario(original.root, host, plan, None, Some(executable), startingLogIndex = 100)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected Step", "Complete accepted Release FIX"),
+      goalSelections = Vector(paths, paths.filterNot(_ == "value.txt")))
+    val process = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1), Some(git))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject { fields =>
+      val selected = fields.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
+      if (recording) selected.add(GoalPhaseFindingRecording.declaration.name,
+        Json.fromString(_finding_recording_policy().noSpaces)) else selected
+    }.noSpaces)
+    if (recording) scenario._prepare_finding_recording_baseline()
+    scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
     scenario
   }
 

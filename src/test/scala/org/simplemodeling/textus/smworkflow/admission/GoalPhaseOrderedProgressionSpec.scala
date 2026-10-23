@@ -931,18 +931,66 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       limited.plan shouldBe plan
     }
 
-    "refuse to turn whole-Phase check failure into Step repair" in {
+    "repair whole-Phase check failure without reopening a closed Step" in {
       Given("all original Steps have closed and the whole-Phase candidate is selected")
       val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
       val snap = Snapshot(oid('e'), oid('f'))
       val inspected = take(all.acceptC(CandidateObserved(snap)))
-      When("a repairable-check event attempts whole-Phase repair")
-      val result = inspected.acceptC(RepairableChecksObserved(snap, Vector("whole-phase"), "phase-failure", directive))
-      Then("the original closed Steps and repair allowance remain unchanged")
-      result.isSuccess shouldBe false
-      inspected.stage shouldBe Stage.PhaseValidation
-      inspected.completed shouldBe all.completed
-      inspected.repairs shouldBe 0
+      When("a known repairable selected check failure reserves the existing repair allowance")
+      val result = take(inspected.acceptC(RepairableChecksObserved(snap, Vector("whole-phase"), "phase-failure", directive)))
+      Then("Release repair retains the Plan and every closed Step while consuming one repair")
+      result.stage shouldBe Stage.Repair
+      result.completed shouldBe all.completed
+      result.plan shouldBe plan
+      result.base shouldBe base
+      result.repairs shouldBe 1
+      work(result).kind shouldBe WorkKind.RepairStep
+      work(result).step shouldBe None
+      val repaired = take(result.acceptC(SemanticCompleted(work(result), "Corrected release delta")))
+      repaired.stage shouldBe Stage.PhaseInspection
+      val changed = snap.copy(tree = oid('9'))
+      val fresh = take(repaired.acceptC(CandidateObserved(changed)))
+      val exhausted = take(fresh.acceptC(RepairableChecksObserved(changed, plan.phaseChecks, "still-failed", directive)))
+      exhausted.stage shouldBe Stage.Decision
+      exhausted.pendingRepair shouldBe Some(directive)
+      exhausted.completed shouldBe all.completed
+      exhausted.repairs shouldBe 1
+    }
+
+    "carry a blocking Release finding through affected checks scoped review and Final" in {
+      Given("the original integrated review of the unchanged accepted Step prefix")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val observed = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+      val checked = take(observed.acceptC(ChecksObserved(all.tipSnapshot, plan.phaseChecks, "whole-checks", true)))
+      val repair = take(checked.acceptC(ReviewAdmitted(work(checked), all.tipSnapshot,
+        "whole-checks", "original-integrated-review", ReviewOutcome.Repair, Some(directive))))
+      repair.stage shouldBe Stage.Repair
+      work(repair).step shouldBe None
+      When("the same release delta is corrected and actual affected checks and review are admitted")
+      val changed = all.tipSnapshot.copy(tree = oid('9'))
+      val inspected = take(take(repair.acceptC(SemanticCompleted(work(repair), "Assigned finding corrected")))
+        .acceptC(CandidateObserved(changed)))
+      val rechecked = take(inspected.acceptC(ChecksObserved(changed, plan.phaseChecks, "affected-checks", true)))
+      rechecked.next.asInstanceOf[Semantic].purpose should include("unresolved release findings")
+      val accepted = take(rechecked.acceptC(ReviewAdmitted(work(rechecked), changed,
+        "affected-checks", "scoped-review", ReviewOutcome.Accept)))
+      accepted.acceptC(PhaseLocallyCompleted(changed, all.completed.map(_.commit), "scoped-review")).isSuccess shouldBe false
+      val commit = Commit(oid('8'), all.tipSnapshot.head, changed.tree)
+      accepted.acceptC(ReleaseCommitObserved(commit.copy(parent = base.head))).isSuccess shouldBe false
+      accepted.acceptC(ReleaseCommitObserved(commit.copy(tree = oid('7')))).isSuccess shouldBe false
+      val committed = take(accepted.acceptC(ReleaseCommitObserved(commit)))
+      val terminal = take(committed.acceptC(PhaseLocallyCompleted(committed.tipSnapshot,
+        all.completed.map(_.commit), "scoped-review")))
+      Then("Final retains the original Step commits and repair count without another Plan or review")
+      terminal.stage shouldBe Stage.Closed
+      terminal.plan shouldBe plan
+      terminal.base shouldBe base
+      terminal.completed shouldBe all.completed
+      terminal.releaseCommit shouldBe Some(commit)
+      terminal.checksReceipt shouldBe Some("affected-checks")
+      terminal.reviewEvidence shouldBe Some("scoped-review")
+      terminal.repairs shouldBe 1
+      terminal.ordinaryRepairs shouldBe 1
     }
 
     "keep Step closure separate from full Phase closure and select the next Step itself" in {

@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -66,7 +66,9 @@ private[smworkflow] object GoalPhaseFixIssues {
   def unresolved(issue: Issue): Boolean = issue.status != "RESOLVED"
   def relevant(request: W.Request, issue: Issue): Boolean =
     issue.repository == request.selectedPlan.repository &&
-      (request.kind == "ReviewPhase" || request.stepIdentity.contains(issue.step))
+      (request.kind == "ReviewPhase" || request.stepIdentity.contains(issue.step) ||
+        (request.kind == "RepairStep" && request.stepIdentity.isEmpty &&
+          request.completed.map(_.step) == request.selectedPlan.steps.map(_.identity)))
   def assigned(request: W.Request): Vector[Issue] = request.issues.toVector.flatMap(_.issues)
     .filter(issue => relevant(request, issue) && unresolved(issue))
 

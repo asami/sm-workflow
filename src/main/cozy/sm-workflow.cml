@@ -2554,6 +2554,11 @@ on = repair-result-admitted
 
 ##### TRANSITION
 
+to = PhaseInspection
+on = release-repair-result-admitted
+
+##### TRANSITION
+
 to = Decision
 on = repair-decision-needed
 
@@ -2653,6 +2658,11 @@ on = phase-checks-passed
 to = Decision
 on = phase-checks-failed
 
+##### TRANSITION
+
+to = Repair
+on = phase-checks-repair-required
+
 #### PhaseReview
 
 ##### TRANSITION
@@ -2677,10 +2687,20 @@ on = phase-review-accepted
 
 ##### TRANSITION
 
+to = Repair
+on = phase-review-repair-admitted
+
+##### TRANSITION
+
 to = Decision
 on = phase-review-decision-needed
 
 #### PhaseClosing
+
+##### TRANSITION
+
+to = PhaseClosing
+on = release-commit-observed
 
 ##### TRANSITION
 
