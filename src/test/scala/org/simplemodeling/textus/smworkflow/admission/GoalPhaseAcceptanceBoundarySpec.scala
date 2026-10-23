@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Application quality examples with explicit fixture provenance. Native effects,
   * real providers and production independent review are not proved by these tests.
   * @since   Oct. 16, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -34,10 +34,10 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
   private val _adoption = B.Adoption("Selected usage excludes extra robustness", Vector(
     _extra.copy(scope = "step", required = false, description = "Extra robustness remains advisory"),
     B.Condition("adopted", "step", true, "Explicit adopted condition")))
-  private val _plain = NativeHostHumanEvidenceFixture.plan.copy(repairLimit = 1)
+  private val _plain = NativeHumanEvidenceFixture.plan.copy(repairLimit = 1)
   private val _plan = take(B.captureC(Some(_project), _plain.copy(acceptance = Some(_adoption))))
-  private val _base = NativeHostHumanEvidenceFixture.snapshot
-  private val _request = NativeHostHumanEvidenceFixture.work.copy(selectedPlan = _plan)
+  private val _base = NativeHumanEvidenceFixture.snapshot
+  private val _request = NativeHumanEvidenceFixture.work.copy(selectedPlan = _plan)
   private def _report(kind: String = "ImplementStep", status: String = "satisfied"): B.Report = B.Report(
     B.applicable(_plan.effectiveAcceptance.get, kind).map(c => B.Observation(c.identity,
       if (c.required) status else "unsatisfied", if (c.required) "Observed " + c.identity else "Excluded idea")),
@@ -89,7 +89,7 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
           B.EffectiveCondition("closure", "phase", true, _phase.description, "project"),
           B.EffectiveCondition("adopted", "step", true, "Explicit adopted condition", "adopted")))
       }
-      ThreeWorkflowHostParameters.declarations.count(_.name == B.declaration.name) shouldBe 1
+      ThreeWorkflowRuntimeParameters.declarations.count(_.name == B.declaration.name) shouldBe 1
       Given("explicitly configured empty project conditions")
       When("Start captures that configuration without an adoption")
       val empty = take(B.captureC(Some(B.Project(Vector.empty)), _plain))

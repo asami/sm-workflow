@@ -15,13 +15,13 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 final class GoalPhaseNativeInputReadPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "goalinputs", name))
-  private val prefix = GoalPhaseHostRecordReadPolicy.prefix
+  private val prefix = GoalPhaseInputRecordReadPolicy.prefix
   private val values: Map[String, ConfigurationValue] = Map(prefix + "store-name" -> ConfigurationValue.StringValue("workflow")) ++
-    GoalPhaseHostRecordReadPolicy.Purpose.values.map(p => prefix + p.key -> ConfigurationValue.StringValue(collection(p.toString.toLowerCase).print)) ++
+    GoalPhaseInputRecordReadPolicy.Purpose.values.map(p => prefix + p.key -> ConfigurationValue.StringValue(collection(p.toString.toLowerCase).print)) ++
     Map(GoalPhaseNativeInputReadPolicy.planKey -> ConfigurationValue.StringValue(collection("plans").print))
   private def host(data: Map[String, ConfigurationValue]) = ResolvedConfiguration(HostConfiguration(data), ConfigurationTrace.empty)
   private val input = GoalPhaseStartInput("PHASE-2", "repository")
@@ -54,9 +54,9 @@ final class GoalPhaseNativeInputReadPolicySpec extends AnyWordSpec with Matchers
       Given("legacy host settings, malformed native settings and an equivalent nested snapshot")
       val legacy = values.removed(GoalPhaseNativeInputReadPolicy.planKey)
       val nested = Map("sm-workflow" -> ConfigurationValue.ObjectValue(Map("goal-phase" -> ConfigurationValue.ObjectValue(
-        Map("host-records" -> ConfigurationValue.ObjectValue(values.map((key, value) => key.stripPrefix(prefix) -> value)))))))
+        Map("input-records" -> ConfigurationValue.ObjectValue(values.map((key, value) => key.stripPrefix(prefix) -> value)))))))
       When("legacy and native read contracts consume their selected declarations")
-      val legacyResult = GoalPhaseHostRecordReadPolicy.decodeC(host(legacy))
+      val legacyResult = GoalPhaseInputRecordReadPolicy.decodeC(host(legacy))
       val absent = GoalPhaseNativeInputReadPolicy.decodeC(host(legacy))
       val malformed = GoalPhaseNativeInputReadPolicy.decodeC(host(values.updated(GoalPhaseNativeInputReadPolicy.planKey,
         ConfigurationValue.StringValue(collection("plans").print + " "))))

@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
 /**
  * Issue-time identity construction only; no grant, effect or recovery recipe.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhasePartitionReplyAllocationPolicy {
   val prefix = "sm-workflow.split-phase.partition-reply."
@@ -74,7 +74,7 @@ private[smworkflow] object SplitPhasePartitionReplyAllocationPolicy {
     }
 
   private def _string_c(host: ResolvedConfiguration, key: String, limit: Int): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if _name(value, limit) => Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase reply requires exact host policy metadata")
     }

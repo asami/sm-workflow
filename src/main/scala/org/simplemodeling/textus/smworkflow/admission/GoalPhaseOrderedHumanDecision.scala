@@ -21,14 +21,14 @@ import GoalPhasePlanRevision as R
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val completionOperation = StateMachineOperationIdentity("GoalPhaseService", "submitGoalPhaseOrderedDecision")
   val closingType = StateMachineResultTypeReference("GoalPhaseOrderedDecisionSubmissionResult")
   val purpose = "goal-phase-ordered-human-answer"
-  val choices = Vector("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "Defer", "Cancel")
+  val choices = Vector("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "Defer", "Cancel")
   private val _ordinary_choices = Vector("ResumeAssignedWork", "Defer", "Cancel")
   private val _repair_choices = Vector("ContinueRepairs", "Defer", "Cancel")
   private val _revision_choices = Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
@@ -36,7 +36,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   def choicesFor(controller: O.State): Vector[String] =
     if (controller.pendingRepair.nonEmpty) _repair_choices else _ordinary_choices
   private def _choices(controller: O.State, input: Input): Vector[String] =
-    if (input.result.dependencyProposal.nonEmpty) _dependency_choices
+    if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.choices
+    else if (input.result.dependencyProposal.nonEmpty) _dependency_choices
     else if (input.planRevision.nonEmpty) _revision_choices else choicesFor(controller)
 
   /** Display only the exact choices captured by the owning issued question.
@@ -48,7 +49,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         raw <- Option(value.presentation).flatMap(p => Option(p.currentSituation)).toRight("ordered Human presentation is absent")
         json <- io.circe.parser.parse(raw).left.map(_.message)
         values <- json.hcursor.get[Vector[String]]("choices").left.map(_.message)
-        admitted <- Either.cond(values == _ordinary_choices || values == _repair_choices || values == _revision_choices || values == _dependency_choices, values,
+        input <- value.request.input.map(_.value).toRight("ordered Human input is absent")
+        admitted <- Either.cond(if (input.sourceHistoryRecovery.nonEmpty) values == GoalPhaseSourceHistoryRecovery.choices
+          else values == _ordinary_choices || values == _repair_choices || values == _revision_choices || values == _dependency_choices, values,
           "ordered Human issued choices differ from a declared question")
       } yield admitted
       case _ => Left("ordered Human issued choices require an actual Decision")
@@ -57,7 +60,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   }
   final case class Input(work: S.Request, requestingResult: ContextReference, result: S.Result, reason: String,
     repairProgress: Option[GoalPhaseRepairProgress.Snapshot] = None,
-    planRevision: Option[R.Captured] = None)
+    planRevision: Option[R.Captured] = None,
+    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None)
   final case class Answer(choice: String, rationale: String)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, question: WorkflowInteraction[Input, Nothing],
@@ -69,7 +73,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   }
   final case class Source(session: F.Session, input: S.Request, controller: O.State,
     from: InstanceRecord, result: ContinuationResult[S.Result], candidate: Option[GoalPhaseNativeCandidate.Saved],
-    documents: Option[GoalPhaseDocumentSource.Bound] = None)
+    documents: Option[GoalPhaseDocumentSource.Bound] = None,
+    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None)
 
   private[admission] def admitRevisionSourceC(controller: O.State, kind: String, result: S.Result,
     documents: Option[GoalPhaseDocumentSource.Bound]): Consequence[Unit] = {
@@ -94,7 +99,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       "result" -> S.resultCodec.encode(value.result), "reason" -> Json.fromString(value.reason)).mapObject { fields =>
         val progress = value.repairProgress.fold(fields)(progress => fields.add("repairProgress",
           summon[io.circe.Encoder[GoalPhaseRepairProgress.Snapshot]].apply(progress)))
-        value.planRevision.fold(progress)(captured => progress.add("planRevision", summon[io.circe.Encoder[R.Captured]].apply(captured)))
+        val revision = value.planRevision.fold(progress)(captured => progress.add("planRevision", summon[io.circe.Encoder[R.Captured]].apply(captured)))
+        value.sourceHistoryRecovery.fold(revision)(target => revision.add("sourceHistoryRecovery",
+          summon[io.circe.Encoder[GoalPhaseSourceHistoryRecovery.RecoveryTarget]].apply(target)))
       }
     def decode(value: Json): Either[String, Input] = for {
       fields <- Option(value).flatMap(_.asObject)
@@ -113,7 +120,11 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case None => Right(None)
         case Some(value) => value.as[R.Captured].left.map(_.message).map(Some(_))
       }
-    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured)
+      recovery <- fields("sourceHistoryRecovery") match {
+        case None => Right(None)
+        case Some(value) => GoalPhaseSourceHistoryRecovery.decodeTarget(value).map(Some(_))
+      }
+    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery)
   }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] = new WorkflowResultJsonV1.PayloadCodec[Answer] {
     val typeIdentity = "GoalPhaseOrderedDecisionAnswer"
@@ -287,15 +298,33 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- installation.validateC
       _ <- GoalPhaseRepairProgress.validateOptionC(source.input.repairProgress)
       _ <- GoalPhaseRepairProgress.validateC(GoalPhaseRepairProgress.snapshot(source.controller))
-      _ <- if (source.controller.stage == O.Stage.Decision && source.controller.decisionSource.exists(stage =>
+      _ <- if (source.sourceHistoryRecovery == null) F.invalid("ordered Human recovery Option is null")
+        else source.sourceHistoryRecovery match {
+          case Some(target) => if (GoalPhaseSourceHistoryRecovery.validTarget(target) &&
+              source.controller.stage == O.Stage.InspectCandidate && source.controller.cursor < source.controller.plan.steps.size &&
+              source.from.identity.value == target.sessionId && source.from.revision.value.toString == target.frontierRevision &&
+              source.from.causation.value == "ordered-candidate:source-history-intent-" + target.intentIndex &&
+              source.from.definition.workflowIdentity.value == target.definitionIdentity &&
+              source.from.definition.workflowRevision.value == target.definitionRevision &&
+              source.session.participantIdentity == target.participant &&
+              source.controller.plan.identity == target.planIdentity && source.controller.plan.revision == target.planRevision &&
+              source.controller.plan.steps(source.controller.cursor).identity == target.step &&
+              source.controller.tipSnapshot == target.controllerTip && source.input.originalBase == target.base &&
+              source.input.stepIdentity.contains(target.step) && source.result.result.value.outcome == "completed" &&
+              Set("ImplementStep", "RepairStep")(source.input.kind) &&
+              source.from.currentProgression.contains(ProgressionReference("phase.InspectCandidate")) && source.from.suspension.isEmpty)
+            Consequence.unit else F.invalid("ordered Human recovery differs from its original unresolved intent")
+          case None => if (source.controller.stage == O.Stage.Decision && source.controller.decisionSource.exists(stage =>
           if (source.controller.documentDecision) stage != O.Stage.Decision && stage != O.Stage.Closed
           else (source.controller.pendingRepair.nonEmpty && Set(O.Stage.Validation, O.Stage.Review)(stage)) ||
             Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)(stage)) &&
           source.from.currentProgression.contains(ProgressionReference("phase.Decision")) && source.from.suspension.isEmpty) Consequence.unit
         else F.invalid("ordered Human source is not a retained semantic decision")
+        }
       input <- _input_c(source, selected, core)
       required <- requiredC
-      bundle = ContextBundle(if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
+      bundle = ContextBundle(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
+        else if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
         else if (input.planRevision.nonEmpty) "Answer only the saved complete bounded Plan revision proposal"
         else if (source.controller.pendingRepair.nonEmpty) "Answer only the exhausted selected Step repair window"
         else if (source.controller.documentDecision) "Answer only the retained document acceptance conflict"
@@ -319,7 +348,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           required.operation, Some(TypedValue(inputCodec.typeIdentity, input)), required.resultType, bundle,
           required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
         MinimalPresentation("Ordered GoalPhase needs Human direction", Json.obj("choices" -> Json.arr(_choices(source.controller, input).map(Json.fromString)*),
-          "notice" -> Json.fromString(if (input.result.dependencyProposal.nonEmpty)
+          "notice" -> Json.fromString(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
+          else if (input.result.dependencyProposal.nonEmpty)
             "ApproveDependencyScope selects only this exact proposed linked work unit, its acceptance and dependent work. RejectDependencyScope rejects that proposal. Both resume the same semantic frontier with the actual answer reference; all effect, target and acceptance authorities still apply. Review remains read-only and neither direction executes dependency work."
           else if (input.planRevision.nonEmpty)
             "AdoptPlanRevision selects only this saved complete Plan revision. RejectPlanRevision retains the original Plan and resumes its same semantic work. Both retain history and counts; execution, source permissions, checks, review and closure require their existing authority."
@@ -362,11 +392,18 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
                 else F.invalid("Plan revision checks must match the declared selected-Step validation policy")
             } yield Some(captured)
           }
-        } yield Input(source.input, source.result.resultReference, source.result.result.value, source.controller.decision.get,
-          Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured)
+        } yield Input(source.input, source.result.resultReference, source.result.result.value,
+          source.sourceHistoryRecovery.fold(source.controller.decision.get)( _ => GoalPhaseSourceHistoryRecovery.message),
+          Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery)
       }
       _ <- if (input != null && input.result != null) Consequence.unit
         else F.invalid("saved Human question has no actual business input")
+      _ <- if (input.sourceHistoryRecovery != null && input.sourceHistoryRecovery == source.sourceHistoryRecovery &&
+          (input.sourceHistoryRecovery.isEmpty || (input.work == source.input && input.requestingResult == source.result.resultReference &&
+            input.result == source.result.result.value && input.reason == GoalPhaseSourceHistoryRecovery.message &&
+            input.repairProgress == Some(GoalPhaseRepairProgress.snapshot(source.controller)) &&
+            input.planRevision.isEmpty && input.result.planRevision.isEmpty && input.result.dependencyProposal.isEmpty))) Consequence.unit
+        else F.invalid("saved Human recovery differs from its actual original target and accepted work")
       _ <- R.validateCapturedOptionC(input.planRevision)
       _ <- GoalPhaseRepairProgress.validateOptionC(input.repairProgress)
       _ <- R.validateOptionC(input.result.planRevision)
@@ -398,6 +435,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- if (_choices(source.controller, input).contains(result.result.value.choice)) Consequence.unit
         else F.invalid("ordered Human choice is not admitted for this actual question")
       state <- result.result.value.choice match {
+        case "AuthorizeNewAttempt" if input.sourceHistoryRecovery.nonEmpty => Consequence.success(source.controller)
         case "AdoptPlanRevision" => input.planRevision.map(R.adoptedC(source.controller, _, result.resultReference.identity))
           .getOrElse(F.invalid("Plan revision adoption has no saved captured proposal"))
         case "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" =>
@@ -406,13 +444,16 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case _ => Consequence.success(source.controller)
       }
       event = result.result.value.choice match {
+        case "AuthorizeNewAttempt" => "human-source-history-new-attempt"
+        case "Defer" if input.sourceHistoryRecovery.nonEmpty => "human-source-history-deferred"
         case "AdoptPlanRevision" => "human-plan-revision-adopted"
         case "ResumeAssignedWork" | "ContinueRepairs" | "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" => (if (source.controller.documentDecision) "human-document-resumed-"
           else "human-semantic-resumed-") + state.stage.toString
         case "Defer" => "human-semantic-deferred"
         case _ => "human-semantic-cancelled"
       }
-      _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Decision", event, state.stage.toString))
+      _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits(
+          if (input.sourceHistoryRecovery.nonEmpty) "InspectCandidate" else "Decision", event, state.stage.toString))
         Consequence.unit else F.invalid("ordered Human successor is absent from CML")
     } yield state
 
@@ -452,7 +493,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     if (answer != null && choices.contains(answer.choice) && _text(answer.rationale)) Consequence.unit
     else F.invalid("ordered Human answer choice or rationale is invalid")
   private def _continues(choice: String): Boolean =
-    Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope")(choice)
+    Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(choice)
   private def _wait_c(next: InstanceRecord, result: ContinuationResult[Answer]) = F.waitC(next,
     "Ordered Human answer retained", result.result.value.choice match {
       case "ResumeAssignedWork" => "Direction retained; only owning advance may issue the same semantic work. No command or closure is authorized."
@@ -461,6 +502,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       case "RejectPlanRevision" => "Revision rejection retained; only owning Advance may resume the original Plan with the explicit rejection context."
       case "ApproveDependencyScope" => "Exact dependency scope direction retained; owning Advance resumes the same semantic work. Effect, target and acceptance authorities still apply; review remains read-only."
       case "RejectDependencyScope" => "Dependency proposal rejected; owning Advance resumes the same semantic work with its explicit rejection and actual answer reference."
+      case "AuthorizeNewAttempt" => "Independent Human direction retained; only owning Advance may start the fresh candidate attempt. The original source normalization effect remains UNKNOWN."
       case "Defer" => "Human deferred this decision. No automatic question, work, command or closure follows."
       case _ => "Human cancelled this decision path. Repository state and history remain; the Phase is not completed."
     })

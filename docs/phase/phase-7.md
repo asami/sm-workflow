@@ -611,3 +611,19 @@ plus explicit supplemental operation references/typed parameters tied to accepta
 conditions. Resolve them in the selected repository/overlay context and record
 plan revision, selection origin and actual invocation inputs in evidence. A plan
 supplement neither changes source metadata nor replaces required project FULL.
+
+## Dependency property ownership clarification (2026-10-21)
+
+Phase 7's shared workspace/repository graph must represent each development dependency with independent `localRepository`, `localJar`, and `localProject` properties (P7-DEP01). The dependency repository owns building, validating and publishing `localJar`; the consumer only resolves the published artifact. Git repository-sync and catch-up must not trigger producer builds or republish JARs implicitly (P7-DEP02). Preserve explicit publish/select/status and per-consumer artifact selection already planned in A/B. Distinguish Git source revision from published artifact version; use development-scoped artifact repositories to avoid global Ivy pollution (P7-DEP03). Reuse this graph for Phase 13 catch-up rather than introducing another dependency configuration model. These are planned requirements, not completed work.
+
+## Development Workspace dependency-edge clarification (2026-10-21)
+
+The discussion concerns the **development environment definition itself**, not a new Workspace Profile abstraction. The existing Phase 7 Project/Repository/Worktree graph and Development Artifact Overlay remain the single configuration model. Revise P7-DEP01 interpretation: `localRepository`, `localJar`, and `localProject` are independent properties of the **consumer-to-provider dependency edge in a Development Workspace**, not intrinsic/global properties of the provider repository. Different consumers/worktrees may select different arrangements. `localRepository` supplies a registered local development checkout for Git operations; `localProject` is an explicit source-project binding; `localJar` is a consumer reference to a provider-published local artifact. The provider alone owns artifact build/validation/publication/update; consumer selection is explicit and cannot trigger provider publication. Reuse existing Consumer Binding and immutable Artifact Selection rather than adding a parallel profile, selector or state store. Phase 13 traverses only registered `localRepository` dependency edges. These are requirements, not implemented features.
+
+## Optional operation candidates — reference only (2026-10-21)
+
+See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
+
+## Natural inclusion of operation candidates (2026-10-21)
+
+During ordinary Phase 7 implementation, include Dependency Status, Artifact Freshness, and basic Dependency Impact when they follow naturally from the existing Development Workspace graph, Artifact Overlay status/verify, publication provenance, and dependency-aware validation. Prefer enriching existing typed operations/results rather than introducing separate operations, duplicate state, approval steps, or a new Phase. No additional approval is needed for such bounded implementation within Phase 7's existing acceptance boundary. Do not interpret the candidate journal as an unconditional new checklist or broaden Phase 7 into a general dependency-management system; materially larger scope requires a separate decision. See [candidate journal](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).

@@ -14,12 +14,12 @@ import GoalPhaseDependencyScope as D
 /** Ordinary command wiring with SPECIFICATION-OWNED semantics and answers.
   * No genuine Human/provider execution, dependency edit or acceptance is claimed.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private val _provenance = "SPECIFICATION-OWNED direction; no genuine Human or dependency-edit claim"
   private val _choices = Vector("ApproveDependencyScope", "RejectDependencyScope", "Defer", "Cancel")
@@ -89,7 +89,7 @@ final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers w
     question.human.get.work shouldBe initial.work.get
     question.human.get.choices shouldBe _choices
     question.human.get.planRevision shouldBe None
-    question.human.get.hostContext should not be empty
+    question.human.get.humanDecisionContext should not be empty
     take(D.fromPublicProposalC(question.human.get.requestingResult.dependencyProposal)) shouldBe Some(proposal)
     _progress(question)
     val value = Selected(scenario, task, initial, proposal, question, output, dependencytext)

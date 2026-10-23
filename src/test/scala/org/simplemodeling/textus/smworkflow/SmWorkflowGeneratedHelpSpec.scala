@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -28,14 +28,20 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
-    SmWorkflowComponent.NativeHostPreparationServiceService -> Vector(
+    SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
-      "prepareExecution", "recordExecution"
+      "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
-      "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan"
+      "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
+      "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",
+      "describeGoalPhaseCandidateRecovery", "recoverGoalPhaseCandidate",
+      "describeGoalPhaseWholePhaseCandidateRecovery", "recoverGoalPhaseWholePhaseCandidate",
+      "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
+      "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
+      "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair"
     ),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
       "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
@@ -46,7 +52,8 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
-    SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal"),
+    SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal",
+      "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
     SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
@@ -129,16 +136,16 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
 
   "SmWorkflow generated Help" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
     "normal passive execution descriptions" which {
-      Vector("prepareExecution" -> "workflowhostexecutionprepareinput", "recordExecution" -> "workflowhostexecutionrecordinput")
+      Vector("prepareExecution" -> "workflowcallerexecutionprepareinput", "recordExecution" -> "workflowcallerexecutionrecordinput")
         .foreach { (name, inputtype) =>
         s"describe the concrete input and execution-state output of $name" in {
           Given("spec:native-host-execution R6,R7,R9: the generated passive execution declaration " + name)
-          val operation = SmWorkflowComponent.NativeHostPreparationServiceService.operations.operations.find(_.name == name).get
+          val operation = SmWorkflowComponent.NativeWorkflowPreparationServiceService.operations.operations.find(_.name == name).get
           When("ordinary canonical Help projects that exact generated Operation")
-          val help = HelpProjection.projectModel(_component(), Some(_selector("NativeHostPreparationService", name)))
+          val help = HelpProjection.projectModel(_component(), Some(_selector("NativeWorkflowPreparationService", name)))
           Then("the one named input, concrete public type and opaque execution-state output remain ordinary generated Help metadata")
           help.details("arguments") shouldBe Vector("input")
-          help.details("returns").mkString should include("WorkflowHostExecutionState")
+          help.details("returns").mkString should include("WorkflowCallerExecutionState")
           help.details("description").mkString should include("opaque")
           help.details("description").mkString should include("No provider IO")
           operation.specification.request.parameters.head.name shouldBe "input"

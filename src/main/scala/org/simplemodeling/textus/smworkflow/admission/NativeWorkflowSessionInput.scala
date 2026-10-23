@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionContextRefe
   * entry; Advance addresses its native state and owning context directly.
   * Actor/capabilities/UoW and the shared storage owner are not replaced.
   * @since   Oct. 10, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object NativeWorkflowSessionInput {
   private type Advance = InstanceRecord => NativeWorkflowAdvanceInput.Resolved
@@ -37,7 +37,7 @@ private[smworkflow] object NativeWorkflowSessionInput {
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       "startRepositorySync", "advanceRepositorySync", instance => NativeWorkflowAdvanceInput.Repository(instance.identity.value),
       NativeWorkflowStartInput.Kind.RepositorySync, _ =>
-        RepositorySyncHostSelectionReadPolicy.bindC(creation.configuration, declaration))
+        RepositorySyncInputSelectionReadPolicy.bindC(creation.configuration, declaration))
 
   def split(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: SplitPhaseManagedStartAssembly.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
@@ -46,7 +46,7 @@ private[smworkflow] object NativeWorkflowSessionInput {
         SplitPhaseAdvanceTarget(instance.identity.value,
           SplitPhasePartitionContextReference("split-context:" + instance.identity.value, "1")), instance),
       NativeWorkflowStartInput.Kind.SplitPhase, _ =>
-        SplitPhaseHostSelectionReadPolicy.bindC(creation.configuration, declaration))
+        SplitPhaseInputSelectionReadPolicy.bindC(creation.configuration, declaration))
 
   /** Change routing alone inside the owning call, never actor/authority/UoW. */
   def contextC(context: ExecutionContext, explicit: Option[String]): Consequence[ExecutionContext] =

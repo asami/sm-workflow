@@ -14,8 +14,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseReasoningHumanD
 
 /** Passive Human interpretation, separately joined to the canonical Decision.
   * Reuses the semantic calculation kernel, never synthesizes an AI completion.
-  * @since Oct. 7, 2026
-  * @version Oct. 11, 2026
+  * @since   Oct.  7, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseHumanReasoningResolution {
   final case class Record(reference: T.ContextReference, decision: String,
@@ -57,7 +57,7 @@ private[smworkflow] object SplitPhaseHumanReasoningResolution {
     // workflow/native and every planning-data collection before this read.
     _ <- SplitPhaseHumanResolutionReadPolicy.bindC(core.component.get.subsystem.get.configuration, declaration)
     purpose <- SplitPhaseHumanResolutionReadPolicy.decodeC(core.component.get.subsystem.get.configuration)
-    row <- ManagedHostRecordRead.loadSplitHumanResolutionC(core, purpose.storeName, purpose.collection, reference.identity)
+    row <- ManagedInputRecordRead.loadSplitHumanResolutionC(core, purpose.storeName, purpose.collection, reference.identity)
       .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected separate interpretation is absent")))
     wire <- row.getString(storageField).map(Consequence.success).getOrElse(_invalid("selected reasoning interpretation payload is absent"))
     record <- decodeC(wire)

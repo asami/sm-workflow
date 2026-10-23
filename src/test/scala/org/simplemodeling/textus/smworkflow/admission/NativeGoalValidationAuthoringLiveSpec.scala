@@ -21,12 +21,12 @@ import GoalPhaseNativeMetadata as N
 /** Finite transport around actual external test and annotation authoring.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
   import N.given
 
   private val _prefix = "smworkflow.spec.p62.authoring."
@@ -290,7 +290,7 @@ final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Match
             Then("the current candidate and StepClosure scope remain uncompleted with one Test")
             waiting.kind shouldBe "Wait"
             waiting.sessionId shouldBe initial.sessionId
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             waiting.validation.get.candidate shouldBe review.work.get.candidate.get
             waiting.work shouldBe None
             val scope = json(waiting.authorityContext.get.scope)
@@ -310,7 +310,7 @@ final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Match
             Then("the exact StepClosure request retains its candidate without completion or another Test")
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             _progress(waiting)
             val pids = _checks(scenario, 1)
             _load[V.GoalPhaseAdvanceResult](_uri(preparation.request, scenario.root)) shouldBe waiting

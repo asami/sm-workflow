@@ -18,12 +18,12 @@ import GoalPhaseAcceptanceBoundary as B
   * review, actual AI authorship, Step acceptance, source-policy-review evidence
   * or whole primary acceptance claim.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.json
+  import NativeCallerExecutionFixture.json
 
   private val _usage = "Selected usage excludes extra robustness"
   private val _advisory = "Consider additional robustness separately"
@@ -194,7 +194,7 @@ final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matcher
       pids.distinct.size shouldBe 1
       pids should not contain ProcessHandle.current().pid()
       pids.foreach(pid => scenario.invocations.map(_.pid) should not contain pid)
-      val target = json(review.work.get.review.get.hostContext.get.target)
+      val target = json(review.work.get.review.get.reviewContext.get.target)
       val effective = target.hcursor.downField("effectiveAcceptance").focus
         .orElse(target.hcursor.downField("effective_acceptance").focus).get
       effective.as[B.Effective].toOption.get shouldBe _expected
@@ -226,7 +226,7 @@ final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matcher
       Then("actual StepClosure waits for absent authority without a commit completion or claim of genuine independent review or Step acceptance")
       waiting.kind shouldBe "Wait"
       waiting.sessionId shouldBe initial.sessionId
-      waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+      waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
       waiting.message should include("commit authority is unavailable")
       waiting.completion shouldBe None
       waiting.issuedWorkContext shouldBe None

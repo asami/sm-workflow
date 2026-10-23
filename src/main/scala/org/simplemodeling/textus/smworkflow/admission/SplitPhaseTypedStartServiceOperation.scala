@@ -11,17 +11,17 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhaseStartResult
 /**
  * Existing generated Operation, with no old execution/assessment fallback.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartServiceOperation {
   def bindC(inputs: SplitPhaseTypedStartDataStorePort, revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision,
-    host: SplitPhaseManagedTypedStartAssembly.Host, instances: CallScopedWorkflowInstances.Port): Consequence[spec.OperationDefinition] = {
+    host: SplitPhaseManagedTypedStartAssembly.HumanVerification, instances: CallScopedWorkflowInstances.Port): Consequence[spec.OperationDefinition] = {
     if (inputs == null || revision == null || host == null || host.evidence == null || instances == null)
       Consequence.configurationInvalid("SplitPhase typed Start host dependencies are absent")
     else Consequence.success(new BoundOperation(inputs, revision, host, instances))
   }
   private final class BoundOperation(inputs: SplitPhaseTypedStartDataStorePort,
-    revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision, host: SplitPhaseManagedTypedStartAssembly.Host,
+    revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision, host: SplitPhaseManagedTypedStartAssembly.HumanVerification,
     instances: CallScopedWorkflowInstances.Port) extends NativeWorkflowStartInput.Receiver {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       SmWorkflowComponent.SplitPhaseServiceService.StartSplitPhaseOperation)
@@ -37,7 +37,7 @@ private[smworkflow] object SplitPhaseTypedStartServiceOperation {
   private final case class SelectedAction(request: Request, input: NativeWorkflowStartInput.Split,
     selection: ProfileStartAdmission.Selection, inputs: SplitPhaseTypedStartDataStorePort,
     revision: SplitPhaseManagedTypedStartAssembly.InvocationRevision,
-    host: SplitPhaseManagedTypedStartAssembly.Host, instances: CallScopedWorkflowInstances.Port) extends CommandAction {
+    host: SplitPhaseManagedTypedStartAssembly.HumanVerification, instances: CallScopedWorkflowInstances.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c

@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 23, 2026
  */
 final class SplitPhaseManagedStartAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
@@ -130,11 +130,11 @@ final class SplitPhaseManagedStartAssemblySpec extends AnyWordSpec with Matchers
       Given("a real SQLite host with only SplitPhase's independent selection read declaration")
       val selections = collection("selections")
       val records: Map[String, ConfigurationValue] = Map(
-        SplitPhaseHostSelectionReadPolicy.prefix + "store-name" -> ConfigurationValue.StringValue("workflow"),
-        SplitPhaseHostSelectionReadPolicy.prefix + "selection-collection" -> ConfigurationValue.StringValue(selections.print))
+        SplitPhaseInputSelectionReadPolicy.prefix + "store-name" -> ConfigurationValue.StringValue("workflow"),
+        SplitPhaseInputSelectionReadPolicy.prefix + "selection-collection" -> ConfigurationValue.StringValue(selections.print))
       withHost({ (host, context) =>
         val owner = RuntimeBindingAdmissionFixture.admit(host.subsystem)
-        val reader = take(SplitPhaseHostSelectionReadPolicy.bindC(owner.configuration, declaration))
+        val reader = take(SplitPhaseInputSelectionReadPolicy.bindC(owner.configuration, declaration))
         var calls = Vector.empty[ActionCall.Core]
         var readbacks = Vector.empty[Option[ProfileStartAdmission.Selection]]
         val observe: ActionCall.Core => Consequence[Unit] = core => {

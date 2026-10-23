@@ -16,6 +16,8 @@ import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 import RepositorySyncNativeMergeValidation as V
+import GoalPhaseNativeCandidateBoundary as B
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import GoalPhaseNativeMetadata as N
 import GoalPhaseSliceValidationPlan as L
 import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
@@ -24,7 +26,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -95,6 +97,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   final case class Saved(record: InstanceRecord, payload: Payload)
   private[admission] final case class Attempt(intent: Option[Saved], result: Option[Saved], recovery: Option[Saved] = None)
   private[admission] final case class CheckProgress(saved: Saved, nextAttempt: Option[Int])
+  private[admission] final case class TerminalFailedAttempt(attempt: Int, intent: Saved, result: Saved, validation: Saved)
 
   /** Same host-policy selection for fresh Validation and issued semantic context. */
   private[admission] def selectedChecksC(d: F.Declaration, plan: O.Plan,
@@ -161,7 +164,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case Some("failed") => "Actual failed or indeterminate checks are retained at Decision. No automatic replay or review acceptance."
       case _ if continuable(actual) && actual.payload.stopped.lastOption.exists(r =>
           actual.payload.selected.lift(actual.payload.receipts.size).exists(_.identity == r.identity)) =>
-        "The selected native check is confirmed not-executed; no product result exists. After preparation correction, the next ordinary Advance uses the standing selected scope."
+        "The selected native check is confirmed not-executed after bounded runtime startup recovery; no product result exists. After preparation correction, the next ordinary Advance uses the standing selected scope."
       case _ if actual.payload.admissionFailures.lastOption.exists(f =>
           actual.payload.selected.lift(actual.payload.receipts.size).exists(_.identity == f.checkIdentity)) =>
         "The owning UoW rejected admission before execution: " + actual.payload.admissionFailures.last.diagnostic +
@@ -186,6 +189,18 @@ private[smworkflow] object GoalPhaseNativeValidation {
     expected: GoalPhaseValidationRecovery.RecoveryTarget, authorization: NewAttempt): Consequence[Saved] =
     _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
       .flatMap(_.appendRecoveryC(expected, authorization))
+
+  /** Read-only proof for the original Decision, including every retained prior attempt. */
+  private[admission] def terminalFailedAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved): Consequence[TerminalFailedAttempt] = for {
+    entry <- session.current.history.filter(_.revision.value.toString == failed.payload.sourceRevision) match {
+      case Vector(value) => Consequence.success(value)
+      case _ => F.invalid("known failed validation source is absent or ambiguous")
+    }
+    source <- GoalPhaseNativeHistory.prefixC(session.current, entry.revision)
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty)
+    terminal <- store.terminalFailedAttemptC(failed)
+  } yield terminal
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
@@ -257,22 +272,46 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _check_loop_c(store: Store, initial: Saved): Consequence[Saved] =
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.receipts.size != index || !successful(current.payload.receipts, store.initial.selected)) Consequence.success(current)
-      else store._check_progress_c(current, index).flatMap { progress => progress.nextAttempt match {
+      else runCheckC(check, index)(() => store._check_progress_c(current, index), () => store.preconditionsC,
+        store.saveC, store.acknowledgeC,
+        selected => if (selected.operation.isEmpty) E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind)
+          else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _)),
+        payload => store.evidenceC(payload).map(_ => ()))
+    }}
+
+  /** The production single-check program. Every dispatch reconciles the same
+    * admitted prefix, then commits a fresh intent before its owning typed UoW.
+    * Only a newly saved actual NotStarted observation permits one fresh dispatch.
+    */
+  private[admission] def runCheckC(check: Check, index: Int)(
+    progressC: () => Consequence[CheckProgress], preconditionsC: () => Consequence[Unit],
+    saveC: (String, InstanceRecord, Payload) => Consequence[Saved],
+    acknowledgeC: String => Consequence[Unit], runC: Check => Consequence[SbtExecutionAttempt],
+    evidenceC: Payload => Consequence[Unit]): Consequence[Saved] = {
+    def _dispatch_(remaining: Int): Consequence[Saved] = progressC().flatMap { progress => progress.nextAttempt match {
           case None => Consequence.success(progress.saved)
           case Some(attempt) => for {
-            _ <- store.preconditionsC
-            prepared <- store.saveC(_attempt_key("intent", index, attempt), progress.saved.record, progress.saved.payload)
-            _ <- store.acknowledgeC("goal-check-prepared:" + check.identity)
-            actual <- if (check.operation.isEmpty) E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind)
-              else N.operationC(check, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _))
-            _ <- store.acknowledgeC("goal-check-executed:" + check.identity)
+            _ <- preconditionsC()
+            prepared <- saveC(_attempt_key("intent", index, attempt), progress.saved.record, progress.saved.payload)
+            _ <- acknowledgeC("goal-check-prepared:" + check.identity)
+            actual <- runC(check)
+            _ <- acknowledgeC("goal-check-executed:" + check.identity)
             payload <- attemptPayloadC(progress.saved.payload, check, attempt, actual)
-            saved <- store.saveC(_attempt_key("result", index, attempt), prepared.record, payload)
-            _ <- store.acknowledgeC("goal-check-recorded:" + check.identity)
-            _ <- store.evidenceC(saved.payload)
-          } yield saved
-      }}
+            saved <- saveC(_attempt_key("result", index, attempt), prepared.record, payload)
+            _ <- acknowledgeC("goal-check-recorded:" + check.identity)
+            _ <- evidenceC(saved.payload)
+            next <- actual match {
+              case SbtExecutionAttempt.Observed(_) if remaining > 0 &&
+                  saved.payload.stopped.size == progress.saved.payload.stopped.size + 1 &&
+                  saved.payload.stopped.dropRight(1) == progress.saved.payload.stopped &&
+                  saved.payload.stopped.lastOption.exists(r => r.identity == check.identity && _not_executed(r)) =>
+                _dispatch_(remaining - 1)
+              case _ => Consequence.success(saved)
+            }
+          } yield next
     }}
+    _dispatch_(1)
+  }
 
   private[admission] def attemptPayloadC(previous: Payload, check: Check, attempt: Int,
     actual: SbtExecutionAttempt): Consequence[Payload] = actual match {
@@ -328,7 +367,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val selectionRecord: Option[InstanceRecord], acknowledgement: String => Consequence[Unit],
     val documentPolicy: Option[GoalPhaseDocumentProgress.Policy], val recordingPaths: Vector[String]) {
     val plan = controller.plan
-    val base = controller.tipSnapshot
+    val base = candidate.payload.continuation.map(_.parent).getOrElse(controller.candidateBase)
     val whole = controller.cursor == plan.steps.size
     val checks = if (whole) plan.phaseChecks else plan.steps(controller.cursor).checks
     val ownedPaths = if (whole) plan.steps.flatMap(_.ownedPaths).distinct else plan.steps(controller.cursor).ownedPaths
@@ -404,18 +443,41 @@ private[smworkflow] object GoalPhaseNativeValidation {
           } yield current
         }
       }
-    def _check_progress_c(previous: Saved, index: Int, selection: Payload = initial): Consequence[CheckProgress] = {
-      def _load_(attempt: Int, attempts: Vector[Attempt]): Consequence[CheckProgress] = for {
+    def _check_progress_c(previous: Saved, index: Int, selection: Payload = initial): Consequence[CheckProgress] =
+      _verified_attempts_c(previous, index, selection).map(_._1)
+    private def _verified_attempts_c(previous: Saved, index: Int, selection: Payload):
+      Consequence[(CheckProgress, Vector[Attempt])] = {
+      def _load_(attempt: Int, attempts: Vector[Attempt]): Consequence[(CheckProgress, Vector[Attempt])] = for {
         intent <- loadC(_attempt_key("intent", index, attempt))
         result <- loadC(_attempt_key("result", index, attempt))
         recovery <- loadC(_attempt_key("recovery", index, attempt))
         pairs = attempts :+ Attempt(intent, result, recovery)
         progress <- reconcileAttemptsC(previous, selection, index, pairs)
         latest <- if (intent.nonEmpty && (result.nonEmpty || recovery.nonEmpty) && progress.nextAttempt.nonEmpty)
-          _load_(progress.nextAttempt.get, pairs) else Consequence.success(progress)
+          _load_(progress.nextAttempt.get, pairs) else Consequence.success((progress, pairs))
       } yield latest
       _load_(0, Vector.empty)
     }
+    def terminalFailedAttemptC(failed: Saved): Consequence[TerminalFailedAttempt] = for {
+      _ <- if (whole && initial.selected.size == 1 && failed.payload.outcome.contains("failed") &&
+          repairable(failed.payload) && failed.payload.receipts.size == 1) Consequence.unit
+        else F.invalid("known failed validation requires one completed terminal Failed check")
+      verified <- _verified_attempts_c(Saved(selectionRecord.getOrElse(frontier), initial), 0, initial)
+      (progress, attempts) = verified
+      pair <- attempts.lastOption match {
+        case Some(Attempt(Some(intent), Some(result), None)) if progress.nextAttempt.isEmpty && progress.saved == result =>
+          Consequence.success((intent, result))
+        case _ => F.invalid("known failed validation has no final actual intent/result pair")
+      }
+      (intent, result) = pair
+      saved <- loadC("validation").flatMap(_.map(Consequence.success)
+        .getOrElse(F.invalid("original failed validation receipt is absent")))
+      _ <- if (saved == failed && compatible(saved.payload) &&
+          saved.payload == result.payload.copy(outcome = Some("failed"))) Consequence.unit
+        else F.invalid("known failed validation differs from its complete terminal result")
+      _ <- _adjacent_record_c(result.record, saved.record, "ordered-validation:validation",
+        Some(ProgressionReference("phase.Decision")))
+    } yield TerminalFailedAttempt(attempts.size - 1, intent, result, saved)
     def pendingSelectionC: Consequence[Option[Saved]] =
       for {
         saved <- _chain_saved_c(Saved(selectionRecord.getOrElse(frontier), initial))
@@ -523,21 +585,29 @@ private[smworkflow] object GoalPhaseNativeValidation {
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
     def preconditionsC: Consequence[Unit] = for {
+      parent <- B.parentC(controller.tipSnapshot, candidate.payload.continuation)
+      _ <- if (parent == base && (controller.candidateParent.isEmpty || controller.candidateBase == parent)) Consequence.unit
+        else F.invalid("native validation candidate parent differs from its retained proof")
+      root <- G.rootC(core)
       actual <- G.observeC(core)
       tree <- G.indexTreeC(core)
-      _ <- if (actual.branch == d.target.localBranch && actual.head == initial.candidate.head && actual.tree == base.tree &&
-          tree == initial.candidate.tree && (if (whole) {
-            if (candidate.payload.selectedPaths.isEmpty) actual.dirty.isEmpty
-            else candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
-              candidate.payload.selectedPaths.distinct == candidate.payload.selectedPaths &&
-              candidate.payload.selectedPaths.forall(managementPaths.contains) && actual.dirty.forall(p =>
-                !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
-                candidate.payload.selectedPaths.contains(p.path) &&
-                p.renamedFrom.forall(candidate.payload.selectedPaths.contains))
-          } else actual.dirty.forall(p => !p.unmerged && p.worktree == ' ' &&
-            p.index != '?' && p.index != '!' && ownedPaths.exists(covers(_, p.path)) &&
-            p.renamedFrom.forall(x => ownedPaths.exists(covers(_, x)))))) Consequence.unit
+      scoped = if (whole) candidate.payload.selectedPaths else ownedPaths
+      _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
+          actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
+          tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
+          (!whole || candidate.payload.selectedPaths.forall(managementPaths.contains)) &&
+          B.scopedDirty(actual.dirty, scoped, true)) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")
+      oid <- GitObjectId.parseC(parent.head)
+      paths <- E.executeGitC(core, GitOperation.PendingPaths(oid)).flatMap(_.valueC)
+      _ <- if (B.pathsOwned(paths.map(_.value), scoped)) Consequence.unit
+        else F.invalid("native validation includes an unrelated index delta")
+      after <- G.observeC(core)
+      index <- G.indexTreeC(core)
+      afterroot <- G.rootC(core)
+      _ <- if (afterroot == root && after.branch == actual.branch && after.head == parent.head && after.tree == parent.tree &&
+          index == initial.candidate.tree && B.scopedDirty(after.dirty, scoped, true)) Consequence.unit
+        else F.invalid("native validation frontier drifted during observation")
     } yield ()
     def acknowledgeC(stage: String): Consequence[Unit] = acknowledgement(stage) match {
       case Consequence.Success(_) => Consequence.unit
@@ -827,7 +897,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     payload.outcome.forall(Set("passed", "failed", "repair-required", "repair-limit-reached")) &&
     payload.receipts.zip(payload.selected).forall { (receipt, check) =>
       receipt != null && receipt.identity == check.identity && receipt.exitCode != null && receipt.sbt != null &&
-        _stored_text(receipt.stdout) && _stored_text(receipt.stderr) &&
+        V.storedProductOutputValid(receipt) &&
         receipt.termination != "not-started" &&
         receipt.sbt.forall(facts => facts != null && facts.valid && facts.kind == check.kind &&
           facts.outcome != WorkflowSbtValidation.Outcome.NotExecuted) &&

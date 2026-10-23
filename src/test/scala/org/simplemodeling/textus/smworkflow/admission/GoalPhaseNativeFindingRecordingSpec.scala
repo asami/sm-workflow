@@ -17,7 +17,7 @@ import org.goldenport.record.io.RecordDecoder
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.{NativeHostAuthorityPreparation, NativeHostReviewPreparation, NativeHostRemainingPlanPreparation}
+import org.simplemodeling.textus.smworkflow.preparation.{NativeAuthorityPreparation, NativeReviewPreparation, NativeRemainingPlanPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -31,7 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
- * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWhenThen
@@ -54,7 +54,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     "The extension is outside the selected requirement")
   private def _root(): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/finding-recording").toAbsolutePath), "episode-").toRealPath()
-  private def _host(directory: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _host(directory: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(directory)
     original.copy(goal = original.goal.copy(input = _input, candidatePaths = _paths,
       closure = original.goal.closure.copy(programs = Vector(
@@ -76,9 +76,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     commands.patch(commands.indexWhere(_.contains("commit")), Vector(Vector("-C", directory.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", _hygiene, _candidates)), 0)
   }
-  override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json =
+  override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     _process_plan(directory, goal)
-  private def _process_plan(directory: Path, goal: ThreeWorkflowHostParameters.Goal, denygit: Boolean = false): Json = {
+  private def _process_plan(directory: Path, goal: ThreeWorkflowRuntimeParameters.Goal, denygit: Boolean = false): Json = {
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
     val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates))
@@ -351,7 +351,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     }
     def prepareRemaining(description: V.GoalPhaseRemainingPlanDescriptionResult, input: V.GoalPhaseRemainingPlanAdoptionInput): Unit =
       prepare(call => for {
-        prepared <- NativeHostRemainingPlanPreparation.prepareC(description, input, input.reference,
+        prepared <- NativeRemainingPlanPreparation.prepareC(description, input, input.reference,
           V.WorkflowExecutionEvidence(Vector(input.reference), Some("participant"), None, None), "participant",
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
@@ -385,7 +385,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty, evidence)
       if (assigned.kind.startsWith("Review")) prepare(call => for {
-        prepared <- NativeHostReviewPreparation.goalC(display.get.work.get.review.get.hostContext.get,
+        prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None, None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
             R.publicObservations(value.reviewObservations), None,
             value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), V.WorkflowArtifactReference(reference.identity, reference.revision),
@@ -424,7 +424,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val selection = _repository_selection_(_host(directory).repository.input, "specification-recording-child",
         id + ":repository-closure:" + from.revision.value)
       prepare(call => for {
-        prepared <- NativeHostAuthorityPreparation.goalC(waiting.authorityContext.get,
+        prepared <- NativeAuthorityPreparation.goalC(waiting.authorityContext.get,
           V.WorkflowArtifactReference("specification-recording-authority", from.revision.value.toString), "participant",
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
@@ -1198,10 +1198,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         completion.completed.map(_.commit.identity) shouldBe closed.map(_.commit.identity)
         completion.reviewedCandidate.head shouldBe source.head
         completion.reviewedCandidate.tree shouldBe source.tree
-        completion.repository.tree shouldBe candidate.payload.finalCandidate.get.tree
-        e.observe().tree shouldBe completion.repository.tree
-        e.observe().head shouldBe completion.repository.tip
-        e.observe().trackingTip shouldBe Some(completion.repository.tip)
+        completion.repository.get.tree shouldBe candidate.payload.finalCandidate.get.tree
+        e.observe().tree shouldBe completion.repository.get.tree
+        e.observe().head shouldBe completion.repository.get.tip
+        e.observe().trackingTip shouldBe Some(completion.repository.get.tip)
         e.observe().dirty shouldBe empty
         terminal.findingRecording.get.completed.map(_.result.outcome) shouldBe Vector("completed")
         e.current(id).lifecycle shouldBe Lifecycle.Completed
@@ -1217,6 +1217,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         var saved = Option.empty[InstanceRecord]
         var index = ""
         var count = 0
+        val outside = "Outside the assigned Phase recording destination.\n"
         _episode(directory, initialize = true, interrupt = interrupted) { e =>
           val (identity, display, review) = _phase_review(e)
           id = identity
@@ -1225,16 +1226,34 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
           val recording = e.recording(id)
           e.writeAssigned(recording)
           e.submitRecording(e.response(recording, Vector("recorded")))
-          if (!interrupted) Files.writeString(directory.resolve("repository/step-1.txt"), "Outside the assigned Phase recording destination.\n")
-          When("ordinary Advance encounters the unassigned edit or the specification interrupts after durable stage intent")
-          val failed = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
+          if (!interrupted) Files.writeString(directory.resolve("repository/step-1.txt"), outside)
+          val beforecount = _checks(directory)
+          When("ordinary Advance retains the unrelated unstaged edit or the specification interrupts after durable stage intent")
+          val advanced = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
           saved = Some(e.current(id))
           index = e.index()
           count = _checks(directory)
-          Then("the visible error leaves actual files intact and retains any actual staging intent without pretending success")
-          failed.isSuccess shouldBe false
-          if (interrupted) saved.get.history.last.causation.value shouldBe "ordered-recording-candidate:stage-intent-0"
-          else Files.readString(directory.resolve("repository/step-1.txt")) should include("Outside the assigned")
+          Then("interruption retains its failed staging intent while normal completion waits for authority with only assigned candidate paths")
+          if (interrupted) {
+            advanced.isSuccess shouldBe false
+            saved.get.history.last.causation.value shouldBe "ordered-recording-candidate:stage-intent-0"
+          } else {
+            val waiting = read_value[V.GoalPhaseAdvanceResult](take(advanced))
+            waiting.kind shouldBe "Wait"
+            waiting.condition shouldBe Some("phase.PhaseClosing")
+            waiting.authorityContext should not be empty
+            Files.readString(directory.resolve("repository/step-1.txt")) shouldBe outside
+            val dirty = e.observe().dirty.filter(_.path == "step-1.txt")
+            dirty.size shouldBe 1
+            dirty.head.index shouldBe ' '
+            dirty.head.worktree shouldBe 'M'
+            val candidate = e.recordingCandidate(id)
+            Vector(candidate.payload.selectedPaths, candidate.payload.stagedPaths, candidate.payload.changedPaths).foreach { paths =>
+              paths should not contain "step-1.txt"
+              paths.forall(candidate.payload.assignedPaths.contains) shouldBe true
+            }
+            _checks(directory) shouldBe beforecount
+          }
         }
         _episode(directory) { e =>
           Given("the same real native history after reopening with normal policies")
@@ -1242,14 +1261,19 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
           When("ordinary Advance reconstructs that retained source twice")
           val first = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
           val second = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
-          Then("unknown intent stays stable Wait and unexpected edits stay visible errors without new checks staging or overwrite")
+          Then("unknown intent and ordinary authority both stay stable Wait without new checks staging or overwrite")
           if (interrupted) {
             read_value[V.GoalPhaseAdvanceResult](take(first)).kind shouldBe "Wait"
             read_value[V.GoalPhaseAdvanceResult](take(second)).message should include("unknown intent")
             read_value[V.GoalPhaseAdvanceResult](take(second)).condition shouldBe Some("phase.PhaseClosing")
           } else {
-            first.isSuccess shouldBe false
-            second.isSuccess shouldBe false
+            val firstwait = read_value[V.GoalPhaseAdvanceResult](take(first))
+            val secondwait = read_value[V.GoalPhaseAdvanceResult](take(second))
+            firstwait.kind shouldBe "Wait"
+            firstwait.condition shouldBe Some("phase.PhaseClosing")
+            secondwait.kind shouldBe "Wait"
+            secondwait.condition shouldBe Some("phase.PhaseClosing")
+            Files.readString(directory.resolve("repository/step-1.txt")) shouldBe outside
           }
           e.current(id).history shouldBe saved.get.history
           e.index() shouldBe index

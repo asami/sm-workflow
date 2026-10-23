@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * Step review. Actual native history selects the source; typed immutable Git
   * facts and fresh selected checks admit ordinary Closing, never a new review.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 21, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReviewCompletion {
@@ -146,7 +146,7 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
               context.priorReviews.reverse.find(value => value.kind == "ReviewStep" && value.step.contains(step.identity))
                 .contains(original)) && repair.checkFailure != null && repair.checkFailure.isEmpty &&
             original.candidate.head == controller.candidate.get.head &&
-            controller.candidate.get.head == controller.tipSnapshot.head &&
+            controller.candidate.get.head == controller.candidateBase.head &&
             result.result.typeIdentity == W.resultCodec.typeIdentity &&
             _reference(result.resultReference.identity) && _revision(result.resultReference.revision),
             "latest actual repair changes the original Plan, review, directive, generation or target")

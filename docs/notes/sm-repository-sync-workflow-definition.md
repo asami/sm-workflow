@@ -496,3 +496,38 @@ The profile must prove at least:
 This definition is source-compatible with the operational safety intent of legacy
 `cncf-repository-sync`, not an invocation, replacement, migration, or forwarding rule for that
 skill. Both entry points remain independently installable and retain separate durable state.
+
+
+## Shared local development dependency policy (2026-10-21)
+
+Repository catch-up and repository-sync share a runtime-owned dependency graph. A dependency
+repository may declare three independent properties, not mutually exclusive modes:
+
+- `localRepository`: identity and local clone/worktree references for recursive Git catch-up
+  and repository synchronization.
+- `localJar`: a reference to a locally published binary artifact and its resolution metadata.
+  **The provider repository exclusively owns building, validating, publishing, and updating
+  that artifact.** Consumers only resolve the provider-published artifact; they must not
+  implicitly build or republish it during catch-up, repository-sync, or their own build.
+- `localProject`: an explicitly opted-in source-project dependency managed by the consumer.
+
+`localJar` is a loose-coupling/publication boundary, not a request to build an upstream
+repository. Git catch-up/sync does not automatically trigger local JAR publication. Prefer
+a development-scoped artifact repository rather than contaminating globally shared Ivy
+artifacts; exact repository configuration and version/immutability policy remain to be
+specified. Keep source commit and published artifact version distinct.
+
+The proposed `sm-repository-catchup` is a separate workflow from the existing
+`RepositorySyncWorkflow`: it updates a selected local repository and recursively
+discovered local development repositories, targeting either GitHub tracking refs or
+same-machine main, without forcing push or rewriting shared history by default.
+It supports rebase and a first-class human-intervenable merge route using the common
+Continuation/Human-in-the-Loop protocol. Conflict resolution and optional approval
+can yield/resume; dirty state, ambiguity, and conflicts must never be silently discarded.
+Shared dependency discovery, visited-set/cycle handling, and Git operation boundaries
+belong to runtime services rather than duplicated skills. The existing repository-sync
+contract remains authoritative for its own remote-convergence behavior.
+
+### Clarification: development workspace dependency edges (2026-10-21)
+
+The three local dependency properties described above belong to each consumer-to-provider dependency **edge in the Phase 7 Development Workspace**, not to the provider repository as global attributes. Existing Project/Repository/Worktree graph, Consumer Binding and Artifact Selection form the single development-environment definition. No separate Workspace Profile model is proposed. `localJar` references provider-owned publications and is selected by the consumer; `localRepository` supplies the explicit recursive catch-up traversal. This clarification supersedes any ambiguous wording above suggesting intrinsic dependency-repository properties.

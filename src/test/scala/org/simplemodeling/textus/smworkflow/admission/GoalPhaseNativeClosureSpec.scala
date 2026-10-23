@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 21, 2026
   */
 final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
@@ -61,6 +61,29 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
     Path.of(".").toRealPath(), "main", "origin", "main", "fixture-upstream.git")
 
   "Native selected Step attempts" should {
+    "bind closure input to the proven candidate parent while preserving the original Phase base" in {
+      Given("an integrated descendant candidate with fresh checks and admitted independent review")
+      val initial = take(O.startC(_plan, _base))
+      val ready = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "implemented")))
+      val parent = O.Snapshot("1" * 40, "2" * 40)
+      val proof = O.CandidateContinuation(parent, Vector(O.HistoryCommit(parent.head, parent.tree, Vector(_base.head)),
+        O.HistoryCommit(_base.head, _base.tree, Vector.empty)))
+      val candidate = O.Snapshot(parent.head, "3" * 40)
+      val seen = take(ready.acceptC(O.CandidateContinuationObserved(candidate, proof)))
+      val checked = take(seen.acceptC(O.ChecksObserved(candidate, Vector("test"), "integrated-checks", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key,
+        candidate, "integrated-checks", "integrated-review", O.ReviewOutcome.Accept)))
+      When("the normal native closure owner captures its immutable input")
+      val input = take(K.inputC(_frontier, reviewed))
+      Then("closure uses the actual integrated parent without changing the original Phase base or counts")
+      input.parent shouldBe parent
+      input.candidate shouldBe candidate
+      input.reviewEvidence shouldBe "integrated-review"
+      reviewed.base shouldBe _base
+      reviewed.generation shouldBe ready.generation
+      reviewed.repairs shouldBe 0
+    }
+
     "retain failed zero and one before clean two, its intent and the normal completed shape" in {
       Given("an original reviewed Closing frontier and two actual-shaped nonclean selected checks without commit dispatch")
       val from = _frontier

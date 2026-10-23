@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * The explicitly selected Git-only policy has no product-test assurance.
   * Fixture authority proves behavior, not final operator/reviewer acceptance.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowTypedGitOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -30,11 +30,11 @@ final class ThreeWorkflowTypedGitOperationSpec extends AnyWordSpec with GivenWhe
     "This selected fixture qualifies typed Git workflow composition only; product tests remain outside its assurance.", Vector.empty)
   private def _fresh(name: String): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/normal-typed-git").toAbsolutePath.normalize), name + "-")
-  private def host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     original.copy(repository = original.repository.copy(validation = _git_only))
   }
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val denied = scenario match {
       case "MissingFetchGrant" => Set(TypedGitHostPlanFixture.capability(GitOperationKind.Fetch))
       case "UnknownDenied" => Set(TypedGitHostPlanFixture.capability(GitOperationKind.CheckPendingIndex))

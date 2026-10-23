@@ -1,5 +1,12 @@
 # Normal typed SBT validation
 
+Planned diagnostic consumer (2026-10-23):
+[incremental SBT failure diagnosis](incremental-sbt-failure-diagnosis.md) reuses
+these typed execution facts and retained evidence. It adds extraction, requested
+detail and an AI repair proposal through existing work continuation, not another
+SBT executor or an interpretation of missing output as success. Existing validation
+results below retain their original scope; they do not certify the new route.
+
 Status: current connection contract. Actual validation188B passed 206 checks in
 20 selected suites, including all seven normal SBT cases, the catalog,
 DirectPreview and the corrected preparation/null-presence matrix. Normal and
@@ -30,6 +37,36 @@ durable receipt conversion. Selected check identity, saved intent,
 candidate/policy preconditions, uncertainty and no automatic replay remain
 unchanged. Review acceptance and effect authority remain separate from semantic
 implementation results and check receipts.
+
+CNCF owns the finite native capture limits for managed typed SBT execution.
+After a typed result returns, application receipt admission requires nonnegative
+byte counts equal to the actual captured bytes, untruncated stdout and stderr,
+strict UTF-8 text without NUL, the selected identity and operation kind, and the
+existing termination/outcome mapping. It imposes no second application byte
+ceiling on complete typed SBT output. Retained typed receipts use the same strict
+text validity without the historical 65536-byte limit, including genuine nonzero
+failed results. Structural Git captures and legacy receipts without typed `sbt`
+facts keep their 65536-byte text bound; Goal recovery diagnostics and rationale
+keep their existing bound. No receipt fields or schema versions change.
+
+`NativeTestOnlyValidationReceiptSpec` covers large actual-shaped captures,
+including multibyte and near-two-MiB stdout, large stderr, positive/nonzero facts,
+codec roundtrips and malformed/incomplete capture controls. Shaped facts do not
+prove external execution. The explicitly selected, discovery-excluded
+`NativeGoalLargeValidationCliSpec` instead prepares 80000 finite ASCII diagnostic
+bytes before the existing ProductCheck assertion in a fresh isolated fixture.
+Ordinary Advance must retain its real failed Test as public RepairStep and a new
+command must reopen the identical receipt without another SBT PID marker. When
+`smworkflow.spec.installedCommand` is selected, both validation and reopening use
+that installed executable with the isolated host; setup remains ordinary fixture
+Start/Advance/semantic Submit. The scenario supplies no review or closure.
+
+An old intent whose actual capture was not retained remains UNKNOWN. Supporting
+test streams cannot reconstruct its process capture, so this boundary correction
+does not establish which predicate rejected an earlier incident. Existing
+describe/recover operations and independent Human direction remain required for
+that unknown result; no automatic replay, backfill or historical promotion is
+authorized.
 
 The public runtime V2 host JSON selects typed SBT-only declarations for isolated
 cases. V3 composes typed Git and SBT declarations for the owning workflows.

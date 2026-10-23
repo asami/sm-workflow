@@ -8,16 +8,16 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /** Additional native Plan input restriction; legacy host-purpose declarations
   * are unchanged. Reading an input supplies no execution or Human authority.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object GoalPhaseNativeInputReadPolicy {
   final case class Declaration(storeName: String, plans: DataStore.CollectionId)
   final case class Readers(selections: ProfileSelectionDataStorePort, plans: GoalPhaseSelectedPlanDataStorePort)
-  val planKey = GoalPhaseHostRecordReadPolicy.prefix + "plan-collection"
+  val planKey = GoalPhaseInputRecordReadPolicy.prefix + "plan-collection"
 
   def decodeC(host: ResolvedConfiguration): Consequence[Declaration] = for {
-    records <- GoalPhaseHostRecordReadPolicy.decodeC(host)
-    raw <- GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, planKey) match {
+    records <- GoalPhaseInputRecordReadPolicy.decodeC(host)
+    raw <- GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, planKey) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("Native GoalPhase requires its explicit selected Plan collection")
@@ -37,12 +37,12 @@ private[smworkflow] object GoalPhaseNativeInputReadPolicy {
 
   def bindC(host: ResolvedConfiguration, workflow: GoalPhaseNativeRun.Declaration): Consequence[Readers] = for {
     _ <- GoalPhaseNativeRun.validateC(workflow)
-    records <- GoalPhaseHostRecordReadPolicy.decodeC(host)
+    records <- GoalPhaseInputRecordReadPolicy.decodeC(host)
     declared <- decodeC(host)
     _ <- if (declared.storeName == workflow.configuration.workflowStore.name &&
         (records.collections.map(_._2) :+ declared.plans).forall(c => c != workflow.instances && c != workflow.continuations))
       Consequence.unit else Consequence.configurationInvalid("Native GoalPhase inputs require the same store and separate collections")
-    selection = records.collections.find(_._1 == GoalPhaseHostRecordReadPolicy.Purpose.Selection).get._2
+    selection = records.collections.find(_._1 == GoalPhaseInputRecordReadPolicy.Purpose.Selection).get._2
   } yield Readers(new ProfileSelectionDataStorePort(declared.storeName, selection),
     new GoalPhaseSelectedPlanDataStorePort(declared.storeName, declared.plans))
 }

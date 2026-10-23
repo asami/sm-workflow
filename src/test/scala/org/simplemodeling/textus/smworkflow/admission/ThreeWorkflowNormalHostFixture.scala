@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
 /** Normal host-file data only; no private runtime enrollment or injected ports.
   * Real-effects scenarios must additionally declare their owned process plan.
   * @since   Oct.  7, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 23, 2026
   */
 private[admission] object ThreeWorkflowNormalHostFixture {
   def collection(name: String): String = EntityCollectionId("smworkflow", "cli", name).print
@@ -18,7 +18,7 @@ private[admission] object ThreeWorkflowNormalHostFixture {
   val recordCollections: Vector[String] = (Vector("goal_plans", "host_evidence", "repository_selections",
     "split_selections", "split_contexts", "split_starts", "split_checkpoints",
     "split_humanresolutions", "split_humancheckpoints") ++
-    GoalPhaseHostRecordReadPolicy.Purpose.values.map(p => "goal_" + p.toString.toLowerCase) ++
+    GoalPhaseInputRecordReadPolicy.Purpose.values.map(p => "goal_" + p.toString.toLowerCase) ++
     SplitPhaseExplicitPlanningInputJsonV1.Purpose.values.map(p => "split_" + p.toString.toLowerCase))
     .map(collection)
   val storagePlan: Json = {
@@ -38,8 +38,8 @@ private[admission] object ThreeWorkflowNormalHostFixture {
       "records" -> Json.fromValues(recordCollections.map(c => Json.obj("componentId" -> Json.fromString(owner),
         "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(c)))))
   }
-  def definition(root: Path): ThreeWorkflowHostParameters.Definition = {
-    import ThreeWorkflowHostParameters.*
+  def definition(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
+    import ThreeWorkflowRuntimeParameters.*
     Definition(schema, Target(root.toString, "main", "origin", "main", root.resolve("upstream.git").toString),
       Goal(GoalPhaseStartInput("phase-2", "sm-workflow"), Vector("docs/phase.md"),
         GoalPhaseNativeValidation.Policy("step-checks", 1, Vector(GoalPhaseNativeValidation.Check("test", 1))),
@@ -52,19 +52,19 @@ private[admission] object ThreeWorkflowNormalHostFixture {
         RepositorySyncNativeConflictInput.Policy(Set("docs/phase.md")), RepositorySyncNativeMergeReview.Policy("merge-review", 1)))
   }
   def values(root: Path): Map[String, String] = {
-    val goal = GoalPhaseHostRecordReadPolicy.prefix
+    val goal = GoalPhaseInputRecordReadPolicy.prefix
     val input = SplitPhasePlanningInputReadPolicy.prefix
-    val split = SplitPhaseHostSelectionReadPolicy.prefix
+    val split = SplitPhaseInputSelectionReadPolicy.prefix
     val context = SplitPhasePartitionContextReadPolicy.prefix
     val starts = SplitPhaseTypedStartReadPolicy.prefix
     val checkpoint = SplitPhasePartitionEnrichmentStorage.prefix
-    val evidence = NativeHostEvidence.prefix
-    Map("sm-workflow.host.definition" -> ThreeWorkflowHostParameters.encode(definition(root)).noSpaces,
+    val evidence = NativeExternalEvidence.prefix
+    Map("sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(definition(root)).noSpaces,
       goal + "store-name" -> "workflow", goal + "plan-collection" -> collection("goal_plans"),
       evidence + "store-name" -> "workflow", evidence + "record-collection" -> collection("host_evidence"),
       evidence + "issuer" -> "normal-development-host",
-      RepositorySyncHostSelectionReadPolicy.prefix + "store-name" -> "workflow",
-      RepositorySyncHostSelectionReadPolicy.prefix + "selection-collection" -> collection("repository_selections"),
+      RepositorySyncInputSelectionReadPolicy.prefix + "store-name" -> "workflow",
+      RepositorySyncInputSelectionReadPolicy.prefix + "selection-collection" -> collection("repository_selections"),
       input + "store-name" -> "workflow", split + "store-name" -> "workflow",
       split + "selection-collection" -> collection("split_selections"), context + "store-name" -> "workflow",
       context + "record-collection" -> collection("split_contexts"), starts + "store-name" -> "workflow",
@@ -75,7 +75,7 @@ private[admission] object ThreeWorkflowNormalHostFixture {
       SplitPhaseHumanResolutionReadPolicy.prefix + "record-collection" -> collection("split_humanresolutions"),
       SplitPhaseHumanResolutionCheckpointPublication.prefix + "store-name" -> "workflow",
       SplitPhaseHumanResolutionCheckpointPublication.prefix + "record-collection" -> collection("split_humancheckpoints")) ++
-      GoalPhaseHostRecordReadPolicy.Purpose.values.map(p => (goal + p.key) -> collection("goal_" + p.toString.toLowerCase)) ++
+      GoalPhaseInputRecordReadPolicy.Purpose.values.map(p => (goal + p.key) -> collection("goal_" + p.toString.toLowerCase)) ++
       SplitPhaseExplicitPlanningInputJsonV1.Purpose.values.map(p => (input + p.key) -> collection("split_" + p.toString.toLowerCase)) ++
       Vector(SplitPhaseCandidateAllocationPolicy.prefix, SplitPhasePartitionReplyAllocationPolicy.prefix).flatMap(p =>
         Vector(p + "policy-identity" -> "normal-host", p + "policy-revision" -> "1", p + "namespace" -> "cli"))

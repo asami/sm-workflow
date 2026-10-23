@@ -7,13 +7,13 @@ import org.goldenport.cncf.datastore.DataStore
 /** Reads only within the current owning call; never installs/upserts a Plan,
   * retains a context or opens a provider/pool. Start admits the selected scope.
   * @since   Oct.  6, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] final class GoalPhaseSelectedPlanDataStorePort(
   storeName: String, collection: DataStore.CollectionId
 ) extends GoalPhaseNativeRun.PlanPort {
   def loadForCallC(identity: String, core: ActionCall.Core): Consequence[Option[GoalPhaseNativeRun.SelectedPlan]] =
-    ManagedHostRecordRead.loadGoalNativePlanC(core, storeName, collection, identity).flatMap {
+    ManagedInputRecordRead.loadGoalNativePlanC(core, storeName, collection, identity).flatMap {
       case None => Consequence.success(None)
       case Some(record) =>
         if (record.fields.count(_.key == GoalPhaseSelectedPlanJsonV1.storageField) != 1)

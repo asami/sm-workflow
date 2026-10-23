@@ -10,7 +10,7 @@ import SplitPhaseDurationCalibration.WorkItem
 /**
  * Current-operation reader, owns no execution context, writer, pool or provider.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] final class SplitPhaseCalibrationDataStorePort private[admission] (declaration: Declaration) {
   def loadForCallC(reference: Reference, core: ActionCall.Core): Consequence[Option[Record]] =
@@ -42,7 +42,7 @@ private[smworkflow] final class SplitPhaseCalibrationDataStorePort private[admis
     core: ActionCall.Core): Consequence[Option[String]] =
     if (reference == null || !name(reference.identity) || !name(reference.revision))
       Consequence.stateConflict("SplitPhase calibration read requires its exact reference/revision")
-    else ManagedHostRecordRead.loadSplitCalibrationC(core, declaration.storeName, declaration.collection(purpose),
+    else ManagedInputRecordRead.loadSplitCalibrationC(core, declaration.storeName, declaration.collection(purpose),
       reference.identity, purpose).flatMap {
       case None => Consequence.success(None)
       case Some(row) => row.getString(field) match {

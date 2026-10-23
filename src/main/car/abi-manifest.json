@@ -67,13 +67,27 @@
           "name": "GoalPhaseSemanticAdmissionService"
         },
         {
-          "name": "NativeHostPreparationService"
+          "name": "NativeWorkflowPreparationService"
         },
         {
           "name": "GoalPhaseFindingRecordingService"
         }
       ],
       "operations": [
+        {
+          "service": "GoalPhaseService",
+          "name": "describeGoalPhaseFailedPhaseRepair",
+          "kind": "COMMAND",
+          "output": "GoalPhaseFailedPhaseRepairDescriptionResult",
+          "input": "GoalPhaseFailedPhaseRepairDescriptionInput"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "adoptGoalPhaseFailedPhaseRepair",
+          "kind": "COMMAND",
+          "output": "GoalPhaseFailedPhaseRepairAdoptionResult",
+          "input": "GoalPhaseFailedPhaseRepairAdoptionInput"
+        },
         {
           "service": "GoalPhaseService",
           "name": "advanceGoalPhase",
@@ -334,42 +348,42 @@
           "output": "GoalPhaseWorkSubmissionResult"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareGoalStart",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowGoalStartPreparationInput"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryStart",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowRepositoryStartPreparationInput"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareSplitStart",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowSplitStartPreparationInput"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryEffect",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowRepositoryEffectPreparationInput"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareAuthority",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
           "input": "WorkflowAuthorityPreparationInput"
         },
         {
-          "service": "NativeHostPreparationService",
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareEvidence",
           "kind": "COMMAND",
           "output": "WorkflowPreparedImport",
@@ -388,9 +402,66 @@
           "kind": "COMMAND",
           "input": "GoalPhaseFindingRecordingRequest",
           "output": "GoalPhaseFindingRecordingResult"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareCallerInformation",
+          "kind": "COMMAND",
+          "input": "WorkflowCallerInformationPrepareInput",
+          "output": "WorkflowCallerInformationRequest"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "recordCallerInformation",
+          "kind": "COMMAND",
+          "input": "WorkflowCallerInformationRecordInput",
+          "output": "WorkflowCallerInformationResult"
         }
       ],
       "types": [
+        {
+          "name": "GoalPhaseFailedPhaseRepairDescriptionInput",
+          "kind": "value",
+          "fields": [
+            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "proposal", "type": "record", "multiplicity": "1", "required": true }
+          ]
+        },
+        {
+          "name": "GoalPhaseFailedPhaseRepairDescriptionResult",
+          "kind": "value",
+          "fields": [
+            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "outcome", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "message", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "componentInstance", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "target", "type": "record", "multiplicity": "1", "required": true },
+            { "name": "choices", "type": "string", "multiplicity": "*", "required": false },
+            { "name": "adoptionOperation", "type": "string", "multiplicity": "1", "required": true }
+          ]
+        },
+        {
+          "name": "GoalPhaseFailedPhaseRepairAdoptionInput",
+          "kind": "value",
+          "fields": [
+            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "target", "type": "record", "multiplicity": "1", "required": true },
+            { "name": "proposal", "type": "record", "multiplicity": "1", "required": true },
+            { "name": "choice", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "rationale", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "reference", "type": "WorkflowArtifactReference", "multiplicity": "1", "required": true }
+          ]
+        },
+        {
+          "name": "GoalPhaseFailedPhaseRepairAdoptionResult",
+          "kind": "value",
+          "fields": [
+            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "accepted", "type": "boolean", "multiplicity": "1", "required": true },
+            { "name": "outcome", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "message", "type": "string", "multiplicity": "1", "required": true }
+          ]
+        },
         {
           "name": "GoalPhaseAdvanceInput",
           "kind": "value",
@@ -577,7 +648,7 @@
             },
             {
               "name": "authorityContext",
-              "type": "WorkflowHostAuthorityContext",
+              "type": "WorkflowAuthorityContext",
               "multiplicity": "?",
               "required": false
             },
@@ -1225,7 +1296,7 @@
             },
             {
               "name": "hostContext",
-              "type": "WorkflowHostReviewContext",
+              "type": "WorkflowReviewContext",
               "multiplicity": "?",
               "required": false
             },
@@ -3247,7 +3318,7 @@
               "required": false
             },
             {
-              "name": "nativeHostEvidencePayload",
+              "name": "nativeExternalEvidencePayload",
               "type": "string",
               "multiplicity": "?",
               "required": false
@@ -4178,7 +4249,7 @@
             },
             {
               "name": "hostContext",
-              "type": "WorkflowHostHumanContext",
+              "type": "WorkflowHumanDecisionContext",
               "multiplicity": "?",
               "required": false
             },
@@ -4230,6 +4301,198 @@
           "name": "GoalPhaseFindingRecordingContext",
           "kind": "statemachine",
           "fields": []
+        },
+        {
+          "name": "WorkflowCallerInformationPrepareInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "WorkflowCodexSourceLocator",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "callerIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerInformationRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "source",
+              "type": "WorkflowCodexSourceLocator",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "callerIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerInformationRecordInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "request",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerInformationObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "request",
+              "type": "WorkflowCallerInformationRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rawObservation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerInformationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "request",
+              "type": "WorkflowCallerInformationRequest",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rawObservation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "terminalObservation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCodexSourceLocator",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "threadId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "turnId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "itemId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
         }
       ],
       "entities": []

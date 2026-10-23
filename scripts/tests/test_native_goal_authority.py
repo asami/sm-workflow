@@ -39,13 +39,13 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.executable = self.root / "installed CLI" / "sm-workflow"
-        self.host = self.root / "host"
-        self.task = self.host / "target/sm-workflow/tasks/selected-task"
+        self.runtime_root = self.root / "runtime_root"
+        self.task = self.runtime_root / "target/sm-workflow/tasks/selected-task"
         self.task.mkdir(parents=True)
         self.prerequisites = (
             self.executable,
-            self.host / ".textus/config.json",
-            self.host / ".textus/assembly.yaml",
+            self.runtime_root / ".textus/config.json",
+            self.runtime_root / ".textus/assembly.yaml",
         )
         for path in self.prerequisites:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,10 +76,10 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         return output
 
     def args(self, output, task=None):
-        return ["--executable", str(self.executable), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--runtime-root", str(self.runtime_root),
                 "--task", str(task or self.task), "--output", str(output),
                 "--request", str(self.request), "--reference", str(self.reference),
-                "--participant", "explicit operator", "--issuer", "explicit host issuer",
+                "--participant", "explicit operator", "--issuer", "explicit runtime_root issuer",
                 "--occurred-at", "2026-10-14T06:07:08.123Z",
                 "--collection", "entity:Explicit.Host.authority_input"]
 
@@ -89,7 +89,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         value = {"request": Path(option("request")).as_uri(), "reference": Path(option("reference")).as_uri(),
                  "participant": option("participant"), "issuer": option("issuer"),
                  "occurredAt": option("occurred-at"), "collection": option("collection")}
-        return [str(self.executable), "--host", str(self.host), "command", "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareAuthority",
+        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareAuthority",
                 "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
     def process_output(self, response, stderr=b"", returncode=0, timeout=False):
@@ -108,20 +108,17 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         printed, diagnostic = io.StringIO(), io.StringIO()
         native = Mock(side_effect=process)
 
-        def fixture(command, host, descriptor, context):
+        def fixture(command, runtime_root, descriptor, context):
             # A route-only native boundary supplies raw observations. Real
             # process ownership/interruption is covered by transport scenarios.
             CALLER.COMMAND.progress("invocation", context)
             with CALLER.COMMAND.new_file(descriptor, "response.json") as stdout:
                 with CALLER.COMMAND.new_file(descriptor, "stderr.log") as stderr:
-                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+                    result = native(command, cwd=str(runtime_root), stdout=stdout, stderr=stderr)
             CALLER.COMMAND.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
-            for name, limit in (("response.json", CALLER.COMMAND.RESPONSE_LIMIT), ("stderr.log", CALLER.COMMAND.STDERR_LIMIT)):
-                CALLER.COMMAND.require(CALLER.COMMAND.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
-                               "native output exceeds its bound; retain output")
             with CALLER.COMMAND.os.fdopen(CALLER.COMMAND.os.open("response.json", CALLER.COMMAND.os.O_RDONLY | CALLER.COMMAND.os.O_NOFOLLOW,
                                                dir_fd=descriptor), "r", encoding="utf-8") as stream:
-                text = stream.read(CALLER.COMMAND.RESPONSE_LIMIT + 1)
+                text = stream.read()
             return text, CALLER.COMMAND.json_object(text)
 
 
@@ -135,12 +132,12 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         args, kwargs = native.call_args
         self.assertEqual(args, (command,))
         self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
-        self.assertEqual(kwargs["cwd"], str(self.host))
+        self.assertEqual(kwargs["cwd"], str(self.runtime_root))
         self.assertTrue(kwargs["stdout"].closed)
         self.assertTrue(kwargs["stderr"].closed)
 
     def test_a1_selected_wait_exact_argv_and_passive_output(self):
-        """A1 / R1,R2,R3,R4,R6 / native-host-authority-preparation; exact passive forwarding."""
+        """A1 / R1,R2,R3,R4,R6 / native-runtime_root-authority-preparation; exact passive forwarding."""
         for spelling in ("sessionId", "session_id", "equal-dual"):
             with self.subTest(spelling=spelling):
                 # Given a matching selected Wait and explicit files/metadata with opaque native context.
@@ -194,7 +191,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         self.assertEqual(self.reference.read_bytes(), before)
 
     def test_a2_crossed_nonwait_and_contradictory_request_refusal(self):
-        """A2 / R1,R4,R6 / native-host-authority-preparation; selected task identity and Wait."""
+        """A2 / R1,R4,R6 / native-runtime_root-authority-preparation; selected task identity and Wait."""
         cases = [self.wait("foreign-goal"), self.wait("foreign-goal", "sessionId"),
                  {**self.wait(), "sessionId": "foreign-goal"}, {"kind": "Wait"},
                  {**self.wait(), "session_id": None}, {**self.wait(), "session_id": True}]
@@ -218,7 +215,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 self.assertEqual(route.read_bytes(), retained)
 
     def test_a3_literal_flag_refusal(self):
-        """A3 / R3,R4,R6 / native-host-authority-preparation; exact complete named pairs."""
+        """A3 / R3,R4,R6 / native-runtime_root-authority-preparation; exact complete named pairs."""
         cases = [(kind, name) for kind in ("missing", "duplicate", "blank", "control")
                  for name in sorted(CALLER.OPTIONS)]
         cases.extend(("extra", name) for name in ("unknown", "action", "proposal", "result", "approval"))
@@ -254,11 +251,11 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 self.assertEqual(route.read_bytes(), retained)
 
     def test_a4_collection_and_explicit_file_refusal(self):
-        """A4 / R3,R4,R6 / native-host-authority-preparation; strict collection and explicit files."""
+        """A4 / R3,R4,R6 / native-runtime_root-authority-preparation; strict collection and explicit files."""
         cases = [("collection", value) for value in (
-            "entity:smworkflow/cli/host_evidence", "entity:smworkflow.cli", "entity:smworkflow.cli.host.extra",
+            "entity:smworkflow/cli/host_evidence", "entity:smworkflow.cli", "entity:smworkflow.cli.runtime_root.extra",
             "smworkflow.cli.host_evidence", "entity:1workflow.cli.host_evidence", "entity:smworkflow..host_evidence",
-            "ENTITY:smworkflow.cli.host_evidence", "entity:smworkflow.cli.host-evidence")]
+            "ENTITY:smworkflow.cli.host_evidence", "entity:smworkflow.cli.runtime_root-evidence")]
         for name in ("request", "reference"):
             cases.extend((name, value) for value in ("relative.json", str(self.root) + "/../absent.json",
                                                      str(self.root / "absent.json")))
@@ -283,11 +280,11 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 self.assertEqual(route.read_bytes(), retained)
 
     def test_a5_selected_directories_and_output_refusal(self):
-        """A5 / R4,R6 / native-host-authority-preparation; selected symlink-free empty write directory."""
+        """A5 / R4,R6 / native-runtime_root-authority-preparation; selected symlink-free empty write directory."""
         for case in ("missing-output", "occupied-output", "symlink-output", "symlink-ancestor", "foreign-task",
-                     "output-is-task", "foreign-output", "relative-executable", "unnormalized-host"):
+                     "output-is-task", "foreign-output", "relative-executable", "unnormalized-runtime_root"):
             with self.subTest(case=case):
-                # Given a missing/occupied/symlinked output or a path outside the exact selected host task.
+                # Given a missing/occupied/symlinked output or a path outside the exact selected runtime_root task.
                 route = self.retain()
                 retained = route.read_bytes()
                 self.write_request(self.wait())
@@ -319,7 +316,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 elif case == "relative-executable":
                     argv[argv.index("--executable") + 1] = "sm-workflow"
                 else:
-                    argv[argv.index("--host") + 1] = str(self.host) + "/../host"
+                    argv[argv.index("--runtime-root") + 1] = str(self.runtime_root) + "/../runtime_root"
                 process, _raw = self.process_output({"datastore": []})
                 # When write-directory ownership and symlink-free prerequisites are checked.
                 status, printed, diagnostic, native = self.call(argv, process)
@@ -335,7 +332,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                     self.assertEqual((output / "retained.txt").read_text(), "preserved")
 
     def test_a6_exact_routing_and_prerequisite_refusal(self):
-        """A6 / R1,R4,R6 / native-host-authority-preparation; retained exact route and prepared launcher."""
+        """A6 / R1,R4,R6 / native-runtime_root-authority-preparation; retained exact route and prepared launcher."""
         routes = (None, b"not-json", b"[]", b"{}", b'{"family":"SplitPhase","sessionId":"selected-goal"}',
                   b'{"family":"GoalPhase","sessionId":" "}',
                   b'{"family":"GoalPhase","sessionId":"selected-goal","session_id":"selected-goal"}',
@@ -343,7 +340,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
         cases = [("route", value) for value in routes] + [("prerequisite", path) for path in self.prerequisites]
         for kind, value in cases:
             with self.subTest(case=kind, value=value):
-                # Given an absent/malformed/nonexact route or missing existing launcher/host prerequisite.
+                # Given an absent/malformed/nonexact route or missing existing launcher/runtime_root prerequisite.
                 route = self.retain()
                 if kind == "route":
                     route.unlink()
@@ -368,7 +365,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                     value.write_text("specification prerequisite", encoding="utf-8")
 
     def test_a7_native_failure_and_disconnection_retain_streams_without_retry(self):
-        """A7 / R4,R6 / native-host-authority-preparation; bounded strict response and failure retention."""
+        """A7 / R4,R6 / native-runtime_root-authority-preparation; strict response and failure retention."""
         cases = (
             ("nonzero", b'{"datastore":[]}\n', b"native diagnostic\n", 2, False),
             ("malformed", b"not-json", b"native diagnostic\n", 0, False),
@@ -377,13 +374,12 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
             ("nonobject", b"[]", b"", 0, False),
             ("absent-datastore", b"{}", b"", 0, False),
             ("nonarray-datastore", b'{"datastore":{}}', b"", 0, False),
-            ("oversized-response", b"x" * (CALLER.COMMAND.RESPONSE_LIMIT + 1), b"", 0, False),
-            ("oversized-stderr", b'{"datastore":[]}', b"x" * (CALLER.COMMAND.STDERR_LIMIT + 1), 0, False),
+            ("large-invalid-json", b"x" * (8 * 1024 * 1024 + 1), b"", 0, False),
             ("disconnected", b"partial stdout", b"partial stderr", 0, True),
         )
         for name, response, stderr, returncode, timeout in cases:
             with self.subTest(case=name):
-                # Given an unsuccessful, malformed, nonfinite, oversized or timed-out passive process.
+                # Given an unsuccessful, malformed, nonfinite or timed-out passive process.
                 route = self.retain()
                 self.write_request(self.wait())
                 before = {path: path.read_bytes() for path in (route, self.request, self.reference, *self.prerequisites)}
@@ -404,8 +400,8 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 self.assertEqual({path: path.read_bytes() for path in before}, before)
 
     def test_a8_sequential_selected_tasks_read_their_own_ids(self):
-        """A8 / R1,R4,R6 / native-host-authority-preparation; independent selected task routing."""
-        # Given two separate exact host task routes and their distinct selected Wait identifiers.
+        """A8 / R1,R4,R6 / native-runtime_root-authority-preparation; independent selected task routing."""
+        # Given two separate exact runtime_root task routes and their distinct selected Wait identifiers.
         second = self.task.parent / "second-task"
         second.mkdir()
         routes = (self.retain(self.task, "first-goal"), self.retain(second, "second-goal"))

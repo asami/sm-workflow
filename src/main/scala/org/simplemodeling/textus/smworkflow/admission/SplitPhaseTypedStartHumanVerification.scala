@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.SplitPhaseTypedStartPrepar
  * Start admission consumes the independent host boundary's outcome. It does
  * not wrap that outcome in another receipt or repeat its evidence checks.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartHumanVerification {
   val purpose = "split-phase-start"
@@ -35,8 +35,8 @@ private[smworkflow] object SplitPhaseTypedStartHumanVerification {
       Consequence.securityPermissionDenied("SplitPhase human Start requires its current owner and independent host evidence")
     else for {
       _ <- participantC(prepared.record.participantIdentity, core)
-      target <- ThreeWorkflowHostEvidencePorts.splitStartBindingC(StartContext(core.component.get.core.instanceId, prepared.record))
-      lookup = ThreeWorkflowHostEvidencePorts.key(allocation.identity, allocation.revision)
+      target <- ThreeWorkflowExternalEvidencePorts.splitStartBindingC(StartContext(core.component.get.core.instanceId, prepared.record))
+      lookup = ThreeWorkflowExternalEvidencePorts.key(allocation.identity, allocation.revision)
       _ <- try Option(evidence.admitC(core, lookup, target)).getOrElse(
         Consequence.serviceUnavailable("SplitPhase human Start host evidence returned no outcome"))
         catch { case NonFatal(_) => Consequence.serviceUnavailable("SplitPhase human Start verification is indeterminate") }

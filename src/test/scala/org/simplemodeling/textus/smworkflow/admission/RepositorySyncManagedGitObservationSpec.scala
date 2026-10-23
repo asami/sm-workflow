@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Fixed ProcessBuilder setup creates inputs only, never Workflow history.
   * Producer decoder/security examples are reused rather than duplicated here.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with GivenWhenThen
@@ -25,7 +25,7 @@ final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with Giv
     Path.of("target/sm-workflow/work/repository-git").toAbsolutePath.normalize), "episode-")
   private def target(root: Path) = Programs.Target(root.resolve("repository"), "main", "origin", "main",
     root.resolve("upstream.git").toString)
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json =
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(target(root), denied = if (scenario == "NoGrant")
       Set(TypedGitHostPlanFixture.capability(GitOperationKind.Head)) else Set.empty,
       commitIdentity = scenario != "NoIdentity")

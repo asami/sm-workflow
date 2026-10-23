@@ -11,7 +11,8 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.{Property, Request}
 import org.simplemodeling.textus.smworkflow.value as V
-import org.simplemodeling.textus.smworkflow.host.{NativeHostReviewPreparation, NativeHostHumanPreparation, NativeHostAuthorityPreparation, NativeWorkflowHostExecution}
+import org.simplemodeling.textus.smworkflow.caller.NativeWorkflowCallerExecution
+import org.simplemodeling.textus.smworkflow.preparation.{NativeReviewPreparation, NativeHumanDecisionPreparation, NativeAuthorityPreparation}
 import WorkflowExecutionHarness as H
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordDecoder
@@ -28,12 +29,12 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
-  override protected def goal_selected_paths(goal: ThreeWorkflowHostParameters.Goal): Vector[Vector[String]] =
+  override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
     if (goal.closure.programs.map(_.step) == Vector("step-1", "step-2") &&
         goal.candidatePaths == Vector("one.scala", "two.scala"))
       Vector(Vector("one.scala"), Vector("two.scala"))
@@ -176,8 +177,8 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         Property("stage", "Completed", None), Property("argv", Vector("must-not-execute"), None),
         Property("diagnostics", io.circe.Json.obj("expectedRevision" -> io.circe.Json.fromInt(999)), None))
       var assigned = Option.empty[WorkflowInteraction[S.Request, Nothing]]
-      var humancontext = Option.empty[V.WorkflowHostHumanContext]
-      var reviewcontext = Option.empty[V.WorkflowHostReviewContext]
+      var humancontext = Option.empty[V.WorkflowHumanDecisionContext]
+      var reviewcontext = Option.empty[V.WorkflowReviewContext]
       var saved = Option.empty[InstanceRecord]
       var firstbase = Option.empty[O.Snapshot]
       var completed = Vector.empty[O.ClosedStep]
@@ -221,7 +222,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         }
       }
       var expectedissues = Map.empty[String, (ExecutionDisposition, String)]
-      var hostsessions = Map.empty[String, NativeWorkflowHostExecution.Prepared]
+      var hostsessions = Map.empty[String, NativeWorkflowCallerExecution.Prepared]
       var usedreviewalternate = false
       val sessions = Vector("issue") ++ (if (mapped) Vector("pending-replacement") else Vector.empty) ++
         Vector("implement-1", "review-repair", "repair") ++
@@ -291,12 +292,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             val key = issued.continuationId
             When("the host prepares only a new continuation or restores its retained session during redisplay")
             val prepared = hostsessions.get(key) match {
-              case Some(retained) => take(NativeWorkflowHostExecution.restoreC(issued,
+              case Some(retained) => take(NativeWorkflowCallerExecution.restoreC(issued,
                 take(H.decodeC(take(H.encodeC(retained.session))))))
               case None =>
                 val mapping = take(WorkflowExecutionProfileParameters.resolveC(component.initializationParameters)).get
                 val origin = take(GoalPhaseNativeExecution.resolveOriginC(component.initializationParameters)).get.current
-                take(NativeWorkflowHostExecution.prepareC(issued, mapping, origin))
+                take(NativeWorkflowCallerExecution.prepareC(issued, mapping, origin))
             }
             hostsessions = hostsessions.updated(key, prepared)
             Then("the host retains the original public scope and native reference without re-resolving pending work")
@@ -311,7 +312,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               prepared.session.requirement.disposition.get.placement shouldBe ExecutionPlacement.Inline
             }
           }
-          reviewcontext = response.work.get.review.flatMap(_.hostContext)
+          reviewcontext = response.work.get.review.flatMap(_.reviewContext)
           if (_input_(work.get).kind.startsWith("Review")) reviewcontext should not be empty
           else reviewcontext shouldBe empty
           work.get
@@ -325,7 +326,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           response.issuedWorkContext shouldBe None
           response.human.get.work.kind shouldBe _input_(assigned.get).kind
           response.human.get.choices shouldBe Vector(if (continuing) "ContinueRepairs" else "ResumeAssignedWork", "Defer", "Cancel")
-          humancontext = response.human.get.hostContext
+          humancontext = response.human.get.humanDecisionContext
           humancontext should not be empty
           var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
           prepare(call => call.goalQuestionC(identity).map(value => { question = Some(value); () }))
@@ -536,7 +537,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           }
           When("the public passive preparation produces a managed record input and the specification provisions it through existing Create")
           prepare(call => for {
-            prepared <- NativeHostReviewPreparation.goalC(reviewcontext.get,
+            prepared <- NativeReviewPreparation.goalC(reviewcontext.get,
               V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, B.publicReport(value.acceptance),
                 GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
                 GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
@@ -588,7 +589,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           _current_().revision shouldBe pending.revision
           def _prepare_human_(value: ContinuationResult[GoalPhaseOrderedHumanDecision.Answer]): Unit =
             prepare(call => for {
-              prepared <- NativeHostHumanPreparation.goalC(humancontext.get,
+              prepared <- NativeHumanDecisionPreparation.goalC(humancontext.get,
                 V.GoalPhaseOrderedDecisionAnswer(value.result.value.choice, value.result.value.rationale),
                 V.WorkflowArtifactReference(value.resultReference.identity, value.resultReference.revision),
                 V.WorkflowExecutionEvidence(Vector.empty, value.evidence.workerIdentity, None, None),
@@ -711,7 +712,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           for ((status, reason) <- Vector(H.Status.Blocked -> H.Reason.AuthorityBlocked,
               H.Status.Failed -> H.Reason.UncertainExecution, H.Status.Declined -> H.Reason.CapabilityDeclined)) {
             Given("E8: an independent specification branch of the actual retained pending issue with operational " + status.value)
-            val branch = take(NativeWorkflowHostExecution.restoreC(hostsessions(key).issued,
+            val branch = take(NativeWorkflowCallerExecution.restoreC(hostsessions(key).issued,
               take(H.decodeC(take(H.encodeC(originalsession))))))
             When("the host records that actual noncompletion and returns control without Submit or Advance")
             val stopped = take(branch.recordC(branch.session.nextSelection.get, H.Outcome(status, reason, "Specification-owned terminal host outcome")))
@@ -729,7 +730,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           waiting.kind shouldBe "Wait"
           waiting.issuedWorkContext shouldBe None
           waiting.authorityContext should not be empty
-          waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.PhaseClosure.identity
+          waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.PhaseClosure.identity
           current.lifecycle shouldBe Lifecycle.Active
           current.currentProgression shouldBe Some(ProgressionReference("phase.PhaseClosing"))
           current.revision shouldBe saved.get.revision
@@ -746,11 +747,11 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           context.scope.getString("sourceRevision") shouldBe Some(current.revision.value.toString)
           context.scope.getString("review") shouldBe Some(reviewreference.identity)
           context.scope.getString("childInvocation") shouldBe Some(invocation)
-          NativeHostAuthorityPreparationFixture.json(context.scope).hcursor.downField("candidate").get[String]("tree").toOption shouldBe
+          NativeAuthorityPreparationFixture.json(context.scope).hcursor.downField("candidate").get[String]("tree").toOption shouldBe
             Some(input.candidate.get.tree)
           When("public passive Phase preparation supplies only input and the specification provisions the row and independent child prerequisites")
           prepare(call => for {
-            prepared <- NativeHostAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-phase-authority", "1"),
+            prepared <- NativeAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-phase-authority", "1"),
               "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
             _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
             _ <- _prepare_input_(call, host.repository.input, child, root)
@@ -777,12 +778,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           result.originalBase.tree shouldBe firstbase.get.tree
           result.completed.map(_.commit.identity) shouldBe completed.map(_.commit.identity)
           result.completed.size shouldBe 2
-          result.repository.tip shouldBe result.reviewedCandidate.head
-          result.repository.tree shouldBe result.reviewedCandidate.tree
+          result.repository.get.tip shouldBe result.reviewedCandidate.head
+          result.repository.get.tree shouldBe result.reviewedCandidate.tree
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           prepare(call => call.observeC().map(value => { observed = Some(value); () }))
-          observed.get.head shouldBe result.repository.tip
-          observed.get.trackingTip shouldBe Some(result.repository.tip)
+          observed.get.head shouldBe result.repository.get.tip
+          observed.get.trackingTip shouldBe Some(result.repository.get.tip)
           observed.get.dirty shouldBe empty
           val actual = _current_()
           actual.lifecycle shouldBe Lifecycle.Completed
@@ -898,7 +899,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               waiting.kind shouldBe "Wait"
               waiting.issuedWorkContext shouldBe None
               waiting.authorityContext should not be empty
-              waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+              waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
               _current_().lifecycle shouldBe Lifecycle.Active
               _current_().revision shouldBe current.revision
               var before = Option.empty[RepositorySyncManagedGitObservation.Observed]
@@ -913,13 +914,13 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               context.scope.getString("sourceRevision") shouldBe Some(current.revision.value.toString)
               context.scope.getString("step") shouldBe input.stepIdentity
               context.scope.getString("reviewEvidence") shouldBe Some(result.resultReference.identity)
-              val target = NativeHostAuthorityPreparationFixture.json(context.scope)
+              val target = NativeAuthorityPreparationFixture.json(context.scope)
               target.hcursor.get[Long]("generation").toOption shouldBe Some(input.generation)
               target.hcursor.downField("parent").get[String]("head").toOption shouldBe Some(parent.head)
               target.hcursor.downField("candidate").get[String]("tree").toOption shouldBe Some(input.candidate.get.tree)
               When("public passive Step preparation supplies input for existing managed specification Create")
               prepare(call => for {
-                prepared <- NativeHostAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-step-authority", "1"),
+                prepared <- NativeAuthorityPreparation.goalC(context, V.WorkflowArtifactReference("specification-step-authority", "1"),
                   "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
                 _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
               } yield ())
@@ -967,7 +968,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
         val plan = O.Plan("human-latch-plan", "1", host.goal.input.phaseIdentity, host.goal.input.repositoryIdentity,
           Vector(O.Step("step-1", "Implement only the original boundary", host.goal.candidatePaths, Vector.empty, Vector("test"))),
           Vector("test"), repairLimit = 0)
-        var humancontext = Option.empty[V.WorkflowHostHumanContext]
+        var humancontext = Option.empty[V.WorkflowHumanDecisionContext]
         var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
         var retained = Option.empty[V.GoalPhaseAdvanceResult]
         var saved = Option.empty[InstanceRecord]
@@ -1016,7 +1017,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             Then("the pending public Human retains its actual context")
             displayed.kind shouldBe "Human"
             displayed.issuedWorkContext shouldBe None
-            humancontext = displayed.human.get.hostContext
+            humancontext = displayed.human.get.humanDecisionContext
             humancontext should not be empty
             question = Some(loadQuestion())
             saved = Some(current())
@@ -1026,7 +1027,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             Then("the pending public Human retains its actual context")
             displayed.kind shouldBe "Human"
             displayed.issuedWorkContext shouldBe None
-            humancontext = displayed.human.get.hostContext
+            humancontext = displayed.human.get.humanDecisionContext
             humancontext should not be empty
             question = Some(loadQuestion())
             val decision = question.get.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request
@@ -1038,7 +1039,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
             Given("the freshly displayed context and explicit fixture Human direction")
             When("public passive preparation supplies the existing managed Create input")
             prepare(call => for {
-              prepared <- NativeHostHumanPreparation.goalC(humancontext.get,
+              prepared <- NativeHumanDecisionPreparation.goalC(humancontext.get,
                 V.GoalPhaseOrderedDecisionAnswer(answer.result.value.choice, answer.result.value.rationale),
                 V.WorkflowArtifactReference(reference.identity, reference.revision),
                 V.WorkflowExecutionEvidence(Vector.empty, answer.evidence.workerIdentity, None, None),

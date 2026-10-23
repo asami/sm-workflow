@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Finite native Goal, Split or Repository host actions; admission remains native-owned.
+"""Finite native Goal, Split or Repository runtime_root actions; admission remains native-owned.
 
 PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @since   Oct. 14, 2026
@@ -22,9 +22,10 @@ import stat
 import subprocess
 import sys
 import time
+from urllib.parse import unquote, urlsplit
 
 
-BASE_OPTIONS = {"executable", "host", "task", "action", "output"}
+BASE_OPTIONS = {"executable", "runtime-root", "task", "action", "output"}
 ACTION_OPTIONS = {
     "start-repository": {"input", "proposal"},
     "advance-repository": set(),
@@ -37,6 +38,8 @@ ACTION_OPTIONS = {
     "submit-split-partition": {"request", "submission"},
     "submit-split-scope": {"request", "submission"},
     "submit-split-reasoning": {"request", "submission"},
+    "prepare-information": {"request", "information-kind", "source-locator", "caller-identity"},
+    "record-information": {"request", "information-request", "observation"},
     "prepare-execution": {"request", "mapping", "origin"},
     "record-execution": {"request", "execution-session", "observation", "reference"},
     "prepare-repository-input": {
@@ -61,7 +64,7 @@ ACTION_OPTIONS = {
     "start": {"input", "proposal"},
     "advance": set(),
     "submit": {"request", "submission"},
-    "complete": {"request", "submission"},
+    "complete": {"request", "submission", "human-provenance"},
     "submit-repository-review": {"request", "submission"},
     "submit-repository-repair": {"request", "submission"},
     "submit-repository-conflict": {"request", "submission"},
@@ -79,8 +82,6 @@ REPOSITORY_ROUTES = {
     "submit-repository-repair": ("submitNativeMergeRepair", "RepositorySyncNativeMergeRepairResult"),
     "submit-repository-conflict": ("submitRepositorySyncWorkResult", "RepositorySyncConflictResult"),
 }
-RESPONSE_LIMIT = 8 * 1024 * 1024
-STDERR_LIMIT = 1024 * 1024
 SESSION_FILE = "workflow-session.json"
 EVENT_LINE_LIMIT = 16384
 BUDGET_FIELDS = frozenset({"launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis"})
@@ -148,6 +149,8 @@ def parse_options(argv):
     require(action in ACTION_OPTIONS, "unsupported action")
     permitted = BASE_OPTIONS | ACTION_OPTIONS[action]
     optional = {"proposal"} if action in {"start", "start-split", "start-repository"} else {"reference"} if action == "record-execution" else set()
+    if action == "complete":
+        optional = {"human-provenance"}
     required = permitted - optional
     require(options.keys() <= permitted, "action-inapplicable argument")
     require(required <= options.keys(), "missing action argument")
@@ -252,9 +255,9 @@ def new_file(directory_fd, name):
     return os.fdopen(descriptor, "wb")
 
 
-def command_prefix(executable, host):
+def command_prefix(executable, runtime_root):
     """Use the explicitly selected installed CLI; artifact selection is its own."""
-    return [str(executable), "--host", str(host), "command"]
+    return [str(executable), "--runtime-root", str(runtime_root), "command"]
 
 
 def installed_executable(path):
@@ -270,8 +273,8 @@ def prepare_goal_input(options, executable):
              "origin": "ExplicitHuman", "idempotencyKey": options["idempotency-key"],
              "selectionCollection": options["selection-collection"],
              "planCollection": options["plan-collection"]}
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareGoalStart",
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareGoalStart",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -281,8 +284,8 @@ def prepare_repository_input(options, executable):
              "selectionId": options["selection-id"], "participant": options["participant"],
              "origin": "ExplicitHuman", "idempotencyKey": options["idempotency-key"],
              "selectionCollection": options["selection-collection"]}
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryStart",
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareRepositoryStart",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -294,8 +297,8 @@ def prepare_split_input(options, executable):
         value[field] = existing_file(explicit_path(options[option])).as_uri()
     value.update(participant=options["participant"], issuer=options["issuer"],
                  occurredAt=options["occurred-at"], collection=options["collection"])
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareSplitStart",
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareSplitStart",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -307,8 +310,8 @@ def prepare_repository_effect(options, executable):
     value.update(effect=options["effect"], participant=options["participant"],
                  issuer=options["issuer"], occurredAt=options["occurred-at"],
                  collection=options["collection"])
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareRepositoryEffect",
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareRepositoryEffect",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], None
 
 
@@ -392,8 +395,8 @@ def review_input_command(options, executable, session_id, family="GoalPhase"):
              "executionEvidence": existing_file(explicit_path(options["execution-evidence"])).as_uri(),
              "issuer": options["issuer"], "occurredAt": options["occurred-at"],
              "collection": options["collection"]}
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareEvidence",
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence",
         "--input", json.dumps(value, ensure_ascii=False), "--json"], session_id
 
 
@@ -440,7 +443,7 @@ def submit(options, task_fd):
 
 
 def execution_command(options, executable, task_fd):
-    """Forward the whole issued DTO and explicitly selected host artifact URIs."""
+    """Forward the whole issued DTO and explicitly selected runtime_root artifact URIs."""
     route = route_record(task_fd)
     session_id = route["sessionId"]
     _text, request = read_object(explicit_path(options["request"]))
@@ -472,13 +475,39 @@ def execution_command(options, executable, task_fd):
             fields += (("reference", "reference"),)
     for field, option in fields:
         value[field] = existing_file(explicit_path(options[option])).as_uri()
-    return command_prefix(executable, explicit_path(options["host"])) + [
-        "org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService." + operation,
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService." + operation,
         "--input", json.dumps(value, ensure_ascii=False), "--json"], session_id
 
 
-def action_command(options, executable, host, task_fd):
+
+def information_command(options, executable, task_fd):
+    """Return to the existing caller; no source fetch, Submit or Advance."""
+    route = route_record(task_fd)
+    session_id = route["sessionId"]
+    _text, request = read_object(explicit_path(options["request"]))
+    require(request.get("kind") == "Request" and native_field(request, "sessionId") == session_id,
+            "information request must retain the actual issued task")
+    issued = native_field(request, "issuedWorkContext")
+    require(isinstance(issued, dict) and issued, "information requires actual issuedWorkContext")
+    value = {"issuedWorkContext": issued}
+    if options["action"] == "prepare-information":
+        operation = "prepareCallerInformation"
+        _text, source = read_object(explicit_path(options["source-locator"]))
+        value.update(kind=options["information-kind"], source=source, callerIdentity=options["caller-identity"])
+    else:
+        operation = "recordCallerInformation"
+        value.update(request=existing_file(explicit_path(options["information-request"])).as_uri(),
+                     observation=existing_file(explicit_path(options["observation"])).as_uri())
+    return command_prefix(executable, explicit_path(options["runtime-root"])) + [
+        "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService." + operation,
+        "--input", json.dumps(value, ensure_ascii=False), "--json"], session_id
+
+
+def action_command(options, executable, runtime_root, task_fd):
     action = options["action"]
+    if action in {"prepare-information", "record-information"}:
+        return information_command(options, executable, task_fd)
     if action in {"prepare-execution", "record-execution"}:
         return execution_command(options, executable, task_fd)
     if action == "prepare-repository-input":
@@ -528,7 +557,7 @@ def action_command(options, executable, host, task_fd):
         service = REPOSITORY_FQN
     else:
         operation, pairs, session_id = submit(options, task_fd)
-    command = command_prefix(executable, host) + [service + operation]
+    command = command_prefix(executable, runtime_root) + [service + operation]
     return command + pairs + ["--json"], session_id
 
 
@@ -565,12 +594,12 @@ def observation_projection(value):
     return selected
 
 
-def exchange_context(command, host, output, outer_id, request=None):
+def exchange_context(command, runtime_root, output, outer_id, request=None):
     """Use only the actual selected invocation and optional issued DTO."""
     operation = command[command.index("command") + 1]
     target = command[command.index("--sessionId") + 1] if "--sessionId" in command else None
     context = {"operation": operation, "outerSessionId": display_value(outer_id),
-               "targetSessionId": display_value(target), "host": str(host),
+               "targetSessionId": display_value(target), "runtimeRoot": str(runtime_root),
                "responseReference": str(output / "response.json"),
                "stderrReference": str(output / "stderr.log")}
     if request is not None:
@@ -583,7 +612,7 @@ def response_progress(response, context):
     progress("response", context, observation=observation_projection(response))
 
 
-def native_call(command, host, output_fd, context):
+def native_call(command, runtime_root, output_fd, context):
     """Wait for one actual runtime response; only the runtime owns termination."""
     require(os.name == "posix" and hasattr(os, "setsid"),
             "native calls require an owned POSIX runtime process")
@@ -697,7 +726,7 @@ def native_call(command, host, output_fd, context):
                 progress("invocation", context)
                 previous = signal.signal(signal.SIGTERM, on_sigterm)
                 try:
-                    process = subprocess.Popen(command, cwd=str(host), stdout=stdout, stderr=stderr, start_new_session=True)
+                    process = subprocess.Popen(command, cwd=str(runtime_root), stdout=stdout, stderr=stderr, start_new_session=True)
                     if cancellation["requested"]:
                         request_termination()
                     last_activity = started
@@ -745,12 +774,9 @@ def native_call(command, host, output_fd, context):
                 finally:
                     signal.signal(signal.SIGTERM, previous)
     require(process.returncode == 0, "native process exited unsuccessfully; retain output")
-    for name, limit in (("response.json", RESPONSE_LIMIT), ("stderr.log", STDERR_LIMIT)):
-        require(os.stat(name, dir_fd=output_fd, follow_symlinks=False).st_size <= limit,
-                "native output exceeds its bound; retain output")
     descriptor = os.open("response.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=output_fd)
     with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
-        text = stream.read(RESPONSE_LIMIT + 1)
+        text = stream.read()
     response = json_object(text)
     if cancellation["requested"]:
         display_observation(response)
@@ -759,27 +785,58 @@ def native_call(command, host, output_fd, context):
     return text, response
 
 
-def completion_commands(options, executable, host, task_fd):
+def completion_commands(options, executable, runtime_root, task_fd):
     """Select a closed issued Submit pair and retain its explicit outer Advance."""
     route = route_record(task_fd)
     _text, request = read_object(explicit_path(options["request"]))
     pair = (native_field(request, "submitOperation"), native_field(request, "resultType"))
     family = route["family"]
-    if family == "GoalPhase" and pair == ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"):
+    preparation = None
+    if request.get("kind") == "Human":
+        require(family == "GoalPhase"
+                and native_field(request, "sessionId") == route["sessionId"]
+                and native_field(request, "submitSessionId") == route["sessionId"]
+                and pair == ("submitGoalPhaseOrderedDecision", "GoalPhaseOrderedDecisionAnswer"),
+                "unsupported or contradictory issued Human completion route")
+        require("human-provenance" in options, "Human completion requires human-provenance")
+        _text, submission = read_object(explicit_path(options["submission"]))
+        require(set(submission) == {"answer", "resultReference", "executionEvidence"}
+                and all(isinstance(value, dict) for value in submission.values()),
+                "Human submission requires exactly answer, resultReference and executionEvidence objects")
+        _text, provenance = read_object(explicit_path(options["human-provenance"]))
+        require(set(provenance) == {"participant", "issuer", "occurredAt", "collection"}
+                and all(nonblank(value) and value == value.strip()
+                        and not any(ord(c) < 32 or ord(c) == 127 for c in value)
+                        for value in provenance.values()), "invalid Human provenance fields")
+        require(re.fullmatch(r"entity:[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*",
+                             provenance["collection"]) is not None,
+                "collection must be a strict dotted entity address")
+        submit_id = route["sessionId"]
+        pairs = ["--sessionId", submit_id]
+        for name in ("answer", "resultReference", "executionEvidence"):
+            pairs.extend(["--" + name, json.dumps(submission[name], ensure_ascii=False, allow_nan=False)])
+        prepared_path = explicit_path(options["output"]) / "preparation" / "response.json"
+        command = [str(executable), "--runtime-root", str(runtime_root),
+                   "--textus.import.data.file=" + str(prepared_path),
+                   "command", FQN + pair[0], *pairs, "--json"]
+        preparation = (submission, provenance)
+    elif family == "GoalPhase" and pair == ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"):
         action = "submit"
     else:
         routes = SPLIT_ROUTES if family == "SplitPhase" else REPOSITORY_ROUTES
         action = next((name for name, candidate in routes.items() if candidate == pair), None)
         require(action is not None, "unsupported issued completion route")
-    command, submit_id = action_command(dict(options, action=action), executable, host, task_fd)
+    if preparation is None:
+        require("human-provenance" not in options, "semantic completion rejects human-provenance")
+        command, submit_id = action_command(dict(options, action=action), executable, runtime_root, task_fd)
     advance_action, service, operation = {
         "GoalPhase": ("advance", FQN, "advanceGoalPhase"),
         "SplitPhase": ("advance-split", SPLIT_FQN, "advanceSplitPhase"),
         "RepositorySync": ("advance-repository", REPOSITORY_FQN, "advanceRepositorySync"),
     }[family]
     outer_id = route["sessionId"]
-    following = command_prefix(executable, host) + [service + operation, "--sessionId", outer_id, "--json"]
-    return command, submit_id, following, outer_id, advance_action
+    following = command_prefix(executable, runtime_root) + [service + operation, "--sessionId", outer_id, "--json"]
+    return command, submit_id, following, outer_id, advance_action, preparation
 
 
 def display_observation(response):
@@ -788,18 +845,43 @@ def display_observation(response):
     sys.stdout.flush()
 
 
-def complete(options, executable, host, task_fd, output_fd):
+def complete(options, executable, runtime_root, task_fd, output_fd):
     """Submit once, then explicitly Advance once only after actual acceptance."""
-    command, submit_id, following, outer_id, advance_action = completion_commands(
-        options, executable, host, task_fd)
+    command, submit_id, following, outer_id, advance_action, preparation = completion_commands(
+        options, executable, runtime_root, task_fd)
     os.mkdir("advance", mode=0o700, dir_fd=output_fd)
     advance_fd = os.open("advance", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
     _request_text, request = read_object(explicit_path(options["request"]))
     output = explicit_path(options["output"])
-    submit_context = exchange_context(command, host, output, outer_id, request)
-    advance_context = exchange_context(following, host, output / "advance", outer_id)
+    submit_context = exchange_context(command, runtime_root, output, outer_id, request)
+    advance_context = exchange_context(following, runtime_root, output / "advance", outer_id)
     try:
-        _text, response = native_call(command, host, output_fd, submit_context)
+        if preparation is not None:
+            submission, provenance = preparation
+            os.mkdir("preparation", mode=0o700, dir_fd=output_fd)
+            preparation_fd = os.open("preparation", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
+            try:
+                value = dict(provenance, family="GoalPhase", kind="human",
+                             request=explicit_path(options["request"]).as_uri())
+                for field, source in (("result", "answer"), ("reference", "resultReference"),
+                                      ("executionEvidence", "executionEvidence")):
+                    name = source + ".json"
+                    with new_file(preparation_fd, name) as stream:
+                        stream.write(json.dumps(submission[source], ensure_ascii=False, allow_nan=False).encode("utf-8"))
+                    value[field] = (output / "preparation" / name).as_uri()
+                prepare_command = command_prefix(executable, runtime_root) + [
+                    "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence",
+                    "--input", json.dumps(value, ensure_ascii=False, allow_nan=False), "--json"]
+                prepare_context = exchange_context(prepare_command, runtime_root, output / "preparation", outer_id, request)
+                _text, prepared = native_call(prepare_command, runtime_root, preparation_fd, prepare_context)
+                require(isinstance(prepared.get("datastore"), list), "preparation must return a datastore array")
+                display_observation(prepared)
+                response_progress(prepared, prepare_context)
+                require(route_record(task_fd) == {"family": "GoalPhase", "sessionId": outer_id},
+                        "task routing changed after preparation; retain output and stop")
+            finally:
+                os.close(preparation_fd)
+        _text, response = native_call(command, runtime_root, output_fd, submit_context)
         require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
                 "Submit response ID or message mismatches the selected route")
         require(isinstance(response.get("accepted"), bool) and nonblank(response.get("outcome")),
@@ -811,7 +893,7 @@ def complete(options, executable, host, task_fd, output_fd):
         require(route_record(task_fd) == {"family": {"advance": "GoalPhase", "advance-split": "SplitPhase",
                                "advance-repository": "RepositorySync"}[advance_action],
                 "sessionId": outer_id}, "task routing changed after accepted Submit; retain output and stop")
-        _text, response = native_call(following, host, advance_fd, advance_context)
+        _text, response = native_call(following, runtime_root, advance_fd, advance_context)
         acknowledge(advance_action, response, outer_id, task_fd, advance_fd)
         display_observation(response)
         response_progress(response, advance_context)
@@ -819,7 +901,19 @@ def complete(options, executable, host, task_fd, output_fd):
         os.close(advance_fd)
 
 
+
 def acknowledge(action, response, session_id, task_fd, output_fd):
+    if action in {"prepare-information", "record-information"}:
+        requested = response if action == "prepare-information" else response.get("request")
+        require(isinstance(requested, dict) and isinstance(native_field(requested, "issuedWorkContext"), dict),
+                "information response must retain issuedWorkContext")
+        if action == "record-information":
+            require(response.get("outcome") in {"available", "partial", "unavailable"},
+                    "information response must retain actual availability")
+        filename = "caller-information-request.json" if action == "prepare-information" else "caller-information-result.json"
+        with new_file(output_fd, filename) as stream:
+            stream.write(json.dumps(response, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        return
     if action in {"prepare-execution", "record-execution"}:
         session = response.get("session")
         selection = native_field(response, "nextSelection")
@@ -861,25 +955,25 @@ def acknowledge(action, response, session_id, task_fd, output_fd):
 
 
 def execute(options):
-    executable, host, task, output = (explicit_path(options[name])
-                                   for name in ("executable", "host", "task", "output"))
-    require(task.parent == host / "target/sm-workflow/tasks", "task must be a direct owned host task")
+    executable, runtime_root, task, output = (explicit_path(options[name])
+                                   for name in ("executable", "runtime-root", "task", "output"))
+    require(task.parent == runtime_root / "target/sm-workflow/tasks", "task must be a direct owned runtime_root task")
     require(output != task and task in output.parents, "output must be beneath the selected task")
     installed_executable(executable)
-    with selected_directory(host):
-        for path in (host / ".textus/config.json", host / ".textus/assembly.yaml"):
+    with selected_directory(runtime_root):
+        for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
             existing_file(path)
         with selected_directory(task) as task_fd, selected_directory(output) as output_fd:
             require(not os.listdir(output_fd), "output directory must be empty")
             if options["action"] == "complete":
-                complete(options, executable, host, task_fd, output_fd)
+                complete(options, executable, runtime_root, task_fd, output_fd)
                 return
-            command, session_id = action_command(options, executable, host, task_fd)
+            command, session_id = action_command(options, executable, runtime_root, task_fd)
             request = read_object(explicit_path(options["request"]))[1] if "request" in options else None
-            context = exchange_context(command, host, output,
+            context = exchange_context(command, runtime_root, output,
                                        route_record(task_fd)["sessionId"] if session_id is not None else None,
                                        request)
-            text, response = native_call(command, host, output_fd, context)
+            text, response = native_call(command, runtime_root, output_fd, context)
             acknowledge(options["action"], response, session_id, task_fd, output_fd)
             response_progress(response, context)
             sys.stdout.write(text)

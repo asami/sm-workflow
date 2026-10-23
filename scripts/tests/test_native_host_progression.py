@@ -35,6 +35,7 @@ CALLER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CALLER)
 
 GOAL_PAIR = ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult")
+HUMAN_PAIR = ("submitGoalPhaseOrderedDecision", "GoalPhaseOrderedDecisionAnswer")
 SPLIT_PAIRS = (
     ("submitPartitionSemanticResult", "SplitPhasePartitionSemanticResult"),
     ("submitHandoffScopeResult", "SplitPhaseScopeSemanticResult"),
@@ -68,13 +69,13 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
         self.executable = self.root / "installed CLI" / "sm-workflow"
-        self.host = self.root / "host"
-        self.task = self.host / "target/sm-workflow/tasks/owned-task"
+        self.runtime_root = self.root / "runtime_root"
+        self.task = self.runtime_root / "target/sm-workflow/tasks/owned-task"
         self.task.mkdir(parents=True)
         for path in (
             self.executable,
-            self.host / ".textus/config.json",
-            self.host / ".textus/assembly.yaml",
+            self.runtime_root / ".textus/config.json",
+            self.runtime_root / ".textus/assembly.yaml",
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture prerequisite", encoding="utf-8")
@@ -119,13 +120,29 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         return output
 
     def args(self, output):
-        return ["--executable", str(self.executable), "--host", str(self.host),
+        return ["--executable", str(self.executable), "--runtime-root", str(self.runtime_root),
                 "--task", str(self.task), "--action", "complete", "--output", str(output),
                 "--request", str(self.request), "--submission", str(self.submission)]
 
     def submit_response(self):
         return {"sessionId": self.submit_id, "message": "Actual fixture acknowledgement",
                 "accepted": True, "outcome": "accepted"}
+
+    def select_human(self, wire=False):
+        self.select(pair=HUMAN_PAIR, wire=wire)
+        request = json.loads(self.request.read_text())
+        request.update(kind="Human", human={"hostContext": {"question": {"opaque": True}}})
+        self.save(self.request, request)
+        self.save(self.submission, {"answer": {"choice": "AuthorizeNewAttempt", "rationale": "Fixture direction"},
+                                   "resultReference": {"identity": "fixture-human", "revision": "1"},
+                                   "executionEvidence": {"workerIdentity": "test-independent-human"}})
+        self.provenance = self.root / "human-provenance.json"
+        self.save(self.provenance, {"participant": "participant", "issuer": "normal-development-runtime_root",
+                                    "occurredAt": "2026-10-21T00:00:00Z",
+                                    "collection": "entity:smworkflow.cli.host_evidence"})
+
+    def human_args(self, output):
+        return self.args(output) + ["--human-provenance", str(self.provenance)]
 
     def advance_response(self, kind="Request"):
         return {"sessionId": self.outer_id, "message": "Actual fixture frontier", "kind": kind}
@@ -141,7 +158,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
             index = len(calls)
             calls.append(command)
             self.assertEqual(set(kwargs), {"cwd", "stdout", "stderr"})
-            self.assertEqual(kwargs["cwd"], str(self.host))
+            self.assertEqual(kwargs["cwd"], str(self.runtime_root))
             if during is not None:
                 during(index, observations)
             kwargs["stdout"].write(self.raw(responses[index]))
@@ -154,18 +171,15 @@ class NativeHostProgressionSpecification(unittest.TestCase):
 
         native = Mock(side_effect=invoke)
 
-        def fixture(command, host, descriptor, context):
+        def fixture(command, runtime_root, descriptor, context):
             CALLER.progress("invocation", context)
             with CALLER.new_file(descriptor, "response.json") as stdout:
                 with CALLER.new_file(descriptor, "stderr.log") as stderr:
-                    result = native(command, cwd=str(host), stdout=stdout, stderr=stderr)
+                    result = native(command, cwd=str(runtime_root), stdout=stdout, stderr=stderr)
             CALLER.require(result.returncode == 0, "native process exited unsuccessfully; retain output")
-            for name, limit in (("response.json", CALLER.RESPONSE_LIMIT), ("stderr.log", CALLER.STDERR_LIMIT)):
-                CALLER.require(CALLER.os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_size <= limit,
-                               "native output exceeds its bound; retain output")
             with CALLER.os.fdopen(CALLER.os.open("response.json", CALLER.os.O_RDONLY | CALLER.os.O_NOFOLLOW,
                                                dir_fd=descriptor), "r", encoding="utf-8") as stream:
-                text = stream.read(CALLER.RESPONSE_LIMIT + 1)
+                text = stream.read()
             return text, CALLER.json_object(text)
 
         with patch.object(CALLER, "native_call", side_effect=fixture):
@@ -177,7 +191,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         return status, observations, diagnostic.getvalue(), calls, native
 
     def expected_command(self, service, operation, pairs):
-        return [str(self.executable), "--host", str(self.host), "command", SERVICES[service] + operation, *pairs, "--json"]
+        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", SERVICES[service] + operation, *pairs, "--json"]
 
     def assert_success(self, output, responses, during=None):
         # Given the selected issued route, prepared output and native response fixtures,
@@ -226,6 +240,169 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # the observation hook checks that Submit is flushed before Advance.
         self.assert_success(output, responses, during)
 
+    def test_human_complete_prepares_imports_submits_and_advances_once(self):
+        # Given actual-shaped independent fixture inputs and an opaque issued Human, using either native spelling.
+        for wire in (False, True):
+            with self.subTest(wire=wire):
+                self.select_human(wire)
+                output = self.output()
+                config = (self.runtime_root / ".textus/config.json").read_bytes()
+                request = self.request.read_bytes()
+                prepared = {"datastore": [{"fixture": "native-generated rows, not live consent"}]}
+                responses = [prepared, self.submit_response(), self.advance_response()]
+
+                def during(index, observed):
+                    self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses[:index])
+                    if index > 0:
+                        self.assertEqual((output / "preparation/response.json").read_bytes(), self.raw(prepared))
+
+                # When the existing finite action consumes those supplied records.
+                status, observed, diagnostic, calls, _native = self.call(
+                    output, responses, argv=self.human_args(output), during=during)
+                # Then the normal preparation, fixed binding Submit and unbound ordinary Advance retain actual outputs.
+                self.assertEqual(status, 0, diagnostic)
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(calls[0][:5], [str(self.executable), "--runtime-root", str(self.runtime_root), "command",
+                    "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence"])
+                value = json.loads(calls[0][6])
+                supplied = json.loads(self.submission.read_text())
+                provenance = json.loads(self.provenance.read_text())
+                self.assertEqual({name: value[name] for name in provenance}, provenance)
+                self.assertEqual(value["family"], "GoalPhase")
+                self.assertEqual(value["kind"], "human")
+                self.assertEqual(value["request"], self.request.as_uri())
+                for field, source in (("result", "answer"), ("reference", "resultReference"),
+                                      ("executionEvidence", "executionEvidence")):
+                    path = output / "preparation" / (source + ".json")
+                    self.assertEqual(value[field], path.as_uri())
+                    self.assertEqual(json.loads(path.read_text()), supplied[source])
+                pairs = ["--sessionId", self.outer_id]
+                for name in ("answer", "resultReference", "executionEvidence"):
+                    pairs.extend(["--" + name, json.dumps(supplied[name], ensure_ascii=False)])
+                expected = self.expected_command("GoalPhase", HUMAN_PAIR[0], pairs)
+                expected.insert(3, "--textus.import.data.file=" + str(output / "preparation/response.json"))
+                self.assertEqual(calls[1], expected)
+                self.assertEqual(calls[2], self.expected_command("GoalPhase", "advanceGoalPhase", ["--sessionId", self.outer_id]))
+                self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses)
+                self.assertEqual((self.runtime_root / ".textus/config.json").read_bytes(), config)
+                self.assertEqual(self.request.read_bytes(), request)
+                for index, directory in enumerate((output / "preparation", output, output / "advance")):
+                    self.assertEqual((directory / "response.json").read_bytes(), self.raw(responses[index]))
+                    self.assertEqual((directory / "stderr.log").read_bytes(), ("fixture stderr " + str(index)).encode())
+
+    def test_human_missing_or_invalid_supplied_records_stop_before_effects(self):
+        # Given absent provenance, nonobject/extra submission fields, and strict invalid provenance JSON.
+        cases = [("missing", None), ("submission", {}), ("submission", {"answer": []}),
+                 ("submission", {"answer": {}, "resultReference": {}, "executionEvidence": {}, "result": {}}),
+                 ("provenance", {}), ("provenance", {"participant": " participant"}),
+                 ("provenance", {"collection": "entity:invalid"}),
+                 ("provenance-raw", '{"participant":"a","participant":"b"}'),
+                 ("submission-raw", '{"answer":NaN}'), ("path", "relative.json")]
+        for kind, value in cases:
+            with self.subTest(kind=kind, value=value):
+                self.select_human()
+                output = self.output()
+                argv = self.human_args(output)
+                if kind == "missing":
+                    argv = self.args(output)
+                elif kind == "path":
+                    argv[-1] = value
+                elif kind.endswith("-raw"):
+                    (self.provenance if kind.startswith("provenance") else self.submission).write_text(value)
+                elif kind == "provenance":
+                    current = json.loads(self.provenance.read_text()) if value else {}
+                    current.update(value)
+                    self.save(self.provenance, current)
+                else:
+                    self.save(self.submission, value)
+                # When complete admits the supplied finite inputs.
+                status, observed, _diagnostic, calls, _native = self.call(output, [], argv=argv)
+                # Then no preparation, Submit, Advance, output write or implicit retry occurs.
+                self.assertEqual(status, 2)
+                self.assertEqual(observed.getvalue(), "")
+                self.assertEqual(calls, [])
+                self.assertEqual(list(output.iterdir()), [])
+
+    def test_human_crossed_routes_and_semantic_provenance_stop_before_effects(self):
+        # Given crossed families, IDs, pairs, colliding consumed aliases or provenance on a semantic Request.
+        cases = [{"family": "SplitPhase"}, {"family": "RepositorySync"}, {"sessionId": "other"},
+                 {"submitSessionId": "other"}, {"submitOperation": GOAL_PAIR[0]}, {"resultType": GOAL_PAIR[1]}]
+        cases += [{name: "contradictory"} for name in ("session_id", "submit_session_id", "submit_operation", "result_type")]
+        cases += [{"kind": "Request", "submitOperation": GOAL_PAIR[0], "resultType": GOAL_PAIR[1]}]
+        for changes in cases:
+            with self.subTest(changes=changes):
+                self.select_human()
+                if "family" in changes:
+                    self.save(self.route, {"family": changes["family"], "sessionId": self.outer_id})
+                else:
+                    request = json.loads(self.request.read_text())
+                    request.update(changes)
+                    self.save(self.request, request)
+                output = self.output()
+                # When complete selects its issued route.
+                status, _observed, _diagnostic, calls, _native = self.call(output, [], argv=self.human_args(output))
+                # Then all effects and retries remain absent.
+                self.assertEqual(status, 2)
+                self.assertEqual(calls, [])
+                self.assertEqual(list(output.iterdir()), [])
+
+    def test_human_provenance_option_is_inapplicable_to_other_actions(self):
+        # Given explicit provenance on an existing single-call advance action.
+        self.select_human()
+        output = self.output()
+        argv = ["--executable", str(self.executable), "--runtime-root", str(self.runtime_root),
+                "--task", str(self.task), "--action", "advance", "--output", str(output),
+                "--human-provenance", str(self.provenance)]
+        # When strict named-option admission selects that action.
+        status, _observed, diagnostic, calls, _native = self.call(output, [], argv=argv)
+        # Then provenance remains complete-only and no native effect or output is created.
+        self.assertEqual(status, 2)
+        self.assertIn("action-inapplicable argument", diagnostic)
+        self.assertEqual(calls, [])
+        self.assertEqual(list(output.iterdir()), [])
+
+    def test_human_preparation_failure_or_submit_uncertainty_never_advances_or_retries(self):
+        # Given a rejected/malformed preparation or refused/uncertain actual Human Submit.
+        prepared = {"datastore": []}
+        cases = [([{"outcome": "rejected"}], None), ([b"not json"], None),
+                 ([prepared], (0, "nonzero")), ([prepared], (0, "transport")),
+                 ([prepared, dict(self.submit_response(), accepted=False, outcome="rejected")], None),
+                 ([prepared, dict(self.submit_response(), outcome="uncertain")], None),
+                 ([prepared, self.submit_response()], (1, "nonzero")),
+                 ([prepared, self.submit_response()], (1, "disconnected"))]
+        for responses, fault in cases:
+            with self.subTest(responses=responses, fault=fault):
+                self.select_human()
+                output = self.output()
+                # When one finite completion reaches that exact failure.
+                status, _observed, _diagnostic, calls, _native = self.call(
+                    output, responses, fault=fault, argv=self.human_args(output))
+                # Then only the attempted actual calls remain and no Advance or implicit retry follows.
+                self.assertEqual(status, 2)
+                self.assertEqual(len(calls), len(responses))
+                self.assertEqual(list((output / "advance").iterdir()), [])
+
+    def test_human_changed_routing_stops_after_preparation_or_accepted_submit(self):
+        # Given a route changed after passive preparation or after actual accepted storage-only Submit.
+        for changed in (0, 1):
+            with self.subTest(changed=changed):
+                self.select_human()
+                output = self.output()
+                responses = [{"datastore": []}, self.submit_response()][:changed + 1]
+
+                def during(index, _observed):
+                    if index == changed:
+                        self.save(self.route, {"family": "GoalPhase", "sessionId": "changed-session"})
+
+                # When the native response returns to the selected finite action.
+                status, observed, _diagnostic, calls, _native = self.call(
+                    output, responses, during=during, argv=self.human_args(output))
+                # Then actual prior observations survive with no later Advance or retry.
+                self.assertEqual(status, 2)
+                self.assertEqual(len(calls), changed + 1)
+                self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses)
+                self.assertEqual(list((output / "advance").iterdir()), [])
+
     def test_all_fixed_split_pairs(self):
         # Given each of the three fixed Split operation/result pairs with wire aliases,
         for pair in SPLIT_PAIRS:
@@ -255,7 +432,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                    "prior = calls.read_text().splitlines() if calls.exists() else []\n"
                    "responses = " + repr(responses) + "\n"
                    "assert len(prior) < 2\n"
-                   "assert sys.argv[1:4] == " + repr(["--host", str(self.host), "command"]) + "\n"
+                   "assert sys.argv[1:4] == " + repr(["--runtime-root", str(self.runtime_root), "command"]) + "\n"
                    "assert sys.argv[4] == " + repr(SERVICES["GoalPhase"]) + " + ['submitGoalPhaseWorkResult', 'advanceGoalPhase'][len(prior)]\n"
                    "with calls.open('a') as stream: stream.write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}) + '\\n')\n"
                    "sys.stderr.write('installed fixture diagnostic\\n')\n"
@@ -270,14 +447,62 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(status, 0, diagnostic.getvalue())
         actual = [json.loads(line) for line in calls.read_text().splitlines()]
         self.assertEqual(len(actual), 2)
-        self.assertTrue(all(call["cwd"] == str(self.host) for call in actual))
-        self.assertEqual(actual[0]["argv"][:4], ["--host", str(self.host), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
-        self.assertEqual(actual[1]["argv"], ["--host", str(self.host), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
+        self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
+        self.assertEqual(actual[0]["argv"][:4], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
+        self.assertEqual(actual[1]["argv"], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
         business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
         self.assertEqual(business, responses)
         self.assertEqual(json.loads((output / "response.json").read_text()), responses[0])
         self.assertEqual(json.loads((output / "advance/response.json").read_text()), responses[1])
         self.assertEqual(self.route.read_bytes(), originalroute)
+
+    def test_human_transport_uses_three_owned_subprocesses_and_unchanged_preparation_bytes(self):
+        # Given a selected executable fixture with three controlled real subprocess responses, not native consent.
+        self.select_human()
+        output = self.output()
+        calls = self.root / "human-installed-calls.jsonl"
+        responses = [{"datastore": [{"fixture": "native preparation output"}]},
+                     self.submit_response(), self.advance_response()]
+        binding = "--textus.import.data.file=" + str(output / "preparation/response.json")
+        config = (self.runtime_root / ".textus/config.json").read_bytes()
+        program = ("#!" + sys.executable + "\n"
+                   "import json, pathlib, sys, os\n"
+                   "calls = pathlib.Path(" + repr(str(calls)) + ")\n"
+                   "prior = calls.read_text().splitlines() if calls.exists() else []\n"
+                   "responses = " + repr(responses) + "\n"
+                   "index = len(prior)\n"
+                   "assert index < 3\n"
+                   "argv = sys.argv[1:]\n"
+                   "assert argv[:2] == " + repr(["--runtime-root", str(self.runtime_root)]) + "\n"
+                   "binding = " + repr(binding) + "\n"
+                   "if index == 1:\n"
+                   " assert argv[2] == binding and argv[3] == 'command'\n"
+                   " assert pathlib.Path(binding.split('=', 1)[1]).read_bytes() == (json.dumps(responses[0], ensure_ascii=False)+'\\n').encode()\n"
+                   "else:\n"
+                   " assert argv[2] == 'command' and binding not in argv\n"
+                   "operations = ['org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence',"
+                   "'" + SERVICES["GoalPhase"] + HUMAN_PAIR[0] + "','" + SERVICES["GoalPhase"] + "advanceGoalPhase']\n"
+                   "assert argv[argv.index('command')+1] == operations[index]\n"
+                   "with calls.open('a') as stream: stream.write(json.dumps({'argv':argv,'cwd':os.getcwd()})+'\\n')\n"
+                   "sys.stderr.write('human fixture diagnostic\\n')\n"
+                   "print(json.dumps(responses[index], ensure_ascii=False))\n")
+        self.executable.write_text(program)
+        observed, diagnostic = io.StringIO(), io.StringIO()
+        # When the real caller launches its selected preparation, Submit and Advance without a native-call mock.
+        with redirect_stdout(observed), redirect_stderr(diagnostic):
+            status = CALLER.main(self.human_args(output))
+        # Then actual subprocess transport preserves the raw preparation binding and emits each actual observation once.
+        self.assertEqual(status, 0, diagnostic.getvalue())
+        actual = [json.loads(line) for line in calls.read_text().splitlines()]
+        self.assertEqual(len(actual), 3)
+        self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
+        business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
+        self.assertEqual(business, responses)
+        self.assertEqual(actual[1]["argv"][2], binding)
+        self.assertNotIn(binding, actual[2]["argv"])
+        self.assertEqual((self.runtime_root / ".textus/config.json").read_bytes(), config)
+        for index, directory in enumerate((output / "preparation", output, output / "advance")):
+            self.assertEqual(json.loads((directory / "response.json").read_text()), responses[index])
 
     def test_changed_routing_after_accepted_submit_stops_before_advance(self):
         # Given accepted Submit and a route removed, corrupted or changed during its return,
@@ -357,16 +582,16 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # Given an owned child that waits for observation of its real stderr event,
         output = self.output()
         signal = output / "event-observed"
-        response = {"sessionId": self.outer_id, "message": "日本語" + "x" * 200000,
+        response = {"sessionId": self.outer_id, "message": "日本語" + "x" * (9 * 1024 * 1024),
                     "kind": "Request", "work": {"kind": "ReviewStep", "step": "step-2"}}
         raw = json.dumps(response, ensure_ascii=False).encode("utf-8")
         event = '[cncf-sbt-event] {"operation":"compile","workspaceId":"fixture","programIdentity":"owned-fixture","state":"started"}'
         program = ("import json,pathlib,sys,time\n"
                    "response = " + repr(dict(response, message="")) + "\n"
-                   "response['message'] = '日本語' + 'x' * 200000\n"
+                   "response['message'] = '日本語' + 'x' * (9 * 1024 * 1024)\n"
                    "sys.stdout.buffer.write(json.dumps(response, ensure_ascii=False).encode('utf-8')); sys.stdout.flush()\n"
-                   "sys.stderr.write('z' * 100000 + '\\n' + " + repr(event + "\n") + "); sys.stderr.flush()\n"
-                   "deadline = time.monotonic() + 3\n"
+                   "sys.stderr.write('z' * (2 * 1024 * 1024) + '\\n' + " + repr(event + "\n") + "); sys.stderr.flush()\n"
+                   "deadline = time.monotonic() + 10\n"
                    "while not pathlib.Path(" + repr(str(signal)) + ").exists() and time.monotonic() < deadline: time.sleep(.01)\n"
                    "sys.exit(0 if pathlib.Path(" + repr(str(signal)) + ").exists() else 9)\n")
         observed, diagnostic = io.StringIO(), io.StringIO()
@@ -382,7 +607,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # When the real finite file-backed transport runs with telemetry displayed,
         with CALLER.selected_directory(output) as descriptor:
             with patch.object(CALLER, "progress", side_effect=display), redirect_stdout(observed), redirect_stderr(diagnostic):
-                text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, context)
+                text, actual = CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, context)
         # Then the event is flushed before termination, raw bytes are complete and no Workflow status is invented.
         records = [json.loads(line) for line in observed.getvalue().splitlines()]
         self.assertEqual([record["event"] for record in records], ["invocation", "sbt-event", "process-terminated"])
@@ -393,7 +618,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(actual, response)
         self.assertEqual(text.encode("utf-8"), raw)
         self.assertEqual((output / "response.json").read_bytes(), raw)
-        self.assertEqual((output / "stderr.log").read_bytes(), ("z" * 100000 + "\n" + event + "\n").encode())
+        self.assertEqual((output / "stderr.log").read_bytes(), ("z" * (2 * 1024 * 1024) + "\n" + event + "\n").encode())
 
     def test_sigterm_forwards_once_to_runtime_and_collects_actual_response(self):
         # Given a real runtime-shaped child whose handler writes its actual cancellation response,
@@ -428,7 +653,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
             with patch.object(CALLER.os, "kill", side_effect=record_signal), patch.object(CALLER, "progress", side_effect=cancel):
                 with redirect_stdout(observed), redirect_stderr(io.StringIO()):
                     with self.assertRaisesRegex(CALLER.CallerError, "termination requested; actual result retained"):
-                        CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                        CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
         # Then actual runtime settlement and response survive, with no kill escalation or caller cutoff.
         displayed = [json.loads(line) for line in observed.getvalue().splitlines()]
         records = [value for value in displayed if value.get("recordType") == "native-command-progress"]
@@ -560,7 +785,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # When the observer consumes the actual raw file sink,
         with CALLER.selected_directory(output) as descriptor:
             with redirect_stdout(observed), redirect_stderr(diagnostic):
-                CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
         # Then only valid bounded metadata is displayed, and every original byte is retained.
         events = [json.loads(item) for item in observed.getvalue().splitlines() if json.loads(item)["event"] == "sbt-event"]
         self.assertEqual([item["rawEvent"] for item in events], [line])
@@ -596,7 +821,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         with CALLER.selected_directory(output) as descriptor:
             with patch.object(CALLER, "time", clocksource), patch.object(CALLER, "progress", side_effect=observe):
                 with patch.object(CALLER.os, "kill") as signals, redirect_stdout(observed), redirect_stderr(io.StringIO()):
-                    _text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                    _text, actual = CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
                     signals.assert_not_called()
         # Then the actual later response is collected without any timer, synthetic deadline or cancellation.
         records = [json.loads(line) for line in observed.getvalue().splitlines()]
@@ -621,7 +846,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # When one actual file-backed runtime response is collected,
         with CALLER.selected_directory(output) as descriptor:
             with redirect_stdout(observed), redirect_stderr(diagnostic):
-                _text, actual = CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                _text, actual = CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
         # Then only the strict metadata is forwarded while original private lines remain solely in the raw sink.
         records = [json.loads(line) for line in observed.getvalue().splitlines()]
         runtime = [record for record in records if record["event"] == "runtime-event"]
@@ -652,7 +877,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
             with patch.object(CALLER.subprocess, "Popen", wraps=realpopen) as launched:
                 with patch.object(CALLER, "progress", side_effect=fail_observer), redirect_stdout(observations), redirect_stderr(io.StringIO()):
                     with self.assertRaisesRegex(ValueError, "test observer failure"):
-                        CALLER.native_call([sys.executable, "-c", program], self.host, descriptor, {})
+                        CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
                 self.assertEqual(launched.call_count, 1)
         # Then original raw bytes and error survive, with an actual exit observation and no accepted response.
         records = [json.loads(line) for line in observations.getvalue().splitlines()]
@@ -822,7 +1047,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 request.update(changes)
                 self.save(self.request, request)
                 output = self.output()
-                # When the host asks complete to consume the route,
+                # When the runtime_root asks complete to consume the route,
                 status, observed, _diagnostic, calls, native = self.call(output, [])
                 # Then it refuses before output preparation or any subprocess and leaves routing untouched.
                 self.assertEqual(status, 2)
@@ -843,7 +1068,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 else:
                     index = argv.index("--" + change)
                     del argv[index:index + 2]
-                # When the strict named-option parser admits the host action,
+                # When the strict named-option parser admits the runtime_root action,
                 status, observed, _diagnostic, calls, native = self.call(output, [], argv=argv)
                 # Then it fails before any native call or output write.
                 self.assertEqual(status, 2)

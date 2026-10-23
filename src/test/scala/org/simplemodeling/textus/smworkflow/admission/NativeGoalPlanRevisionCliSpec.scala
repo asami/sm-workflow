@@ -18,12 +18,12 @@ import GoalPhaseOrderedProgression as O
   * Human answers. These examples claim no genuine Human/provider adoption,
   * independent review, accepted Step commit or Phase acceptance.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private final case class Selected(scenario: F.Scenario, task: Path,
     initial: V.GoalPhaseAdvanceResult, proposal: R.Proposal, question: Option[V.GoalPhaseAdvanceResult],
@@ -97,7 +97,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       question.kind shouldBe "Human"
       question.sessionId shouldBe initial.sessionId
       question.human.get.choices shouldBe Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
-      question.human.get.hostContext should not be empty
+      question.human.get.humanDecisionContext should not be empty
       question.human.get.work shouldBe initial.work.get
       captured.proposal shouldBe proposed
       captured.plan.copy(effectiveAcceptance = None) shouldBe proposed.plan
@@ -222,7 +222,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       question.kind shouldBe "Human"
       question.sessionId shouldBe initial.sessionId
       question.human.get.work shouldBe initial.work.get
-      question.human.get.hostContext should not be empty
+      question.human.get.humanDecisionContext should not be empty
       question.human.get.choices shouldBe Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
       captured.proposal shouldBe proposed
       captured.plan.copy(effectiveAcceptance = None) shouldBe revised

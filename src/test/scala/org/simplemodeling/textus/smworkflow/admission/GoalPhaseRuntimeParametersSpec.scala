@@ -9,6 +9,7 @@ import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.cncf.workflow.WorkflowMechanicalReceiptParameters
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.scalatest.GivenWhenThen
@@ -17,26 +18,28 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 21, 2026
  */
 final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private def take[A](result: Consequence[A]): A = result match {
+  private def _take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value
     case other => fail(s"runtime parameters failed: $other")
   }
-  private val root = EntityCollectionId("test", "configuredgoal", "instances")
-  private val delivery = EntityCollectionId("test", "configuredgoal", "continuations")
-  private val valid = Map(
+  private val _root = EntityCollectionId("test", "configuredgoal", "instances")
+  private val _delivery = EntityCollectionId("test", "configuredgoal", "continuations")
+  private val _valid = Map(
     GoalPhaseRuntimeParameters.storeName.name -> "workflow",
     GoalPhaseRuntimeParameters.storeIdentity.name -> "configured-goal-store",
     GoalPhaseRuntimeParameters.migrationPolicy.name -> "migration-v2",
     GoalPhaseRuntimeParameters.retentionPolicy.name -> "retention-v3",
     GoalPhaseRuntimeParameters.leasePolicy.name -> "lease-v4",
-    GoalPhaseRuntimeParameters.instances.name -> root.print,
-    GoalPhaseRuntimeParameters.continuations.name -> delivery.print
+    GoalPhaseRuntimeParameters.instances.name -> _root.print,
+    GoalPhaseRuntimeParameters.continuations.name -> _delivery.print
   ).view.mapValues(ConfigurationValue.StringValue.apply).toMap
 
-  private def decode(values: Map[String, ConfigurationValue]): Consequence[GoalPhaseRuntimeParameters.Persistence] = {
+  private val _capacity_metadata = afterWord("in spec:workflow-mechanical-receipt-capacity, example:E1, rules:R1,R2,R3, phase:capacity-repair")
+
+  private def _decode(values: Map[String, ConfigurationValue]): Consequence[GoalPhaseRuntimeParameters.Persistence] = {
     val subsystem = RuntimeBindingAdmissionFixture.admit(Subsystem(name = "runtime-parameters", version = None,
       configuration = ResolvedConfiguration(Configuration(values), ConfigurationTrace.empty),
       aliasResolver = AliasResolver.empty, runMode = RunMode.Command))
@@ -57,25 +60,61 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
   }
 
   "GoalPhase runtime persistence parameters" should {
+    "E1 choose sixteen MiB only when the optional CNCF declaration is absent" must _capacity_metadata {
+      "when independent configured factories resolve absent and explicit policies" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R2,R3; Example: E1; normal complete logical settings")
+        val name = WorkflowMechanicalReceiptParameters.maxBytes.name
+        When("separate normal configured factories resolve default, explicit two MiB and independent default settings")
+        val first = _take(_decode(_valid))
+        val explicit = _take(_decode(_valid.updated(name, ConfigurationValue.StringValue("2097152"))))
+        val numeric = _take(_decode(_valid.updated(name, ConfigurationValue.NumberValue(BigDecimal(2097152)))))
+        val second = _take(_decode(_valid))
+        Then("absence selects the application default and a present value selects only that factory's policy")
+        first.configuration.mechanicalReceiptMaxBytes shouldBe Some(16777216)
+        explicit.configuration.mechanicalReceiptMaxBytes shouldBe Some(2097152)
+        numeric.configuration.mechanicalReceiptMaxBytes shouldBe Some(2097152)
+        second.configuration.mechanicalReceiptMaxBytes shouldBe Some(16777216)
+        _take(first.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 16777216
+        _take(explicit.configuration.mechanicalReceiptLimitsC).maxBytes shouldBe 2097152
+        GoalPhaseRuntimeParameters.declarations.count(_.name == name) shouldBe 1
+      }
+    }
+
+    "E1 reject invalid present capacity values without selecting the application default" must _capacity_metadata {
+      "when normal configuration contains a malformed or out-of-range override" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R2; Example: E1; complete logical settings and invalid optional values")
+        val invalid = Vector(ConfigurationValue.StringValue("0"), ConfigurationValue.StringValue("-1"),
+          ConfigurationValue.StringValue("67108865"), ConfigurationValue.StringValue("2147483648"),
+          ConfigurationValue.StringValue(" 2097152"), ConfigurationValue.StringValue("2.0"),
+          ConfigurationValue.StringValue("２"), ConfigurationValue.NumberValue(BigDecimal("1.5")),
+          ConfigurationValue.NumberValue(BigDecimal(67108865)), ConfigurationValue.BooleanValue(true),
+          ConfigurationValue.NullValue, ConfigurationValue.ObjectValue(Map.empty))
+        When("the existing configured factory resolves the optional CNCF declaration")
+        val results = invalid.map(value => _decode(_valid.updated(WorkflowMechanicalReceiptParameters.maxBytes.name, value)))
+        Then("every present invalid policy fails instead of falling back to sixteen MiB")
+        results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      }
+    }
+
     "retain explicit policies and canonical collections without acquiring private storage" in {
       Given("complete canonical logical settings and no physical datastore configuration")
       When("canonical resolution feeds the post-resolution factory binder")
-      val result = take(decode(valid))
+      val result = _take(_decode(_valid))
       Then("logical configuration retains its actual policies and same-store destinations without a catalog prerequisite")
       result.configuration.workflowStore shouldBe NamedWorkflowStore("workflow", WorkflowStoreIdentity("configured-goal-store"))
       result.configuration.migrationPolicy shouldBe MigrationPolicy("migration-v2")
       result.configuration.retentionPolicy shouldBe RetentionPolicy("retention-v3")
       result.configuration.leasePolicy shouldBe LeasePolicy("lease-v4")
       result.configuration.delivery shouldBe DeliveryConfiguration.SameStore(WorkflowStoreIdentity("configured-goal-store"))
-      result.instances shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(root)
-      result.continuations shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(delivery)
+      result.instances shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(_root)
+      result.continuations shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(_delivery)
     }
 
     "reject every missing required setting instead of choosing defaults" in {
       Given("otherwise complete settings with each required key separately absent")
-      val variants = valid.keys.toVector.map(name => name -> (valid - name))
+      val variants = _valid.keys.toVector.map(name => name -> (_valid - name))
       When("each incomplete configuration is assembled")
-      val results = variants.map { case (name, values) => name -> decode(values) }
+      val results = variants.map { case (name, values) => name -> _decode(values) }
       Then("all seven omissions fail before a configured component is returned")
       results.size shouldBe 7
       results.foreach { case (name, result) => withClue(name)(result shouldBe a[Consequence.Failure[?]]) }
@@ -87,7 +126,7 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
         ConfigurationValue.StringValue(" padded "), ConfigurationValue.NumberValue(BigDecimal(3)),
         ConfigurationValue.BooleanValue(true), ConfigurationValue.NullValue)
       When("canonical parameter resolution decodes the typed declarations")
-      val results = for { name <- valid.keys.toVector; value <- invalid } yield decode(valid.updated(name, value))
+      val results = for { name <- _valid.keys.toVector; value <- invalid } yield _decode(_valid.updated(name, value))
       Then("no replacement is normalized or accepted as a persistence fact")
       results.size shouldBe 42
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -96,13 +135,13 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
     "reject malformed or aliased collections and noncanonical logical store names" in {
       Given("complete settings with invalid collection identity or ambiguous storage roles")
       val variants = Vector(
-        valid.updated(GoalPhaseRuntimeParameters.instances.name, ConfigurationValue.StringValue("instances")),
-        valid.updated(GoalPhaseRuntimeParameters.continuations.name, ConfigurationValue.StringValue("foreign")),
-        valid.updated(GoalPhaseRuntimeParameters.continuations.name, ConfigurationValue.StringValue(root.print)),
-        valid.updated(GoalPhaseRuntimeParameters.storeName.name, ConfigurationValue.StringValue(" workflow")),
-        valid.updated(GoalPhaseRuntimeParameters.storeName.name, ConfigurationValue.StringValue("Workflow")))
+        _valid.updated(GoalPhaseRuntimeParameters.instances.name, ConfigurationValue.StringValue("instances")),
+        _valid.updated(GoalPhaseRuntimeParameters.continuations.name, ConfigurationValue.StringValue("foreign")),
+        _valid.updated(GoalPhaseRuntimeParameters.continuations.name, ConfigurationValue.StringValue(_root.print)),
+        _valid.updated(GoalPhaseRuntimeParameters.storeName.name, ConfigurationValue.StringValue(" workflow")),
+        _valid.updated(GoalPhaseRuntimeParameters.storeName.name, ConfigurationValue.StringValue("Workflow")))
       When("configuration is decoded without touching a DataStore or minting a grant")
-      val results = variants.map(decode)
+      val results = variants.map(_decode)
       Then("none can establish the required two distinct canonical collections")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }

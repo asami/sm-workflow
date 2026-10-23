@@ -10,7 +10,7 @@ import SplitPhaseExplicitPlanningInputJsonV1.Purpose
 /**
  * Purpose restrictions are not grants. No legacy entry-role prerequisites.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhasePlanningInputReadPolicy {
   val prefix = "sm-workflow.split-phase.planning-inputs."
@@ -60,7 +60,7 @@ private[smworkflow] object SplitPhasePlanningInputReadPolicy {
     else Consequence.stateConflict("SplitPhase planning input read differs from its declared purpose")
   }
   private def stringC(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase planning inputs require exact host configuration")

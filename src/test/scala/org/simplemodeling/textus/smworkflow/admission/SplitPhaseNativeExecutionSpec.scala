@@ -16,7 +16,7 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.NativeWorkflowHostExecution
+import org.simplemodeling.textus.smworkflow.caller.NativeWorkflowCallerExecution
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseWorkClassification.*
 import SplitPhaseNativeExecution as P
@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification inputs only: no installed provider or authority.
   * @since   Oct. 16, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object SplitExecutionFixture {
@@ -54,7 +54,7 @@ private[admission] object SplitExecutionFixture {
   }
   val mapping = take(WorkflowExecutionProfileParameters.decodeC(take(io.circe.parser.parse(
     parameters()(WorkflowExecutionProfileParameters.declaration.name)).fold(e => Consequence.stateConflict(e.message), Consequence.success))))
-  def evidence(prepared: NativeWorkflowHostExecution.Prepared, reference: ContextReference, worker: String): ExecutionEvidence = {
+  def evidence(prepared: NativeWorkflowCallerExecution.Prepared, reference: ContextReference, worker: String): ExecutionEvidence = {
     val selection = prepared.session.nextSelection.get
     val context = if (prepared.session.requirement.disposition.get.placement == ExecutionPlacement.Inline)
       prepared.session.origin.contextIdentity else worker

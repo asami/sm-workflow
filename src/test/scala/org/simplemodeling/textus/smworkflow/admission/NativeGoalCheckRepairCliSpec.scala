@@ -10,7 +10,7 @@ import NativeWorkflowCliFixture as F
 /** Separate ordinary commands retain actual failed checks and fresh validation.
   * Assigned semantic edits are specification data, not external provider proof.
   * @since   Oct. 17, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -30,8 +30,8 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
           V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None))))
     val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
-      "--result", NativeHostExecutionFixture.json(result.toRecord()).noSpaces,
-      "--resultReference", NativeHostExecutionFixture.json(reference.toRecord()).noSpaces))
+      "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
+      "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))
   }
 
   "Ordinary GoalPhase check repair commands" should afterWord(
@@ -74,7 +74,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       question.issuedWorkContext shouldBe None
       val human = question.human.get
       human.choices shouldBe Vector("ContinueRepairs", "Defer", "Cancel")
-      human.hostContext should not be empty
+      human.humanDecisionContext should not be empty
       human.work.kind shouldBe "RepairStep"
       human.work.selectedPlan shouldBe original.selectedPlan
       human.work.originalBase shouldBe original.originalBase

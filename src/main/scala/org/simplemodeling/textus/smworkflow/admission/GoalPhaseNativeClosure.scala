@@ -12,6 +12,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
+import GoalPhaseClosureRecovery as R
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 
@@ -20,7 +21,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -72,10 +73,13 @@ private[smworkflow] object GoalPhaseNativeClosure {
       } yield Payload(input, ordinal, commit, attempt, check, changes)
     }
   }
-  final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State)
-  private[admission] final case class Attempt(check: Option[Saved], intent: Option[Saved])
+  final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State,
+    execution: Option[R.Execution] = None)
+  private[admission] final case class Attempt(check: Option[Saved], intent: Option[Saved],
+    execution: Option[R.ExecutionSaved] = None, direction: Option[R.DirectionSaved] = None)
   private[admission] final case class Progress(record: InstanceRecord, failed: Vector[Saved],
-    nextAttempt: Option[Int], pending: Option[Saved])
+    nextAttempt: Option[Int], pending: Option[Saved], execution: Option[R.ExecutionSaved] = None,
+    direction: Option[R.DirectionSaved] = None, recovery: Option[R.DirectionSaved] = None)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStepClosureReceipt"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-step-closure.v3"),
@@ -102,7 +106,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
       case None => for {
         progress <- store.progressC
         _ <- if (progress.nextAttempt.nonEmpty) store.latestC(progress.record) else Consequence.unit
-      } yield if (progress.nextAttempt.nonEmpty) progress.failed.lastOption else None
+      } yield if (progress.nextAttempt.nonEmpty || progress.direction.nonEmpty)
+        Some(Saved(progress.record, progress.pending.map(_.payload).orElse(progress.failed.lastOption.map(_.payload))
+          .getOrElse(Payload(store.input, store.ordinal, None)), controller)) else None
     }
   } yield saved
 
@@ -113,7 +119,11 @@ private[smworkflow] object GoalPhaseNativeClosure {
     result <- store.loadC("committed")
     saved <- result match {
       case Some(value) => store.completedRecordingHistoryC(value).map(Some(_))
-      case None => Consequence.success(Option.empty[Saved])
+      case None => for {
+        progress <- store.recordingProgressC
+      } yield if (progress.nextAttempt.nonEmpty || progress.direction.nonEmpty)
+        Some(Saved(progress.record, progress.pending.map(_.payload).orElse(progress.failed.lastOption.map(_.payload))
+          .getOrElse(Payload(store.input, store.ordinal, None)), controller)) else None
     }
   } yield saved
 
@@ -125,10 +135,16 @@ private[smworkflow] object GoalPhaseNativeClosure {
       case Some(value) => store.completedC(value).map(Some(_))
       case None => for {
         progress <- store.progressC
-        _ <- if (progress.nextAttempt.nonEmpty) store.latestC(progress.record)
-          else F.invalid("Step closure has a pending clean check or unknown commit intent; no automatic replay")
+        _ <- store.latestC(progress.record)
+        closed <- if (progress.direction.exists(_.payload.choice == "ReconcileCommit"))
+          store.reconcileC(progress).map(Some(_))
+        else if (progress.nextAttempt.isEmpty) progress.pending.map(saved => Consequence.success(Some(
+          saved.copy(record = progress.record, execution = progress.execution.map(_.payload)))))
+          .getOrElse(F.invalid("Step closure has no actual pending attempt"))
+        else for {
+        _ <- store.recheckRecoveryC(progress)
         authority <- store.installation.authority.isGrantedC(core, store.input)
-        closed <- authority match {
+        result <- authority match {
           case false => Consequence.success(Option.empty[Saved])
           case true => for {
             _ <- store.preconditionsC
@@ -149,9 +165,28 @@ private[smworkflow] object GoalPhaseNativeClosure {
               else store.commitC(checked, payload)
           } yield Some(saved)
         }
+        } yield result
       } yield closed
     }
   } yield saved
+
+  def recoveryProgressC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    from: InstanceRecord, controller: O.State): Consequence[(Input, Int, Progress)] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    committed <- store.loadC("committed")
+    _ <- if (committed.isEmpty) Consequence.unit else F.invalid("completed Step closure has no unresolved recovery target")
+    progress <- store.recordingProgressC
+  } yield (store.input, store.ordinal, progress)
+
+  def executionMessage(value: R.Execution): String = "Actual selected commit outcome: " + value.outcome +
+    "; termination: " + value.termination.getOrElse("unknown") + "; exitCode: " + value.exitCode.fold("unknown")(_.toString) +
+    ". " + value.stderr + " Explicit public closure recovery is required; no automatic replay."
+  def waitMessageC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    from: InstanceRecord, controller: O.State): Consequence[String] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    progress <- store.recordingProgressC
+  } yield progress.execution.map(saved => executionMessage(saved.payload)).getOrElse(
+    "Step commit has an unresolved clean check or original unknown intent; explicit public closure recovery is required. No automatic replay.")
 
   /** The owning Closing frontier supplies the same target to authority lookup
     * and the public missing-authority Wait projection. */
@@ -162,7 +197,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       Consequence.unit else F.invalid("Step closure has no actual accepted review and native Closing frontier")
     step = controller.plan.steps(controller.cursor)
   } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
-    step.identity, controller.generation, controller.tipSnapshot, controller.candidate.get, controller.reviewEvidence.get)
+    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence.get)
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
@@ -203,19 +238,29 @@ private[smworkflow] object GoalPhaseNativeClosure {
         } yield Some(Saved(admitted, value.receipt.payload.value, controller))
       }
     def progressC: Consequence[Progress] = _scan_c(0, Vector.empty, _verify_retained_changes_c)
+    def recordingProgressC: Consequence[Progress] = _scan_c(0, Vector.empty, (_, _) => Consequence.unit)
     private def _scan_c(attempt: Int, attempts: Vector[Attempt],
       verify: (Saved, Progress) => Consequence[Unit]): Consequence[Progress] = for {
       check <- loadC(_attempt_key("check-result", attempt))
       intent <- loadC(_attempt_key("intent", attempt))
-      examined = attempts :+ Attempt(check, intent)
+      execution <- R.loadC(session, core, input, "execution-result", attempt, R.executionCodec)
+      direction <- R.loadC(session, core, input, "recovery", attempt, R.directionCodec)
+      examined = attempts :+ Attempt(check, intent, execution.map((record, payload) => R.ExecutionSaved(record, payload)),
+        direction.map((record, payload) => R.DirectionSaved(record, payload)))
       progress <- reconcileAttemptsC(from, input, ordinal, examined)
+      _ <- progress.recovery.fold(Consequence.unit) { saved =>
+        if (saved.payload.target.participant == session.participantIdentity &&
+            saved.payload.target.ownedPaths == _owned_paths && saved.payload.target.observation.root == d.target.root.toString &&
+            saved.payload.target.observation.branch == d.target.localBranch) Consequence.unit
+        else F.invalid("retained closure recovery crosses its actual participant, ownership or installed target")
+      }
       _ <- check.fold(Consequence.unit) { saved => for {
         _ <- if (saved.payload.changes.forall(change => _owned_paths.exists(covers(_, change.path))) &&
             saved.payload.check.forall(_.eofPaths.forall(path => _owned_paths.exists(covers(_, path)))))
           Consequence.unit else F.invalid("retained correction crosses current Step ownership")
         _ <- verify(saved, progress)
       } yield () }
-      result <- if (check.nonEmpty && progress.nextAttempt.nonEmpty)
+      result <- if ((check.nonEmpty || intent.nonEmpty) && progress.nextAttempt.nonEmpty)
         _scan_c(progress.nextAttempt.get, examined, verify) else Consequence.success(progress)
     } yield result
     private def _verify_retained_changes_c(saved: Saved, progress: Progress): Consequence[Unit] = for {
@@ -283,41 +328,90 @@ private[smworkflow] object GoalPhaseNativeClosure {
           result.payload.copy(commit = None) == pending.payload) Consequence.unit
         else F.invalid("retained Step closure changes its exact pending payload")
       next <- _closed_state_c(result.payload)
-      _ <- _successor_c(pending.record, result.record, "committed", next.stage.toString)
-    } yield Saved(result.record, result.payload, next)
+      _ <- _successor_c(progress.record, result.record, "committed", next.stage.toString)
+    } yield Saved(result.record, result.payload, next, progress.execution.map(_.payload))
+    def recheckRecoveryC(progress: Progress): Consequence[Unit] = progress.recovery.fold(Consequence.unit) { saved => for {
+      actual <- R.observeC(d, core, input, ordinal)
+      _ <- if (actual == saved.payload.target.observation) Consequence.unit
+        else F.invalid("closure recovery Git observation or physical selection drifted before its new effect")
+      _ <- R.choiceC(saved.payload.target, saved.payload.choice)
+    } yield () }
+    def reconcileC(progress: Progress): Consequence[Saved] = for {
+      direction <- progress.direction.filter(_.payload.choice == "ReconcileCommit").map(Consequence.success)
+        .getOrElse(F.invalid("closure reconciliation has no exact explicit direction"))
+      _ <- recheckRecoveryC(progress)
+      granted <- installation.authority.isGrantedC(core, input)
+      _ <- if (granted) Consequence.unit else F.invalid("actual Step closure authority is unavailable")
+      pending <- progress.pending.map(Consequence.success).getOrElse(F.invalid("reconciliation has no original pending intent"))
+      actual = direction.payload.target.observation.commit
+      completed = pending.payload.copy(commit = Some(O.Commit(actual.identity, input.parent.head, actual.tree)))
+      _ <- _verified_commit_c(completed, progress.failed)
+      next <- _closed_state_c(completed)
+      recorded <- saveC("committed", progress.record, next.stage.toString, completed)
+      saved <- completedC(Saved(recorded, completed, next))
+    } yield saved
     def commitC(checked: InstanceRecord, payload: Payload): Consequence[Saved] = for {
+      _ <- preconditionsC
+      differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
+      progress <- progressC
+      _ <- recheckRecoveryC(progress)
+      admitted <- admitChangesC(progress.failed, differences)
+      _ <- if (admitted == payload.changes) Consequence.unit
+        else F.invalid("selected Step index changed after its admitted precheck")
       intent <- saveC(_attempt_key("intent", payload.attempt), checked, "Closing", payload)
       _ <- ackC("goal-step-commit-prepared:" + input.step)
       actual <- E.commitGoalStepC(core, ordinal)
+      summary <- R.executionC(input, ordinal, payload.attempt, actual)
+      recorded <- R.saveC(session, d, core, input, "execution-result", payload.attempt, intent, summary, R.executionCodec)
       _ <- ackC("goal-step-commit-executed:" + input.step)
-      _ <- actual.valueC
+      saved <- if (summary.outcome == "succeeded") for {
+        _ <- actual.valueC
+        _ <- if (progress.recovery.forall(_.payload.target.observation.selectedPaths == summary.selectedPaths)) Consequence.unit
+          else F.invalid("actual new commit result used a different physical selection")
+        closed <- _finish_commit_c(recorded, payload)
+      } yield closed else Consequence.success(Saved(recorded, payload, controller, Some(summary)))
+    } yield saved
+    private def _finish_commit_c(frontier: InstanceRecord, payload: Payload): Consequence[Saved] = for {
       observed <- G.inspectC(core)
       commit <- G.commitC(core, observed.observed.head)
       _ <- if (observed.mergeHead.isEmpty && observed.observed.branch == d.target.localBranch &&
           observed.observed.tree == commit.tree &&
-          !observed.observed.dirty.exists(_touches_owned)) Consequence.unit
+          !observed.observed.dirty.exists(_touches_owned) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, _owned_paths, true)) Consequence.unit
         else F.invalid("actual selected Step commit leaves selected dirty data or a different native frontier")
       completed = payload.copy(commit = Some(O.Commit(commit.identity, input.parent.head, commit.tree)))
-      progress <- progressC
-      _ <- _verified_commit_c(completed, progress.failed)
+      retained <- progressC
+      _ <- _verified_commit_c(completed, retained.failed)
       next <- _closed_state_c(completed)
       event = if (next.stage == O.Stage.Implementation) "step-next-closed" else "last-step-closed"
       _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Closing", event, next.stage.toString))
         Consequence.unit else F.invalid("Step commit successor is absent from CML")
-      recorded <- saveC("committed", intent, next.stage.toString, completed)
+      recorded <- saveC("committed", frontier, next.stage.toString, completed)
       saved <- completedC(Saved(recorded, completed, next))
       _ <- ackC("goal-step-commit-recorded:" + input.step)
     } yield saved
     private def _touches_owned(value: G.DirtyPath): Boolean = _owned_paths.exists(owner =>
       covers(owner, value.path) || value.renamedFrom.exists(covers(owner, _)))
     def preconditionsC: Consequence[Unit] = for {
+      root <- G.rootC(core)
       native <- G.inspectC(core)
       actual = native.observed
-      _ <- if (native.mergeHead.isEmpty && actual.branch == d.target.localBranch && actual.head == input.parent.head &&
-          actual.tree == input.parent.tree && actual.dirty.filter(_touches_owned).forall(p =>
-            p.worktree == ' ' && !p.unmerged && p.index != '?' && p.index != '!' &&
-            _owned_paths.exists(covers(_, p.path)) && p.renamedFrom.forall(x => _owned_paths.exists(covers(_, x))))) Consequence.unit
+      _ <- if (root == d.target.root.toString && native.mergeHead.isEmpty && actual.branch == d.target.localBranch &&
+          actual.head == input.parent.head && actual.tree == input.parent.tree &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, _owned_paths, true)) Consequence.unit
         else F.invalid("actual Step commit candidate or selected ownership has changed")
+      parent <- GitObjectId.parseC(input.parent.head)
+      paths <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
+      _ <- if (GoalPhaseNativeCandidateBoundary.pathsOwned(paths.map(_.value), _owned_paths)) Consequence.unit
+        else F.invalid("actual Step commit includes an unrelated index delta")
+      differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
+      progress <- progressC
+      _ <- admitChangesC(progress.failed, differences)
+      after <- G.observeC(core)
+      afterroot <- G.rootC(core)
+      _ <- if (afterroot == root && after.branch == actual.branch && after.head == input.parent.head && after.tree == input.parent.tree &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(after.dirty, _owned_paths, true)) Consequence.unit
+        else F.invalid("actual Step parent drifted during closure observation")
     } yield ()
     def ackC(stage: String): Consequence[Unit] = acknowledge(stage) match {
       case Consequence.Success(_) => Consequence.unit
@@ -336,17 +430,21 @@ private[smworkflow] object GoalPhaseNativeClosure {
     _ <- from.validateC
     progress <- attempts.zipWithIndex.foldLeft(Consequence.success(Progress(from, Vector.empty, Some(0), None))) {
       case (prior, (attempt, index)) => prior.flatMap { current =>
-        if (attempt == null || attempt.check == null || attempt.intent == null || !current.nextAttempt.contains(index))
+        if (attempt == null || attempt.check == null || attempt.intent == null || attempt.execution == null ||
+            attempt.direction == null || index >= 256 || !current.nextAttempt.contains(index))
           F.invalid("retained Step attempts follow a gap or unresolved attempt")
-        else attempt match {
-          case Attempt(None, None) => if (index == attempts.size - 1) Consequence.success(current)
+        else (attempt.check, attempt.intent) match {
+          case (None, None) => if (index == attempts.size - 1 && attempt.execution.isEmpty && attempt.direction.isEmpty)
+            Consequence.success(current)
             else F.invalid("retained Step attempts have a gap before later facts")
-          case Attempt(None, Some(intent)) => for {
+          case (None, Some(intent)) => for {
             _ <- if (index == 0 && intent != null && intent.payload == Payload(input, ordinal, None)) Consequence.unit
               else F.invalid("retained Step intent has no matching check")
             _ <- _successor_c(current.record, intent.record, "intent", "Closing")
-          } yield Progress(intent.record, current.failed, None, Some(intent))
-          case Attempt(Some(check), intent) => for {
+            base = Progress(intent.record, current.failed, None, Some(intent), recovery = current.recovery)
+            result <- _recovery_progress_c(from, input, ordinal, index, attempt, base)
+          } yield result
+          case (Some(check), intent) => for {
             _ <- if (check != null && check.payload != null && check.payload.input == input &&
                 check.payload.ordinal == ordinal && check.payload.attempt == index && check.payload.commit.isEmpty &&
                 check.payload.check.exists(_valid_precheck) && _valid_changes(check.payload.changes)) Consequence.unit
@@ -355,20 +453,54 @@ private[smworkflow] object GoalPhaseNativeClosure {
             result <- if (check.payload.check.get.findings.nonEmpty) {
               if (check.payload.changes.nonEmpty || intent.nonEmpty) F.invalid("failed Step check has changes or a commit intent")
               else if (index == Int.MaxValue) F.invalid("retained Step attempt ordinal is exhausted")
-              else Consequence.success(Progress(check.record, current.failed :+ check, Some(index + 1), None))
+              else Consequence.success(Progress(check.record, current.failed :+ check, Some(index + 1), None,
+                recovery = current.recovery))
             } else intent match {
-              case None => Consequence.success(Progress(check.record, current.failed, None, Some(check)))
+              case None => Consequence.success(Progress(check.record, current.failed, None, Some(check), recovery = current.recovery))
               case Some(saved) => for {
                 _ <- if (saved != null && saved.payload == check.payload) Consequence.unit
                   else F.invalid("retained Step intent rewrites its exact clean check")
                 _ <- _successor_c(check.record, saved.record, _attempt_key("intent", index), "Closing")
-              } yield Progress(saved.record, current.failed, None, Some(saved))
+              } yield Progress(saved.record, current.failed, None, Some(saved), recovery = current.recovery)
             }
-          } yield result
+            continued <- _recovery_progress_c(from, input, ordinal, index, attempt, result)
+          } yield continued
         }
       }
     }
   } yield progress
+
+  private def _recovery_progress_c(from: InstanceRecord, input: Input, ordinal: Int, index: Int,
+    attempt: Attempt, progress: Progress): Consequence[Progress] = for {
+    _ <- if ((attempt.execution.isEmpty && attempt.direction.isEmpty) || attempt.intent.nonEmpty) Consequence.unit
+      else F.invalid("closure recovery or execution summary has no exact commit intent")
+    observed <- attempt.execution match {
+      case None => Consequence.success(progress)
+      case Some(saved) => for {
+        _ <- if (saved != null && R.validExecution(saved.payload) && saved.payload.input == input &&
+            saved.payload.ordinal == ordinal && saved.payload.attempt == index) Consequence.unit
+          else F.invalid("execution summary crosses its original input or attempt")
+        _ <- R.adjacentC(progress.record, saved.record, "execution-result", index)
+      } yield progress.copy(record = saved.record, execution = Some(saved))
+    }
+    directed <- attempt.direction match {
+      case None => Consequence.success(observed)
+      case Some(saved) => for {
+        _ <- if (saved != null && R.directionCodec.decode(R.directionCodec.encode(saved.payload)).isRight &&
+            saved.payload.target.input == input && saved.payload.target.ordinal == ordinal && saved.payload.target.attempt == index &&
+            saved.payload.target.definitionIdentity == from.definition.workflowIdentity.value &&
+            saved.payload.target.definitionRevision == from.definition.workflowRevision.value &&
+            saved.payload.target.frontierRevision == observed.record.revision.value.toString &&
+            saved.payload.target.intentRecordRevision == attempt.intent.get.record.revision.value.toString &&
+            saved.payload.target.execution == observed.execution.map(_.payload)) Consequence.unit
+          else F.invalid("recovery direction crosses its original intent, execution summary, target or frontier")
+        _ <- R.adjacentC(observed.record, saved.record, "recovery", index)
+        _ <- if (index < 255) Consequence.unit else F.invalid("closure recovery attempt bound exhausted")
+      } yield observed.copy(record = saved.record,
+        nextAttempt = Option.when(saved.payload.choice == "AuthorizeNewAttempt")(index + 1),
+        direction = Some(saved), recovery = Some(saved))
+    }
+  } yield directed
 
   /** Only actual typed blob bytes and an earlier selected EOF failure admit this correction. */
   private[admission] def admitEofCorrectionC(input: Input, ownedPaths: Vector[String], failed: Vector[Precheck],

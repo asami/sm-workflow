@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Public projection of actual retained validation facts, without runtime effects.
   * @since   Oct. 16, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -227,7 +227,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       val (selected, batches) = GoalPhaseNativeMetadataFixture.prepared
       val receipt = _receipt(selected.head, ProcessExecutionTermination.Exited(7))
       val payload = _retained(_payload(selected, Vector(receipt), Some("failed")).copy(metadata = batches))
-      val request = NativeHostHumanEvidenceFixture.work.copy(review = Some(GoalPhaseNativeReview.Context(
+      val request = NativeHumanEvidenceFixture.work.copy(review = Some(GoalPhaseNativeReview.Context(
         Vector("one.scala"), "actual selected diff", Vector(receipt), batches)))
 
       When("public validation and review projections roundtrip through their generated Record readers")
@@ -252,7 +252,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       validation.checks.head.stderr shouldBe _stderr
       metadata.head.hcursor.downField("inventory").get[Vector[Json]]("diagnostics") shouldBe Right(Vector.empty)
       validation.outcome shouldBe Some("failed")
-      restored.review.get.hostContext shouldBe None
+      restored.review.get.reviewContext shouldBe None
     }
 
     "O5 share exact two-suite facts between validation and Goal review through generated Record JSON roundtrips" in {
@@ -284,7 +284,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       restored.review.get.checks.head.exitCode shouldBe Some(0)
       restored.review.get.checks.head.stdout shouldBe _stdout
       restored.review.get.checks.head.stderr shouldBe _stderr
-      restored.review.get.hostContext shouldBe None
+      restored.review.get.reviewContext shouldBe None
       validation.kind shouldBe "Wait"
       validation.work shouldBe None
       validation.completion shouldBe None

@@ -1,5 +1,16 @@
 # SmWorkflow
 
+## Next development — 2026-10-23
+
+[Complete GoalPhase, then attempt repository sync on a best-effort basis](docs/notes/goal-phase-post-completion-sync-plan.md).
+Sync failure or deferral retains completed Phase status and unrelated uncommitted
+work. This is the next bounded delivery before Phase 6.6 diagnosis work;
+the initial completion/safe-deferral implementation is verified and locally
+published, and the CNCF Phase 116 owner has completed same-Session adoption.
+The later Human-confirmed HEAD/dirty continuation and shared-skill promotion
+remain pending. See the
+[current roadmap](docs/phase/README.md) for preserved ongoing work and sequencing.
+
 ## Current Phase 6 planning sequence (2026-10-13)
 
 The applied split is [6](docs/phase/phase-6.md) -> [6.1](docs/phase/phase-6.1.md)

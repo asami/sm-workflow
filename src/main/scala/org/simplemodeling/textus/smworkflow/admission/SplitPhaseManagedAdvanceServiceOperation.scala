@@ -22,11 +22,11 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
   * required: unavailable capability is an error, never invented WAIT/Terminal.
   * Binding retains metadata only; every effect borrows the actual owning Core.
   *
-  * @since Oct.  4, 2026
-  * @version Oct. 14, 2026
+  * @since   Oct.  4, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
-  def bindHostC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
+  def bindRuntimeC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
     catalog: SplitPhaseRuntimeCatalog.Catalog, humanDirection: Boolean = false,
     terminalObservation: () => Consequence[Unit] = () => Consequence.unit): Consequence[spec.OperationDefinition] = {
     if (params == null || declaration == null || catalog == null || terminalObservation == null)

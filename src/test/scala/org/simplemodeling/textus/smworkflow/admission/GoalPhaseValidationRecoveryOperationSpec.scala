@@ -13,12 +13,13 @@ import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.NativeHostValidationRecoveryPreparation
+import org.simplemodeling.textus.smworkflow.preparation.NativeValidationRecoveryPreparation
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseNativeValidation as N
@@ -30,7 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * deliberately retains unknown state before any check effect. Test-owned
   * evidence is not an independent production Human or registered-runner proof.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
@@ -41,7 +42,7 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     Vector(O.Step("step-1", "Implement selected compile boundary", Vector("value.txt"), Vector.empty, _check_names)),
     _check_names, repairLimit = 2)
 
-  protected def recoveryHost(root: Path): ThreeWorkflowHostParameters.Definition = {
+  protected def recoveryHost(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = ThreeWorkflowNormalHostFixture.definition(root)
     val checks = _check_names.zipWithIndex.map { case (name, index) =>
       N.Check(name, index + 1, WorkflowSbtValidation.Kind.Compile)
@@ -60,7 +61,7 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     commands.patch(commands.indexWhere(_.contains("commit")), Vector(Vector("-C", root.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", "src/main/scala/CompileConsumer.scala")), 0)
   }
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), goalPaths = goal.candidatePaths,
       goalMessages = goal.closure.programs.map(p => "Goal Step " + p.step), goalSelections = Vector(goal.candidatePaths))
@@ -91,18 +92,21 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     if (Files.exists(marker)) Files.readString(marker).linesIterator.map(_.toLong).toVector else Vector.empty
   }
   protected def withRecoveryEpisode(root: Path, initialize: Boolean = false, interrupt: Boolean = false,
-    admission: String = "allowed", sequential: Boolean = false)(task: RecoveryEpisode => Unit): Unit = {
+    admission: String = "allowed", sequential: Boolean = false,
+    acknowledgement: Option[String => Consequence[Unit]] = None,
+    importData: Option[String] = None, componentInstance: String = "repository-spec")(task: RecoveryEpisode => Unit): Unit = {
     val previous = _admission
     val previoussequence = _sequential
     _admission = admission
     _sequential = sequential
-    val acknowledgement: String => Consequence[Unit] = point =>
+    val defaultack: String => Consequence[Unit] = point =>
       if (interrupt && point == "goal-check-prepared:compile")
         Consequence.stateConflict("Test-owned acknowledgement failure immediately after actual check intent commit, before effect")
       else Consequence.unit
     try _with_runtime_(root, "Goal", Some(recoveryHost(root)),
-      hostParameters = Map("textus.resource.url.file.roots" -> root.toAbsolutePath.normalize.toString),
-      goalAcknowledgement = Some(acknowledgement)) {
+      hostParameters = Map("textus.resource.url.file.roots" -> root.toAbsolutePath.normalize.toString) ++
+        importData.map(value => "textus.import.data.file" -> value),
+      goalAcknowledgement = Some(acknowledgement.getOrElse(defaultack)), componentInstance = componentInstance) {
       (owner, component, actor, prepare) =>
         if (initialize) prepare(call => call.setupC(_setup_commands_(root, "Goal").size).flatMap { _ =>
           val selection = _goal_selection_(recoveryHost(root).goal.input, "validation-recovery-selection", "validation-recovery-invocation")
@@ -162,11 +166,37 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
       rationale: String, reference: V.WorkflowArtifactReference, participant: String = "participant"):
       V.GoalPhaseValidationRecoveryInput = {
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(participant), None, None)
-      val prepared = take(NativeHostValidationRecoveryPreparation.prepareC(description,
+      val prepared = take(NativeValidationRecoveryPreparation.prepareC(description,
         V.GoalPhaseValidationRecoveryAnswer(choice, rationale), reference, execution, participant, "normal-development-host",
         actor.clock.instant().minusSeconds(1)))
       prepare(call => call.createC("host_evidence", prepared.recordIdentity, prepared.record))
       V.GoalPhaseValidationRecoveryInput(description.sessionId, description.target, choice, rationale, reference)
+    }
+    /** Fixture-owned independent review and authority use the normal evidence ports. */
+    def acceptStep(review: V.GoalPhaseAdvanceResult): Unit = {
+      var assigned = Option.empty[WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]]
+      prepare(call => call.goalWorkC(InstanceIdentity(review.sessionId)).map(value => { assigned = Some(value); () }))
+      val work = assigned.get
+      val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]].request
+      val selected = order.input.get.value
+      val reference = ContextReference("known-failed-fixture-step-review", "1")
+      val completion = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision,
+        order.context.snapshot, TypedValue(GoalPhaseNativeWork.resultCodec.typeIdentity,
+          GoalPhaseNativeWork.Result("accept", "Independent fixture reviewer accepts the exact Step", Vector.empty)),
+        reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer")))
+      prepare(call => ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(call.core, selected, completion)
+        .flatMap(binding => call.evidenceC(NativeExternalEvidence.Purpose.GoalReview,
+          ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision), reference,
+          "fixture-independent-reviewer", binding)))
+      invoke[V.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult",
+        take(NativeWorkflowOperationInputFixture.submissionC(completion))).accepted shouldBe true
+      val pending = current(review.sessionId)
+      val closure = GoalPhaseNativeClosure.Input(review.sessionId, pending.revision.value.toString,
+        selected.selectedPlan.identity, selected.selectedPlan.revision, selected.stepIdentity.get,
+        selected.generation, selected.originalBase, selected.candidate.get, reference.identity)
+      prepare(call => call.evidenceC(NativeExternalEvidence.Purpose.StepClosure,
+        ThreeWorkflowExternalEvidencePorts.key(closure.instance, closure.sourceRevision), ContextReference("fixture-step-authority", "1"),
+        "participant", take(ThreeWorkflowExternalEvidencePorts.stepClosureBindingC(call.core, closure))))
     }
   }
 }
@@ -174,12 +204,273 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
 /** Normal managed Operations prove storage/authority separation. Real SBT is
   * required by the parent's selected runtime preparation; this worker runs none.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {
   "Public validation recovery Operations" should {
+    "E12 preserve a formal Phase failure and admit only one independently bound fresh trial" should afterWord(
+      "in spec:goal-phase-validation-recovery, example:E12, rules:R8,R9, phase:6.4") {
+      "reconstruct the same history and reject stale crossed missing and multi-check direction" in {
+        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture
+        val root = Fixture.newKnownRoot("known-failed-operation")
+        var identity = ""
+        var failed = Option.empty[N.Saved]
+        var before = Option.empty[InstanceRecord]
+        var target = Option.empty[R.RecoveryTarget]
+        var directed = Option.empty[InstanceRecord]
+        Given("docs/spec/goal-phase-validation-recovery.md R8,R9 E12: a fresh fixture Step with real Compile and local commit, then real failing Phase Test")
+        Fixture.inKnownEpisode(root, initialize = true) { episode =>
+          identity = episode.start().sessionId
+          episode.submitImplementation(episode.advance(identity)).accepted shouldBe true
+          val review = episode.advance(identity)
+          review.work.get.kind shouldBe "ReviewStep"
+          review.work.get.review.get.checks.head.sbt.get.kind shouldBe "compile"
+          episode.acceptStep(review)
+          episode.advance(identity).kind shouldBe "Wait"
+          before = Some(episode.current(identity))
+          before.get.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
+          val description = episode.describe(identity)
+          val actual = take(R.targetC(description.target))
+          target = Some(actual)
+          failed = episode.retained(identity, actual.sourceRevision, "validation")
+          failed.get.payload.receipts.head.exitCode shouldBe Some(1)
+          failed.get.payload.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+          actual.knownFailedPhase.get.participant shouldBe "participant"
+          description.message should include("KNOWN FAILED")
+          episode.current(identity).history shouldBe before.get.history
+          When("ordinary Advance repeats without direction and public recovery receives missing or crossed proof")
+          val nodirection = episode.advance(identity)
+          val missing = V.GoalPhaseValidationRecoveryInput(identity, description.target, "AuthorizeNewAttempt", "Fresh trial",
+            V.WorkflowArtifactReference("missing-known-proof", "1"))
+          val missingresult = episode.call(R.recoveryOperation, List(Property("input", missing.toRecord(), None)))
+          val genuine = episode.proof(description, "AuthorizeNewAttempt", "Fresh trial after known failure",
+            V.WorkflowArtifactReference("known-direction", "1"))
+          val crossed = Vector(actual.copy(candidate = actual.candidate.copy(tree = "c" * 40)),
+            actual.copy(knownFailedPhase = None), actual.copy(step = "step-1"),
+            actual.copy(knownFailedPhase = actual.knownFailedPhase.map(_.copy(exitCode = 2))),
+            actual.copy(knownFailedPhase = actual.knownFailedPhase.map(_.copy(participant = "other"))))
+          val crossedresults = crossed.map(t => episode.call(R.recoveryOperation,
+            List(Property("input", genuine.copy(target = R.targetRecord(t)).toRecord(), None))))
+          val defer = episode.proof(description, "Defer", "Keep formal failure", V.WorkflowArtifactReference("known-defer", "1"))
+          val deferred = episode.recover(defer)
+          val deferredhistory = episode.current(identity).history
+          val deferredexecutions = Fixture.phaseExecutions(root).size
+          Then("no direction, missing or crossed proof and Defer preserve the known failure without another Test")
+          nodirection.kind shouldBe "Wait"
+          missingresult.isSuccess shouldBe false
+          crossedresults.foreach(_.isSuccess shouldBe false)
+          deferred.outcome shouldBe "deferred"
+          deferredhistory shouldBe before.get.history
+          deferredexecutions shouldBe 1
+          When("the actual independent Human evidence admits the exact extended target")
+          val authorized = episode.recover(genuine)
+          directed = Some(episode.current(identity))
+          val repeated = episode.call(R.recoveryOperation, List(Property("input", genuine.toRecord(), None)))
+          val authorizedexecutions = Fixture.phaseExecutions(root).size
+          val preserved = episode.retained(identity, actual.sourceRevision, "validation").get.payload
+          Then("one durable direction selects PhaseValidation without Test, refund or historical mutation")
+          authorized.outcome shouldBe "new-attempt-authorized"
+          directed.get.history.dropRight(1) shouldBe before.get.history
+          directed.get.currentProgression shouldBe Some(ProgressionReference("phase.PhaseValidation"))
+          repeated.isSuccess shouldBe false
+          authorizedexecutions shouldBe 1
+          preserved shouldBe failed.get.payload
+        }
+        Given("the same fixture reopened after changing only the external readiness marker")
+        Files.writeString(root.resolve("phase-ready"), "ready\n")
+        Fixture.inKnownEpisode(root) { episode =>
+          When("ordinary Advance reconstructs the saved direction and executes the fresh real Phase Test")
+          val review = episode.advance(identity)
+          Then("ordinary PhaseReview retains the completed Step, Plan, base, failed receipt and counters")
+          review.work.get.kind shouldBe "ReviewPhase"
+          review.work.get.completed.size shouldBe 1
+          review.work.get.selectedPlan.identity shouldBe target.get.planIdentity
+          review.work.get.originalBase.head shouldBe target.get.base.head
+          review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
+          review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          episode.current(identity).history.take(directed.get.history.size) shouldBe directed.get.history
+          episode.retained(identity, target.get.sourceRevision, "validation").get.payload shouldBe failed.get.payload
+          episode.retained(identity, target.get.sourceRevision, "check-recovery-0") shouldBe None
+          Fixture.phaseExecutions(root).size shouldBe 2
+          When("ordinary Advance repeats after the fresh whole-Phase check succeeds")
+          val repeated = episode.advance(identity)
+          val repeatedexecutions = Fixture.phaseExecutions(root).size
+          Then("the existing PhaseReview returns without another Test")
+          repeated shouldBe review
+          repeatedexecutions shouldBe 2
+        }
+        Given("a separate fresh fixture with two selected whole-Phase checks")
+        object Multi extends GoalPhaseKnownFailedPhaseValidationFixture {
+          override protected def known_phase_checks = Vector("phase-test", "phase-sibling")
+        }
+        val multiroot = Multi.newKnownRoot("known-multi-refused")
+        Multi.inKnownEpisode(multiroot, initialize = true) { episode =>
+          val id = episode.start().sessionId
+          episode.submitImplementation(episode.advance(id)).accepted shouldBe true
+          When("the accepted Step closes before whole-Phase validation")
+          val review = episode.advance(id)
+          episode.acceptStep(review)
+          val failed = episode.advance(id)
+          val described = episode.call(R.describeOperation, List(Property("sessionId", id, None)))
+          val executions = Multi.phaseExecutions(multiroot).size
+          Then("the known first failure waits and the multi-check target refuses recovery description")
+          failed.kind shouldBe "Wait"
+          described.isSuccess shouldBe false
+          executions shouldBe 1
+        }
+      }
+    }
+    "E14 preserve three unknown Phase attempts before a real failed fourth attempt and one new trial" should afterWord(
+      "in spec:goal-phase-validation-recovery, example:E14, rules:R3,R4,R8,R9, phase:6.4") {
+      "bind the latest real failure and require its own independent direction after reopening" in {
+        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture
+        Given("docs/spec/goal-phase-validation-recovery.md R3,R4,R8,R9 E14: a NEW isolated normal Operation fixture")
+        val root = Fixture.newKnownRoot("known-failed-three-unknowns-operation")
+        var identity = ""
+        var implementation = Option.empty[V.GoalPhaseAdvanceResult]
+        var oldproof = Option.empty[V.GoalPhaseValidationRecoveryInput]
+        var source = ""
+        var before = Option.empty[InstanceRecord]
+        var failed = Option.empty[N.Saved]
+        var target = Option.empty[R.RecoveryTarget]
+        var preserved = Vector.empty[(String, N.Saved)]
+        When("normal Operations start and submit the selected Step implementation")
+        Fixture.inKnownEpisode(root, initialize = true) { episode =>
+          identity = episode.start().sessionId
+          implementation = Some(episode.advance(identity))
+          val submission = episode.submitImplementation(implementation.get)
+          Then("the selected implementation is accepted")
+          submission.accepted shouldBe true
+          When("ordinary Compile and independent fixture review prepare actual Step closure")
+          val review = episode.advance(identity)
+          episode.acceptStep(review)
+          Then("the real Compile succeeds and independent review is prepared for the selected Step")
+          review.work.get.kind shouldBe "ReviewStep"
+          review.work.get.review.get.checks.head.sbt.get.kind shouldBe "compile"
+          review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+        }
+        (0 until 3).foreach { ordinal =>
+          When("test-owned normal Operation acknowledgement interrupts Phase intent " + ordinal + " before its SBT effect")
+          Fixture.inKnownEpisode(root, acknowledgement = Some(Fixture.unknownPhaseAcknowledgement)) { episode =>
+            val interrupted = episode.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(identity))
+            val description = episode.describe(identity)
+            val actual = take(R.targetC(description.target))
+            val unknown = episode.retained(identity, actual.sourceRevision,
+              "check-intent-0" + (if (ordinal == 0) "" else "-retry-" + ordinal)).get
+            Then("the real selected intent has no result and the preceding old outcomes remain unknown")
+            interrupted.isSuccess shouldBe false
+            actual.attempt shouldBe ordinal
+            actual.knownFailedPhase shouldBe None
+            actual.intentRevision shouldBe unknown.record.revision.value.toString
+            if (ordinal == 0) source = actual.sourceRevision else actual.sourceRevision shouldBe source
+            Fixture.phaseExecutions(root) shouldBe empty
+            When("separate fixture-owned exact R6 evidence authorizes only the next attempt")
+            val proof = episode.proof(description, "AuthorizeNewAttempt", "Old outcome remains unknown; authorize one next attempt",
+              V.WorkflowArtifactReference("combined-unknown-human-" + ordinal, "1"))
+            val accepted = episode.recover(proof)
+            oldproof = Some(proof)
+            Then("authorization adds one R6 record without executing a check")
+            accepted.outcome shouldBe "new-attempt-authorized"
+            Fixture.phaseExecutions(root) shouldBe empty
+          }
+        }
+        val closedtip = Files.readString(root.resolve("repository/.git/refs/heads/main"))
+        val reflog = Files.readString(root.resolve("repository/.git/logs/HEAD"))
+        val product = Files.readAllBytes(root.resolve("repository/src/test/scala/ProductCheck.scala")).toVector
+        When("the next ordinary Operation actually executes the fourth selected Phase attempt and retains its failed result")
+        Fixture.inKnownEpisode(root) { episode =>
+          val waiting = episode.advance(identity)
+          before = Some(episode.current(identity))
+          val description = episode.describe(identity)
+          val actual = take(R.targetC(description.target))
+          target = Some(actual)
+          failed = episode.retained(identity, source, "validation")
+          val finalintent = episode.retained(identity, source, "check-intent-0-retry-3").get
+          preserved = ((0 until 3).flatMap(ordinal => {
+            val suffix = if (ordinal == 0) "" else "-retry-" + ordinal
+            Vector("check-intent-0" + suffix, "check-recovery-0" + suffix)
+          }).toVector ++ Vector("check-intent-0-retry-3", "check-result-0-retry-3", "validation")).map(key =>
+            key -> episode.retained(identity, source, key).get)
+          Then("description binds attempt3 and its own intent, Decision and complete failed receipt")
+          waiting.kind shouldBe "Wait"
+          actual.attempt shouldBe 3
+          actual.intentRevision shouldBe finalintent.record.revision.value.toString
+          actual.sourceRevision shouldBe source
+          actual.frontierRevision shouldBe before.get.revision.value.toString
+          actual.knownFailedPhase.get.failedReceiptRevision shouldBe actual.frontierRevision
+          failed.get.payload.newAttempts.map(_.attempt) shouldBe Vector(0, 1, 2)
+          failed.get.payload.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+          failed.get.payload.receipts.head.exitCode shouldBe Some(1)
+          Fixture.phaseExecutions(root).size shouldBe 1
+          When("the failed target receives missing, old-R6, wrong-ordinal, crossed candidate/Plan or crossed Human proof")
+          val missing = V.GoalPhaseValidationRecoveryInput(identity, description.target, "AuthorizeNewAttempt", "Fresh trial",
+            V.WorkflowArtifactReference("missing-combined-known", "1"))
+          val genuine = episode.proof(description, "AuthorizeNewAttempt", "Independent NEW direction after actual failed attempt3",
+            V.WorkflowArtifactReference("combined-known-human", "1"))
+          val otherdescription = description.copy(target = R.targetRecord(actual.copy(
+            knownFailedPhase = actual.knownFailedPhase.map(_.copy(participant = "other")))))
+          val otherhuman = episode.proof(otherdescription, "AuthorizeNewAttempt", "Crossed participant",
+            V.WorkflowArtifactReference("combined-other-human", "1"), participant = "other")
+          val crossed = Vector(actual.copy(attempt = 0), actual.copy(intentRevision = take(R.targetC(oldproof.get.target)).intentRevision),
+            actual.copy(planRevision = "2"), actual.copy(candidate = actual.candidate.copy(tree = "c" * 40)))
+          val refused = (Vector(missing, oldproof.get, oldproof.get.copy(target = description.target), otherhuman) ++
+            crossed.map(value => genuine.copy(target = R.targetRecord(value)))).map(input => episode.call(R.recoveryOperation,
+              List(Property("input", input.toRecord(), None))))
+          val nodirection = episode.advance(identity)
+          val deferred = episode.recover(episode.proof(description, "Defer", "Retain actual failure",
+            V.WorkflowArtifactReference("combined-known-defer", "1")))
+          val unchanged = episode.current(identity)
+          Then("no old direction or Defer can authorize another check or change the failed history")
+          refused.foreach(_.isSuccess shouldBe false)
+          nodirection.kind shouldBe "Wait"
+          deferred.outcome shouldBe "deferred"
+          unchanged.history shouldBe before.get.history
+          Fixture.phaseExecutions(root).size shouldBe 1
+          When("the exact NEW independent known-failed direction is admitted once")
+          val accepted = episode.recover(genuine)
+          val repeated = episode.call(R.recoveryOperation, List(Property("input", genuine.toRecord(), None)))
+          Then("one separate durable direction grants a fresh validation round without executing it")
+          accepted.outcome shouldBe "new-attempt-authorized"
+          repeated.isSuccess shouldBe false
+          Fixture.phaseExecutions(root).size shouldBe 1
+        }
+        When("only external readiness changes and the same Session reopens for ordinary Advance")
+        Files.writeString(root.resolve("phase-ready"), "ready\n")
+        Fixture.inKnownEpisode(root) { episode =>
+          val review = episode.advance(identity)
+          val repeated = episode.advance(identity)
+          val current = episode.current(identity)
+          val retained = preserved.map { (key, _) => key -> episode.retained(identity, source, key).get }
+          Then("one real fresh Test reaches PhaseReview with all bindings, counters, commits and old records retained")
+          review.sessionId shouldBe identity
+          review.work.get.kind shouldBe "ReviewPhase"
+          review.work.get.selectedPlan shouldBe implementation.get.work.get.selectedPlan
+          review.work.get.originalBase shouldBe implementation.get.work.get.originalBase
+          review.work.get.candidate.get.head shouldBe target.get.candidate.head
+          review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
+          review.work.get.completed.size shouldBe 1
+          review.work.get.completed.head.commit.identity shouldBe closedtip.trim
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+          repeated shouldBe review
+          Fixture.phaseExecutions(root).size shouldBe 2
+          current.history.take(before.get.history.size) shouldBe before.get.history
+          current.history.count(_.causation.value.startsWith("ordered-known-failed-phase-validation-recovery:")) shouldBe 1
+          retained.map((key, saved) => (key, saved.payload, saved.record.history)) shouldBe
+            preserved.map((key, saved) => (key, saved.payload, saved.record.history))
+          (0 until 3).foreach { ordinal =>
+            val suffix = if (ordinal == 0) "" else "-retry-" + ordinal
+            episode.retained(identity, source, "check-result-0" + suffix) shouldBe None
+          }
+          Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+          Files.readString(root.resolve("repository/.git/logs/HEAD")) shouldBe reflog
+          Files.readAllBytes(root.resolve("repository/src/test/scala/ProductCheck.scala")).toVector shouldBe product
+        }
+      }
+    }
     "settle an actual cancelled Compile at Decision after runtime process admission closes" in {
       Given("a fresh normal two-check recovery episode and a Compile source generator that waits after emitting captures")
       val root = freshRecoveryRoot("closed-admission-cancelled")

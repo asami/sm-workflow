@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Stage only retained Phase recording destinations after accepted source review.
   * Unknown effects retain their intent and never replay on reconstruction.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 22, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRecordingCandidate {
@@ -97,18 +97,23 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       _ <- store.ackC("goal-recording-candidate-recorded:" + path)
     } yield saved }
     actual <- store.inspectC
-    _ <- if (actual.dirty.forall(p => p.worktree == ' ' && p.index != '?' && p.index != '!')) Consequence.unit
+    _ <- if (GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, store.assigned, true)) Consequence.unit
       else F.invalid("recording candidate retains unstaged or unsupported paths")
     tree <- G.indexTreeC(store.core)
+    parent <- GitObjectId.parseC(store.reviewed.head)
+    global <- E.executeGitC(store.core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
+    _ <- if (GoalPhaseNativeCandidateBoundary.pathsOwned(global.map(_.value),
+        store.controller.plan.steps.flatMap(_.ownedPaths).distinct)) Consequence.unit
+      else F.invalid("recording candidate includes an unrelated index delta")
     reviewed <- GitObjectId.parseC(store.reviewed.tree)
     nativepaths <- E.executeGitC(store.core, GitOperation.PendingPaths(reviewed)).flatMap(_.valueC)
     paths = nativepaths.map(_.value)
     _ <- if (paths.distinct == paths && paths.forall(store.assigned.contains) && paths.forall(staged.payload.stagedPaths.contains))
       Consequence.unit else F.invalid("final recording delta crosses assigned and actually staged Phase destinations")
     nativediff <- E.executeGitC(store.core, GitOperation.PendingDiff(reviewed)).flatMap(_.valueC)
-    _ <- if (!nativediff.isBinary && nativediff.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 131072 &&
+    _ <- if (!nativediff.isBinary &&
         (paths.isEmpty == (tree == store.reviewed.tree))) Consequence.unit
-      else F.invalid("final recording delta is binary, oversized or contradicts the actual index")
+      else F.invalid("final recording delta is binary or contradicts the actual index")
     payload = staged.payload.copy(finalCandidate = Some(O.Snapshot(actual.head, tree)), changedPaths = paths)
     _ <- observedC(store.controller, payload)
     finalsaved <- store.saveC("candidate", staged.record, payload)
@@ -178,7 +183,8 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       actual <- G.observeC(core)
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree && actual.head == reviewed.head &&
-          actual.dirty.forall(p => !p.unmerged && assigned.contains(p.path) && p.renamedFrom.forall(assigned.contains)))
+          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty,
+            (assigned ++ controller.phaseRecordingPaths).distinct, false))
         Consequence.unit else F.invalid("recording candidate has unexpected edits or changed root, branch or completed-Step tip")
     } yield actual
     def ackC(point: String): Consequence[Unit] = acknowledge(point) match {

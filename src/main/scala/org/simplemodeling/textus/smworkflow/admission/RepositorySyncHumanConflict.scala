@@ -24,7 +24,7 @@ import RepositorySyncNativeProgressStore as N
   * the owning conflict port, not a caller-provided snapshot or workflow stage.
   * Answers are native atomic completion; only a subsequent advance runs effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object RepositorySyncHumanConflict {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositoryConflictDecision")
@@ -233,7 +233,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
       invalid("Human verification requires the actual owning completion call")
     else for {
       _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
-      target <- ThreeWorkflowHostEvidencePorts.repositoryHumanBindingC(AnswerContext(core.component.get.core.instanceId,
+      target <- ThreeWorkflowExternalEvidencePorts.repositoryHumanBindingC(AnswerContext(core.component.get.core.instanceId,
         question, result, participant))
       _ <- Option(evidence.admitC(core, result.resultReference, target)).getOrElse(
         Consequence.serviceUnavailable("Repository Human host evidence returned no outcome"))

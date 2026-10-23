@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -184,7 +184,7 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
         When("the existing business codecs consume the nested data and ignore passive extension annotations")
         val restored = SplitPhaseReasoningHumanDirection.inputCodec.decode(_with_unused_fields(encoded))
         val refused = malformed.map(SplitPhaseReasoningHumanDirection.inputCodec.decode)
-        val target = NativeHostSplitAnswerScope.reasoningTargetC(input, _frame().handle)
+        val target = NativeSplitAnswerScope.reasoningTargetC(input, _frame().handle)
 
         Then("business data survives once and the actual host target uses its work/reference rather than a native wire copy")
         restored shouldBe Right(input)

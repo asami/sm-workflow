@@ -7,8 +7,8 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanScopeResol
 
 /** Exact data read on the owning call, without private storage or new authority.
   *
-  * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @since   Oct.  5, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] final class SplitPhaseHumanResolutionDataStorePort private[admission] (
   declaration: SplitPhaseHumanResolutionReadPolicy.Declaration
@@ -16,7 +16,7 @@ private[smworkflow] final class SplitPhaseHumanResolutionDataStorePort private[a
   def loadForCallC(reference: H.Reference, core: ActionCall.Core): Consequence[Option[H.Record]] =
     if (declaration == null || reference == null || !_reference(reference.identity) || !_reference(reference.revision))
       Consequence.stateConflict("SplitPhase Human resolution requires an exact data reference/revision")
-    else ManagedHostRecordRead.loadSplitHumanResolutionC(core, declaration.storeName, declaration.collection, reference.identity)
+    else ManagedInputRecordRead.loadSplitHumanResolutionC(core, declaration.storeName, declaration.collection, reference.identity)
       .flatMap {
         case None => Consequence.success(None)
         case Some(row) => row.getString(J.storageField) match {

@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 /**
  * Exact raw-data read only. No retained lease, writer or decoded admission.
  * @since   Oct.  2, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] final class SplitPhasePartitionContextDataStorePort(
   declaration: SplitPhasePartitionContextReadPolicy.Declaration
@@ -31,7 +31,7 @@ private[smworkflow] final class SplitPhasePartitionContextDataStorePort(
   private def _load_raw_c(reference: S.ContextReference, core: ActionCall.Core): Consequence[Option[String]] =
     if (declaration == null || reference == null || !name(reference.identity) || !name(reference.revision))
       Consequence.stateConflict("SplitPhase partition context requires an exact reference/revision")
-    else ManagedHostRecordRead.loadSplitPartitionContextC(core, declaration.storeName, declaration.collection, reference.identity)
+    else ManagedInputRecordRead.loadSplitPartitionContextC(core, declaration.storeName, declaration.collection, reference.identity)
       .flatMap {
         case None => Consequence.success(None)
         case Some(row) => row.getString(SplitPhaseExplicitPartitionContextJsonV1.storageField) match {

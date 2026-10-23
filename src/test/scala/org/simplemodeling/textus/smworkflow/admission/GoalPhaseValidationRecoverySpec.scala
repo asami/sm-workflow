@@ -17,10 +17,10 @@ import GoalPhaseValidationRecovery as R
 import GoalPhaseOrderedProgression as O
 import SplitPhaseExplicitPartitionFixture.take
 
-/** Immutable data/chain specifications; these facts are test inputs, not host
+/** Immutable data/chain and production check-program specifications; these facts are test inputs, not host
   * observations or an independent production Human attestation.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -46,6 +46,201 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
   private def conclusion(message: String): Conclusion = Consequence.stateConflict[Unit](message) match {
     case Consequence.Failure(value) => value
     case _ => fail("Expected a diagnostic conclusion")
+  }
+
+  /** Controlled Store/UoW effects for the exact program used by native Advance.
+    * These observations do not claim a real production startup failure.
+    */
+  private final class CheckEpisode(initial: V.Saved, outcomes: Vector[SbtExecutionAttempt],
+    retained: Vector[V.Attempt] = Vector.empty,
+    precondition: Int => Consequence[Unit] = _ => Consequence.unit) {
+    private var _attempts = retained
+    private var _dispatches = Vector.empty[V.Check]
+    private var _events = Vector.empty[String]
+    private var _preconditions = 0
+    def attempts: Vector[V.Attempt] = _attempts
+    def dispatches: Vector[V.Check] = _dispatches
+    def events: Vector[String] = _events
+    def runC(): Consequence[V.Saved] = V.runCheckC(check, 0)(
+      () => {
+        _events :+= "reconcile"
+        V.reconcileAttemptsC(initial, initial.payload, 0, _attempts)
+      },
+      () => {
+        _events :+= "preconditions"
+        _preconditions += 1
+        precondition(_preconditions)
+      }, _save_c, point => { _events :+= "ack:" + point; Consequence.unit }, _run_c,
+      _ => { _events :+= "evidence"; Consequence.unit })
+    private def _save_c(key: String, from: InstanceRecord, payload: V.Payload): Consequence[V.Saved] =
+      if (V.codec.decode(V.codec.encode(payload)).isLeft) Consequence.stateConflict("Controlled Store refuses invalid native payload")
+      else {
+      val ordinal = if (key.contains("-retry-")) key.split("-retry-").last.toInt else 0
+      val saved = V.Saved(append(from, "ordered-validation:" + key), payload)
+      if (_attempts.size == ordinal) _attempts :+= V.Attempt(None, None)
+      val previous = _attempts(ordinal)
+      _attempts = _attempts.updated(ordinal, if (key.startsWith("check-intent-")) previous.copy(intent = Some(saved))
+        else previous.copy(result = Some(saved)))
+      _events :+= key
+      Consequence.success(saved)
+    }
+    private def _run_c(selected: V.Check): Consequence[SbtExecutionAttempt] = {
+      val ordinal = _dispatches.size
+      _events :+= "run:" + selected.identity
+      _dispatches :+= selected
+      Consequence.success(outcomes.lift(ordinal).getOrElse(fail("Unexpected extra selected check dispatch")))
+    }
+  }
+  private def _observed(termination: ProcessExecutionTermination, stdout: String = "", stderr: String = ""):
+    SbtExecutionAttempt = {
+    def _capture_(text: String): ProcessExecutionCapture = {
+      val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+      ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+    }
+    SbtExecutionAttempt.Observed(SbtExecutionResult(
+      SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))), SbtOperation.Compile,
+      ProcessExecutionResult(termination, _capture_(stdout), _capture_(stderr), Vector.empty, 1L, "controlled-check-attempt")))
+  }
+
+  "E7 Bounded runtime NotStarted recovery" should afterWord(
+    "in spec:goal-phase-validation-recovery, example:E7, rules:R1,R2,R7, phase:execution-recovery") {
+    "retain the stopped receipt before reconciling and dispatching the same check once more" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R1,R2,R7 E7: controlled NotStarted then successful owning-UoW results")
+      val initial = source
+      val episode = new CheckEpisode(initial, Vector(_observed(ProcessExecutionTermination.NotStarted),
+        _observed(ProcessExecutionTermination.Exited(0))))
+      When("the exact native single-check program drives the admitted selection")
+      val saved = take(episode.runC())
+      Then("both immutable attempts and the original selection survive in the prescribed effect order")
+      episode.dispatches shouldBe Vector(check, check)
+      episode.attempts.size shouldBe 2
+      val stopped = episode.attempts.head.result.get
+      val retry = episode.attempts(1).intent.get
+      retry.payload shouldBe stopped.payload
+      retry.record.history.dropRight(1) shouldBe stopped.record.history
+      retry.record.causation.value shouldBe "ordered-validation:check-intent-0-retry-1"
+      saved.payload.stopped shouldBe stopped.payload.stopped
+      saved.payload.stopped.head.termination shouldBe "not-started"
+      saved.payload.stopped.head.exitCode shouldBe None
+      saved.payload.receipts.map(_.identity) shouldBe Vector(check.identity)
+      saved.payload.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+      saved.payload.copy(receipts = Vector.empty, stopped = Vector.empty) shouldBe initial.payload
+      episode.events shouldBe Vector("reconcile", "preconditions", "check-intent-0", "ack:goal-check-prepared:compile",
+        "run:compile", "ack:goal-check-executed:compile", "check-result-0", "ack:goal-check-recorded:compile", "evidence",
+        "reconcile", "preconditions", "check-intent-0-retry-1", "ack:goal-check-prepared:compile", "run:compile",
+        "ack:goal-check-executed:compile", "check-result-0-retry-1", "ack:goal-check-recorded:compile", "evidence")
+    }
+
+    "stop after a second NotStarted and preserve a later ordinary invocation's fresh bound" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R7 E7: three controlled NotStarted outcomes")
+      val initial = source
+      val episode = new CheckEpisode(initial, Vector.fill(3)(_observed(ProcessExecutionTermination.NotStarted)))
+      When("one native check invocation completes its bounded startup recovery")
+      val stopped = take(episode.runC())
+      Then("two terminal attempts are retained, with no third dispatch or invented product receipt")
+      episode.dispatches shouldBe Vector(check, check)
+      episode.attempts.size shouldBe 2
+      stopped.payload.stopped.size shouldBe 2
+      stopped.payload.receipts shouldBe empty
+      V.continuable(stopped) shouldBe true
+
+      Given("that retained prefix and a later ordinary invocation under the same selected check")
+      val resumed = new CheckEpisode(initial, Vector(_observed(ProcessExecutionTermination.NotStarted),
+        _observed(ProcessExecutionTermination.Exited(0))), episode.attempts)
+      When("the later invocation reconciles its actual retained ordinals")
+      val completed = take(resumed.runC())
+      Then("new ordinals follow the original terminal prefix with only one additional dispatch per invocation")
+      resumed.dispatches shouldBe Vector(check, check)
+      resumed.attempts.take(2) shouldBe episode.attempts
+      resumed.attempts(2).intent.get.record.causation.value shouldBe "ordered-validation:check-intent-0-retry-2"
+      resumed.attempts(3).intent.get.record.causation.value shouldBe "ordered-validation:check-intent-0-retry-3"
+      completed.payload.stopped.take(2) shouldBe stopped.payload.stopped
+      completed.payload.receipts.head.exitCode shouldBe Some(0)
+    }
+
+    "recheck current preconditions before preparing any extra intent" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R7 E7: NotStarted followed by unavailable current preparation")
+      val initial = source
+      val episode = new CheckEpisode(initial, Vector(_observed(ProcessExecutionTermination.NotStarted)),
+        precondition = count => if (count == 1) Consequence.unit else Consequence.stateConflict("Current preparation refused"))
+      When("the bounded program attempts to re-admit the same check")
+      val refused = episode.runC()
+      Then("the actual stopped result stays terminal and no second intent or execution is created")
+      refused.isSuccess shouldBe false
+      episode.dispatches shouldBe Vector(check)
+      episode.attempts.size shouldBe 1
+      episode.attempts.head.result.get.payload.stopped.size shouldBe 1
+      episode.events.takeRight(3) shouldBe Vector("evidence", "reconcile", "preconditions")
+    }
+
+    "skip dispatch for successful and unresolved retained prefixes" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R7 E7: complete success and unresolved intent prefixes")
+      val initial = source
+      val prepared = intent(initial)
+      val passed = result(prepared, take(V.attemptPayloadC(initial.payload, check, 0,
+        _observed(ProcessExecutionTermination.Exited(0)))))
+      val prefixes = Vector(Vector(V.Attempt(Some(prepared), Some(passed))), Vector(V.Attempt(Some(prepared), None)))
+      prefixes.foreach { retained =>
+        val episode = new CheckEpisode(initial, Vector.empty, retained)
+        When("the exact native program reconciles the retained prefix")
+        val saved = take(episode.runC())
+        Then("neither preconditions, intent creation nor UoW dispatch is repeated")
+        episode.dispatches shouldBe empty
+        episode.events shouldBe Vector("reconcile")
+        episode.attempts shouldBe retained
+        saved shouldBe retained.last.result.getOrElse(prepared)
+      }
+    }
+
+    "refuse an automatic extra dispatch for every unsafe or already completed outcome" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R2,R7 E7: controlled non-NotStarted outcome classes")
+      val target = SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1")))
+      val diagnostic = conclusion("NotStarted in diagnostic prose conveys no process observation")
+      val outcomes = Vector(
+        SbtExecutionAttempt.AdmissionRejected(target, SbtOperation.Compile, diagnostic),
+        SbtExecutionAttempt.Uncertain(target, SbtOperation.Compile, diagnostic),
+        _observed(ProcessExecutionTermination.LaunchFailed),
+        _observed(ProcessExecutionTermination.TimedOut),
+        _observed(ProcessExecutionTermination.Cancelled),
+        _observed(ProcessExecutionTermination.TerminationUnconfirmed),
+        _observed(ProcessExecutionTermination.Exited(1)),
+        _observed(ProcessExecutionTermination.Exited(0)))
+      outcomes.foreach { actual =>
+        val episode = new CheckEpisode(source, Vector(actual))
+        When("the exact native program saves that owning-UoW outcome")
+        val saved = take(episode.runC())
+        Then("one actual result is retained without a fresh automatic intent")
+        withClue(actual.toString) {
+          episode.dispatches shouldBe Vector(check)
+          episode.attempts.size shouldBe 1
+          episode.attempts.head.result shouldBe Some(saved)
+          episode.events.count(_ == "reconcile") shouldBe 1
+          saved.payload.stopped shouldBe empty
+        }
+      }
+    }
+
+    "keep invalid SBT facts and nonempty NotStarted captures unresolved without inventing a stopped result" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R2,R7 E7: controlled NotStarted observations with wrong SBT facts or nonempty captures")
+      val wrongoperation = _observed(ProcessExecutionTermination.NotStarted) match {
+        case SbtExecutionAttempt.Observed(actual) => SbtExecutionAttempt.Observed(actual.copy(operation = SbtOperation.Test))
+        case _ => fail("Expected the controlled observed result")
+      }
+      val invalid = Vector(wrongoperation,
+        _observed(ProcessExecutionTermination.NotStarted, stdout = "unexpected captured output"),
+        _observed(ProcessExecutionTermination.NotStarted, stderr = "unexpected captured diagnostic"))
+      invalid.foreach { actual =>
+        val episode = new CheckEpisode(source, Vector(actual))
+        When("the exact native program validates the observation and the Store admits only valid payloads")
+        val refused = episode.runC()
+        Then("the intent stays unresolved with no stopped receipt, second intent or automatic extra dispatch")
+        refused.isSuccess shouldBe false
+        episode.dispatches shouldBe Vector(check)
+        episode.attempts.size shouldBe 1
+        episode.attempts.head.intent.get.payload.stopped shouldBe empty
+        episode.attempts.head.result shouldBe None
+      }
+    }
   }
 
   "Validation recovery retained facts" should {
@@ -122,6 +317,69 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
       rejected.foreach(_.isSuccess shouldBe false)
     }
 
+    "retain three independently authorized unknowns before the actual failed fourth attempt" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R3,R8,R9 E14: canonical immutable UNKNOWN0/R6, UNKNOWN1/R6 and UNKNOWN2/R6 records")
+      val initial = source
+      val prefix = (0 until 3).foldLeft((initial, Vector.empty[V.Attempt])) { case ((previous, attempts), ordinal) =>
+        val prepared = intent(previous, ordinal)
+        val key = "ordered-validation:check-recovery-0" + (if (ordinal == 0) "" else "-retry-" + ordinal)
+        val authorized = V.Saved(append(prepared.record, key), prepared.payload.copy(newAttempts = prepared.payload.newAttempts :+
+          V.NewAttempt(check.identity, ordinal, prepared.record.revision.value.toString, "independent-human-" + ordinal,
+            "1", "participant", "Authorize only this next attempt; the old outcome remains unknown")))
+        (authorized, attempts :+ V.Attempt(Some(prepared), None, Some(authorized)))
+      }
+      val episode = new CheckEpisode(initial, Vector(_observed(ProcessExecutionTermination.Exited(1))), prefix._2)
+      When("the same native check program reconciles that complete prefix and obtains one actual failed result")
+      val failed = take(episode.runC())
+      val attempts = episode.attempts
+      val reconciled = take(V.reconcileAttemptsC(initial, initial.payload, 0, attempts))
+      Then("the terminal pair is attempt3 and all historical unknowns and exact Human authorizations survive")
+      attempts.size shouldBe 4
+      attempts.take(3) shouldBe prefix._2
+      attempts.take(3).foreach(_.result shouldBe None)
+      attempts.last.intent.get.record.causation.value shouldBe "ordered-validation:check-intent-0-retry-3"
+      attempts.last.result shouldBe Some(failed)
+      failed.payload.newAttempts.map(_.attempt) shouldBe Vector(0, 1, 2)
+      failed.payload.newAttempts shouldBe prefix._1.payload.newAttempts
+      failed.record.history.take(prefix._1.record.history.size) shouldBe prefix._1.record.history
+      V.repairable(failed.payload) shouldBe true
+      reconciled.saved shouldBe failed
+      reconciled.nextAttempt shouldBe None
+      episode.dispatches shouldBe Vector(check)
+
+      Given("missing, crossed, duplicated, rewritten or noncontiguous retained predecessor facts")
+      val prior = attempts(1)
+      val authorized = prior.recovery.get
+      val crossed = authorized.copy(payload = authorized.payload.copy(newAttempts = authorized.payload.newAttempts.map(
+        fact => if (fact.attempt == 1) fact.copy(intentRevision = attempts.head.intent.get.record.revision.value.toString) else fact)))
+      val wrongordinal = authorized.copy(payload = authorized.payload.copy(newAttempts = authorized.payload.newAttempts.map(
+        fact => if (fact.attempt == 1) fact.copy(attempt = 2) else fact)))
+      val duplicated = authorized.copy(payload = authorized.payload.copy(newAttempts = authorized.payload.newAttempts :+
+        authorized.payload.newAttempts.last))
+      val rewritten = prior.intent.get.copy(payload = prior.intent.get.payload.copy(candidate = snapshot.copy(tree = "c" * 40)))
+      val damaged = Vector(attempts.updated(1, prior.copy(recovery = None)),
+        attempts.updated(1, prior.copy(intent = None)), attempts.updated(1, prior.copy(recovery = Some(crossed))),
+        attempts.updated(1, prior.copy(recovery = Some(wrongordinal))), attempts.updated(1, prior.copy(recovery = Some(duplicated))),
+        attempts.updated(1, prior.copy(intent = Some(rewritten))), attempts.patch(1, Vector.empty, 1),
+        attempts :+ V.Attempt(None, None), attempts.updated(3, attempts.last.copy(recovery = Some(authorized))))
+      When("the unchanged reconciler receives each corrupt chain")
+      val rejected = damaged.map(values => V.reconcileAttemptsC(initial, initial.payload, 0, values))
+      Then("no invalid prefix gains a terminal result or new-attempt authority")
+      rejected.foreach(_.isSuccess shouldBe false)
+
+      Given("an unresolved or non-Failed terminal after the same admitted three-unknown prefix")
+      val unsafe = Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.TimedOut,
+        ProcessExecutionTermination.Cancelled, ProcessExecutionTermination.TerminationUnconfirmed)
+      When("terminal classification observes those actual controlled result classes")
+      val classified = unsafe.map(termination => take(new CheckEpisode(initial, Vector(_observed(termination)), prefix._2).runC()))
+      val unresolved = take(V.reconcileAttemptsC(initial, initial.payload, 0, attempts.updated(3, attempts.last.copy(result = None))))
+      Then("none qualifies as a known Failed receipt and the missing final result remains unresolved")
+      classified.foreach(saved => V.repairable(saved.payload) shouldBe false)
+      unresolved.saved shouldBe attempts.last.intent.get
+      unresolved.nextAttempt shouldBe None
+      V.repairable(unresolved.saved.payload) shouldBe false
+    }
+
     "retain uncertainty diagnostics without silent replay and allow only an explicit new attempt" in {
       Given("R2,R3: a typed uncertain UoW outcome, including a possible lifecycle timeout")
       val initial = source
@@ -176,6 +434,44 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
   }
 
   "Public validation recovery target" should {
+    "E11 preserve legacy targets and bind the complete versioned known failed Phase target" should afterWord(
+      "in spec:goal-phase-validation-recovery, example:E11, rules:R4,R8,R9, phase:6.4") {
+      "roundtrip absent extensions and reject null malformed incomplete or crossed authority" in {
+        Given("docs/spec/goal-phase-validation-recovery.md R4,R8,R9 E11: legacy unknown and new known failed targets")
+        val legacy = R.RecoveryTarget("session", "plan", "1", snapshot, snapshot, "2", "5", "phase:phase-2", "test", 2, 0, "3")
+        val extension = R.KnownFailedPhase(R.KnownFailedPhase.schema, "definition", "1", "participant",
+          "session:ordered-validation:2:validation", "5", 1)
+        val known = legacy.copy(knownFailedPhase = Some(extension))
+        When("the codecs and public naming boundary carry each complete typed target")
+        val encoded = known.asJson
+        val rendered = RuntimeContext.PropertyNameContext.default.transformRecord(R.targetRecord(known))
+        Then("legacy bytes omit the extension and the new binding retains every authority dimension")
+        legacy.asJson.hcursor.downField("knownFailedPhase").focus shouldBe None
+        R.decodeTarget(legacy.asJson) shouldBe Right(legacy)
+        R.decodeTarget(encoded) shouldBe Right(known)
+        take(R.targetC(rendered)) shouldBe known
+        R.messageFor(known) should include("KNOWN FAILED")
+        R.messageFor(legacy) shouldBe R.message
+        val malformed = Vector(Json.Null, Json.arr(), Json.obj(), extension.asJson.mapObject(_.remove("participant")),
+          extension.asJson.mapObject(_.add("exitCode", Json.fromString("1"))),
+          extension.asJson.mapObject(_.add("exitCode", Json.fromBigDecimal(BigDecimal("1.5")))),
+          extension.asJson.mapObject(_.add("extra", Json.True)), extension.copy(schemaVersion = "v2").asJson,
+          extension.copy(exitCode = 0).asJson, extension.copy(failedReceiptRevision = "4").asJson,
+          extension.copy(failedReceiptIdentity = "foreign-receipt").asJson)
+        malformed.foreach(value => R.decodeTarget(encoded.mapObject(_.add("knownFailedPhase", value))).isLeft shouldBe true)
+        R.validTarget(known.copy(step = "step-1")) shouldBe false
+        val reference = ContextReference("human-direction", "1")
+        R.bindingC("component", known, "AuthorizeNewAttempt", "Fresh trial after formal failure", "other", reference).isSuccess shouldBe false
+        val binding = take(R.bindingC("component", known, "AuthorizeNewAttempt", "Fresh trial after formal failure", "participant", reference))
+        R.selectBinding(binding) shouldBe Right(binding)
+        val direction = GoalPhaseKnownFailedValidationRecovery.Direction(known, reference, "participant", "Fresh trial")
+        val codec = GoalPhaseKnownFailedValidationRecovery.codec
+        codec.decode(codec.encode(direction)) shouldBe Right(direction)
+        codec.decode(codec.encode(direction).mapObject(_.add("extra", Json.True))).isLeft shouldBe true
+        codec.decode(codec.encode(direction.copy(target = legacy))).isLeft shouldBe true
+        codec.decode(codec.encode(direction.copy(participant = "other"))).isLeft shouldBe true
+      }
+    }
     "roundtrip the standard snake_case Record and refuse colliding public names" in {
       Given("R4: a complete typed target projected through standard public Record naming")
       val target = R.RecoveryTarget("session", "plan", "1", snapshot, snapshot, "2", "3", "step-1", "compile", 1, 0, "3")
@@ -237,19 +533,19 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
       val target = R.RecoveryTarget("session", "plan", "1", snapshot, snapshot, "2", "3", "step-1", "compile", 1, 0, "3")
       val reference = ContextReference("unit-human-reference", "1")
       val binding = take(R.bindingC("component-instance", target, "AuthorizeNewAttempt", "Accept possible repeat effects", "participant", reference))
-      val declared = NativeHostEvidence.Declaration("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
+      val declared = NativeExternalEvidence.Declaration("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
         org.simplemodeling.model.datatype.EntityCollectionId("smworkflow", "cli", "host_evidence")), "test-host")
       val now = Instant.parse("2026-10-20T00:00:00Z")
-      val evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, R.purpose,
+      val evidence = NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, R.purpose,
         "lookup", reference.identity, reference.revision, declared.issuer, "participant", binding, now.toString)
       When("the exact direction and crossed variants are independently observed")
-      val accepted = NativeHostEvidence.observeC(evidence, declared, NativeHostEvidence.Purpose.ValidationRecovery, "lookup", binding, now)
+      val accepted = NativeExternalEvidence.observeC(evidence, declared, NativeExternalEvidence.Purpose.ValidationRecovery, "lookup", binding, now)
       val crossed = Vector(evidence.copy(participant = "another-participant"), evidence.copy(reference = "another-answer"),
         evidence.copy(revision = "2"), evidence.copy(binding = take(R.bindingC("component-instance", target.copy(planRevision = "2"),
           "AuthorizeNewAttempt", "Accept possible repeat effects", "participant", reference))))
       Then("only the exact participant/reference/complete target binding is admitted")
       withClue(accepted.toString + " ") { accepted.isSuccess shouldBe true }
-      crossed.foreach(value => NativeHostEvidence.observeC(value, declared, NativeHostEvidence.Purpose.ValidationRecovery,
+      crossed.foreach(value => NativeExternalEvidence.observeC(value, declared, NativeExternalEvidence.Purpose.ValidationRecovery,
         "lookup", binding, now).isSuccess shouldBe false)
       R.decodeTarget(target.asJson.mapObject(_.add("attempt", Json.fromString("0")))).isLeft shouldBe true
       R.selectBinding(binding.mapObject(_.add("ignoredAuthority", Json.True))) shouldBe Right(binding)

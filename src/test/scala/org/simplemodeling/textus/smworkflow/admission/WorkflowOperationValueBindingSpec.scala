@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named value binding and generated result intake checks. Real operation execution is covered by
   * the normal three-workflow specs, not inferred from a codec round trip.
   * @since   Oct. 12, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -29,8 +29,8 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
   "R1/R3 generated selected repair progress intake" should {
     "roundtrip the additive Request Decision and Advance fields through generated business readers" in {
       Given("saved typed assignment and question progress with their normal public declaration fields")
-      val request = NativeHostHumanEvidenceFixture.work.copy(
-        selectedPlan = NativeHostHumanEvidenceFixture.plan.copy(repairLimit = 2),
+      val request = NativeHumanEvidenceFixture.work.copy(
+        selectedPlan = NativeHumanEvidenceFixture.plan.copy(repairLimit = 2),
         repairProgress = Some(GoalPhaseRepairProgress.Snapshot(1, 1, 2)))
       val payload = GoalPhaseNativeWork.inputCodec.encode(request).hcursor.downField("payload").focus.get
       def _record_(value: Json): Record = _take(new RecordDecoder().json(value.noSpaces))
@@ -110,7 +110,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
 
     "retain a complete Plan proposal with empty Step dependencies through the generated WorkResult reader" in {
       Given("a specification-owned revision Proposal whose complete raw Plan retains the selected empty dependencies")
-      val plan = NativeHostHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
+      val plan = NativeHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
       val proposal = GoalPhasePlanRevision.Proposal("specification-public-input-proposal", "1",
         "SPECIFICATION-OWNED public-input revision", plan)
       val business = Json.obj("outcome" -> Json.fromString("decision-needed"),
@@ -132,7 +132,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
 
     "reject absent and null Step dependencies through generated WorkResult and strict Proposal intake" in {
       Given("specification-owned complete Plan proposals altered only by removing dependencies or explicitly making them null")
-      val plan = NativeHostHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
+      val plan = NativeHumanEvidenceFixture.work.selectedPlan.copy(revision = "2", effectiveAcceptance = None)
       val proposal = GoalPhasePlanRevision.Proposal("specification-invalid-dependencies", "1",
         "SPECIFICATION-OWNED invalid dependency cases", plan).asJson
       val planjson = proposal.hcursor.downField("plan").focus.get

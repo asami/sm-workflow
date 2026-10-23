@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
  * Execution-specific Start records and current business reads. Storage is
  * borrowed inside the actual call; no pool, lease or Human consent is retained.
  * @since   Oct.  2, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admission] (
   declaration: SplitPhaseTypedStartReadPolicy.Declaration,
@@ -114,7 +114,7 @@ private[smworkflow] final class SplitPhaseTypedStartDataStorePort private[admiss
   private def _load_raw_c(reference: T.Reference, core: ActionCall.Core): Consequence[Option[String]] =
     if (reference == null || !name(reference.identity) || !name(reference.revision))
       Consequence.stateConflict("SplitPhase typed Start requires an exact reference/revision")
-    else ManagedHostRecordRead.loadSplitTypedStartC(core, declaration.storeName, declaration.collection, reference.identity)
+    else ManagedInputRecordRead.loadSplitTypedStartC(core, declaration.storeName, declaration.collection, reference.identity)
       .flatMap {
         case None => Consequence.success(None)
         case Some(row) => for {

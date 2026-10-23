@@ -30,7 +30,8 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
-import org.simplemodeling.textus.smworkflow.host.{NativeHostHumanPreparation, NativeHostStartPreparation, NativeWorkflowHostExecution}
+import org.simplemodeling.textus.smworkflow.caller.NativeWorkflowCallerExecution
+import org.simplemodeling.textus.smworkflow.preparation.{NativeHumanDecisionPreparation, NativeStartPreparation}
 import SplitPhaseExplicitPartitionFixture.take
 import SplitPhaseTypedStartFixture as F
 
@@ -42,7 +43,7 @@ import SplitPhaseTypedStartFixture as F
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -151,12 +152,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Split question is absent")))
     } yield question
-    def humanEvidenceC(context: V.WorkflowHostHumanContext,
+    def humanEvidenceC(context: V.WorkflowHumanDecisionContext,
       result: ContinuationResult[SplitPhaseHumanDirectionAnswerContract.Answer]): Consequence[Unit] = for {
       body <- SplitPhaseHumanDirectionAnswerContract.encodeC(result.result.value)
       answer <- new org.goldenport.record.io.RecordDecoder().json(body.hcursor.downField("payload").focus.get.noSpaces)
         .flatMap(V.SplitPhaseHumanDirectionAnswer.createC)
-      prepared <- NativeHostHumanPreparation.splitC(context, answer,
+      prepared <- NativeHumanDecisionPreparation.splitC(context, answer,
         V.WorkflowArtifactReference(result.resultReference.identity, result.resultReference.revision),
         V.WorkflowExecutionEvidence(Vector.empty, result.evidence.workerIdentity, None, None),
         F.participantIdentity, "normal-development-host", executionContext.clock.instant().minusSeconds(60))
@@ -164,16 +165,16 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
     } yield ()
     def privateNativeHumanEvidenceC(question: WorkflowInteraction[?, Nothing],
       result: ContinuationResult[SplitPhaseHumanDirectionAnswerContract.Answer]): Consequence[Unit] = for {
-      binding <- ThreeWorkflowHostEvidencePorts.splitAnswerBindingC(SplitPhaseHumanAnswerVerification.AnswerContext(
+      binding <- ThreeWorkflowExternalEvidencePorts.splitAnswerBindingC(SplitPhaseHumanAnswerVerification.AnswerContext(
         core.component.get.core.instanceId, question, result, F.participantIdentity))
       now = executionContext.clock.instant()
       reference = result.resultReference
-      identity = ThreeWorkflowHostEvidencePorts.key(reference.identity, reference.revision)
-      evidence = NativeHostEvidence.Evidence(NativeHostEvidence.schema, NativeHostEvidence.Purpose.SplitAnswer.identity,
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      evidence = NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, NativeExternalEvidence.Purpose.SplitAnswer.identity,
         identity, reference.identity, reference.revision, "normal-development-host", F.participantIdentity,
         binding, now.minusSeconds(60).toString)
-      _ <- createC(collection("host_evidence"), NativeHostEvidence.recordIdentity(NativeHostEvidence.Purpose.SplitAnswer, identity),
-        Record.data(NativeHostEvidence.storageField -> take(NativeHostEvidence.encodeStorageC(evidence))))
+      _ <- createC(collection("host_evidence"), NativeExternalEvidence.recordIdentity(NativeExternalEvidence.Purpose.SplitAnswer, identity),
+        Record.data(NativeExternalEvidence.storageField -> take(NativeExternalEvidence.encodeStorageC(evidence))))
     } yield ()
     def execute(): Consequence[OperationResponse] = task(this).map(_ => OperationResponse.Scalar("specification-setup"))
   }
@@ -274,9 +275,9 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
       // Optional spec-owned observations surround only genuine actions, keeping
       // their full specification, command mode and afterCommit handling. The
       // completion observation may change only the selected fixture presentation.
-      val factory = new SmWorkflowConfiguredComponentFactory(ThreeWorkflowHostParameters.declarations, Vector.empty,
+      val factory = new SmWorkflowConfiguredComponentFactory(ThreeWorkflowRuntimeParameters.declarations, Vector.empty,
         (creation, parameters, resolved) => for {
-          host <- ThreeWorkflowHostParameters.decodeC(creation, parameters, resolved)
+          host <- ThreeWorkflowRuntimeParameters.decodeC(creation, parameters, resolved)
           services <- ThreeWorkflowLauncherAssembly.bindC(creation, host)(using resolved)
         } yield services.map { service =>
           if (service.name == "SplitPhaseService" && completionobservation.nonEmpty) {
@@ -377,8 +378,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
   }
 
   private def _prepare_start_c(call: Setup, start: SplitPhaseTypedStartPreparation.Record,
-    allocationRow: Record, sourceRow: Record): Consequence[NativeHostStartPreparation.Prepared] = {
-    NativeHostStartPreparation.splitC(call.core.component.get.core.instanceId.canonicalKey,
+    allocationRow: Record, sourceRow: Record): Consequence[NativeStartPreparation.Prepared] = {
+    NativeStartPreparation.splitC(call.core.component.get.core.instanceId.canonicalKey,
       V.WorkflowArtifactReference(start.reference.identity, start.reference.revision), allocationRow, sourceRow,
       V.WorkflowArtifactReference("specification-start-selection", "1"), start.participantIdentity,
       "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
@@ -419,7 +420,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         prepare { call =>
           for {
             prepared <- _prepare_start_c(call, typedStart,
-              NativeHostStartPreparationFixture.allocationRow(typedStart), NativeHostStartPreparationFixture.sourceRow(typedStart))
+              NativeStartPreparationFixture.allocationRow(typedStart), NativeStartPreparationFixture.sourceRow(typedStart))
             _ <- call.createC(collection("host_evidence"), prepared.recordIdentity, prepared.record)
           } yield ()
         }
@@ -535,20 +536,20 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         prepare { call =>
           val configuration = call.core.component.get.subsystem.get.configuration
           val old = ResolvedConfiguration(HostConfiguration(configuration.configuration.values.updated(
-            NativeHostEvidence.prefix + "issuer", ConfigurationValue.StringValue("withdrawn-host"))), ConfigurationTrace.empty)
+            NativeExternalEvidence.prefix + "issuer", ConfigurationValue.StringValue("withdrawn-host"))), ConfigurationTrace.empty)
           val storage = GoalPhaseRuntimeParameters.Persistence(F.configuration,
             declaration.instances, declaration.continuations)
-          val reader = take(NativeHostEvidence.bindC(old, storage))
-          val ports = new ThreeWorkflowHostEvidencePorts(reader)
-          val target = take(ThreeWorkflowHostEvidencePorts.splitStartBindingC(
+          val reader = take(NativeExternalEvidence.bindC(old, storage))
+          val ports = new ThreeWorkflowExternalEvidencePorts(reader)
+          val target = take(ThreeWorkflowExternalEvidencePorts.splitStartBindingC(
             SplitPhaseTypedStartHumanVerification.StartContext(call.core.component.get.core.instanceId, typedStart)))
           val now = call.executionContext.clock.instant()
-          val selected = NativeHostEvidence.Purpose.SplitStart
+          val selected = NativeExternalEvidence.Purpose.SplitStart
           val variants = Vector("current", "withdrawn", "future", "foreign-target", "absent")
           variants.foreach { variant =>
             Given(s"a separately provisioned $variant host input for this actual invocation")
-            val lookup = ThreeWorkflowHostEvidencePorts.key("boundary-" + variant, "1")
-            val issued = NativeHostEvidence.Evidence(NativeHostEvidence.schema, selected.identity, lookup,
+            val lookup = ThreeWorkflowExternalEvidencePorts.key("boundary-" + variant, "1")
+            val issued = NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, selected.identity, lookup,
               "independent-start-consent", "1", "normal-development-host", "separate-human", target, now.minusSeconds(86400).toString)
             val observed = variant match {
               case "withdrawn" => issued.copy(issuer = "withdrawn-host")
@@ -556,8 +557,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               case "foreign-target" => issued.copy(binding = target.mapObject(_.add("componentInstance", Json.fromString("another-owner"))))
               case _ => issued
             }
-            if (variant != "absent") take(call.createC(collection("host_evidence"), NativeHostEvidence.recordIdentity(selected, lookup),
-              Record.data(NativeHostEvidence.storageField -> take(NativeHostEvidence.encodeStorageC(observed)))))
+            if (variant != "absent") take(call.createC(collection("host_evidence"), NativeExternalEvidence.recordIdentity(selected, lookup),
+              Record.data(NativeExternalEvidence.storageField -> take(NativeExternalEvidence.encodeStorageC(observed)))))
             When("the production host EvidencePort reads the physical record under the current host declaration and call clock")
             val admitted = ports.splitStart.admitC(call.core, lookup, target)
             Then("only currently authorized applicable evidence is admitted; no copied construction-time issuer restores withdrawn authority")
@@ -674,7 +675,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
           val scopeprepared = if (mapped) {
             Given("Split execution E6/R1,R3,R6: the first public design context and actual saved scope WorkOrder")
             When("the host prepares and retains the original canonical execution Session")
-            val prepared = take(NativeWorkflowHostExecution.prepareC(scope.issuedWorkContext.get,
+            val prepared = take(NativeWorkflowCallerExecution.prepareC(scope.issuedWorkContext.get,
               SplitExecutionFixture.mapping, SplitExecutionFixture.origin.current))
             Then("DesignStandard preserves the original independent review obligation and delegated placement")
             val requirement = scopework.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].requirement
@@ -745,24 +746,24 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             When("the finite typed host tool converts that actual assigned output into normal importer input")
             val toolanswer = take(V.SplitPhaseHumanDirectionAnswer.createC(take(new org.goldenport.record.io.RecordDecoder().json(
               take(H.encodeC(answer)).hcursor.downField("payload").focus.get.noSpaces))))
-            val toolseed = take(NativeHostEvidenceToolFixture.prepareNormalCommand("SplitPhase", "human", response, toolanswer, F.participantIdentity,
+            val toolseed = take(NativeExternalEvidenceToolFixture.prepareNormalCommand("SplitPhase", "human", response, toolanswer, F.participantIdentity,
               V.WorkflowArtifactReference(submitted.resultReference.identity, submitted.resultReference.revision),
               V.WorkflowExecutionEvidence(Vector.empty, submitted.evidence.workerIdentity, None, None)))
-            val toolquestion = take(NativeHostSplitAnswerScope.questionBindingC(assigned))
+            val toolquestion = take(NativeSplitAnswerScope.questionBindingC(assigned))
             Then("tool export preserves the actual Scope target and supplied choice without advancing")
-            NativeHostEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("question").focus shouldBe
+            NativeExternalEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("question").focus shouldBe
               Some(toolquestion)
-            NativeHostEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("answer").get[String]("choice").toOption shouldBe
+            NativeExternalEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("answer").get[String]("choice").toOption shouldBe
               Some(toolanswer.choice.value)
-            NativeHostEvidenceToolFixture.evidence(toolseed).reference shouldBe submitted.resultReference.identity
-            NativeHostEvidenceToolFixture.evidence(toolseed).participant shouldBe submitted.evidence.workerIdentity.get
+            NativeExternalEvidenceToolFixture.evidence(toolseed).reference shouldBe submitted.resultReference.identity
+            NativeExternalEvidenceToolFixture.evidence(toolseed).participant shouldBe submitted.evidence.workerIdentity.get
             current().revision shouldBe before.revision
             When("the Human answer lacks the required independent host consent")
             invokeC("submitSplitHumanDirection", parameters).isSuccess shouldBe false
             current().revision shouldBe before.revision
             Given("specification-owned consent for the actual assigned Human answer")
             When("public Human preparation consumes the actual Scope output context and explicit fixture answer")
-            prepare(_.humanEvidenceC(response.scopeHuman.get.hostContext.get, submitted))
+            prepare(_.humanEvidenceC(response.scopeHuman.get.humanDecisionContext.get, submitted))
             Then("preparation and managed provisioning leave the pending Scope revision unchanged")
             current().revision shouldBe before.revision
             When("normal Human Submit records the selected Scope direction")
@@ -801,7 +802,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
             val reasoningprepared = if (mapped) {
               Given("Split execution E6/R1,R3,R6: the first public analysis context and actual saved reasoning WorkOrder")
               When("the host prepares the new reasoning Session with its original canonical snapshot")
-              val prepared = take(NativeWorkflowHostExecution.prepareC(response.issuedWorkContext.get,
+              val prepared = take(NativeWorkflowCallerExecution.prepareC(response.issuedWorkContext.get,
                 SplitExecutionFixture.mapping, SplitExecutionFixture.origin.current))
               Then("AnalysisStandard preserves independent review and DELEGATED/REQUIRED selection")
               val requirement = assigned.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].requirement
@@ -899,24 +900,24 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               When("the finite typed tool converts that actual assigned output and answer to normal importer input")
               val toolanswer = take(V.SplitPhaseHumanDirectionAnswer.createC(take(new org.goldenport.record.io.RecordDecoder().json(
                 take(H.encodeC(answer)).hcursor.downField("payload").focus.get.noSpaces))))
-              val toolseed = take(NativeHostEvidenceToolFixture.prepareNormalCommand("SplitPhase", "human", response, toolanswer, F.participantIdentity,
+              val toolseed = take(NativeExternalEvidenceToolFixture.prepareNormalCommand("SplitPhase", "human", response, toolanswer, F.participantIdentity,
                 V.WorkflowArtifactReference(humananswer.resultReference.identity, humananswer.resultReference.revision),
                 V.WorkflowExecutionEvidence(Vector.empty, humananswer.evidence.workerIdentity, None, None)))
-              val toolquestion = take(NativeHostSplitAnswerScope.questionBindingC(human))
+              val toolquestion = take(NativeSplitAnswerScope.questionBindingC(human))
               Then("tool export retains the actual Reasoning source and supplied choice")
-              NativeHostEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("question").focus shouldBe Some(toolquestion)
-              NativeHostEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("answer").get[String]("choice").toOption shouldBe Some(toolanswer.choice.value)
-              NativeHostEvidenceToolFixture.evidence(toolseed).reference shouldBe humananswer.resultReference.identity
-              NativeHostEvidenceToolFixture.evidence(toolseed).participant shouldBe humananswer.evidence.workerIdentity.get
+              NativeExternalEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("question").focus shouldBe Some(toolquestion)
+              NativeExternalEvidenceToolFixture.evidence(toolseed).binding.hcursor.downField("splitAnswerAttestation").downField("answer").get[String]("choice").toOption shouldBe Some(toolanswer.choice.value)
+              NativeExternalEvidenceToolFixture.evidence(toolseed).reference shouldBe humananswer.resultReference.identity
+              NativeExternalEvidenceToolFixture.evidence(toolseed).participant shouldBe humananswer.evidence.workerIdentity.get
               Given("an explicitly invalid duplicate Scope display alongside the actual full Reasoning Human output")
               val invalidscope = V.SplitPhaseScopeHumanQuestion("Invalid duplicate assignment", H.choices,
                 response.reasoningHuman.get.sourcePhaseIdentity, response.reasoningHuman.get.sourceAuthority,
                 response.reasoningHuman.get.items, response.reasoningHuman.get.candidates, scope.scope.get.gaps.toVector,
                 V.SplitPhaseScopeSemanticResult("DecisionNeeded", "Invalid duplicate display", Vector.empty,
                   cats.data.NonEmptyVector.of(V.SplitPhasePartitionEvidenceReference("invalid-duplicate-fixture", "1"))),
-                response.reasoningHuman.get.hostContext)
+                response.reasoningHuman.get.humanDecisionContext)
               When("the tool receives this ambiguous request rather than one selected issued Human")
-              val ambiguous = NativeHostEvidenceToolFixture.prepare("SplitPhase", "human",
+              val ambiguous = NativeExternalEvidenceToolFixture.prepare("SplitPhase", "human",
                 response.copy(scopeHuman = Some(invalidscope)), toolanswer, F.participantIdentity,
                 V.WorkflowArtifactReference(humananswer.resultReference.identity, humananswer.resultReference.revision),
                 V.WorkflowExecutionEvidence(Vector.empty, humananswer.evidence.workerIdentity, None, None))
@@ -925,7 +926,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
               Given("specification-owned evidence for that actual Human answer")
               When("public Human preparation consumes the actual Reasoning output context and explicit fixture answer")
               val beforeanswer = current()
-              prepare(_.humanEvidenceC(response.reasoningHuman.get.hostContext.get, humananswer))
+              prepare(_.humanEvidenceC(response.reasoningHuman.get.humanDecisionContext.get, humananswer))
               Then("preparation and provisioning leave the pending Reasoning revision unchanged")
               current().revision shouldBe beforeanswer.revision
               When("normal Human Submit records the selected Reasoning direction")
@@ -1199,7 +1200,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         if (mapped) {
           Given("Split execution E5/R1,R3,R4: actual first-issued partition design and its public context")
           When("the host prepares and retains its original canonical Session")
-          val prepared = take(NativeWorkflowHostExecution.prepareC(requested.issuedWorkContext.get,
+          val prepared = take(NativeWorkflowCallerExecution.prepareC(requested.issuedWorkContext.get,
             SplitExecutionFixture.mapping, SplitExecutionFixture.origin.current))
           retained = Some(prepared.session)
           Then("the saved partition retains DesignStandard and original independent DELEGATED/REQUIRED execution")
@@ -1261,7 +1262,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with Matchers w
         if (mapped) {
           Given("the original retained Session artifact and actual redisplayed public context")
           When("the host restores that original Session without preparing against changed mapping")
-          val restored = take(NativeWorkflowHostExecution.restoreC(repeated.issuedWorkContext.get,
+          val restored = take(NativeWorkflowCallerExecution.restoreC(repeated.issuedWorkContext.get,
             take(WorkflowExecutionHarness.decodeC(take(WorkflowExecutionHarness.encodeC(retained.get))))))
           result = bareresult.copy(evidence = SplitExecutionFixture.evidence(restored, bareresult.resultReference, "spec-partition-executor"))
           reply = take(NativeWorkflowOperationInputFixture.submissionC(result))

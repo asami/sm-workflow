@@ -17,12 +17,12 @@ import GoalPhasePlanRevision as R
   * The parent supplies actual semantic, Human, review and authority evidence.
   * Retained observations establish no external provenance by themselves.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private val _prefix = "smworkflow.spec.p62.planRevision."
   private val _ranges = Map("after-proposal" -> 1000, "after-human" -> 2000,
@@ -167,7 +167,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
     captured.documents should not be empty
     captured.documents.get.items should not be empty
     captured.plan.copy(effectiveAcceptance = None) shouldBe captured.proposal.plan
-    val context = take(R.normalizeJsonC(json(question.human.get.hostContext.get.question)))
+    val context = take(R.normalizeJsonC(json(question.human.get.humanDecisionContext.get.question)))
     val surfaced = context.hcursor.downField("source").downField("planRevision").as[R.Captured]
       .fold(error => throw new AssertionError(error.message), identity)
     surfaced shouldBe captured
@@ -395,7 +395,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
             Then("Wait exposes current candidate and StepClosure authority without completion or extra Test")
             waiting.kind shouldBe "Wait"
             waiting.sessionId shouldBe review.sessionId
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             waiting.validation.get.candidate shouldBe review.work.get.candidate.get
             waiting.work shouldBe None
             waiting.completion shouldBe None
@@ -411,7 +411,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
             Then("the exact actual Wait requires StepClosure authority with no completed Step or extra check")
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             waiting.completion shouldBe None
             _progress(waiting)
             val checks = _checks(scenario, 1)

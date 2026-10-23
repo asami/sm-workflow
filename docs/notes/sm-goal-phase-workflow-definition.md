@@ -6,6 +6,22 @@ Source workflow: legacy `cncf-goal-phase` skill and its Phase State Machine refe
 
 Target: CML/CNCF Workflow and StateMachine runtime
 
+## Planned completion-policy amendment — 2026-10-23
+
+The next delivery adopts [Phase completion followed by best-effort RepositorySync](../spec/goal-phase-post-completion-sync.md).
+Required development acceptance and commits establish durable Phase completion;
+subsequent sync failure/deferral has a separate outcome and does not reopen the
+Phase. The initial completion/safe-deferral policy is verified and locally
+published; the CNCF Phase 116 owner has adopted it in the same Session and
+completed that Phase. The later Human-confirmed HEAD/dirty amendment remains
+planned. Together these supersede unconditional sync-before-completion as the
+target design; the complete amended contract is not yet current behavior. Follow the
+[C1-C3 plan](goal-phase-post-completion-sync-plan.md) for normal typed contracts,
+existing-Session adoption and preservation. Moved HEAD and uncommitted changes use one
+existing Human confirmation; acceptance continues the same Session without
+repeated rejection of that acknowledged state. Historical observations below remain
+history; no stored workflow is silently rebound by this document update.
+
 ## Purpose
 
 `GoalPhaseWorkflow` は legacy `cncf-goal-phase` の制御意味論を参照しつつ、skill や

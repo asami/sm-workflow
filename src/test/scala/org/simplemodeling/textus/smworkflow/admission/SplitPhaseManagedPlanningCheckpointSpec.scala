@@ -41,8 +41,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * transport; that belongs to the three normal Operation suites.
   * Shared transaction, replay and interruption guarantees are not re-specified.
   *
-  * @since Oct.  2, 2026
-  * @version Oct. 12, 2026
+  * @since   Oct.  2, 2026
+  * @version Oct. 23, 2026
   */
 final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "managedcheckpoint", name))
@@ -50,7 +50,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
   private val declaration = SplitPhaseManagedStartAssembly.Declaration(f.configuration, collection("instances"), collection("continuations"))
   private val ip = SplitPhasePlanningInputReadPolicy.prefix
   private val cp = SplitPhasePartitionContextReadPolicy.prefix
-  private val sp = SplitPhaseHostSelectionReadPolicy.prefix
+  private val sp = SplitPhaseInputSelectionReadPolicy.prefix
   private val tp = SplitPhaseTypedStartReadPolicy.prefix
   private val ep = SplitPhasePartitionEnrichmentStorage.prefix
   private val values = Map[String, ConfigurationValue](
@@ -165,7 +165,7 @@ final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Mat
       val factory = new SmWorkflowConfiguredComponentFactory(Vector.empty, Vector.empty, (creation, parameters, resolved) => {
         val additional = resolvedTarget match {
           case None => Consequence.success(Vector.empty[spec.OperationDefinition])
-          case Some(target) => SplitPhaseManagedAdvanceServiceOperation.bindHostC(creation, declaration, f.catalog).flatMap {
+          case Some(target) => SplitPhaseManagedAdvanceServiceOperation.bindRuntimeC(creation, declaration, f.catalog).flatMap {
             case receiver: NativeWorkflowAdvanceInput.Receiver => Consequence.success(Vector(new spec.OperationDefinition {
               val specification = receiver.specification
               def createOperationRequest(incoming: Request): Consequence[OperationRequest] =

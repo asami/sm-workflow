@@ -23,12 +23,12 @@ import org.simplemodeling.textus.smworkflow.admission.typedmetafixture.{TypedMet
 /** Finite public transport for externally authored typed input selection and adoption.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
   import N.given
 
   private val _prefix = "smworkflow.spec.p62.typedinputs."
@@ -417,8 +417,8 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             val currentreview = pending.work.get.review.get
             val retainedwork = retained.work.get
             val retainedreview = retainedwork.review.get
-            val currenthost = currentreview.hostContext.get
-            val retainedhost = retainedreview.hostContext.get
+            val currenthost = currentreview.reviewContext.get
+            val retainedhost = retainedreview.reviewContext.get
             currenthost.purpose shouldBe retainedhost.purpose
             currenthost.componentInstance shouldBe retainedhost.componentInstance
             currenthost.completion shouldBe retainedhost.completion
@@ -426,7 +426,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             json(retainedhost.target).mapObject(_.remove("validation_metadata")) shouldBe
               currenttarget.mapObject(_.remove("validation_metadata"))
             pending shouldBe retained.copy(work = Some(retainedwork.copy(review = Some(
-              retainedreview.copy(hostContext = currentreview.hostContext)))))
+              retainedreview.copy(reviewContext = currentreview.reviewContext)))))
             val hostmetadata = currenttarget.hcursor.downField("validation_metadata").focus
               .getOrElse(fail("Current review host target requires validation_metadata"))
             val normalizedhostmetadata = N.normalizeBatches(hostmetadata).fold(
@@ -459,7 +459,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             if (result.outcome == "accept") {
               next.kind shouldBe "Wait"
               next.work shouldBe None
-              next.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+              next.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
               next.validation.get.candidate shouldBe retained.work.get.candidate.get
               val scope = json(next.authorityContext.get.scope)
               scope.hcursor.downField("parent").focus shouldBe Some(json(initial.work.get.originalBase.toRecord()))
@@ -486,7 +486,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             Then("the exact StepClosure candidate remains pending with two existing SBT PIDs")
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             waiting.validation.get.candidate shouldBe reviewed.work.get.candidate.get
             _progress(waiting)
             val before = _checks(scenario, 2)

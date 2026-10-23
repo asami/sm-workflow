@@ -1,25 +1,123 @@
-# Native host execution handoff
+# Native caller execution handoff
 
-The existing host uses public `host.NativeWorkflowHostExecution` to connect an
+Terminology revision 2026-10-23: [runtime/caller terminology](runtime-caller-terminology.md)
+is authoritative. Host denotes only a network destination. In this document,
+caller execution/dispatch belongs to CallerIntegration, command execution to
+Runtime, and configuration-directory selection to RuntimeRoot. Old concrete
+historical identifiers remain in original records; the executable names below
+use the adopted interface without compatibility aliases. Follow the [adoption plan](../notes/runtime-caller-terminology-adoption-plan.md)
+for coordinated API/CLI/configuration cutover and existing Session preservation.
+
+The [Codex caller information contract](host-terminal-source.md) returns a typed
+information request to the existing caller and consumes its attributable result
+in the same retained continuation. The former fixed ProcessExec/App Server proxy
+proposal is superseded, not a prerequisite. Runtime Human authority remains
+separate from information collection and implementation approval. The
+[adoption plan](../notes/codex-caller-information-adoption-plan.md) records the
+remaining implementation/acceptance work without resetting active Sessions.
+
+The existing caller uses public `caller.NativeWorkflowCallerExecution` to connect an
 actual generated `WorkflowIssuedWorkContext` from a Request to CNCF's finite
 `WorkflowExecutionHarness`. This library bridge does not install a Codex/provider
 driver, invoke tools, dispatch an application command or advance a Workflow.
 Actual installed host/tool/provider availability, all three skill families and
 genuine separate chat/session observations remain Phase 6 acceptance obligations.
 
+## Codex Goal registration
+
+When the user explicitly asks the owning Codex host to start or resume Phase
+development through `sm-goal-phase`, that request authorizes registering the
+Phase as a Codex Goal. The host performs this step before starting new runtime
+work or resuming semantic work; the semantic executor and native CLI do not
+register it. Reading a skill, inspecting status or receiving an issued worker
+request alone does not authorize a new Goal.
+
+1. Call `get_goal`. Reuse an unfinished Goal for the same requested Phase.
+   If a different unfinished Goal exists, explain the conflict and obtain the
+   user's direction before starting new work; do not overwrite or complete it.
+2. If no unfinished Goal exists, call `create_goal` with a concrete objective
+   naming the selected repository, Phase, intended deliverable and required
+   validation/review/closure. Include the actual retained session/task reference
+   when resuming. Supply `token_budget` only when explicitly requested by the
+   user. Check the tool's actual result before reporting Goal registration.
+3. Continue through the existing admitted host entry. The Codex Goal is host
+   progress tracking; it supplies no native Start selection, session ID, effect
+   authority or acceptance. Resume an existing runtime session through its exact
+   retained route, including when repairing missing Codex Goal registration;
+   never repeat Start merely to register a Goal.
+
+If Goal tools are unavailable or registration fails, explicitly report that the
+Codex Goal was not registered and preserve any existing runtime session. Do not
+claim registration from a native Start response or replay a runtime operation
+to repair the host Goal. Goal status changes follow the host tools' actual
+contracts: mark complete only after successful native Phase closure and all
+remaining requested work, never on Start, an accepted Step, Wait or failure.
+Pause and blocked status retain their tool-specific user-direction and repeated
+blocking requirements.
+
+## Installed sm-workflow command
+
+For `sm-goal-phase`, `sm-repository-sync` and `sm-split-phase`, the owning
+host chat calls the installed `sm-workflow` executable directly through its
+command tool. Do not route that invocation through `cncf_runtime_runner`,
+`cncf-runtime-execution` or another command-execution subagent. This specific
+route takes precedence over generic runtime-runner routing for this command.
+Semantic work and independent review retain their existing executor selection.
+
+On the first attempt, set `sandbox_permissions: "require_escalated"` so normal
+runtime caches and configured runtime outputs are accessible. Use the resolved
+absolute installed command path, explicit runtime root/cwd and the intended literal
+arguments. Limit `prefix_rule` to that executable and, where useful, its fixed
+runtime-root/operation arguments; do not request a general shell or interpreter prefix.
+Normal artifact selection remains with the installed command; do not substitute
+a checkout launcher or development classpath for this installed route.
+
+Escalation is a platform execution request, not workflow effect authority or
+provider/model placement escalation. It grants no Start selection, semantic
+acceptance, Human answer, Git effect, Submit or Advance beyond the existing
+authorized operation. A platform denial stops the call with its actual reason;
+retain actual output and uncertainty without replaying an uncertain effect.
+Do not disable platform controls or broaden the command to evade a denial.
+The existing host completion and caller-loop contracts still govern accepted
+Submit and the following explicit Advance.
+
 For the supported finite paired completion, the parent directly executes the
 deployed `../../scripts/native-goal-command.py --action complete` relative to an
 installed sm skill, passing `--executable <absolute installed sm-workflow>` and
-the explicit host/task/request/submission/fresh-output paths. Use managed Python
+the explicit runtime-root/task/request/submission/fresh-output paths. Use managed Python
 and scoped escalation for this exact finite invocation, with no general shell or
 interpreter approval prefix. This is the existing host-owned pair, not a command
 subagent or a substitute Workflow. The helper launches only the selected
-installed executable with `--host <host> command <fixed Operation>`; it never
+installed executable with `--runtime-root <runtime-root> command <fixed Operation>`; it never
 constructs a development classpath or selects an artifact. It retains/displays
 actual accepted Submit before reopening the original family/Session routing for
 one explicit outer Advance. Changed routing, rejection or uncertainty stops with
 raw outputs preserved and no replay. See the
 [installed finite caller contract](native-goal-command-task.md).
+
+The same finite `complete` action accepts the ordinary Goal Human pair
+`submitGoalPhaseOrderedDecision` / `GoalPhaseOrderedDecisionAnswer` only under
+the retained `GoalPhase` Session. This branch requires an explicit existing
+`--human-provenance` file containing actual `participant`, `issuer`, `occurredAt`
+and strict dotted `collection`, plus exactly supplied answer, resultReference
+and executionEvidence objects in the submission file. Semantic Requests reject
+this option. Genuine channel records supply answer and provenance; Python
+does not capture/authenticate a Human channel, choose direction or create
+worker, reference, issuer or time.
+
+The program calls existing passive `prepareEvidence` once with the whole
+original issue and supplied records. It retains/displays the actual datastore
+response under `preparation`, then selects that unchanged response through the
+single fixed canonical runtime configuration argument
+`--textus.import.data.file=<absolute preparation/response.json>`
+on the issued Human Submit only. CNCF admits its Args snapshot under the
+actually selected subsystem. Ordinary StartupImport provisions the native
+generated rows; no persistent host configuration or import row is edited.
+Native independent-Human admission stays authoritative. Only actual accepted
+storage-only Submit and unchanged routing permit one ordinary outer Advance,
+without that configuration argument. Preparation/Submit uncertainty, rejection, cancellation
+or changed routing stops without Advance or retry and retains all prior actual
+outputs. See the caller contract for exact input shapes and output sequence.
 
 ## Product SBT lifecycle
 
@@ -70,7 +168,7 @@ current typed `registered_sbt` execution; there is no V8 execution promise.
 V4 host configuration requires explicit migration to V3 with
 `registeredSbtHost` removed. No automatic fallback, stored Session edits or
 relabeling of historical accepted evidence is permitted. Historical schemas and
-decoding remain readable. See the [selected validation recovery contract](goal-phase-validation-recovery.md).
+decoding remain readable. See the [retirement contract](registered-sbt-host-execution.md).
 
 ## Visible sm-workflow exchanges
 
@@ -148,6 +246,150 @@ a requested signal, elapsed time or root-process exit alone establishes neither
 descendant cleanup, durable interruption state nor validation success. Preserve
 the actual response/uncertainty and existing normal continuation authority;
 invent no extra approval or AI wait loop and no automatic replay.
+
+### Chat progress indicators
+
+Use a bold standalone heading for preparation, start and return, with a compact
+detail line underneath. Prefix every intervening progress commentary with the
+running marker. Text labels carry the meaning alongside icons; these are chat
+presentation, not ANSI/background styling, runtime states or a new control ledger.
+Keep the gear `⚙️` as the sm-workflow actor marker in every phase, including
+running, return, error and unknown; status colors and interval arrows supplement it.
+
+| Marker | Observed boundary |
+| --- | --- |
+| **⚙️ sm-workflow 呼び出し準備** | Input/output preparation or launch intent; runtime start is not confirmed. |
+| **⚙️ 🔵 ▶ sm-workflow 実行開始 ━━━━━━━━━━━** | The selected CLI/runtime has actually started; `制御：sm-workflow`. |
+| **⚙️ 🔵 │ sm-workflow 実行中** | Actual ongoing progress/wait for this invocation; keep `制御：sm-workflow` visible. |
+| **⚙️ 🔵 ◀ sm-workflow 応答受信・制御返却 ━━━━━━━━━━━** | The owned call returned its response and ended; `制御：親チャット`. |
+| **⚙️ 🔴 sm-workflow 起動前エラー** | Confirmed failure before CLI launch; no execution interval started. |
+| **⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー** | The owned call ended with an observed failure; business outcome/cleanup can still be unknown. |
+| **⚙️ 🟡 │ sm-workflow 実行状態不明** | Lost/insufficient visibility; no claim of runtime termination or normal handback. |
+| **🌀 🔵 AI作業中** | Parent/assigned AI reasoning or editing after actual handoff. |
+| **🌀 🟣 AIレビュー中** / **🌀 🟠 AI修復中** | Actual AI review or admitted repair. |
+| **👤 🟡 ユーザー入力待ち** | A genuine user answer is required. |
+| **🟢 完了** | Only the named task/operation is confirmed complete. |
+
+The existing Before checklist supplies preparation details; During supplies the
+running detail; After supplies the matching returned/error detail. Repeat the
+actual operation and known Session/Step at start and end. Distinguish repeated
+calls using an existing output reference or a short display-only ordinal, not
+a new receipt/ID. Start and return form one visible interval despite intervening
+tool output. Do not use the old generic calling label for preparation and execution.
+
+The helper's `invocation` event precedes Popen and establishes launch intent only.
+Use existing runtime-started, actual running/SBT output or command-tool process
+observations for the start heading. A transport session for the helper alone
+does not establish that the target CLI started. Known preparation failure stays
+outside the interval; a corrected authorized attempt starts its own interval
+when actually launched. This changes no retry or approval authority.
+
+For `complete`, announce Submit + permitted Advance together and keep one outer
+interval until the helper returns. Display intermediate responses inside that
+interval with the running prefix, not a parent-control-return marker. A business
+Operation named prepare still has its own execution interval after its CLI starts.
+
+If output is buffered, retain preparation/start-unconfirmed until evidence arrives;
+then show matching start/end together with `出力一括受信`. Do not imply earlier
+live delivery or create extra AI turns to obtain it. If visibility is lost during
+execution, use the unknown marker; diagnostic parent activity is not proof the
+runtime stopped. A returned Wait condition, accepted Submit, root exit or a
+requested SIGTERM alone proves neither whole-Workflow completion nor descendant
+settlement. Preserve those distinctions in the detail line.
+
+After confirmed handback, mark the actual AI work/review/repair or user-wait actor.
+If actors overlap, name both. Use the swirl `🌀` for AI. Include existing messages,
+result/acceptance values, supplied repair counts and retained response/stderr links
+without adding output-only operations or exposing secret payloads.
+
+Render these markers in existing commentary/output handling. Add no AI invocation,
+agent, continuation prompt, polling/status query, dedicated wait loop, persisted
+display state or periodic message solely for presentation. Existing runtime
+telemetry remains runtime-owned. Tool buffering or unavailable UI coloring is a
+display limitation, not permission to restart work or alter timeouts.
+
+### Subagent call display
+
+For sm-goal-phase, the owning host makes each already-authorized semantic
+subagent call visible in normal commentary, including reuse/resume and an
+already-authorized alternate. Keep the selected role, purpose, known Session/Step
+and the real returned agent identity together. A configured role name is not an
+actual agent ID. Use the existing selection/agent definition or dispatch arguments
+for the selected model and reasoning effort; show that source and label these
+values as configured/requested until execution metadata confirms them. If inherited
+settings cannot be observed, say inherited/unknown rather than inferring them
+from the parent, role name or a previous invocation. Never change model selection
+to improve the display.
+
+Use these compact paired markers in the normal dispatch/result handling:
+
+- **🌀 ▶ subagent 呼出し** — purpose/role, model and reasoning effort with
+  configured/requested/observed labels, and known Session/Step. This announces
+  dispatch, not confirmed execution. When dispatch returns an actual identity,
+  include it in the existing progress update; distinguish accepted from started
+  if the tool does not establish execution.
+- **🌀 │ subagent 実行中** — actual agent identity and relevant observed progress
+  when an ordinary work update is already due. Name the parent and child
+  separately if both are working.
+- **🌀 ◀ subagent 結果受領** — the same agent identity/role and model/effort,
+  actual outcome and concise result. Prefer observed model/effort when supplied;
+  otherwise retain the configured labels. A child result is not Step acceptance.
+- **🌀 🔴 subagent 呼出し失敗** or **🌀 🟡 subagent 状態不明** — actual
+  dispatch failure or uncertain status; do not manufacture an identity, success,
+  termination or replacement call.
+
+If runtime-owned subagent events arrive while sm-workflow is still running,
+retain the outer **⚙️ 🔵 │ sm-workflow 実行中** marker and show the child detail
+inside it. Do not imply control returned to the parent. Buffered observations
+may be summarized together as 出力一括受信; unavailable child details stay unknown.
+Parent INLINE work uses the existing AI marker and is never reported as delegation.
+Use only normal calls, returned metadata and existing events: no extra AI turns,
+status/model queries, polling, continuation prompts or display ledger. Missing
+display metadata is not a work-admission failure or a reason to pause work.
+
+## sm-workflow agent definitions
+
+DELEGATED semantic work uses separately named `sm_workflow_*` agent definitions
+distributed by sm-workflow and installed in the selected host. Keep these
+definitions independent of existing `cncf_*` agents, CNCF skill invocations and
+CNCF-specific Manifest/verifier protocols. Each agent consumes its actual issued
+sm-workflow scope and returns the declared typed result and genuine evidence.
+Implementation/repair and independent review retain distinct responsibilities;
+an editor does not become its own independent reviewer.
+
+The original host configuration selects the actual installed role, model and
+reasoning effort. Do not silently reuse a CNCF agent, invent a registered role,
+copy model identity from another executor or force routine INLINE work into a
+child. Missing definitions are an installation gap for that delegated work.
+Retain the existing Session/selection and continue unaffected work.
+
+The distribution target is an sm-workflow bundle including the agent definition
+files alongside its skills/contracts. On this workstation the shared copies
+belong under `development-workstation/common/codex/agents/sm_workflow_*.toml`;
+deploy agent definitions as regular files under `~/.codex/agents/`, separately
+from skill discovery symlinks. Preserve existing CNCF definitions. Edit the
+shared workstation sources first and reflect selected changes into the product
+at the chosen integration boundary.
+
+The workstation distribution provides five roles: `sm_workflow_analysis`,
+`sm_workflow_design`, `sm_workflow_implementation`, `sm_workflow_repair` and
+`sm_workflow_review`. Initial definitions select `gpt-6.1-sol` / `medium` and
+omit inherited skill-discovery instructions. Analysis/design/review stay
+read-only by their semantic contract; implementation/repair own only the paths
+explicitly issued. Role instructions do not create filesystem permissions.
+The parent admits matching actual profile/identity and genuine independence;
+never relabel an inherited or different execution as the selected role.
+
+The workstation's `scripts/sm-workflow-tools.py` packages the three skills,
+five contracts, two finite caller scripts, five agent files and a standalone installer. It installs only
+those selected files, shared skill links and regular deployed sm agent files.
+Dry-run is the default; occupied discovery paths or differing contents stop
+before writes unless file replacement was explicitly selected. See the
+workstation's `docs/design/sm-workflow-agent-distribution.md` for installation.
+The current product skillBundle still contains no agent definitions; product
+packaging integration is pending. File installation and actual newly loaded
+agent behavior are separate verification boundaries.
+Installed `sm-workflow` command calls remain parent-owned with scoped escalation.
 
 ## R1 — First issued input and retained scope
 
@@ -230,7 +472,7 @@ selection while new issued continuations use their own first-issue snapshot.
 ## R5 — Existing ownership and capability limits
 
 The host owns tools, retention, observations and explicit caller control.
-CNCF owns generic profile/attempt/resource/serialization contracts. The bridge
+CNCF owns generic profile/attempt/resource/execution contracts. The bridge
 only projects the actual public issue and completion evidence. Goal policy,
 semantic results, mechanical commands, native revision/CAS, review, Human,
 commit/repository effects and completion remain with their existing owners.
@@ -241,18 +483,18 @@ lightweight connection scope. Split review/full-suite ownership remains unchange
 
 ## R6 — Three generated public values and two normal Operations
 
-The existing `NativeHostPreparationService` adds two passive COMMAND Operations,
+The existing `NativeWorkflowPreparationService` adds two passive COMMAND Operations,
 `prepareExecution` and `recordExecution`. Each has exactly one named `input` of
-the corresponding generated value type and returns `WorkflowHostExecutionState`
+the corresponding generated value type and returns `WorkflowCallerExecutionState`
 as a direct structured JSON object. The six importer Operations retain their
 existing `WorkflowPreparedImport` output and behavior. These conversions perform
 no provider IO, import/save, Workflow Start, Submit or Advance.
 
 | Value | Fields in declared order |
 | --- | --- |
-| `WorkflowHostExecutionPrepareInput` (COMMAND) | required `issuedWorkContext: WorkflowIssuedWorkContext`, `mapping: string`, `origin: string` |
-| `WorkflowHostExecutionRecordInput` (COMMAND) | required `issuedWorkContext: WorkflowIssuedWorkContext`, `session: string`, `observation: string`; optional `reference: string` |
-| `WorkflowHostExecutionState` | required `session: string`; optional `nextSelection: string`, `completionEvidence: WorkflowExecutionEvidence` |
+| `WorkflowCallerExecutionPrepareInput` (COMMAND) | required `issuedWorkContext: WorkflowIssuedWorkContext`, `mapping: string`, `origin: string` |
+| `WorkflowCallerExecutionRecordInput` (COMMAND) | required `issuedWorkContext: WorkflowIssuedWorkContext`, `session: string`, `observation: string`; optional `reference: string` |
+| `WorkflowCallerExecutionState` | required `session: string`; optional `nextSelection: string`, `completionEvidence: WorkflowExecutionEvidence` |
 
 The issued DTO is inline structured data from the actual Request. Input file
 Strings are exact absolute local `file:` URIs: mapping is the original canonical
@@ -266,7 +508,7 @@ current selection; the helper never substitutes `Session.nextSelection` for it.
 
 ## R7 — Current reader, wire aliases and opaque retention
 
-`NativeHostExecutionInput` borrows only the normal executing call's
+`NativeCallerExecutionInput` borrows only the normal executing call's
 `String => Consequence[String]` reader. All required and optional URI metadata
 validates before acquisition. Prepare reads mapping then origin. Record reads
 Session then observation and restores the Session against the actual issued DTO;
@@ -334,17 +576,17 @@ Select complete concrete input files yourself from the actual Request and
 explicit artifacts. With the explicitly selected installed executable, the two commands are:
 
 ```sh
-"$installed_executable" --host "$host" command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.prepareExecution \
+"$installed_executable" --runtime-root "$runtime_root" command org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareExecution \
   --input "$(cat "$task/prepare-execution-input.json")" --json
 
-"$installed_executable" --host "$host" command org.simplemodeling.textus.SmWorkflow.NativeHostPreparationService.recordExecution \
+"$installed_executable" --runtime-root "$runtime_root" command org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.recordExecution \
   --input "$(cat "$task/record-execution-input.json")" --json
 ```
 
 The existing finite `native-goal-command.py` offers `prepare-execution` with
 `request,mapping,origin`, and `record-execution` with
 `request,execution-session,observation` plus optional `reference`, in addition to
-the shared executable/host/task/action/output options. It checks the retained outer
+the shared executable/runtime-root/task/action/output options. It checks the retained outer
 Goal ID against Request.sessionId, accepts the existing Goal-owned Repository
 review/repair/conflict child routes, and forwards the whole nonempty issued DTO unchanged.
 The conflict pair is exactly `submitRepositorySyncWorkResult` with
@@ -451,10 +693,10 @@ opaque; Submit supplies no effects, retry, authority or automatic Advance.
 `prepare-repository-review-input` uses the same fixed review route guard. Saved
 family alone selects RepositorySync for standalone or GoalPhase for a child;
 kind remains review. One passive normal
-`NativeHostPreparationService.prepareEvidence` call carries whole selected
+`NativeWorkflowPreparationService.prepareEvidence` call carries whole selected
 existing request/result/reference/executionEvidence file URIs and explicit
 issuer/occurredAt/strict collection. The caller parses no business body or
-hostContext. Success requires a datastore array and retains raw streams without
+reviewContext. Success requires a datastore array and retains raw streams without
 changing route, configuration or input. It performs no provisioning, review,
 consent, Submit or Advance. Original prepare-review-input defaults to GoalPhase;
 prepare-repository-input remains passive and routing-independent.
@@ -470,7 +712,7 @@ evidence alias guards remain unchanged. A later mapping cannot reconstruct the
 pending Session; these actions execute no provider, infer no profile and
 automatically Submit or Advance no result.
 
-Every action makes one normal call. Nonzero exit, timeout, malformed/nonobject/
+Every action makes one normal call. Nonzero exit, runtime timeout, malformed/nonobject/
 duplicate/nonfinite/bounded output or uncertain acknowledgement retains raw
 streams and stops without retry/progression. The current UoW owns Git/SBT/file/
 HTTP effects and checks, direct normal binaries and native SBT locks; all nine
@@ -481,17 +723,17 @@ qualification stays light. R1–R9 above retain their original responsibilities.
 
 ## Executable specifications
 
-`NativeWorkflowHostExecutionSpec` E1 covers all four generated public scopes,
+`NativeWorkflowCallerExecutionSpec` E1 covers all four generated public scopes,
 generic artifact restoration and actual completion projection; E2 covers
 missing/mismatched native references and unmapped/unsupported input; E3 covers
 noncompleted outcomes; E4 covers actual descriptor relations, references and
 inert diagnostics. These are specification-owned observations.
 
-`NativeHostExecutionOperationSpec` N1–N4 use the configured normal service and
+`NativeCallerExecutionOperationSpec` N1–N4 use the configured normal service and
 actual current file reader for four scopes, declared/snake aliases, opaque state,
 unavailable/declined alternate completion, stopped/exhausted outcomes, consumed
 contradictions, reference metadata and root/byte-cap denial.
-`NativeHostExecutionCliSpec` C1–C2 use independent ordinary CncfMain processes
+`NativeCallerExecutionCliSpec` C1–C2 use independent ordinary CncfMain processes
 for actual Start/task retention/Advance, prepare/record, normal semantic Submit
 acknowledgement and pending redisplay/restoration despite later configuration.
 `test_native_goal_command.py` E25–E29 cover finite typed forwarding, explicit

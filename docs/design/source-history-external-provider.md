@@ -164,6 +164,15 @@ productionには直接の`java.nio`入出力、hash、新しいprocess、規則l
   後にある長い履歴コメントも扱う。判定不能・不正な日付はツールエラーとする。
 - 既存の`@since`、著者、由来と履歴の相対順序を保持する。最新の`@version`を一つにし、
   同月履歴を圧縮し、`@since`と同日の重複履歴を除く。別月の旧`@version`は履歴として残す。
+- `scala-block-history-v1`の日付行は既存の`@since`も含め、同じ意味の日付を選択したformatterで再出力する。
+  宣言した全tagの最大幅で値の列を揃え、通常tagは左寄せ、履歴tagは右寄せにする。
+  標準tagでは` * @since   <date>`、` *  version <date>`、` * @version <date>`、
+  新規著者行は` * @author  <author>`となる。既存著者行などの日付以外の文字は変更しない。
+  既存blockでは、最初のdepth-oneの通常star行の水平空白とstar位置を保持し、star後の基準空白を一つにする。
+  star行のないinline blockでは、開始delimiterより前の同じ行が水平空白だけならその字下げを
+  設定済み`linePrefix`に加える。新規headerとinline fallbackでは、設定prefixが水平空白・star・水平空白
+  だけならstar位置を保ち、star後を基準空白一つに正規化する。それ以外のliteral prefixは保持する。
+  新規headerのdelimiterは設定値を使い、LF／CRLFとも同日再適用時のbyteを保持する。
 - 日付・作成日・著者は根拠のある供給値だけを使う。現在のFile APIには信頼できる作成／更新metadataがないため、
   C3は所有coreの`executionContext.clock`から取得した当日を更新日とし、`createdOn=None`、`author=None`、
   `dateUncertain=true`を渡す。system既定zoneやNIO metadataで補わず、不確実性をactual resultにも保持する。

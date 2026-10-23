@@ -10,7 +10,7 @@ import org.goldenport.record.io.RecordDecoder
 import org.scalatest.{DoNotDiscover, GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.textus.smworkflow.host.NativeHostHumanQuestionWire
+import org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionQuestionWire
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeWorkflowCliFixture as F
 import GoalPhaseDependencyScope as D
@@ -18,12 +18,12 @@ import GoalPhaseDependencyScope as D
 /** Finite native frontiers around separately supplied dependency work and Human evidence.
   * Fixture setup declares the business model; it supplies no semantic result or consent.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
 final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  import NativeHostExecutionFixture.{json, take}
+  import NativeCallerExecutionFixture.{json, take}
 
   private val _prefix = "smworkflow.spec.p62.dependencylive."
   private val _ranges = Map("after-proposal" -> 1000, "after-human" -> 2000, "after-implementation" -> 3000,
@@ -192,11 +192,11 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
     _progress(value)
     val proposal = _proposal(result)
     _proposal(value.human.get.requestingResult) shouldBe proposal
-    val host = value.human.get.hostContext.get
-    host.purpose shouldBe NativeHostEvidence.Purpose.GoalHuman.identity
+    val host = value.human.get.humanDecisionContext.get
+    host.purpose shouldBe NativeExternalEvidence.Purpose.GoalHuman.identity
     host.componentInstance.trim should not be empty
-    val question = NativeHostHumanQuestionWire.normalize(json(host.question), NativeHostEvidence.Purpose.GoalHuman)
-    NativeHostHumanScope.selectQuestion(question, NativeHostEvidence.Purpose.GoalHuman).isRight shouldBe true
+    val question = NativeHumanDecisionQuestionWire.normalize(json(host.question), NativeExternalEvidence.Purpose.GoalHuman)
+    NativeHumanDecisionScope.selectQuestion(question, NativeExternalEvidence.Purpose.GoalHuman).isRight shouldBe true
     val source = question.hcursor.downField("source")
     _decode[V.WorkflowArtifactReference](source.downField("requestingResult").focus.get.noSpaces) shouldBe reference
     source.downField("result").downField("dependencyProposal").focus.get.as[D.Proposal]
@@ -557,7 +557,7 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
             if (result.outcome == "accept") {
               next.kind shouldBe "Wait"
               next.work shouldBe None
-              next.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+              next.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
               next.validation.get.candidate shouldBe retained.work.get.candidate.get
               val scope = json(next.authorityContext.get.scope)
               scope.hcursor.downField("parent").focus shouldBe Some(json(initial.work.get.originalBase.toRecord()))
@@ -602,7 +602,7 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
             waiting shouldBe retained
             waiting.kind shouldBe "Wait"
             waiting.sessionId shouldBe initial.sessionId
-            waiting.authorityContext.get.purpose shouldBe NativeHostEvidence.Purpose.StepClosure.identity
+            waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
             waiting.validation.get.candidate shouldBe reviewed.work.get.candidate.get
             val scope = json(waiting.authorityContext.get.scope)
             scope.hcursor.downField("parent").focus shouldBe Some(json(initial.work.get.originalBase.toRecord()))

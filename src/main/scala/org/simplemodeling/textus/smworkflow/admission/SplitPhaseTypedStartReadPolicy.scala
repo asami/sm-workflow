@@ -10,7 +10,7 @@ import SplitPhaseExplicitPlanningInputJsonV1.Purpose
 /**
  * Independent read purpose. Not a storage grant or human ingress.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 23, 2026
  */
 private[smworkflow] object SplitPhaseTypedStartReadPolicy {
   val prefix = "sm-workflow.split-phase.typed-starts."
@@ -34,7 +34,7 @@ private[smworkflow] object SplitPhaseTypedStartReadPolicy {
     contexts <- SplitPhaseManagedPartitionPreparation.bindC(host, workflow, catalog)
     declared <- decodeC(host)
     inputDeclaration <- SplitPhasePlanningInputReadPolicy.decodeC(host)
-    selectionDeclaration <- SplitPhaseHostSelectionReadPolicy.decodeC(host)
+    selectionDeclaration <- SplitPhaseInputSelectionReadPolicy.decodeC(host)
     contextDeclaration <- SplitPhasePartitionContextReadPolicy.decodeC(host)
     targets = Purpose.values.toVector.map(inputDeclaration.collection) ++ Vector(selectionDeclaration.collection,
       contextDeclaration.collection, declared.collection, workflow.instances, workflow.continuations)
@@ -48,7 +48,7 @@ private[smworkflow] object SplitPhaseTypedStartReadPolicy {
       else Consequence.stateConflict("SplitPhase typed Start read differs from its declared purpose")
     }
   private def stringC(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase typed Start requires exact host configuration")

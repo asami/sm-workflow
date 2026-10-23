@@ -34,7 +34,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared real producer discovery, never a synthetic positive inventory.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object GoalPhaseNativeMetadataFixture {
@@ -69,19 +69,19 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
     ConfigurationValue.BooleanValue.apply, number => ConfigurationValue.NumberValue(number.toBigDecimal.get),
     ConfigurationValue.StringValue.apply, values => ConfigurationValue.ListValue(values.map(_configuration).toList),
     fields => ConfigurationValue.ObjectValue(fields.toMap.view.mapValues(_configuration).toMap))
-  private def _configured(value: Json): Consequence[ThreeWorkflowHostParameters.Definition] = {
-    var selected = Option.empty[ThreeWorkflowHostParameters.Definition]
+  private def _configured(value: Json): Consequence[ThreeWorkflowRuntimeParameters.Definition] = {
+    var selected = Option.empty[ThreeWorkflowRuntimeParameters.Definition]
     val id = SmWorkflowComponent.componentId
-    val host = ResolvedConfiguration(HostConfiguration(Map(ThreeWorkflowHostParameters.definition.name -> _configuration(value))),
+    val host = ResolvedConfiguration(HostConfiguration(Map(ThreeWorkflowRuntimeParameters.definition.name -> _configuration(value))),
       ConfigurationTrace.empty)
     val creation = ComponentCreate(RuntimeBindingAdmissionFixture.admit(Subsystem(name = "spec-native-metadata", version = None,
       configuration = host, aliasResolver = AliasResolver.empty, runMode = RunMode.Command)), ComponentOrigin.Builtin,
       Vector(ComponentDescriptor(name = Some(id.name), componentName = Some(id.name), version = Some("0.1.0"),
         schemaVersion = Some(3), componentId = Some(id))))
-    val factory = new SmWorkflowConfiguredComponentFactory(Vector(ThreeWorkflowHostParameters.definition), Vector.empty,
+    val factory = new SmWorkflowConfiguredComponentFactory(Vector(ThreeWorkflowRuntimeParameters.definition), Vector.empty,
       (_, parameters, context) => for {
         _ <- if (context != null) Consequence.unit else Consequence.stateConflict("Missing actual initialization context")
-        setting <- parameters.resolve(ThreeWorkflowHostParameters.definition)
+        setting <- parameters.resolve(ThreeWorkflowRuntimeParameters.definition)
         definition <- setting.value.map(Consequence.success).getOrElse(Consequence.stateConflict("Missing host definition"))
         _ <- definition.goal.stepValidation.validateC
         _ <- definition.goal.phaseValidation.validateC
@@ -102,7 +102,7 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       val definition = ThreeWorkflowNormalHostFixture.definition(Path.of("/private/tmp/smwf-source-plan-host"))
       val configured = definition.copy(goal = definition.goal.copy(stepValidation = V.Policy("source-checks", 1, Vector(sourcecheck))))
       When("actual component configuration resolves the source and native metadata prepares the captured typed plan")
-      val initialized = take(_configured(ThreeWorkflowHostParameters.encode(configured)))
+      val initialized = take(_configured(ThreeWorkflowRuntimeParameters.encode(configured)))
       val (selected, batches) = take(N.prepareC(initialized.goal.stepValidation.checks, loader,
         Map(sourcecheck.identity -> sliceplan)))
       val actual = batches.head
@@ -190,7 +190,7 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       Given("the real fixture artifact scope and a fixed TestOnly metadata host binding in a structured host definition")
       val ordinary = ThreeWorkflowNormalHostFixture.definition(Path.of("/private/tmp/smwf-metadata-host"))
       val definition = ordinary.copy(goal = ordinary.goal.copy(stepValidation = V.Policy("selected-checks", 1, Vector(check))))
-      val wire = ThreeWorkflowHostParameters.encode(definition)
+      val wire = ThreeWorkflowRuntimeParameters.encode(definition)
       When("the owning codecs and normal configured factory resolve that nested host configuration with an ExecutionContext")
       val restored = check.asJson.as[V.Check]
       val actual = _configured(wire)
@@ -287,16 +287,16 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
     "give the existing Review binding the same canonical meaning after actual public projection" in {
       Given("a real named-input Batch and its ordinary canonical independent-review target")
       val batches = take(N.prepareC(Vector(K.check), K.loader, Map(K.check.identity -> K.plan)))._2
-      val purpose = NativeHostEvidence.Purpose.GoalReview
-      val target = NativeHostReviewEvidenceFixture.goalInput.mapObject(_.add("validationMetadata", batches.asJson))
-      val canonicalbinding = NativeHostReviewEvidenceFixture.binding(purpose, Some(target))
+      val purpose = NativeExternalEvidence.Purpose.GoalReview
+      val target = NativeReviewEvidenceFixture.goalInput.mapObject(_.add("validationMetadata", batches.asJson))
+      val canonicalbinding = NativeReviewEvidenceFixture.binding(purpose, Some(target))
       When("actual CNCF rendering supplies the public metadata to the existing selected Review scope")
       val publicjson = io.circe.parser.parse(take(RuntimeContext.PropertyNameContext.default
         .transformRecord(N.record(batches.head.asJson)).toJsonStringC)).toOption.get
       val publictarget = target.mapObject(_.add("validationMetadata", Json.arr(publicjson)))
-      val selected = NativeHostReviewScope.select(purpose,
-        NativeHostReviewEvidenceFixture.binding(purpose, Some(publictarget))).toOption.get
-      val canonical = NativeHostReviewScope.select(purpose, canonicalbinding).toOption.get
+      val selected = NativeReviewScope.select(purpose,
+        NativeReviewEvidenceFixture.binding(purpose, Some(publictarget))).toOption.get
+      val canonical = NativeReviewScope.select(purpose, canonicalbinding).toOption.get
       Then("Review selects the identical full canonical Plan schema and distinct named variant values")
       selected shouldBe canonical
       selected.hcursor.downField("attestation").downField("target")
@@ -464,16 +464,16 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       Given("a real typed Batch and the ordinary selected independent-review target")
       val (checks, batches) = take(N.prepareC(Vector(T.check), T.loader, Map(T.check.identity -> T.plan)))
       val context = GoalPhaseNativeReview.Context(Vector(T.source.path), "actual typed fixture context", Vector.empty, batches)
-      val target = NativeHostReviewEvidenceFixture.goalInput.mapObject(_.add("validationMetadata", batches.asJson))
-      val purpose = NativeHostEvidence.Purpose.GoalReview
-      val binding = NativeHostReviewEvidenceFixture.binding(purpose, Some(target))
+      val target = NativeReviewEvidenceFixture.goalInput.mapObject(_.add("validationMetadata", batches.asJson))
+      val purpose = NativeExternalEvidence.Purpose.GoalReview
+      val binding = NativeReviewEvidenceFixture.binding(purpose, Some(target))
       val changedplan = T.plan.copy(additionalOperations = Vector(L.Invocation(T.reference, Map("count" -> Json.fromInt(9)))))
       val changed = take(N.prepareC(Vector(T.check), T.loader, Map(T.check.identity -> changedplan)))._2
-      val request = NativeHostHumanEvidenceFixture.work.copy(checkFailure = None, review = Some(context))
+      val request = NativeHumanEvidenceFixture.work.copy(checkFailure = None, review = Some(context))
       When("the owning review codec and existing selected scope retain that full Batch and a changed valid variant")
       val restored = context.asJson.as[GoalPhaseNativeReview.Context]
-      val selected = NativeHostReviewScope.select(purpose, binding).toOption.get
-      val crossed = NativeHostReviewScope.select(purpose, NativeHostReviewEvidenceFixture.binding(purpose,
+      val selected = NativeReviewScope.select(purpose, binding).toOption.get
+      val crossed = NativeReviewScope.select(purpose, NativeReviewEvidenceFixture.binding(purpose,
         Some(target.mapObject(_.add("validationMetadata", changed.asJson))))).toOption.get
       val restoredrequest = GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(request))
       Then("the existing binding includes the exact Plan and schema and changes when supplied parameter meaning changes")
@@ -656,7 +656,7 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       refused.foreach(_.isSuccess shouldBe false)
       val payload = _payload(checks, batches)
       V.codec.decode(V.codec.encode(payload)) shouldBe Right(payload)
-      val request = NativeHostHumanEvidenceFixture.work.copy(checkFailure = None,
+      val request = NativeHumanEvidenceFixture.work.copy(checkFailure = None,
         review = Some(GoalPhaseNativeReview.Context(Vector("one.scala"), "actual diff", Vector.empty, batches)))
       GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(request)) shouldBe Right(request)
     }

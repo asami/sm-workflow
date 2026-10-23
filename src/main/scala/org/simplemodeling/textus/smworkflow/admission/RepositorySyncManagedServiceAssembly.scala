@@ -14,14 +14,14 @@ import RepositorySyncManagedFetch as Fetch
 /** Current trusted-host entry/owning-advance pair with session-resolved inputs.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   /** Normal host-record composition: no injected in-memory selection callback.
     * The independent effect/review/Human ports still belong to trusted assembly;
     * reading a selection does not install or synthesize any of those grants.
     */
-  def bindHostC(params: ComponentCreate, declaration: Fetch.Declaration,
+  def bindRuntimeC(params: ComponentCreate, declaration: Fetch.Declaration,
     acknowledgement: () => Consequence[Unit] = () => Consequence.unit,
     nativeProgression: Boolean = false,
     nativeAcknowledgement: String => Consequence[Unit] = _ => Consequence.unit,

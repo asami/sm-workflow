@@ -1,5 +1,63 @@
 # sm-workflow incremental-use roadmap
 
+Next-development priority adopted 2026-10-23: complete GoalPhase first, then
+attempt RepositorySync on a best-effort basis. See the
+[C1-C3 delivery plan and GPSYNC checklist](../notes/goal-phase-post-completion-sync-plan.md),
+[planned specification](../spec/goal-phase-post-completion-sync.md), and
+[English handoff](../journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md).
+Deliver this bounded correction before Phase 6.6 diagnosis work at the next
+coherent boundary. Sync failure/deferral preserves Phase completion and unrelated
+dirty work; it does not replay accepted checks/review. This is separate from
+Phase 6.6 and does not add gates to ongoing 6.4/6.5. The prior 17-file dirty-sync
+proposal is not a prerequisite; start with completion plus safe sync deferral.
+The subsequent Human-confirmed continuation amendment adds one combined question
+for moved HEAD/uncommitted changes; acceptance continues the same Session without
+repeated dirty/HEAD gates. C2 includes confirmed Equal/LocalAhead synchronization
+with dirty work preserved (GPSYNC-09..12); general dirty merge remains later work.
+The initial GPSYNC-01..08 producer boundary is verified and locally published;
+the CNCF Phase 116 owner has adopted it and completed that same Session.
+GPSYNC-09..12, the amended parts of the earlier criteria and shared-skill
+promotion remain pending. This roadmap update performs no live Session operation.
+
+Incremental SBT diagnosis adopted 2026-10-23: [Phase 6.6](phase-6.6.md) and its
+[P66 checklist](phase-6.6-checklist.md) own the
+[D1–D4 plan](../notes/incremental-sbt-failure-diagnosis-plan.md), prioritizing one
+failure → structured diagnostics → batched information request → repair → focused
+validation route. Reuse existing repair, Evidence/Journal and caller contracts;
+do not add gates to ongoing 6.4/6.5 or reopen accepted work. Phase 9 consumes the
+result for convergence/routing; model comparison and parallel scheduling are not
+prerequisites. Plan adoption after 6.5; 6.4/6.5 continue without waiting for 6.6.
+The caller's fixed response/stderr limits and read cap are already removed and
+are not remaining Phase 6.6 work. Preserve live Sessions, histories, repair counts
+and validation.
+See the [specification](../spec/incremental-sbt-failure-diagnosis.md) and
+[English handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+
+Terminology revision adopted 2026-10-23: `host` is limited to network connection
+destinations. [Runtime/caller specification](../spec/runtime-caller-terminology.md)
+and [N-01–04 adoption plan](../notes/runtime-caller-terminology-adoption-plan.md)
+define purpose-specific type/configuration/CLI names with no compatibility aliases.
+Integrate the caller-information main route first, preserving active Sessions,
+history, repair counts and evidence. This is not a new Phase or a reopening of
+accepted Steps. [Developer handoff](../journal/2026/10/2026-10-23-network-host-terminology-handoff.md).
+
+AI usage accounting adopted 2026-10-22: [Phase 13](phase-13.md) /
+[checklist](phase-13-checklist.md) is PLANNED. First connect one actual
+sm-goal-phase invocation plus delegated execution to measured token usage,
+retained observations and host completion display, then reuse it for
+RepositorySync/SplitPhase. Include descendants and failed/retried attempts;
+exclude overlapping/inclusive totals and distinguish complete, partial and
+unknown coverage. Also show observed model types and model-invocation counts,
+separating parent-chat self usage from delegated agents even for the same model.
+Turn counts remain a separately labeled metric where invocation counts are
+unavailable. Display Codex and local-LLM consumption separately, classified by
+actual inference destination (local inference through Codex counts only as local).
+Keep per-category coverage and parent/delegated model breakdowns. Reuse current
+execution resources and common Journal/Evidence.
+This adds no gate to ongoing 6.4/6.5, no Phase 9 evaluation prerequisite and no
+Goal/session/history reset. See [spec](../spec/ai-usage-accounting.md) and
+[handoff](../journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md).
+
 Phase 6.5 refinement, adopted 2026-10-21: [deterministic assessment](../spec/goal-phase-step-assessment.md)
 admits ordinary Steps with no AI when declared checks pass and no unresolved
 semantic obligation requires resolution before continuation. Known failures use FIX; uncertain execution stays in

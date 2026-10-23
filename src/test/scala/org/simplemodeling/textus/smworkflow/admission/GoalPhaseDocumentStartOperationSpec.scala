@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
-import org.simplemodeling.textus.smworkflow.host.NativeHostGoalStartInput
+import org.simplemodeling.textus.smworkflow.preparation.NativeGoalStartInput
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDocumentSource as D
@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Isolated selected documents and fixed repository setup; public Start/Advance
   * own admission, document acquisition, history and the first work issue.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentStartOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -34,7 +34,7 @@ final class GoalPhaseDocumentStartOperationSpec extends AnyWordSpec with GivenWh
 
   // Only the Git observations used by Start and initial issue are installed.
   // This episode never installs or invokes an SBT program.
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowHostParameters.Goal): Json = {
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val target = Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString)
     val plan = TypedGitHostPlanFixture.plan(target, kinds = if (scenario == "DocumentDenied") Vector.empty else TypedGitHostPlanFixture.observations)
     if (scenario == "DocumentDenied") plan.mapObject(_.add("workspaceGrants", Json.arr())) else plan
@@ -42,7 +42,7 @@ final class GoalPhaseDocumentStartOperationSpec extends AnyWordSpec with GivenWh
 
   private def _root(): Path = Files.createTempDirectory(Files.createDirectories(
     Path.of("target/sm-workflow/work/document-start").toAbsolutePath), "episode-").toRealPath()
-  private def _host(root: Path): ThreeWorkflowHostParameters.Definition = {
+  private def _host(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val host = ThreeWorkflowNormalHostFixture.definition(root)
     host.copy(goal = host.goal.copy(input = _input))
   }
@@ -66,7 +66,7 @@ final class GoalPhaseDocumentStartOperationSpec extends AnyWordSpec with GivenWh
     val declaration = Json.obj("schemaVersion" -> Json.fromString(D.declarationSchema),
       "phasePath" -> Json.fromString(_source.phasePath), "checklistPath" -> Json.fromString(_source.checklistPath))
     val files = Map("input.json" -> _input.asJson.noSpaces, "plan.json" -> declaration.noSpaces)
-    take(NativeHostGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
+    take(NativeGoalStartInput.prepareC(Map("input" -> "input.json", "plan" -> "plan.json",
       "selection-id" -> "verification-document-selection", "participant" -> "participant", "origin" -> "ExplicitHuman",
       "idempotency-key" -> "verification-document-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection",
       "plan-collection" -> "entity:smworkflow.cli.goal_plans"), path =>

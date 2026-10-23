@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * acknowledgement interruption is installed by the isolated test host before
   * any effect; no private native row or invented execution receipt is written.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWhenThen
@@ -90,7 +90,7 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       val input = V.WorkflowEvidencePreparationInput("GoalPhase", "validation-recovery", requestFile.toUri.toASCIIString,
         answerFile.toUri.toASCIIString, referenceFile.toUri.toASCIIString, executionFile.toUri.toASCIIString,
         "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", Some("participant"))
-      val prepared = call("NativeHostPreparationService", "prepareEvidence", Vector("--input", json(input)))
+      val prepared = call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", json(input)))
       prepared.exitCode shouldBe 0
       parse(Files.readString(prepared.stdout)).toOption.get.hcursor.downField("datastore").focus.get.asArray.get should not be empty
       val config = root.resolve(".textus/config.json")
@@ -148,13 +148,17 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       val root = freshRecoveryRoot("cli-full")
       val (identity, originalHistory) = unknown(root)
       val cli = new Cli(root, identity)
-      When("separate ordinary CncfMain processes Advance and describe the retained Session")
+      When("separate ordinary CncfMain processes repeatedly Advance and describe the retained unknown Session")
       val waiting = cli.advance().business[V.GoalPhaseAdvanceResult]
+      val repeatedwaiting = cli.advance().business[V.GoalPhaseAdvanceResult]
       val (descriptionCall, description) = cli.describe()
       val target = take(R.targetC(description.target))
       Then("the returned exact original target remains unresolved without executing Compile")
       waiting.kind shouldBe "Wait"
       waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      repeatedwaiting.kind shouldBe "Wait"
+      repeatedwaiting.sessionId shouldBe identity
+      repeatedwaiting.repairProgress shouldBe waiting.repairProgress
       description.sessionId shouldBe identity
       description.choices shouldBe Vector("AuthorizeNewAttempt", "Defer")
       target.frontierRevision shouldBe originalHistory.last.revision.value.toString
@@ -205,6 +209,15 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
       compileExecutions(root).size shouldBe 1
       compileExecutions(root).head should not be ProcessHandle.current().pid()
+
+      When("another fresh ordinary process advances the retained successful validation")
+      val repeatedreview = cli.advance().business[V.GoalPhaseAdvanceResult]
+      Then("independent review remains pending and successful Compile is not dispatched again")
+      repeatedreview.sessionId shouldBe identity
+      repeatedreview.kind shouldBe "Request"
+      repeatedreview.work.get.kind shouldBe "ReviewStep"
+      repeatedreview.repairProgress shouldBe review.repairProgress
+      compileExecutions(root).size shouldBe 1
       withRecoveryEpisode(root) { episode =>
         val current = episode.current(identity)
         current.history.take(originalHistory.size) shouldBe originalHistory

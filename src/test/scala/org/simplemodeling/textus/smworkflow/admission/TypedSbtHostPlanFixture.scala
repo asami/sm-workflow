@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -27,7 +27,9 @@ private[admission] object TypedSbtHostPlanFixture {
 
   def plan(root: Path, executable: Path, ordinals: Vector[Int], gitPlan: Option[Json] = None,
     executionTimeoutMillis: Long = 180000L, operation: SbtOperation = SbtOperation.Test,
-    testClasses: Vector[String] = Vector.empty): Json = {
+    testClasses: Vector[String] = Vector.empty, stdoutBytes: Int = 131072, stderrBytes: Int = 16384): Json = {
+    require(stdoutBytes >= 1 && stdoutBytes <= 2097152 && stderrBytes >= 1 && stderrBytes <= 131072,
+      "Select finite native stdout and stderr capture limits")
     require(testClasses != null && (operation match {
       case SbtOperation.TestOnly => testClasses.nonEmpty && testClasses.size <= 16 &&
         testClasses.forall(x => x != null && x.length <= 256 &&
@@ -50,8 +52,8 @@ private[admission] object TypedSbtHostPlanFixture {
     val environment = Map("JAVA_HOME" -> jdkhome, "HOME" -> System.getProperty("user.home"),
       "PATH" -> (Path.of(jdkhome, "bin").toString + java.io.File.pathSeparator + sys.env.getOrElse("PATH", "/usr/bin:/bin")))
     val limits = Json.obj(Vector("launchTimeoutMillis" -> 10000L, "executionTimeoutMillis" -> executionTimeoutMillis,
-      "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> 131072L,
-      "stderrBytes" -> 16384L, "argumentCount" -> 16L, "argumentBytes" -> 131072L,
+      "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> stdoutBytes.toLong,
+      "stderrBytes" -> stderrBytes.toLong, "argumentCount" -> 16L, "argumentBytes" -> 131072L,
       "artifactCount" -> 1L, "artifactBytes" -> 131072L, "workAreaBytes" -> 4194304L)
       .map { case (name, value) => name -> Json.fromLong(value) }*)
     val sbtplan = Json.obj("schema" -> Json.fromString("cncf.runtime-process-execution.v2"), "programs" -> Json.arr(),
@@ -243,7 +245,15 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   /** ProductCheck is deliberate test-owned product input, never an executor. */
-  def build(root: Path, successful: Boolean): Unit = {
+  def build(root: Path, successful: Boolean, diagnosticBytes: Int = 0): Unit = {
+    require(diagnosticBytes >= 0 && diagnosticBytes <= 1500000,
+      "Select finite diagnostic padding from 0 to 1500000 bytes")
+    val diagnostic = if (diagnosticBytes == 0) ""
+      else if (diagnosticBytes <= 90000) "    print(\"D\" * " + diagnosticBytes + "); System.out.flush()\n"
+      else {
+        require(diagnosticBytes == 1500000, "Large diagnostics select exactly 1500000 UTF-8 bytes")
+        "    print(" + Json.fromString("D\"\\あ").noSpaces + " * 250000); System.out.flush()\n"
+      }
     val repository = Files.createDirectories(root.resolve("repository"))
     Files.createDirectories(repository.resolve("project"))
     Files.createDirectories(repository.resolve("src/test/scala"))
@@ -260,11 +270,11 @@ private[admission] object TypedSbtHostPlanFixture {
       |    java.nio.file.Files.write(marker, (java.lang.ProcessHandle.current().pid().toString + "\n").getBytes("UTF-8"),
       |      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
       |    println("PRODUCT_CHECK_ENTERED " + root)
-      |    assert(java.nio.file.Files.readString(root.resolve("value.txt")) == "expected\n", "actual product input differs")
+      |__DIAGNOSTIC__    assert(java.nio.file.Files.readString(root.resolve("value.txt")) == "expected\n", "actual product input differs")
       |    println("PRODUCT_CHECK_PASSED")
       |  }
       |}
-      |""".stripMargin)
+      |""".stripMargin.replace("__DIAGNOSTIC__", diagnostic))
   }
 
   /** Normal Compile consumes an ordinary managed source generator, with no main. */

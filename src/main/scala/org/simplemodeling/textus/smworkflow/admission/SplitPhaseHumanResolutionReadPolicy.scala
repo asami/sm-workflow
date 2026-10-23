@@ -8,8 +8,8 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Fresh-resolution-only purpose restriction; not a global Start prerequisite.
   *
-  * @since Oct.  5, 2026
-  * @version Oct.  5, 2026
+  * @since   Oct.  5, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhaseHumanResolutionReadPolicy {
   val prefix = "sm-workflow.split-phase.human-resolutions."
@@ -39,7 +39,7 @@ private[smworkflow] object SplitPhaseHumanResolutionReadPolicy {
       inputs <- SplitPhasePlanningInputReadPolicy.decodeC(host)
       context <- SplitPhasePartitionContextReadPolicy.decodeC(host)
       start <- SplitPhaseTypedStartReadPolicy.decodeC(host)
-      selection <- SplitPhaseHostSelectionReadPolicy.decodeC(host)
+      selection <- SplitPhaseInputSelectionReadPolicy.decodeC(host)
       reserved = targets.localCollections ++ Vector(workflow.instances, workflow.continuations, context.collection,
         start.collection, selection.collection) ++
         SplitPhaseExplicitPlanningInputJsonV1.Purpose.values.toVector.map(inputs.collection)
@@ -57,7 +57,7 @@ private[smworkflow] object SplitPhaseHumanResolutionReadPolicy {
     }
 
   private def _string_c(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if value != null && value.nonEmpty && value.trim == value =>
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase Human resolution requires exact host configuration")

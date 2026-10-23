@@ -61,6 +61,12 @@ malformed, missing or contradictory check facts, Phase-wide check/review,
 zero allowance, document conflicts, generation overflow and unrelated Human
 decisions MUST NOT create repair continuation authority.
 
+The separately authorized [known failed whole-Phase validation contract](goal-phase-validation-recovery.md#r8--distinct-known-failed-whole-phase-target)
+permits an independently directed fresh trial of one terminated failed Phase
+check on its same retained candidate. It does not renew a Step repair window,
+reopen accepted Steps or reset/refund either repair counter. The exclusions in
+this Step repair specification remain unchanged.
+
 ### R4 — Ask the exact question and admit independent Human evidence
 
 An eligible exhausted repair window offers exactly

@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseWorkClassification.given
 
 /** Deterministic Phase controller, not a Service or a persistence provider.
@@ -10,7 +11,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -37,6 +38,21 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Decoder[Plan] = deriveDecoder
   }
   final case class Snapshot(head: String, tree: String)
+  final case class HistoryCommit(identity: String, tree: String, parents: Vector[String])
+  final case class CandidateContinuation(parent: Snapshot, lineage: Vector[HistoryCommit])
+  /** A retained proof is interpreted against the immutable accepted Step tip. */
+  def continuationValid(anchor: Snapshot, value: CandidateContinuation): Boolean =
+    validSnapshot(anchor) && value != null && validSnapshot(value.parent) && value.parent.head != anchor.head &&
+      value.lineage != null && value.lineage.size >= 2 && value.lineage.size <= 256 &&
+      value.lineage.forall(c => c != null && oid(c.identity) && oid(c.tree) && c.parents != null &&
+        c.parents.size <= 256 && c.parents.distinct == c.parents && c.parents.forall(oid) && !c.parents.contains(c.identity)) &&
+      value.lineage.map(_.identity).distinct.size == value.lineage.size &&
+      value.lineage.head.identity == value.parent.head && value.lineage.head.tree == value.parent.tree &&
+      value.lineage.last.identity == anchor.head && value.lineage.last.tree == anchor.tree &&
+      value.lineage.sliding(2).forall(pair => pair.head.parents.contains(pair.last.identity)) &&
+      value.lineage.zipWithIndex.forall { (commit, index) =>
+        !commit.parents.exists(value.lineage.take(index).map(_.identity).contains)
+      }
   final case class Commit(identity: String, parent: String, tree: String)
   final case class ClosedStep(step: String, commit: Commit, review: String)
   enum Stage {
@@ -56,13 +72,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class BeginClosure(snapshot: Snapshot, phaseWide: Boolean) extends Next
   final case class ObserveClosure(intent: String, phaseWide: Boolean) extends Next
   final case class Decision(reason: String) extends Next
-  final case class Terminal(steps: Vector[ClosedStep], repositoryReceipt: String) extends Next
+  final case class Terminal(steps: Vector[ClosedStep], repositoryReceipt: Option[String]) extends Next
 
   sealed trait Event
   /** Assigned AI work only. Review is deliberately a separate host-admitted event. */
   final case class SemanticCompleted(key: WorkKey, summary: String,
     ordinaryCountExempt: Boolean = false) extends Event
   final case class CandidateObserved(snapshot: Snapshot) extends Event
+  final case class CandidateContinuationObserved(snapshot: Snapshot, continuation: CandidateContinuation) extends Event
   final case class PhaseManagementCandidateObserved(snapshot: Snapshot, paths: Vector[String]) extends Event
   final case class PhaseFindingRecordsObserved(reviewed: Snapshot, finalCandidate: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
@@ -87,6 +104,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     */
   final case class PhaseRepositoryClosed(intent: String, base: String, tip: String,
     commits: Vector[Commit], receipt: String) extends Event
+  /** Accepted committed development is complete independently of synchronization. */
+  final case class PhaseLocallyCompleted(snapshot: Snapshot, commits: Vector[Commit], review: String) extends Event
   final case class NativeFailure(reason: String) extends Event
   final case class DocumentConflictObserved(conflicts: Vector[String]) extends Event
   /** A verified Human may ask for the same semantic work again, not authorize
@@ -95,6 +114,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class DecisionResumptionAdmitted(evidence: String) extends Event
   /** Host-verified consent for one exhausted positive Step repair window only. */
   final case class RepairContinuationAdmitted(evidence: String) extends Event
+  /** Eligibility only; the native owner independently verifies Human direction. */
+  final case class PhaseValidationRetryAdmitted(snapshot: Snapshot, selected: Vector[String],
+    failedReceipt: String, direction: String) extends Event
+  /** Pure eligibility only; the native owner authenticates the actual Human direction. */
+  final case class CandidateWorkRevisionAdmitted(direction: ContextReference, rationale: String) extends Event
 
   final class State private[GoalPhaseOrderedProgression] (
     val plan: Plan, val stage: Stage, val cursor: Int, val generation: Long, val repairs: Int,
@@ -104,11 +128,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val repositoryReceipt: Option[String], val repairDirective: Option[RepairDirective],
     val decisionSource: Option[Stage], val documentDecision: Boolean = false,
     val ordinaryRepairs: Int = 0, val pendingRepair: Option[RepairDirective] = None,
-    val phaseReviewedCandidate: Option[Snapshot] = None, val phaseRecordingPaths: Vector[String] = Vector.empty) {
+    val phaseReviewedCandidate: Option[Snapshot] = None, val phaseRecordingPaths: Vector[String] = Vector.empty,
+    val candidateParent: Option[Snapshot] = None) {
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
     private def tip = completed.lastOption.map(_.commit.identity).getOrElse(base.head)
     def tipSnapshot: Snapshot = completed.lastOption.map(s => Snapshot(s.commit.identity, s.commit.tree)).getOrElse(base)
+    def candidateBase: Snapshot = candidateParent.getOrElse(tipSnapshot)
     private def checks = if (phaseWide) plan.phaseChecks else step.checks
     private def key(kind: WorkKind) = WorkKey(plan.identity, plan.revision, plan.phase, plan.repository,
       if (phaseWide) None else Some(step.identity), kind, generation)
@@ -188,6 +214,34 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
 
+    /** Eligibility only: the native owner must prove the original terminated
+      * failed Phase validation and independently admit the Human direction.
+      * Accepted Steps remain immutable; only one new corrective Step is added.
+      */
+    def adoptFailedPhaseRepairRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (text(evidence) && !evidence.exists(c => Character.isISOControl(c))) Consequence.unit
+        else invalid("Failed Phase repair adoption requires its independent Human direction")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseValidation) &&
+          !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty &&
+          phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && reviewEvidence.isEmpty &&
+          cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
+          plan.steps.size < 64 && plan.phaseChecks.size == 1 && candidate.exists(validSnapshot) &&
+          generation < Long.MaxValue) Consequence.unit
+        else invalid("Failed Phase repair adoption requires the original completed-Plan Phase validation Decision")
+      _ <- if (proposed.identity == plan.identity && proposed.revision != plan.revision &&
+          proposed.phase == plan.phase && proposed.repository == plan.repository &&
+          proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseReviewClassification == plan.phaseReviewClassification &&
+          proposed.acceptance == plan.acceptance && proposed.effectiveAcceptance == plan.effectiveAcceptance &&
+          proposed.steps.size == plan.steps.size + 1 && proposed.steps.take(plan.steps.size) == plan.steps &&
+          proposed.steps.last.dependencies.toSet == plan.steps.map(_.identity).toSet) Consequence.unit
+        else invalid("Failed Phase repair adoption must retain the complete accepted Plan and append exactly one dependent corrective Step")
+    } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, None, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+
     /** Compare already captured effective contracts; the declaration owner captures them. */
     def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
       _ <- validatePlanC(proposed)
@@ -226,7 +280,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else reviewEvidence, if (clear) None else closureIntent,
           if (clear) None else decision, repositoryReceipt, if (clear) None else repairDirective,
           if (clear) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
-          if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths))
+          if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
+          if (clear) None else candidateParent))
       }
     }
 
@@ -247,13 +302,23 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         case Some(value) => ObserveClosure(value, phaseWide)
       }
       case Stage.Decision => Decision(decision.get)
-      case Stage.Closed => Terminal(completed, repositoryReceipt.get)
+      case Stage.Closed => Terminal(completed, repositoryReceipt)
     }
 
     /** Pure transition: does not run commands, issue work, grant consent or write
       * storage. Owning advance will perform and persist these actions natively.
       */
     def acceptC(event: Event): Consequence[State] = event match {
+      case CandidateWorkRevisionAdmitted(direction, rationale) if stage == Stage.InspectCandidate &&
+          !phaseWide && cursor == completed.size && generation < Long.MaxValue &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          decision.isEmpty && decisionSource.isEmpty && !documentDecision && pendingRepair.isEmpty &&
+          phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && candidateParent.isEmpty &&
+          repositoryReceipt.isEmpty && direction != null && text(direction.identity) && text(direction.revision) &&
+          rationale != null && rationale.trim.nonEmpty && !rationale.contains('\u0000') =>
+        success(Stage.Implementation, newGeneration = generation + 1, clear = true,
+          newDirective = Some(RepairDirective("Human-requested reconciliation: " + direction.identity + "@" + direction.revision,
+            Vector(rationale))))
       case SemanticCompleted(value, summary, exempt) if summary != null && summary.trim.nonEmpty &&
           ((stage == Stage.Implementation && value == key(WorkKind.ImplementStep)) ||
             (stage == Stage.Repair && value == key(WorkKind.RepairStep))) &&
@@ -264,6 +329,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           (!phaseWide || completed.lastOption.exists(_.commit.tree == value.tree)) =>
         success(if (phaseWide) Stage.PhaseValidation else Stage.Validation,
           newCandidate = Some(value))
+      case CandidateContinuationObserved(value, continuation) if stage == Stage.InspectCandidate && !phaseWide &&
+          validSnapshot(value) && continuationValid(tipSnapshot, continuation) && value.head == continuation.parent.head =>
+        success(Stage.Validation, newCandidate = Some(value), newcandidateparent = Some(continuation.parent))
       case PhaseManagementCandidateObserved(value, paths) if stage == Stage.PhaseInspection && phaseWide &&
           validSnapshot(value) && value.head == tip && paths != null && paths.nonEmpty &&
           paths.distinct == paths && paths.forall(path) &&
@@ -297,7 +365,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(validation) &&
           generation > 1 && originalgeneration == generation - 1 && repairs > 0 &&
           validSnapshot(snapshot) && validSnapshot(originalcandidate) &&
-          originalcandidate.head == snapshot.head && snapshot.head == tip &&
+          originalcandidate.head == snapshot.head && snapshot.head == candidateBase.head &&
           originalcandidate.tree != snapshot.tree && text(originalreview) && text(completion) &&
           closureIntent.isEmpty => success(Stage.Closing, newReview = Some(originalreview))
       case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive) if
@@ -326,16 +394,21 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case ClosureUnknown(identity) if closureIntent.contains(identity) &&
           (stage == Stage.Closing || stage == Stage.PhaseClosing) => Consequence.success(this)
       case StepCommitObserved(intent, commit) if stage == Stage.Closing &&
-          closureIntent.contains(intent) && validCommit(commit) && commit.parent == tip &&
-          candidate.exists(_.tree == commit.tree) && commit.identity != tip && generation < Long.MaxValue =>
+          closureIntent.contains(intent) && validCommit(commit) && commit.parent == candidateBase.head &&
+          candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
       case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
           closureIntent.contains(intent) && checksReceipt.nonEmpty && reviewEvidence.nonEmpty &&
-          validCommit(commit) && commit.parent == tip && commit.identity != tip && generation < Long.MaxValue &&
+          validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
           candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
           paths.distinct == paths && paths.forall(value => path(value) &&
             step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
         _close_step_c(commit)
+      case PhaseLocallyCompleted(snapshot, commits, review) if stage == Stage.PhaseClosing &&
+          cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
+          candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
+          commits == completed.map(_.commit) => success(Stage.Closed)
       case PhaseRepositoryClosed(intent, original, finalTip, commits, receipt) if
           stage == Stage.PhaseClosing && closureIntent.contains(intent) && original == base.head &&
           finalTip == tip && commits == completed.map(_.commit) && text(receipt) =>
@@ -349,7 +422,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Consequence.success(new State(plan, Stage.Decision, cursor, generation, repairs, base, completed,
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
-          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths))
+          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent))
+      case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
+          decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
+          closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
+          candidate.contains(snapshot) && validSnapshot(snapshot) && selected == plan.phaseChecks && selected.size == 1 &&
+          text(failed) && text(direction) && generation < Long.MaxValue =>
+        success(Stage.PhaseValidation, newGeneration = generation + 1, newChecks = None, newReview = None,
+          newIntent = None, reason = None, newPhaseReviewed = None, newPhasePaths = Vector.empty)
       case RepairContinuationAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
           !documentDecision && !phaseWide && plan.repairLimit > 0 && repairs >= plan.repairLimit &&
           generation < Long.MaxValue && pendingRepair.exists(_valid_directive) &&
@@ -385,6 +465,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newPendingRepair: Option[RepairDirective] = pendingRepair,
       newPhaseReviewed: Option[Snapshot] = phaseReviewedCandidate,
       newPhasePaths: Vector[String] = phaseRecordingPaths,
+      newcandidateparent: Option[Snapshot] = candidateParent,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -392,7 +473,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (nextStage == Stage.Decision) decisionSource.orElse(Some(stage)) else None,
       ordinaryRepairs = newOrdinaryRepairs, pendingRepair = newPendingRepair,
       phaseReviewedCandidate = if (clear) None else newPhaseReviewed,
-      phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths))
+      phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths,
+      candidateParent = if (clear) None else newcandidateparent))
   }
 
   def startC(plan: Plan, initial: Snapshot): Consequence[State] = for {

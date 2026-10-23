@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPlannin
 /** Purpose metadata only. Actual checkpoint owners bind storage inside their
   * native calls; this metadata neither stages effects nor certifies readback.
   * @since   Oct.  2, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 23, 2026
   */
 private[smworkflow] object SplitPhasePartitionEnrichmentStorage {
   val prefix = "sm-workflow.split-phase.partition-enrichment."
@@ -35,7 +35,7 @@ private[smworkflow] object SplitPhasePartitionEnrichmentStorage {
       inputs <- SplitPhasePlanningInputReadPolicy.decodeC(host)
       start <- SplitPhaseTypedStartReadPolicy.decodeC(host)
       context <- SplitPhasePartitionContextReadPolicy.decodeC(host)
-      selection <- SplitPhaseHostSelectionReadPolicy.decodeC(host)
+      selection <- SplitPhaseInputSelectionReadPolicy.decodeC(host)
       target = DataStore.CollectionId.EntityStore(identity)
       targets = F.Purpose.values.toVector.map(inputs.collection) ++ Vector(start.collection, context.collection,
         selection.collection, workflow.instances, workflow.continuations, target)
@@ -46,7 +46,7 @@ private[smworkflow] object SplitPhasePartitionEnrichmentStorage {
       inputs.collection(F.Purpose.Planning), inputs.collection(F.Purpose.Proposal), inputs.collection(F.Purpose.Ownership))
 
   private def _string_c(host: ResolvedConfiguration, key: String): Consequence[String] =
-    GoalPhaseHostRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
+    GoalPhaseInputRecordReadPolicy.storedValue(host.configuration.values, prefix + key) match {
       case Some(ConfigurationValue.StringValue(value)) if _name(value) => Consequence.success(value)
       case _ => Consequence.configurationInvalid("SplitPhase enrichment requires exact host configuration")
     }
