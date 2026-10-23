@@ -453,12 +453,12 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         result.reviewedCandidate.tree shouldBe phaseinput.candidate.get.tree
         checkpoint.payload.method shouldBe Some("checkpoint")
         checkpoint.payload.indexTree shouldBe Some(phaseinput.candidate.get.tree)
-        checkpoint.payload.checkpoint shouldBe Some(result.repository.tip)
-        result.repository.tip should not be result.reviewedCandidate.head
-        result.repository.tree shouldBe result.reviewedCandidate.tree
-        actual.head shouldBe result.repository.tip
-        actual.tree shouldBe result.repository.tree
-        actual.trackingTip shouldBe Some(result.repository.tip)
+        checkpoint.payload.checkpoint shouldBe Some(result.repository.get.tip)
+        result.repository.get.tip should not be result.reviewedCandidate.head
+        result.repository.get.tree shouldBe result.reviewedCandidate.tree
+        actual.head shouldBe result.repository.get.tip
+        actual.tree shouldBe result.repository.get.tree
+        actual.trackingTip shouldBe Some(result.repository.get.tip)
         actual.dirty shouldBe empty
         episode.index() shouldBe actual.tree
         episode.pendingDiff(phaseinput.completed.last.commit.identity) should include(desired.steps.last.commit.identity)

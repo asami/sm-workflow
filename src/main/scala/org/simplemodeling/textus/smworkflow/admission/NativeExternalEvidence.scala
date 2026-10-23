@@ -44,6 +44,7 @@ private[smworkflow] object NativeExternalEvidence {
     case ClosureRecovery extends Purpose(GoalPhaseClosureRecovery.purpose)
     case RemainingPlanAdoption extends Purpose(GoalPhaseRemainingPlanAdoption.purpose)
     case FailedPhaseRepairAdoption extends Purpose(GoalPhaseFailedPhaseRepairAdoption.purpose)
+    case CompletionPolicyAdoption extends Purpose(GoalPhaseCompletionPolicyAdoption.purpose)
   }
   final case class Declaration(storeName: String, collection: DataStore.CollectionId, issuer: String)
   final case class Evidence(schemaVersion: String, purpose: String, lookupIdentity: String,
@@ -154,7 +155,8 @@ private[smworkflow] object NativeExternalEvidence {
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
     } else if (purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
-        purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption) {
+        purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
+        purpose == Purpose.CompletionPolicyAdoption) {
       val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
         else if (purpose == Purpose.SourceHistoryRecovery) selected.hcursor.downField("sourceHistoryRecovery").downField("answer")
         else if (purpose == Purpose.CandidateRecovery) selected.hcursor.downField("candidateRecovery").downField("answer")
@@ -162,6 +164,7 @@ private[smworkflow] object NativeExternalEvidence {
         else if (purpose == Purpose.WholePhaseCandidateRecovery) selected.hcursor.downField("wholePhaseCandidateRecovery").downField("answer")
         else if (purpose == Purpose.ClosureRecovery) selected.hcursor.downField("closureRecovery").downField("answer")
         else if (purpose == Purpose.FailedPhaseRepairAdoption) selected.hcursor.downField("failedPhaseRepairAdoption").downField("answer")
+        else if (purpose == Purpose.CompletionPolicyAdoption) selected.hcursor.downField("completionPolicyAdoption").downField("answer")
         else selected.hcursor.downField("remainingPlanAdoption").downField("directive")
       if (answer.get[String]("participant").contains(value.participant) &&
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
@@ -195,6 +198,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.ClosureRecovery => GoalPhaseClosureRecovery.selectBinding(value)
       case Purpose.RemainingPlanAdoption => GoalPhaseRemainingPlanAdoption.selectBinding(value)
       case Purpose.FailedPhaseRepairAdoption => GoalPhaseFailedPhaseRepairAdoption.selectBinding(value)
+      case Purpose.CompletionPolicyAdoption => GoalPhaseCompletionPolicyAdoption.selectBinding(value)
     }
     selected.fold(Consequence.stateConflict(_), Consequence.success)
   }

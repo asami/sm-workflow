@@ -633,6 +633,63 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseCompletionPolicyDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseCompletionPolicyDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseCompletionPolicyAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseCompletionPolicyAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseFailedPhaseRepairDescriptionInput
 
 - input-kind :: COMMAND
@@ -2286,6 +2343,14 @@ operation = GoalPhaseService.describeGoalPhaseFailedPhaseRepair
 
 operation = GoalPhaseService.adoptGoalPhaseFailedPhaseRepair
 
+#### describeGoalPhaseCompletionPolicy
+
+operation = GoalPhaseService.describeGoalPhaseCompletionPolicy
+
+#### adoptGoalPhaseCompletionPolicy
+
+operation = GoalPhaseService.adoptGoalPhaseCompletionPolicy
+
 #### recoverGoalPhaseValidation
 
 operation = GoalPhaseService.recoverGoalPhaseValidation
@@ -2626,6 +2691,16 @@ on = documents-conflicted
 
 to = PhaseClosing
 on = phase-closure-intent-saved
+
+##### TRANSITION
+
+to = PhaseClosing
+on = completion-policy-adopted
+
+##### TRANSITION
+
+to = Closed
+on = phase-locally-completed
 
 ##### TRANSITION
 
@@ -5132,6 +5207,62 @@ GoalPhaseFailedPhaseRepairAdoptionInput
 
 GoalPhaseFailedPhaseRepairAdoptionResult
 
+#### describeGoalPhaseCompletionPolicy
+
+##### DESCRIPTION
+
+Passively describe the exact unsuspended PhaseClosing frontier with accepted whole-Phase development. Missing legacy completion policy and explicitly selected repository-sync-required remain strict until independent Human adoption. Bind original closure input, actual frontier, repair counters, generation and existing child identity. Description changes no work or authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseCompletionPolicyDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseCompletionPolicyDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseCompletionPolicyDescriptionResult
+
+#### adoptGoalPhaseCompletionPolicy
+
+##### DESCRIPTION
+
+Require independently observed Human evidence for the exact described target and answer(choice,rationale,participant,reference). Choices are AdoptLocalCompletion and Defer. Defer writes nothing. Adoption appends only a PhaseClosing self-transition and retained direction; preserve accepted Plan, base, Steps, candidate, checks, review, counters, history and linked child. A later ordinary Advance completes committed development before best-effort sync. Repeated, stale, suspended, crossed or already-completed targets refuse. No new remote authority or child restart follows.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseCompletionPolicyAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseCompletionPolicyAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseCompletionPolicyAdoptionResult
+
 #### submitGoalPhaseWorkResult
 
 ##### DESCRIPTION
@@ -7014,7 +7145,19 @@ GoalPhaseWorkSubmissionResult
 | originalBase | GoalPhaseNativeSnapshot | 1 |
 | completed | GoalPhaseClosedStep | * |
 | reviewedCandidate | GoalPhaseNativeSnapshot | 1 |
-| repository | RepositorySyncNativeConvergenceResult | 1 |
+| repository | RepositorySyncNativeConvergenceResult | ? |
+| synchronization | GoalPhaseSynchronizationResult | 1 |
+
+## GoalPhaseSynchronizationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| state | string | 1 |
+| reason | string | 1 |
+| childSessionId | string | ? |
+| advanceOperation | string | ? |
 
 ## SplitPhasePartitionWorkView
 
@@ -7833,6 +7976,8 @@ WorkflowPreparedImport
 ##### DESCRIPTION
 
 GoalPhase kind failed-phase-repair-adoption requires participant, the actual generated GoalPhaseFailedPhaseRepairDescriptionResult as request and GoalPhaseFailedPhaseRepairAdoptionInput as result, exact target/proposal/choice/reference and matching execution worker. Prepare only the independently observed actual Human direction under purpose goal-phase-failed-phase-repair-adoption and exact failedPhaseRepairAdoption(target,answer) binding. Choices are AdoptRepairPlan and Defer. The returned native external-evidence StartupImport rows neither provision storage nor adopt a Plan nor continue a Workflow. Unknown/missing/explicit-null target, direction or binding fields refuse; no legacy kind or fallback is supported.
+
+GoalPhase kind completion-policy-adoption requires participant, the actual GoalPhaseCompletionPolicyDescriptionResult as request and GoalPhaseCompletionPolicyAdoptionInput as result, the exact described target and matching independent Human reference and execution worker. Prepare the existing external-evidence import under purpose goal-phase-completion-policy-adoption and completionPolicyAdoption(target,answer). Choices are AdoptLocalCompletion and Defer. Preparation neither adopts direction nor changes a saved Start nor grants repository effects; the public adoption operation owns its guarded self-transition.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. It encodes HumanNewAttempt direction only. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

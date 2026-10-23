@@ -52,7 +52,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     candidateRecovery: Option[GoalPhaseCandidateRecovery.Installation] = None,
     candidateObservationContinuation: Option[GoalPhaseCandidateObservationContinuation.Installation] = None,
     wholePhaseCandidateRecovery: Option[GoalPhaseWholePhaseCandidateRecovery.Installation] = None,
-    failedPhaseRepairAdoption: Option[GoalPhaseFailedPhaseRepairAdoption.Installation] = None)
+    failedPhaseRepairAdoption: Option[GoalPhaseFailedPhaseRepairAdoption.Installation] = None,
+    completionPolicyAdoption: Option[GoalPhaseCompletionPolicyAdoption.Installation] = None,
+    selectedCompletionPolicy: String = GoalPhasePostCompletionSync.localPolicy)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -62,7 +64,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     def loadForCallC(selectionIdentity: String, core: ActionCall.Core): Consequence[Option[SelectedPlan]]
   }
   final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot,
-    documents: Option[GoalPhaseDocumentSource.Bound] = None)
+    documents: Option[GoalPhaseDocumentSource.Bound] = None,
+    completionPolicy: Option[String] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -70,13 +73,20 @@ private[smworkflow] object GoalPhaseNativeRun {
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStartRecord"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-start.v2"),
-      "payload" -> (if (value.documents.isEmpty) value.asJson.mapObject(_.remove("documents")) else value.asJson))
+      "payload" -> value.asJson.mapObject(fields => {
+        val documents = if (value.documents.isEmpty) fields.remove("documents") else fields
+        if (value.completionPolicy.isEmpty) documents.remove("completionPolicy") else documents
+      }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(schema == "sm-workflow.goal-phase-native-start.v2",
         (), "native ordered Start schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond(!wire.hcursor.downField("payload").downField("completionPolicy").focus.contains(Json.Null), (),
+        "native ordered Start completion policy must be omitted or explicitly selected")
+      _ <- Either.cond(payload.completionPolicy.forall(GoalPhasePostCompletionSync.policies.contains), (),
+        "native ordered Start completion policy is unsupported")
     } yield payload
   }
 
@@ -103,7 +113,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
       Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
     base = O.Snapshot(observed.head, observed.tree)
-    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents)
+    payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents,
+      Some(d.selectedCompletionPolicy))
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -160,6 +171,8 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.closureRecovery == null || d.closureRecovery.exists(_ == null) ||
         d.remainingPlanAdoption == null || d.remainingPlanAdoption.exists(_ == null) ||
         d.failedPhaseRepairAdoption == null || d.failedPhaseRepairAdoption.exists(_ == null) ||
+        d.completionPolicyAdoption == null || d.completionPolicyAdoption.exists(_ == null) ||
+        !GoalPhasePostCompletionSync.policies.contains(d.selectedCompletionPolicy) ||
         d.findingRecordingPolicy.exists(p => p == null || !RepositorySyncNativeConflictInput.relative(p.hygiene) ||
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
@@ -188,7 +201,8 @@ private[smworkflow] object GoalPhaseNativeRun {
                     d.candidateRecovery.fold(Consequence.unit)(_.validateC)).flatMap(_ =>
                     d.candidateObservationContinuation.fold(Consequence.unit)(_.validateC)).flatMap(_ =>
                     d.wholePhaseCandidateRecovery.fold(Consequence.unit)(_.validateC)).flatMap(_ =>
-                    d.failedPhaseRepairAdoption.fold(Consequence.unit)(_.validateC))
+                    d.failedPhaseRepairAdoption.fold(Consequence.unit)(_.validateC)).flatMap(_ =>
+                    d.completionPolicyAdoption.fold(Consequence.unit)(_.validateC))
   def bindC(d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
     validateC(d).flatMap { _ =>
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
@@ -202,6 +216,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,
+            GoalPhaseCompletionPolicyAdoption.describeOperation, GoalPhaseCompletionPolicyAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation) ||
           !core.component.exists(c => c.componentId == SmWorkflowComponent.componentId && c.subsystem.nonEmpty))

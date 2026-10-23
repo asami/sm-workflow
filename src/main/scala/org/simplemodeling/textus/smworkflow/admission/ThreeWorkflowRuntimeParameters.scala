@@ -61,10 +61,17 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         .fold(_ => Consequence.configurationInvalid("Three-workflow runtime JSON is invalid"), decodeDefinitionC)
       case _ => Consequence.configurationInvalid("Three-workflow runtime requires an explicit structured definition")
     })
+  val completionPolicy: ComponentParameterKey[String] = ComponentParameterKey.optional(
+    "sm-workflow.goal-phase.completion-policy", ComponentParameterDecoder {
+      case ConfigurationValue.StringValue(value) if GoalPhasePostCompletionSync.policies.contains(value) =>
+        Consequence.success(value)
+      case _ => Consequence.configurationInvalid("GoalPhase completion policy is unsupported")
+    })
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
-      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration)
+      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
+      completionPolicy)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -76,6 +83,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       settings <- resolved.value.map(Consequence.success).getOrElse(
         Consequence.configurationInvalid("Three-workflow runtime definition is not configured"))
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
+      selectedpolicy <- parameters.resolve(completionPolicy).map(_.value.getOrElse(GoalPhasePostCompletionSync.localPolicy))
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
@@ -107,7 +115,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseCandidateRecovery.Installation(ports.candidateRecovery)),
         Some(GoalPhaseCandidateObservationContinuation.Installation(ports.candidateObservationContinuation)),
         Some(GoalPhaseWholePhaseCandidateRecovery.Installation(ports.wholePhaseCandidateRecovery)),
-        Some(GoalPhaseFailedPhaseRepairAdoption.Installation(ports.failedPhaseRepairAdoption)))
+        Some(GoalPhaseFailedPhaseRepairAdoption.Installation(ports.failedPhaseRepairAdoption)),
+        Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy)
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

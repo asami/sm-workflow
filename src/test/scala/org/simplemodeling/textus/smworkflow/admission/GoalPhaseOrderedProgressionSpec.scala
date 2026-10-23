@@ -43,6 +43,53 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "local completion of accepted whole-Phase development" should {
+      "produce a Terminal without manufacturing a repository receipt" in {
+        Given("GPSYNC-01: all required Step commits and the actual whole-Phase checks and independent review")
+        val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+        val observed = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+        val checked = take(observed.acceptC(ChecksObserved(all.tipSnapshot, plan.phaseChecks, "whole-checks", true)))
+        val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), all.tipSnapshot,
+          "whole-checks", "whole-review", ReviewOutcome.Accept)))
+        When("the owner admits local completion of that exact committed candidate and complete ordered chain")
+        val closed = take(accepted.acceptC(PhaseLocallyCompleted(all.tipSnapshot, all.completed.map(_.commit), "whole-review")))
+        Then("the controller closes with the original work and an absent repository receipt")
+        closed.stage shouldBe Stage.Closed
+        closed.next shouldBe Terminal(all.completed, None)
+        closed.repositoryReceipt shouldBe None
+        closed.completed shouldBe accepted.completed
+        closed.candidate shouldBe accepted.candidate
+        closed.checksReceipt shouldBe accepted.checksReceipt
+        closed.reviewEvidence shouldBe accepted.reviewEvidence
+        closed.generation shouldBe accepted.generation
+        closed.repairs shouldBe accepted.repairs
+        closed.ordinaryRepairs shouldBe accepted.ordinaryRepairs
+      }
+
+      "refuse incomplete development crossed acceptance and an outstanding Phase recording commit" in {
+        Given("GPSYNC-02: accepted development and a separate uncommitted final management tree")
+        val owned = plan.copy(steps = plan.steps.map(s => s.copy(ownedPaths = s.ownedPaths :+ "docs/findings.md")))
+        val all = close(close(take(startC(owned, base)), oid('c'), oid('d')), oid('e'), oid('f'))
+        val observed = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+        val checked = take(observed.acceptC(ChecksObserved(all.tipSnapshot, owned.phaseChecks, "whole-checks", true)))
+        val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), all.tipSnapshot,
+          "whole-checks", "whole-review", ReviewOutcome.Accept)))
+        val staged = take(accepted.acceptC(PhaseFindingRecordsObserved(all.tipSnapshot,
+          all.tipSnapshot.copy(tree = oid('9')), Vector("docs/findings.md"))))
+        val event = PhaseLocallyCompleted(all.tipSnapshot, all.completed.map(_.commit), "whole-review")
+        When("local completion is offered before acceptance, with crossed inputs or while the management commit is outstanding")
+        val results = Vector(initial.acceptC(event), all.acceptC(event), checked.acceptC(event), staged.acceptC(event),
+          accepted.acceptC(event.copy(snapshot = all.tipSnapshot.copy(head = oid('8')))),
+          accepted.acceptC(event.copy(commits = all.completed.take(1).map(_.commit))),
+          accepted.acceptC(event.copy(review = "other-review")))
+        Then("every incomplete or crossed frontier remains open and the staged management candidate remains explicit")
+        results.foreach(_.isSuccess shouldBe false)
+        staged.stage shouldBe Stage.PhaseClosing
+        staged.phaseReviewedCandidate shouldBe Some(all.tipSnapshot)
+        staged.phaseRecordingPaths shouldBe Vector("docs/findings.md")
+        staged.completed shouldBe accepted.completed
+      }
+    }
     "E1 failed whole-Phase corrective Plan" should afterWord(
       "in spec:goal-phase-failed-phase-repair-adoption, example:E1, rules:R3,R6,R7, phase:P116-CONT-01") {
       "preserve the accepted prefix and consumed policy while assigning exactly one appended corrective Step" in {
@@ -926,7 +973,7 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       val closed = take(intent.acceptC(PhaseRepositoryClosed("phase-close", base.head, oid('e'),
         allSteps.completed.map(_.commit), "actual-repository-closure")))
       Then("only that whole-plan successor is Terminal and cannot accept another effect")
-      closed.next shouldBe Terminal(allSteps.completed, "actual-repository-closure")
+      closed.next shouldBe Terminal(allSteps.completed, Some("actual-repository-closure"))
       closed.acceptC(NativeFailure("later input")).shouldBe(a[Consequence.Failure[?]])
     }
 

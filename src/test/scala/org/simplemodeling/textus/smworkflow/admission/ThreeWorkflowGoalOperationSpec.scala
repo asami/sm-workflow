@@ -778,12 +778,12 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
           result.originalBase.tree shouldBe firstbase.get.tree
           result.completed.map(_.commit.identity) shouldBe completed.map(_.commit.identity)
           result.completed.size shouldBe 2
-          result.repository.tip shouldBe result.reviewedCandidate.head
-          result.repository.tree shouldBe result.reviewedCandidate.tree
+          result.repository.get.tip shouldBe result.reviewedCandidate.head
+          result.repository.get.tree shouldBe result.reviewedCandidate.tree
           var observed = Option.empty[RepositorySyncManagedGitObservation.Observed]
           prepare(call => call.observeC().map(value => { observed = Some(value); () }))
-          observed.get.head shouldBe result.repository.tip
-          observed.get.trackingTip shouldBe Some(result.repository.tip)
+          observed.get.head shouldBe result.repository.get.tip
+          observed.get.trackingTip shouldBe Some(result.repository.get.tip)
           observed.get.dirty shouldBe empty
           val actual = _current_()
           actual.lifecycle shouldBe Lifecycle.Completed

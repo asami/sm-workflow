@@ -188,8 +188,32 @@ result or ID mismatch stops without success-path Advance, retry or restart.
 Failed/uncertain Advance retains the displayed Submit and available outputs,
 returns nonzero and permits no replay. Request returns semantic work to the
 host; Human uses its independent actual human channel and genuine evidence;
-Wait follows its actual condition without spin/polling; Terminal ends. The
-skill implements no caller loop, automatic semantic chaining or pending-call
+Wait follows its actual condition without spin/polling; Terminal ends. Display
+GoalPhase `Terminal/outcome=completed` as **Phase completed**, followed separately
+by `completion.synchronization.state`, its actual `reason`, and any
+`childSessionId`/`advanceOperation`. A deferred, failed, Human, running or unknown
+sync does not reopen the Phase or require another Phase review. Never claim
+repository convergence unless the result contains actual succeeded synchronization.
+Reopen only to read the normal retained completion projection; never poll it or
+replay accepted Phase work. A known nonterminal child continues only through its
+own `advanceRepositorySync` operation and existing issued work/Human contract.
+An unconfirmed reserved child Start must be observed, never blindly retried.
+
+For an existing unsuspended strict PhaseClosing run, use the normal public
+`describeGoalPhaseCompletionPolicy` operation with its sessionId. Present the
+actual target and choices to the Human. Prepare independently observed direction
+through `prepareEvidence` with family GoalPhase and kind
+`completion-policy-adoption`, using the actual description, adoption input,
+reference, execution evidence, participant, issuer, time and existing collection.
+Then call `adoptGoalPhaseCompletionPolicy` with the exact described target and
+Human choice (`AdoptLocalCompletion` or `Defer`). Adoption saves direction only;
+the next ordinary `advanceGoalPhase` owns completion. Keep original accepted
+candidate, Steps, results and child identity. Do not rewrite Session records,
+restart linked children, or infer remote permission from this direction. New
+Starts capture the normally configured completion policy; absent host selection
+defaults to local completion, while a missing legacy saved field remains strict.
+
+The skill implements no caller loop, automatic semantic chaining or pending-call
 replay. Do not infer state or recover a route through status/history/storage.
 Workflow retains mechanical effects. Source edits and mechanical fixtures prove
 no installed route acceptance, genuine task provenance or Phase completion.

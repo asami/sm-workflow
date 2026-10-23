@@ -38,7 +38,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       GoalPhaseCandidateObservationContinuation.operations(port) ++
       GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
       GoalPhaseClosureRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port) ++
-      GoalPhaseFailedPhaseRepairAdoption.operations(port))))
+      GoalPhaseFailedPhaseRepairAdoption.operations(port) ++ GoalPhaseCompletionPolicyAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
     * belong to the trusted host; stored Plan data cannot install them.

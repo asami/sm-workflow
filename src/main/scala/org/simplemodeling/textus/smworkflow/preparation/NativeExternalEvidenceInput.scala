@@ -22,10 +22,10 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption")(options("kind")) &&
+          Set("review", "human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (!Set("validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption")(options("kind"))) options.contains("participant")
+          (!Set("validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
+          (if (Set("human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -67,6 +67,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
       prepared <- NativeHumanDecisionPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "GoalPhase" if options("kind") == "completion-policy-adoption" => for {
+        description <- summon[ValueReader[V.GoalPhaseCompletionPolicyDescriptionResult]].readC(request)
+        input <- summon[ValueReader[V.GoalPhaseCompletionPolicyAdoptionInput]].readC(result)
+        prepared <- NativeCompletionPolicyPreparation.prepareC(description, input, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "failed-phase-repair-adoption" => for {
         description <- summon[ValueReader[V.GoalPhaseFailedPhaseRepairDescriptionResult]].readC(request)
         input <- summon[ValueReader[V.GoalPhaseFailedPhaseRepairAdoptionInput]].readC(result)

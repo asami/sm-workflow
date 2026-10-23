@@ -104,7 +104,19 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.GoalPhaseAdvanceResult(session, "Terminal", "The ordered Phase and repository synchronization completed.",
       None, None, None, None, Some("completed"), None, None, None, None, None,
       Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
-        _goal_snapshot(candidate), repository)), None, None, None, None, None, None)
+        _goal_snapshot(candidate), Some(repository), V.GoalPhaseSynchronizationResult("succeeded",
+          "Actual RepositorySync convergence and native completion are retained.", None, None))), None, None, None, None, None, None)
+
+  def goalLocallyComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
+    completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
+    synchronization: GoalPhasePostCompletionSync.Synchronization,
+    repository: Option[V.RepositorySyncNativeConvergenceResult]): V.GoalPhaseAdvanceResult =
+    V.GoalPhaseAdvanceResult(session, "Terminal", "The ordered Phase completed. Repository synchronization: " +
+      synchronization.state + ". " + synchronization.reason, None, None, None, None, Some("completed"),
+      None, None, None, None, None, Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base),
+        completed.map(_goal_closed), _goal_snapshot(candidate), repository,
+        V.GoalPhaseSynchronizationResult(synchronization.state, synchronization.reason,
+          synchronization.childSessionId, synchronization.advanceOperation))), None, None, None, None, None, None)
 
   def goalRecordingResult(value: GoalPhaseFindingRecording.Result): V.GoalPhaseFindingRecordingResult =
     V.GoalPhaseFindingRecordingResult(value.outcome, value.summary, value.items.map(item =>

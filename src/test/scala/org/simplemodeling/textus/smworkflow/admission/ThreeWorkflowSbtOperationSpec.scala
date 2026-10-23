@@ -726,9 +726,9 @@ final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
             actual.completed.size shouldBe 1
             actual.completed.head.commit.parent shouldBe base.get.head
             actual.completed.head.commit.identity should not be base.get.head
-            actual.repository.tip shouldBe actual.reviewedCandidate.head
-            observed.get.head shouldBe actual.repository.tip
-            observed.get.trackingTip shouldBe Some(actual.repository.tip)
+            actual.repository.get.tip shouldBe actual.reviewedCandidate.head
+            observed.get.head shouldBe actual.repository.get.tip
+            observed.get.trackingTip shouldBe Some(actual.repository.get.tip)
             observed.get.dirty shouldBe empty
             checked.get.receipts.last.exitCode shouldBe Some(0)
             checked.get.receipts.last.stdout should include("PRODUCT_CHECK_PASSED")

@@ -137,6 +137,15 @@ private[admission] object NativeWorkflowCliFixture {
         .add("sm-workflow.execution.origin", Json.fromString(origin.noSpaces))).noSpaces)
     }
 
+    /** Normal host selection before a fresh Start; saved Workflow records are never changed. */
+    def selectCompletionPolicy(policy: String): Unit = {
+      require(GoalPhasePostCompletionSync.policies.contains(policy), "Select a declared completion policy")
+      val config = root.resolve(".textus/config.json")
+      val current = parse(Files.readString(config)).fold(error => throw new AssertionError(error.message), identity)
+      Files.writeString(config, current.mapObject(_.add(ThreeWorkflowRuntimeParameters.completionPolicy.name,
+        Json.fromString(policy))).noSpaces)
+    }
+
     def ownTask(name: String): Path = {
       require(name.matches("[a-z][a-z0-9-]*"), "Task name must be a local literal")
       Files.createDirectory(Files.createDirectories(root.resolve("target/sm-workflow/tasks")).resolve(name))
@@ -1561,6 +1570,7 @@ private[admission] object NativeWorkflowCliFixture {
       "continuation-collection" -> ThreeWorkflowNormalHostFixture.collection("continuations"))
       .map((key, value) => ("sm-workflow.goal-phase.persistence." + key) -> value)
     val values = ThreeWorkflowNormalHostFixture.values(root) ++ persistence ++ Map(
+      ThreeWorkflowRuntimeParameters.completionPolicy.name -> GoalPhasePostCompletionSync.strictPolicy,
       "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(host).noSpaces,
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
       "textus.datastore.path" -> root.resolve("workflow.sqlite").toString,

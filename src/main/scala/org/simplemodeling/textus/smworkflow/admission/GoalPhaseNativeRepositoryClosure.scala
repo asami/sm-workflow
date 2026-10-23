@@ -147,7 +147,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
           } yield waiting.copy(authorityContext = Some(context))
           case Some((intent, payload, fresh)) => for {
             _ <- if (fresh) invokeC[V.RepositorySyncStartResult](core, Fetch.startOperation.operation,
-              List(Property("input", childStartInput(installation), None),
+              List(Property("input", _child_start_input(installation), None),
                 Property("sessionId", payload.childSessionId, None))).map(_ => ())
               else Consequence.unit
             child <- invokeC[V.RepositorySyncAdvanceResult](core, Fetch.advanceOperation.operation,
@@ -175,7 +175,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     }
   } yield wire
 
-  private def childStartInput(installation: Installation): V.RepositorySyncStartInput =
+  private def _child_start_input(installation: Installation): V.RepositorySyncStartInput =
     installation.declaration.input
 
   /** Admit only the selected native closure or its already committed completion. */
@@ -204,7 +204,7 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
   /** Invoke the actually installed public Operation with named business
     * parameters. Its after-commit result is consumed directly; no native wire,
     * copied selector, JSON parsing or additional child status read. */
-  private def invokeC[A <: RecordPresentable: ValueReader](core: ActionCall.Core, name: String,
+  private[admission] def invokeC[A <: RecordPresentable: ValueReader](core: ActionCall.Core, name: String,
     properties: List[Property]): Consequence[A] = for {
     service <- core.component.get.core.protocol.services.services.find(_.name == "RepositorySyncService")
       .map(Consequence.success).getOrElse(F.invalid("paired child RepositorySyncService is not installed"))

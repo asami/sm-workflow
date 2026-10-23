@@ -46,6 +46,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
+  protected def goal_completion_policy: String = GoalPhasePostCompletionSync.strictPolicy
   protected def _collection_(name: String): DataStore.CollectionId =
     DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", name))
   protected val _configuration_ = StorageFixture.configuration
@@ -322,6 +323,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       conflicts = RepositorySyncNativeConflictInput.Policy(conflict_path(scenario).toSet)) else original.repository
     val settings = original.copy(target = original.target.copy(root = root.resolve("repository").toString), repository = repository)
     val raw = ThreeWorkflowNormalHostFixture.values(root) ++ Map(
+      ThreeWorkflowRuntimeParameters.completionPolicy.name -> goal_completion_policy,
       "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(settings).noSpaces,
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
       "textus.datastore.path" -> root.resolve("operation.sqlite").toString,

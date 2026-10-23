@@ -44,6 +44,7 @@ lazy val root = project
         "org.simplemodeling.textus.smworkflow.admission.NativeInstalledCarAdmissionDiagnosticSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalKnownFailedPhaseValidationCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalFailedPhaseRepairAdoptionCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPostCompletionSyncCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalWholePhaseCandidateRecoveryCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalProjectBuildCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",

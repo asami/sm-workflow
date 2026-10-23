@@ -1197,10 +1197,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         completion.completed.map(_.commit.identity) shouldBe closed.map(_.commit.identity)
         completion.reviewedCandidate.head shouldBe source.head
         completion.reviewedCandidate.tree shouldBe source.tree
-        completion.repository.tree shouldBe candidate.payload.finalCandidate.get.tree
-        e.observe().tree shouldBe completion.repository.tree
-        e.observe().head shouldBe completion.repository.tip
-        e.observe().trackingTip shouldBe Some(completion.repository.tip)
+        completion.repository.get.tree shouldBe candidate.payload.finalCandidate.get.tree
+        e.observe().tree shouldBe completion.repository.get.tree
+        e.observe().head shouldBe completion.repository.get.tip
+        e.observe().trackingTip shouldBe Some(completion.repository.get.tip)
         e.observe().dirty shouldBe empty
         terminal.findingRecording.get.completed.map(_.result.outcome) shouldBe Vector("completed")
         e.current(id).lifecycle shouldBe Lifecycle.Completed

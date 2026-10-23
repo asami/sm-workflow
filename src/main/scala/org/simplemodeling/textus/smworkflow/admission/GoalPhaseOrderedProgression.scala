@@ -72,7 +72,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class BeginClosure(snapshot: Snapshot, phaseWide: Boolean) extends Next
   final case class ObserveClosure(intent: String, phaseWide: Boolean) extends Next
   final case class Decision(reason: String) extends Next
-  final case class Terminal(steps: Vector[ClosedStep], repositoryReceipt: String) extends Next
+  final case class Terminal(steps: Vector[ClosedStep], repositoryReceipt: Option[String]) extends Next
 
   sealed trait Event
   /** Assigned AI work only. Review is deliberately a separate host-admitted event. */
@@ -104,6 +104,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     */
   final case class PhaseRepositoryClosed(intent: String, base: String, tip: String,
     commits: Vector[Commit], receipt: String) extends Event
+  /** Accepted committed development is complete independently of synchronization. */
+  final case class PhaseLocallyCompleted(snapshot: Snapshot, commits: Vector[Commit], review: String) extends Event
   final case class NativeFailure(reason: String) extends Event
   final case class DocumentConflictObserved(conflicts: Vector[String]) extends Event
   /** A verified Human may ask for the same semantic work again, not authorize
@@ -300,7 +302,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         case Some(value) => ObserveClosure(value, phaseWide)
       }
       case Stage.Decision => Decision(decision.get)
-      case Stage.Closed => Terminal(completed, repositoryReceipt.get)
+      case Stage.Closed => Terminal(completed, repositoryReceipt)
     }
 
     /** Pure transition: does not run commands, issue work, grant consent or write
@@ -402,6 +404,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           paths.distinct == paths && paths.forall(value => path(value) &&
             step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
         _close_step_c(commit)
+      case PhaseLocallyCompleted(snapshot, commits, review) if stage == Stage.PhaseClosing &&
+          cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
+          candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
+          commits == completed.map(_.commit) => success(Stage.Closed)
       case PhaseRepositoryClosed(intent, original, finalTip, commits, receipt) if
           stage == Stage.PhaseClosing && closureIntent.contains(intent) && original == base.head &&
           finalTip == tip && commits == completed.map(_.commit) && text(receipt) =>
