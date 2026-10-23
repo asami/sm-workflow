@@ -99,6 +99,8 @@ DISPLAY_KEYS = frozenset({
     "stdoutReference", "stdout_reference", "stderrReference", "stderr_reference", "outputReference", "output_reference",
     "evidenceRecording", "evidence_recording", "evidence", "observation", "journal", "entry",
     "sourceReference", "source_reference", "observedAt", "observed_at",
+    "assessment", "assessmentJournal", "assessment_journal", "branch", "reason", "triage", "review",
+    "validationReference", "validation_reference",
 })
 
 

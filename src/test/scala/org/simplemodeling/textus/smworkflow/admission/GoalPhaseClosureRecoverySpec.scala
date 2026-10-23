@@ -139,7 +139,7 @@ final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with 
         evidence.copy(participant = "foreign"), evidence.copy(reference = "foreign"), evidence.copy(issuer = "foreign"))
         .foreach(value => NativeExternalEvidence.observeC(value, declaration, NativeExternalEvidence.Purpose.ClosureRecovery,
           evidence.lookupIdentity, binding, Instant.parse("2026-10-22T01:00:00Z")).isSuccess shouldBe false)
-      val crossed = take(R.bindingC("component", target.copy(reviewEvidence = "foreign-review"), "AuthorizeNewAttempt",
+      val crossed = take(R.bindingC("component", target.copy(reviewEvidence = Some("foreign-review")), "AuthorizeNewAttempt",
         "Explicit", "participant", reference, true))
       NativeExternalEvidence.observeC(evidence, declaration, NativeExternalEvidence.Purpose.ClosureRecovery,
         evidence.lookupIdentity, crossed, Instant.parse("2026-10-22T01:00:00Z")).isSuccess shouldBe false
@@ -222,7 +222,7 @@ final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with 
       val observed = _direction(_target(input, attempt.intent.get, Some(summary)), summary.record)
       val malformed = Vector(unknown.copy(record = _append(unknown.record, "recovery")),
         unknown.copy(payload = unknown.payload.copy(target = unknown.payload.target.copy(frontierRevision = "99"))),
-        unknown.copy(payload = unknown.payload.copy(target = unknown.payload.target.copy(reviewEvidence = "foreign"))),
+        unknown.copy(payload = unknown.payload.copy(target = unknown.payload.target.copy(reviewEvidence = Some("foreign")))),
         unknown.copy(payload = unknown.payload.copy(participant = "foreign")),
         unknown.copy(payload = unknown.payload.copy(priorExecutionEnded = false)))
       When("history reconstruction checks each exact intent summary and direction edge")

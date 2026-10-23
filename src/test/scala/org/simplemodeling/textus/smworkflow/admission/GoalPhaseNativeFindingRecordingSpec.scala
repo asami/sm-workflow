@@ -299,6 +299,133 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _same_instance(e.current(session), before)
     }
   }
+
+  /** Actual SQL/Git/check history with fixture-owned independent review and
+    * Human direction. The historical Review remains decision-needed.
+    */
+  private[admission] def qualifyReviewRepairAdoption(narrator: GivenWhenThen): Unit = {
+    val directory = _root()
+    val conditions = (1 to 30).map(n => GoalPhaseAcceptanceBoundary.Condition("phase-" + n, "phase", true,
+      "Original Phase condition " + n)).toVector
+    val initial = _plan(two = true).copy(repairLimit = 10,
+      acceptance = Some(GoalPhaseAcceptanceBoundary.Adoption("Original selected usage", conditions)))
+    val added = GoalPhaseAcceptanceBoundary.Condition("preserve-step-admission", "step", true,
+      "Preserve Step admission during compatible document continuation")
+    val raw = initial.copy(revision = "review-repair-2", acceptance = initial.acceptance.map(a =>
+      a.copy(conditions = a.conditions :+ added)))
+    val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal("review-human-condition", "1",
+      "Adopt the actual independent blocker as a future Step condition", raw))).get
+    var session = ""
+    var before = Option.empty[InstanceRecord]
+    var oldquestion = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
+    var captured = Option.empty[GoalPhaseRemainingPlanAdoption.Target]
+    var reviewresult = Option.empty[ContinuationResult[S.Result]]
+    narrator.Given("an isolated actual two-Step Session with thirty phase-only conditions and an accepted first Step")
+    _episode(directory, initialize = true, selected = initial) { e =>
+      session = e.start()
+      e.advance(session)
+      Files.writeString(directory.resolve("repository/step-1.txt"), "Accepted first Step\n")
+      e.submit(e.work(session))
+      val firstreview = e.advance(session)
+      e.submit(e.work(session), Some(firstreview), "accept")
+      val closing = e.advance(session)
+      e.authority(session, closing)
+      e.advance(session).work.get.stepIdentity shouldBe Some("step-2")
+      Files.writeString(directory.resolve("repository/step-2.txt"), "Current candidate with an actual blocker\n")
+      e.submit(e.work(session))
+      val review = e.advance(session)
+      reviewresult = Some(e.submit(e.work(session), Some(review), "decision-needed",
+        findings = Vector("The selected Step admission must survive compatible document continuation")))
+      e.advance(session)
+      oldquestion = Some(e.question(session))
+      before = Some(e.current(session))
+      val checks = _checks(directory)
+      narrator.When("read-only description binds the actual saved Review, reconstructed OPEN issue, candidate and checks")
+      val description = e.invoke[V.GoalPhaseRemainingPlanDescriptionResult](GoalPhaseRemainingPlanAdoption.describeOperation,
+        List(Property("input", V.GoalPhaseRemainingPlanDescriptionInput(session, proposal).toRecord(), None)))
+      val target = take(GoalPhaseRemainingPlanAdoption.targetC(description.target))
+      captured = Some(target)
+      narrator.Then("the old accepted prefix and thirty original raw/effective conditions remain exact")
+      _same_instance(e.current(session), before.get)
+      target.completed.size shouldBe 1
+      target.captured.plan.steps shouldBe target.plan.steps
+      target.captured.plan.effectiveAcceptance.get.conditions.init shouldBe target.plan.effectiveAcceptance.get.conditions
+      target.captured.plan.acceptance.get.conditions.init shouldBe conditions
+      target.reviewRepair.get.conditionIdentity shouldBe added.identity
+      target.reviewRepair.get.candidate shouldBe oldquestion.get.current.asInstanceOf[
+        WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request.input.get.value.work.candidate.get
+      val input = V.GoalPhaseRemainingPlanAdoptionInput(session, description.target, proposal,
+        "SPECIFICATION-OWNED independent Human adopts this condition for newly issued and future Step work",
+        V.WorkflowArtifactReference("spec-review-repair-direction", "1"))
+      def _adopt_(value: V.GoalPhaseRemainingPlanAdoptionInput) = e.call(GoalPhaseRemainingPlanAdoption.adoptionOperation,
+        List(Property("input", value.toRecord(), None)))
+      narrator.When("missing and then crossed independent direction attempts the exact target")
+      val missing = _adopt_(input)
+      e.prepareRemaining(description, input)
+      val crossed = _adopt_(input.copy(rationale = "An unobserved direction"))
+      val wrongcandidate = target.copy(reviewRepair = target.reviewRepair.map(r => r.copy(candidate = r.candidate.copy(tree = "f" * 40))))
+      val wrong = _adopt_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(wrongcandidate)))
+      narrator.Then("all fail without changing the pending question or native history")
+      Vector(missing, crossed, wrong).foreach(_.isSuccess shouldBe false)
+      _same_instance(e.current(session), before.get)
+      narrator.When("the separately prepared actual direction is adopted once")
+      take(_adopt_(input))
+      val after = e.current(session)
+      narrator.Then("one adjacent supersession retains the unanswered old question and does not run any checks")
+      after.revision shouldBe before.get.revision.next
+      after.history.take(before.get.history.size) shouldBe before.get.history
+      after.history.last.causation.value shouldBe input.reference.identity
+      e.retainedQuestion(session, target.questionIdentity) shouldBe oldquestion.get
+      _checks(directory) shouldBe checks
+      _adopt_(input).isSuccess shouldBe false
+      _same_instance(e.current(session), after)
+    }
+    narrator.Given("the same managed SQL Session reopens after its original runtime has closed")
+    _episode(directory, selected = initial) { e =>
+      narrator.When("ordinary Advance traverses the saved supersession")
+      val next = e.advance(session)
+      val assigned = _business(e.work(session))
+      narrator.Then("exactly the new RepairStep retains Session base prefix review context OPEN issue and ordinary consumption")
+      next.sessionId shouldBe session
+      assigned.kind shouldBe "RepairStep"
+      assigned.stepIdentity shouldBe Some("step-2")
+      assigned.originalBase shouldBe captured.get.base
+      assigned.completed shouldBe captured.get.completed
+      assigned.generation shouldBe captured.get.generation + 1
+      assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(1, 1, 10))
+      assigned.selectedPlan shouldBe captured.get.captured.plan
+      assigned.candidate shouldBe None
+      assigned.checksReceipt shouldBe None
+      assigned.issues.get.issues.find(_.identity == captured.get.reviewRepair.get.issueIdentity).get.status shouldBe "OPEN"
+      assigned.repairDirective.get.findings shouldBe reviewresult.get.result.value.findings
+      assigned.review.get.priorReviews.last.result shouldBe reviewresult.get.result.value
+      assigned.review.get.priorReviews.last.checksReceipt shouldBe captured.get.reviewRepair.get.checksReceipt
+      e.current(session).history.take(before.get.history.size) shouldBe before.get.history
+      e.retainedQuestion(session, captured.get.questionIdentity) shouldBe oldquestion.get
+      val question = oldquestion.get.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]].request
+      val answer = ContinuationResult(oldquestion.get.handle, question.runId, question.continuationId, question.expectedRevision,
+        question.context.snapshot, TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
+          GoalPhaseOrderedHumanDecision.Answer("ResumeAssignedWork", "SPECIFICATION-OWNED stale answer")),
+        ContextReference("spec-review-stale-answer", "1"), Vector.empty,
+        ExecutionEvidence(Vector(ContextReference("spec-review-stale-answer", "1")), Some("participant")))
+      narrator.When("a delayed old answer attempts to resume the superseded Review")
+      val stale = e.call(GoalPhaseOrderedHumanDecision.completionOperation.operation,
+        take(NativeWorkflowOperationInputFixture.submissionC(answer)))
+      narrator.Then("the answer refuses and repeated Advance retains the same new repair")
+      stale.isSuccess shouldBe false
+      e.advance(session) shouldBe next
+      narrator.When("the assigned repair completes and ordinary Advance observes its candidate and real checks")
+      Files.writeString(directory.resolve("repository/step-2.txt"), "Corrected Step admission continuation\n")
+      e.submit(e.work(session))
+      val checked = e.advance(session)
+      narrator.Then("ordinary independent ReviewStep follows and the new condition is applicable without retroactively rewriting the old review")
+      checked.work.get.kind shouldBe "ReviewStep"
+      _business(e.work(session)).selectedPlan shouldBe captured.get.captured.plan
+      e.retainedQuestion(session, captured.get.questionIdentity) shouldBe oldquestion.get
+      reviewresult.get.result.value.outcome shouldBe "decision-needed"
+      reviewresult.get.result.value.acceptance.get.conditions shouldBe empty
+    }
+  }
   private def _request[A](work: WorkflowInteraction[A, Nothing]): ContinuationRequest[A] =
     work.current.asInstanceOf[WorkflowContinuation.WorkOrder[A]].request
   private def _business[A](work: WorkflowInteraction[A, Nothing]): A = _request(work).input.get.value
@@ -378,7 +505,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         else relevant.filter(_.source == "REVIEW").map(i => GoalPhaseFixIssues.Disposition(i.identity,
           if (outcome == "accept") "RESOLVED" else "NOT_REVIEWED", "SPECIFICATION-OWNED independent coverage", None)))
       }
-      val value = S.Result(outcome, "SPECIFICATION-OWNED assigned semantic response", findings, issueReport = reports,
+      val acceptance = assigned.selectedPlan.effectiveAcceptance.map(boundary => GoalPhaseAcceptanceBoundary.Report(
+        GoalPhaseAcceptanceBoundary.applicable(boundary, assigned.kind).map(condition => GoalPhaseAcceptanceBoundary.Observation(
+          condition.identity, if (condition.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED " + condition.description)), Vector.empty))
+      val value = S.Result(outcome, "SPECIFICATION-OWNED assigned semantic response", findings, acceptance = acceptance, issueReport = reports,
         reviewObservations = observations, dependencyProposal = dependencyProposal)
       val reference = ContextReference("specification-recording-" + assigned.kind, order.expectedRevision.value)
       val evidence = ExecutionEvidence(Vector(reference), Some(if (assigned.kind.startsWith("Review")) "specification-reviewer" else "participant"))
@@ -386,7 +516,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty, evidence)
       if (assigned.kind.startsWith("Review")) prepare(call => for {
         prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
-          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None, None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
+          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance), None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
             R.publicObservations(value.reviewObservations), None,
             value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
@@ -668,7 +798,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         actualcommit.commit.identity shouldBe e.observe().head
         entry.stepIdentity shouldBe Some("step-1")
         entry.finding.get.completed.last.commit.identity shouldBe actualcommit.commit.identity
-        entry.finding.get.completed.last.review shouldBe review.resultReference.identity
+        entry.finding.get.completed.last.review shouldBe Some(review.resultReference.identity)
         entry.finding.get.eligibilityStage shouldBe "Implementation"
         next.findingRecording.get.pending shouldBe empty
         next.findingRecording.get.journaled.flatMap(_.items).map(_.status) shouldBe Vector("recorded")
@@ -811,7 +941,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         assigned.selectedPlan shouldBe _business(implementation).selectedPlan
         assigned.originalBase shouldBe _business(implementation).originalBase
         assigned.completed.size shouldBe 1
-        assigned.completed.head.review shouldBe secondreview.resultReference.identity
+        assigned.completed.head.review shouldBe Some(secondreview.resultReference.identity)
         assigned.completed.head.commit.identity shouldBe e.observe().head
         assigned.requiredIssues.get.issues.map(_.status) shouldBe Vector("RESOLVED")
         assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(0, 0, 2))

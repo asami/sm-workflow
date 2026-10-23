@@ -106,10 +106,37 @@ admitted UoW. Consume its actual observations; do not create, launch, wait for
 or complete a per-check AI command runner or use the retired registered SBT
 caller bridge. Explicit V4-to-V3 host migration removes `registeredSbtHost`;
 there is no automatic fallback or stored Session edit. Historical records and
-accepted evidence retain their meaning. Independent top-level development
-tests/publication still use `cncf_command_runner` and native sbt locks; product
-SBT within the installed CLI's UoW is platform-owned. See the
+accepted evidence retain their meaning. Product SBT within the installed CLI's
+UoW is platform-owned. See the
 [product SBT lifecycle](../../docs/spec/native-host-execution.md#product-sbt-lifecycle).
+
+Classify validation by its purpose, not the repository being developed or the
+label attached to the command. Checks needed for issued implementation, repair,
+Step acceptance or Phase completion belong to this workflow, including when
+developing sm-workflow itself. Calling them "independent development tests",
+"supplementary checks" or a worker's pre-Submit sanity check does not move them
+to `cncf_command_runner`. Apply this rule before general top-level SBT routing.
+
+Pass this boundary in implementation/repair assignments: edit the issued scope
+and return the actual semantic result and any missing validation requirement;
+do not launch SBT or prepare/delegate a runner intake. The caller Submits that
+result and uses ordinary Advance so the runtime executes the selected checks,
+waits, retains actual outcomes and continues through its configured progression.
+If selection, Submit-to-validation progression or execution is missing, report
+the concrete gap and correct that connection; do not silently run checks outside
+the workflow or claim unobserved validation success.
+
+The independent route remains for separately scoped work outside this Phase's
+validation, such as a standalone test request or restoration of a broken runtime
+that cannot execute its own checks. State that purpose and scope using existing
+task context; this is no new approval or per-command classification artifact.
+Use `cncf_command_runner` and native sbt locks for that separate work, without
+treating its receipt as automatic Phase acceptance. Preserve ongoing work,
+Session identity, history, repair counts and existing validation evidence when
+adopting this rule. Collect an already-running invocation rather than killing
+or duplicating it, retain its original attribution, and reuse applicable evidence
+through existing supported admission. Do not restart the Session, resubmit
+accepted work or rerun successful checks solely to change the execution route.
 
 The parent directly invokes the escalated ordinary installed CLI and waits for
 its actual response, even when Advance takes an hour or longer. There is no
@@ -220,14 +247,21 @@ no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Journal results and purpose-driven lookup
 
-Consume optional `journalRecording` and automatic `findingRecording.journaled`
-from the actual returned business view. Show each supplied Journal status,
+Consume optional `journalRecording`, automatic `findingRecording.journaled`,
+and native `validation.assessmentJournal` from the actual returned business view. Show each supplied Journal status,
 actual Entry identity/revision, and short message/source reference when supplied;
 keep the operation's business acceptance and outcome distinct. `recorded` and
 `alreadyRecorded` name only supplied real Entry references. Report `unavailable`,
 `conflict`, `indeterminate`, `disabled`, absent fields and unknown outcomes
 honestly, without inventing Entries, zero counts or success. Reuse the supplied
 view; never query another operation merely to fill display fields.
+
+A native Step `admission` with absent `review` is formal reviewless acceptance
+under the saved PLAN policy and actual checks. It is not independent review PASS
+or AI CLEAN. Consume the actual `validation.assessment` and retained unresolved
+observations; do not request an AI waiver, synthesize a review reference or
+resubmit accepted work to make the old required-review shape. A selected required
+review and the integrated Phase review retain their own real issued routes.
 
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
@@ -241,7 +275,8 @@ Use ordinary provided `JournalService.findJournalEntries` or
 `JournalService.readJournalEntry` only for a concrete lookup purpose. Pass their
 generated input as `--input` JSON through the existing installed command.
 Find requires `repositoryIdentity`; optional exact filters are `phaseIdentity`,
-`sessionIdentity`, `kind` (only `ExecutionObservation` or `Finding`) and
+`sessionIdentity`, `kind` (`ExecutionObservation`, `Finding`, `EvidenceStorageObservation`
+or `StepAssessment`, as supported by the selected runtime) and
 `sourceReference` with its actual complete identity/revision tuple. Never
 fabricate a partial source. Optional `recordedFrom` is from-inclusive and
 `recordedBefore` is to-exclusive; both require whole-second UTC
@@ -522,8 +557,8 @@ completed-Step progress and existing document policy, validating that policy
 against the adopted Plan and fixed candidate paths. Rejection, defer and cancel
 retain the old documents, policy and progress; no file restoration is implied.
 Ordinary document refresh and progress keep their existing owners at the next
-fresh frontier. Checks, independent review, Step commit and
-Phase closure retain their mandatory gates. Review reports gaps as findings
+fresh frontier. Required checks, PLAN-selected Step assessment/review, independent
+Phase review, Step commit and Phase closure retain their owning gates. Review reports gaps as findings
 for later repair, with only the disjoint ReviewPhase proposal case below.
 
 An actual `ReviewPhase` with a genuine integrated finding after all accepted

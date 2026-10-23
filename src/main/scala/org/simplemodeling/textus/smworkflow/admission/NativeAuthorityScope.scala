@@ -21,11 +21,34 @@ private[smworkflow] object NativeAuthorityScope {
           target <- at(input, "target").flatMap(strings(_, Vector("root", "localBranch", "remote", "remoteBranch", "endpoint")))
         } yield Json.fromJsonObject(fields.add("kind", Json.fromString("repository-effect")).add("target", Json.fromJsonObject(target)))
         case Purpose.StepClosure => for {
-          fields <- strings(input, Vector("instance", "sourceRevision", "plan", "planRevision", "step", "reviewEvidence"))
+          fields <- strings(input, Vector("instance", "sourceRevision", "plan", "planRevision", "step"))
+          acceptance <- (input("reviewEvidence").filterNot(_.isNull), input("admission").filterNot(_.isNull),
+            input("admissionReference").filterNot(_.isNull)) match {
+            case (Some(value), None, None) => value.asString.filter(review =>
+              review.trim.nonEmpty && !review.exists(_.isControl))
+              .map(review => "reviewEvidence" -> Json.fromString(review)).toRight("Step review reference is invalid")
+            case (None, Some(value), None) => for {
+              admission <- value.as[GoalPhaseStepAssessment.Admission].left.map(_ => "Step admission is invalid")
+              _ <- Either.cond(GoalPhaseOrderedProgression.validStepAcceptance(
+                GoalPhaseOrderedProgression.ClosedStep("step", GoalPhaseOrderedProgression.Commit("", "", ""), None, Some(admission))),
+                (), "Step admission is not a formal admission")
+              candidate <- input("candidate").toRight("Step candidate is absent")
+                .flatMap(_.as[GoalPhaseOrderedProgression.Snapshot].left.map(_ => "Step candidate is invalid"))
+              _ <- Either.cond(admission.assessment.candidate == candidate, (), "Step admission candidate differs")
+            } yield "admissionReference" -> Json.fromString(admission.reference)
+            // Stored authority already contains the selected reference. Selection
+            // must be idempotent; the reader still compares this exact target
+            // with the freshly derived native Closing input before granting it.
+            case (None, None, Some(value)) => value.asString.filter(reference =>
+              reference.trim.nonEmpty && reference.trim == reference && !reference.exists(_.isControl))
+              .map(reference => "admissionReference" -> Json.fromString(reference))
+              .toRight("Step admission reference is invalid")
+            case _ => Left("Step closure cannot mix review and reviewless admission")
+          }
           generation <- input("generation").flatMap(_.asNumber).flatMap(_.toLong).toRight("Step generation must be an integer")
           parent <- at(input, "parent").flatMap(snapshot)
           candidate <- at(input, "candidate").flatMap(snapshot)
-        } yield Json.fromJsonObject(fields.add("kind", Json.fromString("step-closure")).add("generation", Json.fromLong(generation))
+        } yield Json.fromJsonObject(fields.add(acceptance._1, acceptance._2).add("kind", Json.fromString("step-closure")).add("generation", Json.fromLong(generation))
           .add("parent", parent).add("candidate", candidate))
         case Purpose.PhaseClosure => for {
           fields <- strings(input, Vector("instance", "sourceRevision", "review", "childInvocation"))

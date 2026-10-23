@@ -132,8 +132,9 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   /** Two finite typed SBT targets share the existing typed Git boundary. */
-  def authoringPlan(root: Path, executable: Path, git: Json): Json = {
-    val ordinary = plan(root, executable, Vector(1), Some(git))
+  def authoringPlan(root: Path, executable: Path, git: Json, compileFirst: Boolean = false): Json = {
+    val ordinary = plan(root, executable, Vector(1), Some(git),
+      operation = if (compileFirst) SbtOperation.Compile else SbtOperation.Test)
     val selected = plan(root, executable, Vector(2), operation = SbtOperation.TestOnly,
       testClasses = Vector("org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"))
     def array(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get

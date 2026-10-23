@@ -462,7 +462,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
           commit.parent shouldBe work.originalBase.head
           commit.tree shouldBe waiting.validation.get.candidate.tree
           commit.tree should not be work.originalBase.tree
-          work.completed.head.review.trim should not be empty
+          work.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
           val scope = json(waiting.authorityContext.get.scope)
           scope.hcursor.downField("parent").focus shouldBe Some(json(work.originalBase.toRecord()))
           scope.hcursor.get[String]("plan").toOption shouldBe Some(work.selectedPlan.identity)

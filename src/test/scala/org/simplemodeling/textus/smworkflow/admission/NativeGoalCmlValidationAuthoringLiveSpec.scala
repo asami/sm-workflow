@@ -398,7 +398,7 @@ final class NativeGoalCmlValidationAuthoringLiveSpec extends AnyWordSpec with Ma
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewwork.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             work.candidate.get.head shouldBe closed.commit.identity
             work.candidate.get.tree shouldBe closed.commit.tree
             work.checksReceipt should not be empty

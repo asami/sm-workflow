@@ -15,7 +15,7 @@ import GoalPhaseOrderedProgression as O
 /** Finite nonblocking review observations and assigned recording replies.
   * Source references and these pure values grant no native-history or effect authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFindingRecording {
@@ -26,8 +26,6 @@ private[smworkflow] object GoalPhaseFindingRecording {
   private given Decoder[O.Snapshot] = deriveDecoder
   private given Encoder[O.Commit] = deriveEncoder
   private given Decoder[O.Commit] = deriveDecoder
-  private given Encoder[O.ClosedStep] = deriveEncoder
-  private given Decoder[O.ClosedStep] = deriveDecoder
 
   final case class Observation(identity: String, category: String, summary: String, rationale: String)
   object Observation {
@@ -103,7 +101,7 @@ private[smworkflow] object GoalPhaseFindingRecording {
     _ <- GoalPhaseRepairProgress.validateOptionC(value.repairProgress)
     _ <- _check(value.originalBase != null && _oid(value.originalBase.head) && _oid(value.originalBase.tree) &&
       value.completed != null && value.completed.size <= value.selectedPlan.steps.size &&
-      value.completed.forall(c => c != null && c.commit != null && _exact(c.step) && _exact(c.review) &&
+      value.completed.forall(c => c != null && c.commit != null && _exact(c.step) && O.validStepAcceptance(c) &&
         Vector(c.commit.identity, c.commit.parent, c.commit.tree).forall(_oid)) &&
       value.completed.map(_.step) == value.selectedPlan.steps.take(value.completed.size).map(_.identity) &&
       value.completed.map(_.commit.identity).distinct.size == value.completed.size &&

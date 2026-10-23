@@ -636,7 +636,7 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewed.work.get.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             _checks(scenario, 1) shouldBe pids
 
             Given("the actual Step2 implementation request remains unanswered after the isolated Step1 commit")

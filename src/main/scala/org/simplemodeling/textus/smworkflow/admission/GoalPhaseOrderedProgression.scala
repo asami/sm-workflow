@@ -17,10 +17,11 @@ import GoalPhaseWorkClassification.given
 private[smworkflow] object GoalPhaseOrderedProgression {
   final case class Step(identity: String, purpose: String, ownedPaths: Vector[String],
     dependencies: Vector[String], checks: Vector[String],
-    workClassification: Option[GoalPhaseWorkClassification.Assignment] = None)
+    workClassification: Option[GoalPhaseWorkClassification.Assignment] = None,
+    actionPolicy: Option[GoalPhaseStepAssessment.Policy] = None)
   object Step {
     given Encoder[Step] = deriveEncoder[Step].mapJson(_.mapObject(_.filter {
-      case ("workClassification", value) => !value.isNull
+      case ("workClassification" | "actionPolicy", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Step] = deriveDecoder
@@ -38,6 +39,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Decoder[Plan] = deriveDecoder
   }
   final case class Snapshot(head: String, tree: String)
+  object Snapshot {
+    given Encoder[Snapshot] = deriveEncoder
+    given Decoder[Snapshot] = deriveDecoder
+  }
   final case class HistoryCommit(identity: String, tree: String, parents: Vector[String])
   final case class CandidateContinuation(parent: Snapshot, lineage: Vector[HistoryCommit])
   /** A retained proof is interpreted against the immutable accepted Step tip. */
@@ -54,7 +59,23 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         !commit.parents.exists(value.lineage.take(index).map(_.identity).contains)
       }
   final case class Commit(identity: String, parent: String, tree: String)
-  final case class ClosedStep(step: String, commit: Commit, review: String)
+  object Commit {
+    given Encoder[Commit] = deriveEncoder
+    given Decoder[Commit] = deriveDecoder
+  }
+  final case class ClosedStep(step: String, commit: Commit, review: Option[String],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+  object ClosedStep {
+    def apply(step: String, commit: Commit, review: String): ClosedStep = new ClosedStep(step, commit, Some(review))
+    given Encoder[ClosedStep] = deriveEncoder[ClosedStep].mapJson(_.mapObject(_.filter {
+      case ("admission", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[ClosedStep] = deriveDecoder
+  }
+  def validStepAcceptance(step: ClosedStep): Boolean = step != null && step.review != null && step.admission != null &&
+    ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
+      step.admission.exists(GoalPhaseStepAssessment.validAdmission)))
   enum Stage {
     case Implementation, InspectCandidate, Validation, Review, Repair, Closing,
       PhaseInspection, PhaseValidation, PhaseReview, PhaseClosing, Decision, Closed
@@ -84,6 +105,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class PhaseFindingRecordsObserved(reviewed: Snapshot, finalCandidate: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, passed: Boolean) extends Event
+  final case class StepAssessed(assessment: GoalPhaseStepAssessment.Result) extends Event
   final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, directive: RepairDirective) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
@@ -129,7 +151,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val decisionSource: Option[Stage], val documentDecision: Boolean = false,
     val ordinaryRepairs: Int = 0, val pendingRepair: Option[RepairDirective] = None,
     val phaseReviewedCandidate: Option[Snapshot] = None, val phaseRecordingPaths: Vector[String] = Vector.empty,
-    val candidateParent: Option[Snapshot] = None) {
+    val candidateParent: Option[Snapshot] = None,
+    val stepAdmission: Option[GoalPhaseStepAssessment.Admission] = None) {
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
     private def tip = completed.lastOption.map(_.commit.identity).getOrElse(base.head)
@@ -214,6 +237,36 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
 
+    /** Eligibility only. The native owner binds the actual Review finding and
+      * new condition to an independently admitted Human directive. This consumes
+      * one ordinary repair; no past acceptance observation is manufactured.
+      */
+    private[admission] def adoptRemainingReviewRevisionC(proposed: Plan, evidence: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && directive != null && text(directive.reason) &&
+          directive.findings != null && directive.findings.size == 1 &&
+          directive.reason.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384 &&
+          directive.findings.forall(finding => finding != null && finding.trim.nonEmpty && !finding.contains('\u0000') &&
+            finding.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384)) Consequence.unit
+        else invalid("Review remaining Plan adoption requires its independently admitted directive and exact finding")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && cursor < plan.steps.size && cursor == completed.size &&
+          generation < Long.MaxValue && repairs < plan.repairLimit &&
+          candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
+        else invalid("Review remaining Plan adoption requires an unanswered current-Step Review Decision with remaining repair allowance")
+      condition <- reviewRepairConditionC(plan, proposed.copy(effectiveAcceptance = None))
+      expected = plan.effectiveAcceptance.map(boundary => boundary.copy(conditions = boundary.conditions :+
+        GoalPhaseAcceptanceBoundary.EffectiveCondition(condition.identity, condition.scope, condition.required,
+          condition.description, "adopted")))
+      _ <- if (proposed.effectiveAcceptance == expected) Consequence.unit
+        else invalid("Review remaining Plan adoption must preserve every saved effective condition and its source")
+    } yield new State(proposed, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
+      None, None, None, None, None, repositoryReceipt, Some(directive), None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None)
+
     /** Eligibility only: the native owner must prove the original terminated
       * failed Phase validation and independently admit the Human direction.
       * Accepted Steps remain immutable; only one new corrective Step is added.
@@ -281,7 +334,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else decision, repositoryReceipt, if (clear) None else repairDirective,
           if (clear) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
           if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
-          if (clear) None else candidateParent))
+          if (clear) None else candidateParent, stepAdmission = if (clear) None else stepAdmission))
       }
     }
 
@@ -347,10 +400,25 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         success(Stage.PhaseClosing, newCandidate = Some(value), newPhaseReviewed = Some(reviewed), newPhasePaths = paths)
       case ChecksObserved(value, selected, receipt, passed) if candidate.contains(value) &&
           selected == checks && text(receipt) &&
-          (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
+          (stage == Stage.PhaseValidation || (stage == Stage.Validation && (!passed || step.actionPolicy.isEmpty))) =>
         if (passed) success(if (phaseWide) Stage.PhaseReview else Stage.Review,
           newChecks = Some(receipt))
         else success(Stage.Decision, reason = Some("Selected native checks failed: " + receipt))
+      case StepAssessed(assessment) if stage == Stage.Validation && !phaseWide && GoalPhaseStepAssessment.validResult(assessment) &&
+          step.actionPolicy.contains(assessment.policy) && candidate.contains(assessment.candidate) &&
+          assessment.checks == checks && text(assessment.validationReference) &&
+          Set("admit", "detailed-review", "decision")(assessment.branch) =>
+        assessment.branch match {
+          case "admit" if GoalPhaseStepAssessment.validAdmission(GoalPhaseStepAssessment.admission(assessment)) =>
+            success(Stage.Closing, newChecks = Some(assessment.validationReference),
+              newAdmission = Some(GoalPhaseStepAssessment.admission(assessment)))
+          case "detailed-review" if assessment.policy.detailedReview == "required" ||
+              assessment.policy.observations.exists(_.timing == "immediate") =>
+            success(Stage.Review, newChecks = Some(assessment.validationReference))
+          case "decision" if assessment.policy.observations.exists(_.timing == "immediate") =>
+            success(Stage.Decision, newChecks = Some(assessment.validationReference), reason = Some(assessment.reason))
+          case _ => invalid("assessment branch contradicts its selected policy")
+        }
       case RepairableChecksObserved(value, selected, receipt, directive) if
           stage == Stage.Validation && !phaseWide && candidate.contains(value) &&
           selected == checks && text(receipt) && _valid_directive(directive) =>
@@ -398,7 +466,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
       case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
-          closureIntent.contains(intent) && checksReceipt.nonEmpty && reviewEvidence.nonEmpty &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
           validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
           candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
           paths.distinct == paths && paths.forall(value => path(value) &&
@@ -422,7 +490,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Consequence.success(new State(plan, Stage.Decision, cursor, generation, repairs, base, completed,
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
-          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent))
+          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent,
+          stepAdmission = stepAdmission))
       case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -448,7 +517,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     }
 
     private def _close_step_c(commit: Commit): Consequence[State] = {
-      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence.get)
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission)
       val nextcursor = cursor + 1
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
@@ -466,6 +535,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newPhaseReviewed: Option[Snapshot] = phaseReviewedCandidate,
       newPhasePaths: Vector[String] = phaseRecordingPaths,
       newcandidateparent: Option[Snapshot] = candidateParent,
+      newAdmission: Option[GoalPhaseStepAssessment.Admission] = stepAdmission,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -474,7 +544,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       ordinaryRepairs = newOrdinaryRepairs, pendingRepair = newPendingRepair,
       phaseReviewedCandidate = if (clear) None else newPhaseReviewed,
       phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths,
-      candidateParent = if (clear) None else newcandidateparent))
+      candidateParent = if (clear) None else newcandidateparent,
+      stepAdmission = if (clear) None else newAdmission))
   }
 
   def startC(plan: Plan, initial: Snapshot): Consequence[State] = for {
@@ -482,6 +553,33 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     _ <- if (validSnapshot(initial)) Consequence.unit else invalid("native initial Git snapshot is missing")
   } yield new State(plan, Stage.Implementation, 0, 1, 0, initial, Vector.empty,
     None, None, None, None, None, None, None, None)
+
+  /** Exact raw delta for the narrow Review continuation. Existing exclusions,
+    * defaults and Usage Contract retain their original meaning and ordering.
+    */
+  private[admission] def reviewRepairConditionC(current: Plan, proposed: Plan):
+      Consequence[GoalPhaseAcceptanceBoundary.Condition] = for {
+    _ <- validatePlanC(current)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(current)
+    _ <- validatePlanC(proposed)
+    _ <- if (current.effectiveAcceptance.exists(boundary =>
+        GoalPhaseAcceptanceBoundary.applicable(boundary, "ReviewStep").isEmpty) &&
+        proposed.effectiveAcceptance.isEmpty && proposed.revision != current.revision &&
+        proposed.copy(revision = current.revision, acceptance = current.acceptance) ==
+          current.copy(effectiveAcceptance = None)) Consequence.unit
+      else invalid("Review continuation requires a configured boundary without applicable Step conditions and an otherwise exact Plan")
+    prior <- current.acceptance.map(Consequence.success).getOrElse(
+      invalid("Review continuation requires the saved adopted Usage Contract"))
+    adoption <- proposed.acceptance.map(Consequence.success).getOrElse(invalid("Review continuation requires its added condition"))
+    _ <- if (adoption.usage == prior.usage && adoption.conditions.size == prior.conditions.size + 1 &&
+        adoption.conditions.take(prior.conditions.size) == prior.conditions) Consequence.unit
+      else invalid("Review continuation may only append one raw condition to the unchanged Usage Contract")
+    condition = adoption.conditions.last
+    _ <- if (condition.scope == "step" && condition.required &&
+        !current.effectiveAcceptance.get.conditions.exists(_.identity == condition.identity) &&
+        !prior.conditions.exists(_.identity == condition.identity)) Consequence.unit
+      else invalid("Review continuation requires one fresh required Step condition; exclusions cannot be promoted")
+  } yield condition
 
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||
@@ -496,10 +594,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (s == null || !text(s.purpose) || s.ownedPaths == null || s.ownedPaths.isEmpty ||
           s.ownedPaths.size > 256 || s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
           !identities(s.dependencies) || !s.dependencies.forall(ids.take(index).contains) ||
-          !identities(s.checks) || s.checks.isEmpty || s.workClassification == null ||
+          !identities(s.checks) || s.checks.isEmpty || s.workClassification == null || s.actionPolicy == null ||
           s.workClassification.exists(value => value == null || value.validateC.toOption.isEmpty))
         invalid("Step coverage, earlier dependencies, selected checks or WorkClassification are invalid")
-      else Consequence.unit
+      else s.actionPolicy.fold(Consequence.unit)(GoalPhaseStepAssessment.validateC(_, s, plan))
     }}
   }
   private def identities(values: Vector[String]) = values != null && values.size <= 64 &&

@@ -147,7 +147,7 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     t.controller != null && O.validatePlanC(t.controller.plan).isSuccess && t.controller.stage == "PhaseInspection" &&
     t.controller.cursor == t.controller.plan.steps.size && t.controller.completed != null &&
     t.controller.completed.size == t.controller.cursor && t.controller.completed.map(_.step) == t.controller.plan.steps.map(_.identity) &&
-    t.controller.completed.forall(s => s != null && s.commit != null && _exact(s.review) &&
+    t.controller.completed.forall(s => s != null && s.commit != null && O.validStepAcceptance(s) &&
       Vector(s.commit.identity, s.commit.parent, s.commit.tree).forall(_object)) &&
     t.controller.generation >= 0 && t.controller.repairs >= 0 && t.controller.ordinaryRepairs >= 0 &&
     t.controller.ordinaryRepairs <= t.controller.repairs && _snapshot(t.controller.base) && _snapshot(t.controller.tip) &&

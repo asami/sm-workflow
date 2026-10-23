@@ -55,7 +55,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
           import GoalPhaseNativeMetadata.given
           GoalPhaseNativeMetadata.record(operation.asJson)
         })), (payload.receipts ++ stopped).map(_goal_check), payload.outcome,
-      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty)
+      payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty,
+      payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), None)
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
@@ -233,7 +234,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
 
   private def _goal_plan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
-      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks)),
+      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
+        s.actionPolicy.map(p => GoalPhaseNativeMetadata.record(p.asJson)))),
       value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
       GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance))
   private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
@@ -245,7 +247,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     V.WorkflowSbtValidationFacts(value.kind.wire, value.outcome.wire,
       value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason)
   private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
-    V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review)
+    V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree),
+      value.review, value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)))
   private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance),
       GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport),

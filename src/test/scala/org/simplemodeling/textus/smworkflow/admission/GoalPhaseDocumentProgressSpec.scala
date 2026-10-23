@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure controller/merge inputs are executable business specifications, not
   * native persistence, provider, Git or SBT evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentProgressSpec extends AnyWordSpec with GivenWhenThen with Matchers {
@@ -63,7 +63,7 @@ final class GoalPhaseDocumentProgressSpec extends AnyWordSpec with GivenWhenThen
       desired.steps.map(_.step) shouldBe Vector("S1", "S2")
       desired.steps.head.items shouldBe Vector("VERIFY-A", "VERIFY-B")
       desired.steps.map(_.commit) shouldBe state.completed.map(_.commit)
-      desired.steps.map(_.review) shouldBe Vector("review-c", "review-e")
+      desired.steps.map(_.review) shouldBe Vector(Some("review-c"), Some("review-e"))
       take(P.projectionC(_initial, _documents)).steps shouldBe empty
       desired.asJson.as[P.Projection] shouldBe Right(desired)
     }
@@ -126,7 +126,7 @@ final class GoalPhaseDocumentProgressSpec extends AnyWordSpec with GivenWhenThen
       val one = _close(_initial, 'c', 'd')
       val previous = take(P.projectionC(one, _documents))
       val desired = take(P.projectionC(_close(one, 'e', 'f'), _documents))
-      val altered = previous.copy(steps = previous.steps.map(_.copy(review = "different-review")))
+      val altered = previous.copy(steps = previous.steps.map(_.copy(review = Some("different-review"))))
       When("the block is removed, its review is edited, or desired facts are pasted over the previous prefix")
       val missing = P.mergeC("Independent narrative only.\n", _plan.phase, Some(previous), desired)
       val overlap = P.mergeC(_block(altered), _plan.phase, Some(previous), desired)

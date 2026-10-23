@@ -1,7 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
+import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -23,7 +24,7 @@ import GoalPhaseDocumentSource as D
 /** New Human direction for future work, separately from the unanswered old
   * question. All effects belong to the owning native guarded transaction.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRemainingPlanAdoption {
@@ -32,11 +33,35 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   val adoptionOperation = "adoptGoalPhaseRemainingPlan"
   val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive. " +
     "The original unanswered question is retained as superseded-by-adoption, without an answer. " +
-    "Accepted Steps, commits, reviews, base and repair history remain. No check, Submit, Advance or commit runs here."
+    "Accepted Steps, commits, reviews, base and repair history remain. Review continuation adds one required Step condition " +
+    "for newly issued and future unaccepted work and consumes one ordinary repair. No check, Submit, Advance or commit runs here."
+
+  final case class ReviewRepairTarget(issueIdentity: String, conditionIdentity: String,
+    candidate: O.Snapshot, checksReceipt: String)
+  object ReviewRepairTarget {
+    given Encoder[ReviewRepairTarget] = deriveEncoder
+    private val _decoder: Decoder[ReviewRepairTarget] = deriveDecoder
+    given Decoder[ReviewRepairTarget] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (_valid_review_target(value) && cursor.value.asObject.exists(_.keys.toSet ==
+          Set("issueIdentity", "conditionIdentity", "candidate", "checksReceipt"))) Right(value)
+      else Left(DecodingFailure("Review repair target is incomplete", cursor.history))))
+  }
 
   final case class Target(sessionId: String, questionIdentity: String, sourceRevision: String, pendingRevision: String,
     plan: O.Plan, base: O.Snapshot, completed: Vector[O.ClosedStep], generation: Long,
-    repairProgress: GoalPhaseRepairProgress.Snapshot, requestingResult: ContextReference, captured: R.Captured)
+    repairProgress: GoalPhaseRepairProgress.Snapshot, requestingResult: ContextReference, captured: R.Captured,
+    reviewRepair: Option[ReviewRepairTarget] = None)
+  object Target {
+    given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(fields =>
+      if (fields("reviewRepair").exists(_.isNull)) fields.remove("reviewRepair") else fields))
+    private val _decoder: Decoder[Target] = deriveDecoder
+    given Decoder[Target] = Decoder.instance { cursor =>
+      if (cursor.downField("reviewRepair").focus.exists(_.isNull))
+        Left(DecodingFailure("Review repair must be omitted or a valid target", cursor.history))
+      else _decoder(cursor).flatMap(value => if (_validate_target_c(value).isSuccess) Right(value)
+        else Left(DecodingFailure("Remaining Plan target is invalid", cursor.history)))
+    }
+  }
   final case class Payload(target: Target, directive: ContextReference, participant: String, rationale: String)
   final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound])
   trait EvidencePort {
@@ -58,7 +83,7 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     _ <- if (_exact(component) && target != null && _text(rationale) && _exact(participant) &&
         reference != null && _exact(reference.identity) && _exact(reference.revision)) Consequence.unit
       else F.invalid("remaining Plan directive requires its actual target, participant, reference and rationale")
-    _ <- R.validateCapturedC(target.captured)
+    _ <- _validate_target_c(target)
   } yield Json.obj("componentInstance" -> Json.fromString(component), "remainingPlanAdoption" -> Json.obj(
     "target" -> target.asJson, "directive" -> Json.obj("rationale" -> Json.fromString(rationale),
       "participant" -> Json.fromString(participant), "reference" -> Json.obj(
@@ -86,7 +111,7 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
       _ <- Either.cond(payload != null && payload.target != null && payload.directive != null &&
         _exact(payload.directive.identity) && _exact(payload.directive.revision) && _exact(payload.participant) && _text(payload.rationale),
         (), "remaining Plan adoption is incomplete")
-      _ <- R.validateCapturedC(payload.target.captured).map[Either[String, Unit]](_ => Right(())).fold(error => Left(error.toString), result => result)
+      _ <- _validate_target_c(payload.target).map[Either[String, Unit]](_ => Right(())).fold(error => Left(error.toString), result => result)
     } yield payload
   }
 
@@ -94,7 +119,15 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
       Consequence[V.GoalPhaseRemainingPlanDescriptionResult] = for {
     target <- _target_c(source, d, core, proposal)
   } yield V.GoalPhaseRemainingPlanDescriptionResult(source.from.identity.value, "adoption-required", message,
-    core.component.get.core.instanceId.canonicalKey, targetRecord(target), adoptionOperation)
+    core.component.get.core.instanceId.canonicalKey, targetRecord(target), adoptionOperation).copy(message =
+      target.reviewRepair.fold(message) { review =>
+        val condition = target.captured.plan.acceptance.get.conditions.find(_.identity == review.conditionIdentity).get
+        message + " Saved independent review " + source.result.resultReference.identity + "@" + source.result.resultReference.revision +
+          ": " + source.result.result.value.summary + ". Finding " + review.issueIdentity + ": " + source.result.result.value.findings.head +
+          ". Adopt required condition " + condition.identity + ": " + condition.description +
+          ". scope=step applies to newly issued and future unaccepted ImplementStep, RepairStep and ReviewStep work; " +
+          "historically accepted work keeps its original contract."
+      })
 
   def adoptC(source: H.Source, d: F.Declaration, core: ActionCall.Core, input: V.GoalPhaseRemainingPlanAdoptionInput):
       Consequence[V.GoalPhaseRemainingPlanAdoptionResult] = for {
@@ -109,7 +142,7 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     binding <- bindingC(core.component.get.core.instanceId.canonicalKey, actual, input.rationale,
       source.session.participantIdentity, reference)
     _ <- installation.evidence.admitC(core, reference, binding)
-    state <- source.controller.adoptRemainingRevisionC(actual.captured.plan, reference.identity)
+    state <- _adopted_c(source, actual, reference.identity, input.rationale)
     pending <- _pending_c(source)
     adapter <- source.session.storage.bindDecisionSupersessionC(H.completionOperation, H.inputCodec, codec)
     _ <- adapter.executeC(H.identity(source), pending.revision, pending,
@@ -132,7 +165,10 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         _ <- if (_matches(source, target, pending) && payload.participant == source.session.participantIdentity)
           Consequence.unit else F.invalid("retained remaining Plan adoption crosses its original actual source")
         _ <- validateDocumentsC(source.controller, target.captured, source.documents)
-        state <- source.controller.adoptRemainingRevisionC(target.captured.plan, payload.directive.identity)
+        review <- _review_target_c(source, target.captured.plan)
+        _ <- if (review == target.reviewRepair) Consequence.unit
+          else F.invalid("retained remaining Plan adoption crosses its actual Review issue, condition, candidate or checks")
+        state <- _adopted_c(source, target, payload.directive.identity, payload.rationale)
         next <- GoalPhaseNativeHistory.completionC(source.session.current, pending, payload.directive, state.stage.toString)
       } yield Some(Selected(state, next, target.captured.documents))
     }
@@ -141,7 +177,14 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   private def _target_c(source: H.Source, d: F.Declaration, core: ActionCall.Core, raw: Record): Consequence[Target] = for {
     pending <- _pending_c(source)
     proposal <- R.fromPublicProposalC(Some(raw)).flatMap(_.map(Consequence.success).getOrElse(F.invalid("remaining Plan proposal is absent")))
-    plan <- GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, proposal.plan)
+    plan <- if (source.controller.decisionSource.contains(O.Stage.Review)) for {
+      condition <- O.reviewRepairConditionC(source.controller.plan, proposal.plan)
+      // This explicit saved capture deliberately does not recapture current host
+      // defaults. Every old effective condition, including its source, survives.
+    } yield proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance.map(boundary =>
+      boundary.copy(conditions = boundary.conditions :+ GoalPhaseAcceptanceBoundary.EffectiveCondition(
+        condition.identity, condition.scope, condition.required, condition.description, "adopted"))))
+      else GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, proposal.plan)
     documents <- source.documents match {
       case None => Consequence.success(Option.empty[D.Bound])
       case Some(previous) => D.loadForCallC(previous.source, core).flatMap { imported =>
@@ -151,16 +194,91 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     }
     captured = R.Captured(proposal, plan, documents)
     _ <- validateDocumentsC(source.controller, captured, source.documents)
-    _ <- source.controller.adoptRemainingRevisionC(plan, "description-eligibility")
+    review <- _review_target_c(source, plan)
+    target = Target(source.from.identity.value, H.identity(source).value, source.from.revision.value.toString,
+      pending.revision.value.toString, source.controller.plan, source.controller.base, source.controller.completed,
+      source.controller.generation, GoalPhaseRepairProgress.snapshot(source.controller), source.result.resultReference, captured, review)
+    _ <- _adopted_c(source, target, "description-eligibility", "Read-only description eligibility")
     _ <- plan.steps.drop(source.controller.cursor).foldLeft(Consequence.unit) { (prior, step) =>
       prior.flatMap(_ => GoalPhaseNativeValidation.selectedChecksC(d, plan, Some(step.identity)).map(_ => ()))
     }
     questions <- source.session.storage.bindDecisionC(H.completionOperation, H.inputCodec)
     issued <- questions.loadC(H.identity(source))(using core.executionContext)
     _ <- if (issued.nonEmpty) Consequence.unit else F.invalid("remaining Plan adoption requires its actual issued unanswered question")
-  } yield Target(source.from.identity.value, H.identity(source).value, source.from.revision.value.toString,
-    pending.revision.value.toString, source.controller.plan, source.controller.base, source.controller.completed,
-    source.controller.generation, GoalPhaseRepairProgress.snapshot(source.controller), source.result.resultReference, captured)
+  } yield target
+
+  private def _adopted_c(source: H.Source, target: Target, evidence: String, rationale: String): Consequence[O.State] =
+    target.reviewRepair match {
+      case Some(_) if source.controller.decisionSource.contains(O.Stage.Review) =>
+        val result = source.result.result.value
+        source.controller.adoptRemainingReviewRevisionC(target.captured.plan, evidence,
+          O.RepairDirective(_single_line(result.summary + " / Human remaining Plan direction: " + rationale), result.findings))
+      case None if !source.controller.decisionSource.contains(O.Stage.Review) =>
+        source.controller.adoptRemainingRevisionC(target.captured.plan, evidence)
+      case _ => F.invalid("remaining Plan adoption requires Review repair metadata exactly on the Review branch")
+    }
+
+  /** Uses the current reconstructed ledger supplied by the walker, rather than
+    * the issue set captured before this independent review produced its finding.
+    */
+  private[admission] def reviewRepairTargetC(controller: O.State, input: GoalPhaseNativeWork.Request,
+    result: GoalPhaseNativeWork.Result, reference: ContextReference, proposed: O.Plan): Consequence[ReviewRepairTarget] = for {
+    _ <- if (controller != null && input != null && result != null && reference != null &&
+        _exact(reference.identity) && _exact(reference.revision) && input.kind == "ReviewStep" &&
+        controller.stage == O.Stage.Decision && controller.decisionSource.contains(O.Stage.Review) &&
+        controller.cursor < controller.plan.steps.size && input.stepIdentity.contains(controller.plan.steps(controller.cursor).identity) &&
+        input.selectedPlan == controller.plan && input.originalBase == controller.base && input.completed == controller.completed &&
+        input.generation == controller.generation && input.candidate == controller.candidate &&
+        input.checksReceipt == controller.checksReceipt && input.candidate.nonEmpty && input.checksReceipt.exists(_exact) &&
+        input.review.exists(_ != null) && input.checkFailure.isEmpty &&
+        result.outcome == "decision-needed" && _text(result.summary) && result.findings != null &&
+        result.findings.size == 1 && result.findings.forall(_text) && result.planRevision.isEmpty &&
+        result.dependencyProposal.isEmpty) Consequence.unit
+      else F.invalid("Review continuation requires its actual current issued ReviewStep and single decision-needed finding")
+    _ <- GoalPhaseAcceptanceBoundary.admitC(controller.plan, input.kind, result)
+    _ <- GoalPhaseFixIssues.validateOptionC(input.issues)
+    condition <- O.reviewRepairConditionC(controller.plan, proposed.copy(effectiveAcceptance = None))
+    matching = input.issues.toVector.flatMap(_.issues).filter(issue =>
+      issue.source == "REVIEW" && issue.status == "OPEN" && issue.repository == controller.plan.repository &&
+        input.stepIdentity.contains(issue.step) && issue.evidenceReference == reference.identity &&
+        issue.summary == result.findings.head)
+    _ <- if (matching.size == 1) Consequence.unit
+      else F.invalid("Review continuation requires exactly one corresponding OPEN actual REVIEW issue")
+    target = ReviewRepairTarget(matching.head.identity, condition.identity, input.candidate.get, input.checksReceipt.get)
+    _ <- controller.adoptRemainingReviewRevisionC(proposed, "review-target-eligibility",
+      O.RepairDirective(_single_line(result.summary), result.findings))
+  } yield target
+
+  private def _review_target_c(source: H.Source, proposed: O.Plan): Consequence[Option[ReviewRepairTarget]] =
+    if (!source.controller.decisionSource.contains(O.Stage.Review)) Consequence.success(None)
+    else for {
+      _ <- if (source.sourceHistoryRecovery.isEmpty && source.input.instanceIdentity == source.from.identity.value &&
+          source.result.result.typeIdentity == GoalPhaseNativeWork.resultCodec.typeIdentity &&
+          source.candidate.exists(saved => saved.payload.candidate == source.controller.candidate &&
+            source.input.stepIdentity.contains(saved.payload.step))) Consequence.unit
+        else F.invalid("Review continuation crosses its native source, candidate or recovery boundary")
+      target <- reviewRepairTargetC(source.controller, source.input, source.result.result.value, source.result.resultReference, proposed)
+    } yield Some(target)
+
+  private def _validate_target_c(target: Target): Consequence[Unit] = for {
+    _ <- if (target != null && target.reviewRepair != null && target.reviewRepair.forall(_valid_review_target)) Consequence.unit
+      else F.invalid("remaining Plan target is incomplete")
+    _ <- R.validateCapturedC(target.captured)
+    _ <- target.reviewRepair.fold(Consequence.unit) { review => for {
+      condition <- O.reviewRepairConditionC(target.plan, target.captured.proposal.plan)
+      _ <- if (condition.identity == review.conditionIdentity) Consequence.unit
+        else F.invalid("Review repair target names a different added condition")
+    } yield () }
+  } yield ()
+
+  private def _valid_review_target(value: ReviewRepairTarget): Boolean = value != null &&
+    value.issueIdentity != null && value.issueIdentity.matches("issue-[1-9][0-9]{0,4}") &&
+    value.issueIdentity.stripPrefix("issue-").toInt <= 16384 &&
+    value.conditionIdentity != null && value.conditionIdentity.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}") &&
+    value.candidate != null && Vector(value.candidate.head, value.candidate.tree).forall(oid =>
+      oid != null && oid.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) && _exact(value.checksReceipt)
+
+  private def _single_line(value: String): String = value.replace('\r', ' ').replace('\n', ' ')
 
   private def _pending_c(source: H.Source): Consequence[InstanceRecord] = for {
     following <- GoalPhaseNativeHistory.nextC(source.session.current, source.from)

@@ -760,6 +760,7 @@ OperationResult
 | ownedPaths | string | * |
 | dependencies | string | * |
 | checks | string | * |
+| actionPolicy | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedPlan
 
@@ -864,7 +865,8 @@ OperationResult
 |------+------|--------------|
 | step | string | 1 |
 | commit | GoalPhaseNativeCommit | 1 |
-| review | string | 1 |
+| review | string | ? |
+| admission | org.goldenport.record.Record | ? |
 
 ## GoalPhaseRepairDirective
 
@@ -1031,6 +1033,8 @@ OperationResult
 | outcome | string | ? |
 | metadata | org.goldenport.record.Record | * |
 | evidenceRecording | EvidenceRecordingState | * |
+| assessment | org.goldenport.record.Record | ? |
+| assessmentJournal | JournalRecordingState | ? |
 
 ## EvidenceReference
 
@@ -1658,6 +1662,7 @@ OperationResult
 | recording | JournalExecutionObservation | ? |
 | finding | JournalFinding | ? |
 | evidenceStorage | EvidenceStorageObservation | ? |
+| assessment | org.goldenport.record.Record | ? |
 
 ## JournalReadInput
 
@@ -2482,6 +2487,16 @@ on = documents-conflicted
 
 to = Review
 on = checks-passed
+
+##### TRANSITION
+
+to = Closing
+on = checks-admitted
+
+##### TRANSITION
+
+to = Decision
+on = checks-judgment-required
 
 ##### TRANSITION
 

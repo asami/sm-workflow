@@ -256,7 +256,7 @@ final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Match
       work.completed.map(_.step) shouldBe Vector("step-1")
       val closed = work.completed.head
       val commit = closed.commit
-      closed.review.trim should not be empty
+      closed.review.exists(_.trim.nonEmpty) shouldBe true
       commit.identity should not be beforehead
       commit.parent shouldBe beforehead
       commit.tree shouldBe reviewed.work.get.candidate.get.tree

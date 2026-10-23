@@ -918,6 +918,21 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(displayed["journal"], {"status": "unavailable", "entry": None})
         self.assertNotIn("text", displayed)
 
+    def test_projection_preserves_formal_admission_and_actual_journal_failure_without_review_pass(self):
+        # Given an actual-shaped deterministic outcome with deliberately private policy/source material.
+        assessment = {"branch": "admit", "reason": "Selected checks passed; Release observation retained",
+                      "triage": "not-selected", "review": "not-executed", "validationReference": "native-check:1",
+                      "candidate": {"head": "private"}, "policy": {"source": "private"}}
+        journal = {"status": "indeterminate", "entry": None, "sourceReference": {"identity": "native-check:1", "revision": "1"}}
+        native = {"validation": {"outcome": "passed", "assessment": assessment, "assessmentJournal": journal}}
+        # When ordinary bounded exchange display consumes the supplied public result.
+        actual = CALLER.observation_projection(native)["validation"]
+        # Then omitted AI work stays distinct from CLEAN/PASS and recording failure creates no Entry.
+        self.assertEqual(actual["assessment"], {k: v for k, v in assessment.items() if k not in ("candidate", "policy")})
+        self.assertEqual(actual["assessmentJournal"], journal)
+        self.assertEqual(actual["outcome"], "passed")
+        self.assertEqual(native["validation"]["assessment"]["policy"], {"source": "private"})
+
     def test_all_advance_frontiers_stop_after_two_calls(self):
         # Given accepted Submit followed by each native frontier kind,
         for kind in ("Request", "Human", "Wait", "Terminal"):

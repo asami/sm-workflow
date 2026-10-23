@@ -37,7 +37,8 @@ private[admission] object NativeWorkflowCliFixture {
 
   def publicPlan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
-      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks)),
+      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
+        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
       A.publicEffective(value.effectiveAcceptance))
 
@@ -210,7 +211,9 @@ private[admission] object NativeWorkflowCliFixture {
       * staging, checks and Step commits always use normal typed host programs.
       */
     private def _candidate_git(arguments: Vector[String]): String = {
-      require(repairContinuation, "Candidate continuation requires the isolated two-Step host")
+      require(repairContinuation || (plan.steps.exists(_.actionPolicy.nonEmpty) &&
+        arguments.headOption.exists(Set("rev-parse", "diff", "status"))),
+        "Candidate mutation requires the isolated two-Step host; assessment permits only Git observation")
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root,
@@ -1162,6 +1165,49 @@ private[admission] object NativeWorkflowCliFixture {
     val config = parse(Files.readString(configfile)).fold(error => throw new AssertionError(error.message), identity)
     Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(
       TypedSbtHostPlanFixture.authoringPlan(scenario.root, executable, _authoring_git(scenario.host)).noSpaces))).noSpaces)
+    scenario._prepare_authoring_build()
+    scenario
+  }
+
+  /** Specification-owned code Step: actual Compile/TestOnly, normal authority and native Git commit.
+    * No workflow records, checks, review results or admission are seeded.
+    */
+  def freshStepAssessment(name: String, executable: Path): Scenario = {
+    require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
+    val initial = fresh(name)
+    val paths = authoringPaths :+ "src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala"
+    val original = _authoring_host(initial.root)
+    val compile = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+    val focused = GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly)
+    val host = original.copy(goal = original.goal.copy(candidatePaths = paths,
+      stepValidation = original.goal.stepValidation.copy(checks = Vector(compile, focused)),
+      phaseValidation = original.goal.phaseValidation.copy(checks = Vector(focused))))
+    val old = _authoring_plan()
+    val observation = GoalPhaseStepAssessment.Observation("later-integration",
+      org.goldenport.cncf.workflow.ContextReference(old.identity, old.revision),
+      "Confirm the planned later integration at Release", "release",
+      "The local code boundary and subsequent prerequisites are satisfied; the second Step owns the narrative", Some("step-2"))
+    val policy = GoalPhaseStepAssessment.Policy("local-code", "code", "conditional", "off", "off", Vector(observation))
+    val selected = old.copy(steps = Vector(
+      old.steps.head.copy(ownedPaths = paths, checks = Vector("compile", "focused"), actionPolicy = Some(policy)),
+      old.steps.last.copy(checks = Vector("focused"))), phaseChecks = Vector("focused"))
+    val scenario = new Scenario(initial.root, host, selected, None, Some(executable), startingLogIndex = 100)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected continuation Step 1", "Complete selected continuation Step 2"),
+      goalSelections = Vector(paths, Vector("docs/validation.md")))
+    val process = TypedSbtHostPlanFixture.authoringPlan(scenario.root, executable, git, compileFirst = true)
+    val journal = JournalHost(DevelopmentJournal.Policy("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
+      org.simplemodeling.model.datatype.EntityCollectionId("smworkflow", "cli", "development_journal"))))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject(fields => journal.values.foldLeft(fields
+      .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))) {
+        case (values, (key, value)) => values.add(key, Json.fromString(value))
+      }).noSpaces)
     scenario._prepare_authoring_build()
     scenario
   }

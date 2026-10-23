@@ -271,7 +271,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
     commit.identity should not be commit.parent
     commit.parent shouldBe request.originalBase.head
     commit.tree shouldBe reviewed.candidate.get.tree
-    request.completed.head.review.trim should not be empty
+    request.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
     val sources = _review_sources(scenario)
     sources.last._1.outcome shouldBe "accept"
     val observations = sources.flatMap(_._1.reviewObservations.toVector.flatMap(_.items))

@@ -12,7 +12,7 @@ import GoalPhaseWorkClassification as W
 
 /** Controller snapshots/receipts below are unit inputs, not native Git/SBT or provider evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentRefreshSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -116,7 +116,7 @@ final class GoalPhaseDocumentRefreshSpec extends AnyWordSpec with Matchers with 
       _key(adopted).step shouldBe Some("step-3")
       _facts(adopted) shouldBe _facts(state)
       Vector(changed, removed, reordered).foreach(p => _evaluate(state, p).left.toOption.get should contain("completed-steps"))
-      state.completed.head.review shouldBe "unit-step-review"
+      state.completed.head.review shouldBe Some("unit-step-review")
     }
 
     "protect issued and completed implementation definitions and their document acceptance" in {

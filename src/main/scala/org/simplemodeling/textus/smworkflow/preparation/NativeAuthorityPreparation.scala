@@ -4,7 +4,7 @@ import io.circe.Json
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive preparation of explicit Step/Phase permission input.
@@ -31,7 +31,12 @@ object NativeAuthorityPreparation {
       .find(_.identity == context.purpose).map(Consequence.success).getOrElse(_invalid("has an unsupported purpose"))
     text <- context.scope.toJsonStringC
     scopeJson <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
-    scope <- _project_c(scopeJson, if (purpose == NativeExternalEvidence.Purpose.StepClosure) _step_names else _phase_names)
+    projected <- _project_c(scopeJson, if (purpose == NativeExternalEvidence.Purpose.StepClosure) _step_names else _phase_names)
+    scope <- if (purpose == NativeExternalEvidence.Purpose.StepClosure) projected.hcursor.downField("admission").focus match {
+      case Some(value) if !value.isNull => GoalPhaseNativeMetadata.normalizePublicJson(value)
+        .fold(_invalid, actual => Consequence.success(projected.mapObject(_.add("admission", actual))))
+      case _ => Consequence.success(projected)
+    } else Consequence.success(projected)
     instance <- _string_c(scope, "instance")
     revision <- _string_c(scope, "sourceRevision")
     identity = ThreeWorkflowExternalEvidencePorts.key(instance, revision)

@@ -191,7 +191,7 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
         _request.copy(stepIdentity = Some("another-step")), _request.copy(items = _items :+ _items.head),
         _request.copy(originalBase = _base.copy(head = "a" * 64)),
         _request.copy(completed = Vector(_closed.copy(commit = _closed.commit.copy(parent = "e" * 40)))),
-        _request.copy(completed = Vector(_closed.copy(review = " "))),
+        _request.copy(completed = Vector(_closed.copy(review = Some(" ")))),
         _request.copy(items = _items.updated(0, _items.head.copy(sourceKind = "ReviewPhase", stepIdentity = None))),
         _request.copy(requiredIssues = Some(null)), _request.copy(repairProgress = null))
       When("the request input checks consume the impossible finite assignments")

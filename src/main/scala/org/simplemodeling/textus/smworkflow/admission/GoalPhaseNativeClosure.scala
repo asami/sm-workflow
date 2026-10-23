@@ -21,7 +21,7 @@ import WorkflowManagedProcessExecution as E
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -34,7 +34,18 @@ private[smworkflow] object GoalPhaseNativeClosure {
       else F.invalid("native Step closure host policy is incomplete")
   }
   final case class Input(instance: String, sourceRevision: String, plan: String, planRevision: String,
-    step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: String)
+    step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: Option[String],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+  object Input {
+    def apply(instance: String, sourceRevision: String, plan: String, planRevision: String,
+      step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: String): Input =
+      new Input(instance, sourceRevision, plan, planRevision, step, generation, parent, candidate, Some(reviewEvidence))
+    given Encoder[Input] = io.circe.generic.semiauto.deriveEncoder[Input].mapJson(_.mapObject(_.filter {
+      case ("admission", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Input] = io.circe.generic.semiauto.deriveDecoder
+  }
   trait AuthorityPort {
     /** Observe host-recorded authority for this actual current call. Never
       * synthesize approval from a worker result or a missing record.
@@ -192,12 +203,17 @@ private[smworkflow] object GoalPhaseNativeClosure {
     * and the public missing-authority Wait projection. */
   def inputC(from: InstanceRecord, controller: O.State): Consequence[Input] = for {
     _ <- if (controller.stage == O.Stage.Closing && controller.cursor < controller.plan.steps.size &&
-        controller.candidate.nonEmpty && controller.checksReceipt.nonEmpty && controller.reviewEvidence.nonEmpty &&
+        controller.candidate.nonEmpty && controller.checksReceipt.nonEmpty &&
+        O.validStepAcceptance(O.ClosedStep(controller.plan.steps(controller.cursor).identity,
+          O.Commit("", "", ""), controller.reviewEvidence, controller.stepAdmission)) &&
         from.currentProgression.contains(ProgressionReference("phase.Closing")))
-      Consequence.unit else F.invalid("Step closure has no actual accepted review and native Closing frontier")
+      Consequence.unit else F.invalid("Step closure has no actual accepted review or formal Step admission at native Closing")
+    _ <- if (controller.stepAdmission.forall(a => a.assessment.candidate == controller.candidate.get &&
+        controller.checksReceipt.contains(a.assessment.validationReference))) Consequence.unit
+      else F.invalid("formal Step admission differs from the exact closure candidate or checks")
     step = controller.plan.steps(controller.cursor)
   } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
-    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence.get)
+    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence, controller.stepAdmission)
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit]): Consequence[Store] = for {
@@ -582,7 +598,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
     _text(value.plan) && _text(value.planRevision) && _text(value.step) && value.generation > 0 &&
     value.parent != null && value.candidate != null && _oid(value.parent.head) && _oid(value.parent.tree) &&
     value.candidate.head == value.parent.head && _oid(value.candidate.tree) &&
-    _text(value.reviewEvidence)
+    O.validStepAcceptance(O.ClosedStep(value.step, O.Commit("", "", ""), value.reviewEvidence, value.admission)) &&
+    value.admission.forall(_.assessment.candidate == value.candidate)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
     !value.exists(c => Character.isISOControl(c))
   private def _valid_precheck(value: Precheck): Boolean = value != null && value.findings != null &&

@@ -14,7 +14,7 @@ import DevelopmentJournal as J
 
 /** Evidence storage observations are their own producer, with no Finding eligibility.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalEvidence {
@@ -96,7 +96,7 @@ private[smworkflow] object DevelopmentJournalEvidence {
   }
   def publicEntry(e: Entry): V.JournalEntry = V.JournalEntry(e.identity, "1", kind, e.metadata.repositoryIdentity,
     e.metadata.phaseIdentity, e.metadata.stepIdentity, e.metadata.sessionIdentity, e.observation.sourceReference,
-    e.recordedAt, "Evidence " + e.observation.status + ": " + e.metadata.outputIdentity, None, None, Some(e.observation))
+    e.recordedAt, "Evidence " + e.observation.status + ": " + e.metadata.outputIdentity, None, None, Some(e.observation), None)
   def view(e: Entry): String = s"# Evidence ${e.observation.status}\n\nEvidence: ${e.metadata.evidence.identity}@1\n" +
     s"Source: ${e.metadata.sourceReference.identity}@${e.metadata.sourceReference.revision}\n" +
     s"Action: ${e.metadata.actionOutcome}\nOutput: ${e.metadata.outputIdentity}\n${e.observation.message}\n"

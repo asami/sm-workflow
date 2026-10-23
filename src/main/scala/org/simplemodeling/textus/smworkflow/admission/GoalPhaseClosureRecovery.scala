@@ -25,7 +25,7 @@ import WorkflowManagedProcessExecution as E
 /** Explicit recovery of an unresolved selected Step commit. Old intent and
   * terminal observations are immutable; direction never executes a commit.
   * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 23, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseClosureRecovery {
@@ -43,8 +43,6 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   // Derive each small nested contract once before composing recovery codecs.
   private given _snapshot_encoder: Encoder[O.Snapshot] = deriveEncoder
   private given _snapshot_decoder: Decoder[O.Snapshot] = deriveDecoder
-  private given _input_encoder: Encoder[K.Input] = deriveEncoder
-  private given _input_decoder: Decoder[K.Input] = deriveDecoder
   private given _dirty_path_encoder: Encoder[G.DirtyPath] = deriveEncoder
   private given _dirty_path_decoder: Decoder[G.DirtyPath] = deriveDecoder
   private given _commit_encoder: Encoder[G.Commit] = deriveEncoder
@@ -70,9 +68,10 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     participant: String, planIdentity: String, planRevision: String, step: String, generation: Long,
     sourceRevision: String, frontierRevision: String, intentIdentity: String, intentRevision: String,
     intentRecordRevision: String, ordinal: Int, attempt: Int, parent: O.Snapshot, candidate: O.Snapshot,
-    reviewEvidence: String, ownedPaths: Vector[String], observation: Observation, execution: Option[Execution]) {
+    reviewEvidence: Option[String], ownedPaths: Vector[String], observation: Observation, execution: Option[Execution],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None) {
     def input: K.Input = K.Input(sessionId, sourceRevision, planIdentity, planRevision, step, generation,
-      parent, candidate, reviewEvidence)
+      parent, candidate, reviewEvidence, admission)
   }
   object RecoveryTarget {
     given Encoder[RecoveryTarget] = Encoder.instance(value => Json.obj(
@@ -96,7 +95,8 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       "reviewEvidence" -> value.reviewEvidence.asJson,
       "ownedPaths" -> value.ownedPaths.asJson,
       "observation" -> value.observation.asJson,
-      "execution" -> value.execution.asJson))
+      "execution" -> value.execution.asJson).mapObject(fields =>
+        value.admission.fold(fields)(a => fields.add("admission", a.asJson))))
     given Decoder[RecoveryTarget] = Decoder.instance(cursor => for {
       sessionid <- cursor.get[String]("sessionId")
       definitionidentity <- cursor.get[String]("definitionIdentity")
@@ -115,13 +115,14 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       attempt <- cursor.get[Int]("attempt")
       parent <- cursor.get[O.Snapshot]("parent")
       candidate <- cursor.get[O.Snapshot]("candidate")
-      reviewevidence <- cursor.get[String]("reviewEvidence")
+      reviewevidence <- cursor.get[Option[String]]("reviewEvidence")
+      admission <- cursor.get[Option[GoalPhaseStepAssessment.Admission]]("admission")
       ownedpaths <- cursor.get[Vector[String]]("ownedPaths")
       observation <- cursor.get[Observation]("observation")
       execution <- cursor.get[Option[Execution]]("execution")
     } yield RecoveryTarget(sessionid, definitionidentity, definitionrevision, participant, planidentity, planrevision,
       step, generation, sourcerevision, frontierrevision, intentidentity, intentrevision, intentrecordrevision,
-      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution))
+      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution, admission))
   }
   final case class Direction(target: RecoveryTarget, choice: String, rationale: String,
     participant: String, reference: ContextReference, priorExecutionEnded: Boolean)
@@ -157,7 +158,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   def validPaths(values: Vector[String]): Boolean = values != null && values.nonEmpty && values.size <= 256 &&
     values.distinct == values && values.forall(path => path != null && GitPath.parseC(path).isSuccess)
   def validExecution(value: Execution): Boolean = value != null && value.input != null &&
-    Vector(value.input.instance, value.input.plan, value.input.planRevision, value.input.step, value.input.reviewEvidence).forall(_exact) &&
+    Vector(value.input.instance, value.input.plan, value.input.planRevision, value.input.step).forall(_exact) &&
+    O.validStepAcceptance(O.ClosedStep(value.input.step, O.Commit("", "", ""), value.input.reviewEvidence, value.input.admission)) &&
+    value.input.admission.forall(_.assessment.candidate == value.input.candidate) &&
     _revision(value.input.sourceRevision) && value.input.generation > 0 &&
     _snapshot(value.input.parent) && _snapshot(value.input.candidate) && value.input.candidate.head == value.input.parent.head &&
     value.ordinal > 0 && value.ordinal <= 64 && value.attempt >= 0 && value.attempt < 256 &&
@@ -169,7 +172,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     value.selectedPaths.distinct == value.selectedPaths && value.selectedPaths.forall(p => p != null && GitPath.parseC(p).isSuccess)
   def validTarget(value: RecoveryTarget): Boolean = value != null &&
     Vector(value.sessionId, value.definitionIdentity, value.definitionRevision, value.participant,
-      value.planIdentity, value.planRevision, value.step, value.reviewEvidence).forall(_exact) &&
+      value.planIdentity, value.planRevision, value.step).forall(_exact) &&
+    O.validStepAcceptance(O.ClosedStep(value.step, O.Commit("", "", ""), value.reviewEvidence, value.admission)) &&
+    value.admission.forall(_.assessment.candidate == value.candidate) &&
     value.generation > 0 && value.ordinal > 0 && value.ordinal <= 64 && value.attempt >= 0 && value.attempt < 255 &&
     Vector(value.sourceRevision, value.frontierRevision, value.intentRecordRevision).forall(_revision) &&
     value.sourceRevision.toLong < value.intentRecordRevision.toLong &&
@@ -349,7 +354,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       session.participantIdentity, input.plan, input.planRevision, input.step, input.generation,
       input.sourceRevision, progress.record.revision.value.toString, reference(input, "intent", pending.payload.attempt).identity,
       "1", pending.record.revision.value.toString, ordinal, pending.payload.attempt, input.parent, input.candidate,
-      input.reviewEvidence, controller.plan.steps(controller.cursor).ownedPaths, observed, progress.execution.map(_.payload))
+      input.reviewEvidence, controller.plan.steps(controller.cursor).ownedPaths, observed, progress.execution.map(_.payload), input.admission)
     _ <- if (validTarget(target)) Consequence.unit else _invalid("actual unresolved closure target is invalid")
   } yield target
 

@@ -446,7 +446,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
             commit.parent shouldBe initial.work.get.originalBase.head
             commit.tree shouldBe reviewed.work.get.candidate.get.tree
             commit.tree shouldBe waiting.validation.get.candidate.tree
-            work.completed.head.review.trim should not be empty
+            work.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
             val scope = json(waiting.authorityContext.get.scope)
             scope.hcursor.downField("parent").focus shouldBe Some(json(work.originalBase.toRecord()))
             scope.hcursor.get[String]("plan").toOption shouldBe Some(work.selectedPlan.identity)

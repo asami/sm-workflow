@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 23, 2026
   */
 final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
@@ -78,7 +78,7 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
       Then("closure uses the actual integrated parent without changing the original Phase base or counts")
       input.parent shouldBe parent
       input.candidate shouldBe candidate
-      input.reviewEvidence shouldBe "integrated-review"
+      input.reviewEvidence shouldBe Some("integrated-review")
       reviewed.base shouldBe _base
       reviewed.generation shouldBe ready.generation
       reviewed.repairs shouldBe 0
@@ -113,7 +113,7 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
         saved.controller.generation shouldBe _controller.generation
         saved.controller.repairs shouldBe _controller.repairs
         saved.controller.ordinaryRepairs shouldBe _controller.ordinaryRepairs
-        saved.controller.reviewEvidence shouldBe Some(input.reviewEvidence)
+        saved.controller.reviewEvidence shouldBe input.reviewEvidence
       }
       Given("that exact pending intent and a pure ordinary commit fact; actual Store completion additionally observes typed Git")
       val identity = from.identity.value + ":ordered-step-closure:" + from.revision.value + ":intent-retry-2"
@@ -184,7 +184,7 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
       val crossedinputs = Vector(input.copy(instance = "foreign"), input.copy(sourceRevision = "99"),
         input.copy(plan = "foreign"), input.copy(planRevision = "2"), input.copy(step = "S2"),
         input.copy(generation = 2), input.copy(parent = input.parent.copy(tree = "d" * 40)),
-        input.copy(candidate = input.candidate.copy(tree = "e" * 40)), input.copy(reviewEvidence = "other-review"))
+        input.copy(candidate = input.candidate.copy(tree = "e" * 40)), input.copy(reviewEvidence = Some("other-review")))
       val crossedrecords = Vector(saved.record.copy(identity = InstanceIdentity("foreign")),
         saved.record.copy(definition = take(RepositorySyncDefinitionBinding.bindC)),
         saved.record.copy(correlation = CorrelationReference("foreign")),
@@ -226,7 +226,7 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
         K.Change("src/one.scala", "100644", "d" * 40, "e" * 40))
       unchanged shouldBe Vector.empty
       input.candidate shouldBe _candidate
-      input.reviewEvidence shouldBe "review-original"
+      input.reviewEvidence shouldBe Some("review-original")
       _controller.checksReceipt shouldBe Some("checks-original")
       _controller.plan.steps(1).ownedPaths shouldBe Vector("docs/next.md")
     }

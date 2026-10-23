@@ -523,7 +523,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewed.work.get.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             if (recording.nonEmpty) {
               _checks(scenario, 2) shouldBe before
               _selectors(scenario, 2)

@@ -227,3 +227,54 @@ acceptance using an adequate existing profile. Model comparison stays with the
 future Phase 9 work, without a Local LLM evaluation prerequisite.
 Current Phase 6.4/12 execution and earlier accepted evidence are not modified.
 See the [adoption handoff](../journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
+
+## Native Step policy and admission (Q1)
+
+A selected ordered Step may carry `actionPolicy` in its saved PLAN. Absence
+retains the original required independent Step review. The Q1 shape is:
+
+```json
+{
+  "identity": "local-code",
+  "kind": "code",
+  "detailedReview": "conditional",
+  "scalaLint": "off",
+  "carLint": "off",
+  "observations": []
+}
+```
+
+`kind` is `code` or `documentation`; `detailedReview` is `conditional` or
+`required`. In Q1 both lint Actions are explicitly `off`; this reports selection,
+not a lint PASS. Q3 supplies the applicable enabled lint and conditional triage
+connections. No live Session's saved policy is upgraded implicitly.
+
+Each observation retains an `identity`, exact `source` identity/revision,
+`question`, `timing` (`immediate` or `release`), `reason`, and optional
+`plannedStep`. A Release deferral in this minimum connection must name an actual
+later Step. Immediate observations and explicitly required detailed review
+continue through the existing independent review route. They cannot take
+reviewless admission. Q3 adds triage for the selected unresolved semantic signal.
+
+The native validation owner computes assessment only from its complete successful
+selected receipts and exact candidate. A code Step requires a typed Compile and
+a typed TestOnly with actual nonzero behavioral test and completed-suite counts.
+It checks the fixed selections before execution and checks actual results again
+before admission. Missing, partial, uncertain or failed evidence keeps its existing
+validation, recovery or FIX route. A semantic worker cannot submit assessment in
+place of those receipts.
+
+An admitted Step carries its actual validation reference, candidate, policy,
+selected checks, branch and reason in a formal `admission`. `review` is absent;
+no empty string, made-up independent PASS or AI CLEAN replaces it. Independent
+commit authority binds the actual admission reference and candidate. Native Git
+prechecks, intent/result recording, recovery and the accepted commit chain retain
+the existing owning boundaries. Historical reviewed Steps keep their review
+reference and existing wire representation.
+
+The runtime appends `StepAssessment` to the existing common Journal after saving
+the native result. The public validation view returns `assessment` and the
+separate `assessmentJournal` recording state; normal Journal read/find supports
+this kind. Unresolved observations remain part of the assessment. A disabled,
+unavailable, conflicting or indeterminate Journal reports its real state without
+replaying validation, inventing an Entry reference or calling an AI recorder.

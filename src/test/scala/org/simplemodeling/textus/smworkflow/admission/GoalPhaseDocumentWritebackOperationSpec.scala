@@ -290,7 +290,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         second.kind shouldBe "ImplementStep"
         second.stepIdentity shouldBe Some("step-2")
         second.completed.size shouldBe 1
-        second.completed.head.review shouldBe accepted.resultReference.identity
+        second.completed.head.review shouldBe Some(accepted.resultReference.identity)
       }
     }
 
@@ -337,7 +337,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         input.selectedPlan.revision shouldBe "2"
         input.originalBase shouldBe originalbase.get
         input.completed.size shouldBe 1
-        input.completed.head.review shouldBe accepted.resultReference.identity
+        input.completed.head.review shouldBe Some(accepted.resultReference.identity)
         progress.map(_.payload.outcome) shouldBe Vector(Some("updated"))
         firstprojection.get.steps.map(_.commit) shouldBe input.completed.map(_.commit)
         firstprojection.get.steps.map(_.review) shouldBe input.completed.map(_.review)

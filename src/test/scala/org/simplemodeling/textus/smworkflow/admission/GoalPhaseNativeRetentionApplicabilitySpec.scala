@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Native saved inputs are scoped facts, not complete host-declaration witnesses.
   * @since   Oct.  8, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 23, 2026
   */
 final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val candidate = O.Snapshot("a" * 40, "b" * 40)
@@ -678,7 +678,7 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
         wire.hcursor.get[String]("schemaVersion").toOption.get shouldBe "sm-workflow.goal-phase-native-step-closure.v3"
         actual.toOption.get.input shouldBe input
         actual.toOption.get.input.candidate shouldBe candidate
-        actual.toOption.get.input.reviewEvidence shouldBe "original-review-result"
+        actual.toOption.get.input.reviewEvidence shouldBe Some("original-review-result")
         payload(wire).asObject.get.keys.toSet should not contain "validationTarget"
         payload(wire).asObject.get.keys.toSet should not contain "reviewTarget"
         payload(wire).asObject.get.keys.toSet should not contain "authority"

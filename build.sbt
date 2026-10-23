@@ -32,7 +32,8 @@ lazy val root = project
     }.evaluated,
     // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (Set("org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",
+      if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseAssessmentCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
         "org.simplemodeling.textus.smworkflow.admission.GoalPhaseNativeCandidateCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
@@ -45,6 +46,7 @@ lazy val root = project
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalKnownFailedPhaseValidationCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalFailedPhaseRepairAdoptionCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalPostCompletionSyncCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalReviewRepairAdoptionCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalWholePhaseCandidateRecoveryCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalProjectBuildCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",

@@ -1103,10 +1103,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       F.sessionC(source.current.identity.value, d, definition, core).flatMap { current =>
         if (current.current.revision.value > cursor.from.revision.value) _advance_session_c(current, core).map { result =>
-          fallback.validation.filter(_.evidenceRecording.nonEmpty).fold(result) { original =>
+          fallback.validation.filter(v => v.evidenceRecording.nonEmpty || v.assessment.nonEmpty).fold(result) { original =>
             val projected = result.validation.filter(v => v.sourceRevision == original.sourceRevision &&
               v.scopeIdentity == original.scopeIdentity).getOrElse(original)
-            result.copy(validation = Some(projected.copy(evidenceRecording = original.evidenceRecording)))
+            result.copy(validation = Some(projected.copy(evidenceRecording = original.evidenceRecording,
+              assessment = original.assessment, assessmentJournal = original.assessmentJournal)))
           }
         }
         else Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(fallback, cursor.findings))

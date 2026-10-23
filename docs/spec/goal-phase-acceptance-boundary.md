@@ -1,5 +1,20 @@
 # GoalPhase effective acceptance boundary
 
+Updated 2026-10-23: a phase-only configured boundary can honestly return
+`decision-needed` with an actual finding and no applicable Step observations.
+It still cannot return `repair` without unsatisfied applicable required
+observations whose ordered details exactly equal the findings. Excluded ideas
+and advisory-only results never become repair evidence. The separate narrow
+[remaining Plan adoption](goal-phase-remaining-plan-adoption.md#narrow-review-decision-continuation-r8r12)
+contract lets an independently admitted actual Human add exactly one fresh
+required `scope=step` condition for newly issued and future unaccepted work,
+bound to the actual saved Review finding, candidate and successful checks.
+Existing raw/effective conditions and their sources remain exact. The old
+review stays `decision-needed`; no unsatisfied historical observation is
+fabricated, excluded condition promoted, or accepted work reassessed. Ordinary
+repair Submit, candidate/check admission and independent review remain owed.
+The source regressions are pending parent-owned execution and review.
+
 This contract defines application quality for a selected GoalPhase task. It
 does not define CNCF execution policy or issue permission, independent review,
 Human consent, artifact, mutation, commit or repository authority. Workflow
