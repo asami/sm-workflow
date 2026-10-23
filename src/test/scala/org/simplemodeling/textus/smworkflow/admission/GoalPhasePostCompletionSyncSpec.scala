@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -20,6 +21,119 @@ final class GoalPhasePostCompletionSyncSpec extends AnyWordSpec with GivenWhenTh
     "Retain the accepted reviewer observation", "This nonblocking observation needs the ordinary finite recording disposition")
   private val _observations = GoalPhaseFindingRecording.Observations(Vector(_observation))
   "GoalPhase completion before best-effort sync" should {
+    "complete real Evidence at the first host observation and retain its payload and native completion on reopen" in {
+      object Evidence extends GoalPhasePostCompletionEvidenceFixture
+      Given("GPSYNC-EVIDENCE-01: accepted real Compile and Test with an explicitly configured managed Evidence archive")
+      val root = Evidence.freshRoot("evidence-local-completion")
+      var identity = ""
+      var completed = Option.empty[InstanceRecord]
+      var retained = Vector.empty[(V.EvidenceReference, V.EvidenceDetailResult)]
+      var terminal = Option.empty[V.GoalPhaseAdvanceResult]
+      Evidence.episode(root, initialize = true) { e =>
+        identity = e.closeDevelopment()._1
+        val released = e.releasedEvidence
+        released should not be empty
+        released.foreach(_.status shouldBe "stored")
+        val before = released.map(value => value.evidence.get -> e.describeEvidence(value.evidence.get))
+        before.foreach { (_, detail) =>
+          detail.status shouldBe "active"
+          detail.lifecycle.get.completedAt shouldBe None
+          detail.read.get.status shouldBe "found"
+          detail.read.get.text.get should not be empty
+        }
+        val checks = Evidence.phaseExecutions(root)
+        val instant = e.native.actor.clock.instant()
+        When("ordinary Advance durably completes the accepted Phase without separate sync authority")
+        val result = e.advance(identity)
+        terminal = Some(result)
+        completed = Some(e.current(identity))
+        retained = before.map((reference, _) => reference -> e.describeEvidence(reference))
+        Then("fresh public Evidence descriptions use the actual Completed reference and first host instant plus thirty days")
+        result.kind shouldBe "Terminal"
+        result.outcome shouldBe Some("completed")
+        result.completion.get.synchronization.state shouldBe "deferred"
+        completed.get.lifecycle shouldBe Lifecycle.Completed
+        retained.zip(before).foreach { (after, original) =>
+          after._2.status shouldBe "completed"
+          after._2.lifecycle.get.status shouldBe "completed"
+          after._2.lifecycle.get.completedAt shouldBe Some(instant.toString)
+          after._2.lifecycle.get.expiresAt shouldBe Some(instant.plus(Duration.ofDays(30)).toString)
+          after._2.lifecycle.get.completionReference shouldBe Some(V.WorkflowArtifactReference(identity,
+            completed.get.revision.value.toString))
+          after._2.read shouldBe original._2.read
+          after._2.representation shouldBe original._2.representation
+        }
+        Evidence.phaseExecutions(root) shouldBe checks
+      }
+      val checks = Evidence.phaseExecutions(root)
+      Evidence.episode(root) { e =>
+        When("ordinary Advance projects the already-Completed Session twice")
+        val first = e.advance(identity)
+        val second = e.advance(identity)
+        Then("the original Evidence marker, payload, native history and execution count remain unchanged with sync separately deferred")
+        first shouldBe terminal.get
+        second shouldBe first
+        retained.foreach((reference, detail) => e.describeEvidence(reference) shouldBe detail)
+        Evidence.sameInstance(e.current(identity), completed.get)
+        Evidence.phaseExecutions(root) shouldBe checks
+      }
+    }
+
+    "notify missed Evidence through ordinary already-Completed Advance without appending history or replaying work" in {
+      object Evidence extends GoalPhasePostCompletionEvidenceFixture
+      Given("GPSYNC-EVIDENCE-01: real Evidence and accepted work produced with the normal optional Evidence policy")
+      val root = Evidence.freshRoot("evidence-missed-notification")
+      var identity = ""
+      var reference = Option.empty[V.EvidenceReference]
+      var original = Option.empty[V.EvidenceDetailResult]
+      var completed = Option.empty[InstanceRecord]
+      Evidence.episode(root, initialize = true) { e =>
+        identity = e.closeDevelopment()._1
+        e.releasedEvidence should not be empty
+        e.releasedEvidence.head.status shouldBe "stored"
+        reference = e.releasedEvidence.head.evidence
+        original = Some(e.describeEvidence(reference.get))
+        original.get.status shouldBe "active"
+        original.get.read.get.status shouldBe "found"
+      }
+      episode(root) { e =>
+        When("the same test-owned Phase normally completes in an episode without the optional Evidence policy")
+        val result = e.advance(identity)
+        Then("native completion succeeds with synchronization still separately deferred")
+        result.kind shouldBe "Terminal"
+        result.completion.get.synchronization.state shouldBe "deferred"
+        completed = Some(e.current(identity))
+        completed.get.lifecycle shouldBe Lifecycle.Completed
+      }
+      val checks = Evidence.phaseExecutions(root)
+      Evidence.episode(root) { e =>
+        val before = e.describeEvidence(reference.get)
+        before shouldBe original.get
+        before.lifecycle.get.completedAt shouldBe None
+        val instant = e.native.actor.clock.instant()
+        When("ordinary public Advance reopens that Completed Session using its original configured Evidence policy")
+        val result = e.advance(identity)
+        val repaired = e.describeEvidence(reference.get)
+        Then("Evidence acquires its first actual observation while native history and accepted execution remain untouched")
+        result.kind shouldBe "Terminal"
+        result.outcome shouldBe Some("completed")
+        result.completion.get.synchronization.state shouldBe "deferred"
+        repaired.status shouldBe "completed"
+        repaired.lifecycle.get.completedAt shouldBe Some(instant.toString)
+        repaired.lifecycle.get.expiresAt shouldBe Some(instant.plus(Duration.ofDays(30)).toString)
+        repaired.lifecycle.get.completionReference shouldBe Some(V.WorkflowArtifactReference(identity,
+          completed.get.revision.value.toString))
+        repaired.read shouldBe before.read
+        repaired.representation shouldBe before.representation
+        Evidence.sameInstance(e.current(identity), completed.get)
+        Evidence.phaseExecutions(root) shouldBe checks
+        e.advance(identity) shouldBe result
+        e.describeEvidence(reference.get) shouldBe repaired
+        Evidence.sameInstance(e.current(identity), completed.get)
+        Evidence.phaseExecutions(root) shouldBe checks
+      }
+    }
+
     "wait for normal recording configuration when the accepted Phase contains a pending observation" in {
       Given("GPSYNC-01,05 / CB-01: accepted real Phase review with a nonblocking observation and no recording policy")
       val root = freshRoot("pending-phase-recording")

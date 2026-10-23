@@ -74,7 +74,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
         _ <- _validate_saved_c(session, value.receipt.next, value.receipt.payload.value)
         completed <- _complete_c(session, value.receipt.next, core, acknowledge)
         observed <- _observe_c(session, d, core, value.receipt.payload.value)
-      } yield Some(_output(completed.identity.value, value.receipt.payload.value, observed._1, observed._2))
+      } yield Some(_output(completed, d, core, value.receipt.payload.value, observed._1, observed._2))
     }
   } yield result
 
@@ -110,7 +110,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
           org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
       _ <- acknowledge("goal-local-completion-recorded")
       completed <- _complete_c(session, saved.receipt.next, core, acknowledge)
-      // Every error above is a real completion failure. Only child follow-up is best effort.
+      // Every error above is a real completion failure. Follow-up observations are best effort.
       failure = if (!payload.startReserved) None else try {
         acknowledge("goal-local-before-child-start").flatMap(_ => _start_child_c(d, core, payload, acknowledge))
           .map(_ => Option.empty[String]).fold(error => Some(error.toString), identity)
@@ -118,7 +118,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
       observed <- _observe_c(session, d, core, payload)
       synchronization = failure.map(error => payload.synchronization.copy(state = "unknown",
         reason = "Child Start or Advance did not return confirmed completion: " + error)).getOrElse(observed._1)
-    } yield _output(completed.identity.value, payload, synchronization, if (failure.isEmpty) observed._2 else None)
+    } yield _output(completed, d, core, payload, synchronization, if (failure.isEmpty) observed._2 else None)
   } yield output
 
   private def _committed(controller: O.State): Boolean = controller.candidate.contains(controller.tipSnapshot) &&
@@ -222,11 +222,20 @@ private[smworkflow] object GoalPhasePostCompletionSync {
       else if (current == next) Consequence.success(Option.empty[HistoryEntry])
       else F.invalid("Local completion differs from its exact saved native frontier")
   } yield result
-  private def _output(identity: String, payload: Payload, synchronization: Synchronization,
-    repository: Option[V.RepositorySyncNativeConvergenceResult]): V.GoalPhaseAdvanceResult =
-    NativeWorkflowOperationOutput.withFindingRecording(NativeWorkflowOperationOutput.goalLocallyComplete(identity,
+  private def _output(completed: InstanceRecord, declaration: F.Declaration, core: ActionCall.Core,
+    payload: Payload, synchronization: Synchronization,
+    repository: Option[V.RepositorySyncNativeConvergenceResult]): V.GoalPhaseAdvanceResult = {
+    val observation = declaration.evidencePolicy.map { policy =>
+      try CommonEvidenceLifecycle.completedC(CommonEvidence.storage(core, policy), declaration.input.repositoryIdentity,
+        declaration.input.phaseIdentity, completed, core.executionContext.clock)
+      catch { case NonFatal(_) => Consequence.stateConflict("Evidence completion observation interrupted") }
+    }
+    val result = NativeWorkflowOperationOutput.withFindingRecording(NativeWorkflowOperationOutput.goalLocallyComplete(completed.identity.value,
       payload.input.plan, payload.input.base, payload.input.completed,
       payload.input.reviewedCandidate.getOrElse(payload.input.candidate), synchronization, repository), payload.findings)
+    if (observation.exists(!_.isSuccess)) result.copy(message = result.message +
+      " Evidence completion/lifecycle observation is unavailable; completed work remains closed.") else result
+  }
   private[admission] def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-local-completion", "1")
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
 }

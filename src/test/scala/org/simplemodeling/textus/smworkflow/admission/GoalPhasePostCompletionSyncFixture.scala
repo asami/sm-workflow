@@ -1,14 +1,17 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import io.circe.Json
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.Request
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.preparation.NativeCompletionPolicyPreparation
 import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -58,8 +61,18 @@ private[admission] trait GoalPhasePostCompletionSyncFixture extends GoalPhaseKno
   }
   final class Episode(val native: RecoveryEpisode) {
     val root: Path = native.root
+    private var _released_evidence = Vector.empty[V.EvidenceRecordingState]
+    def releasedEvidence: Vector[V.EvidenceRecordingState] = _released_evidence
     def current(identity: String): InstanceRecord = native.current(identity)
-    def advance(identity: String): V.GoalPhaseAdvanceResult = native.advance(identity)
+    def advance(identity: String): V.GoalPhaseAdvanceResult = {
+      val result = native.advance(identity)
+      _released_evidence = _released_evidence ++ result.validation.toVector.flatMap(_.evidenceRecording)
+      result
+    }
+    def describeEvidence(reference: V.EvidenceReference): V.EvidenceDetailResult = read_value[V.EvidenceDetailResult](take(
+      native.owner.executeOperationResponseInContext(Request.of(component = native.component.name,
+        service = "EvidenceService", operation = "describeEvidence", properties = List(Property("input",
+          V.EvidenceDescribeInput(reference.identity, Some(reference.revision)).toRecord(), None))), native.actor)))
     def call(operation: String, input: org.goldenport.record.Record) = native.call(operation, List(Property("input", input, None)))
     def describe(identity: String): V.GoalPhaseCompletionPolicyDescriptionResult = native.invoke[AResult](
       A.describeOperation, List(Property("input", V.GoalPhaseCompletionPolicyDescriptionInput(identity).toRecord(), None)))
@@ -102,11 +115,11 @@ private[admission] trait GoalPhasePostCompletionSyncFixture extends GoalPhaseKno
     def closeDevelopment(observations: Option[GoalPhaseFindingRecording.Observations] = None):
       (String, GoalPhaseNativeRepositoryClosure.Input) = {
       val identity = native.start().sessionId
-      native.submitImplementation(native.advance(identity)).accepted shouldBe true
-      val step = native.advance(identity)
+      native.submitImplementation(advance(identity)).accepted shouldBe true
+      val step = advance(identity)
       step.work.get.kind shouldBe "ReviewStep"
       native.acceptStep(step)
-      val phase = native.advance(identity)
+      val phase = advance(identity)
       phase.work.get.kind shouldBe "ReviewPhase"
       identity -> acceptPhase(phase, observations)
     }
@@ -210,5 +223,41 @@ private[admission] trait GoalPhasePostCompletionSyncFixture extends GoalPhaseKno
       read_value[V.RepositorySyncConflictSubmissionResult](response).accepted shouldBe true
       advanceChild(identity)
     }
+  }
+}
+
+/** Explicit normal host configuration for real Test stdout and managed lifetime.
+  * @since   Oct. 23, 2026
+  * @version Oct. 23, 2026
+  * @author  ASAMI, Tomoharu
+  */
+private[admission] trait GoalPhasePostCompletionEvidenceFixture extends GoalPhasePostCompletionSyncFixture {
+  def prepareInstalled(root: Path): Unit = {
+    NativeWorkflowCliFixture.journalReader(root, _recovery_plan)
+    ()
+  }
+  override protected def post_completion_parameters(root: Path): Map[String, String] = {
+    Files.createDirectories(root.resolve("repository"))
+    val archive = Files.createDirectories(root.resolve("archive/logs")).getParent.toRealPath()
+    val collection = EntityCollectionId("smworkflow", "cli", "common_evidence").print
+    val declared = Json.obj("schemaVersion" -> Json.fromString(CommonEvidence.schemaVersion),
+      "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection),
+      "hostIdentity" -> Json.fromString("spec-host"), "workspaceIdentity" -> Json.fromString("evidence-archive"),
+      "directory" -> Json.fromString("logs"))
+    val journal = NativeWorkflowCliFixture.JournalHost(DevelopmentJournal.Policy("workflow",
+      DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", "development_journal")))).values
+    val storage = io.circe.parser.parse(journal("textus.subsystem.storage.plan")).toOption.get.mapObject(fields =>
+      fields.add("records", Json.fromValues(fields("records").get.asArray.get :+ Json.obj(
+        "componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
+        "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection)))))
+    val process = process_plan(root, "Goal", recoveryHost(root).goal).mapObject(fields => fields
+      .add("workspaces", Json.fromValues(fields("workspaces").get.asArray.get :+ Json.obj(
+        "identity" -> Json.fromString("evidence-archive"), "root" -> Json.fromString(archive.toString))))
+      .add("workspaceGrants", Json.fromValues(fields("workspaceGrants").get.asArray.get :+ Json.obj(
+        "componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
+        "workspaceId" -> Json.fromString("evidence-archive"), "access" -> Json.fromString("manage")))))
+    super.post_completion_parameters(root) ++ journal ++ Map(CommonEvidence.declaration.name -> declared.noSpaces,
+      "textus.subsystem.storage.plan" -> storage.noSpaces,
+      "textus.subsystem.process-execution.plan" -> process.noSpaces)
   }
 }

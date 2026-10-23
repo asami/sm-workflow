@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import io.circe.parser.parse
 import java.nio.file.{Files, Path}
+import java.time.{Duration, Instant}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.convert.ValueReader
@@ -71,6 +72,9 @@ final class NativeGoalPostCompletionSyncCliSpec extends AnyWordSpec with GivenWh
     def goal(operation: String, input: RecordPresentable): Invocation =
       call("GoalPhaseService", operation, Vector("--input", _json(input)))
     def advance(): Invocation = call("GoalPhaseService", "advanceGoalPhase", Vector("--sessionId", identity))
+    def describeEvidence(reference: V.EvidenceReference): V.EvidenceDetailResult =
+      call("EvidenceService", "describeEvidence", Vector("--input",
+        _json(V.EvidenceDescribeInput(reference.identity, Some(reference.revision))))).business[V.EvidenceDetailResult]
     private def _file(name: String, value: RecordPresentable): String = {
       val path = Files.createTempDirectory(root, name + "-").resolve("input.json")
       Files.writeString(path, _json(value))
@@ -96,6 +100,60 @@ final class NativeGoalPostCompletionSyncCliSpec extends AnyWordSpec with GivenWh
   }
 
   "Installed GoalPhase completion and policy preparation" should {
+    "retain installed Evidence lifetime on fresh completion and later already-Completed projection" in {
+      object Evidence extends GoalPhasePostCompletionEvidenceFixture
+      Given("GPSYNC-EVIDENCE-01: an installed runtime and a new test-owned Phase with real Test stdout in the managed Evidence archive")
+      val executable = _required("smworkflow.spec.installedCommand")
+      val installations = _required("smworkflow.spec.runtimeRoot")
+      Files.isExecutable(executable) shouldBe true
+      val root = Evidence.freshRoot("installed-evidence-lifetime")
+      var identity = ""
+      var reference = Option.empty[V.EvidenceReference]
+      var original = Option.empty[V.EvidenceDetailResult]
+      var completed = Option.empty[InstanceRecord]
+      Evidence.episode(root, initialize = true, componentInstance = "default") { e =>
+        identity = e.closeDevelopment()._1
+        e.releasedEvidence should not be empty
+        e.releasedEvidence.head.status shouldBe "stored"
+        reference = e.releasedEvidence.head.evidence
+        original = Some(e.describeEvidence(reference.get))
+        original.get.status shouldBe "active"
+        original.get.read.get.status shouldBe "found"
+        original.get.read.get.text.get should not be empty
+      }
+      val checks = Evidence.phaseExecutions(root)
+      Evidence.prepareInstalled(root)
+      val cli = new Cli(root, executable, installations, identity)
+      When("the normal installed Advance completes the Phase and a new installed EvidenceService call describes the real stdout")
+      val terminal = cli.advance().business[V.GoalPhaseAdvanceResult]
+      val detail = cli.describeEvidence(reference.get)
+      Evidence.episode(root, componentInstance = "default") { e => completed = Some(e.current(identity)) }
+      Then("the installed result keeps sync deferred while Evidence refers to the actual Completed revision and preserves its payload")
+      terminal.kind shouldBe "Terminal"
+      terminal.outcome shouldBe Some("completed")
+      terminal.completion.get.synchronization.state shouldBe "deferred"
+      completed.get.lifecycle shouldBe Lifecycle.Completed
+      detail.status shouldBe "completed"
+      detail.lifecycle.get.status shouldBe "completed"
+      detail.lifecycle.get.completedAt should not be empty
+      val instant = Instant.parse(detail.lifecycle.get.completedAt.get)
+      detail.lifecycle.get.expiresAt shouldBe Some(instant.plus(Duration.ofDays(30)).toString)
+      detail.lifecycle.get.completionReference shouldBe Some(V.WorkflowArtifactReference(identity,
+        completed.get.revision.value.toString))
+      detail.read shouldBe original.get.read
+      detail.representation shouldBe original.get.representation
+      Evidence.phaseExecutions(root) shouldBe checks
+      Evidence.prepareInstalled(root)
+      When("later installed commands project the already-Completed Session and freshly describe Evidence again")
+      val reopened = cli.advance().business[V.GoalPhaseAdvanceResult]
+      val retained = cli.describeEvidence(reference.get)
+      Then("the first lifetime marker and actual native history survive without checks, work or synchronization replay")
+      reopened shouldBe terminal
+      retained shouldBe detail
+      Evidence.episode(root, componentInstance = "default") { e => Evidence.sameInstance(e.current(identity), completed.get) }
+      Evidence.phaseExecutions(root) shouldBe checks
+    }
+
     "display completed Phase and deferred sync while preserving unrelated bytes and accepted checks" in {
       Given("GPSYNC-01,02,08: required absolute installed command and installations plus an explicitly local-policy fixture Start")
       val executable = _required("smworkflow.spec.installedCommand")
