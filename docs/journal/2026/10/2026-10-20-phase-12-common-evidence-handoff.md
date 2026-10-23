@@ -77,3 +77,49 @@ JournalとEvidenceは別の正本だが、6.4専用の別writer/storeは作ら�
 [producer delivery](2026-10-20-phase-12-producer-delivery.md)を参照する。
 上記の初回未実施記録は履歴として保持する。6.4の実Session採用・E2〜E4受入れ、
 Phase 12全体の最終ローカルclosureは、この先行配備とは区別する。
+
+## Consumer側の先行準備記録（履歴を保持）
+
+以下はproducer受領前の2026-10-20時点の準備と制約を記録した履歴である。
+現在のproducer配備・API・Phase 12完了状況は上記の引渡し資料を参照し、
+この過去記録の未受領・未提供という観測で取り消さない。consumerの実Session状態は
+Phase 6.4の現在の実行記録を参照する。
+
+## Consumer採用準備・producer所有範囲の受領 — 2026-10-20
+
+継続所有者は[consumer採用準備記録](2026-10-20-phase-6.4-phase12-consumer-preparation.md)に、
+E2接続条件、host設定の既存／未受領の区別、producer結果の再利用範囲、E3/E4運用要求をまとめた。
+これは文書方針の再承認要求ではなく、採用済み方針を実接続するための準備である。
+Phase 12の公開API名・設定キー・配備結果はまだ受領しておらず、仮の名前で呼び出さない。
+
+producerが所有すると伝達された範囲は、main checkoutの共通Evidence model/store/Service、
+DevelopmentJournalのEvidence保存観測variant、GoalPhaseNativeValidationの完了Testログproducer、
+host declarationとCML生成型である。consumerは同時編集・生成・専用サービスの再実装をしない。
+producerは6.4 Session/Plan/Human/E1を操作せず、consumerだけが既存Sessionの操作所有者を保つ。
+
+最小受領条件は、実API／型と結果の公開契約、対象Test出力とrelease点、stable source/output関係、
+実保存→Journal→別プロセスreadの結果、通常artifact配備情報、必要なcanonical目的／collection／
+grant／File binding／親ディレクトリ準備と制限である。既存Journalの設定・成果は再利用し、
+host.evidenceの権限証拠設定をpayload Evidence用に流用しない。E2では本当に必要なActionの
+完了ログを使い、E1成功Compileや記録だけのテストを再実行しない。storage／Journal／test／
+availabilityは分離し、producer検証は元の対象・結果の範囲でのみ再利用する。
+
+現行runtimeには採用手続の制約が残る。現在の保存済み境界はordered-human:26、
+OperationはsubmitGoalPhaseOrderedDecision、型はGoalPhaseOrderedDecisionAnswerであり、
+旧依存提案の4択に文書handoffや新Planを代入できない。独立した正規host判断で旧提案を
+処理しても、E2再発行時のPlanは元のままである。E1受入れ後のUsage Contract本文は固定され、
+現行Plan改訂は現在Stepに限定される。文書Sourceがある場合、他Stepのchecklist受入文言も
+その改訂では変更できないため、今回のE3/E4文言変更を一括captureする制約がある。
+具体的なguard箇所と必要な将来作業への採用意味はconsumer記録に列挙した。
+
+runtime所有者には、旧質問とE1の歴史的受入れを保持し、残るE2/E3/E4に採用済みの
+自動Evidence方針を適用できる正規の同一Session経路を確認・提供してもらう。
+新Operation／migrationが既にあるとは扱わず、live 6.4 Sessionでの試験やguard回避はしない。
+この追記ではHuman回答、Start/Submit/Advance、host設定変更、実接続・テスト・配備をしていない。
+P64全18項目のID／チェック状態、6.3/6.5、既存実装・検証結果は保持した。
+
+準備記録の作成後、既存の人間の引継ぎ許可に基づき、sm-workflow開発
+（01a13249-14e0-7470-8144-f9af8145cec6）へ上記文書の場所、consumer要求と採用制約を送信した。
+送信ツールは対象threadIdを返した。これはhandoffの送信記録であり、producer完了・配備や
+正規採用経路の提供・6.4接続成功を表さない。初期作成時点の「送信していない」という記述は
+初期文書編集の実施範囲として保持する。

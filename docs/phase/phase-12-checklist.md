@@ -1,6 +1,7 @@
 # Phase 12 Checklist: Common Evidence
 
 status=closed
+phase=[Phase 12](phase-12.md)
 Current status: closed
 Owner: sm-workflow
 Update rule: check P12-09 only when Phase review, integrated full validation and local release prerequisites have passed.

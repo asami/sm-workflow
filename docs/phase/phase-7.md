@@ -16,7 +16,19 @@ and explicitly selected. Other owned delivery/validation obligations remain.
 
 Status: planned
 Planned: 2026-10-04
-Depends on: Phase 1, Phase 5, Phase 6.3, Phase 6.4
+Depends on: Phase 1, Phase 5, Phase 6.3, Phase 6.4, Phase 6.5
+
+## Workflow-optimization predecessor — 2026-10-20
+
+[Phase 6.5](phase-6.5.md) now follows 6.4 and precedes this Phase. Consume its
+accepted conditional Action policy, ordinary reviewless Step admission and
+Step/Release FIX alongside 6.4 evidence storage. PLAN selects semantic-review
+Steps when needed; Release retains integrated business/meaning review. CBD
+remains OFF pending Phase 10; observed convergence extensions remain in Phase 9.
+The existing A -> minimum C -> remaining B/C -> D implementation order, work IDs
+and acceptance remain unchanged. Earlier ordinary Step-review references describe
+the producer history, not a new mandatory per-Step review after 6.5 adoption.
+See the [handoff](../journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
 
 ## Evidence-storage predecessor — 2026-10-13
 

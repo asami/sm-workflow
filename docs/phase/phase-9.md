@@ -42,6 +42,13 @@ Phase 9 entry or completion gates. Deliver and verify routing with available
 admitted providers/profiles, including hosted providers; no local adapter,
 installation or local-model performance result is required.
 
+Phase 6.5's three-workflow optimization excludes LLM evaluation and model
+comparison. It may adopt Luna through an existing supported configuration, but
+may also complete using an adequate existing profile without Luna success.
+Future comparative model work, if separately selected, belongs with this Phase's
+provider-routing work; it is not a new mandatory benchmark or Local LLM gate.
+Reuse ordinary retained task outcomes before requesting additional evaluation.
+
 Phase 9 also turns the minimum Acceptance Boundary contract established in Phase 6 into the governing convergence boundary. Validation or Review work outside the Effective Acceptance Boundary is not evidence that the provider is failing to converge. sm-workflow must distinguish genuine inability to satisfy required quality from provider-generated assurance work that should not have been undertaken.
 
 ## Use-case-first planning and review (2026-10-11)
