@@ -1,5 +1,24 @@
 # sm-workflow incremental-use roadmap
 
+Next-development priority adopted 2026-10-23: complete GoalPhase first, then
+attempt RepositorySync on a best-effort basis. See the
+[C1-C3 delivery plan and GPSYNC checklist](../notes/goal-phase-post-completion-sync-plan.md),
+[planned specification](../spec/goal-phase-post-completion-sync.md), and
+[English handoff](../journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md).
+Deliver this bounded correction before Phase 6.6 diagnosis work at the next
+coherent boundary. Sync failure/deferral preserves Phase completion and unrelated
+dirty work; it does not replay accepted checks/review. This is separate from
+Phase 6.6 and does not add gates to ongoing 6.4/6.5. The prior 17-file dirty-sync
+proposal is not a prerequisite; start with completion plus safe sync deferral.
+The subsequent Human-confirmed continuation amendment adds one combined question
+for moved HEAD/uncommitted changes; acceptance continues the same Session without
+repeated dirty/HEAD gates. C2 includes confirmed Equal/LocalAhead synchronization
+with dirty work preserved (GPSYNC-09..12); general dirty merge remains later work.
+The initial GPSYNC-01..08 producer boundary is verified and locally published;
+the CNCF Phase 116 owner has adopted it and completed that same Session.
+GPSYNC-09..12, the amended parts of the earlier criteria and shared-skill
+promotion remain pending. This roadmap update performs no live Session operation.
+
 Incremental SBT diagnosis adopted 2026-10-23: [Phase 6.6](phase-6.6.md) and its
 [P66 checklist](phase-6.6-checklist.md) own the
 [D1–D4 plan](../notes/incremental-sbt-failure-diagnosis-plan.md), prioritizing one

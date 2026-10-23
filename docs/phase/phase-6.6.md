@@ -9,6 +9,15 @@ Specification: [incremental SBT failure diagnosis](../spec/incremental-sbt-failu
 Design: [diagnostic interaction](../design/incremental-sbt-failure-diagnosis.md)
 Delivery detail: [D1 through D4](../notes/incremental-sbt-failure-diagnosis-plan.md)
 
+## Next-delivery scheduling clarification — 2026-10-23
+
+The [completion-first, best-effort sync correction](../notes/goal-phase-post-completion-sync-plan.md)
+is the next independent delivery before D1-D4. It has its own GPSYNC checklist;
+it does not expand P66 acceptance or require ongoing 6.4/6.5 to redo accepted work.
+Deliver the local completion/safe-deferral route first rather than requiring
+general dirty-worktree synchronization. Phase 6.6 remains planned and retains
+its diagnostic scope and existing predecessor/adoption policy.
+
 ## Goal
 
 Deliver one normal workflow path from an actual SBT failure to structured
