@@ -10,7 +10,7 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -72,7 +72,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       _ <- if (repository.review.nonEmpty && repository.humanConflict.nonEmpty && repository.conflicts.semanticPaths.nonEmpty)
         Consequence.unit else Consequence.configurationInvalid("Three-workflow RepositorySync requires paired semantic conflict, independent review and Human handling")
       goal <- GoalPhaseNativeServiceAssembly.bindRuntimeC(creation, host.goal)
-      sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration,
+      sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
         convergence = Some(repository.convergence), humanConflict = repository.humanConflict)

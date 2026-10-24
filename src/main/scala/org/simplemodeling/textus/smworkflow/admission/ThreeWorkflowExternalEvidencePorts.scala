@@ -312,11 +312,13 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
     Consequence.success(_review_target(core, "repository-review", repositoryReviewTarget(input), submitted,
       repositoryReviewVerdict(submitted.result.value)))
   }
-  def repositoryReviewTarget(input: RepositorySyncNativeMergeReview.Request): Json =
-    Json.obj("instance" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
+  def repositoryReviewTarget(input: RepositorySyncNativeMergeReview.Request): Json = {
+    val fields = Json.obj("instance" -> Json.fromString(input.instanceIdentity), "validatedRevision" -> Json.fromString(input.validatedRevision),
       "localTip" -> Json.fromString(input.localTip), "remoteTip" -> Json.fromString(input.remoteTip), "indexTree" -> Json.fromString(input.indexTree),
       "changedPaths" -> input.changedPaths.asJson, "validationMode" -> Json.fromString(input.validationMode), "selectedChecks" -> input.selectedChecks.asJson,
       "checks" -> Json.fromValues(input.checks.map(_check_target)))
+    if (input.judgmentMode == "triage") fields.mapObject(_.add("judgmentMode", Json.fromString("triage"))) else fields
+  }
   private def _check_target(receipt: RepositorySyncNativeMergeValidation.Receipt): Json = {
     val fields = Json.obj("identity" -> Json.fromString(receipt.identity),
       "termination" -> Json.fromString(receipt.termination), "exitCode" -> receipt.exitCode.asJson)

@@ -26,7 +26,7 @@ object NativeReviewPreparation {
     "effectiveAcceptance" -> "effective_acceptance", "validationMetadata" -> "validation_metadata", "purposeRepair" -> "purpose_repair")
   private val _repository_names = Vector("validatedRevision" -> "validated_revision", "localTip" -> "local_tip",
     "remoteTip" -> "remote_tip", "indexTree" -> "index_tree", "validationMode" -> "validation_mode",
-    "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks")
+    "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks", "judgmentMode" -> "judgment_mode")
   private val _check_names = Vector("exitCode" -> "exit_code")
   private val _selection_names = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites",
     "testsRun" -> "tests_run")

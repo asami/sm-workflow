@@ -7,7 +7,7 @@ import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
-import org.goldenport.cncf.workflow.{WorkflowProtocolV1, WorkflowResultJsonV1}
+import org.goldenport.cncf.workflow.{ContextReference, WorkflowProtocolV1, WorkflowResultJsonV1}
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncNativeMergeValidation as V
 import WorkflowManagedProcessExecution as E
@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -25,7 +25,18 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   }
   final case class Request(instanceIdentity: String, validatedRevision: String, localTip: String, remoteTip: String,
     indexTree: String, changedPaths: Vector[String], localDiff: String, remoteDiff: String,
-    validationMode: String, validationReason: String, selectedChecks: Vector[String], checks: Vector[V.Receipt])
+    validationMode: String, validationReason: String, selectedChecks: Vector[String], checks: Vector[V.Receipt],
+    judgmentMode: String = "detailed-review", uncertainties: Vector[String] = Vector.empty,
+    priorReview: Option[PriorReview] = None)
+  final case class RepairContext(reference: ContextReference, indexTree: String, findings: Vector[Finding],
+    rationale: String, affectedPaths: Vector[String])
+  final case class PriorReview(context: RepairContext, repairDelta: String)
+  given Encoder[ContextReference] = deriveEncoder
+  given Decoder[ContextReference] = deriveDecoder
+  given Encoder[RepairContext] = deriveEncoder
+  given Decoder[RepairContext] = deriveDecoder
+  given Encoder[PriorReview] = deriveEncoder
+  given Decoder[PriorReview] = deriveDecoder
   final case class Finding(identity: String, affectedPaths: Vector[String], rationale: String)
   final case class Result(decision: String, rationale: String, findings: Vector[Finding])
   trait EvidencePort {
@@ -40,10 +51,18 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   }
 
   def captureC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
-    _ <- policy.validateC
-    _ <- if (source.payload.stage == "MergeValidated" && source.payload.validation.nonEmpty &&
-        source.payload.indexTree.nonEmpty && source.payload.mergeHead.nonEmpty) Consequence.unit
+    _ <- if (source.payload.stage == "MergeValidated") Consequence.unit
       else invalid("review has no actual native selected validation")
+    request <- captureCandidateC(store, source, policy)
+  } yield request
+
+  /** The same actual candidate facts also bound check-origin repair. Capturing
+    * a failed batch neither issues a review nor manufactures review findings. */
+  private[admission] def captureCandidateC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
+    _ <- policy.validateC
+    _ <- if (source.payload.validation.nonEmpty &&
+        source.payload.indexTree.nonEmpty && source.payload.mergeHead.nonEmpty) Consequence.unit
+      else invalid("candidate has no actual native selected validation")
     _ <- V.preconditionsC(store, source)
     state = source.payload.validation.get
     localDiff <- diffC(store.core, source.payload.before.head, policy.maximumDiffBytes)
@@ -53,9 +72,14 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     paths = (localPaths ++ remotePaths).distinct.sorted
     _ <- if (paths.size <= policy.maximumPaths) Consequence.unit else invalid("full merge path coverage exceeds policy; Human handling required")
     _ <- V.preconditionsC(store, source)
+    prior <- source.payload.repairContext match {
+      case None => Consequence.success(None)
+      case Some(context) => diffC(store.core, context.indexTree, policy.maximumDiffBytes)
+        .map(delta => Some(PriorReview(context, delta)))
+    }
     input = Request(store.identity, source.record.revision.value.toString, source.payload.before.head,
       source.payload.mergeHead.get, source.payload.indexTree.get, paths, localDiff, remoteDiff,
-      state.mode, state.reason, state.selected.map(_.identity), state.receipts)
+      state.mode, state.reason, state.selected.map(_.identity), state.receipts, priorReview = prior)
   } yield input
 
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
@@ -64,7 +88,8 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
           f.affectedPaths.forall(input.changedPaths.contains) && bounded(f.rationale, 16384) && f.rationale.trim.nonEmpty) &&
         result.findings.map(_.identity).distinct.size == result.findings.size &&
-        Set("accept", "repair", "decision-needed", "reject")(result.decision) &&
+        (if (input.judgmentMode == "triage") Set("clean", "suspicious", "decline")(result.decision) && result.findings.isEmpty
+          else input.judgmentMode == "detailed-review" && Set("accept", "repair", "decision-needed", "reject")(result.decision)) &&
         (result.decision != "accept" || result.findings.isEmpty) && (result.decision != "repair" || result.findings.nonEmpty)) Consequence.unit
       else invalid("review result has unknown decision, missing rationale or out-of-coverage findings")
   } yield ()
@@ -81,8 +106,15 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     paths <- E.executeGitC(core, GitOperation.PendingPaths(oid)).flatMap(_.valueC)
   } yield paths.map(_.value)
 
-  private given Encoder[Request] = deriveEncoder
-  private given Decoder[Request] = deriveDecoder
+  private given Encoder[Request] = deriveEncoder[Request].mapJson(_.mapObject(fields =>
+    (if (fields("judgmentMode").contains(Json.fromString("detailed-review"))) fields.remove("judgmentMode") else fields)
+      .filter { case ("uncertainties", value) => !value.asArray.exists(_.isEmpty);
+        case ("priorReview", value) => !value.isNull; case _ => true }))
+  private val requestDecoder: Decoder[Request] = deriveDecoder
+  private given Decoder[Request] = Decoder.instance(c => requestDecoder.decodeJson(c.value.mapObject(fields => {
+    val mode = if (fields("judgmentMode").isEmpty) fields.add("judgmentMode", Json.fromString("detailed-review")) else fields
+    if (mode("uncertainties").isEmpty) mode.add("uncertainties", Json.arr()) else mode
+  })))
   private given Encoder[Finding] = deriveEncoder
   private given Decoder[Finding] = deriveDecoder
   private given Encoder[Result] = deriveEncoder

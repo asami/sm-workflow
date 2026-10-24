@@ -24,7 +24,7 @@ import RepositorySyncNativeProgressStore as N
   * the owning conflict port, not a caller-provided snapshot or workflow stage.
   * Answers are native atomic completion; only a subsequent advance runs effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 private[smworkflow] object RepositorySyncHumanConflict {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositoryConflictDecision")
@@ -71,7 +71,9 @@ private[smworkflow] object RepositorySyncHumanConflict {
   final class Port(declaration: F.Declaration, definition: DefinitionBinding, policy: I.Policy,
     installation: Installation, sourceReader: (String, ActionCall.Core) => Consequence[Source],
     acknowledgement: String => Consequence[Unit], sourceValidation: Option[RepositorySyncNativeMergeValidation.Policy],
-    sourceReview: Option[RepositorySyncNativeMergeReviewContinuation.Port]) {
+    sourceReview: Option[RepositorySyncNativeMergeReviewContinuation.Port],
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None) {
     def advanceC(source: Source): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
       projected <- prepareC(source)
       questions <- source.session.storage.bindDecisionC(completionOperation, inputCodec)
@@ -94,7 +96,7 @@ private[smworkflow] object RepositorySyncHumanConflict {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store,
               plan.question.current.asInstanceOf[WorkflowContinuation.Decision[Input]].request.input.get.value.conflict, proposal(answer),
               source.current, next, policy)
-            result <- RepositorySyncNativeMergeValidation.waitC(source.store, pending, sourceValidation, sourceReview)
+            result <- RepositorySyncNativeProgression.pendingMergeC(source.store, pending, sourceValidation, sourceReview, convergence, "", repair)
           } yield result else waitC(next, value.completion.result)
         } yield wire
       }

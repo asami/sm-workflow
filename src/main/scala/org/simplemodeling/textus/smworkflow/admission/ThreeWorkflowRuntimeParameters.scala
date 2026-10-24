@@ -96,7 +96,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       target <- targetC(settings.target)
       evidence <- NativeExternalEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
-        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications)
+        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications, journalpolicy)
       ports = new ThreeWorkflowExternalEvidencePorts(evidence)
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,

@@ -93,3 +93,51 @@ do not prove all historical address resolution. Removal must continue through
 the remaining producer/consumer/storage/read/spec paths, not be deferred to
 Phase 6 or declared complete by these pending cases. Provider/Workflow result
 connection, validation/FIX/cost integration and assembled review remain open.
+
+
+## Phase 6.5 selected native merge assessment
+
+An absent assessment policy retains the legacy required review route. An explicit
+`validation.assessment` selects `detailedReview` (required/conditional), Scala lint
+(required/not-applicable), CAR lint (off/not-applicable), a meaningful lint reason,
+relative contract paths and a bounded repair limit (default 3). Actual Scala paths
+cannot claim lint non-applicability; required lint needs a selected successful
+native fix-check receipt. Unsupported semantic scanners remain absent.
+
+The actual pending-index paths relative to both genuine parents select overlap
+and declared contract uncertainty. Complete actual selected checks with neither
+uncertainty nor required review enter `MergeAdmitted`, distinct from
+`ReviewAccepted` and non-merge `IntegrationValidated`. The native commit and
+non-force convergence still independently require their ordinary host grants.
+An actual merge commit retains both parents; no AI CLEAN or waiver is fabricated.
+
+Residual uncertainty issues the existing independent merge interaction in triage
+mode. Its closed decisions are clean/suspicious/decline, with no review findings.
+Actual clean completion admits the merge; suspicious and semantic decline issue
+one detailed review through the same paired service without replaying checks.
+Required policy and conflict-resolution provenance directly select detailed review.
+Provider/transport failure does not count as semantic decline.
+
+Only an actual recorded selected nonzero exited check selects
+`ValidationRepairRequired`. It issues the existing bounded repair interaction with
+`validationFailure`, the original check output and no fabricated review findings.
+Unknown/unrecorded effects retain Wait without replay or repair issuance. The
+existing fixed file materialization and staging preserve the failed batch and
+repair history, then validate the repaired candidate. Repair limits are cumulative
+within this merge; exhaustion requires actual Human handling without a reset.
+Review-origin repairs retain their actual original report, findings, affected paths
+and previous index tree. The next independent review receives their bounded
+actual repair delta and reuses applicable unaffected judgments as context.
+That outstanding detailed-review obligation survives conditional assessment and
+changed uncertainty signals. Fresh affected checks return directly to detailed
+re-review; neither another triage CLEAN nor signal-free admission resolves the
+original finding before actual independent review acceptance.
+
+Actual selected routing and attributable triage escalation are immutable
+`MergeAssessment` observations in the common Journal. Read/find use the existing
+Journal operations; optional business `journalRecording` distinguishes recorded,
+alreadyRecorded, disabled, conflict, unavailable and indeterminate. A Journal
+failure neither accepts the merge nor retries or rolls back a Git/SBT effect.
+The fixture-owned Phase65RepositoryAdmissionSpec exercises the actual native
+routes; fixture judgments and grants establish no real external Human consent,
+provider invocation or installed CLI qualification.

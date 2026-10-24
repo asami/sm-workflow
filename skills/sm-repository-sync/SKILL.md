@@ -184,9 +184,7 @@ view; never query another operation merely to fill display fields.
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
 An already-issued file-only recording retains its exact captured destinations,
-assigned edits and typed completion contract. RepositorySync and SplitPhase gain
-no automatic Journal producer in this Phase: consume only real supplied fields;
-do not invent a recording duty. Existing caller controls, consent, effect authority
+assigned edits and typed completion contract. Consume the actual optional RepositorySync merge-assessment Journal status and source reference. The runtime records actual selected routing in the common Journal; the skill adds no recording duty or alternate ledger. Existing caller controls, consent, effect authority
 and the first-attempt escalated direct installed CLI rule still apply.
 
 Use ordinary provided `JournalService.findJournalEntries` or
@@ -255,6 +253,22 @@ merge boundary or resolve only the explicitly issued conflict frontier.
 Explain material choices, uncertainty and unresolved conflicts in the declared
 result. A required human choice stays unresolved; do not turn an AI judgment
 into human approval or commit/push authority.
+
+For an issued merge judgment with `judgmentMode=triage`, assess only its captured
+`uncertainties` against the actual candidate and selected checks. Return the
+existing typed merge result with exactly `clean`, `suspicious` or `decline`,
+meaningful rationale and an empty `findings` array. CLEAN resolves only those
+assigned semantic uncertainties; it grants no Git authority. Semantic decline
+asks for detailed review. Execution/provider failure is not semantic decline:
+return its honest operational outcome to the caller without semantic Submit.
+An absent judgmentMode retains the existing detailed-review contract; an
+explicit required review or AI-authored conflict resolution is never waived.
+
+When `priorReview` is supplied, retain its genuine source/result reference,
+original findings and applicable unaffected judgments. Review the actual
+`repairDelta` and affected meaning against the captured parents and current
+checks. Do not describe retained conclusions as new PASS results. A new
+candidate still requires its selected checks and genuine independent judgment.
 
 Workflow handles fetch, deterministic merge where possible, staging, validation,
 commit, non-force push, verification fetch, concurrency and retained effect

@@ -1887,6 +1887,7 @@ OperationResult
 | convergence | RepositorySyncNativeConvergenceResult | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | repair | RepositorySyncNativeMergeRepairRequest | ? |
+| journalRecording | JournalRecordingState | ? |
 
 ## RepositorySyncConflictBlob
 
@@ -2076,6 +2077,7 @@ OperationResult
 | review | RepositorySyncNativeMergeReviewRequest | 1 |
 | findings | RepositorySyncNativeMergeReviewFinding | * |
 | files | RepositorySyncNativeMergeRepairFile | * |
+| validationFailure | string | ? |
 
 ## RepositorySyncNativeMergeRepairResult
 
@@ -4147,9 +4149,17 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### MergeValidated
 
+##### MergeAdmitted
+
+##### MergeTriageClean
+
+##### MergeReviewRequired
+
 ##### ReviewAccepted
 
 ##### ReviewRepairRequired
+
+##### ValidationRepairRequired
 
 ##### RepairProposalAdmitted
 
@@ -4280,6 +4290,21 @@ when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, nativeRepa
 state = ReviewAccepted
 when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
+##### merge-admitted
+
+state = MergeAdmitted
+when = sync.MergeAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### merge-triage-clean
+
+state = MergeTriageClean
+when = sync.MergeTriageClean, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### merge-review-required
+
+state = MergeReviewRequired
+when = sync.MergeReviewRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
 ##### review-repair-required
 
 state = ReviewRepairRequired
@@ -4289,6 +4314,11 @@ when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, nati
 
 state = RepairProposalAdmitted
 when = sync.RepairProposalAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### validation-repair-required
+
+state = ValidationRepairRequired
+when = sync.ValidationRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### repair-decision-required
 
@@ -4645,6 +4675,11 @@ on = native-check-prepared
 
 ##### TRANSITION
 
+to = ValidationRepairRequired
+on = native-validation-repair-required
+
+##### TRANSITION
+
 to = ValidationChecking
 on = native-check-prepared
 
@@ -4712,6 +4747,21 @@ on = human-conflict-cancelled
 
 ##### TRANSITION
 
+to = MergeTriageClean
+on = native-merge-triage-clean
+
+##### TRANSITION
+
+to = MergeReviewRequired
+on = native-merge-review-required
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = native-merge-admitted
+
+##### TRANSITION
+
 to = ReviewAccepted
 on = native-review-accepted
 
@@ -4737,7 +4787,55 @@ on = native-review-rejected
 to = NativeCommitPreparing
 on = native-commit-prepared
 
+#### MergeAdmitted
+
+##### TRANSITION
+
+to = NativeCommitPreparing
+on = native-commit-prepared
+
+#### MergeTriageClean
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = native-merge-admitted
+
+#### MergeReviewRequired
+
+##### TRANSITION
+
+to = ReviewAccepted
+on = native-review-accepted
+
+##### TRANSITION
+
+to = ReviewRepairRequired
+on = native-review-repair-required
+
+##### TRANSITION
+
+to = ReviewDecisionRequired
+on = native-review-decision-required
+
+##### TRANSITION
+
+to = ReviewRejected
+on = native-review-rejected
+
 #### ReviewRepairRequired
+
+##### TRANSITION
+
+to = RepairProposalAdmitted
+on = native-repair-proposal-admitted
+
+##### TRANSITION
+
+to = RepairDecisionRequired
+on = native-repair-decision-required
+
+#### ValidationRepairRequired
 
 ##### TRANSITION
 
@@ -7608,6 +7706,9 @@ GoalPhaseWorkSubmissionResult
 | selectedChecks | string | * |
 | checks | RepositorySyncNativeValidationReceipt | * |
 | reviewContext | WorkflowReviewContext | ? |
+| judgmentMode | string | ? |
+| uncertainties | string | * |
+| priorReview | record | ? |
 
 ## RepositorySyncHumanQuestion
 

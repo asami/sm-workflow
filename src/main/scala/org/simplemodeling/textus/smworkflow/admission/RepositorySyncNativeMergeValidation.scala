@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -35,14 +35,24 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       kind <- WorkflowSbtValidation.checkKind(cursor)
     } yield Check(identity, ordinal, kind))
   }
-  final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check]) {
+  final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check],
+    assessment: Option[RepositorySyncMergeAssessment.Policy] = None) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
         reason.trim.nonEmpty && reason.length <= 4096 && checks != null && checks.size <= 16 &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
           c.kind != null && c.ordinal > 0 && c.ordinal <= 16) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
-        ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty))) Consequence.unit
+        assessment != null &&
+        ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty)))
+      assessment.fold(Consequence.unit)(RepositorySyncMergeAssessment.validateC)
       else N.invalid("pending-merge validation policy is incomplete or contradictory")
+  }
+  object Policy {
+    given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
+      case ("assessment", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Policy] = deriveDecoder
   }
   final case class Receipt(identity: String, termination: String, exitCode: Option[Int], stdout: String, stderr: String,
     sbt: Option[WorkflowSbtValidation.Facts] = None)
@@ -199,6 +209,42 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
   private[admission] def applies(state: State, policy: Policy): Boolean =
     state.mode == policy.mode && state.selected.forall(check => policy.checks.exists(_ == check))
+
+  private[admission] def knownFailure(value: N.Stage, policy: Policy): Boolean =
+    value.payload.stage == "ValidationChecking" && value.payload.validation.exists { state =>
+      val offset = state.receipts.size - 3
+      applies(state, policy) && offset >= 0 && state.selected.lift(offset).exists { check =>
+        val failed = state.receipts.last
+        successful(state.receipts.dropRight(1), merge = true, selected = state.selected) &&
+          failed.identity == check.identity && _receipt_kind(failed, check.kind) &&
+          storedProductOutputValid(failed) && failed.termination == "exited" && failed.exitCode.exists(_ != 0)
+      }
+    }
+
+  /** Read the retained executed prefix only. Incomplete intents, missing results
+    * and uncertain terminations cannot become a known-failure repair source. */
+  private[admission] def retainedFailureC(store: N.Store, pending: N.Stage, policy: Policy,
+    namespace: String): Consequence[Option[N.Stage]] = for {
+    results <- (0 until policy.checks.size + 2).foldLeft(Consequence.success(Vector.empty[N.Stage])) { (prior, index) =>
+      prior.flatMap(values => store.loadC(N.candidateKey(namespace, "validation-result-" + index))
+        .map(found => values ++ found.toVector))
+    }
+    selected = results.lastOption.filter(value => knownFailure(value, policy) && value.payload.validation.exists(state =>
+      state.sourceRevision == pending.record.revision.value.toString && state.receipts.size == results.size))
+  } yield selected
+
+  private[admission] def prepareFailureC(store: N.Store, failed: N.Stage, policy: Policy,
+    namespace: String): Consequence[N.Stage] = for {
+    _ <- if (knownFailure(failed, policy) && policy.assessment.nonEmpty) Consequence.unit
+      else N.invalid("check-origin repair requires an actual known failure and explicitly selected policy")
+    retained <- store.loadC(N.candidateKey(namespace, "validation-repair-required"))
+    selected <- retained match {
+      case Some(saved) if saved.payload == failed.payload.copy(stage = "ValidationRepairRequired") => Consequence.success(saved)
+      case Some(_) => N.invalid("check-origin repair source crosses retained validation")
+      case None => store.saveC(N.candidateKey(namespace, "validation-repair-required"), "native-validation-repair-required",
+        failed.record, failed.payload.copy(stage = "ValidationRepairRequired"))
+    }
+  } yield selected
 
 
   private[admission] def preconditionsC(store: N.Store, pending: N.Stage): Consequence[Unit] = for {

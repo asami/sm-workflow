@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -25,7 +25,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     before: Git.Observed, indexTree: Option[String] = None, checkpoint: Option[String] = None,
     after: Option[Git.Observed] = None, method: Option[String] = None, mergeHead: Option[String] = None,
     validation: Option[RepositorySyncNativeMergeValidation.State] = None,
-    finalTip: Option[String] = None)
+    finalTip: Option[String] = None, assessment: Option[RepositorySyncMergeAssessment.Result] = None,
+    repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -33,7 +34,10 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Encoder[RepositorySyncNativeMergeValidation.State] = Encoder.instance(RepositorySyncNativeMergeValidation.stateCodec.encode)
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
-  private given Encoder[Payload] = deriveEncoder
+  private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
+    case ("assessment" | "repairContext", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[Payload] = deriveDecoder
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "RepositorySyncNativeProgressReceipt"
