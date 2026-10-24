@@ -212,7 +212,11 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
     "E12 preserve a formal Phase failure and admit only one independently bound fresh trial" should afterWord(
       "in spec:goal-phase-validation-recovery, example:E12, rules:R8,R9, phase:6.4") {
       "reconstruct the same history and reject stale crossed missing and multi-check direction" in {
-        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture
+        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture {
+          // Select the known-failed Decision contract at this NEW Session's
+          // Start; a positive allowance instead selects automatic Release FIX.
+          override protected def known_repair_limit: Int = 0
+        }
         val root = Fixture.newKnownRoot("known-failed-operation")
         var identity = ""
         var failed = Option.empty[N.Saved]
@@ -228,6 +232,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           review.work.get.review.get.checks.head.sbt.get.kind shouldBe "compile"
           episode.acceptStep(review)
           episode.advance(identity).kind shouldBe "Wait"
+          Fixture.phaseExecutions(root).size shouldBe 1
           before = Some(episode.current(identity))
           before.get.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
           val description = episode.describe(identity)
@@ -289,7 +294,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           review.work.get.originalBase.head shouldBe target.get.base.head
           review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
           review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
-          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
           episode.current(identity).history.take(directed.get.history.size) shouldBe directed.get.history
           episode.retained(identity, target.get.sourceRevision, "validation").get.payload shouldBe failed.get.payload
           episode.retained(identity, target.get.sourceRevision, "check-recovery-0") shouldBe None
@@ -303,6 +308,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         }
         Given("a separate fresh fixture with two selected whole-Phase checks")
         object Multi extends GoalPhaseKnownFailedPhaseValidationFixture {
+          override protected def known_repair_limit: Int = 0
           override protected def known_phase_checks = Vector("phase-test", "phase-sibling")
         }
         val multiroot = Multi.newKnownRoot("known-multi-refused")
@@ -325,7 +331,9 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
     "E14 preserve three unknown Phase attempts before a real failed fourth attempt and one new trial" should afterWord(
       "in spec:goal-phase-validation-recovery, example:E14, rules:R3,R4,R8,R9, phase:6.4") {
       "bind the latest real failure and require its own independent direction after reopening" in {
-        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture
+        object Fixture extends GoalPhaseKnownFailedPhaseValidationFixture {
+          override protected def known_repair_limit: Int = 0
+        }
         Given("docs/spec/goal-phase-validation-recovery.md R3,R4,R8,R9 E14: a NEW isolated normal Operation fixture")
         val root = Fixture.newKnownRoot("known-failed-three-unknowns-operation")
         var identity = ""
@@ -382,6 +390,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         When("the next ordinary Operation actually executes the fourth selected Phase attempt and retains its failed result")
         Fixture.inKnownEpisode(root) { episode =>
           val waiting = episode.advance(identity)
+          Fixture.phaseExecutions(root).size shouldBe 1
           before = Some(episode.current(identity))
           val description = episode.describe(identity)
           val actual = take(R.targetC(description.target))
@@ -452,7 +461,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
           review.work.get.completed.size shouldBe 1
           review.work.get.completed.head.commit.identity shouldBe closedtip.trim
-          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
           review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
           repeated shouldBe review
           Fixture.phaseExecutions(root).size shouldBe 2

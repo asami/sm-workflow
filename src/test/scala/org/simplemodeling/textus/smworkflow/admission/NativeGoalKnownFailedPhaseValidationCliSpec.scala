@@ -31,9 +31,10 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends GoalPhaseValidationRecoveryOperationFixture {
   protected def known_phase_checks: Vector[String] = Vector("phase-test")
+  protected def known_repair_limit: Int = 2
   override protected def _recovery_plan = O.Plan("known-failed-phase-plan", "1", "phase-2", "sm-workflow",
     Vector(O.Step("step-1", "Complete the selected Compile Step", Vector("value.txt"), Vector.empty, Vector("compile"))),
-    known_phase_checks, repairLimit = 2)
+    known_phase_checks, repairLimit = known_repair_limit)
   override protected def recoveryHost(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = super.recoveryHost(root)
     original.copy(goal = original.goal.copy(
@@ -161,6 +162,9 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
 @DoNotDiscover
 final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseKnownFailedPhaseValidationFixture {
+  // These NEW qualification Sessions exercise known-failed recovery rather
+  // than the distinct automatic Release FIX route selected by a positive limit.
+  override protected def known_repair_limit: Int = 0
   private def _required(property: String): Path = {
     val path = Path.of(sys.props.getOrElse(property, throw new IllegalArgumentException("Missing " + property)))
     require(path.isAbsolute, property + " must be absolute")
@@ -425,7 +429,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.candidate.get.tree shouldBe target.candidate.tree
       fresh.work.get.completed.size shouldBe 1
       fresh.work.get.completed.head.commit.identity shouldBe closedtip.trim
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
@@ -578,7 +582,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
       phaseExecutions(root).size shouldBe 2
       val terminal = freshcall.events.filter(_.hcursor.get[String]("state").contains("terminal"))
       terminal.size shouldBe 1

@@ -6,6 +6,7 @@ lazy val projectIdentityEvidence = settingKey[CozyProjectIdentityEvidence]("Admi
 lazy val skillSourceFiles = taskKey[Seq[(File, String)]]("Exact component-owned semantic skill sources")
 lazy val skillBundle = taskKey[File]("Package the semantic skill sources as a standalone ZIP")
 lazy val checkSkillBundleReproducibility = taskKey[File]("Verify skill ZIP bytes despite source timestamp and ordering changes")
+lazy val prepareTestArtifacts = taskKey[Unit]("Prepare the current runtime, component JAR and reproducible skill distribution for tests")
 lazy val runtimeTestOnly = inputKey[Unit]("Prepare official runtime artifacts and run the selected executable specifications")
 
 lazy val root = project
@@ -22,12 +23,16 @@ lazy val root = project
     resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/repository/maven",
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
 
-    // Explicit runtimeTestOnly and fixed native testOnly selections prepare the
-    // official runtime and current CAR. Ordinary test keeps its declared scope.
-    runtimeTestOnly := Def.inputTaskDyn {
-      val selection = (sbt.complete.DefaultParsers.Space ~> sbt.complete.DefaultParsers.any.*).parsed.mkString
+    // Both ordinary Test and fixed TestOnly selections consume fresh artifacts.
+    // Preparation has no Test dependency, so the native entry tasks stay acyclic.
+    prepareTestArtifacts := {
       cozyPrepareRuntime.value
       (Compile / packageBin).value
+      checkSkillBundleReproducibility.value
+      ()
+    },
+    runtimeTestOnly := Def.inputTaskDyn {
+      val selection = (sbt.complete.DefaultParsers.Space ~> sbt.complete.DefaultParsers.any.*).parsed.mkString
       (Test / testOnly).toTask(" " + selection)
     }.evaluated,
     // Lint only handwritten production Scala. Test and managed/generated code
@@ -36,7 +41,8 @@ lazy val root = project
     Compile / scalafix / managedSources := Nil,
     // Fixed native TestOnly selections run the real CLI against the ordinary
     // freshly resolved runtime and current CAR; no caller-built classpath.
-    Test / testOnly := (Test / testOnly).dependsOn(cozyPrepareRuntime, Compile / packageBin).evaluated,
+    Test / test := (Test / test).dependsOn(prepareTestArtifacts).value,
+    Test / testOnly := (Test / testOnly).dependsOn(prepareTestArtifacts).evaluated,
     // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
       if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65WorkflowConsumerCliSpec",
