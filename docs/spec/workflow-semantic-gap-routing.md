@@ -106,6 +106,31 @@ not be silently reinterpreted. Distinguish these reasons at the owning boundary:
 Do not add a confidence-scoring system, fabricate a new native result, erase a
 retained DecisionNeeded or build Phase 9's routing merely to enable a cheap model.
 
+### Connected Split observation and bounded reuse
+
+The normal Split Advance observes its actual retained native source after business
+progression. When the existing common Journal is configured, it returns optional
+`journalRecording` for a `SplitRouting` entry in that same store. Public Journal
+read/find can select it by repository, `SplitPhase`, Session and full source tuple.
+The entry identifies the actual branch, selected operation and retained assignment;
+it does not claim that a provider executed. Repeated pending/terminal observations
+return the same immutable entry. Selected Preview observation reads its retained
+publication and exact terminal successor; a known prepared Preview can finish its
+one pending terminal append. Completed APPLY observation requires its actual applied
+effect receipt and exact terminal successor, and never prepares/applies files again.
+Unfinished or unknown application remains unavailable for its owning recovery route. Disabled policy adds no storage read. Recording
+failure reports its own status without replaying progression or a semantic answer.
+
+`Phase65SplitReuseSpec` uses production public Operations and normal SQLite
+reopen to cover known-input selection without work issuance, pending assignment
+reuse, exact unknown-only answer coverage, retained answer to ordinary Preview
+admission, repeated terminal observation, common Journal lookup, and distinct
+DecisionNeeded/partial-enrichment/missing-handler outcomes. Its Start consent and
+semantic answers belong to the fixture; installed CLI/provider qualification is
+separate Q4 work. The fixed partition engine and existing scope/reasoning guards
+remain authoritative. No generic bundle, new mandatory review or provider-routing
+engine is introduced.
+
 ## Semantic worker context and records
 
 Keep host command, lifecycle, effects and routing controls enforced by their

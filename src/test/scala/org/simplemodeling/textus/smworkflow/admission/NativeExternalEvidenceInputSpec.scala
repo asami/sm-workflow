@@ -196,7 +196,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     "refuse Split review and unassigned outputs while managed Direct consumers exercise both full public Human outputs" in {
       Given("Split has Human preparation but no review kind, and an ordinary unassigned Wait output")
       val wait = V.SplitPhaseAdvanceResult("fixture-session", "Wait", "No assigned input", None, None, None,
-        Some("waiting"), None, None, None, None, None, None, None, None, None)
+        Some("waiting"), None, None, None, None, None, None, None, None, None, None)
       When("the tool receives unsupported review or a Human request without an assigned context")
       val review = _tool.prepareRecord("SplitPhase", "review", wait, splitAnswer())
       val absent = _tool.prepareRecord("SplitPhase", "human", wait, splitAnswer())

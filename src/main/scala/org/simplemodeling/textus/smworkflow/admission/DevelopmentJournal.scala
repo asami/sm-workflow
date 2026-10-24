@@ -230,8 +230,9 @@ private[smworkflow] object DevelopmentJournal {
     val finding = input != null && DevelopmentJournalFinding.sourceC(input.identity).isSuccess
     val evidence = input != null && DevelopmentJournalEvidence.validIdentity(input.identity)
     val merge = input != null && DevelopmentJournalMergeAssessment.validIdentity(input.identity)
+    val split = input != null && DevelopmentJournalSplitRouting.validIdentity(input.identity)
     val assessment = input != null && DevelopmentJournalAssessment.validIdentity(input.identity)
-    if (input == null || input.revision == null || !(finding || evidence || assessment || merge || sourceC(input.identity).isSuccess))
+    if (input == null || input.revision == null || !(finding || evidence || assessment || merge || split || sourceC(input.identity).isSuccess))
       Consequence.success(_result_("invalid", "Journal identity is invalid or noncanonical"))
     else if (input.revision.exists(_ != "1")) Consequence.success(_result_("unsupportedRevision", "Journal supports revision 1 only"))
     else policy match {
@@ -240,6 +241,9 @@ private[smworkflow] object DevelopmentJournal {
         try {
           val loaded = _bind_c(core, p, input.identity).flatMap(_.loadC()).flatMap {
             case None => Consequence.success(_result_("absent", "Journal entry is absent"))
+            case Some(row) if split => DevelopmentJournalSplitRouting.storedC(row, input.identity).map(e =>
+              V.JournalReadResult("found", "Journal Split routing found", Some(DevelopmentJournalSplitRouting.publicEntry(e)),
+                Some(DevelopmentJournalSplitRouting.view(e))))
             case Some(row) if merge => DevelopmentJournalMergeAssessment.storedC(row, input.identity).map(e =>
               V.JournalReadResult("found", "Journal merge assessment found", Some(DevelopmentJournalMergeAssessment.publicEntry(e)),
                 Some(DevelopmentJournalMergeAssessment.view(e))))

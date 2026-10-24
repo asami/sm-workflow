@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseTypedStartPrepa
   * Binding retains metadata only; every effect borrows the actual owning Core.
   *
   * @since   Oct.  4, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
   def bindRuntimeC(params: ComponentCreate, declaration: SplitPhaseManagedStartAssembly.Declaration,
@@ -63,7 +63,8 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
     checkpoints: D.Port, humandirection: Boolean, terminalobservation: () => Consequence[Unit]) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       _advance_c(command, current, declaration, catalog, checkpoints, core, humandirection, terminalobservation)
-      .map(NativeWorkflowOperationOutput.response(_))
+      .flatMap(result => DevelopmentJournalSplitRouting.recordC(declaration, catalog, current, result, core)
+        .map(recording => NativeWorkflowOperationOutput.response(result.copy(journalRecording = recording))))
   }
 
   private def _advance_c(command: SplitPhaseAdvanceTarget,
@@ -168,9 +169,14 @@ private[smworkflow] object SplitPhaseManagedAdvanceServiceOperation {
                 declaration, catalog, core, terminalobservation)
               else SplitPhaseManagedReasoningHumanCompletion.terminalC(human)
             }
-          case _: SplitPhaseExecutionFrontier.Value.SelectedPreview | _: SplitPhaseExecutionFrontier.Value.SelectedApply =>
+          case _: SplitPhaseExecutionFrontier.Value.SelectedPreview =>
             SplitPhaseManagedPlanningFrontier.loadSelectedForCallC(command, current, start, source,
-              declaration, catalog, core).flatMap(_selected_c(command, _, declaration, catalog, core, terminalobservation))
+              declaration, catalog, core).flatMap(SplitPhaseManagedSelectedPreview.resumeRetainedC(
+                command, _, declaration, catalog, core, terminalobservation))
+          case _: SplitPhaseExecutionFrontier.Value.SelectedApply =>
+            SplitPhaseManagedPlanningFrontier.loadSelectedForCallC(command, current, start, source,
+              declaration, catalog, core).flatMap(SplitPhaseManagedSelectedApply.observeCompletedC(
+                command, _, declaration, catalog, core))
           case SplitPhaseExecutionFrontier.Value.Stopped(answer) =>
             if (SplitPhaseManagedReasoningHumanCompletion.isReasoning(answer))
               SplitPhaseManagedReasoningHumanCompletion.observeForAdvanceC(command, declaration, catalog, core)

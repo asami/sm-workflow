@@ -76,7 +76,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
         convergence = Some(repository.convergence), humanConflict = repository.humanConflict)
-      split <- SplitPhaseManagedServiceAssembly.bindRuntimeWorkflowC(creation, host.split, host.splitCatalog,
+      split <- SplitPhaseManagedServiceAssembly.bindRuntimeWorkflowC(creation, host.split.copy(journalPolicy = host.goal.journalPolicy,
+        journalRepository = Some(repository.declaration.input.repositoryIdentity)), host.splitCatalog,
         host.splitStartHuman, host.splitAnswerHuman)
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC

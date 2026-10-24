@@ -471,16 +471,16 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     issuedWorkContext: Option[V.WorkflowIssuedWorkContext] = None): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, if (scopeHuman.nonEmpty || reasoningHuman.nonEmpty) "Human" else "Request",
       message, Some(operation), Some(session), Some(resultType), None, None, partition, scope, reasoning,
-      scopeHuman, reasoningHuman, None, None, issuedWorkContext)
+      scopeHuman, reasoningHuman, None, None, issuedWorkContext, None)
 
   def splitSelected(session: String, value: V.SplitPhaseSelectedPlanView): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, "Terminal", "Split plan " + value.mode + " completed.", None, None, None,
-      None, Some(if (value.mode == "APPLY") "Applied" else "Previewed"), None, None, None, None, None, Some(value), None, None)
+      None, Some(if (value.mode == "APPLY") "Applied" else "Previewed"), None, None, None, None, None, Some(value), None, None, None)
 
   def splitStopped(session: String, outcome: String, answer: ContextReference): V.SplitPhaseAdvanceResult =
     V.SplitPhaseAdvanceResult(session, "Terminal", "The recorded Human direction ended this split run: " + outcome,
       None, None, None, None, Some(outcome), None, None, None, None, None, None,
-      Some(V.SplitPhaseStoppedResult(outcome, V.WorkflowArtifactReference(answer.identity, answer.revision))), None)
+      Some(V.SplitPhaseStoppedResult(outcome, V.WorkflowArtifactReference(answer.identity, answer.revision))), None, None)
 
   private def _source(value: P.SourceReference): V.SplitPhasePartitionSourceReference =
     V.SplitPhasePartitionSourceReference(value.identity, value.revision)

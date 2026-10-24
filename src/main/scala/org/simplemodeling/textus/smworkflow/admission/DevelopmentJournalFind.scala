@@ -27,7 +27,7 @@ private[smworkflow] object DevelopmentJournalFind {
         Vector(input.phaseIdentity, input.sessionIdentity, input.kind, input.recordedFrom, input.recordedBefore)
           .forall(o => o != null && o.forall(_exact)) &&
         input.kind.forall(k => k == DevelopmentJournal.kind || k == DevelopmentJournalFinding.kind ||
-          k == DevelopmentJournalEvidence.kind || k == DevelopmentJournalAssessment.kind || k == DevelopmentJournalMergeAssessment.kind) &&
+          k == DevelopmentJournalEvidence.kind || k == DevelopmentJournalAssessment.kind || k == DevelopmentJournalMergeAssessment.kind || k == DevelopmentJournalSplitRouting.kind) &&
         input.sourceReference != null && input.sourceReference.forall(s => s != null && _exact(s.identity) && _exact(s.revision)) &&
         input.limit != null && input.limit.forall(n => n >= 1 && n <= 20) &&
         input.recordedFrom.forall(_second) && input.recordedBefore.forall(_second) &&
@@ -86,6 +86,8 @@ private[smworkflow] object DevelopmentJournalFind {
         DevelopmentJournalEvidence.storedC(row, id).map(DevelopmentJournalEvidence.publicEntry)
       case Some(id) if DevelopmentJournalMergeAssessment.validIdentity(id) =>
         DevelopmentJournalMergeAssessment.storedC(row, id).map(DevelopmentJournalMergeAssessment.publicEntry)
+      case Some(id) if DevelopmentJournalSplitRouting.validIdentity(id) =>
+        DevelopmentJournalSplitRouting.storedC(row, id).map(DevelopmentJournalSplitRouting.publicEntry)
       case Some(id) if DevelopmentJournalAssessment.validIdentity(id) =>
         DevelopmentJournalAssessment.storedC(row, id).map(DevelopmentJournalAssessment.publicEntry)
       case _ => Consequence.stateConflict("Journal physical identity is invalid")

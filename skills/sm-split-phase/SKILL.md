@@ -184,16 +184,17 @@ view; never query another operation merely to fill display fields.
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
 An already-issued file-only recording retains its exact captured destinations,
-assigned edits and typed completion contract. RepositorySync and SplitPhase gain
-no automatic Journal producer in this Phase: consume only real supplied fields;
-do not invent a recording duty. Existing caller controls, consent, effect authority
+assigned edits and typed completion contract. The normal Split Advance may return a `SplitRouting` observation from the common
+Journal. It describes the actual retained frontier and selected operation, not
+proof that a provider ran. Repeated pending or terminal observations reuse their
+native source. Consume only actual supplied fields; do not invent a recording duty. Existing caller controls, consent, effect authority
 and the first-attempt escalated direct installed CLI rule still apply.
 
 Use ordinary provided `JournalService.findJournalEntries` or
 `JournalService.readJournalEntry` only for a concrete lookup purpose. Pass their
 generated input as `--input` JSON through the existing installed command.
 Find requires `repositoryIdentity`; optional exact filters are `phaseIdentity`,
-`sessionIdentity`, `kind` (only `ExecutionObservation` or `Finding`) and
+`sessionIdentity`, `kind` (including `SplitRouting`) and
 `sourceReference` with its actual complete identity/revision tuple. Never
 fabricate a partial source. Optional `recordedFrom` is from-inclusive and
 `recordedBefore` is to-exclusive; both require whole-second UTC
@@ -279,3 +280,14 @@ result. Missing evidence stays explicit rather than becoming fabricated success.
 ## Caller information
 
 Follow [caller information return](../../docs/spec/caller-information.md). When the runtime requests an attributable observation, keep the original issuedWorkContext and exact source locator. Use observations already available to this caller or its ordinary public tools. Return available, partial or unavailable through prepare-information/record-information with --runtime-root. Display the kind, source reference, availability and retained continuation; preserve raw source in its artifact rather than paraphrasing it as proof. This return performs no Submit, recovery or Advance and confers no Human consent. Never start another model or source provider to acquire this information.
+
+## Unknown-only completion and reuse
+
+The issued partition request contains the already-known independent estimate and
+boundary gaps at that frontier. Answer those gaps together; preserve known inputs
+and host-assigned result and resolution references. Do not predict gaps belonging
+to later stages, choose a mechanical partition, or add a second AI review.
+Repeated Advance or process reopen consumes the saved answer and current retained
+frontier through the normal runtime, without resubmitting the answer.
+Capability/transport failure is not a semantic DecisionNeeded judgment; preserve
+the actual outcome and the existing independent Human channel.

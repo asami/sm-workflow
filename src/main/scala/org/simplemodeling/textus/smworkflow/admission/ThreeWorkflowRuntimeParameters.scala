@@ -121,7 +121,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,
-        executionprofiles, executionorigin, splitclassifications)
+        executionprofiles, executionorigin, splitclassifications, journalpolicy, Some(settings.repository.input.repositoryIdentity))
     } yield ThreeWorkflowLauncherAssembly.RuntimeComposition(goal, split, splitCatalog, ports.splitStart, ports.splitAnswer)
 
   private def targetC(value: Target): Consequence[RepositoryGitRuntimePrograms.Target] =

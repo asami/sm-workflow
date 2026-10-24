@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.SplitPhasePlanningSnapshot
 /** Read the actual saved successor. No planner, allocator, AI or fresh
   * publication runs here. A reader failure never selects an older frontier.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 24, 2026
   */
 private[smworkflow] object SplitPhaseManagedPlanningFrontier {
   final class Observed private[SplitPhaseManagedPlanningFrontier] (
@@ -39,6 +39,20 @@ private[smworkflow] object SplitPhaseManagedPlanningFrontier {
       case _ => _invalid("current business reference does not carry a selected planning successor")
     }
   } yield observed(selected._1, selected._2, current, start.invocationMode)
+
+  /** The actual terminal append must be the single successor of the retained
+    * publication. DefinitionBinding uses runtime reference identity; its owning
+    * storage binding already validates the definition before this comparison. */
+  def requireCompletedC(prepared: InstanceRecord, current: InstanceRecord,
+    cause: String): Consequence[Unit] = {
+    import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+    val entry = HistoryEntry(HistorySequence(prepared.history.size.toLong + 1L), prepared.revision.next,
+      Lifecycle.Completed, None, prepared.correlation, CausationReference(cause),
+      prepared.derivedCompositeOccurrence, prepared.committedPredecessor, None)
+    prepared.appendC(prepared.revision, entry).flatMap(expected =>
+      if (current.copy(definition = expected.definition) == expected) Consequence.unit
+      else _invalid("terminal state differs from the retained native publication"))
+  }
 
   /** Resolve only the concrete receipt selected by the current business
     * reference. No history-prefix search or sibling-reader fallback. */

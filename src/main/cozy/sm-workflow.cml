@@ -7120,6 +7120,7 @@ OperationResult
 | selectedPlan | SplitPhaseSelectedPlanView | ? |
 | stopped | SplitPhaseStoppedResult | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| journalRecording | JournalRecordingState | ? |
 
 ## SplitPhaseHumanScopeCheckpointReference
 
