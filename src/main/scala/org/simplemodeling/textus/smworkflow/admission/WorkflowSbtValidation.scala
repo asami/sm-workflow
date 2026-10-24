@@ -7,7 +7,7 @@ import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -15,6 +15,7 @@ private[smworkflow] object WorkflowSbtValidation {
     case Compile extends Kind("compile")
     case Test extends Kind("test")
     case TestOnly extends Kind("test-only")
+    case FixCheck extends Kind("fix-check")
   }
   object Kind {
     given Encoder[Kind] = Encoder.encodeString.contramap(_.wire)
@@ -88,7 +89,8 @@ private[smworkflow] object WorkflowSbtValidation {
         result.processResult.termination != null && result.testSelection != null &&
         ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
           (kind == Kind.Test && result.operation == SbtOperation.Test) ||
-          (kind == Kind.TestOnly && result.operation == SbtOperation.TestOnly)) &&
+          (kind == Kind.TestOnly && result.operation == SbtOperation.TestOnly) ||
+          (kind == Kind.FixCheck && result.operation == SbtOperation.FixCheck)) &&
         result.testSelection.forall {
           case SbtTestSelectionResult.Verified(classes, suites, tests) =>
             kind == Kind.TestOnly && Selection(classes, suites, tests).valid

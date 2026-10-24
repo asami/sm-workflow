@@ -633,6 +633,62 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseReviewPurposeRepairDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseReviewPurposeRepairDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| admissionOperation | string | 1 |
+
+## GoalPhaseReviewPurposeRepairInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| acknowledgeOriginalPurposeDefects | boolean | 1 |
+
+## GoalPhaseReviewPurposeRepairResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseCompletionPolicyDescriptionInput
 
 - input-kind :: COMMAND
@@ -912,6 +968,8 @@ OperationResult
 | checkFailure | GoalPhaseCheckFailureContext | ? |
 | issues | GoalPhaseIssueState | ? |
 | repairProgress | GoalPhaseRepairProgress | ? |
+| purposeRepair | org.goldenport.record.Record | ? |
+| triage | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -1288,6 +1346,7 @@ OperationResult
 | reviewContext | WorkflowReviewContext | ? |
 | metadata | org.goldenport.record.Record | * |
 | priorReviews | org.goldenport.record.Record | * |
+| triageJudgment | org.goldenport.record.Record | ? |
 
 ## GoalPhaseCheckFailureContext
 
@@ -1317,6 +1376,15 @@ OperationResult
 | reviewObservations | GoalPhaseReviewObservations | ? |
 | dependencyProposal | org.goldenport.record.Record | ? |
 | completionConditions | org.goldenport.record.Record | ? |
+| repairFindingSources | GoalPhaseRepairFindingSources | ? |
+
+## GoalPhaseRepairFindingSources
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sources | org.goldenport.record.Record | * |
 
 ## GoalPhaseReviewObservation
 
@@ -1453,6 +1521,7 @@ OperationResult
 | accepted | boolean | 1 |
 | outcome | string | 1 |
 | message | string | 1 |
+| journalRecording | JournalRecordingState | ? |
 
 ## GoalPhaseFindingObservationSource
 
@@ -2105,6 +2174,8 @@ subject-type = GoalPhaseFindingRecordingRequest
 
 ##### OrderedValidation
 
+##### OrderedTriage
+
 ##### OrderedReview
 
 ##### OrderedRepair
@@ -2144,6 +2215,11 @@ when = phase.InspectCandidate, orderedDecision.Retained, findingRecords.Retained
 
 state = OrderedValidation
 when = phase.Validation, orderedDecision.Retained, findingRecords.Retained
+
+##### ordered-triage
+
+state = OrderedTriage
+when = phase.Triage, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-review
 
@@ -2208,6 +2284,12 @@ kind = OPERATION
 operation = repairGoalPhaseStep
 input = phase.subject
 
+##### TriageOrderedStep
+
+kind = OPERATION
+operation = triageGoalPhaseStep
+input = phase.subject
+
 ##### ReviewOrderedStep
 
 kind = JUDGMENT
@@ -2265,6 +2347,10 @@ action = ImplementOrderedStep
 #### goal-phase-repair-capability
 
 action = RepairOrderedStep
+
+#### goal-phase-step-triage-capability
+
+action = TriageOrderedStep
 
 #### goal-phase-step-review-capability
 
@@ -2339,6 +2425,14 @@ operation = GoalPhaseService.describeGoalPhaseRemainingPlan
 #### adoptGoalPhaseRemainingPlan
 
 operation = GoalPhaseService.adoptGoalPhaseRemainingPlan
+
+#### describeGoalPhaseReviewPurposeRepair
+
+operation = GoalPhaseService.describeGoalPhaseReviewPurposeRepair
+
+#### admitGoalPhaseReviewPurposeRepair
+
+operation = GoalPhaseService.admitGoalPhaseReviewPurposeRepair
 
 #### describeGoalPhaseFailedPhaseRepair
 
@@ -2485,6 +2579,11 @@ on = documents-conflicted
 
 ##### TRANSITION
 
+to = Triage
+on = checks-triage-required
+
+##### TRANSITION
+
 to = Review
 on = checks-passed
 
@@ -2507,6 +2606,28 @@ on = checks-failed
 
 to = Repair
 on = checks-repair-required
+
+#### Triage
+
+##### TRANSITION
+
+to = Triage
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = Closing
+on = triage-clean
+
+##### TRANSITION
+
+to = Review
+on = triage-escalated
 
 #### Review
 
@@ -2773,6 +2894,11 @@ on = human-document-resumed-InspectCandidate
 
 to = Validation
 on = human-document-resumed-Validation
+
+##### TRANSITION
+
+to = Triage
+on = human-document-resumed-Triage
 
 ##### TRANSITION
 
@@ -5186,6 +5312,62 @@ GoalPhaseRemainingPlanAdoptionInput
 
 GoalPhaseRemainingPlanAdoptionResult
 
+#### describeGoalPhaseReviewPurposeRepair
+
+##### DESCRIPTION
+
+Read only the current unanswered Human from an old issued ReviewStep with absent purposeRepair and an accepted untyped decision-needed report. Newly marked ReviewSteps use the ordinary typed route. Describe the exact original assignment, result, unchanged Plan, Step purpose and owned scope, base, accepted prefix, generation, candidate, checks, repair progress and complete ordered OPEN REVIEW issue batch. Refuse stale, exhausted, unknown-effect or conflicting frontiers. Preparation and description grant no Human authority and run no check, Submit, Advance or commit.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReviewPurposeRepairDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairDescriptionResult
+
+#### admitGoalPhaseReviewPurposeRepair
+
+##### DESCRIPTION
+
+Admit a separately provisioned actual Human directive for an old issued ReviewStep with absent purposeRepair and an accepted untyped decision-needed report, acknowledging every described saved blocking finding as an original-purpose defect inside the unchanged selected Step scope. Preserve the original accepted review and unanswered Human question through a separately typed native DecisionSupersession receipt. No Plan revision or new required condition is added. Next separate ordinary Advance issues the same-Step RepairStep once using existing repair budgets and issue verification. Stale, repeated, foreign, exhausted or incompatible direction refuses; no check, Submit, Advance or commit runs here.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReviewPurposeRepairInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairResult
+
 #### describeGoalPhaseFailedPhaseRepair
 
 ##### DESCRIPTION
@@ -6028,6 +6210,42 @@ for a failed check. Return only semantic completion or an explicit decision-need
 the assigned completion route. Do not expand the repair scope, reset counters,
 execute external commands or substitute a passing review. Workflow observes the
 changed candidate and selects the required checks and independent follow-up.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseWorkResult
+
+# SERVICE
+
+## GoalPhaseStepTriageService
+
+### DESCRIPTION
+
+Bounded read-only triage of immediate semantic uncertainty after complete selected
+checks, separate from implementation reasoning and independent detailed review.
+
+### OPERATION
+
+#### triageGoalPhaseStep
+
+##### DESCRIPTION
+
+Return clean, suspicious or genuine semantic decline with summary and attributable
+suspected observations in findings. No edits, checks, review acceptance, confirmed
+blockers, Plan adoption or effect authority. Tool failure is not semantic decline.
+The existing completion owner routes clean to admission or escalates once to review.
 
 ##### TYPE
 
@@ -7155,6 +7373,8 @@ GoalPhaseWorkSubmissionResult
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
 | checkFailure | GoalPhaseCheckFailureContext | ? |
 | issues | GoalPhaseIssueState | ? |
+| purposeRepair | org.goldenport.record.Record | ? |
+| triage | org.goldenport.record.Record | ? |
 
 ## GoalPhaseHumanQuestion
 
@@ -8009,6 +8229,8 @@ WorkflowPreparedImport
 #### prepareEvidence
 
 ##### DESCRIPTION
+
+GoalPhase kind review-purpose-repair requires participant, the actual GoalPhaseReviewPurposeRepairDescriptionResult as request and GoalPhaseReviewPurposeRepairInput as result, matching directive reference and execution worker, and explicit acknowledgment of the complete saved original-purpose defect batch. Preparation records separately observed actual Human provenance under goal-phase-review-purpose-repair; it neither grants that consent nor admits a continuation nor rewrites the original review or unanswered question.
 
 GoalPhase kind failed-phase-repair-adoption requires participant, the actual generated GoalPhaseFailedPhaseRepairDescriptionResult as request and GoalPhaseFailedPhaseRepairAdoptionInput as result, exact target/proposal/choice/reference and matching execution worker. Prepare only the independently observed actual Human direction under purpose goal-phase-failed-phase-repair-adoption and exact failedPhaseRepairAdoption(target,answer) binding. Choices are AdoptRepairPlan and Defer. The returned native external-evidence StartupImport rows neither provision storage nor adopt a Plan nor continue a Workflow. Unknown/missing/explicit-null target, direction or binding fields refuse; no legacy kind or fallback is supported.
 

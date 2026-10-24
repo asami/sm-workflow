@@ -14,7 +14,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -60,6 +60,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+      case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
     }
     execution = new Execution(core)
     result <- execution.runSbtC(execution.prepareSbt(target, kind))
@@ -93,6 +94,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+      case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
     }
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))
@@ -153,12 +155,14 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
+      case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check(target)
     }
     def runSbtC(program: ExecUowM[SbtExecutionResult]): Consequence[SbtExecutionResult] = executeProgram(program)
     def prepareSbtAttempt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionAttempt] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile_attempt(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only_attempt(target)
+      case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check_attempt(target)
     }
     def runSbtAttemptC(program: ExecUowM[SbtExecutionAttempt]): Consequence[SbtExecutionAttempt] = executeProgram(program)
     def prepareGit[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {

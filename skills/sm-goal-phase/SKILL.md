@@ -263,6 +263,42 @@ observations; do not request an AI waiver, synthesize a review reference or
 resubmit accepted work to make the old required-review shape. A selected required
 review and the integrated Phase review retain their own real issued routes.
 
+## Selected lint and semantic triage
+
+`fix-check` is the typed CNCF check-only SBT operation. The project owns the
+nonempty `fixCheck` Scalafix profile. Consume actual durable check results;
+missing, timed-out, uncertain, unavailable and OFF are distinct from PASS.
+Known check failures use the existing assigned FIX, not an AI waiver. An
+intentional lint exception requires an actual applicable prior Human decision.
+Use standard rule-scoped suppression with its source reason and decision
+reference; preserve the original finding and failed result, and recheck the
+exception plus unrelated violations. Do not disable the Action or claim the
+original implementation was corrected. Ordinary correction needs no new Human
+question, and an already admitted applicable exception needs no duplicate approval.
+
+Perform `TriageStep` only when actually issued. Use a separate read-only context
+through the configured execution profile; the existing `sm_workflow_analysis`
+role can perform this bounded semantic work when selected. Preserve its actual
+configured model/effort and scope; do not run a model comparison or replace a
+required independent reviewer with triage. Read the supplied candidate diff,
+passed check receipts, assessment triggers, structural availability and applicable
+prior decisions. Do not execute commands or edit source in the triage worker.
+Return the issued `GoalPhaseWorkResult` with only `outcome`, `summary` and
+`findings`: `clean` requires empty findings, `suspicious` requires attributable
+observations and the scope needing review, and semantic `decline` states the
+actual inability to judge. These observations are not confirmed blocking issues.
+Omit acceptance, fix/issue reports, Plan/dependency proposals and review reports.
+Transport or tool failure leaves this work open; it is never semantic DECLINE.
+
+CLEAN returns through formal admission and creates no independent review PASS.
+SUSPICIOUS/DECLINE issues one detailed review using the original evidence and
+triage judgment. Required planned review bypasses triage. Do not repeat triage
+on an unchanged candidate or replay settled checks to obtain another judgment.
+Absent optional scenario mapping means the detector is OFF, not verified clean;
+partial mapping cannot prove missing coverage. The runtime only joins explicitly
+selected path/Operation/scenario facts and keeps observations distinct from
+actual check failures. CBD remains OFF.
+
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
 An already-issued file-only recording retains its exact captured destinations,
@@ -364,12 +400,32 @@ For an issued semantic request:
    condition and may contain applicable excluded conditions; `advisories`
    contains nonblocking ideas. Use only `satisfied`, `unsatisfied` or
    `not-evaluated` with honest nonblank detail. Completed/accept requires all
-   applicable required conditions satisfied and empty findings. Review repair
-   requires at least one unsatisfied required condition, and `findings` must
-   equal those unsatisfied required details in report order. An excluded idea
-   or advisory never creates repair scope. Required not-evaluated prevents
+   applicable required conditions satisfied and empty findings, with no
+   `repairFindingSources`. The legacy required-only review repair form omits
+   sources and requires `findings` to equal the unsatisfied required details
+   in report order. A newly issued ReviewStep with an actual `purposeRepair`
+   contract also permits independently judged defects in that original Step
+   purpose and owned scope, without per-finding Human approval. For this form,
+   public `repairFindingSources` is `{sources:[...]}` (the native saved result
+   uses an array). Supply one closed tagged source per finding in ordinal
+   order: `{kind:"required-condition",findingOrdinal,conditionIdentity}` or
+   `{kind:"step-purpose",findingOrdinal,stepIdentity,rationale,affectedPaths}`.
+   Include every applicable required failure with its exact detail in report
+   order; evaluate every required condition, and keep purpose paths inside the
+   captured Step ownership. Never add the contract to old issued work or add
+   sources to an old request, ReviewPhase, completed or accept result. An
+   excluded idea or advisory never creates repair scope. Required not-evaluated prevents
    acceptance; a structurally valid decision-needed report uses the existing
    independent Human route. For an unconfigured Plan omit the report.
+   For an old issued ReviewStep with absent `purposeRepair`, an already accepted
+   untyped decision-needed report and an unanswered Human, the caller may separately
+   describe `describeGoalPhaseReviewPurposeRepair`
+   and prepare kind `review-purpose-repair`. Only a separately provisioned actual
+   Human directive acknowledging the complete described saved finding/OPEN issue
+   batch may call `admitGoalPhaseReviewPurposeRepair`. Engineering approval and
+   passive preparation grant no live direction. Preserve the original verdict,
+   question, Plan, base, prefix and repair history; the next ordinary Advance
+   owns same-Step repair. This legacy continuation adds no condition or Plan revision.
 4. Hand the actual result and control back to the caller. Report rejection or uncertain submission;
    do not replay, select the next operation or implement a polling/advance loop.
 

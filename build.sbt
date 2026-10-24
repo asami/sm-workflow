@@ -22,17 +22,25 @@ lazy val root = project
     resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/repository/maven",
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
 
-    // Artifact-dependent selections explicitly prepare the official runtime and
-    // current CAR. Ordinary test/testOnly compilation has no runtime preparation.
+    // Explicit runtimeTestOnly and fixed native testOnly selections prepare the
+    // official runtime and current CAR. Ordinary test keeps its declared scope.
     runtimeTestOnly := Def.inputTaskDyn {
       val selection = (sbt.complete.DefaultParsers.Space ~> sbt.complete.DefaultParsers.any.*).parsed.mkString
       cozyPrepareRuntime.value
       (Compile / packageBin).value
       (Test / testOnly).toTask(" " + selection)
     }.evaluated,
+    // Lint only handwritten production Scala. Test and managed/generated code
+    // retain their compiler/tests; project/build code is outside this profile.
+    Compile / scalafix / unmanagedSources := (Compile / unmanagedSources).value,
+    Compile / scalafix / managedSources := Nil,
+    // Fixed native TestOnly selections run the real CLI against the ordinary
+    // freshly resolved runtime and current CAR; no caller-built classpath.
+    Test / testOnly := (Test / testOnly).dependsOn(cozyPrepareRuntime, Compile / packageBin).evaluated,
     // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseFixCliSpec",
+      if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65ConditionalLintSpec",
+        "org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseFixCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseAssessmentCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
@@ -48,6 +56,7 @@ lazy val root = project
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalFailedPhaseRepairAdoptionCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalPostCompletionSyncCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalReviewRepairAdoptionCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.NativeGoalClosureContinuationAdoptionCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalWholePhaseCandidateRecoveryCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalProjectBuildCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",
@@ -86,6 +95,7 @@ lazy val root = project
         "docs/spec/native-host-execution.md",
         "docs/spec/caller-information.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
+        "docs/spec/goal-phase-purpose-repair.md",
         "docs/spec/goal-phase-dependency-scope.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
@@ -137,3 +147,5 @@ lazy val root = project
     cozyCarName := ProjectYamlBuild.carBaseName(projectIdentityEvidence.value, moduleName.value, version.value),
     cozyManifestMetadata ++= ProjectYamlBuild.manifestMetadata(projectIdentityEvidence.value, cozyProjectMetadata.value)
   )
+// Syntactic check only: no SemanticDB or additional compilation prerequisite.
+addCommandAlias("fixCheck", "Compile / scalafix --check")

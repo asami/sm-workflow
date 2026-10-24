@@ -28,7 +28,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * drives the same public Operations through the actual installed executable.
   * Fixture evidence asserts no production Human provenance.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -152,7 +152,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val name = review.work.get.stepIdentity.get
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact candidate", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None)
       val reference = V.WorkflowArtifactReference("repair-fixture-review-" + name, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
@@ -394,7 +394,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val repairedsource = Files.readString(product)
       cli.submit(implementation, V.WorkflowArtifactReference("fixture-corrective-implementation", "1"),
         V.GoalPhaseWorkResult("completed", "The explicitly selected source repair already exists", Vector.empty,
-          None, None, None, None, None, None, None))
+          None, None, None, None, None, None, None, None))
       var correctivefrontier = Option.empty[InstanceRecord]
       inKnownEpisode(root, componentInstance = "default") { episode => correctivefrontier = Some(episode.current(identity)) }
       When("ordinary Advance normalizes the corrective source through goldenport, captures only the repair scope, runs its real Compile and requests independent ReviewStep")

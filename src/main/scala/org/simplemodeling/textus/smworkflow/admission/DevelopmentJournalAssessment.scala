@@ -14,7 +14,7 @@ import DevelopmentJournal as J
 /** Assessment is an observation, never a review Finding or AI CLEAN.
   * Uses the common immutable Journal after native validation has committed.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalAssessment {
@@ -29,15 +29,15 @@ private[smworkflow] object DevelopmentJournalAssessment {
     id.length > prefix.length && id.length <= J.maximumIdentityLength && !id.exists(_.isControl)
   private def valid(e: Entry): Boolean = try {
     e != null && validIdentity(e.identity) && GoalPhaseStepAssessment.validResult(e.assessment) &&
-      e.identity == prefix + e.assessment.validationReference &&
+      e.identity == prefix + source(e.assessment).identity &&
       Vector(e.repository, e.phase, e.step, e.session, e.assessment.reason).forall(s => s != null && s.trim.nonEmpty) &&
-      Set("admit", "detailed-review", "decision")(e.assessment.branch) && Instant.parse(e.recordedAt).toString == e.recordedAt
+      Set("admit", "detailed-review", "triage", "decision")(e.assessment.branch) && Instant.parse(e.recordedAt).toString == e.recordedAt
   } catch { case scala.util.control.NonFatal(_) => false }
   def rowC(e: Entry): Consequence[Record] = if (!valid(e)) Consequence.stateConflict("Invalid assessment Journal entry")
     else Consequence.success(Record.data(J.storageField -> Json.obj("schemaVersion" -> Json.fromString(schema),
       "payload" -> e.asJson).noSpaces, "kind" -> kind, "repositoryIdentity" -> e.repository,
-      "phaseIdentity" -> e.phase, "sessionIdentity" -> e.session, "sourceIdentity" -> e.assessment.validationReference,
-      "sourceRevision" -> "1", "recordedAt" -> e.recordedAt, "revision" -> "1"))
+      "phaseIdentity" -> e.phase, "sessionIdentity" -> e.session, "sourceIdentity" -> source(e.assessment).identity,
+      "sourceRevision" -> source(e.assessment).revision, "recordedAt" -> e.recordedAt, "revision" -> "1"))
   def storedC(row: Record, id: String): Consequence[Entry] = {
     val decoded = for {
       raw <- row.getString(J.storageField).toRight("Assessment Journal payload is absent")
@@ -54,7 +54,7 @@ private[smworkflow] object DevelopmentJournalAssessment {
   def appendC(storage: J.Storage, e: Entry): Consequence[V.JournalRecordingState] = {
     def state(status: String, saved: Option[Entry] = None) = V.JournalRecordingState(status,
       "Step assessment Journal: " + status, saved.map(s => V.JournalEntryReference(s.identity, "1")),
-      V.WorkflowArtifactReference(e.assessment.validationReference, "1"))
+      V.WorkflowArtifactReference(source(e.assessment).identity, source(e.assessment).revision))
     val result = rowC(e).flatMap { row => storage.loadC().map {
       case Some(existing) => storedC(existing, e.identity).map(saved =>
         if (saved.copy(recordedAt = e.recordedAt) == e) state("alreadyRecorded", Some(saved)) else state("conflict"))
@@ -67,12 +67,13 @@ private[smworkflow] object DevelopmentJournalAssessment {
     payload: GoalPhaseNativeValidation.Payload): Consequence[Option[V.JournalRecordingState]] = payload.assessment match {
     case None => Consequence.success(None)
     case Some(a) =>
-      val source = V.WorkflowArtifactReference(a.validationReference, "1")
-      def unavailable = V.JournalRecordingState("unavailable", "Assessment Journal unavailable; native result retained", None, source)
+      val reference = source(a)
+      val sourceRef = V.WorkflowArtifactReference(reference.identity, reference.revision)
+      def unavailable = V.JournalRecordingState("unavailable", "Assessment Journal unavailable; native result retained", None, sourceRef)
       val result = try d.journalPolicy match {
-        case None => Consequence.success(V.JournalRecordingState("disabled", "Journal is disabled by the caller", None, source))
+        case None => Consequence.success(V.JournalRecordingState("disabled", "Journal is disabled by the caller", None, sourceRef))
         case Some(p) => for {
-          e <- Consequence.success(Entry(prefix + a.validationReference, d.input.repositoryIdentity,
+          e <- Consequence.success(Entry(prefix + reference.identity, d.input.repositoryIdentity,
             d.input.phaseIdentity, payload.step, session, a, core.executionContext.clock.instant().toString))
           bound <- ComponentRecordStorage.bindForCallC(core, p.storeName, p.collection, DataStore.StringEntryId(e.identity))
           recorded <- appendC(new J.Storage {
@@ -83,8 +84,21 @@ private[smworkflow] object DevelopmentJournalAssessment {
       } catch { case scala.util.control.NonFatal(_) => Consequence.success(unavailable) }
       Consequence.success(Some(result.fold(_ => unavailable, identity)))
   }
+  private def source(a: GoalPhaseStepAssessment.Result): org.goldenport.cncf.workflow.ContextReference =
+    a.triageJudgment.map(_.reference).getOrElse(org.goldenport.cncf.workflow.ContextReference(a.validationReference, "1"))
+  def recordTriageC(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core, request: GoalPhaseNativeWork.Request,
+    result: GoalPhaseNativeWork.Result, reference: org.goldenport.cncf.workflow.ContextReference):
+    Consequence[Option[V.JournalRecordingState]] = request.triage match {
+    case None => Consequence.success(None)
+    case Some(context) =>
+      val judgment = GoalPhaseStepTriage.Judgment(reference, result.outcome, result.summary, result.findings)
+      val assessment = GoalPhaseStepAssessment.triaged(context.assessment, judgment)
+      val payload = GoalPhaseNativeValidation.Payload(request.sourceRevision, request.stepIdentity.get,
+        assessment.candidate, Vector.empty, context.checks, Some("passed"), assessment = Some(assessment))
+      recordC(d, core, request.instanceIdentity, payload)
+  }
   def publicEntry(e: Entry): V.JournalEntry = V.JournalEntry(e.identity, "1", kind, e.repository, e.phase,
-    Some(e.step), e.session, V.WorkflowArtifactReference(e.assessment.validationReference, "1"), e.recordedAt,
+    Some(e.step), e.session, V.WorkflowArtifactReference(source(e.assessment).identity, source(e.assessment).revision), e.recordedAt,
     "Step assessment: " + e.assessment.branch, None, None, None,
     Some(GoalPhaseNativeMetadata.record(e.assessment.asJson)))
   def view(e: Entry): String = {

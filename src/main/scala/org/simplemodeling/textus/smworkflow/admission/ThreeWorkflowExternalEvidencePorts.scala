@@ -14,7 +14,7 @@ import NativeExternalEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -86,6 +86,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val remainingPlanAdoption: GoalPhaseRemainingPlanAdoption.EvidencePort = new GoalPhaseRemainingPlanAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RemainingPlanAdoption, key(reference.identity, reference.revision), binding)
+  }
+  val reviewPurposeRepair: GoalPhaseLegacyPurposeRepairContinuation.EvidencePort = new GoalPhaseLegacyPurposeRepairContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.ReviewPurposeRepair, key(reference.identity, reference.revision), binding)
   }
   val completionPolicyAdoption: GoalPhaseCompletionPolicyAdoption.EvidencePort = new GoalPhaseCompletionPolicyAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
@@ -254,6 +258,7 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
       Consequence.stateConflict("Goal review target or result is absent")
     else for {
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(input.selectedPlan)
+      _ <- GoalPhasePurposeRepair.admitC(input, submitted.result.value)
       report = submitted.result.value.acceptance
       _ <- if (report == null) Consequence.stateConflict("Goal review report option is absent")
         else report.fold(Consequence.unit)(GoalPhaseAcceptanceBoundary.validateReportC)
@@ -282,7 +287,8 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
       "base" -> input.originalBase.asJson, "candidate" -> input.candidate.asJson, "checksReceipt" -> input.checksReceipt.asJson,
       "changedPaths" -> input.review.map(_.changedPaths).getOrElse(Vector.empty).asJson).mapObject { fields =>
         val checks = input.review.toVector.flatMap(_.checks).filter(_.sbt.nonEmpty)
-        val quality = input.selectedPlan.effectiveAcceptance.fold(fields)(value => fields.add("effectiveAcceptance", value.asJson))
+        val purpose = input.purposeRepair.fold(fields)(value => fields.add("purposeRepair", value.asJson))
+        val quality = input.selectedPlan.effectiveAcceptance.fold(purpose)(value => purpose.add("effectiveAcceptance", value.asJson))
         val target = input.issues.fold(quality)(value => quality.add("issues", value.asJson))
         val progress = input.repairProgress.fold(target)(value => target.add("repairProgress", value.asJson))
         val metadata = input.review.toVector.flatMap(_.metadata)
@@ -298,7 +304,8 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
         val observations = result.reviewObservations.fold(issues)(value => issues.add("reviewObservations", value.asJson))
         val dependency = result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
         val proposed = result.planRevision.fold(dependency)(value => dependency.add("planRevision", value.asJson))
-        result.completionConditions.fold(proposed)(value => proposed.add("completionConditions", value.asJson))
+        val conditions = result.completionConditions.fold(proposed)(value => proposed.add("completionConditions", value.asJson))
+        result.repairFindingSources.fold(conditions)(value => conditions.add("repairFindingSources", value.asJson))
       }
   def repositoryReviewBindingC(core: ActionCall.Core, input: RepositorySyncNativeMergeReview.Request,
     submitted: ContinuationResult[RepositorySyncNativeMergeReview.Result]): Consequence[Json] = {

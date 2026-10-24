@@ -6,7 +6,7 @@ import NativeExternalEvidence.Purpose
 
 /** Selected independent review targets; native completion owns result validity.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeReviewScope {
@@ -25,6 +25,23 @@ private[smworkflow] object NativeReviewScope {
         Either.cond(conditions.isEmpty || (input("workKind").flatMap(_.asString).contains("ReviewStep") &&
           input("step").flatMap(_.asString).exists(_.nonEmpty)), (),
           "Completion conditions require an assigned Step review")
+      }
+      _ <- if (purpose != Purpose.GoalReview) Right(()) else {
+        val sources = result.hcursor.downField("verdict").downField("repairFindingSources").focus
+        sources match {
+          case None => Right(())
+          case Some(value) => for {
+            contract <- input("purposeRepair").toRight("Typed review requires its actual issued purpose contract")
+              .flatMap(_.as[GoalPhasePurposeRepair.Contract].left.map(_.message))
+            parsed <- value.as[Vector[GoalPhasePurposeRepair.Source]].left.map(_.message)
+            _ <- Either.cond(input("workKind").flatMap(_.asString).contains("ReviewStep") &&
+              input("step").flatMap(_.asString).contains(contract.stepIdentity) && parsed.collect {
+                case source: GoalPhasePurposeRepair.StepPurpose => source
+              }.forall(source => source.stepIdentity == contract.stepIdentity && source.affectedPaths.forall(path =>
+                contract.ownedPaths.exists(owner => path == owner || path.startsWith(owner + "/")))), (),
+              "Typed review crosses the actual issued Step purpose/scope")
+          } yield ()
+        }
       }
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "attestation" -> Json.obj(
       "kind" -> Json.fromString(if (purpose == Purpose.GoalReview) "goal-review" else "repository-review"),
@@ -47,6 +64,12 @@ private[smworkflow] object NativeReviewScope {
       case Some(value) => GoalPhaseNativeMetadata.normalizeBatches(value).map(Some(_))
     }
     progress <- GoalPhaseRepairProgress.selectOption(input)
+    contract <- input("purposeRepair") match {
+      case None => Right(None)
+      case Some(value) => value.as[GoalPhasePurposeRepair.Contract].left.map(_.message).flatMap(contract =>
+        Either.cond(fields("workKind").flatMap(_.asString).contains("ReviewStep") && step.contains(contract.stepIdentity),
+          Some(contract.asJson), "Purpose contract has no actual assigned Step review"))
+    }
     acceptance <- _effective(input)
     issues <- input("issues") match {
       case None => Right(None)
@@ -58,7 +81,8 @@ private[smworkflow] object NativeReviewScope {
     checked = checks.fold(selected)(value => selected.add("testChecks", value))
     withMetadata = metadata.fold(checked)(value => checked.add("validationMetadata", value))
     quality = acceptance.fold(withMetadata)(value => withMetadata.add("effectiveAcceptance", value))
-    withIssues = issues.fold(quality)(value => quality.add("issues", value))
+    withPurpose = contract.fold(quality)(value => quality.add("purposeRepair", value))
+    withIssues = issues.fold(withPurpose)(value => withPurpose.add("issues", value))
   } yield Json.fromJsonObject(progress.fold(withIssues)(value => withIssues.add("repairProgress", value)))
 
   private def repository(input: JsonObject): Either[String, Json] = for {
@@ -122,13 +146,23 @@ private[smworkflow] object NativeReviewScope {
           revision.isEmpty && dependency.isEmpty, (), "Completion conditions contradict the original repair verdict")
       } yield Some(parsed.asJson)
     }
+    sources <- input("repairFindingSources") match {
+      case None => Right(None)
+      case Some(value) => for {
+        parsed <- value.as[Vector[GoalPhasePurposeRepair.Source]].left.map(_.message)
+        _ <- Either.cond(GoalPhasePurposeRepair.validateSourcesC(Some(parsed)).isSuccess && outcome == "repair" &&
+          parsed.size == findings.size && findings.forall(GoalPhasePurposeRepair.text) && revision.isEmpty && dependency.isEmpty,
+          (), "Typed repair sources contradict the actual verdict")
+      } yield Some(parsed.asJson)
+    }
     selected = Json.obj("outcome" -> Json.fromString(outcome), "findings" -> Json.fromValues(findings.map(Json.fromString)), "repairSummary" -> summary)
     quality = acceptance.fold(selected)(value => selected.mapObject(_.add("acceptance", value)))
     reported = issues.fold(quality)(value => quality.mapObject(_.add("issueReport", value)))
     observed = observations.fold(reported)(value => reported.mapObject(_.add("reviewObservations", value)))
     proposed = dependency.fold(observed)(value => observed.mapObject(_.add("dependencyProposal", value)))
     revised = revision.fold(proposed)(value => proposed.mapObject(_.add("planRevision", value)))
-  } yield conditions.fold(revised)(value => revised.mapObject(_.add("completionConditions", value)))
+    completed = conditions.fold(revised)(value => revised.mapObject(_.add("completionConditions", value)))
+  } yield sources.fold(completed)(value => completed.mapObject(_.add("repairFindingSources", value)))
 
   private def _effective(input: JsonObject): Either[String, Option[Json]] = input("effectiveAcceptance").filterNot(_.isNull) match {
     case None => Right(None)

@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 /** Trusted operational input for fresh native Goal issuance. Configuration is
   * neither an executor observation nor permission to execute or close work.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 24, 2026
   */
 private[smworkflow] object GoalPhaseNativeExecution {
   final case class Origin(current: WorkflowExecutorDescriptor, preference: WorkflowExecutionPreference)
@@ -58,7 +58,7 @@ private[smworkflow] object GoalPhaseNativeExecution {
     * resolution and the stored WorkOrder owns its selected disposition thereafter.
     */
   def bindIssuedC[W](work: WorkflowInteraction[W, Nothing], mapping: Option[WorkflowExecutionProfileMapping],
-    origin: Option[Origin]): Consequence[WorkflowInteraction[W, Nothing]] = for {
+    origin: Option[Origin], isolateContext: Boolean = false): Consequence[WorkflowInteraction[W, Nothing]] = for {
     _ <- validatePairC(mapping, origin)
     order <- Option(work).map(_.current) match {
       case Some(value: WorkflowContinuation.WorkOrder[W]) => Consequence.success(value)
@@ -66,7 +66,8 @@ private[smworkflow] object GoalPhaseNativeExecution {
     }
     _ <- if (order.requirement == null) invalid("WorkOrder requirement is absent") else order.requirement.validateC.map(_ => ())
     selected <- (mapping, origin) match {
-      case (Some(profiles), Some(current)) => profiles.resolveC(order.requirement, current.current, current.preference)
+      case (Some(profiles), Some(current)) => profiles.resolveC(order.requirement, current.current,
+        if (isolateContext) current.preference.copy(isolateContext = true) else current.preference)
         .map(resolved => work.copy(current = order.copy(requirement = resolved.requirement)))
       case _ => Consequence.success(work)
     }

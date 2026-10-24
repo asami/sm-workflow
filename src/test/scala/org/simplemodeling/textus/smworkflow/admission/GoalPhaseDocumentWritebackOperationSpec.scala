@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -188,7 +188,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
             GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
             GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))),
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), result.evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))

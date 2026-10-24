@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -95,7 +95,7 @@ private[smworkflow] object GoalPhaseFixIssues {
     current = request.issues.getOrElse(_empty)
     reports = result.issueReport.toVector.flatMap(_.dispositions)
     next <- request.kind match {
-      case "ImplementStep" => _check(result.issueReport.isEmpty,
+      case "ImplementStep" | "TriageStep" => _check(result.issueReport.isEmpty,
         "initial implementation cannot supply an issue report").map(_ => current)
       case "RepairStep" => _repair_c(request, result, current, reports, evidence)
       case "ReviewStep" | "ReviewPhase" => _review_c(request, result, current, reports, evidence)

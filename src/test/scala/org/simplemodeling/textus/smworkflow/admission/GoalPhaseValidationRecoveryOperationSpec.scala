@@ -31,7 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * deliberately retains unknown state before any check effect. Test-owned
   * evidence is not an independent production Human or registered-runner proof.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
@@ -136,7 +136,7 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     def submitImplementation(request: V.GoalPhaseAdvanceResult): V.GoalPhaseWorkSubmissionResult = {
       Files.writeString(root.resolve("repository/value.txt"), "selected semantic change\n")
       val result = V.GoalPhaseWorkResult("completed", "Test-owned selected semantic implementation", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None)
       invoke[V.GoalPhaseWorkSubmissionResult](request.submitOperation.get, List(Property("sessionId", request.submitSessionId.get, None),
         Property("result", result.toRecord(), None), Property("resultReference", V.WorkflowArtifactReference("recovery-implementation", "1").toRecord(), None)))
     }
@@ -203,9 +203,8 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
 
 /** Normal managed Operations prove storage/authority separation. Real SBT is
   * required by the parent's selected runtime preparation; this worker runs none.
-  * @since   Oct. 20, 2026
-  * @version Oct. 22, 2026
-  * @author  ASAMI, Tomoharu
+  * Declaration metadata retained from the producer: introduced Oct. 20, 2026;
+  * producer version Oct. 22, 2026; author ASAMI, Tomoharu.
   */
 final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {

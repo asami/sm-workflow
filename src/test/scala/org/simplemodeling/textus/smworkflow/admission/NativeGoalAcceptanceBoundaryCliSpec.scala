@@ -18,7 +18,7 @@ import GoalPhaseAcceptanceBoundary as B
   * review, actual AI authorship, Step acceptance, source-policy-review evidence
   * or whole primary acceptance claim.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -99,7 +99,7 @@ final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matcher
   private def _result(outcome: String, report: V.GoalPhaseAcceptanceReport,
     findings: Vector[String] = Vector.empty): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED acceptance boundary response", findings,
-      Some(report), None, None, None, None, None, None)
+      Some(report), None, None, None, None, None, None, None)
   private def _submit(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,
     result: V.GoalPhaseWorkResult, reference: V.WorkflowArtifactReference,
     execution: Option[V.WorkflowExecutionEvidence] = None): F.Result =

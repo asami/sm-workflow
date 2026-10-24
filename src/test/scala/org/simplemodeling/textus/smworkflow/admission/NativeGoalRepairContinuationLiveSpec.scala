@@ -16,7 +16,7 @@ import NativeWorkflowCliFixture as F
   * Public files retain observations; the parent establishes external provenance.
   * No stage supplies Human, independent review or effect-authority evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -118,7 +118,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
       V.GoalPhaseFixConvergenceAssessment("STALLED", "HIGH",
         "The unchanged incorrect input supplies no progress toward the actual failed Test requirement")))
     val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic batch leaves value.txt incorrect",
-      Vector.empty, None, assessment, report, None, None, None, None)
+      Vector.empty, None, assessment, report, None, None, None, None, None)
     val submitted = _retain(output, name, scenario.call("command", request.submitOperation.get,
       Vector("--sessionId", request.submitSessionId.get, "--result", json(result.toRecord()).noSpaces,
         "--resultReference", json(V.WorkflowArtifactReference("p62-fixture-" + name, "1").toRecord()).noSpaces)))

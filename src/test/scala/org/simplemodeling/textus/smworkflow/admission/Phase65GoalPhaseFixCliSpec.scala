@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual public CLI/SBT/Git on an isolated specification-owned repository.
   * Fixture reviews and authority are explicit test data, not genuine AI proof.
   * @since   Oct. 24, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -29,7 +29,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
   private def result(outcome: String, findings: Vector[String] = Vector.empty,
     report: Option[V.GoalPhaseIssueReport] = None): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "Specification-owned assigned work", findings,
-      None, None, report, None, None, None, None)
+      None, None, report, None, None, None, None, None)
   private def submit(s: F.Scenario, request: V.GoalPhaseAdvanceResult, value: V.GoalPhaseWorkResult,
     ref: V.WorkflowArtifactReference, execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
     val response = s.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

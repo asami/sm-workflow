@@ -17,21 +17,24 @@ import NativeWorkflowCliFixture as F
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Fresh test Session, ordinary Start/Submit/check/review once, real selected
-  * Git failure, and public recovery through a separate normal Advance. SQLite
+  * Git failure, and bounded continuation through a separate normal Advance. SQLite
   * access below is observation only. The optional installedCommand property
   * qualifies the same isolated host through an actual installed executable.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+  /** The adoption subclass selects complete installations; no source/classpath substitution. */
+  protected def closure_runtime_roots: Option[(Path, Path)] = None
+  private var _selected_runtime = Option.empty[Path]
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
   private val _scope = "src/main/scala"
   private val _missing = _scope + "/MissingClosurePath.scala"
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   private def _call(fixture: Implemented, service: String, operation: String, arguments: Vector[String]): F.Result =
     sys.props.get("smworkflow.spec.installedCommand") match {
-      case Some(executable) => fixture.scenario.callInstalled(Path.of(executable), service, operation, arguments)
+      case Some(executable) => fixture.scenario.callInstalled(Path.of(executable), service, operation, arguments, _selected_runtime)
       case None if service == "GoalPhaseService" => fixture.scenario.call("command", operation, arguments)
       case None => fixture.scenario.prepareHostInput(operation, take(new org.goldenport.record.io.RecordDecoder().json(arguments(1))))
     }
@@ -41,8 +44,7 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
     Vector("--sessionId", fixture.request.sessionId))
   private def _describe(fixture: Implemented): F.Result = _goal(fixture, R.describeOperation,
     Vector("--sessionId", fixture.request.sessionId))
-  private def _recover(fixture: Implemented, input: V.GoalPhaseClosureRecoveryInput): F.Result =
-    _goal(fixture, R.recoveryOperation, Vector("--input", _json(input)))
+  private def _adopt_runtime(): Unit = closure_runtime_roots.foreach { (_, current) => _selected_runtime = Some(current) }
   private def _file(fixture: Implemented, name: String, value: RecordPresentable): String = {
     val path = Files.createTempDirectory(fixture.scenario.root, name + "-").resolve("input.json")
     Files.writeString(path, _json(value))
@@ -70,7 +72,8 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
   }
   private def _episode(name: String): Implemented = {
-    Given("CC02: a fresh test host with two selected Steps and physical commit selection containing one nonexistent owned path")
+    Given("CC02: a fresh test host with two selected Steps and declared scope containing one nonexistent unchanged future path")
+    _selected_runtime = closure_runtime_roots.map(_._1)
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), sourceHistory = true)
     val first = scenario.plan.steps.head.copy(ownedPaths = Vector(_scope))
     val second = first.copy(identity = "step-2", purpose = "Later unissued work after the protected closure",
@@ -93,14 +96,14 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
     val fixture = setup.copy(request = request)
     Files.writeString(fixture.source, changedText)
     _submit(fixture, request, V.WorkflowArtifactReference(name + "-implementation", "1"),
-      V.GoalPhaseWorkResult("completed", "Test-owned source edit", Vector.empty, None, None, None, None, None, None, None))
+      V.GoalPhaseWorkResult("completed", "Test-owned source edit", Vector.empty, None, None, None, None, None, None, None, None))
     val reviewcall = _advance(fixture)
     val review = reviewcall.business[V.GoalPhaseAdvanceResult]
     Then("a single actual product Test and the independent ReviewStep precede closure")
     review.work.get.kind shouldBe "ReviewStep"
     executions(scenario).size shouldBe 1
     val result = V.GoalPhaseWorkResult("accept", "Independent test-owned review accepts the exact candidate", Vector.empty,
-      None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None)
     val reference = V.WorkflowArtifactReference(name + "-review", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("test-independent-reviewer"), None, None)
     val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.invocation.stdout.toUri.toASCIIString,
@@ -114,33 +117,25 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
       _file(fixture, "closure-reference", V.WorkflowArtifactReference(name + "-closure", "1")), "participant",
       "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence")
     _import(fixture, _call(fixture, "NativeWorkflowPreparationService", "prepareAuthority", Vector("--input", _json(authority))))
-    When("ordinary Advance attempts the actual host-selected commit with the missing pathspec")
-    val failed = _advance(fixture).business[V.GoalPhaseAdvanceResult]
-    Then("honest Wait retains actual Failed(1), pathspec diagnostics and the accepted Test/review without a commit")
+    val lock = Path.of(host.target.root).resolve(".git/index.lock")
+    if (closure_runtime_roots.isEmpty) Files.writeString(lock, "Fixture-owned lock for the single ended commit failure\n",
+      java.nio.file.StandardOpenOption.CREATE_NEW)
+    When("ordinary Advance attempts a real selected commit, blocked by the fixture lock or the legacy missing pathspec")
+    val failed = try _advance(fixture).business[V.GoalPhaseAdvanceResult]
+      finally if (closure_runtime_roots.isEmpty) Files.delete(lock)
+    Then("honest Wait retains the actual ended failure and accepted Test/review without a commit")
     failed.kind shouldBe "Wait"
     failed.message should not include "index check failed"
     val description = _describe(fixture).business[V.GoalPhaseClosureRecoveryDescriptionResult]
     val target = take(R.targetC(description.target))
     target.execution.get.outcome shouldBe "failed"
-    target.execution.get.exitCode shouldBe Some(1)
-    target.execution.get.stderr should include("pathspec")
+    target.execution.get.exitCode shouldBe Some(if (closure_runtime_roots.nonEmpty) 1 else 128)
+    target.execution.get.stderr should include(if (closure_runtime_roots.nonEmpty) "pathspec" else "index.lock")
     target.observation.head shouldBe target.parent.head
     target.observation.indexTree shouldBe target.candidate.tree
-    target.observation.selectedPaths shouldBe Vector(sourcePath, _missing)
+    target.observation.selectedPaths shouldBe (if (closure_runtime_roots.nonEmpty) Vector(sourcePath, _missing) else Vector(sourcePath))
     executions(scenario).size shouldBe 1
     fixture
-  }
-  private def _direction(fixture: Implemented, described: F.Result, choice: String, identity: String,
-    ended: Boolean = true): V.GoalPhaseClosureRecoveryInput = {
-    val description = described.business[V.GoalPhaseClosureRecoveryDescriptionResult]
-    val reference = V.WorkflowArtifactReference(identity, "1")
-    val answer = V.GoalPhaseClosureRecoveryAnswer(choice, "Test-owned independent Human direction with retained terminal CLI evidence", ended)
-    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
-    val input = V.WorkflowEvidencePreparationInput("GoalPhase", "closure-recovery", described.invocation.stdout.toUri.toASCIIString,
-      _file(fixture, "human-answer", answer), _file(fixture, "human-reference", reference), _file(fixture, "human-execution", execution),
-      "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", Some("participant"))
-    _import(fixture, _call(fixture, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input))))
-    V.GoalPhaseClosureRecoveryInput(description.sessionId, description.target, choice, answer.rationale, reference, ended)
   }
   /** Read only actual native bytes; this helper cannot mutate a fixture row. */
   private def _stored(fixture: Implemented): Vector[String] = {
@@ -180,64 +175,35 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
   private def _operation_count(fixture: Implemented, operation: String): Int =
     fixture.scenario.invocations.count(_.argv.exists(_.endsWith(".GoalPhaseService." + operation)))
 
-  "Public selected Step closure recovery commands" should {
-    "defer then bind the corrected selection and close through one new same-Session attempt without replaying accepted work" in {
+  "Public selected Step closure continuation" should {
+    "retain an ended failed attempt and close through ordinary same-Session Advance without replaying accepted work" in {
       Given("a fresh isolated normal Session which reaches the actual selected commit failure")
       val fixture = _episode("closure-recovery-new-attempt")
-      Given("the actual Failed(1) summary, accepted review, Session history and terminal old invocation are retained")
+      And("the actual failed summary, accepted review, Session history and terminal invocation are retained")
       val before = _current(fixture)
       val old = _closures(fixture)
       val checks = executions(fixture.scenario)
       val reflog = _reflog(fixture)
       val starts = _operation_count(fixture, "startGoalPhase")
       val submits = _operation_count(fixture, "submitGoalPhaseWorkResult")
-      val defer = _direction(fixture, _describe(fixture), "Defer", "closure-defer", ended = false)
-      When("public recovery receives Defer without asserting prior termination")
-      val deferred = _recover(fixture, defer).business[V.GoalPhaseClosureRecoveryResult]
-      Then("no native history, Git state, index or product Test is changed")
-      deferred.outcome shouldBe "deferred"
-      _current(fixture) shouldBe before
-      _reflog(fixture) shouldBe reflog
-      executions(fixture.scenario) shouldBe checks
-
-      Given("the host corrects physical scope and a separately trusted Human attests the prior owner ended")
-      _select(fixture, Vector(sourcePath))
+      val executionsbefore = _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.executionCodec).toOption)
+        .map(_.payload.value)
+      Given("only the selected runtime is updated when this is a dual-generation adoption scenario")
+      _adopt_runtime()
+      When("the public read-only description observes the ended actual commit and original reviewed candidate")
       val described = _describe(fixture)
-      val target = take(R.targetC(described.business[V.GoalPhaseClosureRecoveryDescriptionResult].target))
-      val authorized = _direction(fixture, described, "AuthorizeNewAttempt", "closure-new-attempt")
-      When("public recovery rejects an old selection and accepts only the exact newly observed target")
-      val staleselection = _recover(fixture, authorized.copy(target = defer.target))
-      val priornotended = _recover(fixture, authorized.copy(priorExecutionEnded = false))
-      val foreignsession = _recover(fixture, authorized.copy(sessionId = "foreign-session"))
-      val accepted = _recover(fixture, authorized).business[V.GoalPhaseClosureRecoveryResult]
-      val directed = _current(fixture)
-      Then("only one immutable mechanical direction is appended without executing Git or Test")
+      val description = described.business[V.GoalPhaseClosureRecoveryDescriptionResult]
+      val target = take(R.targetC(description.target))
+      Then("it projects ordinary continuation and no Human choices, without a history or Git effect")
+      description.outcome shouldBe "continuation-ready"
+      description.choices shouldBe empty
+      description.recoveryOperation shouldBe "advanceGoalPhase"
       target.observation.selectedPaths shouldBe Vector(sourcePath)
-      staleselection.exitCode should not be 0
-      priornotended.exitCode should not be 0
-      foreignsession.exitCode should not be 0
-      accepted.outcome shouldBe "new-attempt-authorized"
-      directed.history.dropRight(1) shouldBe before.history
+      _current(fixture) shouldBe before
       _head(fixture) shouldBe target.parent.head
-      executions(fixture.scenario) shouldBe checks
-      When("the same recovery direction is submitted again")
-      val duplicate = _recover(fixture, authorized)
-      Then("duplicate direction refuses and preserves the directed frontier")
-      duplicate.exitCode should not be 0
-      _current(fixture) shouldBe directed
-
-      Given("a later ordinary Advance sees physical selection drift before any new intent")
-      _select(fixture, Vector(sourcePath, _missing))
-      When("ordinary Advance checks the retained direction against its live physical selection")
-      val drifted = _advance(fixture)
-      Then("drift refuses before a commit or new native history")
-      drifted.exitCode should not be 0
-      _current(fixture) shouldBe directed
       _reflog(fixture) shouldBe reflog
-
-      Given("the independently corrected physical selection again matches the retained direction exactly")
-      _select(fixture, Vector(sourcePath))
-      When("a separate ordinary Advance consumes the fresh attempt and records its one actual commit")
+      executions(fixture.scenario) shouldBe checks
+      When("ordinary Advance saves its automatic continuation and records one fresh actual commit")
       val next = _advance(fixture).business[V.GoalPhaseAdvanceResult]
       val closed = _current(fixture)
       Then("the same Session reaches Step two with the original accepted check/review and exactly one new commit")
@@ -251,13 +217,20 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
       _head(fixture) shouldBe next.work.get.completed.head.commit.identity
       _reflog(fixture).size shouldBe reflog.size + 1
       executions(fixture.scenario) shouldBe checks
-      closed.history.take(directed.history.size) shouldBe directed.history
+      closed.history.take(before.history.size) shouldBe before.history
       _closures(fixture).filter(_.commit.isEmpty).toSet should contain allElementsOf old.toSet
       _closures(fixture).count(_.commit.nonEmpty) shouldBe 1
       _closures(fixture).find(_.commit.nonEmpty).get.attempt shouldBe 1
+      val summaries = _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.executionCodec).toOption)
+        .map(_.payload.value)
+      summaries should contain allElementsOf executionsbefore
+      val continuations = _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.continuationCodec).toOption)
+      continuations.map(_.payload.value.action) shouldBe Vector("retry-preparation")
+      _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.directionCodec).toOption) shouldBe empty
       next.repairProgress shouldBe fixture.request.repairProgress
       _operation_count(fixture, "startGoalPhase") shouldBe starts
       _operation_count(fixture, "submitGoalPhaseWorkResult") shouldBe submits
+      _operation_count(fixture, R.recoveryOperation) shouldBe 0
       When("ordinary Advance repeats after the saved commit")
       val repeated = _advance(fixture).business[V.GoalPhaseAdvanceResult]
       Then("saved closure never executes a second commit or repeats the successful Step Test")
@@ -270,26 +243,31 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
       Given("a fresh isolated normal Session with accepted implementation, Test and independent review")
       val fixture = _episode("closure-recovery-reconcile")
       Given("a terminal old invocation and an independently arranged prior owner matching commit in the isolated test repository")
-      _select(fixture, Vector(sourcePath))
       fixture.scenario.commitClosureRecoveryFixture()
       val actual = _head(fixture)
       val reflog = _reflog(fixture)
       val before = _current(fixture)
       val checks = executions(fixture.scenario)
-      When("public description observes the independently arranged matching commit")
+      val oldexecutions = _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.executionCodec).toOption)
+        .map(_.payload.value)
+      _adopt_runtime()
+      When("public description observes the independently arranged matching commit under the current runtime")
       val described = _describe(fixture)
       val target = take(R.targetC(described.business[V.GoalPhaseClosureRecoveryDescriptionResult].target))
       Then("the recovery target contains the actual commit, original parent and reviewed tree")
       target.observation.head shouldBe actual
       target.observation.commit.parents shouldBe Vector(target.parent.head)
       target.observation.tree shouldBe target.candidate.tree
-      Given("an independent reconciliation authorization for the described recovery target")
-      val authorization = _direction(fixture, described, "ReconcileCommit", "closure-reconcile")
-      When("public recovery appends reconciliation direction and a separate ordinary Advance observes that exact commit")
-      val recovered = _recover(fixture, authorization).business[V.GoalPhaseClosureRecoveryResult]
+      target.observation.selectedPaths shouldBe Vector(sourcePath)
+      described.business[V.GoalPhaseClosureRecoveryDescriptionResult].outcome shouldBe "continuation-ready"
+      described.business[V.GoalPhaseClosureRecoveryDescriptionResult].choices shouldBe empty
+      When("ordinary Advance retains the observed continuation and reconciles the exact actual commit")
       val next = _advance(fixture).business[V.GoalPhaseAdvanceResult]
       Then("normal StepCommitObserved retains the actual matching commit without another Git commit or Test")
-      recovered.outcome shouldBe "reconciliation-authorized"
+      next.sessionId shouldBe fixture.request.sessionId
+      next.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
+      next.work.get.originalBase shouldBe fixture.request.work.get.originalBase
+      next.repairProgress shouldBe fixture.request.repairProgress
       next.work.get.completed.head.commit.identity shouldBe actual
       next.work.get.completed.head.review shouldBe target.reviewEvidence
       _head(fixture) shouldBe actual
@@ -298,6 +276,17 @@ final class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoal
       _current(fixture).history.take(before.history.size) shouldBe before.history
       _closures(fixture).count(_.commit.nonEmpty) shouldBe 1
       _closures(fixture).find(_.commit.nonEmpty).get.attempt shouldBe 0
+      _operation_count(fixture, R.recoveryOperation) shouldBe 0
+      _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.continuationCodec).toOption)
+        .map(_.payload.value.action) shouldBe Vector("reconcile-commit")
+      _stored(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, R.executionCodec).toOption)
+        .map(_.payload.value) should contain allElementsOf oldexecutions
+      When("ordinary Advance repeats after reconciliation")
+      val repeated = _advance(fixture).business[V.GoalPhaseAdvanceResult]
+      Then("the saved closure returns the same work and cannot execute a duplicate commit")
+      repeated shouldBe next
+      _reflog(fixture) shouldBe reflog
+      executions(fixture.scenario) shouldBe checks
     }
   }
 }

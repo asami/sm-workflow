@@ -20,17 +20,24 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure native history and independent host evidence contracts. Installed
   * command behavior is exercised separately against a fresh test Session.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _parent = O.Snapshot("a" * 40, "b" * 40)
   private val _candidate = O.Snapshot(_parent.head, "c" * 40)
   private val _paths = Vector("src/one.scala")
-  private val _plan = O.Plan("closure-plan", "1", "PHASE", "sm-workflow", Vector(
-    O.Step("S1", "Close selected work", _paths, Vector.empty, Vector("test"))), Vector("test"))
+  private val _plan = O.Plan("closure-plan", "2", "PHASE", "sm-workflow", Vector(
+    O.Step("S1", "Close selected work", _paths, Vector.empty, Vector("test"))), Vector("test"), repairLimit = 10)
   private val _controller = {
-    val started = take(O.startC(_plan, _parent))
+    val started = (1 to 4).foldLeft(take(O.startC(_plan, _parent))) { (current, index) =>
+      val implemented = take(current.acceptC(O.SemanticCompleted(current.next.asInstanceOf[O.Semantic].key, "implemented")))
+      val candidate = take(implemented.acceptC(O.CandidateObserved(_candidate)))
+      val checked = take(candidate.acceptC(O.ChecksObserved(_candidate, Vector("test"), "prior-test-" + index, true)))
+      take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, _candidate,
+        "prior-test-" + index, "prior-review-" + index, O.ReviewOutcome.Repair,
+        Some(O.RepairDirective("Fixture-owned earlier review", Vector("Repair fixture work"))))))
+    }
     val implemented = take(started.acceptC(O.SemanticCompleted(started.next.asInstanceOf[O.Semantic].key, "implemented")))
     val candidate = take(implemented.acceptC(O.CandidateObserved(_candidate)))
     val checked = take(candidate.acceptC(O.ChecksObserved(_candidate, Vector("test"), "accepted-test", true)))
@@ -257,6 +264,123 @@ final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with 
       R.choiceC(committed.copy(observation = committed.observation.copy(commit =
         committed.observation.commit.copy(parents = Vector(_parent.head, "f" * 40)))), "ReconcileCommit").isSuccess shouldBe false
       drifted.foreach(value => R.choiceC(value, "AuthorizeNewAttempt").isSuccess shouldBe false)
+    }
+
+  }
+
+  "Observed selected Step closure continuation" should {
+    "terminal eligibility and immutable history" which {
+    "retain one observed continuation and a fresh attempt without Human direction or refunded repair counts" in {
+      Given("a bound actual failed Exited result, exact unchanged parent/index, and accepted generation five at four of ten repairs")
+      val (from, input, attempt) = _pending
+      val execution = R.ExecutionSaved(_append(attempt.intent.get.record, "execution-result"), _execution(input))
+      val target = _target(input, attempt.intent.get, Some(execution))
+      val receipt = R.ContinuationSaved(_append(execution.record, "continuation"), R.Continuation(target, "retry-preparation"))
+      val original = attempt.copy(execution = Some(execution), continuation = Some(receipt))
+      val payload = attempt.intent.get.payload.copy(attempt = 1)
+      val check = K.Saved(_append(receipt.record, "check-result-retry-1"), payload, _controller)
+      val intent = K.Saved(_append(check.record, "intent-retry-1"), payload, _controller)
+      When("the private codec and native history reconstruct continuation before and after the one fresh intent")
+      val decoded = R.continuationCodec.decode(R.continuationCodec.encode(receipt.payload))
+      val ready = take(K.reconcileAttemptsC(from, input, 1, Vector(original, K.Attempt(None, None))))
+      val pending = take(K.reconcileAttemptsC(from, input, 1, Vector(original, K.Attempt(Some(check), Some(intent)))))
+      Then("the automatic receipt is distinct from Human direction and every accepted target and cumulative count survives")
+      decoded.toOption shouldBe Some(receipt.payload)
+      R.continuationAction(target) shouldBe Some("retry-preparation")
+      ready.nextAttempt shouldBe Some(1)
+      ready.automatic shouldBe Some(receipt)
+      ready.direction shouldBe None
+      ready.recovery shouldBe None
+      pending.pending shouldBe Some(intent)
+      pending.automatic shouldBe Some(receipt)
+      pending.execution shouldBe None
+      intent.record.history.take(execution.record.history.size) shouldBe execution.record.history
+      intent.payload.input shouldBe input
+      input.planRevision shouldBe "2"
+      input.generation shouldBe 5L
+      intent.controller.base shouldBe _parent
+      intent.controller.checksReceipt shouldBe Some("accepted-test")
+      intent.controller.reviewEvidence shouldBe Some("accepted-review")
+      GoalPhaseRepairProgress.snapshot(intent.controller) shouldBe GoalPhaseRepairProgress.Snapshot(4, 4, 10)
+    }
+
+    "require a complete consistent finite execution result and current exact ownership before automatic continuation" in {
+      Given("one saved terminal failed execution and separately observed original Git state")
+      val (_, input, attempt) = _pending
+      val execution = R.ExecutionSaved(_append(attempt.intent.get.record, "execution-result"), _execution(input))
+      val target = _target(input, attempt.intent.get, Some(execution))
+      val summaries = Vector(execution.payload.copy(termination = None),
+        execution.payload.copy(termination = Some("Running")), execution.payload.copy(termination = Some("TimedOut")),
+        execution.payload.copy(termination = Some("Cancelled")), execution.payload.copy(exitCode = None),
+        execution.payload.copy(exitCode = Some(128)), execution.payload.copy(outcome = "incomplete"),
+        execution.payload.copy(outcome = "succeeded"), execution.payload.copy(termination = Some("Exited(0)"), exitCode = Some(0)),
+        execution.payload.copy(input = input.copy(reviewEvidence = Some("foreign-review"))),
+        execution.payload.copy(attempt = 1), execution.payload.copy(operation = "push"))
+      val observations = Vector(target.copy(observation = _observation.copy(indexTree = "f" * 40)),
+        target.copy(observation = _observation.copy(selectedChangesEmpty = false)),
+        target.copy(observation = _observation.copy(mergeHead = Some("f" * 40))),
+        target.copy(observation = _observation.copy(pendingPaths = Vector("unowned.scala"))),
+        target.copy(observation = _observation.copy(dirty = Vector(G.DirtyPath('M', 'M', _paths.head, None)))),
+        target.copy(observation = _observation.copy(selectedPaths = Vector("unowned.scala"))))
+      When("eligibility considers the saved result and all typed Git facts together")
+      val refused = summaries.map(value => target.copy(execution = Some(value))) ++ observations ++
+        Vector(_target(input, attempt.intent.get), target.copy(candidate = _parent), target.copy(attempt = 255))
+      Then("unchanged HEAD, nonzero status alone, missing receipts, live or inconsistent owners and candidate drift grant no continuation")
+      refused.foreach(value => R.continuationAction(value) shouldBe None)
+      R.continuationAction(target) shouldBe Some("retry-preparation")
+      val succeeded = target.copy(execution = Some(execution.payload.copy(outcome = "succeeded",
+        termination = Some("Exited(0)"), exitCode = Some(0))))
+      R.continuationAction(succeeded) shouldBe None
+    }
+
+    "reconstruct matching-commit continuation without selecting a second attempt" in {
+      Given("an ended actual execution and an observed clean single-parent child of the original reviewed candidate")
+      val (from, input, attempt) = _pending
+      val execution = R.ExecutionSaved(_append(attempt.intent.get.record, "execution-result"), _execution(input))
+      val target = _target(input, attempt.intent.get, Some(execution)).copy(observation = _observation.copy(
+        head = "e" * 40, tree = _candidate.tree, dirty = Vector.empty,
+        commit = G.Commit("e" * 40, _candidate.tree, Vector(_parent.head))))
+      val receipt = R.ContinuationSaved(_append(execution.record, "continuation"), R.Continuation(target, "reconcile-commit"))
+      When("the adjacent automatic continuation is reconstructed from saved facts alone")
+      val retained = take(K.reconcileAttemptsC(from, input, 1, Vector(attempt.copy(execution = Some(execution),
+        continuation = Some(receipt)))))
+      Then("the original intent remains the closure target and no fresh commit attempt is selected")
+      R.continuationAction(target) shouldBe Some("reconcile-commit")
+      retained.nextAttempt shouldBe None
+      retained.pending shouldBe attempt.intent
+      retained.continuation shouldBe Some(receipt)
+      retained.direction shouldBe None
+      R.continuationAction(target.copy(execution = None, frontierRevision = attempt.intent.get.record.revision.value.toString)) shouldBe None
+      val succeeded = target.copy(execution = Some(execution.payload.copy(outcome = "succeeded",
+        termination = Some("Exited(0)"), exitCode = Some(0))))
+      R.continuationAction(succeeded) shouldBe Some("reconcile-commit")
+    }
+
+    "reject automatic receipts crossing an execution frontier Human direction or canonical native history" in {
+      Given("one exact failed result followed by its immutable continuation")
+      val (from, input, attempt) = _pending
+      val execution = R.ExecutionSaved(_append(attempt.intent.get.record, "execution-result"), _execution(input))
+      val target = _target(input, attempt.intent.get, Some(execution))
+      val receipt = R.ContinuationSaved(_append(execution.record, "continuation"), R.Continuation(target, "retry-preparation"))
+      val malformed = Vector(receipt.copy(record = _append(receipt.record, "continuation")),
+        receipt.copy(record = receipt.record.copy(history = receipt.record.history.drop(1))),
+        receipt.copy(payload = receipt.payload.copy(action = "AuthorizeNewAttempt")),
+        receipt.copy(payload = receipt.payload.copy(target = target.copy(frontierRevision = "99"))),
+        receipt.copy(payload = receipt.payload.copy(target = target.copy(definitionRevision = "foreign"))),
+        receipt.copy(payload = receipt.payload.copy(target = target.copy(reviewEvidence = Some("foreign")))))
+      When("reconstruction binds each receipt to the exact original execution and adjacent history edge")
+      val refused = malformed.map(value => K.reconcileAttemptsC(from, input, 1, Vector(attempt.copy(
+        execution = Some(execution), continuation = Some(value))))) ++ Vector(
+        K.reconcileAttemptsC(from, input, 1, Vector(attempt.copy(continuation = Some(receipt)))),
+        K.reconcileAttemptsC(from, input, 1, Vector(attempt.copy(execution = Some(execution), continuation = Some(receipt),
+          direction = Some(_direction(target, execution.record))))),
+        K.reconcileAttemptsC(from, input, 1, Vector(attempt.copy(execution = Some(execution), continuation = Some(receipt)),
+          attempt.copy(execution = Some(execution), continuation = Some(receipt)))))
+      Then("stale duplicate gapped and mixed Human/automatic continuations fail closed")
+      refused.foreach(_.isSuccess shouldBe false)
+      R.continuationCodec.decode(R.directionCodec.encode(_direction(target, execution.record).payload)).isRight shouldBe false
+      R.directionCodec.decode(R.continuationCodec.encode(receipt.payload)).isRight shouldBe false
+    }
     }
   }
 }

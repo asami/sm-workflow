@@ -29,7 +29,7 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
@@ -541,7 +541,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, B.publicReport(value.acceptance),
                 GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
                 GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
-                value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), reference, evidence,
+                value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None), reference, evidence,
               "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
             _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
           } yield ())

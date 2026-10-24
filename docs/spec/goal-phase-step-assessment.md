@@ -317,3 +317,54 @@ separate `assessmentJournal` recording state; normal Journal read/find supports
 this kind. Unresolved observations remain part of the assessment. A disabled,
 unavailable, conflicting or indeterminate Journal reports its real state without
 replaying validation, inventing an Entry reference or calling an AI recorder.
+
+
+## Q3 typed lint and bounded triage connection
+
+New Plans may explicitly select `scalaLint: required` together with a selected
+native check whose kind is `fix-check`, and `semanticTriage: conditional`.
+Absent `semanticTriage` retains the old immediate-observation review route;
+absent `actionPolicy` retains required independent review. Historical encodings
+omit the new default/absent fields. No saved Plan is silently upgraded.
+
+The app projects CNCF's actual `FixCheck` result into the same separate durable
+native check receipts as Compile/TestOnly. FixCheck has no fabricated test
+selection, suite count or semantic verdict. The project alias runs
+`Compile / scalafix --check` with sbt-scalafix 0.12.1 and the nonempty
+DisableSyntax/noFinalize syntactic profile. This detects finalizer overrides,
+consistent with explicit managed lifecycle/UoW cleanup. It does not ban local
+variables, null, exceptions or infrastructure code wholesale. Tests and generated
+sources are outside the selected handwritten Compile lint scope; no SemanticDB
+or extra semantic compilation gate is introduced. Standard rule-specific
+`DisableSyntax.noFinalize` suppression must retain the actual prior Human decision,
+local scope and reason. Execution acceptance remains pending actual Q3 checks.
+
+A selected `scenarioInventory` optionally supplies an exact source reference,
+a `complete` flag and unique mappings of Operation identity, relative source
+`paths`, and executable `scenarios`. Runtime joins actual candidate changed paths
+to these declared mappings. Only a complete inventory can yield a missing-scenario
+observation; partial input is explicitly `partial` and proves no absence. No
+inventory selects no detector (OFF), not a zero-warning coverage claim. This
+small join cannot establish semantic Given/Then coverage or infer mappings from
+prose. Unsupported alternative/Guard and test-target detectors remain OFF.
+
+Complete successful checks plus a selected immediate observation or a supported
+structural warning issue `TriageStep` unless detailed review is required. The
+request contains actual changed paths/diff, typed receipts and original assessment.
+Mapped execution forces a context separate from the implementation context.
+Genuine semantic CLEAN creates admission without a review reference;
+SUSPICIOUS/DECLINE retains the judgment reference and goes directly to independent
+ReviewStep without changing the repair count. A rejected transport-shaped reply
+keeps the same pending request. The common Journal records original assessment
+and actual triage disposition after their respective native commits; recording
+failure does not replay semantic work. Subsequent review receives the original
+triage reference, observations and actual check evidence.
+
+The Phase 6.5 development Session's Plan2 remains on its admitted Compile and
+conditional-lint-route TestOnly selections, with its original independent review.
+That suite exercises the adopted profile through typed FixCheck in disposable
+real Scala 3.3.8 projects. It is not a claim that Plan2 acquired a root FixCheck
+selection or that a root lint command ran. Future explicit selections use the
+new typed route. The prior purpose-repair/selected-closure producer integrations
+retain their original qualification; new consumer compilation and review apply
+to the integrated delta without replaying accepted live effects.

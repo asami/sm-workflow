@@ -11,7 +11,7 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -77,10 +77,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
       step.admission.exists(GoalPhaseStepAssessment.validAdmission)))
   enum Stage {
-    case Implementation, InspectCandidate, Validation, Review, Repair, Closing,
+    case Implementation, InspectCandidate, Validation, Triage, Review, Repair, Closing,
       PhaseInspection, PhaseValidation, PhaseReview, PhaseClosing, Decision, Closed
   }
-  enum WorkKind { case ImplementStep, RepairStep, ReviewStep, ReviewPhase }
+  enum WorkKind { case ImplementStep, RepairStep, TriageStep, ReviewStep, ReviewPhase }
   final case class WorkKey(plan: String, revision: String, phase: String, repository: String, step: Option[String],
     kind: WorkKind, generation: Long)
   sealed trait Next
@@ -105,6 +105,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class PhaseFindingRecordsObserved(reviewed: Snapshot, finalCandidate: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, passed: Boolean) extends Event
+  final case class TriageAdmitted(key: WorkKey, assessment: GoalPhaseStepAssessment.Result,
+    judgment: GoalPhaseStepTriage.Judgment) extends Event
   final case class StepAssessed(assessment: GoalPhaseStepAssessment.Result) extends Event
   final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, directive: RepairDirective) extends Event
@@ -272,6 +274,24 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       None, None, None, None, None, repositoryReceipt, Some(directive), None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None)
 
+    /** Separate unchanged-Plan continuation of an independently directed legacy
+      * review batch. Native receipt reconstruction owns the actual Human origin.
+      */
+    private[admission] def continueLegacyPurposeRepairC(evidence: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && directive != null &&
+          GoalPhasePurposeRepair.text(directive.reason) && directive.findings != null &&
+          directive.findings.nonEmpty && directive.findings.size <= 128 && directive.findings.forall(GoalPhasePurposeRepair.text))
+        Consequence.unit else invalid("legacy purpose continuation requires the independently admitted exact finding batch")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty &&
+          cursor < plan.steps.size && cursor == completed.size && generation < Long.MaxValue && repairs < plan.repairLimit &&
+          candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
+        else invalid("legacy purpose continuation requires its unanswered Step Review and remaining ordinary repair allowance")
+    } yield new State(plan, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
+      None, None, None, None, None, repositoryReceipt, Some(directive), None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None)
+
     /** Eligibility only: the native owner must prove the original terminated
       * failed Phase validation and independently admit the Human direction.
       * Accepted Steps remain immutable; only one new corrective Step is added.
@@ -356,6 +376,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case Stage.InspectCandidate => Inspect(false, tip)
       case Stage.PhaseInspection => Inspect(true, base.head)
       case Stage.Validation | Stage.PhaseValidation => Validate(candidate.get, checks, phaseWide)
+      case Stage.Triage => semantic(WorkKind.TriageStep, step.purpose)
       case Stage.Review => semantic(WorkKind.ReviewStep, step.purpose)
       case Stage.PhaseReview => semantic(WorkKind.ReviewPhase, if (releaseRepairActive)
         "Review the unresolved release findings, repair delta and affected meaning; reuse the prior integrated Phase review"
@@ -418,18 +439,30 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case StepAssessed(assessment) if stage == Stage.Validation && !phaseWide && GoalPhaseStepAssessment.validResult(assessment) &&
           step.actionPolicy.contains(assessment.policy) && candidate.contains(assessment.candidate) &&
           assessment.checks == checks && text(assessment.validationReference) &&
-          Set("admit", "detailed-review", "decision")(assessment.branch) =>
+          Set("admit", "detailed-review", "triage", "decision")(assessment.branch) =>
         assessment.branch match {
           case "admit" if GoalPhaseStepAssessment.validAdmission(GoalPhaseStepAssessment.admission(assessment)) =>
             success(Stage.Closing, newChecks = Some(assessment.validationReference),
               newAdmission = Some(GoalPhaseStepAssessment.admission(assessment)))
+          case "triage" if assessment.triage == "required" && assessment.triageJudgment.isEmpty =>
+            success(Stage.Triage, newChecks = Some(assessment.validationReference))
           case "detailed-review" if assessment.policy.detailedReview == "required" ||
-              assessment.policy.observations.exists(_.timing == "immediate") =>
+              assessment.policy.observations.exists(_.timing == "immediate") || assessment.scenarioSignals.exists(_.missing.nonEmpty) =>
             success(Stage.Review, newChecks = Some(assessment.validationReference))
           case "decision" if assessment.policy.observations.exists(_.timing == "immediate") =>
             success(Stage.Decision, newChecks = Some(assessment.validationReference), reason = Some(assessment.reason))
           case _ => invalid("assessment branch contradicts its selected policy")
         }
+      case TriageAdmitted(value, assessment, judgment) if stage == Stage.Triage && !phaseWide &&
+          value == key(WorkKind.TriageStep) && GoalPhaseStepAssessment.validResult(assessment) &&
+          assessment.branch == "triage" && step.actionPolicy.contains(assessment.policy) &&
+          candidate.contains(assessment.candidate) && checksReceipt.contains(assessment.validationReference) &&
+          assessment.checks == checks && GoalPhaseStepTriage.valid(judgment) =>
+        val resolved = GoalPhaseStepAssessment.triaged(assessment, judgment)
+        if (!GoalPhaseStepAssessment.validResult(resolved)) invalid("triage contradicts its selected policy")
+        else if (judgment.outcome == "clean") success(Stage.Closing,
+          newAdmission = Some(GoalPhaseStepAssessment.admission(resolved)))
+        else success(Stage.Review)
       case RepairableChecksObserved(value, selected, receipt, directive) if
           (stage == Stage.Validation || stage == Stage.PhaseValidation) && candidate.contains(value) &&
           selected == checks && text(receipt) && _valid_directive(directive) =>

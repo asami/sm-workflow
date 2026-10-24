@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -116,7 +116,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseCandidateObservationContinuation.Installation(ports.candidateObservationContinuation)),
         Some(GoalPhaseWholePhaseCandidateRecovery.Installation(ports.wholePhaseCandidateRecovery)),
         Some(GoalPhaseFailedPhaseRepairAdoption.Installation(ports.failedPhaseRepairAdoption)),
-        Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy)
+        Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy,
+        Some(GoalPhaseLegacyPurposeRepairContinuation.Installation(ports.reviewPurposeRepair)))
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,

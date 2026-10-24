@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -36,12 +36,13 @@ private[admission] object TypedSbtHostPlanFixture {
           x.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")) &&
         testClasses.distinct == testClasses &&
         testClasses.map(_.split('.').last).distinct.size == testClasses.size
-      case SbtOperation.Compile | SbtOperation.Test => testClasses.isEmpty
+      case SbtOperation.Compile | SbtOperation.Test | SbtOperation.FixCheck => testClasses.isEmpty
     }), "Only bounded exact TestOnly classes or class-free Compile/Test are admitted")
     val operationwire = operation match {
       case SbtOperation.Compile => "compile"
       case SbtOperation.Test => "test"
       case SbtOperation.TestOnly => "test-only"
+      case SbtOperation.FixCheck => "fix-check"
     }
     require(ordinals.nonEmpty && ordinals.forall(value => value >= 1 && value <= 16) &&
       ordinals.distinct == ordinals, "Only distinct selected SBT ordinals 1..16 are admitted")
@@ -132,17 +133,18 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   /** Two finite typed SBT targets share the existing typed Git boundary. */
-  def authoringPlan(root: Path, executable: Path, git: Json, compileFirst: Boolean = false): Json = {
+  def authoringPlan(root: Path, executable: Path, git: Json, compileFirst: Boolean = false, lint: Boolean = false): Json = {
     val ordinary = plan(root, executable, Vector(1), Some(git),
       operation = if (compileFirst) SbtOperation.Compile else SbtOperation.Test)
     val selected = plan(root, executable, Vector(2), operation = SbtOperation.TestOnly,
       testClasses = Vector("org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"))
     def array(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
-    val programs = array(ordinary, "sbtPrograms") ++ array(selected, "sbtPrograms")
+    val lintPlan = if (lint) Some(plan(root, executable, Vector(3), operation = SbtOperation.FixCheck)) else None
+    val programs = array(ordinary, "sbtPrograms") ++ array(selected, "sbtPrograms") ++ lintPlan.toVector.flatMap(array(_, "sbtPrograms"))
     val capabilities = (array(ordinary, "gitPrograms") ++ programs).map(_.hcursor.downField("capability").focus.get)
     ordinary.mapObject(_.add("sbtPrograms", Json.fromValues(programs))
-      .add("workspaces", Json.fromValues(array(ordinary, "workspaces") ++ array(selected, "workspaces")))
-      .add("workspaceGrants", Json.fromValues(array(ordinary, "workspaceGrants") ++ array(selected, "workspaceGrants")))
+      .add("workspaces", Json.fromValues(array(ordinary, "workspaces") ++ array(selected, "workspaces") ++ lintPlan.toVector.flatMap(array(_, "workspaces"))))
+      .add("workspaceGrants", Json.fromValues(array(ordinary, "workspaceGrants") ++ array(selected, "workspaceGrants") ++ lintPlan.toVector.flatMap(array(_, "workspaceGrants"))))
       .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
         "capabilities" -> Json.fromValues(capabilities)))))
   }

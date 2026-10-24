@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Finite conversion of explicit issued output and supplied external facts to
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -22,16 +22,22 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) &&
+          Set("review", "human", "review-purpose-repair", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (!Set("validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("human", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind"))) options.contains("participant")
+          (!Set("review-purpose-repair", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
+          (if (Set("human", "review-purpose-repair", "validation-recovery", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
       _ <- NativePreparationInput.collectionC(options("collection"))
       request <- NativePreparationInput.readC(options("request"), readText)
-      result <- NativePreparationInput.readC(options("result"), readText)
+      result <- if (options("family") == "GoalPhase" && options("kind") == "review")
+        readText(options("result")).flatMap { text => for {
+          json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
+          _ <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePurposeRepair.validatePublicResultJsonC(json)
+          record <- new org.goldenport.record.io.RecordDecoder().json(text)
+        } yield record }
+        else NativePreparationInput.readC(options("result"), readText)
       referenceRecord <- NativePreparationInput.readC(options("reference"), readText)
       executionRecord <- NativePreparationInput.readC(options("execution-evidence"), readText)
       reference <- summon[ValueReader[V.WorkflowArtifactReference]].readC(referenceRecord)
@@ -51,6 +57,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
     val issuer = options("issuer")
     val participant = options.getOrElse("participant", "")
     def goalReview(context: V.WorkflowReviewContext): Consequence[(String, Record)] = for {
+      _ <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePurposeRepair.validatePublicResultC(result)
       answer <- summon[ValueReader[V.GoalPhaseWorkResult]].readC(result)
       prepared <- NativeReviewPreparation.goalC(context, answer, reference, execution, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
@@ -67,6 +74,11 @@ private[smworkflow] object NativeExternalEvidenceInput {
       prepared <- NativeHumanDecisionPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "GoalPhase" if options("kind") == "review-purpose-repair" => for {
+        description <- summon[ValueReader[V.GoalPhaseReviewPurposeRepairDescriptionResult]].readC(request)
+        input <- summon[ValueReader[V.GoalPhaseReviewPurposeRepairInput]].readC(result)
+        prepared <- NativeLegacyPurposeRepairPreparation.prepareC(description, input, reference, execution, participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "completion-policy-adoption" => for {
         description <- summon[ValueReader[V.GoalPhaseCompletionPolicyDescriptionResult]].readC(request)
         input <- summon[ValueReader[V.GoalPhaseCompletionPolicyAdoptionInput]].readC(result)

@@ -22,7 +22,7 @@ import NativeWorkflowCliFixture as F
   * SPECIFICATION-OWNED; they establish no real independent review or acceptance.
   * The successful example stops at pending ReviewPhase.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -133,7 +133,7 @@ final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers
 
   private def _result(outcome: String): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED isolated mechanical receipt response", Vector.empty,
-      None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None)
 
   private def _submit(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,
     result: V.GoalPhaseWorkResult, reference: V.WorkflowArtifactReference,

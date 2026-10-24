@@ -24,7 +24,7 @@ import GoalPhaseDocumentSource as D
 /** New Human direction for future work, separately from the unanswered old
   * question. All effects belong to the owning native guarded transaction.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRemainingPlanAdoption {
@@ -63,7 +63,8 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     }
   }
   final case class Payload(target: Target, directive: ContextReference, participant: String, rationale: String)
-  final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound])
+  final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound],
+    decisionContext: Option[GoalPhaseNativeWork.DecisionContext] = None)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
   }
@@ -154,14 +155,25 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     * recreated, and a retained receipt confers no additional write authority.
     */
   def retainedC(source: H.Source, core: ActionCall.Core): Consequence[Option[Selected]] = for {
-    adapter <- source.session.storage.bindDecisionSupersessionC(H.completionOperation, H.inputCodec, codec)
+    adapter <- source.session.storage.bindDecisionSupersessionC(H.completionOperation, H.inputCodec,
+      GoalPhaseLegacyPurposeRepairContinuation.storageCodec)
     retained <- adapter.loadRetainedC(H.identity(source), source.session.current.identity)(using core.executionContext)
     selected <- retained match {
       case None => Consequence.success(Option.empty[Selected])
-      case Some(value) => for {
-        payload <- Consequence.success(value.receipt.payload)
-        target = payload.target
-        pending <- GoalPhaseNativeHistory.prefixC(source.session.current, value.receipt.sourceRevision)
+      case Some(value) => value.receipt.payload match {
+        case GoalPhaseLegacyPurposeRepairContinuation.ExistingRemainingPlan(payload) =>
+          reconstructC(source, payload, value.receipt.sourceRevision, value.receipt.nextRevision).map(Some(_))
+        case GoalPhaseLegacyPurposeRepairContinuation.LegacyPurposeRepair(payload) =>
+          GoalPhaseLegacyPurposeRepairContinuation.reconstructC(source, core, payload,
+            value.receipt.sourceRevision, value.receipt.nextRevision).map(Some(_))
+      }
+    }
+  } yield selected
+
+  private[admission] def reconstructC(source: H.Source, payload: Payload, sourceRevision: InstanceRevision,
+    nextRevision: InstanceRevision): Consequence[Selected] = for {
+        target <- Consequence.success(payload.target)
+        pending <- GoalPhaseNativeHistory.prefixC(source.session.current, sourceRevision)
         _ <- if (_matches(source, target, pending) && payload.participant == source.session.participantIdentity)
           Consequence.unit else F.invalid("retained remaining Plan adoption crosses its original actual source")
         _ <- validateDocumentsC(source.controller, target.captured, source.documents)
@@ -170,9 +182,9 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
           else F.invalid("retained remaining Plan adoption crosses its actual Review issue, condition, candidate or checks")
         state <- _adopted_c(source, target, payload.directive.identity, payload.rationale)
         next <- GoalPhaseNativeHistory.completionC(source.session.current, pending, payload.directive, state.stage.toString)
-      } yield Some(Selected(state, next, target.captured.documents))
-    }
-  } yield selected
+        _ <- if (next.revision == nextRevision && nextRevision == sourceRevision.next) Consequence.unit
+          else F.invalid("retained remaining Plan adoption crosses its actual native receipt revisions")
+  } yield Selected(state, next, target.captured.documents)
 
   private def _target_c(source: H.Source, d: F.Declaration, core: ActionCall.Core, raw: Record): Consequence[Target] = for {
     pending <- _pending_c(source)

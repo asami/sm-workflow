@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual public CLI, SBT and Git in a fresh isolated repository. Semantic input
   * and authority are explicitly specification-owned; no real Human or AI proof.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -56,7 +56,7 @@ final class Phase65GoalPhaseAssessmentCliSpec extends AnyWordSpec with Matchers 
         |}
         |""".stripMargin)
       val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned local code and behavioral tests",
-        Vector.empty, None, None, None, None, None, None, None)
+        Vector.empty, None, None, None, None, None, None, None, None)
       val reference = V.WorkflowArtifactReference("p65-assessment-implementation", "1")
       scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
         "--result", json(semantic), "--resultReference", json(reference)))

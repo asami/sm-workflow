@@ -1,5 +1,11 @@
 # Native Goal execution disposition
 
+[Step purpose repair](goal-phase-purpose-repair.md) extends new ReviewStep
+semantic requests and independently attested results without granting effects.
+The separate legacy batch directive uses existing native DecisionSupersession;
+description, preparation and admission execute no checks or Advance. Saved
+unmarked work/results retain their original codecs and old meaning.
+
 This contract connects semantic Goal classification to fresh native WorkOrder
 issuance. It consumes the delivered CNCF execution-profile resolver and existing
 WorkflowProtocolV1 observation admission. Configuration and specification-owned

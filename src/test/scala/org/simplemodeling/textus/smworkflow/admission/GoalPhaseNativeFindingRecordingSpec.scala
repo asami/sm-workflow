@@ -31,7 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWhenThen
@@ -518,7 +518,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance), None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
             R.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), V.WorkflowArtifactReference(reference.identity, reference.revision),
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

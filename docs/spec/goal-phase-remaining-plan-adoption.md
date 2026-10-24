@@ -1,5 +1,12 @@
 # Explicit adoption of a remaining Plan
 
+The separate [legacy purpose batch continuation](goal-phase-purpose-repair.md)
+preserves an already accepted untyped ReviewStep decision and its unanswered
+Human without changing the Plan or adding a condition. Its explicit new inner
+origin shares the historical native Decision-disposition storage family through
+one typed reader. This document's old writer, payload and Plan-changing meaning
+remain unchanged. Future ordinary typed purpose repair requires no per-finding Human.
+
 date=2026-10-23
 status=implemented-local-installed-route-qualified
 

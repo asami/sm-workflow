@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  */
 final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val operations: Vector[OperationDefinition] = Vector(
@@ -24,7 +24,23 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseValidationRecoveryOperation,
     SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseValidationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseRemainingPlanOperation,
-    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseRemainingPlanOperation)
+    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseRemainingPlanOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseReviewPurposeRepairOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdmitGoalPhaseReviewPurposeRepairOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseClosureRecoveryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseClosureOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseSourceHistoryRecoveryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseSourceHistoryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCandidateRecoveryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseCandidateOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseWholePhaseCandidateRecoveryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseWholePhaseCandidateOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCandidateObservationContinuationOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.ContinueGoalPhaseCandidateObservationOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCompletionPolicyOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseCompletionPolicyOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseFailedPhaseRepairOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseFailedPhaseRepairOperation)
   private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "GoalPhaseService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -45,7 +61,7 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       absent.foreach(_.isSuccess shouldBe false)
       val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("all nine Provided operations declare their business inputs, without a universal argument")
+      And("all twenty-five Provided operations declare their business inputs, without a universal argument")
       operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
@@ -56,14 +72,34 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
         "describeGoalPhaseValidationRecovery" -> Some("GoalPhaseValidationRecoveryDescriptionInput"),
         "recoverGoalPhaseValidation" -> Some("GoalPhaseValidationRecoveryInput"),
         "describeGoalPhaseRemainingPlan" -> Some("GoalPhaseRemainingPlanDescriptionInput"),
-        "adoptGoalPhaseRemainingPlan" -> Some("GoalPhaseRemainingPlanAdoptionInput"))
+        "adoptGoalPhaseRemainingPlan" -> Some("GoalPhaseRemainingPlanAdoptionInput"),
+        "describeGoalPhaseReviewPurposeRepair" -> Some("GoalPhaseReviewPurposeRepairDescriptionInput"),
+        "admitGoalPhaseReviewPurposeRepair" -> Some("GoalPhaseReviewPurposeRepairInput"),
+        "describeGoalPhaseClosureRecovery" -> Some("GoalPhaseClosureRecoveryDescriptionInput"),
+        "recoverGoalPhaseClosure" -> Some("GoalPhaseClosureRecoveryInput"),
+        "describeGoalPhaseSourceHistoryRecovery" -> Some("GoalPhaseSourceHistoryRecoveryDescriptionInput"),
+        "recoverGoalPhaseSourceHistory" -> Some("GoalPhaseSourceHistoryRecoveryInput"),
+        "describeGoalPhaseCandidateRecovery" -> Some("GoalPhaseCandidateRecoveryDescriptionInput"),
+        "recoverGoalPhaseCandidate" -> Some("GoalPhaseCandidateRecoveryInput"),
+        "describeGoalPhaseWholePhaseCandidateRecovery" -> Some("GoalPhaseWholePhaseCandidateRecoveryDescriptionInput"),
+        "recoverGoalPhaseWholePhaseCandidate" -> Some("GoalPhaseWholePhaseCandidateRecoveryInput"),
+        "describeGoalPhaseCandidateObservationContinuation" -> Some("GoalPhaseCandidateObservationContinuationDescriptionInput"),
+        "continueGoalPhaseCandidateObservation" -> Some("GoalPhaseCandidateObservationContinuationInput"),
+        "describeGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyDescriptionInput"),
+        "adoptGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyAdoptionInput"),
+        "describeGoalPhaseFailedPhaseRepair" -> Some("GoalPhaseFailedPhaseRepairDescriptionInput"),
+        "adoptGoalPhaseFailedPhaseRepair" -> Some("GoalPhaseFailedPhaseRepairAdoptionInput"))
       operations.find(_.name == "submitGoalPhaseFindingRecording").get.specification.request.parameters.map(_.name) shouldBe Vector(
         "sessionId", "result", "resultReference", "completionFacts", "executionEvidence")
       provided.find(_.name == "submitGoalPhaseFindingRecording").get.resultType shouldBe
         Some("GoalPhaseFindingRecordingSubmissionResult")
+      provided.find(_.name == "describeGoalPhaseReviewPurposeRepair").get.resultType shouldBe
+        Some("GoalPhaseReviewPurposeRepairDescriptionResult")
+      provided.find(_.name == "admitGoalPhaseReviewPurposeRepair").get.resultType shouldBe
+        Some("GoalPhaseReviewPurposeRepairResult")
     }
 
-    "resolve the six real semantic Human and recording capabilities in the ordered definition" in {
+    "resolve the seven real semantic, triage, Human and recording capabilities in the ordered definition" in {
       Given("the generated ordered Workflow and its actual native definition consumer")
       When("the definition and Required operations are resolved")
       val workflow = GoalPhaseWorkflowStateMachineWorkflow1.workflow
@@ -73,9 +109,9 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       native.isSuccess shouldBe true
       workflow.version shouldBe "goal-phase-business-operation-v7"
       workflow.states.map(_.name) shouldBe Vector("Pending", "OrderedImplementation", "OrderedInspectCandidate",
-        "OrderedValidation", "OrderedReview", "OrderedRepair", "OrderedClosing", "PhaseInspection",
+        "OrderedValidation", "OrderedTriage", "OrderedReview", "OrderedRepair", "OrderedClosing", "PhaseInspection",
         "PhaseValidation", "PhaseReview", "PhaseClosing", "PhaseDecision", "PhaseClosed")
-      capabilities shouldBe Set("goal-phase-implementation-capability", "goal-phase-repair-capability",
+      capabilities shouldBe Set("goal-phase-implementation-capability", "goal-phase-repair-capability", "goal-phase-step-triage-capability",
         "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability",
         "goal-phase-finding-recording-capability")
       val recording = workflow.requiredOperations.find(_.identity.capability == "goal-phase-finding-recording-capability").get

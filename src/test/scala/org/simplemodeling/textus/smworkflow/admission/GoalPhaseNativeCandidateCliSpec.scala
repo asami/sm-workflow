@@ -11,7 +11,7 @@ import NativeWorkflowCliFixture as F
 /** Normal isolated CLI regression with explicitly specification-owned semantics,
   * review attestations and local effect grants. No live Session or external AI.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -26,7 +26,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
   private def _reference(name: String) = V.WorkflowArtifactReference("candidate-continuation-spec-" + name, "1")
   private def _result(outcome: String) = V.GoalPhaseWorkResult(outcome,
     "SPECIFICATION-OWNED selected candidate disposition", Vector.empty,
-    None, None, None, None, None, None, None)
+    None, None, None, None, None, None, None, None)
   private def _submit_call(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult, name: String,
     outcome: String, execution: Option[V.WorkflowExecutionEvidence]): F.Result =
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

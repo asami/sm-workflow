@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -54,7 +54,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     wholePhaseCandidateRecovery: Option[GoalPhaseWholePhaseCandidateRecovery.Installation] = None,
     failedPhaseRepairAdoption: Option[GoalPhaseFailedPhaseRepairAdoption.Installation] = None,
     completionPolicyAdoption: Option[GoalPhaseCompletionPolicyAdoption.Installation] = None,
-    selectedCompletionPolicy: String = GoalPhasePostCompletionSync.localPolicy)
+    selectedCompletionPolicy: String = GoalPhasePostCompletionSync.localPolicy,
+    reviewPurposeRepair: Option[GoalPhaseLegacyPurposeRepairContinuation.Installation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -215,6 +216,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseWholePhaseCandidateRecovery.describeOperation, GoalPhaseWholePhaseCandidateRecovery.recoveryOperation,
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
+            GoalPhaseLegacyPurposeRepairContinuation.describeOperation, GoalPhaseLegacyPurposeRepairContinuation.admissionOperation,
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,
             GoalPhaseCompletionPolicyAdoption.describeOperation, GoalPhaseCompletionPolicyAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,

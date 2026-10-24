@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Input-only shared fixture for a real Compile Step and one real Phase Test.
   * The external readiness marker is outside the candidate and repository.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends GoalPhaseValidationRecoveryOperationFixture {
@@ -155,9 +155,8 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
 /** Explicit opt-in installed qualification. Every repository, Session, Human
   * fixture, Step commit and execution belongs only to this newly created root.
   * Fixture-owned evidence does not claim production Human provenance.
-  * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
-  * @author  ASAMI, Tomoharu
+  * Declaration metadata retained from the producer: introduced Oct. 22, 2026;
+  * producer version Oct. 22, 2026; author ASAMI, Tomoharu.
   */
 @DoNotDiscover
 final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with GivenWhenThen
@@ -233,7 +232,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
     def acceptStep(reviewcall: Invocation): Unit = {
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact Step", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None)
       val reference = V.WorkflowArtifactReference("installed-known-step-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,

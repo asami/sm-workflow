@@ -9,12 +9,13 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import GoalPhaseNativeClosure as K
+import GoalPhaseClosureRecovery as R
 import GoalPhaseOrderedProgression as O
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
@@ -207,6 +208,43 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
         Then("the invalid pair grants neither retry nor native progress")
         result.isSuccess shouldBe false
       }
+    }
+  }
+
+  "Observed continuation attempt bounds" should {
+    "preserve attempt 255 as pending and refuse an automatic continuation beyond the existing bound" in {
+      Given("255 retained failed checks followed by one actual-shaped clean intent and terminal failed execution at attempt 255")
+      val from = _frontier
+      val input = _input(from)
+      val prefix = (0 until 255).foldLeft(Vector.empty[K.Attempt]) { (attempts, index) =>
+        val previous = attempts.lastOption.flatMap(_.check).map(_.record).getOrElse(from)
+        attempts :+ _attempt(previous, K.Payload(input, 1, None, index, Some(_failed)))
+      }
+      val pending = _attempt(prefix.last.check.get.record, K.Payload(input, 1, None, 255, Some(_clean)), true)
+      val intent = pending.intent.get
+      val execution = R.ExecutionSaved(_append(intent.record, "execution-result-retry-255"),
+        R.Execution(input, 1, 255, "commit-selected", "sm-workflow-repository", "failed",
+          Some("Exited(128)"), Some(128), "Fixture-owned actual-shaped index lock failure", Vector(_paths.head)))
+      val observation = R.Observation("/fixture/repository", "main", _base.head, _base.tree, _candidate.tree,
+        None, Vector(RepositorySyncManagedGitObservation.DirtyPath('M', ' ', _paths.head, None)), Vector(_paths.head),
+        true, Vector(_paths.head), RepositorySyncManagedGitObservation.Commit(_base.head, _base.tree, Vector("d" * 40)))
+      val target = R.RecoveryTarget(input.instance, from.definition.workflowIdentity.value, from.definition.workflowRevision.value,
+        "fixture-participant", input.plan, input.planRevision, input.step, input.generation, input.sourceRevision,
+        execution.record.revision.value.toString, R.reference(input, "intent", 255).identity, "1",
+        intent.record.revision.value.toString, 1, 255, input.parent, input.candidate, input.reviewEvidence,
+        _paths, observation, Some(execution.payload))
+      val continuation = R.ContinuationSaved(_append(execution.record, "continuation-retry-255"),
+        R.Continuation(target, "retry-preparation"))
+      When("native history is reconstructed with and without the out-of-bound continuation")
+      val retained = take(K.reconcileAttemptsC(from, input, 1, prefix :+ pending.copy(execution = Some(execution))))
+      val refused = K.reconcileAttemptsC(from, input, 1, prefix :+ pending.copy(execution = Some(execution),
+        continuation = Some(continuation)))
+      Then("the final actual intent and summary remain retained while attempt 256 is never admitted")
+      retained.pending shouldBe Some(intent)
+      retained.execution shouldBe Some(execution)
+      retained.nextAttempt shouldBe None
+      R.continuationAction(target) shouldBe None
+      refused.isSuccess shouldBe false
     }
   }
 

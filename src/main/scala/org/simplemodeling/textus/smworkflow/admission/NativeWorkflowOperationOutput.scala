@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -40,11 +40,13 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.checksReceipt, value.repairDirective.map(d => V.GoalPhaseRepairDirective(d.reason, d.findings)),
       value.review.map(r => V.GoalPhaseNativeReviewContext(r.changedPaths, r.diff, r.checks.map(_goal_check), reviewContext,
         r.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)),
-        r.priorReviews.map(prior => GoalPhaseNativeMetadata.record(prior.asJson)))),
+        r.priorReviews.map(prior => GoalPhaseNativeMetadata.record(prior.asJson)),
+        r.triageJudgment.map(j => GoalPhaseNativeMetadata.record(j.asJson)))),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
         d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
       value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))),
-      GoalPhaseFixIssues.publicState(value.issues))
+      GoalPhaseFixIssues.publicState(value.issues), value.purposeRepair.map(contract => GoalPhaseNativeMetadata.record(contract.asJson)),
+      value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
@@ -254,7 +256,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport),
       GoalPhasePlanRevision.publicProposal(value.planRevision), GoalPhaseFindingRecording.publicObservations(value.reviewObservations),
       GoalPhaseDependencyScope.publicProposal(value.dependencyProposal),
-      value.completionConditions.map(conditions => GoalPhaseNativeMetadata.record(conditions.asJson)))
+      value.completionConditions.map(conditions => GoalPhaseNativeMetadata.record(conditions.asJson)),
+      GoalPhasePurposeRepair.publicSources(value.repairFindingSources))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not
@@ -265,7 +268,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     val session = completed.identity.value
     submitted.result.value match {
       case value: GoalPhaseNativeWork.Result =>
-        V.GoalPhaseWorkSubmissionResult(session, true, "accepted", "Accepted " + value.outcome + ": " + value.summary)
+        V.GoalPhaseWorkSubmissionResult(session, true, "accepted", "Accepted " + value.outcome + ": " + value.summary, journalRecording)
       case value: GoalPhaseOrderedHumanDecision.Answer =>
         V.GoalPhaseOrderedDecisionSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
       case value: GoalPhaseFindingRecording.Result =>

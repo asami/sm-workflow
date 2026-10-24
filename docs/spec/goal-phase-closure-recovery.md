@@ -1,6 +1,6 @@
 # GoalPhase selected Step closure recovery
 
-Date: 2026-10-22 (Asia/Tokyo)
+Date: 2026-10-24 (Asia/Tokyo)
 
 The normal generated `GoalPhaseService.describeGoalPhaseClosureRecovery(sessionId)`
 and `recoverGoalPhaseClosure(input)` operations support an existing Session paused
@@ -27,7 +27,12 @@ its native Long range and ordinal/attempt require JSON integers.
 Git observation uses existing typed `git_*` operations in the current owning
 UnitOfWork. It reads the installed root, branch, HEAD/tree, index, merge and
 selected state and actual commit metadata, then checks for observation drift.
-Physical `selectedPaths` comes from the actual CNCF selected-read result. The
+Physical `selectedPaths` comes from the typed value of
+`SelectedIndexChanges(selection, originalParentHead)`, including deletions,
+additions and rename destinations. The reviewed-candidate comparison separately
+determines `selectedChangesEmpty`. Selection does not come from declared-path
+metadata or a comparison against current HEAD: it must remain available after
+an exact matching commit already exists. The
 application never discovers selection by reading configuration, argv or Git
 output. Description writes no records and supplies no authority. These separate
 reads are not an atomic filesystem snapshot.
@@ -37,7 +42,21 @@ execution summary remains **unknown**. A later dry-run or unchanged HEAD cannot
 establish historical Failed(1), NotStarted, NotExecuted or success. The current
 observation and any actual saved terminal summary remain distinct facts.
 
-## R2 — Independent Human evidence and prior execution ownership
+## R2 — Existing authority and independent Human direction
+
+An actual saved local `CommitSelected` execution is known ended only when its
+bound summary has termination exactly `Exited(code)`, a matching exit code and
+consistent outcome (`failed` with nonzero code or `succeeded` with zero). An
+absent summary, an unknown/live/cancelled/timed-out termination, an incomplete
+result, nonzero alone, unchanged HEAD alone or stderr text grants no automatic
+continuation. This closed local program disables hooks and signing and has no
+remote effect. Independently existing Step closure authority remains required.
+
+Read-only description returns `continuation-ready`, empty Human choices and
+`advanceGoalPhase` when those saved terminal facts, current typed Git facts and
+existing authority admit one of the two R3 continuations. Otherwise it retains
+`decision-required` and the genuine independent Human route below. Description
+does not persist a continuation or grant authority.
 
 The installed independent evidence purpose is `goal-phase-closure-recovery`.
 `NativeHostPreparationService.prepareEvidence` accepts kind `closure-recovery`
@@ -61,7 +80,23 @@ is fixture-only and never authorizes a real Session.
 history and Git state and creates no mechanical direction. It grants no effect.
 Its current target and independent Human evidence still must match.
 
-## R3 — Immutable direction and separate Advance
+## R3 — Immutable direction or observed continuation
+
+Ordinary Advance may save one small private typed `Continuation(target, action)`
+at the exact execution frontier through the existing guarded mechanical
+receipt/history boundary. It is distinct from Human `Direction`; it fabricates
+no Human reference or `AuthorizeNewAttempt` evidence.
+
+| Automatic action | Required saved execution and actual observation | Ordinary Advance |
+| --- | --- | --- |
+| `retry-preparation` | Actual failed nonzero Exited result; original branch/root, no merge, original parent HEAD/tree, exact reviewed index, selected worktree clean, all pending/selected paths owned | Recheck the exact observation and existing Step closure authority, save one fresh selected structural check and incremented attempt intent, invoke local commit once |
+| `reconcile-commit` | Actual consistent Exited result; actual HEAD is a single-parent child of the original parent with exact reviewed tree/index and clean selected state | Recheck the observation, authority and typed commit metadata, then record normal StepCommitObserved without invoking commit |
+
+The original execution summary and accepted input remain immutable. Each
+ordinary Advance invokes at most one commit; a new failure returns honest Wait
+with its own actual summary. There is no internal retry loop or repair-count
+refund. An unresolved old effect or new authority still uses explicit Human
+direction; no current observation alone substitutes for historical termination.
 
 Recovery compares the supplied target to freshly described current facts and
 appends only an immutable typed mechanical direction with a normal conditional

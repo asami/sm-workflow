@@ -10,7 +10,7 @@ import NativeWorkflowCliFixture as F
 /** Separate ordinary commands retain actual failed checks and fresh validation.
   * Assigned semantic edits are specification data, not external provider proof.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -28,7 +28,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       work.issues.toVector.flatMap(_.issues).filter(i => i.repository == work.selectedPlan.repository &&
         work.stepIdentity.contains(i.step) && i.status != "RESOLVED").map(i =>
           V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None))))
-    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None)
+    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None, None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
       "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))

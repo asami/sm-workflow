@@ -15,7 +15,7 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary command stages around genuine external semantic repair.
   * Supplied observations check coherence and authenticate no provider provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -91,7 +91,7 @@ final class NativeGoalProviderRepairCliSpec extends AnyWordSpec with Matchers wi
       Given("the initial assigned semantic input is explicitly fixture data without execution evidence")
       When("the fixture writes the incorrect newline and submits through the issued normal named contract")
       Files.writeString(value, "incorrect\n", UTF_8)
-      val initialresult = V.GoalPhaseWorkResult("completed", "Initial fixture input for actual failed product check", Vector.empty, None, None, None, None, None, None, None)
+      val initialresult = V.GoalPhaseWorkResult("completed", "Initial fixture input for actual failed product check", Vector.empty, None, None, None, None, None, None, None, None)
       val initialreference = V.WorkflowArtifactReference("fixture-cli-check-implementation", "1")
       val submitted = scenario.call("command", implementation.submitOperation.get,
         Vector("--sessionId", implementation.submitSessionId.get,

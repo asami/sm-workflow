@@ -26,7 +26,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -119,6 +119,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
         !(selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
           selected.exists(_.kind == WorkflowSbtValidation.Kind.TestOnly)))
       F.invalid("code Step policy requires fixed Compile and focused TestOnly programs before execution") else Consequence.unit
+    _ <- if (step.flatMap(id => plan.steps.find(_.identity == id)).flatMap(_.actionPolicy).exists(_.scalaLint == "required") &&
+        !selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      F.invalid("required Scala lint has no fixed FixCheck program before execution") else Consequence.unit
   } yield selected
 
   private[admission] def sourceInstructionsC(d: F.Declaration, plan: O.Plan,
@@ -166,6 +169,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
       case Some("passed") if actual.payload.assessment.exists(_.branch == "admit") =>
         "Actual checks passed and formal Step admission is retained. Triage and detailed review were not executed; native commit authority and closure remain separate."
+      case Some("passed") if actual.payload.assessment.exists(_.branch == "triage") =>
+        "Actual required native checks passed; selected semantic uncertainty requires bounded triage. Independent review and closure are not accepted."
       case Some("passed") if actual.payload.assessment.exists(_.branch == "decision") =>
         "Actual checks passed; the retained immediate observation requires judgment before continuation."
       case Some("passed") => "Actual required native checks passed. Independent review work, acceptance and Step/Phase closure remain unfinished."
@@ -359,13 +364,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
         } else "failed"
         completed = current.payload.copy(outcome = Some(outcome))
         assessment <- if (passed && !store.whole && inspected.plan.steps(inspected.cursor).actionPolicy.nonEmpty)
-          GoalPhaseStepAssessment.assessC(inspected, completed, store.reference("validation").identity).map(Some(_))
+          GoalPhaseStepAssessment.assessC(inspected, completed, store.reference("validation").identity, store.candidate.payload.changedPaths).map(Some(_))
           else Consequence.success(Option.empty[GoalPhaseStepAssessment.Result])
         payload = completed.copy(assessment = assessment)
-        validated <- observedStateC(inspected, payload, store.reference("validation").identity)
+        validated <- observedStateC(inspected, payload, store.reference("validation").identity, store.candidate.payload.changedPaths)
         target = validated.stage.toString
         event = (if (store.whole) "phase-" else "") + (outcome match {
           case "passed" if assessment.exists(_.branch == "admit") => "checks-admitted"
+          case "passed" if assessment.exists(_.branch == "triage") => "checks-triage-required"
           case "passed" if assessment.exists(_.branch == "decision") => "checks-judgment-required"
           case "passed" => "checks-passed"
           case "repair-required" => "checks-repair-required"
@@ -578,6 +584,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         else F.invalid("check intent/result has no actual unsuspended Validation frontier")
       target = payload.outcome.map {
         case "passed" if payload.assessment.exists(_.branch == "admit") => "Closing"
+        case "passed" if payload.assessment.exists(_.branch == "triage") => "Triage"
         case "passed" if payload.assessment.exists(_.branch == "decision") => "Decision"
         case "passed" => reviewStage
         case "repair-required" => "Repair"
@@ -599,7 +606,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       inspected <- if (controller.stage.toString == validationStage && controller.candidate.contains(initial.candidate))
         Consequence.success(controller)
         else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy, recordingPaths)
-      state <- observedStateC(inspected, saved.payload, reference("validation").identity)
+      state <- observedStateC(inspected, saved.payload, reference("validation").identity, candidate.payload.changedPaths)
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:validation",
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
@@ -874,7 +881,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   /** One owner reconstructs new and retained outcomes; old failed records stay Decision. */
   private[admission] def observedStateC(controller: O.State, payload: Payload,
-    receiptIdentity: String): Consequence[O.State] = {
+    receiptIdentity: String, changedPaths: Vector[String] = Vector.empty): Consequence[O.State] = {
     if (controller == null || !_valid_payload(payload) || !_text(receiptIdentity) ||
         !(controller.stage == O.Stage.Validation || controller.stage == O.Stage.PhaseValidation) ||
         payload.step != (if (controller.cursor == controller.plan.steps.size) "phase:" + controller.plan.phase
@@ -890,7 +897,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       payload.outcome match {
       case Some("passed") if full && payload.receipts.size == payload.selected.size && successful(payload.receipts, payload.selected) =>
         if (controller.cursor < controller.plan.steps.size && controller.plan.steps(controller.cursor).actionPolicy.nonEmpty)
-          GoalPhaseStepAssessment.assessC(controller, payload, receiptIdentity).flatMap { expected =>
+          GoalPhaseStepAssessment.assessC(controller, payload, receiptIdentity, changedPaths).flatMap { expected =>
             if (payload.assessment.contains(expected)) controller.acceptC(O.StepAssessed(expected))
             else F.invalid("formal Step assessment differs from the saved Plan and actual validation facts")
           }
