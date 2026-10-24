@@ -39,7 +39,8 @@ lazy val root = project
     Test / testOnly := (Test / testOnly).dependsOn(cozyPrepareRuntime, Compile / packageBin).evaluated,
     // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
     Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65ConditionalLintSpec",
+      if (Set("org.simplemodeling.textus.smworkflow.admission.Phase65WorkflowConsumerCliSpec",
+        "org.simplemodeling.textus.smworkflow.admission.Phase65ConditionalLintSpec",
         "org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseFixCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.Phase65GoalPhaseAssessmentCliSpec",
         "org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",

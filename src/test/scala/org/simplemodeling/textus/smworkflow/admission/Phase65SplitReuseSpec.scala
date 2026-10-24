@@ -52,6 +52,23 @@ final class Phase65SplitReuseSpec extends AnyWordSpec with ThreeWorkflowDirectOp
       input.boundaries.map(b => S.BoundaryJudgment(b.edge.afterItem, EdgeDisposition.Either, "independent closure")),
       Vector(S.EvidenceReference("specification-semantic-answer", "1")))
   }
+  /** Independent Q4 client handoff: normal public Start only; the client owns
+    * subsequent Advance/Submit. No store row or history is reconstructed. */
+  private[admission] def prepareClientScenario(unknown: Boolean): (java.nio.file.Path, String) = {
+    val owned = Files.createDirectories(java.nio.file.Path.of("target/sm-workflow/work/p65-split-consumer").toAbsolutePath)
+    val root = Files.createTempDirectory(owned, if (unknown) "unknown-" else "known-")
+    val policy = DevelopmentJournal.Policy("workflow", collection("journal"))
+    val parameters = NativeWorkflowCliFixture.JournalHost(policy).values
+    var id = ""
+    withRuntime(root, Some(_document_workspace_plan(root)), executionParameters = parameters) { (owner, component, actor, prepare) =>
+      prepare(c => prepareInputsWithFacts(c, if (unknown) _semantic_preview_facts() else knownFacts))
+      val result = take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+        service = "SplitPhaseService", operation = "startSplitPhase", properties = startWire), actor))
+      id = _business_value[V.SplitPhaseStartResult](result).sessionId
+    }
+    root -> id
+  }
+
   "Phase 6.5 Split reuse" should afterWord("in spec:workflow-semantic-gap-routing, examples:S1-S5, rules:P65-24,P65-25,P65-26") {
     for (enabled <- Vector(false, true)) {
       s"complete known inputs without a semantic assignment and reopen the actual selected frontier (journal=$enabled)" in {

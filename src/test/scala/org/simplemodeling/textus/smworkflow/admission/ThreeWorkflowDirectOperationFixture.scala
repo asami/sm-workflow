@@ -204,7 +204,8 @@ private[admission] trait ThreeWorkflowDirectOperationFixture extends Matchers wi
       org.goldenport.cncf.path.AliasResolver.empty, grants))) else None
     val embedded = processplan.map { plan =>
       val directory = Files.createDirectories(root.resolve(".textus"))
-      val host = raw ++ Map("textus.subsystem.storage.plan" -> ThreeWorkflowNormalHostFixture.storagePlan.noSpaces,
+      val host = raw ++ Map("textus.subsystem.storage.plan" -> executionParameters.getOrElse("textus.subsystem.storage.plan",
+          ThreeWorkflowNormalHostFixture.storagePlan.noSpaces),
         "textus.subsystem.process-execution.plan" -> plan.noSpaces,
         WorkflowSelectedDocumentFiles.repositoryKey -> "repo",
         WorkflowSelectedDocumentFiles.workspaceKey -> WorkflowFileRuntimeFixture.documentsWorkspace)

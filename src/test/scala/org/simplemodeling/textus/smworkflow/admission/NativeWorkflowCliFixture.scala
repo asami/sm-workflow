@@ -96,6 +96,47 @@ private[admission] object NativeWorkflowCliFixture {
     new Scenario(root, host, plan, None, None)
   }
 
+  /** Public CLI continuation of a real direct-operation producer. Only the normal
+    * assembly descriptor is selected here; no Workflow data is reconstructed. */
+  final class ProducerClient(val root: Path) {
+    require(root.isAbsolute && Files.isRegularFile(root.resolve(".textus/config.json")))
+    private val descriptor = root.resolve(".textus/assembly.yaml")
+    private val original = Files.readString(descriptor)
+    require(original.contains("components: []"), "Select the actual direct producer descriptor once")
+    Files.writeString(descriptor, original.replace("components: []",
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+    private var index = 0
+    def call(service: String, operation: String, parameters: Vector[String]): Result = {
+      require(Set("SplitPhaseService", "RepositorySyncService", "JournalService")(service))
+      val argv = Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
+        _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
+        "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
+        s"--textus.assembly.descriptor=$descriptor", "command", s"$_component.$service.$operation") ++
+        parameters ++ Vector("--json")
+      val logs = Files.createDirectories(root.resolve("consumer-logs"))
+      val stdout = logs.resolve(s"$index.stdout.json")
+      val stderr = logs.resolve(s"$index.stderr")
+      index += 1
+      require(!Files.exists(stdout) && !Files.exists(stderr), "Retain every actual invocation")
+      val process = new ProcessBuilder(argv.asJava).directory(root.toFile)
+        .redirectOutput(stdout.toFile).redirectError(stderr.toFile).start()
+      process.getOutputStream.close()
+      val invocation = Invocation(argv, process.pid(), stdout, stderr)
+      try {
+        require(process.waitFor(240, TimeUnit.SECONDS), "Owned public CLI exceeded fixture deadline\n" + invocation.logs)
+        Result(process.exitValue(), invocation)
+      } finally {
+        if (process.isAlive) {
+          process.destroy()
+          if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            require(process.waitFor(5, TimeUnit.SECONDS), "Owned public CLI did not terminate")
+          }
+        }
+      }
+    }
+  }
+
   final class Scenario private[NativeWorkflowCliFixture] (
     val root: Path, val host: ThreeWorkflowRuntimeParameters.Definition,
     val plan: GoalPhaseOrderedProgression.Plan, val port: Option[Int],

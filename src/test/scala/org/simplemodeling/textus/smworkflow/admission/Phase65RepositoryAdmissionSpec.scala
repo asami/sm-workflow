@@ -124,7 +124,8 @@ final class Phase65RepositoryAdmissionSpec extends AnyWordSpec with GivenWhenThe
   }
 
   private def episode(name: String, policy: Option[RepositorySyncMergeAssessment.Policy],
-    effects: Boolean = true, interrupt: Option[String => Consequence[Unit]] = None, scenario: String = "Diverged")
+    effects: Boolean = true, interrupt: Option[String => Consequence[Unit]] = None, scenario: String = "Diverged",
+    componentInstance: String = "repository-spec")
     (run: Episode => Unit): Unit = {
     val owned = Files.createDirectories(Path.of("target/sm-workflow/work/p65-repository-admission").toAbsolutePath.normalize)
     val root = Files.createTempDirectory(owned, name + "-")
@@ -142,7 +143,8 @@ final class Phase65RepositoryAdmissionSpec extends AnyWordSpec with GivenWhenThe
         "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection)).noSpaces,
         "textus.subsystem.storage.plan" -> storage.noSpaces)
     } else Map.empty[String, String]
-    _with_runtime_(root, scenario, host = Some(host), hostParameters = journalParameters, nativeAcknowledgement = interrupt) { (owner, component, actor, prepare) =>
+    _with_runtime_(root, scenario, host = Some(host), hostParameters = journalParameters, nativeAcknowledgement = interrupt,
+      componentInstance = componentInstance) { (owner, component, actor, prepare) =>
       def call(operation: String, fields: List[Property]) = owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = if (operation.startsWith("journal:")) "JournalService" else "RepositorySyncService",
           operation = operation.stripPrefix("journal:"), properties = fields), actor)
@@ -151,6 +153,14 @@ final class Phase65RepositoryAdmissionSpec extends AnyWordSpec with GivenWhenThe
       val started = read_value[V.RepositorySyncStartResult](take(call("startRepositorySync", NativeWorkflowOperationInputFixture.repository(input))))
       run(new Episode(root, InstanceIdentity(started.sessionId), input, call, prepare))
     }
+  }
+
+  /** Q4 receives an actual normal Start and owned diverged repository, before
+    * validation or merge effects. A separate native client continues it. */
+  private[admission] def prepareClientScenario(): (Path, String) = {
+    var selected = Option.empty[(Path, String)]
+    episode("journal", Some(assessment), componentInstance = "default") { e => selected = Some(e.root -> e.id.value) }
+    selected.get
   }
 
   "Q3-R formal pending merge admission" should {
