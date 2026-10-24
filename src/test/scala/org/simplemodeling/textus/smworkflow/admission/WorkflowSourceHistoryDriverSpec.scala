@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Source-history dispatch and actual effects in the ordinary owning File UoW.
   * Fixtures independently inspect bytes; product code uses only the File DSL.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   */
 final class WorkflowSourceHistoryDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import WorkflowSourceHistory.{Source, Result}
@@ -82,7 +82,7 @@ final class WorkflowSourceHistoryDriverSpec extends AnyWordSpec with Matchers wi
       val original = _header("Origin: migrated 日本 source.", "born   2026-01-06",
         "latest 2026-03-24", "writer Existing Author") + _code
       val expected = _header("Origin: migrated 日本 source.", "born   2026-01-06",
-        "prior 2026-03-24", "latest 2026-04-09", "writer Existing Author") + _code
+        " prior 2026-03-24", "latest 2026-04-09", "writer Existing Author") + _code
       val root = _fixture(original)
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace, mapping = _mapping) { core =>
         When("the owning Manage call dispatches goldenport with supplied uncertain update provenance")
@@ -105,14 +105,14 @@ final class WorkflowSourceHistoryDriverSpec extends AnyWordSpec with Matchers wi
         Then("only the initial result is updated and the repeated result is byte-identical and reliable")
         first shouldBe Result("goldenport", "updated", Some(_identity), false)
         repeated shouldBe Result("goldenport", "unchanged", Some(_identity), false)
-        installed shouldBe (_header("born 2026-01-06", "latest 2026-04-09") + _code).getBytes(UTF_8).toVector
+        installed shouldBe (_header("born   2026-01-06", "latest 2026-04-09") + _code).getBytes(UTF_8).toVector
         _bytes(root) shouldBe installed
       }
     }
 
     "return unchanged under actual read-only authority without issuing a write" in {
       Given("already normalized history under a workspace grant that permits only reads")
-      val root = _fixture(_header("born 2026-01-06", "latest 2026-04-09", "writer Known Author") + _code)
+      val root = _fixture(_header("born   2026-01-06", "latest 2026-04-09", "writer Known Author") + _code)
       val before = _bytes(root)
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace, access = Some("read-only"), mapping = _mapping) { core =>
         When("the owning call dispatches the same external rule and day")
@@ -231,7 +231,7 @@ final class WorkflowSourceHistoryDriverSpec extends AnyWordSpec with Matchers wi
           _source.copy(createdOn = None, author = None)))
         Then("the actual new header uses the supplied fallback date with uncertainty and has no invented writer")
         result shouldBe Result("goldenport", "updated", Some(_identity), true)
-        _bytes(root) shouldBe (_header("born 2026-04-09", "latest 2026-04-09") + _code).getBytes(UTF_8).toVector
+        _bytes(root) shouldBe (_header("born   2026-04-09", "latest 2026-04-09") + _code).getBytes(UTF_8).toVector
       }
     }
 
@@ -243,7 +243,7 @@ final class WorkflowSourceHistoryDriverSpec extends AnyWordSpec with Matchers wi
         val result = take(WorkflowSourceHistory.applyC(core, _target, _source.copy(author = Some("Known Writer"))))
         Then("the installed external header retains the supplied facts and the result remains reliable")
         result shouldBe Result("goldenport", "updated", Some(_identity), false)
-        _bytes(root) shouldBe (_header("born 2026-01-06", "latest 2026-04-09", "writer Known Writer") + _code).getBytes(UTF_8).toVector
+        _bytes(root) shouldBe (_header("born   2026-01-06", "latest 2026-04-09", "writer Known Writer") + _code).getBytes(UTF_8).toVector
       }
     }
 

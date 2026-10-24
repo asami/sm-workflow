@@ -702,25 +702,39 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the twenty-one installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the thirty-seven installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
           "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
+          "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
+          "GoalPhaseService.describeGoalPhaseSourceHistoryRecovery", "GoalPhaseService.recoverGoalPhaseSourceHistory",
+          "GoalPhaseService.describeGoalPhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseCandidate",
+          "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
+          "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
+          "GoalPhaseService.describeGoalPhaseReviewPurposeRepair", "GoalPhaseService.admitGoalPhaseReviewPurposeRepair",
+          "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
+          "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
           "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
           "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 21
-        published.map(_._1).distinct should have size 21
+        published should have size 37
+        published.map(_._1).distinct should have size 37
         published.map(_._1).toSet shouldBe expected
         published.foreach { (_, operation) =>
           operation.specification.request.parameters.head.name shouldBe
-            (if (operation.name.startsWith("start") || Set("recoverGoalPhaseValidation",
-              "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan").contains(operation.name)) "input" else "sessionId")
+            (if (operation.name.startsWith("start") || Set(
+              "recoverGoalPhaseValidation", "recoverGoalPhaseClosure", "recoverGoalPhaseSourceHistory",
+              "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "continueGoalPhaseCandidateObservation",
+              "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
+              "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
+              "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
+              "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy"
+            ).contains(operation.name)) "input" else "sessionId")
           operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
         }
         val beforeinvalid = current()

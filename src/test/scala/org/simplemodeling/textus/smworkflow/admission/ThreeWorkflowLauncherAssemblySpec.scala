@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -45,15 +45,19 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "GoalPhaseService.submitGoalPhaseFindingRecording",
         "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
         "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
+        "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
+        "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
         "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
         "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
-        "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal")
+        "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
+        "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",
+        "EvidenceService.manageEvidenceRetention", "EvidenceService.findDueEvidence")
       Then("every published native operation has a generated counterpart and each owning advance has its paired Start")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations shouldBe expected
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 24
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 32
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")
