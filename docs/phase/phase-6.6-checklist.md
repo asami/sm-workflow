@@ -1,6 +1,6 @@
 # Phase 6.6 Checklist: Incremental SBT Failure Diagnosis and Repair
 
-Status: planned
+Status: in progress; acceptance evidence pending
 Phase: [Phase 6.6](phase-6.6.md)
 
 All P66 outcomes are pending. The prior caller-size-limit removal is a completed

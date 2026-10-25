@@ -48,6 +48,21 @@ retained material from the current caller.
 
 ## Initial boundary and later extensions
 
+D1 implementation uses a read-only projection of the retained typed native SBT
+receipt. The validation view adds `diagnostics`; it does not rewrite the receipt
+codec or outcome. It recognizes attributable console boundaries, preserves raw
+line locators and distinguishes compilation-blocked selections from tests that
+actually ran in other aggregate projects. Missing counts remain unknown.
+Preceding suite headers are context, not proof of attribution under parallel output.
+The bounded initial display reports omitted groups, occurrences and context;
+the complete retained capture remains the source. Identical blocks are grouped
+only within the same stream and do not establish common causation. Unsupported
+formats stay explicitly unmatched. Common Evidence keeps existing Test stdout
+identities and additionally archives available failed Compile/check stderr and
+typed incomplete prefixes with distinct prefix output identities. An association
+or source projection alone does not prove that archival succeeded.
+This source change is not installed-route or connected D1–D4 acceptance.
+
 Deliver one failed SBT check, one additional-information round, one repair unit and
 one actual focused validation first. Include truthful empty/partial extraction
 and unavailable-source behavior within that connection. Do not first build a

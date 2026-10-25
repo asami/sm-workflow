@@ -1213,6 +1213,7 @@ OperationResult
 | dependencyValidation | org.goldenport.record.Record | ? |
 | assessment | org.goldenport.record.Record | ? |
 | assessmentJournal | JournalRecordingState | ? |
+| diagnostics | org.goldenport.record.Record | * |
 
 ## EvidenceReference
 

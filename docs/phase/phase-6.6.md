@@ -1,6 +1,6 @@
 # Phase 6.6: Incremental SBT Failure Diagnosis and Repair
 
-Status: planned
+Status: in progress; native Session f01d809d1b4bfe8a4b5c241dac301b81
 Planned: 2026-10-23
 Owner: sm-workflow development chat
 Predecessor: Phase 6.5; preserve ongoing Phase 6.4/6.5 work
@@ -8,6 +8,13 @@ Checklist: [Phase 6.6 acceptance](phase-6.6-checklist.md)
 Specification: [incremental SBT failure diagnosis](../spec/incremental-sbt-failure-diagnosis.md)
 Design: [diagnostic interaction](../design/incremental-sbt-failure-diagnosis.md)
 Delivery detail: [D1 through D4](../notes/incremental-sbt-failure-diagnosis-plan.md)
+
+Execution started on 2026-10-25 through the installed `sm-goal-phase` caller.
+Plan `phase-6.6-incremental-sbt-failure-diagnosis`, revision 1, captures D1–D4 and
+all sixteen P66 conditions. The original base is
+`2110f194c11f031a600a2c117da1a1761f618890`. D1 is the first issued implementation;
+the checklist remains pending until the corresponding actual evidence is available.
+The completed Phase 6.4/6.5 Sessions and their evidence are retained.
 
 ## Next-delivery scheduling clarification — 2026-10-23
 

@@ -61,7 +61,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         })), (payload.receipts ++ stopped).filter(r => payload.selected.exists(c => c.dependency.isEmpty && c.identity == r.identity)).map(_goal_check), payload.outcome,
       payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty,
       dependencyValidation = GoalPhaseNativeDependencyValidation.publicView(payload),
-      assessment = payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), assessmentJournal = None)
+      assessment = payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), assessmentJournal = None,
+      diagnostics = IncrementalSbtFailureDiagnosis.selected(payload).map(d => GoalPhaseNativeMetadata.record(d.asJson)))
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
