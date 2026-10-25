@@ -52,9 +52,9 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
       val child = NativeWorkflowOperationOutput.goalChild("selected-instance",
         NativeWorkflowOperationOutput.repositoryWait("selected-instance", "Pending repository", "Actual child condition"))
       Then("Request and question retain distinct saved counts and context-free Wait stays unknown")
-      work.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+      work.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2, None, None, None))
       human.work.repairProgress shouldBe work.repairProgress
-      human.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2))
+      human.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2, None, None, None))
       output.repairProgress shouldBe work.repairProgress
       absent.repairProgress shouldBe None
       child.repairProgress shouldBe None

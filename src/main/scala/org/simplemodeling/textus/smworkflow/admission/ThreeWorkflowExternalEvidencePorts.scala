@@ -71,6 +71,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.SourceHistoryRecovery, key(reference.identity, reference.revision), binding)
   }
+  val sourceHistoryNormalization: GoalPhaseSourceHistoryNormalization.EvidencePort = new GoalPhaseSourceHistoryNormalization.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.SourceHistoryNormalization, key(reference.identity, reference.revision), binding)
+  }
   val wholePhaseCandidateRecovery: GoalPhaseWholePhaseCandidateRecovery.EvidencePort = new GoalPhaseWholePhaseCandidateRecovery.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
       _admit_evidence_c(core, Purpose.WholePhaseCandidateRecovery, key(reference.identity, reference.revision), binding)
@@ -98,6 +102,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val completionPolicyAdoption: GoalPhaseCompletionPolicyAdoption.EvidencePort = new GoalPhaseCompletionPolicyAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
       _admit_evidence_c(core, Purpose.CompletionPolicyAdoption, key(reference.identity, reference.revision), binding)
+  }
+  val repairPolicyAdoption: GoalPhaseRepairPolicyAdoption.EvidencePort = new GoalPhaseRepairPolicyAdoption.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.RepairPolicyAdoption, key(reference.identity, reference.revision), binding)
   }
   val failedPhaseRepairAdoption: GoalPhaseFailedPhaseRepairAdoption.EvidencePort = new GoalPhaseFailedPhaseRepairAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =

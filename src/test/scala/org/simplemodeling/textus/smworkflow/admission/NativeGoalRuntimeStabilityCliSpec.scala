@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * The parent alone owns producer publication and activation. A successful Test
   * remains at pending independent review; this fixture supplies no review.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -402,7 +402,7 @@ final class NativeGoalRuntimeStabilityCliSpec extends AnyWordSpec with GivenWhen
     result.work.get.kind shouldBe "ReviewStep"
     result.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
     result.work.get.originalBase shouldBe fixture.request.work.get.originalBase
-    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   }
 
   private def _retained(fixture: Implemented, cli: InstalledCli, completed: Invocation,

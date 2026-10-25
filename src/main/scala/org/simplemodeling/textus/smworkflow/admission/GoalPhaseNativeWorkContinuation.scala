@@ -104,6 +104,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     sourceHistoryRecoveryConsumed: Boolean = false,
     sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
     sourceHistoryContinuation: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
+    sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Saved] = None,
+    sourceHistoryNormalizationContinuation: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
     closureSource: Option[InstanceRecord] = None,
     candidateObservation: Option[GoalPhaseCandidateRecovery.RecoveryTarget] = None,
     candidateObservationContinuation: Option[GoalPhaseCandidateObservationContinuation.Target] = None,
@@ -160,7 +162,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             GoalPhasePostCompletionSync.usesLocalPolicy(retained, cursor.completionDirection) =>
           _frontier_c(retained, cursor, core)
         // Admission and intent persistence must precede even the normal entry's Git observations.
-        case Frontier(cursor) if cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty =>
+        case Frontier(cursor) if cursor.sourceHistoryNormalization.nonEmpty || cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty =>
           _dispatch_c(retained, cursor, core)
         case Frontier(cursor) if cursor.controller.stage == O.Stage.Implementation &&
             cursor.controller.repairDirective.exists(_.reason.startsWith("Human-requested reconciliation: ")) =>
@@ -169,11 +171,37 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             plan.input.repairDirective.exists(_.reason.startsWith("Human-requested reconciliation: ")) =>
           NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, plan.findings))
-        case Paused(cursor, reason, false) if cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty =>
+        case Paused(cursor, reason, false) if cursor.sourceHistoryNormalization.nonEmpty || cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty =>
           _wait_cursor_c(cursor, reason)
         case _ => F.sessionC(identity, d, definition, core).flatMap(_advance_session_c(_, core))
       }
     } yield result
+
+    def describeRepairPolicyC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyDescriptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyDescriptionResult] =
+      _repair_policy_source_c(input.sessionId, core).flatMap(GoalPhaseRepairPolicyAdoption.describeC(_, input.restoration, core))
+
+    def adoptRepairPolicyC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyAdoptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyAdoptionResult] =
+      _repair_policy_source_c(input.sessionId, core).flatMap(GoalPhaseRepairPolicyAdoption.adoptC(_, d, core, input))
+
+    private def _repair_policy_source_c(identity: String, core: ActionCall.Core): Consequence[GoalPhaseRepairPolicyAdoption.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      selected <- located match {
+        case Frontier(cursor) if cursor.from == source.current && cursor.controller.closureIntent.isEmpty =>
+          Consequence.success(GoalPhaseRepairPolicyAdoption.Source(source, cursor.from, cursor.controller,
+            lastResult = cursor.lastresult))
+        case Human(human, _) => for {
+          next <- GoalPhaseNativeHistory.nextC(source.current, human.from)
+          _ <- if (next.exists(entry => entry.revision == source.current.revision && entry.suspension.nonEmpty))
+            Consequence.unit else F.invalid("Repair policy adoption requires the exact unanswered Human question")
+        } yield GoalPhaseRepairPolicyAdoption.Source(source, source.current, human.controller, Some(human),
+          Some(human.input -> human.result))
+        case _ => F.invalid("Collect issued work and reconcile unknown native effects before repair policy adoption")
+      }
+    } yield selected
 
     def describeCompletionPolicyC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseCompletionPolicyDescriptionResult] =
@@ -478,6 +506,45 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       GoalPhaseSourceHistoryRecovery.targetRecord(target), GoalPhaseSourceHistoryRecovery.choices,
       GoalPhaseSourceHistoryRecovery.recoveryOperation)
 
+    def describeSourceHistoryNormalizationC(identity: String, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseSourceHistoryNormalizationDescriptionResult] =
+      _source_history_normalization_source_c(identity, core).flatMap(GoalPhaseSourceHistoryNormalization.describeC(_, core))
+
+    def adoptSourceHistoryNormalizationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseSourceHistoryNormalizationAdoptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseSourceHistoryNormalizationAdoptionResult] =
+      _source_history_normalization_source_c(input.sessionId, core).flatMap(GoalPhaseSourceHistoryNormalization.adoptC(_, d, core, input))
+
+    private def _source_history_normalization_source_c(identity: String, core: ActionCall.Core):
+      Consequence[GoalPhaseSourceHistoryNormalization.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      selected <- located match {
+        case Human(human, _) if human.sourceHistoryRecovery.nonEmpty => for {
+          original <- GoalPhaseNativeHistory.prefixC(source.current,
+            InstanceRevision(human.sourceHistoryRecovery.get.sourceRevision.toLong))
+        } yield GoalPhaseSourceHistoryNormalization.Source(source, original, human.controller,
+          human.sourceHistoryRecovery.get, Some(human))
+        case Paused(cursor, _, false) if cursor.controller.stage == O.Stage.InspectCandidate &&
+            cursor.sourceHistoryNormalization.nonEmpty => for {
+          saved <- Consequence.success(cursor.sourceHistoryNormalization.get)
+          observed <- GoalPhaseSourceHistoryNormalization.retainedObservationC(source, core, saved)
+            .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Normalization has no actual preceding reconciliation")))
+          _ <- if (observed.record == source.current && observed.record == cursor.from && !observed.succeeded)
+            Consequence.unit else F.invalid("Normalization resume requires its latest failed or unresolved frontier")
+          original <- GoalPhaseNativeHistory.prefixC(source.current,
+            InstanceRevision(saved.direction.target.recovery.sourceRevision.toLong))
+        } yield GoalPhaseSourceHistoryNormalization.Source(source, original, cursor.controller,
+          saved.direction.target.recovery, resume = Some(saved))
+        case Paused(cursor, _, false) if cursor.controller.stage == O.Stage.InspectCandidate &&
+            cursor.inspectionSource.nonEmpty && !cursor.sourceHistoryRecoveryConsumed => for {
+          actual <- GoalPhaseSourceHistoryRecovery.currentTargetC(source, d, core, cursor.inspectionSource.get,
+            cursor.controller, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
+        } yield GoalPhaseSourceHistoryNormalization.Source(source, cursor.inspectionSource.get, cursor.controller, actual)
+        case _ => F.invalid("Normalization requires the original unknown source-history intent or its unanswered Human; other effects or completed decisions refuse")
+      }
+    } yield selected
+
     def recoverSourceHistoryC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseSourceHistoryRecoveryInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseSourceHistoryRecoveryResult] = for {
       supplied <- GoalPhaseSourceHistoryRecovery.targetC(input.target)
@@ -637,7 +704,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     private def _initial_cursor_c(source: F.Session): Consequence[Cursor] = for {
       from <- GoalPhaseNativeHistory.prefixC(source.current, source.started.receipt.next.revision)
-      controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
+      controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base,
+        source.started.receipt.payload.value.repairPolicy)
     } yield Cursor(from, controller, source.started.receipt.payload.value.documents, None, None, None, None)
 
     /** The sole read-only traversal follows only contiguous actual predecessors. */
@@ -707,9 +775,30 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             _ <- if (boundary.continuationIdentity.value == H.identity(decision).value) Consequence.unit
               else F.invalid("actual Human suspension differs from its Decision source")
             port <- _human_port_c
-            adopted <- if (decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
+            policyfollowing <- GoalPhaseNativeHistory.nextC(source.current, pending)
+            normalization <- if (policyfollowing.exists(_.causation.value.startsWith("ordered-source-history-normalization:")) &&
+                decision.sourceHistoryRecovery.nonEmpty) for {
+              original <- GoalPhaseNativeHistory.prefixC(source.current,
+                InstanceRevision(decision.sourceHistoryRecovery.get.sourceRevision.toLong))
+              saved <- GoalPhaseSourceHistoryNormalization.retainedC(source, d, core, original, cursor.controller,
+                cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates, Some(decision))
+            } yield saved else Consequence.success(Option.empty[GoalPhaseSourceHistoryNormalization.Saved])
+            policy <- if (policyfollowing.exists(_.causation.value.startsWith("ordered-repair-policy-adoption:")))
+              GoalPhaseRepairPolicyAdoption.retainedC(GoalPhaseRepairPolicyAdoption.Source(source, pending,
+                cursor.controller, Some(decision), Some(decision.input -> decision.result)), core).map(Some(_))
+              else Consequence.success(Option.empty[GoalPhaseRepairPolicyAdoption.Resumed])
+            adopted <- if (policy.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
               else GoalPhaseRemainingPlanAdoption.retainedC(decision, core, Some(d))
-            result <- adopted match {
+            result <- if (normalization.nonEmpty) {
+              val saved = normalization.get
+              _walk_c(source, cursor.copy(from = saved.record, sourceHistoryRecovery = None, inspectionSource = None,
+                sourceHistoryRecoveryConsumed = true, sourceHistoryNormalization = Some(saved)),
+                soughtwork, soughthuman, soughtrecording, core, historyonly)
+            } else if (policy.nonEmpty) {
+              val resumed = policy.get
+              _walk_c(source, cursor.copy(from = resumed.record, controller = resumed.controller),
+                soughtwork, soughthuman, soughtrecording, core, historyonly)
+            } else adopted match {
               case Some(value) => for {
                 policy <- value.documents.map(documents => P.policyC(value.controller.plan, documents, d.candidatePaths).map(Some(_)))
                   .getOrElse(Consequence.success(Option.empty[P.Policy]))
@@ -753,7 +842,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               }
             }
           } yield result else for {
-            prepared <- _retained_work_c(source, cursor, pending, core)
+            issuecursor <- if (cursor.controller.policyRepairPending) cursor.controller.dispatchPolicyRepairC
+              .map(state => cursor.copy(controller = state)) else Consequence.success(cursor)
+            prepared <- _retained_work_c(source, issuecursor, pending, core)
             identity = ContinuationIdentity(boundary.continuationIdentity.value)
             result <- if (soughtwork.contains(identity)) Consequence.success[Located](Work(prepared))
               else for {
@@ -810,6 +901,29 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughtwork: Option[ContinuationIdentity], soughthuman: Option[ContinuationIdentity],
       soughtrecording: Option[ContinuationIdentity],
       core: ActionCall.Core, historyonly: Boolean): Consequence[Located] = cursor.controller.stage match {
+      case O.Stage.InspectCandidate if cursor.sourceHistoryNormalization.nonEmpty => for {
+        observed <- GoalPhaseSourceHistoryNormalization.retainedObservationC(source, core, cursor.sourceHistoryNormalization.get)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Normalization history has no retained reconciliation intent")))
+        result <- if (observed.succeeded) _walk_c(source, cursor.copy(from = observed.record,
+          sourceHistoryNormalization = None, sourceHistoryContinuation = Some(observed.observation.target.recovery),
+          sourceHistoryNormalizationContinuation = Some(observed.observation.target)),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+        else for {
+          resumed <- GoalPhaseSourceHistoryNormalization.retainedResumeC(source, core, cursor.sourceHistoryNormalization.get, observed)
+          next <- resumed match {
+            case Some(saved) => _walk_c(source, cursor.copy(from = saved.record, sourceHistoryNormalization = Some(saved)),
+              soughtwork, soughthuman, soughtrecording, core, historyonly)
+            case None => _paused_c(source, cursor.copy(from = observed.record), observed.observation.diagnostic.getOrElse(
+              "Normalization reconciliation has an unresolved writer. Actual terminal lifecycle evidence is required; no automatic retry or new Human follows."))
+          }
+        } yield next
+      } yield result
+      case _ if entry.causation.value.startsWith("ordered-repair-policy-adoption:") => for {
+        retained <- GoalPhaseRepairPolicyAdoption.retainedC(GoalPhaseRepairPolicyAdoption.Source(
+          source, cursor.from, cursor.controller, lastResult = cursor.lastresult), core)
+        result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.controller),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
       case O.Stage.Decision if entry.causation.value.startsWith("ordered-validation-repair-adoption:") &&
           cursor.candidate.nonEmpty && cursor.validation.nonEmpty =>
         _resume_validation_repair_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -895,7 +1009,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                   case Some(value) => _walk_c(source, cursor.copy(from = value.record, inspectionSource = None,
                     sourceHistoryRecoveryConsumed = true, sourceHistoryContinuation = Some(value.target)),
                     soughtwork, soughthuman, soughtrecording, core, historyonly)
-                  case None => _source_history_human_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
+                  case None => for {
+                    normalization <- GoalPhaseSourceHistoryNormalization.retainedC(source, d, core, cursor.from, cursor.controller,
+                      cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
+                    next <- normalization match {
+                      case Some(saved) => _walk_c(source, cursor.copy(from = saved.record, inspectionSource = None,
+                        sourceHistoryRecoveryConsumed = true, sourceHistoryNormalization = Some(saved)),
+                        soughtwork, soughthuman, soughtrecording, core, historyonly)
+                      case None => _source_history_human_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
+                    }
+                  } yield next
                 }
               } yield next
             }
@@ -915,6 +1038,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             result <- _walk_c(source, cursor.copy(from = record, controller = state,
               candidate = Some(value.copy(record = record)), validation = None,
               sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None,
+              sourceHistoryNormalizationContinuation = None,
               wholePhaseCandidateRecovery = None), soughtwork, soughthuman, soughtrecording, core, historyonly)
           } yield result
         }
@@ -1043,8 +1167,20 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       def _pause_ = _paused_c(source, stopped,
         "Candidate inspection has an actual partial or unknown result; no automatic replay.")
       if (cursor.sourceHistoryRecoveryConsumed || d.humanDecision.isEmpty) _pause_
-      else GoalPhaseSourceHistoryRecovery.historicalTargetC(source, d, core, cursor.from, cursor.controller,
-        cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates).toOption match {
+      else {
+        val exact = GoalPhaseSourceHistoryRecovery._target_c(source, d, core, cursor.from, cursor.controller,
+          cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
+        val selected = exact.flatMap { target => for {
+          frontier <- GoalPhaseNativeHistory.prefixC(source.current, InstanceRevision(target.frontierRevision.toLong))
+          pending <- GoalPhaseNativeHistory.nextC(source.current, frontier)
+          next <- pending.map(entry => GoalPhaseNativeHistory.prefixC(source.current, entry.revision)
+            .flatMap(record => GoalPhaseNativeHistory.nextC(source.current, record)))
+            .getOrElse(Consequence.success(None))
+          result <- if (next.exists(_.causation.value.startsWith("ordered-source-history-normalization:"))) Consequence.success(target)
+            else GoalPhaseSourceHistoryRecovery.historicalTargetC(source, d, core, cursor.from, cursor.controller,
+              cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
+        } yield result }
+        selected.toOption match {
         case None => _pause_
         case Some(target) => for {
           frontier <- GoalPhaseNativeHistory.prefixC(source.current, InstanceRevision(target.frontierRevision.toLong))
@@ -1063,6 +1199,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case _ => _pause_
           }
         } yield result
+        }
       }
     }
 
@@ -1219,7 +1356,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = {
       val recording = _recording_source(source, cursor)
-      if (cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty) _dispatch_c(source, cursor, core)
+      if (cursor.sourceHistoryNormalization.nonEmpty || cursor.sourceHistoryNormalizationContinuation.nonEmpty ||
+          cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty) _dispatch_c(source, cursor, core)
       else if (N.eligible(recording) && d.journalPolicy.nonEmpty) {
         if (cursor.findings.pending.size > 256) _wait_cursor_c(cursor,
           "The accumulated recording batch exceeds the bounded 256-item input. All pending observations are retained; no subset is recorded.")
@@ -1280,13 +1418,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       } yield wire
       case O.Stage.Implementation | O.Stage.Repair | O.Stage.Triage | O.Stage.PhaseReview => _semantic_frontier_c(source, cursor, core)
       case O.Stage.InspectCandidate | O.Stage.PhaseInspection =>
-        if (cursor.controller.stage == O.Stage.InspectCandidate && d.candidatePaths.isEmpty ||
+        if (cursor.sourceHistoryNormalization.nonEmpty) for {
+          observed <- GoalPhaseSourceHistoryNormalization.reconcileC(source, d, core, cursor.sourceHistoryNormalization.get, acknowledgement)
+          result <- if (observed.succeeded) F.waitC(observed.record, "Same-authority source-history normalization",
+            "Actual " + observed.observation.outcome.get + " retained separately from the original UNKNOWN.")
+            .flatMap(_after_native_c(source, cursor, _, core))
+            else F.waitC(observed.record, "Source-history normalization stopped", observed.observation.diagnostic.getOrElse(
+              "Reconciliation writer termination is unconfirmed; no automatic retry or new question follows."))
+        } yield result
+        else if (cursor.controller.stage == O.Stage.InspectCandidate && d.candidatePaths.isEmpty ||
             cursor.controller.stage == O.Stage.PhaseInspection && d.phaseValidationPolicy.isEmpty && cursor.wholePhaseCandidateRecovery.isEmpty)
           _wait_cursor_c(cursor, "Native candidate inspection is not installed; selected work and Phase remain open.")
         else GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
           runValidation = false, documentPolicy = cursor.documentpolicy,
           recordingPaths = N.managementPaths(cursor.findings), completedCandidates = cursor.completedCandidates,
           sourceHistoryRecovery = cursor.sourceHistoryContinuation, candidateObservation = cursor.candidateObservation,
+          sourceHistoryNormalization = cursor.sourceHistoryNormalizationContinuation,
           candidateObservationContinuation = cursor.candidateObservationContinuation,
           wholePhaseCandidateRecovery = cursor.wholePhaseCandidateRecovery,
           dependencyAdmission = cursor.dependencyAdmission.filter(a =>
@@ -1355,7 +1502,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
         else _wait_cursor_c(cursor, "Whole-Phase checks and review are retained; repository closure remains unavailable.")
       case O.Stage.Decision =>
-        if (d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
+        if (cursor.controller.policyRepairPending) cursor.controller.dispatchPolicyRepairC.flatMap(state =>
+          _semantic_frontier_c(source, cursor.copy(controller = state), core))
+        else if (d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
             Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)))) for {
           decision <- _human_source_c(source, cursor)
           port <- _human_port_c

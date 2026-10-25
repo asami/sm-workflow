@@ -298,7 +298,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           review.work.get.originalBase.head shouldBe target.get.base.head
           review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
           review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
-          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0, Some("sm-workflow.repair-trend.v1"), Some(0), Some(0)))
           episode.current(identity).history.take(directed.get.history.size) shouldBe directed.get.history
           episode.retained(identity, target.get.sourceRevision, "validation").get.payload shouldBe failed.get.payload
           episode.retained(identity, target.get.sourceRevision, "check-recovery-0") shouldBe None
@@ -465,7 +465,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           review.work.get.candidate.get.tree shouldBe target.get.candidate.tree
           review.work.get.completed.size shouldBe 1
           review.work.get.completed.head.commit.identity shouldBe closedtip.trim
-          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
+          review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0, Some("sm-workflow.repair-trend.v1"), Some(0), Some(0)))
           review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
           repeated shouldBe review
           Fixture.phaseExecutions(root).size shouldBe 2
@@ -523,7 +523,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         cancellation.isAlive shouldBe false
         driver.terminationConfirmed shouldBe true
         waiting.kind shouldBe "Wait"
-        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
         val current = episode.current(identity)
         current.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
         current.history.take(before.history.size) shouldBe before.history
@@ -613,7 +613,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           Then("one actual admission diagnostic is retained without a process receipt or repair update")
           waiting.kind shouldBe "Wait"
           waiting.message should include("admission")
-          waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
           failed.get.payload.admissionFailures.map(_.checkIdentity) shouldBe Vector("compile")
           failed.get.payload.admissionFailures.head.diagnostic.trim should not be empty
           failed.get.payload.receipts shouldBe empty
@@ -632,7 +632,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
           reviewed.kind shouldBe "Request"
           reviewed.work.get.kind shouldBe "ReviewStep"
           reviewed.work.get.selectedPlan.identity shouldBe _recovery_plan.identity
-          reviewed.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+          reviewed.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
           actual.payload.admissionFailures shouldBe failed.get.payload.admissionFailures
           actual.payload.receipts.map(_.termination) shouldBe Vector("exited")
           actual.payload.receipts.head.exitCode shouldBe Some(0)
@@ -673,7 +673,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         val target = take(R.targetC(actual.target))
         Then("description uses the original Validation source and current actual intent frontier without a write")
         waiting.kind shouldBe "Wait"
-        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
         actual.outcome shouldBe "decision-required"
         actual.choices shouldBe Vector("AuthorizeNewAttempt", "Defer")
         actual.recoveryOperation shouldBe R.recoveryOperation
@@ -767,7 +767,7 @@ final class GoalPhaseValidationRecoveryOperationSpec extends AnyWordSpec with Gi
         review.kind shouldBe "Request"
         review.work.get.kind shouldBe "ReviewStep"
         review.work.get.selectedPlan.identity shouldBe _recovery_plan.identity
-        review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+        review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
         val result = episode.retained(identity, target.sourceRevision, "check-result-0-retry-1").get
         result.payload.newAttempts shouldBe saved.payload.newAttempts
         result.payload.receipts.head.exitCode shouldBe Some(0)

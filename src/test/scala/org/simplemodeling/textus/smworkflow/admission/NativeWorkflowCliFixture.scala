@@ -1358,7 +1358,7 @@ private[admission] object NativeWorkflowCliFixture {
     */
   def freshStepAssessment(name: String, executable: Path,
     overridePolicy: Option[GoalPhaseStepAssessment.Policy] = None, lint: Boolean = false,
-    repairLimit: Option[Int] = None): Scenario = {
+    repairLimit: Option[Int] = None, focusedFirst: Boolean = false): Scenario = {
     require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
     require(repairLimit.forall(n => n >= 0 && n <= 64), "Select the fresh fixture Plan's bounded repair limit")
     val initial = fresh(name)
@@ -1366,7 +1366,8 @@ private[admission] object NativeWorkflowCliFixture {
     val original = _authoring_host(initial.root)
     val compile = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
     val focused = GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly)
-    val selectedChecks = Vector(compile, focused) ++ (if (lint) Vector(GoalPhaseNativeValidation.Check("scala-lint", 3, WorkflowSbtValidation.Kind.FixCheck)) else Vector.empty)
+    val selectedChecks = (if (focusedFirst) Vector(focused, compile) else Vector(compile, focused)) ++
+      (if (lint) Vector(GoalPhaseNativeValidation.Check("scala-lint", 3, WorkflowSbtValidation.Kind.FixCheck)) else Vector.empty)
     val host = original.copy(goal = original.goal.copy(candidatePaths = paths,
       stepValidation = original.goal.stepValidation.copy(checks = selectedChecks),
       phaseValidation = original.goal.phaseValidation.copy(checks = Vector(focused))))

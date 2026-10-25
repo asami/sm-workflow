@@ -1,10 +1,11 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseWorkClassification.given
+import GoalPhaseRuntimeRepairControl as R
 
 /** Deterministic Phase controller, not a Service or a persistence provider.
   * Native adapters must admit selection, actual command receipts and independent
@@ -110,7 +111,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     judgment: GoalPhaseStepTriage.Judgment) extends Event
   final case class StepAssessed(assessment: GoalPhaseStepAssessment.Result) extends Event
   final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
-    receipt: String, directive: RepairDirective) extends Event
+    receipt: String, directive: RepairDirective, comparableFindings: Boolean = true) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
     evidence: String, outcome: ReviewOutcome, repairDirective: Option[RepairDirective] = None,
     allowPhaseRepair: Boolean = false) extends Event
@@ -162,7 +163,69 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val phaseReviewedCandidate: Option[Snapshot] = None, val phaseRecordingPaths: Vector[String] = Vector.empty,
     val candidateParent: Option[Snapshot] = None,
     val stepAdmission: Option[GoalPhaseStepAssessment.Admission] = None,
-    val releaseCommit: Option[Commit] = None) {
+    val releaseCommit: Option[Commit] = None,
+    val repairControl: Option[R.Context] = None,
+    val policyRepairPending: Boolean = false,
+    val repairObservations: Vector[R.Observation] = Vector.empty) {
+    def selectedRepairLimit: Int = repairControl.map(_.selectedLimit).getOrElse(plan.repairLimit)
+    def effectiveRepairLimit: Int = repairControl.map(_.effectiveLimit).getOrElse(plan.repairLimit)
+    private def _repair_scope: String = Json.arr(Json.fromString(plan.identity), Json.fromString(plan.revision),
+      Json.fromString(if (cursor == plan.steps.size) "Release" else "Step"),
+      Json.fromString(if (cursor == plan.steps.size) plan.phase else plan.steps(cursor).identity)).noSpaces
+    private def _observed_repair(directive: RepairDirective, reference: String, comparable: Boolean): Vector[R.Observation] =
+      if (comparable) R.Context(R.version, selectedRepairLimit, repairObservations)
+        .observe(_repair_scope, reference, directive.findings).observations
+      else repairObservations.filter(_.scope == _repair_scope)
+    private def _reserve_repair_c(directive: RepairDirective, reference: String,
+      legacyreason: String, comparable: Boolean = true): Consequence[State] = {
+      val observations = _observed_repair(directive, reference, comparable)
+      val observed = repairControl.map(_.copy(observations = observations))
+      val trend = observed.flatMap(_.stop)
+      if (generation < Long.MaxValue && repairs < effectiveRepairLimit && trend.isEmpty)
+        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
+          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive),
+          newPendingRepair = None, newcontrol = observed, newpolicypending = false,
+          newobservations = observations, reason = None, clear = true)
+      else success(Stage.Decision, newDirective = Some(directive),
+        newReview = if (Set(Stage.Review, Stage.PhaseReview)(stage)) Some(reference) else reviewEvidence,
+        newPendingRepair = Option.when(effectiveRepairLimit > 0 && generation < Long.MaxValue)(directive),
+        newcontrol = observed, newpolicypending = false, newobservations = observations,
+        reason = Some(trend.getOrElse(repairControl.map(c => c.policy + ": runtime repair budget exhausted; " +
+          "selected=" + c.selectedLimit + "; effective=" + c.effectiveLimit + "; evidence=" + reference).getOrElse(legacyreason))))
+    }
+
+    /** Policy adoption neither reserves a batch nor opens a continuation window. */
+    private[admission] def adoptRepairPolicyC(choice: String, evidence: String,
+      restoration: Option[R.RestorationLink] = None): Consequence[State] = for {
+      _ <- if (text(evidence) && restoration != null && restoration.forall(R.validLink) &&
+          Set("AdoptRuntimePolicy", "RetainSelectedLimit")(choice) && stage != Stage.Closed &&
+          closureIntent.isEmpty && !documentDecision &&
+          (stage != Stage.Decision || pendingRepair.nonEmpty || decisionSource.contains(Stage.Repair))) Consequence.unit
+        else invalid("repair policy adoption requires the unchanged eligible repair frontier")
+      selected = if (choice == "AdoptRuntimePolicy") R.ceiling else selectedRepairLimit
+      _ <- if (selected >= 0 && selected <= R.ceiling && (choice != "RetainSelectedLimit" || selectedRepairLimit <= R.ceiling))
+        Consequence.unit else invalid("retained selected repair allowance exceeds the runtime ceiling")
+      context = R.Context(R.version, selected, repairObservations, restoration)
+      _ <- if (repairControl.forall(c => c.policy != context.policy || c.selectedLimit != context.selectedLimit ||
+          c.restoration != context.restoration)) Consequence.unit else invalid("repair policy is already adopted")
+      adopted = new State(plan, stage, cursor, generation, repairs, base, completed, candidate, checksReceipt,
+        reviewEvidence, closureIntent, decision, repositoryReceipt, repairDirective, decisionSource,
+        documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
+        candidateParent, stepAdmission, releaseCommit, Some(context),
+        pendingRepair.nonEmpty && repairs < context.effectiveLimit && context.stop.isEmpty,
+        repairObservations)
+      resumed <- if (stage == Stage.Decision && pendingRepair.isEmpty && decisionSource.contains(Stage.Repair))
+        adopted.acceptC(DecisionResumptionAdmitted(evidence)) else Consequence.success(adopted)
+    } yield resumed
+
+    /** Called only by ordinary issue dispatch (and reconstruction of that issue). */
+    private[admission] def dispatchPolicyRepairC: Consequence[State] =
+      if (policyRepairPending && stage == Stage.Decision && pendingRepair.exists(_valid_directive) &&
+          repairControl.nonEmpty && repairs < effectiveRepairLimit && generation < Long.MaxValue)
+        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
+          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = pendingRepair, newPendingRepair = None,
+          newpolicypending = false, reason = None, clear = true)
+      else invalid("repair policy has no eligible unreserved pending batch")
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
     private def tip = tipSnapshot.head
@@ -186,11 +249,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseReview) && !documentDecision &&
           phaseWide && completed.map(_.step) == plan.steps.map(_.identity) && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && releaseCommit.isEmpty &&
-          generation < Long.MaxValue && repairs < plan.repairLimit && candidate.exists(validSnapshot) &&
+          generation < Long.MaxValue && repairs < effectiveRepairLimit && candidate.exists(validSnapshot) &&
           checksReceipt.exists(text)) Consequence.unit
         else invalid("legacy Release continuation requires the original completed-Plan Phase review Decision with remaining allowance")
-      next <- success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-        newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive), reason = None, clear = true)
+      next <- _reserve_repair_c(directive, evidence, "Legacy Release repair allowance exhausted")
     } yield next
 
     /** Business context only: this projection grants no issue or execution authority. */
@@ -236,7 +298,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
     /** Separate explicit remaining-work adoption. Historical accepted Step
       * contracts stay in their original retained native requests and results;
@@ -266,7 +328,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
     /** Eligibility only. The native owner binds the actual Review finding and
       * new condition to an independently admitted Human directive. This consumes
@@ -285,7 +347,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
           pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && cursor < plan.steps.size && cursor == completed.size &&
-          generation < Long.MaxValue && repairs < plan.repairLimit &&
+          generation < Long.MaxValue && repairs < effectiveRepairLimit &&
           candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
         else invalid("Review remaining Plan adoption requires an unanswered current-Step Review Decision with remaining repair allowance")
       condition <- reviewRepairConditionC(plan, proposed.copy(effectiveAcceptance = None))
@@ -294,10 +356,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           condition.description, "adopted")))
       _ <- if (proposed.effectiveAcceptance == expected) Consequence.unit
         else invalid("Review remaining Plan adoption must preserve every saved effective condition and its source")
-    } yield new State(proposed, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
-      None, None, None, None, None, repositoryReceipt, Some(directive), None,
-      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit)
+      selected = new State(proposed, stage, cursor, generation, repairs, base, completed,
+        candidate, checksReceipt, reviewEvidence, closureIntent, decision, repositoryReceipt, repairDirective,
+        decisionSource, documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate,
+        phaseRecordingPaths, candidateParent, stepAdmission, releaseCommit, repairControl,
+        repairObservations = repairObservations)
+      next <- selected._reserve_repair_c(directive, evidence, "Review repair allowance exhausted")
+    } yield next
 
     /** Separate unchanged-Plan continuation of an independently directed legacy
       * review batch. Native receipt reconstruction owns the actual Human origin.
@@ -310,13 +375,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Consequence.unit else invalid("legacy purpose continuation requires the independently admitted exact finding batch")
       _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
           pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty &&
-          cursor < plan.steps.size && cursor == completed.size && generation < Long.MaxValue && repairs < plan.repairLimit &&
+          cursor < plan.steps.size && cursor == completed.size && generation < Long.MaxValue && repairs < effectiveRepairLimit &&
           candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
         else invalid("legacy purpose continuation requires its unanswered Step Review and remaining ordinary repair allowance")
-    } yield new State(plan, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
-      None, None, None, None, None, repositoryReceipt, Some(directive), None,
-      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit)
+      next <- _reserve_repair_c(directive, evidence, "Legacy purpose repair allowance exhausted")
+    } yield next
 
     /** Eligibility only: the native owner must prove the original terminal
       * Failed or confirmed TimedOut/incomplete Phase validation through its
@@ -353,7 +416,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
     /** Compare already captured effective contracts; the declaration owner captures them. */
     def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
@@ -395,7 +458,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
           if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
           if (clear) None else candidateParent, stepAdmission = if (clear) None else stepAdmission,
-          releaseCommit = releaseCommit))
+          releaseCommit = releaseCommit, repairControl = repairControl, policyRepairPending = policyRepairPending,
+          repairObservations = repairObservations))
       }
     }
 
@@ -501,15 +565,16 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else if (judgment.outcome == "clean") success(Stage.Closing,
           newadmission = Some(GoalPhaseStepAssessment.admission(resolved)))
         else success(Stage.Review)
-      case RepairableChecksObserved(value, selected, receipt, directive) if
+      case RepairableChecksObserved(value, selected, receipt, directive, comparable) if
           (stage == Stage.Validation || (stage == Stage.PhaseValidation && releaseRepairActive)) && candidate.contains(value) &&
           selected == checks && text(receipt) && _valid_directive(directive) =>
-        if (generation < Long.MaxValue && repairs < plan.repairLimit)
-          success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-            newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive), clear = true)
-        else success(Stage.Decision, newChecks = Some(receipt), newDirective = Some(directive),
-          newPendingRepair = Option.when(plan.repairLimit > 0 && generation < Long.MaxValue)(directive),
-          reason = Some("Selected repair window requires a Human decision: " + receipt))
+        _reserve_repair_c(directive, receipt, "Selected repair window requires a Human decision: " + receipt, comparable)
+          .map(state => if (state.stage == Stage.Decision) new State(state.plan, state.stage, state.cursor,
+            state.generation, state.repairs, state.base, state.completed, state.candidate, Some(receipt),
+            state.reviewEvidence, state.closureIntent, state.decision, state.repositoryReceipt, state.repairDirective,
+            state.decisionSource, state.documentDecision, state.ordinaryRepairs, state.pendingRepair,
+            state.phaseReviewedCandidate, state.phaseRecordingPaths, state.candidateParent, state.stepAdmission,
+            state.releaseCommit, state.repairControl, state.policyRepairPending, state.repairObservations) else state)
       case CoveredReviewCompletionObserved(snapshot, validation, originalgeneration, originalcandidate,
           originalreview, completion) if stage == Stage.Review && !phaseWide &&
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(validation) &&
@@ -524,16 +589,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
             (stage == Stage.PhaseReview && value == key(WorkKind.ReviewPhase))) => outcome match {
         case ReviewOutcome.Accept => success(if (phaseWide) Stage.PhaseClosing else Stage.Closing,
           newReview = Some(evidence))
-        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && generation < Long.MaxValue && repairs < plan.repairLimit =>
-          if (directive.exists(_valid_directive))
-            success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-              newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = directive, clear = true)
-          else invalid("repair requires the independent review's assigned reason and findings")
-        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && plan.repairLimit > 0 &&
-            repairs >= plan.repairLimit && generation < Long.MaxValue && directive.exists(_valid_directive) =>
-          success(Stage.Decision, newReview = Some(evidence), newDirective = directive,
-            newPendingRepair = directive,
-            reason = Some("Independent review exhausted the selected repair window: " + evidence))
+        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && generation < Long.MaxValue &&
+            repairs < effectiveRepairLimit && !directive.exists(_valid_directive) =>
+          invalid("repair requires the independent review's assigned reason and findings")
+        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && generation < Long.MaxValue &&
+            (effectiveRepairLimit > 0 || repairControl.nonEmpty) && directive.exists(_valid_directive) =>
+          _reserve_repair_c(directive.get, evidence, "Independent review exhausted the selected repair window: " + evidence)
         case _ => success(Stage.Decision, reason = Some("Independent review requires a Human decision: " + evidence))
       }
       case ClosureIntentSaved(value, identity) if candidate.contains(value) && text(identity) &&
@@ -577,7 +638,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
           repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent,
-          stepAdmission = stepAdmission, releaseCommit = releaseCommit))
+          stepAdmission = stepAdmission, releaseCommit = releaseCommit, repairControl = repairControl,
+          repairObservations = repairObservations))
       case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -586,12 +648,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         success(Stage.PhaseValidation, newGeneration = generation + 1, newChecks = None, newReview = None,
           newIntent = None, reason = None, newPhaseReviewed = None, newPhasePaths = Vector.empty)
       case RepairContinuationAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
-          !documentDecision && plan.repairLimit > 0 && repairs >= plan.repairLimit &&
+          !documentDecision && effectiveRepairLimit > 0 &&
+          (repairs >= effectiveRepairLimit || repairControl.flatMap(_.stop).nonEmpty) &&
           generation < Long.MaxValue && pendingRepair.exists(_valid_directive) &&
           decisionSource.exists(Set(Stage.Validation, Stage.Review, Stage.PhaseValidation, Stage.PhaseReview)) =>
         success(Stage.Repair, newGeneration = generation + 1, newRepairs = 1,
           newOrdinaryRepairs = 1, newDirective = pendingRepair, newPendingRepair = None,
-          reason = None, clear = true)
+          reason = None, newcontrol = repairControl.map(_.copy(observations = Vector.empty)),
+          newobservations = Vector.empty, clear = true)
       case DecisionResumptionAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
           documentDecision && decisionSource.exists(value => value != Stage.Decision && value != Stage.Closed) =>
         success(decisionSource.get, reason = None)
@@ -608,7 +672,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
         nextcursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None,
-        stepAdmission = None, releaseCommit = releaseCommit))
+        stepAdmission = None, releaseCommit = releaseCommit,
+        repairControl = repairControl.map(_.copy(observations = Vector.empty))))
     }
 
     private def success(nextStage: Stage, newCandidate: Option[Snapshot] = candidate,
@@ -624,6 +689,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newcandidateparent: Option[Snapshot] = candidateParent,
       newadmission: Option[GoalPhaseStepAssessment.Admission] = stepAdmission,
       newreleasecommit: Option[Commit] = releaseCommit,
+      newcontrol: Option[R.Context] = repairControl,
+      newpolicypending: Boolean = policyRepairPending,
+      newobservations: Vector[R.Observation] = repairObservations,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -633,14 +701,18 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       phaseReviewedCandidate = if (clear) None else newPhaseReviewed,
       phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths,
       candidateParent = if (clear) None else newcandidateparent,
-      stepAdmission = if (clear) None else newadmission, releaseCommit = newreleasecommit))
+      stepAdmission = if (clear) None else newadmission, releaseCommit = newreleasecommit,
+      repairControl = newcontrol, policyRepairPending = newpolicypending, repairObservations = newobservations))
   }
 
-  def startC(plan: Plan, initial: Snapshot): Consequence[State] = for {
+  def startC(plan: Plan, initial: Snapshot, repairPolicy: Option[String] = None): Consequence[State] = for {
     _ <- validatePlanC(plan)
     _ <- if (validSnapshot(initial)) Consequence.unit else invalid("native initial Git snapshot is missing")
+    _ <- if (repairPolicy != null && repairPolicy.forall(_ == R.version)) Consequence.unit
+      else invalid("runtime repair policy is unsupported")
   } yield new State(plan, Stage.Implementation, 0, 1, 0, initial, Vector.empty,
-    None, None, None, None, None, None, None, None)
+    None, None, None, None, None, None, None, None,
+    repairControl = repairPolicy.map(value => R.Context(value, plan.repairLimit)))
 
   /** Exact raw delta for the narrow Review continuation. Existing exclusions,
     * defaults and Usage Contract retain their original meaning and ordering.

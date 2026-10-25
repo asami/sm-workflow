@@ -25,6 +25,14 @@ Start admission and effect permissions with their existing owners.
 
 ## Long-running invocation collection
 
+Before resuming after a caller/model interruption or answering a status request,
+[recover retained execution results](../../docs/spec/native-host-execution.md#recovering-completed-results-after-caller-interruption).
+Use the original invocation references and actual terminal receipts even when the
+producer chat has no final response. Separate publishLocal, activation, installed
+qualification and consumer adoption. Do not report missing completion from chat
+status alone or rerun a successful command to reconstruct its summary.
+
+
 Follow [passive result collection](../../docs/spec/native-host-execution.md#long-running-invocation-collection).
 Keep the existing owned Advance/complete invocation alive and collect its actual
 result. Do not periodically tail/read logs, stat the response file, query status,
@@ -72,8 +80,9 @@ Keep paired `complete` (Submit + permitted Advance) in one interval; an intermed
 Submit response does not return control. If output is buffered, show a compact
 matched start/end when received and label it `出力一括受信`, without claiming live
 delivery. A start not yet observable stays preparation/start-unconfirmed.
-After actual handback, use **🌀 🔵 AI作業中** (or the applicable AI review/repair
-indicator). Add no AI call, status query, wait loop, command, persisted display
+After actual handback, use **🤖 ✨ AI作業中** without a blue circle.
+For review or repair, append the activity after this same prefix.
+Add no AI call, status query, wait loop, command, persisted display
 record or extra update solely to create these markers; use existing calls/events.
 
 Use actual program-produced information. Absent optional fields, repair counts

@@ -209,9 +209,21 @@ final class IncrementalSbtDiagnosisInformationSpec extends AnyWordSpec with Matc
 
     "compare the entire canonical context and validate batch identity without altering the original work" in {
       I.sameWorkC(_context, _context).isSuccess shouldBe true
+      val publicJson = take(GoalPhaseNativeMetadata.normalizePublicJson(
+        io.circe.parser.parse(take(_context.toRecord().toJsonStringC)).toOption.get)
+        .fold(Consequence.stateConflict(_), Consequence.success))
+      val transported = take(NativeWorkflowOperationInput.decodeValueC[V.WorkflowIssuedWorkContext](publicJson, "issuedWorkContext"))
+      I.sameWorkC(_context, transported).isSuccess shouldBe true
       for (other <- Vector(_context.copy(expectedRevision = "16"), _context.copy(runId = "foreign"),
-        _context.copy(completionOperation = Record.data("service" -> "Foreign", "operation" -> "submit"))))
+        _context.copy(completionOperation = Record.data("service" -> "Foreign", "operation" -> "submit")),
+        _context.copy(handle = Record.data("componentIdentity" -> "Foreign")),
+        _context.copy(context = Record.data("summary" -> "Changed", "references" -> Vector.empty)),
+        _context.copy(executionRequirement = Record.data("risk" -> "Different")),
+        _context.copy(evidence = Record.data("identity" -> "different")),
+        _context.copy(completion = Record.data("identity" -> "different"))))
         I.sameWorkC(_context, other).isSuccess shouldBe false
+      I.sameWorkC(_context, _context.copy(handle = Record.data(
+        "componentIdentity" -> "one", "component_identity" -> "two"))).isSuccess shouldBe false
       val input = _input(Vector(_file("source")))
       I.validateC(input).isSuccess shouldBe true
       I.validateC(input.copy(selections = input.selections ++ input.selections)).isSuccess shouldBe false

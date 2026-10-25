@@ -236,6 +236,41 @@ V4 host configuration requires explicit migration to V3 with
 relabeling of historical accepted evidence is permitted. Historical schemas and
 decoding remain readable. See the [retirement contract](registered-sbt-host-execution.md).
 
+## Recovering completed results after caller interruption
+
+On resumption after a chat/model/transport interruption, or an explicit status
+request, reconcile retained executions before reporting a producer as incomplete
+or starting replacement work. A chat error is not a process failure. Use the
+original invocation/work identity and exact saved handle/result/output references
+in the existing continuation or handoff; no new tracking ledger or global scan.
+
+1. Read the attributable terminal receipt and relevant summary. A completed
+   success, failure or cancellation is its actual outcome regardless of whether
+   the owning chat sent a final message. If still running, collect the original
+   invocation through its supported delivery/wait mechanism. If no terminal result
+   is available, report that uncertainty and retain the unresolved reference.
+2. For publication, consume the normal `publishLocal` result and its publication/
+   runtime activation records. Distinguish publication success, runtime activation,
+   installed qualification, producer acceptance and consumer adoption. Do not infer
+   any of these from chat status or from another invocation's success.
+3. Recover all outstanding known verification results, including commands completed
+   after the chat stopped. Reuse success at its actual candidate/image/selection;
+   retain failures and genuinely missing results. Do not repeat successful commands
+   merely to obtain a new chat summary. Source changes require only the applicable
+   validation under the existing policy.
+4. Update the existing handoff with the recovered facts and next action. Collecting
+   an execution receipt does not Submit/Advance a consumer Session or complete its
+   Phase. The owning workflow performs any required admission through its public
+   route. Share one usable delivery when messaging is authorized; do not request
+   status-only AI turns from an unavailable producer.
+
+This is event-driven recovery, not periodic monitoring. Preserve the original
+Session, accepted results, history and repair counts; no fresh execution, extra
+AI monitor, automatic model switch, duplicate Submit or automatic publication is
+introduced. The current [long-running collection](#long-running-invocation-collection)
+contract still governs ordinary waiting. A missing live handle with known saved
+outputs calls for receipt recovery, not abandonment or blind replay.
+
 ## Long-running invocation collection
 
 For Advance or complete taking minutes or hours, preserve the one owned execution

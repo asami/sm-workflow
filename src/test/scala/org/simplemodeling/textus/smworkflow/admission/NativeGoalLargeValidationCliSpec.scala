@@ -99,7 +99,7 @@ final class NativeGoalLargeValidationCliSpec extends AnyWordSpec with Matchers w
       Then("public RepairStep retains the complete genuine nonzero typed failure and the original base and selected plan")
       repair.kind shouldBe "Request"
       repair.sessionId shouldBe started.sessionId
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       val work = repair.work.get
       work.kind shouldBe "RepairStep"
       work.originalBase shouldBe original.originalBase

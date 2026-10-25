@@ -223,7 +223,7 @@ final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers
       Then("RepairStep contains a genuine complete failed typed receipt above one MiB with the original Plan base and counters")
       repair.kind shouldBe "Request"
       repair.sessionId shouldBe started.sessionId
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       val work = repair.work.get
       work.kind shouldBe "RepairStep"
       work.originalBase shouldBe initial.work.get.originalBase
@@ -304,7 +304,7 @@ final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers
       review.work.get.originalBase shouldBe initial.work.get.originalBase
       review.work.get.selectedPlan shouldBe initial.work.get.selectedPlan
       review.work.get.completed shouldBe empty
-      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
+      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       review.work.get.review.get.changedPaths shouldBe Vector("value.txt")
       review.work.get.review.get.checks.size shouldBe 1
       val stepcheck = review.work.get.review.get.checks.head
@@ -353,7 +353,7 @@ final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers
       phase.completion shouldBe None
       phase.authorityContext shouldBe None
       phase.issuedWorkContext should not be empty
-      phase.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
+      phase.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       val work = phase.work.get
       work.kind shouldBe "ReviewPhase"
       work.originalBase shouldBe initial.work.get.originalBase

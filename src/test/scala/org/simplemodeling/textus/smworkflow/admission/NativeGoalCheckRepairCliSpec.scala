@@ -54,8 +54,8 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val repair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("the first repair is assigned from a genuine typed failure")
       repair.work.get.kind shouldBe "RepairStep"
-      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
       val firstpids = _executions(scenario.root)
       firstpids.size shouldBe 1
@@ -69,7 +69,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val question = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("the actual public Human question offers exactly the bounded continuation choices")
       question.kind shouldBe "Human"
-      question.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      question.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       question.sessionId shouldBe started.sessionId
       question.submitOperation shouldBe Some(GoalPhaseOrderedHumanDecision.completionOperation.operation)
       question.issuedWorkContext shouldBe None
@@ -125,7 +125,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val implementation = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("the public Request belongs to the retained task and no product check has run")
       implementation.kind shouldBe "Request"
-      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
+      implementation.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       implementation.sessionId shouldBe started.sessionId
       scenario.retrieve(task) shouldBe started.sessionId
       implementation.work.get.kind shouldBe "ImplementStep"
@@ -155,7 +155,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       val repair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
       Then("a newly issued public Repair retains the actual failed candidate, typed receipt and original boundary")
       repair.kind shouldBe "Request"
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       repair.sessionId shouldBe started.sessionId
       val failedwork = repair.work.get
       failedwork.kind shouldBe "RepairStep"
@@ -237,7 +237,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       review.sessionId shouldBe started.sessionId
       val reviewedwork = review.work.get
       reviewedwork.kind shouldBe "ReviewStep"
-      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       reviewedwork.checkFailure shouldBe None
       val revalidated = reviewedwork.issues.get
       revalidated.issues.map(_.identity) shouldBe tracked.issues.map(_.identity)

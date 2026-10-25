@@ -1,5 +1,85 @@
 # Source-history recovery through the ordinary Human Decision
 
+## Same-authority comment recovery — adopted 2026-10-26
+
+Status: target contract and delivery plan; implementation/installed qualification
+remain pending. This section supersedes the legacy unconditional Human escalation
+for missing source-history results below. It does not authorize a caller to bypass
+a pending runtime question. [Delivery and adoption](../phase/source-history-recovery-result-collection-correction.md)
+include the existing Phase 6.6 D3 frontier.
+
+SHR-01. A local source-history comment update already authorized for the same
+Component, purpose, acceptance and operations is a repeatable normalization, not
+an arbitrary external effect. A missing completion receipt alone MUST NOT require
+`AuthorizeNewAttempt`. sm-workflow owns classification and continuation. AI and the
+skill do not infer success/non-execution, grant permission or run a parallel repair
+loop. Generic unknown Git, publication and other effects retain their own contracts.
+
+SHR-02. Normalize only the admitted comment area under the selected provider/rule
+and effective date already associated with the operation. Reapplying that same
+normalization must have no additional change: N(N(text)) = N(text). Preserve source
+code, unrelated comments and user edits. Reconcile only the affected file(s) through
+existing managed File/Resource operations, not process-based reads or repository
+scans. Do not introduce hashes, ownership locks, per-read checks or a new store.
+
+SHR-03. At ordinary continuation, read the affected file and apply these decisions:
+
+- A retained attributable terminal result exists: consume/reconcile it without
+  another write or execution.
+- Current comment satisfies the intended normalization: append a current
+  observation and continue without writing. This establishes the current
+  postcondition, not who wrote it or whether the old interrupted attempt succeeded.
+- Current comment can be normalized unambiguously within the same authorized
+  boundary: perform the bounded normalization and record the actual result through
+  existing UoW/File and history owners; continue ordinary candidate processing.
+- Malformed/ambiguous comment, unavailable file, changed rule/authority or actual
+  conflicting content: return the concrete diagnostic. A known failure before any
+  write is not UNKNOWN. Ordinary in-scope correction remains ordinary work; ask
+  Human only when a genuine intent/authority decision is required. Do not delete
+  ambiguous comments by guessing which one is authoritative.
+
+The runtime must ensure the old execution has ended before another write; reuse
+its execution lifecycle, not a new polling or locking mechanism. Use the existing
+managed replacement facility where applicable so partial writes cannot be reported
+as success. Persistent I/O failures return their actual outcome; no busy retry or
+silent infinite recovery loop. Another interruption retains its observations and
+resumes from the current postcondition through the same owner.
+
+SHR-04. Retain the original UNKNOWN intent and successful prefix unchanged. Append
+reconciliation/current normalization outcomes with references to that intent.
+A postcondition observed now does not rewrite the old attempt as NotExecuted or
+Success. Mechanical continuation consumes no semantic repair cycle and refunds
+none. Actual semantic RepairStep assignments remain counted by the existing
+controller (convergence and ten-cycle ceiling), not by a new comment-repair budget.
+Ordinary candidate capture and applicable validation follow changed content;
+old PASS results do not certify new source bytes.
+
+SHR-05. Provide a public same-Session adoption/continuation for legacy pending
+source-history Human questions, including Human226 in Phase 6.6. Use retained
+existing authorization and actual user policy direction, record why the pending
+question is superseded by reconciliation, and preserve the original question
+unanswered in historical evidence. Do not fabricate an AuthorizeNewAttempt answer,
+edit storage, drop an obligation, restart or replay accepted Submit. A previously
+explicit Defer/Cancel or revoked authority is not undone by automatic recovery.
+No additional per-file approval is required just to adopt an already authorized
+policy. Until this public route is delivered, report the specific runtime gap and
+respect the actual installed decision; do not ask again for direction already held.
+
+SHR-06. Recovery success and cause resolution remain separate. Record the original
+failure, reconciliation branch, actual result and unresolved cause through existing
+Journal/Evidence/Finding owners without extra AI calls. A duplicate-comment input
+corrected for this attempt does not prove the comment producer defect is fixed.
+See [recovery observations](recovery-observations-and-cause-resolution.md).
+
+## Legacy explicit-Human route and retained evidence
+
+The remaining sections describe the previous implementation and its historical
+qualification. Their unconditional UNKNOWN-to-Human policy is superseded by
+SHR-01..06 for this bounded comment operation once delivered/adopted. They remain
+relevant to actual installed legacy behavior and provenance, not a reason to add
+a caller-side approval gate to the new contract.
+
+
 ## Normal public continuation
 
 Call the existing `GoalPhaseService.advanceGoalPhase(sessionId)` for the existing
@@ -365,3 +445,168 @@ SBT check before another independent Review. Original prefix receipts, UNKNOWN
 intent, Plan/base, completed Step facts and the single recovery Human remain
 retained. This regression distinguishes candidate-scoped prefix reuse from the
 Step-scoped consumed recovery allowance.
+
+## Public same-authority normalization adoption contract
+
+The source implementation adds these ordinary `GoalPhaseService` Operations:
+
+- `describeGoalPhaseSourceHistoryNormalization(sessionId)` returns
+  `GoalPhaseSourceHistoryNormalizationDescriptionResult`, with outcome
+  `adoption-required`, the exact target, choices
+  `AdoptSameAuthorityNormalization` and `Defer`, and
+  `adoptionOperation = adoptGoalPhaseSourceHistoryNormalization`.
+- `adoptGoalPhaseSourceHistoryNormalization(input)` accepts
+  `GoalPhaseSourceHistoryNormalizationAdoptionInput`: `sessionId`, `target`,
+  `choice`, `rationale`, actual policy-direction `reference`, and Boolean
+  `priorExecutionEnded`. It returns
+  `GoalPhaseSourceHistoryNormalizationAdoptionResult`. Adoption and description
+  use managed native storage only; neither calls File, Git, SBT or Advance.
+
+The canonical target contains the complete existing `recovery` target, exact
+current `frontierRevision` and `frontierCause`, the named policy
+`sm-workflow.source-history-normalization.v1`, and, only when present, exact
+`pendingQuestion(identity,pendingRevision)` or `resumeFrom`, as applicable.
+Initial targets omit `resumeFrom` and retain the original frontier/question
+rules. A continuation target omits `pendingQuestion`, retains the complete
+original recovery rule/date/prefix, and binds the actual current failed or
+resultless reconciliation frontier. Its exact `resumeFrom` record contains
+`directionIdentity`, `directionRevision`, `intentIdentity`, `intentRevision`
+and, for an actual failed result only, `resultIdentity`, `resultRevision` and
+`outcome = failed`. A resultless intent omits all three result/outcome fields;
+it remains UNKNOWN. Successful observations cannot be resumed. These references
+name the immediately preceding actual normalization attempt, including each
+consecutive continuation, rather than an earlier convenient direction.
+Complete canonical nested payloads
+are required. Extra, absent, null, crossed and colliding public property names
+refuse. Later unresolved intents retain every successful contiguous prefix
+pair; the same contract supports intent8. Staging, other effect histories,
+changed authority, completed questions and actual old Defer/Cancel decisions
+cannot be adopted through this route.
+
+For a pending legacy Human, the genuinely saved question supplies the complete
+captured recovery target and full `historyPolicy`. Adoption and replay compare
+it with the actual native source, requesting result, pending revision and current
+resolved full rule. A changed captured rule refuses. An unsuspended legacy
+intent retained provider identity and effective date, rather than the full old
+rule. Its description states that unavailable old full-rule provenance; the
+complete currently resolved rule is bound for adoption, without claiming that
+the original intent independently proved that full rule.
+
+The actual already held policy-direction artifact is the new direction's
+reference. It is not an answer to the old Human and requires no newly invented
+per-file Human approval. The distinct independent host evidence purpose is
+`goal-phase-source-history-normalization`, binding
+`sourceHistoryNormalization(target,answer(choice,rationale,participant,reference,priorExecutionEnded))`.
+An effect-bearing choice requires `priorExecutionEnded=true`. The trusted host
+must attest that fact from actual terminal evidence for the old invocation;
+missing receipts, elapsed time, present content and caller prose prove none of
+it. Old source-history-recovery evidence and generic authorization cannot
+authorize the new purpose.
+
+Normal passive `prepareEvidence` accepts GoalPhase kind
+`source-history-normalization`, the actual description as request and
+`GoalPhaseSourceHistoryNormalizationAnswer(choice,rationale,priorExecutionEnded)`
+as result, plus the actual policy reference, matching execution worker,
+participant, issuer and time. Preparation returns ordinary inert import rows.
+It proves neither real lifecycle termination nor consent and does not provision,
+adopt, answer the old question or Advance.
+
+`Defer` writes nothing. Adoption appends an immutable
+`GoalPhaseSourceHistoryNormalizationDirection`. With an exact unanswered
+source-history question, normal decision supersession retains that question
+unanswered and records a distinct `superseded-by-normalization` cause. It never
+creates a Human completion or an `AuthorizeNewAttempt` answer. The original
+UNKNOWN and successful prefix remain unchanged. Replay loads the exact immutable
+direction and saved question, validates the complete original target and every
+adjacent native predecessor, and consumes the supersession once.
+
+A separate ordinary `advanceGoalPhase` owns reconciliation. It appends its own
+managed reconciliation intent referring to the original intent and policy
+direction, verifies completed prefix sources with their retained rule/date,
+and reads the affected file through the existing File UoW. An already satisfied
+postcondition records `observed-current-postcondition` with no File replacement.
+An unambiguous normalizable comment uses managed
+`UpdateExisting(expectedText)` and records the actual `updated-current` result.
+Source body, unrelated comments and actual user changes remain preserved.
+
+Missing or unreadable source, malformed/duplicate managed comments, changed
+rule or conflicting replacement retain concrete diagnostics. Known read or
+pure prewrite failures and the managed conflict result produce a separate
+durable `failed` observation. A dispatched write without an attributable result
+remains UNKNOWN. Reconciliation never fills the original missing result or
+asserts who performed an already observed normalization. Available actual branch,
+result, original UNKNOWN, policy reference and unassessed cause resolution are
+recorded through existing CommonEvidence and Journal owners, without AI work.
+
+An attributable retained reconciliation result is reused after interruption,
+without another completed write. A new unresolved reconciliation writer stops
+ordinary Advance with an explicit requirement for actual terminal lifecycle
+evidence. The old prior-ended assertion does not authorize that new writer, and
+the route supplies no busy retry, replacement Human or extra comment-repair
+allowance. A durable failed observation also stops with its actual diagnostic.
+Repeated Advance preserves that stop until continuation is explicitly adopted
+through the same public describe/preparation/adopt Operations. Ordinary authorized
+correction of an ambiguous source can precede that continuation.
+
+Description reconstructs the actual immediately preceding direction and
+reconciliation from retained native history. Adoption compares the complete
+resume target with that current frontier and requires refreshed independent
+`priorExecutionEnded=true` evidence for that exact latest invocation. The policy
+direction artifact identity/revision remains the same; the refreshed host
+lifecycle attestation supplies information rather than renewed Human authority.
+Absent/false evidence, stale/crossed provenance, a different authority artifact,
+changed full rule/scope, completed candidate/Review and genuine old Defer/Cancel
+refuse. No File access occurs in description or adoption, and current bytes or
+missing results never prove termination.
+
+Adoption appends one distinct mechanical direction after that exact failed or
+resultless frontier, with a reference and cause derived from its source frontier
+revision. Native replay reconstructs the original question/rule and every
+adjacent direction/intent/result edge before consuming the next direction.
+Separate ordinary Advance then creates new reconciliation references and reads
+the current affected source: an already satisfied original-date postcondition
+requires no write; unnormalized unambiguous content receives the same bounded
+managed update. Consecutive genuine attempts use the same relationship, each
+requiring its latest actual lifecycle information. Earlier failed results,
+unresolved intents and the original UNKNOWN stay unchanged; no missing result
+is filled. The existing observation/CommonEvidence/Journal payloads link the
+original UNKNOWN, prior direction/intent/result and new actual branch/result,
+with cause resolution still unassessed.
+
+After actual reconciliation success, ordinary candidate capture verifies both
+the successful prefix and affected current postcondition before fresh effects.
+Those paths are excluded only from this candidate's new-date normalization.
+Remaining files receive normal processing, fresh selected validation and
+independent Review. No original success receipt is synthesized for the affected
+file. Successful candidate capture clears this reuse, so a later genuine
+semantic RepairStep normalizes its changed files normally. The same Session,
+Plan/base, accepted work, completed Steps, RRC counts and all failed/UNKNOWN
+receipts remain; mechanical adoption/reconciliation reserve and refund no
+semantic repair batches. Legacy explicit APIs and their historical codecs remain
+readable and retain their existing choices.
+
+`GoalPhaseSourceHistoryNormalizationSpec` covers the strict later-intent8 target,
+own-purpose binding and passive preparation, real managed File idempotence,
+read-only current observation, bounded update, ambiguous known failure and
+changed-rule refusal. `NativeGoalSourceHistoryNormalizationCliSpec` uses the
+existing isolated normal CLI fixture with a completed Step, four actual prefix
+updates and an unresolved successor. It covers public adoption without an old
+Human answer, separate Advance through actual selected SBT to independent
+Review, unchanged original facts, Defer, denied evidence, known prewrite failure,
+ordinary correction followed by same-policy continuation, interruption before
+File work and after File write before result, consecutive exact-frontier
+continuations, and retained-result continuation. The pure binding suite includes
+failed/resultless resume targets and crossed/stale/null/extra/public-name
+rejections. The interruption cases use the already supported test-owned native
+acknowledgement hook and never seed native rows.
+
+Installed qualification supplies explicit `smworkflow.spec.installedCommand`
+and `smworkflow.spec.runtimeRoot`; the suite resolves and pins that immutable
+publication directory for new public calls through `SM_WORKFLOW_INSTALLATIONS`.
+Optional explicit `smworkflow.spec.legacyRuntimeRoot` creates the legacy pending
+question with an actual old image, then switches to the pinned new image for
+description, preparation, adoption and Advance. These fixtures own their host,
+policy metadata and terminal assertions; they establish no live Human consent.
+Generation, compilation, focused validation, independent review, publication
+and installed qualification remain parent-owned requirements. The source
+contract alone does not claim an installed product or live consumer adoption.

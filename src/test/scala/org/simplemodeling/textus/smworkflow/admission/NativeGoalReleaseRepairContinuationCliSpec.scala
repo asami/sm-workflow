@@ -674,7 +674,7 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         repair.work.get.kind shouldBe "RepairStep"
         repair.work.get.stepIdentity shouldBe None
         repair.work.get.completed shouldBe oldphase.work.get.completed
-        repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, target.repairProgress.limit))
+        repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, target.repairProgress.limit, None, None, None))
         cli.advance(session).business[V.GoalPhaseAdvanceResult] shouldBe repair
         _checks(s) shouldBe oldchecks
         val open = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")

@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseFindingRecording
 
 /** Finite wire names for supplied Human questions; native scopes own projection.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionQuestionWire {
@@ -32,7 +32,7 @@ private[smworkflow] object NativeHumanDecisionQuestionWire {
       case Node.GoalResult => Vector("reviewObservations", "dependencyProposal")
       case Node.GoalAssignment => Vector("instanceIdentity", "sourceRevision", "kind", "stepIdentity", "generation",
         "selectedPlan", "originalBase", "candidate", "checksReceipt", "repairProgress")
-      case Node.Progress => Vector("automaticCount", "ordinaryCount", "limit")
+      case Node.Progress => Vector("automaticCount", "ordinaryCount", "limit", "runtimePolicy", "selectedLimit", "effectiveLimit")
       case Node.RepositorySource => Vector("requestingResult", "conflict")
       case Node.RepositoryConflict => Vector("instanceIdentity", "conflictRevision", "localTip", "remoteTip", "conflicts")
       case Node.SplitSource => Vector("kind", "context", "checkpoint", "scopeCheckpoint", "result", "work")

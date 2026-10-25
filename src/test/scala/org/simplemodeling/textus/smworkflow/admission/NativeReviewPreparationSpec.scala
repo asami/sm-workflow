@@ -376,7 +376,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
           .map(c => take(_prepare(c)))
         val expected = take(ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(call.core, input, submitted))
         Then("normal declaration and wire fields retain exactly the saved Work counts while the verdict has none")
-        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2, None, None, None))
         prepared.map(p => _evidence(p).binding).distinct.size shouldBe 1
         prepared.foreach(p => _observe(_evidence(p), Purpose.GoalReview, expected).isSuccess shouldBe true)
         _verdict(_evidence(prepared.head)).hcursor.downField("repairProgress").focus shouldBe None

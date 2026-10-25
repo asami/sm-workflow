@@ -65,10 +65,37 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   def sameWorkC(actual: V.WorkflowIssuedWorkContext, supplied: V.WorkflowIssuedWorkContext): Consequence[Unit] = for {
     expected <- actual.toRecord().toJsonStringC
     received <- supplied.toRecord().toJsonStringC
-    a <- io.circe.parser.parse(expected).fold(_ => Consequence.stateConflict("Actual work context is not JSON"), Consequence.success)
-    b <- io.circe.parser.parse(received).fold(_ => Consequence.stateConflict("Supplied work context is not JSON"), Consequence.success)
-    _ <- if (a == b) Consequence.unit else Consequence.stateConflict("Diagnostic request differs from the currently issued work")
+    a <- _context_json_c(expected)
+    b <- _context_json_c(received)
+    _ <- if (a == b) Consequence.unit else Consequence.stateConflict(
+      "Diagnostic request differs from the currently issued work at " + _difference(a, b, "issuedWorkContext"))
   } yield ()
+
+  // Generic CNCF Records cross the public snake_case naming projection while
+  // generated value fields use camelCase. Compare that existing public codec's
+  // canonical representation, rejecting ambiguous aliases rather than dropping
+  // fields, values, array members or completion/authority requirements.
+  private def _context_json_c(text: String): Consequence[Json] =
+    io.circe.parser.parse(text).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
+      .fold(Consequence.stateConflict(_), Consequence.success)
+
+  private def _difference(actual: Json, supplied: Json, path: String): String =
+    (actual.asObject, supplied.asObject) match {
+      case (Some(a), Some(b)) =>
+        (a.keys.toVector ++ b.keys.toVector).distinct.sorted.find(k => a(k) != b(k))
+          .map(k => (a(k), b(k)) match {
+            case (Some(x), Some(y)) => _difference(x, y, path + "." + k)
+            case _ => path + "." + k
+          }).getOrElse(path)
+      case _ => (actual.asArray, supplied.asArray) match {
+        case (Some(a), Some(b)) =>
+          a.zip(b).indexWhere((x, y) => x != y) match {
+            case -1 => path + ".length"
+            case i => _difference(a(i), b(i), path + "[" + i + "]")
+          }
+        case _ => path
+      }
+    }
 
   private def _missing(s: Selection, why: String): Item =
     Item(s, "unavailable", "none", "unknown", "unavailable", None, why)

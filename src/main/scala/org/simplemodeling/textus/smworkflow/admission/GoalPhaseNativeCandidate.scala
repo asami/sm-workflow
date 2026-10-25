@@ -160,7 +160,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     candidateObservationContinuation: Option[GoalPhaseCandidateObservationContinuation.Target] = None,
     wholePhaseCandidateRecovery: Option[GoalPhaseWholePhaseCandidateRecovery.Target] = None,
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
-    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
+    sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -173,7 +174,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- dependencyAdmission.fold(Consequence.unit)(GoalPhaseNativeDependencyValidation.resolvedC(_, dependencyChain))
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy, recordingPaths, completedCandidates,
-      sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain)
+      sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain,
+      sourceHistoryNormalization = sourceHistoryNormalization)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
@@ -457,7 +459,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
     val retainedOnly: Boolean = false,
     val dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
-    val dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None) {
+    val dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
+    val sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity
@@ -468,7 +471,16 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val stagingPaths = if (whole && !controller.releaseRepairActive) managementPaths else ownedPaths
     val scopedPhase = whole && completedCandidates.exists(_.continuation.nonEmpty)
-    def reusePrefixC: Consequence[Vector[String]] = sourceHistoryRecovery match {
+    def reusePrefixC: Consequence[Vector[String]] = for {
+      prefix <- _reuse_prefix_c
+      affected <- sourceHistoryNormalization match {
+        case None => Consequence.success(Vector.empty[String])
+        case Some(target) if sourceHistoryRecovery.contains(target.recovery) && target.recovery.planRevision == plan.revision =>
+          GoalPhaseSourceHistoryNormalization.verifyAffectedC(core, target).map(Vector(_))
+        case _ => F.invalid("normalization continuation has no matching admitted original source")
+      }
+    } yield (prefix ++ affected).distinct
+    private def _reuse_prefix_c: Consequence[Vector[String]] = sourceHistoryRecovery match {
       case None => Consequence.success(Vector.empty)
       case Some(target) if !whole && GoalPhaseSourceHistoryRecovery.validTarget(target) &&
           target.sessionId == from.identity.value && target.definitionIdentity == from.definition.workflowIdentity.value &&

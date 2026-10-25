@@ -257,7 +257,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
                 issued.work.get.selectedPlan shouldBe original.selectedPlan
                 issued.work.get.originalBase shouldBe original.originalBase
                 issued.work.get.completed shouldBe acceptedprefix
-                issued.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, 2))
+                issued.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, 2, None, None, None))
                 When("ordinary Advance only observes the same pending actual issued repair")
                 val observed = _advance(s, task).business[V.GoalPhaseAdvanceResult]
                 Then("the exact issued work context and original four check PIDs remain unchanged")
@@ -278,7 +278,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
             repair.work.get.selectedPlan shouldBe original.selectedPlan
             repair.work.get.originalBase shouldBe original.originalBase
             repair.work.get.completed shouldBe acceptedprefix
-            repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, 2))
+            repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, 2, None, None, None))
             repair.work.get.review.get.priorReviews shouldBe originalrepair.work.get.review.get.priorReviews
             repair.work.get.review.get.checks shouldBe originalrepair.work.get.review.get.checks
             repair.work.get.review.get.checks.forall(_.exitCode.contains(0)) shouldBe true
@@ -327,7 +327,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
           Then("the unchanged original Step awaits only normal Final authority")
           waiting.kind shouldBe "Wait"
           waiting.sessionId shouldBe session
-          waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(if (failedphase) 2 else 1, if (failedphase) 2 else 1, if (failedphase) 2 else 1))
+          waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(if (failedphase) 2 else 1, if (failedphase) 2 else 1, if (failedphase) 2 else 1, None, None, None))
           s.candidateHead shouldBe head
           if (!failedphase) _executions(s) shouldBe oldchecks
           require(!Files.exists(root.resolve("retained-final-closure-r2-authority-reference.json")), "Never replace a retained authority sidecar")
@@ -400,7 +400,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         steprepair.work.get.kind shouldBe "RepairStep"
         steprepair.work.get.stepIdentity shouldBe Some("step-1")
         steprepair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
-        steprepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, limit))
+        steprepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
         _executions(s).size shouldBe 1
         Files.writeString(repo.resolve("value.txt"), "expected\n")
         val stepissues = steprepair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
@@ -421,7 +421,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         val acceptedprefix = integrated.work.get.completed
         acceptedprefix.size shouldBe 1
         acceptedprefix.head.commit.identity shouldBe s.candidateHead
-        integrated.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, limit))
+        integrated.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
         _executions(s).size shouldBe 3
 
         When("the integrated reviewer identifies the existing required usage-contract mismatch")
@@ -439,7 +439,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         repair.work.get.selectedPlan shouldBe original.selectedPlan
         repair.work.get.originalBase shouldBe original.originalBase
         repair.work.get.completed shouldBe acceptedprefix
-        repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, limit))
+        repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
         if (recording) {
           repair.findingRecording.get.pending.map(_.observation.identity) shouldBe Vector("original-phase-note")
           repair.findingRecording.get.request shouldBe None
@@ -471,7 +471,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
           failedrepair.work.get.selectedPlan shouldBe original.selectedPlan
           failedrepair.work.get.originalBase shouldBe original.originalBase
           failedrepair.work.get.completed shouldBe acceptedprefix
-          failedrepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, limit))
+          failedrepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
           val historical = failedrepair.work.get.review.get
           historical.checks shouldBe repair.work.get.review.get.checks
           historical.checks.forall(_.exitCode.contains(0)) shouldBe true
@@ -507,7 +507,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         rereview.work.get.review.get.checks.head.exitCode shouldBe Some(0)
         if (failedphase) {
           rereview.work.get.issues.get.issues.filter(_.source == "TEST").forall(_.status == "RESOLVED") shouldBe true
-          rereview.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, limit))
+          rereview.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(2, 2, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
         }
         _executions(s).size shouldBe finalexecutions
         if (recording) {
@@ -575,7 +575,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
         Files.writeString(finalconfigpath, finalconfig)
         val finalwait = _advance(s, task)
         finalwait.business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
-        finalwait.business[V.GoalPhaseAdvanceResult].repairProgress shouldBe Some(V.GoalPhaseRepairProgress(releasecount, releasecount, limit))
+        finalwait.business[V.GoalPhaseAdvanceResult].repairProgress shouldBe Some(V.GoalPhaseRepairProgress(releasecount, releasecount, limit, Some("sm-workflow.repair-trend.v1"), Some(limit), Some(limit)))
         _authority(s, finalwait, "fixture-final-closure")
         if (unknownfinal) {
           Given("the actual Final commit capability becomes unavailable after its accepted authority and candidate")

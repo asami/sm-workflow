@@ -57,6 +57,40 @@ invent a smaller allowance such as 3. An explicit new continuation window retain
 its existing Human semantics and all cumulative history. Policy adoption itself
 does not open a new window or refund either count.
 
+### Minimal runtime policy v1
+
+The corrective implementation selects the named policy
+`sm-workflow.repair-trend.v1`. Its bounded window is the latest four comparable
+attributable failure observations for the same Step or Release scope. Each
+observation retains the actual check/review reference and its finding set;
+diagnostic calls and AI convergence labels are not observations of execution.
+The generic sentence identifying a failed SBT check is not a complete unresolved
+finding catalog. Repeated failure of that check alone cannot distinguish
+improving diagnostics from a stall; this coarse case retains unknown trend and
+the ordinary automatic budget. No extra AI classification call is required.
+Four equal nonempty sets establish sustained recurrence; alternating distinct
+sets A/B/A/B establish oscillation; three successive strict set expansions
+across four observations establish sustained regression. These are runtime
+decision reasons. Other changes, a single temporary expansion, missing evidence
+or fewer than four comparable observations do not establish divergence.
+
+The automatic dispatch ceiling is the smaller of the selected allowance and
+ten. Retained legacy Plans with larger limits remain readable and their original
+selected limit is not rewritten during decoding. New native Starts capture the
+policy version; old Starts without that field retain their historical replay
+semantics until a separately recorded public policy adoption. Policy adoption
+and a Human-selected new repair window are distinct transitions. Adopting policy
+does not reset consumed counts; a genuinely selected new window retains its
+existing Human semantics and cumulative native history.
+
+The public adoption direction distinguishes correcting a caller-selected limit
+to ten from retaining an explicit smaller selected limit. Neither a description
+nor an absent provenance field proves what happened in unseen caller text. A
+restoration association identifies the actual producer work and its suspended
+consumer as business context; it grants no consumer access, state transition,
+count change or replay authority. Qualification and actual consumer adoption
+remain separate evidence.
+
 ## Runtime restoration
 
 ### Transition before RRC delivery — 2026-10-25 correction

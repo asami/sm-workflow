@@ -68,7 +68,7 @@ final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matcher
     if (Files.exists(path)) Files.readString(path, UTF_8).linesIterator.map(_.toLong).toVector else Vector.empty
   }
   private def _progress(value: V.GoalPhaseAdvanceResult): Unit =
-    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1))
+    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
   private def _retained(value: V.GoalPhaseAdvanceResult, initial: V.GoalPhaseAdvanceResult): Unit = {
     value.sessionId shouldBe initial.sessionId
     value.work.get.originalBase shouldBe initial.work.get.originalBase

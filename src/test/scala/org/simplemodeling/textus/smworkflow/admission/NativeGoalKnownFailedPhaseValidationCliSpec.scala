@@ -501,7 +501,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.completed.size shouldBe 1
       fresh.work.get.completed.head.commit.identity shouldBe closedtip
       fresh.repairProgress shouldBe waiting.repairProgress
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
       repeated shouldBe fresh
@@ -706,7 +706,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.candidate.get.tree shouldBe target.candidate.tree
       fresh.work.get.completed.size shouldBe 1
       fresh.work.get.completed.head.commit.identity shouldBe closedtip.trim
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0, Some("sm-workflow.repair-trend.v1"), Some(0), Some(0)))
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
@@ -859,7 +859,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0, Some("sm-workflow.repair-trend.v1"), Some(0), Some(0)))
       phaseExecutions(root).size shouldBe 2
       val terminal = freshcall.events.filter(_.hcursor.get[String]("state").contains("terminal"))
       terminal.size shouldBe 1

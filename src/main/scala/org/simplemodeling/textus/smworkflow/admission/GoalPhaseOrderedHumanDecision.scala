@@ -340,7 +340,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             Consequence.unit else F.invalid("ordered Human recovery differs from its original unresolved intent")
           case None => if (source.controller.stage == O.Stage.Decision && source.controller.decisionSource.exists(stage =>
           if (source.controller.documentDecision) stage != O.Stage.Decision && stage != O.Stage.Closed
-          else (source.controller.pendingRepair.nonEmpty && Set(O.Stage.Validation, O.Stage.Review)(stage)) ||
+          else (source.controller.pendingRepair.nonEmpty && Set(O.Stage.Validation, O.Stage.Review,
+            O.Stage.PhaseValidation, O.Stage.PhaseReview)(stage)) ||
             Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)(stage)) &&
           source.from.currentProgression.contains(ProgressionReference("phase.Decision")) && source.from.suspension.isEmpty) Consequence.unit
         else F.invalid("ordered Human source is not a retained semantic decision")
@@ -350,7 +351,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       bundle = ContextBundle(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
         else if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
         else if (input.planRevision.nonEmpty) "Answer only the saved complete bounded Plan revision proposal"
-        else if (source.controller.pendingRepair.nonEmpty) "Answer only the exhausted selected Step repair window"
+        else if (source.controller.pendingRepair.nonEmpty) "Answer only the runtime repair budget or convergence stop for this unchanged Step or Release scope"
         else if (source.controller.documentDecision) "Answer only the retained document acceptance conflict"
         else "Answer only the retained ordered semantic decision", Vector(source.result.resultReference), Vector.empty,
         ContextSnapshot(source.from.definition.workflowRevision.value, evidenceRevision = Some(source.from.revision.value.toString)))
@@ -378,7 +379,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           else if (input.planRevision.nonEmpty)
             "AdoptPlanRevision selects only this saved complete Plan revision. RejectPlanRevision retains the original Plan and resumes its same semantic work. Both retain history and counts; execution, source permissions, checks, review and closure require their existing authority."
           else if (source.controller.pendingRepair.nonEmpty)
-            "ContinueRepairs renews only the same positive Step repair window and reserves its first batch. Original failure evidence and history remain; commands, scope, review acceptance and closure need their existing authority."
+            "ContinueRepairs explicitly opens a new window for the same positive Step or Release repair scope after its actual runtime budget or convergence stop, and reserves its first batch. Original failure evidence and cumulative history remain; commands, scope, review acceptance and closure need their existing authority."
           else if (source.controller.documentDecision)
             "Resume rechecks current documents at the same frontier; it grants no amendment, command, review acceptance or repair allowance."
           else "Resume requests the same semantic work; it grants no commands, review acceptance, Plan amendment or repair allowance.")).noSpaces)))

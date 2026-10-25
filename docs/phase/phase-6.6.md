@@ -20,16 +20,16 @@ independent Step review. D2 was natively accepted and committed as
 tests passed. Its conditional assessment also admitted without independent Step
 review; these Step outcomes do not establish integrated Phase acceptance.
 
-D3 is the current issued repair. Its first native check passed production
-compilation and lint, but test compilation failed because existing generated
-public-result constructors omitted the newly added optional diagnostic field.
-That source correction was accepted; the following candidate preparation stopped
-at source-history intent 8 after eight completed normalization results. Public
-Human226 retains source208 and the unresolved effect as UNKNOWN, with repair
-progress 1/10. Duplicate managed comments in the affected fixture sources have
-been corrected; no replacement attempt, accepted-result replay or fresh D3 test
-success is claimed. The original `AuthorizeNewAttempt`/`Defer` question remains
-in the retained history; no answer has been fabricated.
+D3 was natively accepted and committed as
+`38b53fa5c689bf18b6ab095d001e21ba12da35b2` after Compile, lint and four
+focused diagnostic-repair tests passed. Its conditional Step assessment admitted
+without an independent Step review. The earlier test compilation failure and
+source-history interruption remain retained. Public same-authority normalization
+adoption superseded Human226 without answering it, preserved the old UNKNOWN and
+eight successful prefix results, and resumed ordinary validation and closure.
+D3 consumed repair count 1/10; ordinary D4 starts its own 0/10 Step window.
+D4 is now issued as ImplementStep at continuation
+`f01d809d1b4bfe8a4b5c241dac301b81:ordered-implementation:331`, expected revision332.
 
 On 2026-10-26 the consumer recovered the producer's original terminal receipts:
 `sm-rrc-20261025-publish01-result@1` reports successful publication with exit 0;
@@ -50,9 +50,11 @@ evidence-based recurrence stop, legacy 3-to-10 policy adoption, fresh
 failure-to-Release-FIX, saved-failure adoption/FIX and confirmed-timeout recovery.
 These are focused/isolated results with test-owned decisions, not a new full-suite
 run or real consumer consent. Successful commands/publication were not repeated.
-Producer qualification and delivery are complete; consumer runtime selection,
-public policy adoption/continuation, RRC-06/08 consumer acceptance, P66-16 adoption
-and new comment recovery remain unproven. Detailed evidence is retained in the
+Producer qualification and delivery are complete. The consumer selected the
+subsequent qualified SHR image (which contains RRC) and completed live comment
+normalization adoption/continuation. Public repair-policy adoption and RRC-06/08
+consumer acceptance remain distinct pending work; image selection alone does
+not adopt a new policy in the existing legacy Session. Detailed evidence is retained in the
 producer's execution archive through 2026-11-25.
 
 The separately adopted source-history/result-collection correction requires
@@ -60,11 +62,19 @@ runtime reconciliation of the current comment under the retained rule and
 effective date, preserving the old UNKNOWN, successful prefix, pending question
 and counts. Reuse existing user direction through its delivered public same-Session
 route; a missing normalization receipt alone is not a request for another
-consumer permission. That new route is not yet implemented/qualified. D3 is
-waiting for this producer capability, without bypassing the actual pending
-question. The producer owns implementation and installed qualification; the
-consumer owns live adoption. The new P66-17/P66-18 planning conditions do not
-silently rewrite the native Plan revision 1 or reopen accepted D1/D2 work.
+consumer permission. That public route is now delivered and live adoption succeeded through retained
+responses 017 (description), 018 (independent preparation), 019 (adoption),
+020 (ordinary resumed checks), 021 (normal Step authority), and 022 (D3 closure
+and D4 issue), in the existing task directory. The selected image is installation
+`54ea51ef-6e14-405a-8938-532b6d2c9a23`, update
+`9e0d06c6-dc27-4f00-820f-5f0b7976cd04`. Producer installed qualification passed
+nine isolated cases; this is distinct from the now observed live D3 continuation.
+The original policy direction and actual old terminal command evidence were
+recovered from retained chat execution results; no successful command was rerun
+for collection. New P66-17/P66-18 planning conditions do not silently rewrite
+native Plan revision1 or reopen accepted D1/D2/D3. D4 integrates qualified RRC/SHR
+source with D1-D3 before a future combined distribution; the currently selected
+image does not yet contain the new Phase 6.6 diagnostic operations.
 
 The checklist remains pending until the corresponding actual evidence is available.
 The completed Phase 6.4/6.5 Sessions and their evidence are retained.

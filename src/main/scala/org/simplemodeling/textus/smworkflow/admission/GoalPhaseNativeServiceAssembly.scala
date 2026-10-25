@@ -35,6 +35,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
       IncrementalSbtDiagnosisInformation.operations(port) ++
       GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseSourceHistoryRecovery.operations(port) ++
+      GoalPhaseSourceHistoryNormalization.operations(port) ++
       GoalPhaseCandidateRecovery.operations(port) ++
       GoalPhaseCandidateObservationContinuation.operations(port) ++
       GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
@@ -42,7 +43,8 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       GoalPhaseLegacyPurposeRepairContinuation.operations(port) ++
       GoalPhaseReleaseRepairContinuation.operations(port) ++
       GoalPhaseValidationRepairAdoption.operations(port) ++
-      GoalPhaseFailedPhaseRepairAdoption.operations(port) ++ GoalPhaseCompletionPolicyAdoption.operations(port))))
+      GoalPhaseFailedPhaseRepairAdoption.operations(port) ++ GoalPhaseCompletionPolicyAdoption.operations(port) ++
+      GoalPhaseRepairPolicyAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
     * belong to the trusted host; stored Plan data cannot install them.

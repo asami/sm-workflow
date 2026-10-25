@@ -114,7 +114,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
     }
   }
   private def _progress(value: V.GoalPhaseAdvanceResult, automatic: Int = 0, ordinary: Int = 0): Unit = {
-    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(automatic, ordinary, 2))
+    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(automatic, ordinary, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
     value.completion shouldBe None
   }
   private def _plan(scenario: F.Scenario, value: V.GoalPhaseOrderedPlan): Unit = {

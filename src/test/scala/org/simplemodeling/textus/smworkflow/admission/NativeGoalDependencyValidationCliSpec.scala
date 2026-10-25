@@ -967,7 +967,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       repair.work.get.review.get.dependencyValidations.map(json) shouldBe originalreview.work.get.review.get.dependencyValidations.map(json)
       val prior = repair.work.get.review.get.priorReviews.map(json)
       prior.last.hcursor.downField("result").get[String]("outcome").toOption shouldBe Some("repair")
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       val primarychecks = _executions(selected.scenario.root)
       val dependencychecks = _executions(selected.scenario.root.resolve("dependency"))
 
@@ -1045,7 +1045,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       repair.work.get.selectedPlan shouldBe originalreview.work.get.selectedPlan
       _capture(repair) shouldBe _capture(originalreview)
       repair.work.get.repairDirective.get.findings shouldBe Vector("Remove executable permission from dependency value.txt")
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       _executions(selected.scenario.root.resolve("dependency")) shouldBe executed
       When("that issued repair completes and ordinary Advance captures its current admitted state")
       _complete_repair(selected, repair).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
