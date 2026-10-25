@@ -174,9 +174,17 @@ Required Step commits, actual local release, aggregate full validation and Phase
 closure remain with their existing owners. Practical use follows that formal
 acceptance, with observed limitations kept explicit.
 
-## Phase 6.5 current delivery evidence (2026-10-24)
+## Phase 6.5 current delivery evidence (updated 2026-10-25)
 
-Q1 through Q3-S have accepted independent reviews and native Step commits in
-the existing Session. Q4 client integration, full validation, integrated Phase
-review and local closure are pending. See the
+Plan 4 retains eight accepted Steps, Q1 through Q6 including Q3-R and Q3-S,
+with independent accepted reviews and native commits in the existing Session.
+Q4, Q5 and Q6 committed as `20183694`, `295492e` and `879bf769`, with accepted
+reviews `2147`, `2188` and `2224`. Whole validation `2231` passed at Q6 HEAD:
+185 suites, 1765 successful tests, 0 failures and 5 cancellations. Earlier UNKNOWN
+and formal failures remain historical; cancelled opt-in qualifications establish
+no new installed qualification PASS. Integrated review
+`phase-6.5-independent-phase-review-2235` returned P65-14 / native `issue-15` for
+delivery alignment. The current Release documentation FIX, fresh affected checks,
+independent scoped review and ordinary native Final/local closure remain pending;
+Phase completion requires the actual native Terminal result. See the
 [actual evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).

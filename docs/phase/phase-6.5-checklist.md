@@ -3,11 +3,21 @@
 status=in-progress
 phase=[Phase 6.5](phase-6.5.md)
 
-Q1, Q2, Q3, Q3-R and Q3-S have actual accepted independent reviews and native
-Step commits. Their conditions below are checked at that accepted Step scope.
-Q4 integration, full validation, integrated Phase review and local closure remain
-pending; these flags do not substitute for Phase acceptance. See the
-[delivery evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).
+Plan `phase-6.5-three-workflow-optimization@4` retains eight accepted Steps:
+Q1, Q2, Q3, Q3-R, Q3-S, Q4, Q5 and Q6, each with an actual independent accepted
+review and native Step commit. Whole validation `2231` passed at Q6 HEAD
+`879bf769e933e5a25fb615b5a2873df10c405e3d`: 185 suites, 1765 successful tests,
+0 failures and 5 cancellations. Earlier UNKNOWN and formally failed attempts,
+including whole validation `2196`, remain historical facts. Integrated review
+`phase-6.5-independent-phase-review-2235` returned the P65-14 delivery-document
+finding / native `issue-15`. The current phase-level Release FIX
+`ordered-repair:2238` (expected revision `2239`), its fresh affected validation,
+independent scoped review and native Final/local closure remain pending. Phase
+completion requires an actual native Terminal result. The checked conditions
+below retain their accepted Step scope; unchecked delivery conditions do not
+mean Q4 or whole validation is still unexecuted and do not substitute for Phase
+acceptance. See the [delivery evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md)
+for all eight commit/review references and qualification/cost limits.
 
 ## Q1: ordinary Step main route
 
