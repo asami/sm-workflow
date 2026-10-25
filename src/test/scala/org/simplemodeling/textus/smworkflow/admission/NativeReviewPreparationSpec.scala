@@ -28,7 +28,7 @@ import NativePreparationFixture.expectedRecordJson
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -38,7 +38,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
   private val _now = Instant.parse("2026-10-07T00:00:00Z")
   private val _reference = V.WorkflowArtifactReference("specification-review", "1")
   private val _execution = V.WorkflowExecutionEvidence(Vector(_reference), Some("specification-reviewer"), None, None)
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty)
   private val _receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "diagnostic output", "")
   private val _goal_input = NativeHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = "ReviewStep",
@@ -450,7 +450,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
         val result = GoalPhaseNativeWork.Result("accept", "Explicit independent coverage", Vector.empty, issueReport = Some(report))
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, None, None,
           GoalPhaseFixIssues.publicReport(result.issueReport), None, GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None)
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("normal formatted output and generated readers carry actual selected issues into public passive preparation")
@@ -528,7 +528,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, boundary.publicReport(result.acceptance),
           GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
           GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None)
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("the normal command formatter and generated readers carry the issued view and result into passive preparation")
@@ -652,7 +652,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
       _with_core { call =>
         val goal = take(NativeReviewContext.goalC(call.core, _goal_work())).get
         val repository = take(NativeReviewContext.repositoryC(call.core, _repository_work))
-        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None, None, None, dependencyValidation = None)
+        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
         val finding = V.RepositorySyncNativeMergeReviewFinding("missing-case", Vector("one.scala"), "Repair only this native path")
         When("public preparation encodes each selected repair result through the existing binding")
         val goalrepair = _evidence(take(Preparation.goalC(goal, repair, _reference, _execution, _declared.issuer, _now)))

@@ -163,6 +163,9 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
     decoded.fold(Consequence.stateConflict(_), Consequence.success)
   }
 
+  def failedCandidate(work: GoalPhaseNativeWork.Request): Option[GoalPhaseOrderedProgression.Snapshot] =
+    work.checkFailure.map(_.validation.candidate).orElse(work.candidate)
+
   /** The storage boundary is shared by production and focused tests. Loaded
     * batches never cause another source read; unknown archive intents retain
     * Common Evidence's existing no-replay behavior.
@@ -189,7 +192,7 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
           .getOrElse(Consequence.stateConflict("Delivered batch payload unavailable; no repeat source read")))
         batch <- _batch_c(text)
         _ <- if (batch.work == input.issuedWorkContext.continuationId && batch.revision == input.issuedWorkContext.expectedRevision &&
-            batch.requestIdentity == input.requestIdentity && batch.candidate == work.candidate && batch.items.map(_.selection) == selections)
+            batch.requestIdentity == input.requestIdentity && batch.candidate == failedCandidate(work) && batch.items.map(_.selection) == selections)
           Consequence.unit else Consequence.stateConflict("Request identity already names a different delivered batch")
         state = V.EvidenceRecordingState(observed.status, "Retained delivered batch; no source refresh",
           Some(V.EvidenceReference(id, "1")), Some(CommonEvidence.observation(allocation, observed)), None)
@@ -200,7 +203,7 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
         resolution = if (items.forall(_.status == "unavailable")) "no-new-information"
           else if (items.exists(_.status != "available")) "partial-information" else "information-available"
         batch = Batch("sm-workflow.diagnostic-information.v1", input.issuedWorkContext.continuationId,
-          input.issuedWorkContext.expectedRevision, input.requestIdentity, work.candidate,
+          input.issuedWorkContext.expectedRevision, input.requestIdentity, failedCandidate(work),
           clock.instant().toString, resolution, items)
         saved <- CommonEvidence.archiveManagedC(store, policy, selectedsource, batch.asJson.noSpaces, "identity", clock)
         result <- recordedC(batch, saved._1, saved._2)

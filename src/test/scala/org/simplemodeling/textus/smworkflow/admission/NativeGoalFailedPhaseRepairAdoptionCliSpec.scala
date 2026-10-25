@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * drives the same public Operations through the actual installed executable.
   * Fixture evidence asserts no production Human provenance.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -190,7 +190,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val name = review.work.get.stepIdentity.get
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact candidate", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("repair-fixture-review-" + name, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
@@ -432,7 +432,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val repairedsource = Files.readString(product)
       cli.submit(implementation, V.WorkflowArtifactReference("fixture-corrective-implementation", "1"),
         V.GoalPhaseWorkResult("completed", "The explicitly selected source repair already exists", Vector.empty,
-          None, None, None, None, None, None, None, None, dependencyValidation = None))
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None))
       var correctivefrontier = Option.empty[InstanceRecord]
       inKnownEpisode(root, componentInstance = "default") { episode => correctivefrontier = Some(episode.current(identity)) }
       When("ordinary Advance normalizes the corrective source through goldenport, captures only the repair scope, runs its real Compile and requests independent ReviewStep")
@@ -690,7 +690,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       When("the original accepted recovery-implementation reference is resubmitted with an altered payload before any corrective assignment is issued")
       val late = cli.goal(original.get.submitOperation.get, Vector("--sessionId", original.get.submitSessionId.get,
         "--result", _json(V.GoalPhaseWorkResult("completed", "Late altered old implementation result", Vector.empty,
-          None, None, None, None, None, None, None, None, dependencyValidation = None)),
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)),
         "--resultReference", _json(V.WorkflowArtifactReference("recovery-implementation", "1"))))
       Then("the historical original result has no pending assignment and refuses without changing the adopted instance or repository effects")
       late.exit should not be 0
@@ -722,7 +722,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       Files.writeString(product, originalsource.replace(predicate, "val ready = true"))
       cli.submit(implementation, V.WorkflowArtifactReference("fixture-timeout-corrective-implementation", "1"),
         V.GoalPhaseWorkResult("completed", "The exact corrective test source is repaired", Vector.empty,
-          None, None, None, None, None, None, None, None, dependencyValidation = None))
+          None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None))
       val correctionreview = cli.advance()
       val review = correctionreview.business[V.GoalPhaseAdvanceResult]
       Then("the new candidate has its own real successful Compile and independently assigned ReviewStep")

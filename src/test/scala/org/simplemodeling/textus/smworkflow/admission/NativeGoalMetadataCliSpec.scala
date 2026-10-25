@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Semantic Submit is specification-owned input, never provider, Human or
   * independent review evidence. Every successful example stops pending review.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -87,7 +87,7 @@ final class NativeGoalMetadataCliSpec extends AnyWordSpec with Matchers with Giv
     Files.writeString(Path.of(scenario.host.target.root).resolve("docs/phase.md"),
       "# Owned native qualification candidate\n\nMetadata selected through the owning native UoW.\n")
     val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned assigned docs/phase.md edit",
-      Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+      Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", json(semantic.toRecord()).noSpaces,
       "--resultReference", json(_reference.toRecord()).noSpaces)).business[V.GoalPhaseWorkSubmissionResult]

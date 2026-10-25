@@ -1545,6 +1545,7 @@ OperationResult
 | completionConditions | org.goldenport.record.Record | ? |
 | repairFindingSources | GoalPhaseRepairFindingSources | ? |
 | dependencyValidation | org.goldenport.record.Record | ? |
+| diagnosticRepair | org.goldenport.record.Record | ? |
 
 ## GoalPhaseRepairFindingSources
 
@@ -7904,6 +7905,7 @@ GoalPhaseWorkSubmissionResult
 | purposeRepair | org.goldenport.record.Record | ? |
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
+| diagnosticHistory | org.goldenport.record.Record | * |
 
 ## GoalPhaseHumanQuestion
 

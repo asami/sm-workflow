@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named value binding and generated result intake checks. Real operation execution is covered by
   * the normal three-workflow specs, not inferred from a codec round trip.
   * @since   Oct. 12, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -204,7 +204,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
 
     "consume outcome, summary and multiple findings as the named work result" in {
       Given("a semantic work result supplied without value/payload/schema wrappers")
-      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None, None, None, None, None, None, None, None, dependencyValidation = None)
+      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val request = _request(Property("sessionId", "execution-1", None), Property("result", result, None))
 
       When("the result and canonical session parameters are read")

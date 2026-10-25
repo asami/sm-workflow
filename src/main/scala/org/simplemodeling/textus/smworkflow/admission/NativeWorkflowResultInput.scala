@@ -76,7 +76,8 @@ private[smworkflow] object NativeWorkflowResultInput {
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       Vector(
         _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, request =>
-          NativeWorkflowOperationInput.recordC(request, "result").flatMap(GoalPhasePurposeRepair.validatePublicResultC)
+          NativeWorkflowOperationInput.recordC(request, "result").flatMap(record =>
+            GoalPhasePurposeRepair.validatePublicResultC(record).flatMap(_ => IncrementalSbtDiagnosisRepair.validatePublicResultC(record)))
             .flatMap(_ => NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result")).flatMap[Value](value =>
             for {
               report <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
@@ -87,9 +88,10 @@ private[smworkflow] object NativeWorkflowResultInput {
               conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)
               sources <- GoalPhasePurposeRepair.internalSourcesC(value.repairFindingSources)
               validation <- GoalPhaseDependencyValidation.fromPublicC(value.dependencyValidation)
+              diagnostic <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
             } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
                 GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions, sources,
-                dependencyValidation = validation))),
+                dependencyValidation = validation, diagnosticRepair = diagnostic))),
         _work(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseFindingRecordingResult](request, "result").map[Value](value =>
             GoalPhaseFindingRecording.Result(value.outcome, value.summary, value.items.map(item =>

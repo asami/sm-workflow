@@ -83,6 +83,25 @@ normal Evidence service. Storage/Journal availability is distinct from source
 availability and original check failure. D2 focused evidence and later D4 native
 connection are separate acceptance scopes.
 
+D3 keeps the existing RepairStep and semantic result, adding a strict optional
+Fix Manifest rather than another diagnosis executor or progression loop. The
+provider forms cause/evidence/edit/dependency/verification directions within the
+issued scope before the repair participant edits. Submission retains that
+manifest in the existing native result. Current-work information references
+must be confirmed Common Evidence observations for the same issued continuation;
+log references must address the captured failure. Scope and selected compile plus
+behavioral checks are admitted; causal claims and implementation quality still
+need their ordinary evidence. A source fix cannot claim behavioral success.
+
+The contiguous native-history walk accumulates accepted manifests and projects
+same-Step prior diagnoses into later work. No independent counter, history store,
+retry controller or mandatory diagnosis review is added. Old accepted results
+remain unchanged. A RepairStep deliberately has no current candidate: additional
+information therefore binds to `checkFailure.validation.candidate`, the actual
+failed source, rather than inventing a candidate on the repair assignment.
+Common RRC qualification and connected managed execution remain separate delivery
+evidence and cannot be inferred from these source contracts or fixture counts.
+
 Deliver one failed SBT check, one additional-information round, one repair unit and
 one actual focused validation first. Include truthful empty/partial extraction
 and unavailable-source behavior within that connection. Do not first build a

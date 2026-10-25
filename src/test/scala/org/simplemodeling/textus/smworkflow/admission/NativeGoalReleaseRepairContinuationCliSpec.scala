@@ -104,7 +104,7 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         if (outcome == "repair") findings.head else "SPECIFICATION-OWNED verified accepted input contract"))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED assigned semantic result", findings,
       Some(V.GoalPhaseAcceptanceReport(acceptance, Vector.empty)), None, issues, None, None, None, None,
-      repairFindingSources = None, dependencyValidation = None)
+      repairFindingSources = None, dependencyValidation = None, diagnosticRepair = None)
   }
 
   private def _envelopes(s: F.Scenario): Vector[Json] =

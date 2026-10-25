@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Application quality examples with explicit fixture provenance. Native effects,
   * real providers and production independent review are not proved by these tests.
   * @since   Oct. 16, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -186,7 +186,7 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
       val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, B.publicReport(result.acceptance),
         GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
         GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-        result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
+        result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None)
       When("saved codecs and normal strict generated Record readers consume their own structured JSON")
       val start = GoalPhaseNativeRun.codec.decode(GoalPhaseNativeRun.codec.encode(payload))
       val work = S.inputCodec.decode(S.inputCodec.encode(_request))

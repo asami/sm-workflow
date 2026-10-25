@@ -37,7 +37,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Staged fixture support lives in this owned suite. It never manufactures a
   * commandExecution source, native receipt or genuine Human authority.
-  * @since Oct. 24, 2026
+  * @since   Oct. 24, 2026
   * @version Oct. 25, 2026
   * @author ASAMI, Tomoharu
   */
@@ -138,7 +138,7 @@ private[admission] object NativeValidationRepairInstalledFixture extends Matcher
       B.applicable(boundary, request.work.get.kind).map(c => V.GoalPhaseAcceptanceObservation(c.identity,
         if (c.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED observed " + c.description)), Vector.empty))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + request.work.get.kind + " " + outcome, Vector.empty,
-      acceptance, None, None, None, None, None, None, None, dependencyValidation = None)
+      acceptance, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   }
   def complete(cli: Cli, plan: O.Plan, request: V.GoalPhaseAdvanceResult, name: String): Unit =
     cli.submit(request, result(plan, request, "completed"), V.WorkflowArtifactReference(name, "1"))
@@ -990,9 +990,9 @@ private[admission] object NativeValidationRepairInstalledFixture extends Matcher
 
 /** Explicit staged installed qualification. Setup and resume are separate Test
   * invocations; the final old382 command belongs to the actual parent caller.
-  * @since Oct. 24, 2026
-  * @version Oct. 24, 2026
-  * @author ASAMI, Tomoharu
+  * Introduced: Oct. 24, 2026
+  * Updated: Oct. 24, 2026
+  * Author: ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

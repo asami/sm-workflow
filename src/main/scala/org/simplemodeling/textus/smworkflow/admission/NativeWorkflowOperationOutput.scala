@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.syntax.*
+import IncrementalSbtDiagnosisRepair.given
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.{WorkflowInstancePersistence, ContextReference}
@@ -48,7 +49,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))),
       GoalPhaseFixIssues.publicState(value.issues), value.purposeRepair.map(contract => GoalPhaseNativeMetadata.record(contract.asJson)),
       releaseRepairContract = value.releaseRepairContract,
-      triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)))
+      triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)),
+      diagnosticHistory = value.diagnosticHistory.toVector.flatten.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
@@ -271,7 +273,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       GoalPhaseDependencyScope.publicProposal(value.dependencyProposal),
       value.completionConditions.map(conditions => GoalPhaseNativeMetadata.record(conditions.asJson)),
       GoalPhasePurposeRepair.publicSources(value.repairFindingSources),
-      dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation))
+      dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation),
+      diagnosticRepair = value.diagnosticRepair.map(m => GoalPhaseNativeMetadata.record(m.asJson)))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not

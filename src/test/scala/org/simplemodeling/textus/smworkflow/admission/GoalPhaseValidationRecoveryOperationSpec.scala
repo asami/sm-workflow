@@ -136,7 +136,7 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     def submitImplementation(request: V.GoalPhaseAdvanceResult): V.GoalPhaseWorkSubmissionResult = {
       Files.writeString(root.resolve("repository/value.txt"), "selected semantic change\n")
       val result = V.GoalPhaseWorkResult("completed", "Test-owned selected semantic implementation", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       invoke[V.GoalPhaseWorkSubmissionResult](request.submitOperation.get, List(Property("sessionId", request.submitSessionId.get, None),
         Property("result", result.toRecord(), None), Property("resultReference", V.WorkflowArtifactReference("recovery-implementation", "1").toRecord(), None)))
     }
@@ -203,10 +203,10 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
 
 /** Normal managed Operations prove storage/authority separation. Real SBT is
   * required by the parent's selected runtime preparation; this worker runs none.
-  * @since   Oct. 20, 2026
-  *  version Oct. 22, 2026
-  * @version Oct. 25, 2026
-  * @author  ASAMI, Tomoharu
+  * Introduced:   Oct. 20, 2026
+  *  Updated: Oct. 22, 2026
+  * Updated: Oct. 25, 2026
+  * Author:  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

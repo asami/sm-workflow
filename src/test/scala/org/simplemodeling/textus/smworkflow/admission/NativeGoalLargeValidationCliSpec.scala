@@ -14,7 +14,7 @@ import NativeWorkflowCliFixture as F
 /** Fresh isolated ordinary commands retain a genuine large failed Test receipt.
   * Optional installed-command selection applies to both validation and reopening.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -86,7 +86,7 @@ final class NativeGoalLargeValidationCliSpec extends AnyWordSpec with Matchers w
       When("the fixture submits only its incorrect semantic input and ordinary Advance executes the selected actual Test")
       Files.writeString(value, "incorrect\n")
       val result = V.GoalPhaseWorkResult("completed", "Specification-owned incorrect value.txt input", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("fixture-large-validation-implementation", "1")
       scenario.call("command", implementation.submitOperation.get, Vector("--sessionId", implementation.submitSessionId.get,
         "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,

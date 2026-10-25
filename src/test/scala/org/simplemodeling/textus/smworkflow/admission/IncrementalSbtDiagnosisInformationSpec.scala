@@ -49,8 +49,8 @@ final class IncrementalSbtDiagnosisInformationSpec extends AnyWordSpec with Matc
       Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly, WorkflowSbtValidation.Outcome.Failed, None, None)), Some(process))
     val payload = GoalPhaseNativeValidation.Payload("12", "D2", _candidate,
       Vector(GoalPhaseNativeValidation.Check("focused", 1, WorkflowSbtValidation.Kind.TestOnly)), Vector(receipt), Some("repair-required"))
-    W.Request("session", "14", "RepairStep", Some("D2"), 2, "Diagnose", _plan, _candidate, Vector.empty, Some(_candidate),
-      Some("failed-check"), Some(O.RepairDirective("Failed focused check", Vector("retain source"))),
+    W.Request("session", "14", "RepairStep", Some("D2"), 2, "Diagnose", _plan, _candidate, Vector.empty, None,
+      None, Some(O.RepairDirective("Failed focused check", Vector("retain source"))),
       checkFailure = Some(W.CheckFailureContext(Vector("src/Reader.scala"), "selected diff", payload)))
   }
   private val _codec = new WorkflowResultJsonV1.PayloadCodec[String] {
@@ -188,7 +188,9 @@ final class IncrementalSbtDiagnosisInformationSpec extends AnyWordSpec with Matc
       store.writes shouldBe 1
       store.files shouldBe bytes
       _deliver(store, files, input.copy(selections = Vector(_value(_file("different"))))).isSuccess shouldBe false
-      _deliver(store, files, input, _work().copy(candidate = Some(_candidate.copy(tree = "c" * 40)))).isSuccess shouldBe false
+      val failure = _work().checkFailure.get
+      _deliver(store, files, input, _work().copy(checkFailure = Some(failure.copy(
+        validation = failure.validation.copy(candidate = _candidate.copy(tree = "c" * 40)))))).isSuccess shouldBe false
       files.reads shouldBe Vector("src/Reader.scala")
     }
 

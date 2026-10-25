@@ -46,6 +46,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
         readText(options("result")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
           _ <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePurposeRepair.validatePublicResultJsonC(json)
+          _ <- org.simplemodeling.textus.smworkflow.admission.IncrementalSbtDiagnosisRepair.validatePublicResultJsonC(json)
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
         } yield record }
         else NativePreparationInput.readC(options("result"), readText)

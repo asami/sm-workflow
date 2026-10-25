@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Instance-independent installed invocation result.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeGoalReviewRepairAdoptionCliSpec extends Matchers {
@@ -40,10 +40,10 @@ private[admission] object NativeGoalReviewRepairAdoptionCliSpec extends Matchers
 /** Actual installed command, isolated managed SQL/Git and real typed SBT.
   * Every semantic response and independent directive is specification-owned;
   * this suite supplies no genuine live Human approval or independent review.
-  * @since   Oct. 23, 2026
-  *  version Oct. 23, 2026
-  * @version Oct. 24, 2026
-  * @author  ASAMI, Tomoharu
+  * Introduced:   Oct. 23, 2026
+  *  Updated: Oct. 23, 2026
+  * Updated: Oct. 24, 2026
+  * Author:  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -157,7 +157,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       "SPECIFICATION-OWNED exact issue coverage", None))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + work.kind + " " + outcome, findings, acceptance,
       None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)), None, None, None, None,
-      GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None)
+      GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None, diagnosticRepair = None)
   }
   private def _review(cli: Cli, issued: Invocation, value: V.GoalPhaseWorkResult, name: String): V.GoalPhaseAdvanceResult = {
     val request = issued.business[V.GoalPhaseAdvanceResult]
@@ -425,7 +425,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       val initial = cli.advance(started.sessionId).business[V.GoalPhaseAdvanceResult]
       val emptyreport = V.GoalPhaseAcceptanceReport(Vector.empty, Vector.empty)
       val completed = V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED selected implementation", Vector.empty,
-        Some(emptyreport), None, None, None, None, None, None, None, dependencyValidation = None)
+        Some(emptyreport), None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n")
       cli.submit(initial, completed, V.WorkflowArtifactReference("installed-review-implementation", "1"))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true

@@ -57,7 +57,7 @@ final class Phase65WorkflowConsumerCliSpec extends AnyWordSpec with Matchers wit
         |}
         |""".stripMargin)
       val implementation = V.GoalPhaseWorkResult("completed", "Specification-owned bounded code and behavior", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       s.call("command", issued.submitOperation.get, Vector("--sessionId", issued.submitSessionId.get,
         "--result", json(implementation), "--resultReference", json(V.WorkflowArtifactReference("p65-q4-goal-answer", "1"))))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true

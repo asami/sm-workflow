@@ -15,8 +15,58 @@ all sixteen P66 conditions. The original base is
 `2110f194c11f031a600a2c117da1a1761f618890`. D1 was natively accepted and committed as
 `cdefff3d2928c87973abf00ad5f06d850cf8b28d` after compile, lint and seven focused
 tests passed. Its conditional Step assessment admitted without executing an
-independent Step review. D2 is the current issued implementation;
-the checklist remains pending until the corresponding actual evidence is available.
+independent Step review. D2 was natively accepted and committed as
+`51166691a39a2d5f87b00a6d84774ff73b35a467` after compile, lint and nine focused
+tests passed. Its conditional assessment also admitted without independent Step
+review; these Step outcomes do not establish integrated Phase acceptance.
+
+D3 is the current issued repair. Its first native check passed production
+compilation and lint, but test compilation failed because existing generated
+public-result constructors omitted the newly added optional diagnostic field.
+That source correction was accepted; the following candidate preparation stopped
+at source-history intent 8 after eight completed normalization results. Public
+Human226 retains source208 and the unresolved effect as UNKNOWN, with repair
+progress 1/10. Duplicate managed comments in the affected fixture sources have
+been corrected; no replacement attempt, accepted-result replay or fresh D3 test
+success is claimed. The original `AuthorizeNewAttempt`/`Defer` question remains
+in the retained history; no answer has been fabricated.
+
+On 2026-10-26 the consumer recovered the producer's original terminal receipts:
+`sm-rrc-20261025-publish01-result@1` reports successful publication with exit 0;
+the publication observation reports Completed and runtime Activated for update
+`f78e8820-0768-4b63-a9cb-fe575077299a`, installation
+`d19b540a-647f-4dc6-84ed-f510037183ad`. Original qualification receipt
+`sm-rrc-20261025-installed03-result@1` also reports exit 0, and its retained
+stdout records the two selected retained-failed/timeout recovery cases passing,
+with final completion at 2026-10-25 22:25:28 JST. The producer chat's capacity
+failure did not undo those completed commands.
+
+The producer subsequently delivered its consolidated result on 2026-10-26:
+all nine known original command receipts accounted for, 236 distinct focused
+tests across twelve suites passed, independent review and two closure passes
+without a remaining blocker, and six distinct isolated installed cases passed.
+The installed cases cover the ten-batch ceiling/tenth-batch success, early
+evidence-based recurrence stop, legacy 3-to-10 policy adoption, fresh
+failure-to-Release-FIX, saved-failure adoption/FIX and confirmed-timeout recovery.
+These are focused/isolated results with test-owned decisions, not a new full-suite
+run or real consumer consent. Successful commands/publication were not repeated.
+Producer qualification and delivery are complete; consumer runtime selection,
+public policy adoption/continuation, RRC-06/08 consumer acceptance, P66-16 adoption
+and new comment recovery remain unproven. Detailed evidence is retained in the
+producer's execution archive through 2026-11-25.
+
+The separately adopted source-history/result-collection correction requires
+runtime reconciliation of the current comment under the retained rule and
+effective date, preserving the old UNKNOWN, successful prefix, pending question
+and counts. Reuse existing user direction through its delivered public same-Session
+route; a missing normalization receipt alone is not a request for another
+consumer permission. That new route is not yet implemented/qualified. D3 is
+waiting for this producer capability, without bypassing the actual pending
+question. The producer owns implementation and installed qualification; the
+consumer owns live adoption. The new P66-17/P66-18 planning conditions do not
+silently rewrite the native Plan revision 1 or reopen accepted D1/D2 work.
+
+The checklist remains pending until the corresponding actual evidence is available.
 The completed Phase 6.4/6.5 Sessions and their evidence are retained.
 
 ## Next-delivery scheduling clarification — 2026-10-23

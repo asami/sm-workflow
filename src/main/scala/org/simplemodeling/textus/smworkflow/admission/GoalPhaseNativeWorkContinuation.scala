@@ -115,7 +115,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     completedDependencies: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
     validationRepair: Option[(GoalPhaseValidationRepairAdoption.Source, GoalPhaseValidationRepairAdoption.Direction)] = None,
-    dependencyChain: DependencyChain = _empty_dependency_chain)
+    dependencyChain: DependencyChain = _empty_dependency_chain,
+    diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -790,6 +791,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       lastresult = Some(prepared.input -> value.completion.result), decisioncontext = None,
                       validationRepair = if (prepared.input.kind == "ImplementStep") None else cursor.validationRepair,
                       issues = issues, findings = findings, priorReviews = priorreviews,
+                      diagnoses = IncrementalSbtDiagnosisRepair.append(cursor.diagnoses, prepared.input,
+                        value.completion.result.result.value, value.completion.result.resultReference),
                       dependencyChain = authenticated,
                       dependencyAdmission = value.completion.result.result.value.dependencyAdmission.orElse(cursor.dependencyAdmission)),
                       soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -1122,6 +1125,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           input.candidate == semantic.candidate && input.checksReceipt == semantic.checksReceipt &&
           input.repairDirective == semantic.repairDirective && GoalPhaseNativeReview.sameIssuedContext(input.review, context) && input.checkFailure == checkfailure &&
           input.decisionContext == cursor.decisioncontext && input.issues == cursor.issues &&
+          input.diagnosticHistory == IncrementalSbtDiagnosisRepair.selected(cursor.diagnoses, input.stepIdentity) &&
           input.triage == _triage_context(cursor, input.kind) &&
           actual.handle.instanceIdentity.value == source.current.identity.value && order.request.runId.value == source.current.identity.value &&
           order.request.continuationId.value == boundary.continuationIdentity.value &&
@@ -1435,7 +1439,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         Some(GoalPhaseRepairProgress.snapshot(cursor.controller)),
         GoalPhasePurposeRepair.capture(semantic.key.kind.toString, semantic.key.step, semantic.selectedPlan),
         releaseRepairContract = Option.when(semantic.key.kind == O.WorkKind.ReviewPhase)(S.RELEASE_REPAIR_CONTRACT),
-        triage = _triage_context(cursor, semantic.key.kind.toString))
+        triage = _triage_context(cursor, semantic.key.kind.toString),
+        diagnosticHistory = IncrementalSbtDiagnosisRepair.selected(cursor.diagnoses, semantic.key.step))
 
     private def _triage_context(cursor: Cursor, kind: String): Option[GoalPhaseStepTriage.Context] =
       if (kind != "TriageStep") None else for {
@@ -1655,6 +1660,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           source <- F.retainedSessionC(submitted.handle.instanceIdentity.value, d, definition, call)
           plan <- _locate_assigned_c(source, submitted.continuationId, call)
           admission <- _dependency_admission_c(plan, submitted.result.value)
+          mode <- NativeWorkflowIssuedWorkContext.goalModeC(plan.input.kind)
+          context <- NativeWorkflowIssuedWorkContext.fromIssuedC(plan.work, mode, S.inputCodec)
+          _ <- IncrementalSbtDiagnosisRepair.admitInformationC(d, call, context, plan.input, submitted.result.value.diagnosticRepair)
         } yield submitted.copy(result = TypedValue(S.resultCodec.typeIdentity,
           submitted.result.value.copy(dependencyAdmission = admission)))
         def encodeC(resume: ContinuationRuntime.Resume) = F.invalid("result acknowledgement requires native committed completion")
@@ -1723,6 +1731,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     .flatMap(_native_c).flatMap(n => port.operationC(Some(core), n, Some(result))))
 
   private def _completed_state_c(plan: Prepared, submitted: ContinuationResult[S.Result]): Consequence[O.State] = for {
+    _ <- IncrementalSbtDiagnosisRepair.admitC(plan.input, submitted.result.value)
     dependency <- _dependency_admission_c(plan, submitted.result.value, retained = true)
     _ <- if (dependency == submitted.result.value.dependencyAdmission) Consequence.unit
       else F.invalid("retained completion changed its adopted dependency validation obligation")

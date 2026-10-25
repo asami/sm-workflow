@@ -14,7 +14,7 @@ import GoalPhaseDependencyScope as D
 /** Ordinary command wiring with SPECIFICATION-OWNED semantics and answers.
   * No genuine Human/provider execution, dependency edit or acceptance is claimed.
   * @since   Oct. 19, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -76,7 +76,7 @@ final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers w
       Vector("Retain current callers and expose the selected operation"),
       Vector(ContextReference("specification-dependent-work", "1")), Vector.empty)
     val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED dependency direction needed",
-      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)), None, None, dependencyValidation = None)
+      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)), None, None, dependencyValidation = None, diagnosticRepair = None)
     When("ordinary semantic Submit precedes Advance that saves the actual ordered Human question")
     val submitted = scenario.call("command", initial.submitOperation.get,
       Vector("--sessionId", initial.submitSessionId.get, "--result", json(result.toRecord()).noSpaces,

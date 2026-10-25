@@ -129,6 +129,35 @@ provider cannot proceed; do not manufacture progress through automatic polling.
 
 ## Repair and validation
 
+D3 source contract adds optional `diagnosticRepair` to the existing
+`GoalPhaseWorkResult` for a completed, failure-bearing `RepairStep`. It is one
+strict `sm-workflow.diagnostic-repair.v1` Fix Manifest: `identity`, the actual
+validation `sourceRevision` and `candidate`, `causeHypothesis`, retained-log
+`evidence` locators (`check`, `stream`, `firstLine`, `lastLine`, `rationale`),
+confirmed current-work `information` Evidence references, `ownedPaths`, concrete
+`directions`, `dependencies`, selected `checks` and `risks`. The provider forms
+the manifest before edits; the already assigned repair worker implements it
+and returns it through ordinary Submit. Inline work uses the same semantic
+participant. No second work assignment or approval is introduced to admit it.
+
+Native admission compares the manifest to the captured failure, checks the log
+ranges and selected ownership, verifies any information references against the
+actual issued work, and requires selected behavioral verification as well as
+any declared compilation check. It does not certify the causal hypothesis,
+assert that a source file matches the failed candidate, or establish successful
+tests. Existing candidate ownership and typed SBT admission still govern actual
+edits and positive nonempty focused execution. Unsupported/missing context can
+continue through NeedInformation or the existing explicit decision-needed route;
+it does not justify inventing a manifest or a new approval loop.
+
+Accepted manifests remain in native result history. Subsequent work receives
+same-Step `diagnosticHistory` with the actual result reference, generation and
+manifest, so later test failures can revise hypotheses while preserving prior
+compiler failure and counts. Records carrying the new result/history fields use
+native result v3/request v4; old forms retain their original versions. New records
+must not be silently downgraded for an old reader. This source contract still
+requires the planned connected/installed acceptance and qualified RRC delivery.
+
 The diagnosis provider proposes units based on causes and edit dependencies,
 not one worker per failed test. Each unit carries the concrete Fix Manifest
 content: hypothesis/evidence, owned scope, implementation direction, known risks,

@@ -75,9 +75,9 @@ private[admission] object NativeExternalEvidenceToolFixture {
 
 /** Passive input specifications execute only during parent-selected validation.
   * Fixture success is not genuine independent review, Human consent or task completion.
-  * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
-  * @author  ASAMI, Tomoharu
+  * Introduced:   Oct. 14, 2026
+  * Updated: Oct. 25, 2026
+  * Author:  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -85,7 +85,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     with NativePreparationManagedFixture {
   import NativePreparationFixture.*
   private val _tool = NativeExternalEvidenceToolFixture
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
 
   "T1 Own Goal review input" should afterWord("in spec:native-host-evidence-tool, example:T1, rules:R1,R2,R3,R4, phase:6") {

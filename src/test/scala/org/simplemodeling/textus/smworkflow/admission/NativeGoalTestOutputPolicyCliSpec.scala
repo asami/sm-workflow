@@ -14,7 +14,7 @@ import NativeWorkflowCliFixture as F
 
 /** Installed continuation retains the actual Test output under its selected policy.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -125,7 +125,7 @@ final class NativeGoalTestOutputPolicyCliSpec extends AnyWordSpec with Matchers 
       When("the semantic worker submits incorrect value.txt and installed Advance executes the actual Test")
       Files.writeString(value, "incorrect\n")
       val result = V.GoalPhaseWorkResult("completed", "Specification-owned incorrect value.txt input", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("fixture-test-output-policy-implementation", "1")
       scenario.call("command", implementation.submitOperation.get, Vector("--sessionId", implementation.submitSessionId.get,
         "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,

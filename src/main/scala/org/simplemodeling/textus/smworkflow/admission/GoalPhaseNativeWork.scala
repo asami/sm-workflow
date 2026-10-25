@@ -10,6 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeRun as F
 import GoalPhaseDependencyValidation.given
+import IncrementalSbtDiagnosisRepair.given
 
 /** Assigned semantic payload only. Native receipts and permissions are never
   * decoded from an AI reply. Other work kinds will be selected by owning advance
@@ -33,7 +34,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     repairProgress: Option[GoalPhaseRepairProgress.Snapshot] = None,
     purposeRepair: Option[GoalPhasePurposeRepair.Contract] = None,
     releaseRepairContract: Option[String] = None,
-    triage: Option[GoalPhaseStepTriage.Context] = None)
+    triage: Option[GoalPhaseStepTriage.Context] = None,
+    diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None,
     fixAssessment: Option[GoalPhaseFixAssessment.Report] = None,
@@ -44,18 +46,20 @@ private[smworkflow] object GoalPhaseNativeWork {
     completionConditions: Option[GoalPhaseNativeReviewCompletion.Conditions] = None,
     repairFindingSources: Option[Vector[GoalPhasePurposeRepair.Source]] = None,
     dependencyValidation: Option[GoalPhaseDependencyValidation.Selection] = None,
-    dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None)
+    dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
+    diagnosticRepair: Option[IncrementalSbtDiagnosisRepair.Manifest] = None)
   object Result {
     given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
-      case ("acceptance" | "fixAssessment" | "issueReport" | "planRevision" | "reviewObservations" | "dependencyProposal" | "completionConditions" | "repairFindingSources" | "dependencyValidation" | "dependencyAdmission", value) => !value.isNull
+      case ("acceptance" | "fixAssessment" | "issueReport" | "planRevision" | "reviewObservations" | "dependencyProposal" | "completionConditions" | "repairFindingSources" | "dependencyValidation" | "dependencyAdmission" | "diagnosticRepair", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[Result] = deriveDecoder
     given Decoder[Result] = Decoder.instance { cursor =>
-      if (Vector("fixAssessment", "issueReport", "planRevision", "reviewObservations", "dependencyProposal", "completionConditions", "repairFindingSources", "dependencyValidation", "dependencyAdmission").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+      if (Vector("fixAssessment", "issueReport", "planRevision", "reviewObservations", "dependencyProposal", "completionConditions", "repairFindingSources", "dependencyValidation", "dependencyAdmission", "diagnosticRepair").exists(key => cursor.downField(key).focus.exists(_.isNull)))
         Left(DecodingFailure("Fix reports must be absent or valid objects", cursor.history))
       else _decoder.tryDecode(cursor).flatMap { result =>
-        if (GoalPhaseFixAssessment.validateOptionC(result.fixAssessment).isSuccess &&
+        if (IncrementalSbtDiagnosisRepair.validateOptionC(result.diagnosticRepair).isSuccess &&
+            GoalPhaseFixAssessment.validateOptionC(result.fixAssessment).isSuccess &&
             GoalPhaseFixIssues.validateReportOptionC(result.issueReport).isSuccess &&
             GoalPhasePlanRevision.validateOptionC(result.planRevision).isSuccess &&
             GoalPhaseFindingRecording.validateObservationsOptionC(result.reviewObservations).isSuccess &&
@@ -113,10 +117,11 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Encoder[Request] = deriveEncoder
   private val _request_decoder: Decoder[Request] = deriveDecoder
   private given Decoder[Request] = Decoder.instance { cursor =>
-    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory").exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(DecodingFailure("Check failure context must be absent or a valid object", cursor.history))
     else _request_decoder.tryDecode(cursor).flatMap { request =>
-      if (request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess) &&
+      if (IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory) &&
+          request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess) &&
           GoalPhaseFixIssues.validateOptionC(request.issues).isSuccess &&
           GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess &&
           GoalPhasePurposeRepair.validateRequestC(request).isSuccess && releaseRepairContractValid(request)) Right(request)
@@ -192,6 +197,7 @@ private[smworkflow] object GoalPhaseNativeWork {
         (result.outcome == "completed" && result.findings.nonEmpty))
       F.invalid("initial assigned result must report completion or an explicit decision, never review/command/closure")
     else for {
+      _ <- IncrementalSbtDiagnosisRepair.admitC(request, result)
       _ <- GoalPhaseFixIssues.admitC(request, result)
       _ <- GoalPhaseFindingRecording.admitObservationsC(request.kind, result.reviewObservations)
       _ <- _plan_revision_c(result)
@@ -219,6 +225,7 @@ private[smworkflow] object GoalPhaseNativeWork {
         (result.outcome == "completed" && result.findings.nonEmpty))
       F.invalid("assigned repair must return semantics or a decision, not review, checks, commands or closure")
     else for {
+      _ <- IncrementalSbtDiagnosisRepair.admitC(request, result)
       _ <- GoalPhaseFixIssues.admitC(request, result)
       _ <- GoalPhaseFindingRecording.admitObservationsC(request.kind, result.reviewObservations)
       _ <- _plan_revision_c(result)
@@ -278,9 +285,11 @@ private[smworkflow] object GoalPhaseNativeWork {
           val progress = if (value.repairProgress.isEmpty) issues.remove("repairProgress") else issues
           val purpose = if (value.purposeRepair.isEmpty) progress.remove("purposeRepair") else progress
           val release = if (value.releaseRepairContract.isEmpty) purpose.remove("releaseRepairContract") else purpose
-          if (value.triage.isEmpty) release.remove("triage") else release
+          val triage = if (value.triage.isEmpty) release.remove("triage") else release
+          if (value.diagnosticHistory.isEmpty) triage.remove("diagnosticHistory") else triage
         }
-        Json.obj("schemaVersion" -> Json.fromString(if (value.purposeRepair.nonEmpty)
+        Json.obj("schemaVersion" -> Json.fromString(if (value.diagnosticHistory.nonEmpty)
+          "sm-workflow.goal-phase-native-work-request.v4" else if (value.purposeRepair.nonEmpty)
           "sm-workflow.goal-phase-native-work-request.v3" else "sm-workflow.goal-phase-native-work-request.v2"),
           "payload" -> payload)
       }
@@ -288,22 +297,27 @@ private[smworkflow] object GoalPhaseNativeWork {
         wire <- Option(value).toRight("native ordered work is missing")
         version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
         marked = wire.hcursor.downField("payload").downField("purposeRepair").focus.nonEmpty
-        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-request.v2" && !marked) ||
-          (version == "sm-workflow.goal-phase-native-work-request.v3" && marked), (), "native ordered request version or purpose contract differs")
+        diagnosis = wire.hcursor.downField("payload").downField("diagnosticHistory").focus.nonEmpty
+        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-request.v2" && !marked && !diagnosis) ||
+          (version == "sm-workflow.goal-phase-native-work-request.v3" && marked && !diagnosis) ||
+          (version == "sm-workflow.goal-phase-native-work-request.v4" && diagnosis), (), "native ordered request version or purpose contract differs")
         parsed <- wire.hcursor.get[Request]("payload").left.map(_.message)
       } yield parsed
     }
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
     new Codec[Result]("GoalPhaseWorkResult", "sm-workflow.goal-phase-native-work-result.v1") {
       override def encode(value: Result): Json = Json.obj("schemaVersion" -> Json.fromString(
-        if (value.repairFindingSources.nonEmpty) "sm-workflow.goal-phase-native-work-result.v2"
+        if (value.diagnosticRepair.nonEmpty) "sm-workflow.goal-phase-native-work-result.v3"
+        else if (value.repairFindingSources.nonEmpty) "sm-workflow.goal-phase-native-work-result.v2"
         else "sm-workflow.goal-phase-native-work-result.v1"), "payload" -> value.asJson)
       override def decode(value: Json): Either[String, Result] = for {
         wire <- Option(value).toRight("native ordered result is missing")
         version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
         marked = wire.hcursor.downField("payload").downField("repairFindingSources").focus.nonEmpty
-        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-result.v1" && !marked) ||
-          (version == "sm-workflow.goal-phase-native-work-result.v2" && marked), (), "native ordered result version or repair sources differ")
+        diagnosis = wire.hcursor.downField("payload").downField("diagnosticRepair").focus.nonEmpty
+        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-result.v1" && !marked && !diagnosis) ||
+          (version == "sm-workflow.goal-phase-native-work-result.v2" && marked && !diagnosis) ||
+          (version == "sm-workflow.goal-phase-native-work-result.v3" && diagnosis), (), "native ordered result version or repair sources differ")
         parsed <- wire.hcursor.get[Result]("payload").left.map(_.message)
       } yield parsed
     }

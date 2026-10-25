@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * access below is observation only. The optional installedCommand property
   * qualifies the same isolated host through an actual installed executable.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -98,14 +98,14 @@ class NativeGoalClosureRecoveryCliSpec extends AnyWordSpec with NativeGoalSource
     val fixture = setup.copy(request = request)
     Files.writeString(fixture.source, changedText)
     _submit(fixture, request, V.WorkflowArtifactReference(name + "-implementation", "1"),
-      V.GoalPhaseWorkResult("completed", "Test-owned source edit", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None))
+      V.GoalPhaseWorkResult("completed", "Test-owned source edit", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None))
     val reviewcall = _advance(fixture)
     val review = reviewcall.business[V.GoalPhaseAdvanceResult]
     Then("a single actual product Test and the independent ReviewStep precede closure")
     review.work.get.kind shouldBe "ReviewStep"
     executions(scenario).size shouldBe 1
     val result = V.GoalPhaseWorkResult("accept", "Independent test-owned review accepts the exact candidate", Vector.empty,
-      None, None, None, None, None, None, None, None, dependencyValidation = None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     val reference = V.WorkflowArtifactReference(name + "-review", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("test-independent-reviewer"), None, None)
     val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.invocation.stdout.toUri.toASCIIString,
