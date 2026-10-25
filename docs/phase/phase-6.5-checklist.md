@@ -1,22 +1,35 @@
 # Phase 6.5 Checklist: Conditional Actions and Workflow Quality Optimization
 
-status=planned
+status=in-progress
 phase=[Phase 6.5](phase-6.5.md)
 
-All outcomes are pending. Retain prior implementation/evidence at its actual
-scope; mark completion only from the selected Phase's actual results.
+Plan `phase-6.5-three-workflow-optimization@4` retains eight accepted Steps:
+Q1, Q2, Q3, Q3-R, Q3-S, Q4, Q5 and Q6, each with an actual independent accepted
+review and native Step commit. Whole validation `2231` passed at Q6 HEAD
+`879bf769e933e5a25fb615b5a2873df10c405e3d`: 185 suites, 1765 successful tests,
+0 failures and 5 cancellations. Earlier UNKNOWN and formally failed attempts,
+including whole validation `2196`, remain historical facts. Integrated review
+`phase-6.5-independent-phase-review-2235` returned the P65-14 delivery-document
+finding / native `issue-15`. The current phase-level Release FIX
+`ordered-repair:2238` (expected revision `2239`), its fresh affected validation,
+independent scoped review and native Final/local closure remain pending. Phase
+completion requires an actual native Terminal result. The checked conditions
+below retain their accepted Step scope; unchecked delivery conditions do not
+mean Q4 or whole validation is still unexecuted and do not substitute for Phase
+acceptance. See the [delivery evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md)
+for all eight commit/review references and qualification/cost limits.
 
 ## Q1: ordinary Step main route
 
-- [ ] P65-01: PLAN records the Step kind and selected Actions; ordinary semantic
+- [x] P65-01: PLAN records the Step kind and selected Actions; ordinary semantic
       Step review is conditional; deterministic policy chooses the route without
       a repeated AI selection/waiver call or an all-Step triage gate.
-- [ ] P65-02: A normal code Step executes required focused behavioral tests and
+- [x] P65-02: A normal code Step executes required focused behavioral tests and
       compilation; compile-only or empty test selection is not test success.
-- [ ] P65-03: Actual workflow admission and native Step commit complete without
+- [x] P65-03: Actual workflow admission and native Step commit complete without
       any AI triage/review call for a local Step satisfying checks with no residual
       immediate obligation; no fabricated review PASS or AI CLEAN supplies missing evidence.
-- [ ] P65-28: PLAN-selected Step kind/acceptance/dependencies distinguish immediate
+- [x] P65-28: PLAN-selected Step kind/acceptance/dependencies distinguish immediate
       obligations from eligible planned-later/nonblocking observations. A Step
       commits with the latter retained in common Journal, not falsely CLEAN/closed;
       required validation/review and uncertainty about a subsequent prerequisite
@@ -24,57 +37,57 @@ scope; mark completion only from the selected Phase's actual results.
 
 ## Q2: Step and Release FIX
 
-- [ ] P65-04: A failed Step check follows bounded FIX, affected validation and
+- [x] P65-04: A failed Step check follows bounded FIX, affected validation and
       admission to a real Step commit, retaining unaffected results and history.
-- [ ] P65-05: A blocking Release finding after closed Steps follows FIX and
+- [x] P65-05: A blocking Release finding after closed Steps follows FIX and
       affected validation/scoped review to Final and local release closure;
       previous Step commits are preserved without per-finding replacement Steps.
-- [ ] P65-06: In-scope repairs continue under the existing authority; real scope
+- [x] P65-06: In-scope repairs continue under the existing authority; real scope
       expansion remains distinguishable. Actions/executors/intermediate repair
       commits do not reset counters or inflate the repair budget.
 
 ## Q3: conditional branches and connected contracts
 
-- [ ] P65-07: A planned semantic-review Step actually dispatches review and
+- [x] P65-07: A planned semantic-review Step actually dispatches review and
       bypasses triage, returning blocking findings through FIX; settled checks
       are not re-reviewed and triage CLEAN cannot bypass planned required review.
-- [ ] P65-08: Q3 selects a small nonempty Scalafix syntactic-rule profile from
+- [x] P65-08: Q3 selects a small nonempty Scalafix syntactic-rule profile from
       existing Scala conventions, records rule scope/disposition and proves its
       actual Scala 3.3.8 connection. Accepted applicable rules are ON; compiler
       and CAR checks are not duplicated, and unrelated legacy cleanup is not required.
-- [ ] P65-15: Actual lint detects a selected violation, accepts valid code and
+- [x] P65-15: Actual lint detects a selected violation, accepts valid code and
       returns a repaired candidate through the existing FIX/admission route.
       Check-only execution, source attribution, generated/test/infrastructure
       scope and Release result reuse are verified; OFF, unmet condition,
       unavailable and failed execution stay distinct without silent downgrade.
-- [ ] P65-16: A user-decided intentional lint exception is repaired with a
+- [x] P65-16: A user-decided intentional lint exception is repaired with a
       standard rule-scoped annotation/comment and source reason. Actual lint
       recheck suppresses that finding while still detecting an unrelated
       unsuppressed violation; applicable validation returns to Step/Release
       admission. The existing record distinguishes correction from accepted
       exception and retains the finding, decision, scope, reason and results,
       without duplicate approval/review or counter reset.
-- [ ] P65-09: CBD is OFF and future convergence/routing stays in Phase 9;
+- [x] P65-09: CBD is OFF and future convergence/routing stays in Phase 9;
       documentation-only Steps have truthful, applicable admission checks.
-- [ ] P65-10: Affected skill/client and typed result contracts use formal
+- [x] P65-10: Affected skill/client and typed result contracts use formal
       reviewless admission without duplicate AI gates or compatibility routes.
-- [ ] P65-17: Assessment routes known check failures to FIX and missing/uncertain
+- [x] P65-17: Assessment routes known check failures to FIX and missing/uncertain
       validation to its existing execution/observation path; neither uses AI CLEAN
       to waive required checks. OFF is distinct from zero findings and PASS.
-- [ ] P65-18: A lint-clean Step with a selected unresolved boundary/contract or
+- [x] P65-18: A lint-clean Step with a selected unresolved boundary/contract or
       disproportionate-change signal requiring resolution before continuation
       invokes triage using actual scope/results.
       Signals are not defects or repair authority; planned scope and prior
       applicable decisions are considered without a heavy new analysis engine.
-- [ ] P65-19: Actual triage CLEAN returns to formal admission; SUSPICIOUS and
+- [x] P65-19: Actual triage CLEAN returns to formal admission; SUSPICIOUS and
       semantic DECLINE invoke scoped detailed review with original evidence.
       Transport failure is distinct, unchanged candidates do not loop through
       triage, and affected FIX reuses applicable checks/semantic judgments.
-- [ ] P65-20: Common Journal records actual assessment rule, evidence references,
+- [x] P65-20: Common Journal records actual assessment rule, evidence references,
       signals and selected/skipped Actions without an AI recording task or a second
       ledger; recording failure does not replay completed checks/AI actions.
       Triage observations remain distinct from review-confirmed Findings.
-- [ ] P65-29: Structural scenario warnings consume available explicit mappings
+- [x] P65-29: Structural scenario warnings consume available explicit mappings
       and inventory completeness. Existing scenarios may cover unchanged test
       files; partial metadata does not prove absent coverage. Unsupported optional
       detectors remain OFF, without a new producer mapping/parser prerequisite.
@@ -83,15 +96,15 @@ scope; mark completion only from the selected Phase's actual results.
 
 ## Q3-R: RepositorySync main route, then repair and escalation
 
-- [ ] P65-21: An actual conflict-free diverged merge uses selected integration
+- [x] P65-21: An actual conflict-free diverged merge uses selected integration
       validation/applicable lint and deterministic assessment to reach formal
       merge admission, native commit and authorized convergence without AI.
       No fake ReviewAccepted or non-merge shortcut bypasses actual merge commit;
       existing parent/tree/authority checks remain owned by their current boundary.
-- [ ] P65-22: Known failed merge checks reach bounded FIX and affected validation
+- [x] P65-22: Known failed merge checks reach bounded FIX and affected validation
       without an invented AI review finding. Unknown/missing results remain
       distinct; original integration, history and repair counters are preserved.
-- [ ] P65-23: Actual merge uncertainty selects bounded triage/scoped review;
+- [x] P65-23: Actual merge uncertainty selects bounded triage/scoped review;
       explicitly required review dispatches directly. AI-authored conflict
       resolution receives independent Detailed Review. Repair reuses unaffected
       judgments/checks and limits re-review to findings/delta/affected meaning.
@@ -100,16 +113,16 @@ scope; mark completion only from the selected Phase's actual results.
 
 ## Q3-S: SplitPhase reuse, then bounded semantic context
 
-- [ ] P65-24: Existing deterministic partitioning completes a known-input route
+- [x] P65-24: Existing deterministic partitioning completes a known-input route
       without AI; repeated Advance/reopen reuses actual saved semantic answers
       and retained frontiers without new calls or replayed completed calculation.
       Reuse applicable existing evidence and verify the changed connection.
-- [ ] P65-25: A bounded unknown-only semantic completion preserves known inputs
+- [x] P65-25: A bounded unknown-only semantic completion preserves known inputs
       and runtime partition authority, then reaches ordinary proposal admission
       without mandatory second AI review. Worker context is bounded; host controls
       remain enforced. Bundle only already-known independent gaps at the same
       frontier if justified; no safe bundling opportunity is a valid outcome.
-- [ ] P65-26: Capability limits, missing information, actual Human choices and
+- [x] P65-26: Capability limits, missing information, actual Human choices and
       execution failures retain distinct handling. Existing DecisionNeeded/Human
       history is not reinterpreted or rewritten to simulate provider escalation.
       Applicable retained answers are not re-requested just to read their result.
