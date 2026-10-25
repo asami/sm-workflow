@@ -1,5 +1,13 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+Authorization reuse (2026-10-25): related-project delivery consumes the
+[purpose-based authorization correction](purpose-based-authorization-correction.md).
+Additional necessary files within the admitted Component/purpose/acceptance/operations
+are scope updates judged by sm-workflow, not automatic Human questions. Preserve
+real Component and operation boundaries. Reuse the producer implementation and
+evidence; do not create another consent owner or repeat accepted Phase 6 work.
+
+
 Evidence ownership update (2026-10-20): consume [Phase 6.4](phase-6.4.md)'s
 accepted operational use of [Phase 12](phase-12.md)'s common Evidence service.
 Use Evidence/Journal IDs and automatic result recording; earlier references to

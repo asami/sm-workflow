@@ -1,5 +1,72 @@
 # sm-workflow incremental-use roadmap
 
+Purpose-based authorization correction adopted 2026-10-25:
+[PA-D1–5](purpose-based-authorization-correction.md) replaces per-file Human gates
+with runtime admission against Component, purpose, acceptance and operations.
+AI submits extra files/reasons; only a formal runtime Human request reaches the
+user. Preserve ongoing work and all historical evidence; already approved
+restoration does not wait for this correction. Phase 7 reuses the delivered owner.
+See the [English handoff](../journal/2026/10/2026-10-25-purpose-based-authorization-handoff.md).
+
+
+Runtime repair correction adopted 2026-10-25:
+[RRC main path and acceptance](runtime-repair-control-correction.md) removes
+caller-created stop/approval loops and connects runtime-owned convergence,
+the ten-cycle ceiling and same-Session adoption. Prioritize the blocked Control
+Center restoration at the next coherent producer boundary; preserve ongoing
+work/results. Phase 6.6 reuses this owner and Phase 9 retains broader routing.
+See the [English handoff](../journal/2026/10/2026-10-25-runtime-owned-repair-control-handoff.md).
+
+Label-driven test migration adopted 2026-10-24:
+[LTEST-1–4](../notes/label-driven-test-migration-plan.md) restores canonical
+metadata discovery/selection/preparation for runnable tests, retiring DoNotDiscover
+and manual class-name enrollment used as execution classification. Intentional
+disabled/helper exclusions remain explicit. Establish FULL/default exclusion of
+HEAVY/external services before removing runnable exclusions. This is a bounded
+correction, not reopened Phase 6.3 acceptance or a new gate for active Sessions.
+See the [specification](../spec/label-driven-test-selection.md) and
+[English producer/control-center handoff](../journal/2026/10/2026-10-24-label-driven-test-handoff.md).
+
+Project initialization adopted 2026-10-24: deliver the bounded
+[Phase 15 early slice](phase-15.md) / [INIT-1–4 plan](../notes/project-initialization-delivery-plan.md)
+for a proposed `initializeProject` Operation callable without project runtime
+configuration. Generate compatible setup through existing typed contracts,
+reuse existing installations and keep Start separate. This adds no dependency
+on Phase 7/catch-up and no reset of active consumer Sessions. See the
+[specification](../spec/project-initialization.md) and
+[producer/control-center handoff](../journal/2026/10/2026-10-24-project-initialization-handoff.md).
+
+Ad hoc GoalTask adopted 2026-10-24: [sm-goal-task](../spec/goal-task.md) accepts
+journals or other development inputs and completes Task-wide integrated review
+and local commit without a numbered Phase. The
+[GTASK-1–4 plan](../notes/goal-task-delivery-plan.md) shares the SFIX execution
+path, retaining distinct terminal policies: sm-fix is Step-equivalent and does
+not implicitly commit. Deliver a single-repository main path before broadening
+inputs/composition. This is follow-on work, with no new gate for ongoing Phases.
+See the [English handoff](../journal/2026/10/2026-10-24-goal-task-handoff.md).
+
+Standalone sm-fix acceptance adopted 2026-10-24: one repair request is one
+Step-equivalent unit with required focused tests and conditional independent
+review. The [SFIX-1–4 delivery plan](../notes/standalone-fix-delivery-plan.md)
+consumes existing Phase 6.5 FIX and Phase 6.6 diagnosis as a follow-on slice;
+it adds no acceptance gate to those Phases. Start with single-repository
+`sm-test-fix`, then reuse it for finding-origin repair and dirty/focused options.
+Phase 14 diagnosis can hand off an explicitly authorized repair. No automatic
+Phase/Release Review or commit is added. See the
+[specification](../spec/standalone-fix-acceptance.md) and
+[English handoff](../journal/2026/10/2026-10-24-standalone-fix-handoff.md).
+
+Recovery observation correction adopted 2026-10-24: extend the active producer
+commit-selection/ordinary-recovery fix with the
+[ROBS-1–4 plan and checklist](../notes/recovery-observations-delivery-plan.md).
+Deliver actual selection and safe continuation first, then deterministic
+Journal/Evidence/Finding recording, recurrence and cause closure, and existing
+Session adoption. [Recovery success and cause resolution](../spec/recovery-observations-and-cause-resolution.md)
+are independent; successful recovery does not erase the defect signal. No extra
+AI call, Human gate, numbered Phase or reopening of accepted 6.4/6.5 work is
+introduced. Implementation/live adoption remain pending. See the
+[English handoff for both development chats](../journal/2026/10/2026-10-24-recovery-observations-handoff.md).
+
 Next-development priority adopted 2026-10-23: complete GoalPhase first, then
 attempt RepositorySync on a best-effort basis. See the
 [C1-C3 delivery plan and GPSYNC checklist](../notes/goal-phase-post-completion-sync-plan.md),

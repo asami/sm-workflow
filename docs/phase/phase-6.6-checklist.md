@@ -39,6 +39,11 @@ scope; source inspection here does not certify a new execution.
 
 ## D3: repair and focused validation
 
+- [ ] P66-16: D3 reuses the qualified RRC runtime controller for convergence and
+      the ten-cycle ceiling; no AI-authored one-run restriction or per-failure
+      reapproval. Reuse [RRC evidence](runtime-repair-control-correction.md)
+      without repeating its full acceptance; preserve the existing Session/counts.
+
 - [ ] P66-07: AI cause/evidence/scope/dependency/verification judgments produce one
       concrete Fix Manifest admitted through the existing repair assignment path.
 - [ ] P66-08: Actual focused behavioral tests pass after that repair and the

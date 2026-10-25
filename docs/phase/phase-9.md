@@ -204,6 +204,13 @@ Initial routing policy MUST be explicit and versioned. Representative policy:
 
 Exact retry counts and severity thresholds belong to policy/configuration, not Workflow semantics.
 
+2026-10-25 delivery split: the minimal runtime-owned convergence stop, ten-cycle
+ceiling, restoration connection and existing-Session adoption are delivered early
+by [RRC](runtime-repair-control-correction.md). Reuse its actual implementation
+and evidence here; Phase 9 retains provider routing/comparison and broader trend
+refinement. The target behavior below does not claim those early checks already
+pass or authorize skill-side replacement control.
+
 Measured convergence is the primary basis for continuing repair, switching
 providers or stopping: use failure/finding movement, supported partial progress,
 recurrence and oscillation. Ordinary repair count is an input to that judgment;

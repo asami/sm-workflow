@@ -20,6 +20,13 @@ its diagnostic scope and existing predecessor/adoption policy.
 
 ## Goal
 
+Runtime control correction (2026-10-25): reuse the
+[RRC corrective delivery](runtime-repair-control-correction.md) for ordinary
+same-scope repair, convergence stops and the ten-cycle ceiling. Its immediate
+Control Center restoration path is independent of D1-D4 and the sync correction.
+Do not add a Phase 6.6 caller-owned retry/approval loop or require ongoing 6.4/6.5
+to restart. D3 adopts the qualified common owner and preserves all prior results.
+
 Deliver one normal workflow path from an actual SBT failure to structured
 diagnostics, additional information requested by the AI, a concrete repair and
 successful focused behavioral validation. Use information appropriate to each
@@ -108,6 +115,12 @@ or local repair. Broaden validation only for an actual affected dependency or
 execution-order concern.
 
 ## Dependencies, exclusions and preservation
+
+The [standalone sm-fix delivery plan](../notes/standalone-fix-delivery-plan.md)
+is a follow-on consumer of this diagnosis path and Phase 6.5 FIX. It provides
+Step-equivalent acceptance outside a Phase, using focused tests and conditional
+review. Its entrypoints/checklist do not enlarge Phase 6.6 acceptance or require
+ongoing Sessions to migrate. Keep the shared diagnosis and repair path reusable.
 
 Reuse CNCF typed SBT and managed File/Resource access, Common Evidence/Journal,
 the caller continuation and the existing repair/admission path. Do not create
