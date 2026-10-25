@@ -179,6 +179,160 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
     cli.submit(request, _result(plan, request, "completed"), name).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
 
   "Installed runtime-owned repair control" should {
+    "adopt an untouched public target with a reviewless completed prefix and preserve ordinary closing without replay" in {
+      Given("D4-PUBLIC-TARGET-01: an isolated conditional code Step with actual Compile/TestOnly and the installed current image")
+      val scenario = F.freshStepAssessment("rrc-installed-reviewless-prefix", TypedSbtHostPlanFixture.normalExecutable)
+      val selected = scenario.plan
+      val cli = new Cli(scenario.root, _required("smworkflow.spec.installedCommand"), _required("smworkflow.spec.runtimeRoot"))
+      val session = _started(cli, scenario)
+      val originalhead = scenario.candidateHead
+      val initial = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      val repository = Path.of(scenario.host.target.root)
+      Files.writeString(repository.resolve("src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala"),
+        "package org.simplemodeling.textus.smworkflow.p62authored\n" +
+          "object LineWriter { def render(value: String): String = value.reverse + \"\\n\" }\n")
+      val test = repository.resolve(F.authoringPaths.head)
+      Files.createDirectories(test.getParent)
+      Files.writeString(test, """package org.simplemodeling.textus.smworkflow.p62authored
+        |import org.scalatest.wordspec.AnyWordSpec
+        |import org.scalatest.matchers.should.Matchers
+        |import org.scalatest.GivenWhenThen
+        |final class LineWriterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+        |  "LineWriter" should {
+        |    "reverse text before writing one line" in {
+        |      Given("a nonempty input line")
+        |      val input = "abc"
+        |      When("LineWriter renders the line")
+        |      val rendered = LineWriter.render(input)
+        |      Then("the text is reversed and terminated once")
+        |      rendered shouldBe "cba\n"
+        |    }
+        |    "preserve an empty line" in {
+        |      Given("an empty input line")
+        |      val input = ""
+        |      When("LineWriter renders the line")
+        |      val rendered = LineWriter.render(input)
+        |      Then("one newline preserves the empty line")
+        |      rendered shouldBe "\n"
+        |    }
+        |  }
+        |}
+        |""".stripMargin)
+      When("the completed implementation passes its actual selected checks and conditional formal admission")
+      _complete(cli, selected, initial, "rrc-prefix-implementation")
+      val closingcall = cli.advance(session)
+      val closing = closingcall.business[V.GoalPhaseAdvanceResult]
+      Then("Step 1 reaches authority Wait with two behavioral tests and no review request")
+      initial.work.get.stepIdentity shouldBe Some("step-1")
+      closing.kind shouldBe "Wait"
+      closing.work shouldBe None
+      closing.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+      closing.validation.get.outcome shouldBe Some("passed")
+      closing.validation.get.assessment.nonEmpty shouldBe true
+      closing.validation.get.checks.map(_.sbt.get.kind) shouldBe Vector("compile", "test-only")
+      closing.validation.get.checks.last.sbt.get.selection.get.testsRun shouldBe 2L
+      _checks(scenario).size shouldBe 2
+
+      Given("fixture-owned independent authority prepared against the actual Step 1 closing response")
+      val authority = V.WorkflowAuthorityPreparationInput(closingcall.stdout.toUri.toASCIIString,
+        cli.file("rrc-prefix-closure-reference", V.WorkflowArtifactReference("rrc-prefix-closure", "1")),
+        "participant", "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence")
+      cli.importPrepared(cli.prepare("prepareAuthority", authority))
+      When("ordinary Advance performs the selected Step 1 Git commit")
+      val next = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      val completed = next.work.get.completed.head
+      Then("Step 2 carries the actual reviewless committed prefix and successful checks are retained")
+      next.kind shouldBe "Request"
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      next.work.get.completed.size shouldBe 1
+      completed.review shouldBe None
+      completed.admission.nonEmpty shouldBe true
+      completed.commit.identity shouldBe scenario.candidateHead
+      completed.commit.parent shouldBe originalhead
+      scenario.candidateParent shouldBe originalhead
+      scenario.candidateIndex shouldBe ""
+      _checks(scenario).size shouldBe 2
+
+      Given("the issued Step 2 owns only the selected validation narrative")
+      Files.writeString(repository.resolve("docs/validation.md"),
+        "# Fixture-owned validation\n\nLineWriter reverses text and preserves one empty line; both behavioral tests passed.\n")
+      When("ordinary Step 2 work and its selected check complete, with independent review acceptance if requested")
+      _complete(cli, selected, next, "rrc-prefix-second-implementation")
+      val evaluatedcall = cli.advance(session)
+      val evaluated = evaluatedcall.business[V.GoalPhaseAdvanceResult]
+      if (evaluated.work.exists(_.kind == "ReviewStep")) {
+        cli.review(evaluatedcall, _result(selected, evaluated, "accept"), "rrc-prefix-second-review")
+      }
+      val described = cli.goal(A.describeOperation, V.GoalPhaseRepairPolicyDescriptionInput(session, None))
+      val target = take(A.targetC(described.business[V.GoalPhaseRepairPolicyDescriptionResult].target))
+      val beforechecks = _checks(scenario)
+      val beforesubmissions = cli.operations.count(_.startsWith("submit"))
+      Then("the actual public target contains one formally admitted completed Step and the current Closing candidate/check receipt")
+      if (evaluated.work.isEmpty) {
+        evaluated.kind shouldBe "Wait"
+        evaluated.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+      } else {
+        evaluated.kind shouldBe "Request"
+        evaluated.work.get.kind shouldBe "ReviewStep"
+      }
+      target.stage shouldBe "Closing"
+      target.plan shouldBe selected
+      target.completed.size shouldBe 1
+      target.completed.head.review shouldBe None
+      target.completed.head.admission.exists(GoalPhaseStepAssessment.validAdmission) shouldBe true
+      target.completed.head.commit.identity shouldBe completed.commit.identity
+      target.cursor shouldBe 1
+      target.candidate.nonEmpty shouldBe true
+      target.checksReceipt.nonEmpty shouldBe true
+      beforechecks.size shouldBe 3
+      beforesubmissions should be > 0
+      scenario.candidateHead shouldBe completed.commit.identity
+
+      When("public prepareEvidence reads the untouched describe stdout, trusted import admits it, and adoption executes once")
+      val direction = cli.direction(described, "AdoptRuntimePolicy", "rrc-prefix-policy-direction")
+      val adopted = cli.goal(A.adoptionOperation, direction).business[V.GoalPhaseRepairPolicyAdoptionResult]
+      val rebuilt = take(A.targetC(cli.goal(A.describeOperation, V.GoalPhaseRepairPolicyDescriptionInput(session, None))
+        .business[V.GoalPhaseRepairPolicyDescriptionResult].target))
+      Then("a separately reconstructed description preserves the complete public target apart from the policy transition")
+      adopted.outcome shouldBe "repair-policy-adopted"
+      rebuilt.frontierRevision.toLong shouldBe target.frontierRevision.toLong + 1
+      rebuilt.plan shouldBe target.plan
+      rebuilt.base shouldBe target.base
+      rebuilt.completed shouldBe target.completed
+      rebuilt.cursor shouldBe target.cursor
+      rebuilt.generation shouldBe target.generation
+      rebuilt.candidate shouldBe target.candidate
+      rebuilt.checksReceipt shouldBe target.checksReceipt
+      rebuilt.stage shouldBe target.stage
+      rebuilt.repairProgress.automaticCount shouldBe target.repairProgress.automaticCount
+      rebuilt.repairProgress.ordinaryCount shouldBe target.repairProgress.ordinaryCount
+      rebuilt.repairProgress.limit shouldBe target.repairProgress.limit
+      rebuilt.currentPolicy shouldBe Some(R.version)
+      rebuilt.selectedLimit shouldBe 10
+      rebuilt.effectiveLimit shouldBe 10
+      _checks(scenario) shouldBe beforechecks
+      scenario.candidateHead shouldBe completed.commit.identity
+
+      When("stale adoption input is refused and ordinary Advance reaches the still-unbound Step 2 authority Wait")
+      val stale = cli.goal(A.adoptionOperation, direction)
+      val waiting = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      val retained = take(A.targetC(cli.goal(A.describeOperation, V.GoalPhaseRepairPolicyDescriptionInput(session, None))
+        .business[V.GoalPhaseRepairPolicyDescriptionResult].target))
+      Then("no accepted work, successful check, Start or Step commit is replayed")
+      stale.exit should not be 0
+      waiting.kind shouldBe "Wait"
+      waiting.work shouldBe None
+      waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+      retained shouldBe rebuilt
+      _checks(scenario) shouldBe beforechecks
+      scenario.candidateHead shouldBe completed.commit.identity
+      scenario.candidateParent shouldBe originalhead
+      cli.operations.count(_ == "startGoalPhase") shouldBe 1
+      cli.operations.count(_.startsWith("submit")) shouldBe beforesubmissions
+      cli.operations should not contain "submitGoalPhaseOrderedDecision"
+    }
+
     "continue an actual terminated failure through ten charged batches let ten pass and issue no eleven" in {
       Given("RRC-01/02/04: a fresh typed SBT fixture with real product failure and the installed current runtime")
       val scenario = F.fresh("rrc-installed-ten", bootstrapSelectedInput = false,

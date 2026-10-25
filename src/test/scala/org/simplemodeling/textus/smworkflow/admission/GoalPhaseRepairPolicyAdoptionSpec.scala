@@ -31,6 +31,26 @@ final class GoalPhaseRepairPolicyAdoptionSpec extends AnyWordSpec with GivenWhen
     None, 3, 3, R.version)
   private val _reference = ContextReference("independent-fixture-direction", "1")
   private val _link = R.RestorationLink(_target.sessionId, _plan.repository, "suspended-consumer", "consumer-repository", "restore producer runtime")
+  private val _completed_target = {
+    val policy = GoalPhaseStepAssessment.Policy("conditional-code", "code", "conditional", "off", "off", Vector.empty)
+    val plan = _plan.copy(steps = Vector("S1", "S2", "S3").map(name =>
+      _plan.steps.head.copy(identity = name, purpose = "Preserve boundary " + name, actionPolicy = Some(policy))))
+    val completed = Vector(("S1", "c", "a"), ("S2", "d", "c")).map { (step, head, parent) =>
+      val candidate = O.Snapshot(head * 40, "e" * 40)
+      val assessment = GoalPhaseStepAssessment.Result(policy, candidate, step + "-checks", Vector("check"),
+        "admit", "Selected checks passed with no immediate obligation", "not-selected", "not-executed")
+      O.ClosedStep(step, O.Commit(candidate.head, parent * 40, candidate.tree), None,
+        Some(GoalPhaseStepAssessment.admission(assessment)))
+    }
+    _target.copy(plan = plan, completed = completed, cursor = completed.size, generation = 4,
+      repairProgress = GoalPhaseRepairProgress.Snapshot(2, 1, 3), stage = "Closing",
+      candidate = Some(O.Snapshot("f" * 40, "1" * 40)), checksReceipt = Some("current-step-checks"))
+  }
+  private def _change(value: Json, path: Vector[String], change: Json => Json): Json =
+    if (path.isEmpty) change(value) else value.asObject match {
+      case Some(fields) => value.mapObject(_.add(path.head, _change(fields(path.head).get, path.tail, change)))
+      case None => value.mapArray(items => items.updated(path.head.toInt, _change(items(path.head.toInt), path.tail, change)))
+    }
   private def _describe(e: Episode, identity: String, restoration: Option[org.goldenport.record.Record] = None): V.GoalPhaseRepairPolicyDescriptionResult =
     e.native.invoke[V.GoalPhaseRepairPolicyDescriptionResult](A.describeOperation,
       List(Property("input", V.GoalPhaseRepairPolicyDescriptionInput(identity, restoration).toRecord(), None)))
@@ -47,6 +67,122 @@ final class GoalPhaseRepairPolicyAdoptionSpec extends AnyWordSpec with GivenWhen
   }
 
   "Exact repair policy contracts" should {
+    "project a reviewless completed prefix publicly while retaining exact internal Target Direction and evidence binding bytes" in {
+      Given("D4-PUBLIC-TARGET-01: two formally admitted completed Steps, a later current Step, nonzero counts and current candidate checks")
+      val target = _completed_target
+      val retained = target.asJson
+      val direction = A.Direction(target, "AdoptRuntimePolicy", _reference, "Independent fixture direction")
+      val directionwire = A.codec.encode(direction)
+      val binding = take(A.bindingC("fixture-component", target, direction.choice, direction.rationale, target.participant, _reference))
+      When("the retained codecs read their original complete representation")
+      val decoded = A.decodeTarget(retained)
+      val decodeddirection = A.codec.decode(directionwire)
+      Then("review nulls and every retained value remain byte-meaning identical")
+      target.completed.forall(step => step.review.isEmpty && step.admission.exists(GoalPhaseStepAssessment.validAdmission)) shouldBe true
+      retained.hcursor.downField("completed").downN(0).downField("review").focus shouldBe Some(Json.Null)
+      decoded shouldBe Right(target)
+      decoded.map(_.asJson) shouldBe Right(retained)
+      decodeddirection shouldBe Right(direction)
+      decodeddirection.map(A.codec.encode) shouldBe Right(directionwire)
+      A.selectBinding(binding) shouldBe Right(binding)
+
+      When("the public Record omits object nulls and its untouched description is prepared with independent fixture direction")
+      val record = A.targetRecord(target)
+      val publicjson = GoalPhaseNativeMetadata.normalizePublicJson(
+        io.circe.parser.parse(take(record.toJsonStringC)).toOption.get).fold(message => fail(message), identity)
+      val description = V.GoalPhaseRepairPolicyDescriptionResult(target.sessionId, "adoption-required", A.message,
+        "fixture-component", record, A.choices, A.adoptionOperation)
+      val reference = V.WorkflowArtifactReference(_reference.identity, _reference.revision)
+      val input = V.GoalPhaseRepairPolicyAdoptionInput(target.sessionId, description.target, direction.choice, direction.rationale, reference)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(target.participant), None, None)
+      val prepared = take(NativeRepairPolicyPreparation.prepareC(description, input, reference, execution,
+        target.participant, "independent-fixture-issuer", Instant.parse("2026-10-25T00:00:00Z")))
+      val evidence = take(NativeExternalEvidence.decodeStorageC(prepared.record.getString(NativeExternalEvidence.storageField).get))
+      Then("the public target reconstructs exactly and preparation binds the unchanged retained representation")
+      publicjson shouldBe retained.deepDropNullValues
+      publicjson.hcursor.downField("completed").downN(0).downField("review").focus shouldBe None
+      take(A.targetC(record)) shouldBe target
+      A.Target.publicRecordDecoder.decodeJson(publicjson) shouldBe Right(target)
+      A.decodeTarget(publicjson).isLeft shouldBe true
+      evidence.binding shouldBe binding
+      evidence.binding.hcursor.downField("repairPolicyAdoption").downField("target").focus shouldBe Some(retained)
+      target.asJson shouldBe retained
+    }
+
+    "reject incomplete public Plan completed admission assessment candidate counts and target fields without relaxing retained decoding" in {
+      Given("D4-PUBLIC-TARGET-01: the complete public projection with a valid reviewless formal admission")
+      val target = _completed_target
+      val retained = target.asJson
+      val projected = retained.deepDropNullValues
+      val required = Vector(
+        Vector.empty[String] -> Vector("sessionId", "definitionIdentity", "definitionRevision", "frontierRevision", "frontierCause",
+          "participant", "plan", "base", "completed", "cursor", "generation", "repairProgress", "stage", "selectedLimit", "effectiveLimit", "proposedPolicy"),
+        Vector("plan") -> Vector("identity", "revision", "phase", "repository", "steps", "phaseChecks", "repairLimit"),
+        Vector("plan", "steps", "0") -> Vector("identity", "purpose", "ownedPaths", "dependencies", "checks"),
+        Vector("completed", "0") -> Vector("step", "commit", "admission"),
+        Vector("completed", "0", "commit") -> Vector("identity", "parent", "tree"),
+        Vector("completed", "0", "admission") -> Vector("reference", "assessment"),
+        Vector("completed", "0", "admission", "assessment") -> Vector("policy", "candidate", "validationReference", "checks", "branch", "reason", "triage", "review"),
+        Vector("completed", "0", "admission", "assessment", "policy") -> Vector("identity", "kind", "detailedReview", "scalaLint", "carLint", "observations"),
+        Vector("completed", "0", "admission", "assessment", "candidate") -> Vector("head", "tree"),
+        Vector("candidate") -> Vector("tree"),
+        Vector("repairProgress") -> Vector("automaticCount", "ordinaryCount", "limit"))
+      When("any required field is omitted from the public target")
+      val incomplete = required.flatMap { (path, fields) => fields.map(field =>
+        (path :+ field).mkString(".") -> _change(projected, path, _.mapObject(_.remove(field)))) }
+      Then("every typed public read refuses the incomplete contract")
+      incomplete.foreach { (name, wire) => withClue(name) {
+        A.Target.publicRecordDecoder.decodeJson(wire).isLeft shouldBe true
+        A.targetC(GoalPhaseNativeMetadata.record(wire)).isSuccess shouldBe false
+      } }
+
+      When("unknown fields, explicit nulls, a null array entry or an invalid admission are supplied")
+      val invalid = Vector(
+        projected.mapObject(_.add("unknownTarget", Json.fromBoolean(true))),
+        _change(projected, Vector("plan"), _.mapObject(_.add("unknownPlan", Json.fromBoolean(true)))),
+        _change(projected, Vector("completed", "0"), _.mapObject(_.add("unknownStep", Json.fromBoolean(true)))),
+        _change(projected, Vector("completed", "0", "admission", "assessment"), _.mapObject(_.add("unknownAssessment", Json.fromBoolean(true)))),
+        projected.mapObject(_.add("restoration", Json.Null)),
+        _change(projected, Vector("completed", "0"), _.mapObject(_.add("review", Json.Null))),
+        _change(projected, Vector("completed"), _.mapArray(_ :+ Json.Null)),
+        _change(projected, Vector("completed", "0", "admission"), _.mapObject(_.add("reference", Json.fromString("different-admission")))),
+        _change(projected, Vector("completed", "0", "admission", "assessment"), _.mapObject(_.add("branch", Json.fromString("detailed-review")))))
+      Then("public decoding never erases supplied nulls or unknown fields and omission requires a valid formal admission")
+      invalid.foreach(wire => A.Target.publicRecordDecoder.decodeJson(wire).isLeft shouldBe true)
+      A.decodeTarget(retained.mapObject(_.add("restoration", Json.Null))).isLeft shouldBe true
+      A.decodeTarget(retained.mapObject(_.add("unknownTarget", Json.fromBoolean(true)))).isLeft shouldBe true
+      A.decodeTarget(_change(retained, Vector("completed", "0"), _.mapObject(_.remove("review")))).isLeft shouldBe true
+      A.Target.publicRecordDecoder.decodeJson(projected) shouldBe Right(target)
+    }
+
+    "refuse independently valid changed candidate counts Plan or frontier against the genuine completed-prefix description" in {
+      Given("D4-PUBLIC-TARGET-01: a genuine public description and independent fixture direction for its complete target")
+      val target = _completed_target
+      val retained = target.asJson
+      val description = V.GoalPhaseRepairPolicyDescriptionResult(target.sessionId, "adoption-required", A.message,
+        "fixture-component", A.targetRecord(target), A.choices, A.adoptionOperation)
+      val reference = V.WorkflowArtifactReference(_reference.identity, _reference.revision)
+      val input = V.GoalPhaseRepairPolicyAdoptionInput(target.sessionId, description.target, "AdoptRuntimePolicy", "Independent fixture direction", reference)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(target.participant), None, None)
+      val changed = Vector(target.copy(candidate = Some(target.candidate.get.copy(tree = "2" * 40))),
+        target.copy(repairProgress = target.repairProgress.copy(automaticCount = 3, ordinaryCount = 2)),
+        target.copy(plan = target.plan.copy(steps = target.plan.steps.updated(2, target.plan.steps(2).copy(purpose = "Different current purpose")))),
+        target.copy(frontierRevision = "13"))
+      When("a different complete target is supplied beside that unchanged description")
+      val decoded = changed.map(value => A.decodeTarget(value.asJson))
+      val publictargets = changed.map(value => take(A.targetC(A.targetRecord(value))))
+      val results = changed.map { value =>
+        NativeRepairPolicyPreparation.prepareC(description, input.copy(target = A.targetRecord(value)), reference, execution,
+          target.participant, "independent-fixture-issuer", Instant.parse("2026-10-25T00:00:00Z"))
+      }
+      Then("preparation rejects the crossed target while the genuine target remains unchanged")
+      decoded shouldBe changed.map(Right(_))
+      publictargets shouldBe changed
+      results.foreach(_.isSuccess shouldBe false)
+      target.asJson shouldBe retained
+      take(A.targetC(description.target)) shouldBe target
+    }
+
     "roundtrip the complete target with optional omission and strictly reject null partial crossed or unknown policy fields" in {
       Given("RRC-05: a complete legacy target and the same target with an explicit producer/consumer business link")
       val linked = _target.copy(restoration = Some(_link))

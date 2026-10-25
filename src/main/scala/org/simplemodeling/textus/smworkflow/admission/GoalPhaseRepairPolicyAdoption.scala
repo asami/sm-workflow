@@ -117,6 +117,9 @@ private[smworkflow] object GoalPhaseRepairPolicyAdoption {
     given Decoder[Target] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
       if (value.asJson == cursor.value && _valid_target_c(value).isSuccess) Right(value)
       else Left(io.circe.DecodingFailure("Repair policy target requires its exact complete contract", cursor.history))))
+    val publicRecordDecoder: Decoder[Target] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
+      if (value.asJson.deepDropNullValues == cursor.value && _valid_target_c(value).isSuccess) Right(value)
+      else Left(io.circe.DecodingFailure("Public repair policy target requires its exact complete contract", cursor.history))))
   }
   final case class Direction(target: Target, choice: String, reference: ContextReference, rationale: String)
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
@@ -135,7 +138,8 @@ private[smworkflow] object GoalPhaseRepairPolicyAdoption {
     .flatMap(_.as[Target].left.map(_.message))
   def targetC(value: Record): Consequence[Target] = if (value == null) F.invalid("Repair policy target is absent")
     else value.toJsonStringC.flatMap(text => io.circe.parser.parse(text).left.map(_.message)
-      .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).flatMap(decodeTarget).fold(F.invalid, Consequence.success))
+      .flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
+      .flatMap(Target.publicRecordDecoder.decodeJson(_).left.map(_.message)).fold(F.invalid, Consequence.success))
   def restorationC(value: Option[Record]): Consequence[Option[R.RestorationLink]] =
     if (value == null) F.invalid("Restoration selection is null") else value match {
       case None => Consequence.success(None)

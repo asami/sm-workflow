@@ -132,6 +132,14 @@ Do not edit stored Sessions, restart, resubmit accepted work, or rerun valid che
 just to adopt this policy. If the public transition is missing, implement that gap
 in the authorized producer scope rather than inventing a consumer bypass.
 
+The public adoption Target uses the Record projection that omits null-valued
+object fields, including an absent review on a completed Step with valid formal
+admission. Its decoder requires the complete projected Target after normal field
+name normalization; supplied nulls, unknown fields and missing required fields
+remain invalid. Retained Target, Direction, evidence binding and ClosedStep codecs
+keep their existing format, including `review: null`; public projection does not
+change saved history or the exact described-target equality required for adoption.
+
 Project stop/decision provenance using existing result/context fields: actual
 runtime Human request, concrete authority/scope delta, capability gap, or observed
 caller-added restriction. These are semantic distinctions, not invented shipped
