@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Saved application quality conditions. These values grant no execution,
   * independent review, mutation or closure authority.
   * @since   Oct. 16, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseAcceptanceBoundary {
@@ -129,10 +129,21 @@ private[smworkflow] object GoalPhaseAcceptanceBoundary {
     value.conditions.map(_.identity).distinct.size == value.conditions.size && value.advisories != null &&
     value.advisories.size <= 128 && value.advisories.forall(_text), "acceptance report is invalid")
 
-  def admitC(plan: GoalPhaseOrderedProgression.Plan, kind: String, result: GoalPhaseNativeWork.Result): Consequence[Unit] = for {
+  def admitC(plan: GoalPhaseOrderedProgression.Plan, kind: String, result: GoalPhaseNativeWork.Result): Consequence[Unit] =
+    _admit_c(plan, kind, result, false)
+
+  /** Typed repair is available only with its actual issued immutable contract. */
+  def admitRequestC(request: GoalPhaseNativeWork.Request, result: GoalPhaseNativeWork.Result): Consequence[Unit] = for {
+    _ <- GoalPhasePurposeRepair.admitC(request, result)
+    _ <- _admit_c(request.selectedPlan, request.kind, result, result.repairFindingSources.nonEmpty)
+  } yield ()
+
+  private def _admit_c(plan: GoalPhaseOrderedProgression.Plan, kind: String,
+    result: GoalPhaseNativeWork.Result, typed: Boolean): Consequence[Unit] = for {
     _ <- savedPlanC(plan)
     _ <- _check(Set("ImplementStep", "RepairStep", "ReviewStep", "ReviewPhase")(kind) &&
-      result != null && result.acceptance != null, "assigned kind or result report option is invalid")
+      result != null && result.acceptance != null && result.repairFindingSources != null &&
+      (typed || result.repairFindingSources.isEmpty), "assigned kind or result report option is invalid")
     _ <- (plan.effectiveAcceptance, result.acceptance) match {
       case (None, None) => Consequence.unit
       case (None, Some(_)) => _invalid("unconfigured Plan cannot claim an acceptance report")
@@ -148,7 +159,7 @@ private[smworkflow] object GoalPhaseAcceptanceBoundary {
         _ <- result.outcome match {
           case "completed" | "accept" => _check(required.forall(id => observations(id).status == "satisfied") &&
             result.findings != null && result.findings.isEmpty, "required quality conditions prevent acceptance")
-          case "repair" => _check(failures.nonEmpty && result.findings == failures,
+          case "repair" => _check(typed || (failures.nonEmpty && result.findings == failures),
             "repair findings must be exactly the ordered unsatisfied required observation details")
           case "decision-needed" => Consequence.unit
           case _ => _invalid("quality report has no assigned semantic disposition")
@@ -158,7 +169,7 @@ private[smworkflow] object GoalPhaseAcceptanceBoundary {
   } yield ()
 
   def instructions(plan: GoalPhaseOrderedProgression.Plan): String = if (plan.effectiveAcceptance.isEmpty) "" else
-    ". Consume the saved effectiveAcceptance and Usage Contract for this assigned kind: all applies to every kind, step to ImplementStep/RepairStep/ReviewStep, phase only to ReviewPhase. Return acceptance with every applicable required condition observed; completed/accept requires satisfied. Only unsatisfied required details are repair findings; excluded ideas remain advisories. Quality conditions grant no execution or review authority."
+    ". Consume the saved effectiveAcceptance and Usage Contract for this assigned kind: all applies to every kind, step to ImplementStep/RepairStep/ReviewStep, phase only to ReviewPhase. Return acceptance with every applicable required condition observed; completed/accept requires satisfied, empty findings and no repairFindingSources. The legacy required-only repair form omits sources and exactly matches ordered unsatisfied required details. Only an actual issued ReviewStep purposeRepair contract permits additional independently judged original-purpose defects inside its owned scope: provide one explicit ordinal source per finding and cover every required failure exactly, with every required condition evaluated. This ordinary repair needs no per-finding Human approval. Excluded ideas and advisories never create repair scope. Quality conditions grant no execution or review authority."
 
   // Pure projections retain invalid nested nulls for the typed admission owner.
   private def _map[A, B](values: Vector[A])(f: A => B): Vector[B] =

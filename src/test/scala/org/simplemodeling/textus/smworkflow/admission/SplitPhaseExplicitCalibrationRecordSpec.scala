@@ -11,8 +11,10 @@ import SplitPhaseExplicitCalibrationRecordJsonV1.{Record, schema, encodeC, decod
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val policy = PolicyRecord(Reference("policy", "1"), Policy("duration-v1", 2, 100, 900,
     BigDecimal("3.25"), BigDecimal("120.5"), BigDecimal(2), 15, Map("scala" -> 10)))

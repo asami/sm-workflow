@@ -29,7 +29,7 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
@@ -72,16 +72,19 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         validationPolicy = Some(validation), nativeReview = review, convergence = Some(convergence), humanConflict = humanConflict)
   }
   final case class Payload(input: Input, childSessionId: String,
-    result: Option[V.RepositorySyncNativeConvergenceResult])
+    result: Option[V.RepositorySyncNativeConvergenceResult], developmentOccurredAt: Option[String] = None)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseRepositoryClosureRecord"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-repository-closure.v3"),
-      "payload" -> value.asJson)
+      "payload" -> value.asJson.mapObject(fields => if (value.developmentOccurredAt.isEmpty)
+        fields.remove("developmentOccurredAt") else fields))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("Phase repository closure is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(schema == "sm-workflow.goal-phase-native-repository-closure.v3", (), "Phase repository closure schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond(payload.developmentOccurredAt != null && payload.developmentOccurredAt.forall(at =>
+        scala.util.Try(java.time.Instant.parse(at)).isSuccess), (), "Phase repository occurrence time is invalid")
     } yield payload
   }
 
@@ -241,8 +244,10 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         else F.invalid("repository closure has no native PhaseClosing predecessor")
       entry = if (closed) F.history(current, "phase.Closed", "ordered-repository-closed:" + payload.childSessionId)
         else F.history(current, "phase.PhaseClosing", "ordered-repository-intent:" + payload.childSessionId)
+      selected = if (closed && d.developmentObservation.nonEmpty)
+        payload.copy(developmentOccurredAt = Some(core.executionContext.clock.instant().toString)) else payload
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration,
-        reference(key), current, current.revision, entry, TypedValue(codec.typeIdentity, payload)),
+        reference(key), current, current.revision, entry, TypedValue(codec.typeIdentity, selected)),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield saved.receipt.next -> saved.receipt.payload.value
     /** Close the normal saved business result through the native instance API. */
@@ -258,9 +263,14 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       completed <- entry match {
         case None => Consequence.success(current)
         case Some(value) => for {
-          appended <- instances.appendC(saved._1.identity, saved._1.revision, value)(using core.executionContext)
+          events <- GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, saved._1.identity.value,
+            value.revision.value, "GoalPhaseCompleted", value.causation.value, core,
+            saved._2.developmentOccurredAt.map(java.time.Instant.parse))
+          committed <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration,
+            reference("terminal"), saved._1, saved._1.revision, value, TypedValue(codec.typeIdentity, saved._2)),
+            ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()), events)(using core.executionContext)
           _ <- ackC("goal-repository-completed")
-        } yield appended
+        } yield committed.receipt.next
       }
     } yield completed
     def terminalC(saved: (InstanceRecord, Payload)): Consequence[V.GoalPhaseAdvanceResult] = for {

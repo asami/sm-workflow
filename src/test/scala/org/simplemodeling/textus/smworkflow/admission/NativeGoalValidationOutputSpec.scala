@@ -18,9 +18,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Public projection of actual retained validation facts, without runtime effects.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _snapshot = O.Snapshot("a" * 40, "b" * 40)
   private val _classes = Vector("example.FirstSpec", "example.SecondSpec")
@@ -174,9 +176,9 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
     }
 
     "O6 load historical absent SBT facts through the current codec and leave public facts absent" in {
-      Given("a current-schema historical Check without kind and a raw receipt without sbt")
+      Given("a historical Check without kind and a legacy receipt without SBT or raw process observation")
       val receipt = _receipt(_focused, ProcessExecutionTermination.Exited(0),
-        Some(SbtTestSelectionResult.Verified(_classes, 2, 9L)))
+        Some(SbtTestSelectionResult.Verified(_classes, 2, 9L))).copy(sbt = None, processObservation = None)
       val historical = _legacy(G.codec.encode(_payload(Vector(_focused), Vector(receipt), Some("passed"))))
 
       When("the current codec loads the historical shape and public output projects and serializes it")
@@ -185,7 +187,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
 
       Then("only historical Test meaning applies and no TestOnly selection, reason or new receipt appears")
       loaded.selected shouldBe Vector(_focused.copy(kind = Kind.Test))
-      loaded.receipts shouldBe Vector(receipt.copy(sbt = None))
+      loaded.receipts shouldBe Vector(receipt)
       actual.selectedChecks.map(_.kind) shouldBe Vector("test")
       actual.checks.size shouldBe 1
       actual.checks.head.sbt shouldBe None

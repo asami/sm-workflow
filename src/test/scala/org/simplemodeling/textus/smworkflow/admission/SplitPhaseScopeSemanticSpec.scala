@@ -14,8 +14,10 @@ import SplitPhaseExplicitPartitionFixture.*
 
 /**
  * @since   Oct.  4, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _checkpoint = {
     val source = base(Vector.fill(4)(180))

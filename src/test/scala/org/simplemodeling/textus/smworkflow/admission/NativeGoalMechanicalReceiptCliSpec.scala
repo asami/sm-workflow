@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -22,10 +22,11 @@ import NativeWorkflowCliFixture as F
   * SPECIFICATION-OWNED; they establish no real independent review or acceptance.
   * The successful example stops at pending ReviewPhase.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -133,7 +134,7 @@ final class NativeGoalMechanicalReceiptCliSpec extends AnyWordSpec with Matchers
 
   private def _result(outcome: String): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED isolated mechanical receipt response", Vector.empty,
-      None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None)
 
   private def _submit(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,
     result: V.GoalPhaseWorkResult, reference: V.WorkflowArtifactReference,

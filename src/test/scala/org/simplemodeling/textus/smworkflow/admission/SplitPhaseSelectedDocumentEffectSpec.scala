@@ -21,9 +21,11 @@ import SplitPhaseSelectedDocumentEffect.Status
 /** Selected application semantics through actual ordinary owning UoWs.
   * Producer filesystem/security algorithms are qualified separately.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseSelectedDocumentEffectSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val repository = "repo"
   private val instance = "test-selected-apply"

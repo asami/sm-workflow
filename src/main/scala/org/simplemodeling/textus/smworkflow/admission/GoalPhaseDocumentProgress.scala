@@ -8,7 +8,7 @@ import GoalPhaseOrderedProgression as O
 
 /** Business projection of closed Steps; Markdown never supplies execution facts.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDocumentProgress {
@@ -22,7 +22,12 @@ private[smworkflow] object GoalPhaseDocumentProgress {
         else _invalid("enabled progress requires both literal source paths in every Step and fixed host candidate paths")
     } yield ()
   }
-  final case class Step(step: String, items: Vector[String], commit: O.Commit, review: String)
+  final case class Step(step: String, items: Vector[String], commit: O.Commit, review: Option[String],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+  object Step {
+    def apply(step: String, items: Vector[String], commit: O.Commit, review: String): Step =
+      new Step(step, items, commit, Some(review))
+  }
   final case class Projection(phase: String, steps: Vector[Step])
   final case class Merged(enabled: Boolean, replacement: Option[String])
 
@@ -38,7 +43,7 @@ private[smworkflow] object GoalPhaseDocumentProgress {
         "step" -> Json.fromString(row.step), "items" -> row.items.asJson,
         "commit" -> Json.obj("identity" -> Json.fromString(row.commit.identity),
           "parent" -> Json.fromString(row.commit.parent), "tree" -> Json.fromString(row.commit.tree)),
-        "review" -> Json.fromString(row.review))))))
+        "review" -> row.review.asJson).mapObject(fields => row.admission.fold(fields)(a => fields.add("admission", a.asJson)))))))
     given Decoder[Projection] = Decoder.instance(cursor =>
       _decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   }
@@ -54,7 +59,7 @@ private[smworkflow] object GoalPhaseDocumentProgress {
         case Vector(value) => Consequence.success(value)
         case _ => _invalid("completed Step has no unique protected item binding")
       }
-    } yield result :+ Step(closed.step, binding.items.sorted, closed.commit, closed.review) }
+    } yield result :+ Step(closed.step, binding.items.sorted, closed.commit, closed.review, closed.admission) }
     result = Projection(controller.plan.phase, rows)
     _ <- _decode(result.asJson).fold(_invalid(_), _ => Consequence.unit)
   } yield result
@@ -102,17 +107,20 @@ private[smworkflow] object GoalPhaseDocumentProgress {
     rows <- obj("steps").get.asArray.toRight("progress Steps must be an array")
     steps <- rows.foldLeft[Either[String, Vector[Step]]](Right(Vector.empty)) { (prior, row) => for {
       result <- prior
-      fields <- _object(row, Set("step", "items", "commit", "review"))
+      fields <- _object(row, if (row.hcursor.downField("admission").succeeded)
+        Set("step", "items", "commit", "review", "admission") else Set("step", "items", "commit", "review"))
       step <- fields("step").get.as[String].left.map(_ => "invalid Step identity")
       items <- fields("items").get.as[Vector[String]].left.map(_ => "invalid item identities")
       commit <- _object(fields("commit").get, Set("identity", "parent", "tree"))
       identity <- commit("identity").get.as[String].left.map(_ => "invalid commit identity")
       parent <- commit("parent").get.as[String].left.map(_ => "invalid commit parent")
       tree <- commit("tree").get.as[String].left.map(_ => "invalid commit tree")
-      review <- fields("review").get.as[String].left.map(_ => "invalid review identity")
+      review <- fields("review").get.as[Option[String]].left.map(_ => "invalid review identity")
+      admission <- row.hcursor.get[Option[GoalPhaseStepAssessment.Admission]]("admission").left.map(_ => "invalid Step admission")
       _ <- _require(_id(step) && items.nonEmpty && items.forall(_id) && items.distinct == items &&
-        Vector(identity, parent, tree).forall(_oid) && _text(review), "invalid progress Step business fields")
-    } yield result :+ Step(step, items, O.Commit(identity, parent, tree), review) }
+        Vector(identity, parent, tree).forall(_oid) && O.validStepAcceptance(O.ClosedStep(step,
+          O.Commit(identity, parent, tree), review, admission)), "invalid progress Step business fields")
+    } yield result :+ Step(step, items, O.Commit(identity, parent, tree), review, admission) }
     _ <- _require(steps.map(_.step).distinct.size == steps.size &&
       steps.flatMap(_.items).distinct.size == steps.flatMap(_.items).size, "duplicate progress identities")
   } yield Projection(phase, steps)

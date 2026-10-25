@@ -13,8 +13,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitPlanningAdvanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def partition(source: Base, template: Option[B.Validated] = None): E.Input =
     take(E.loadC(template.getOrElse(source.initial), source.records))

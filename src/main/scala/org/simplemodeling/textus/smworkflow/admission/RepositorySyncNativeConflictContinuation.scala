@@ -20,8 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  *  version Oct. 12, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictContinuation {
@@ -35,10 +34,11 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
   final class Port private[RepositorySyncNativeConflictContinuation] (
     declaration: F.Declaration, definition: DefinitionBinding, policy: I.Policy,
     acknowledgement: String => Consequence[Unit], validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
-    review: Option[RepositorySyncNativeMergeReviewContinuation.Port], human: Option[RepositorySyncHumanConflict.Installation]) {
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port], human: Option[RepositorySyncHumanConflict.Installation],
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort], repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]) {
 
     private val humanPort = human.map(installation => new RepositorySyncHumanConflict.Port(declaration, definition, policy,
-      installation, humanSourceC, acknowledgement, validationPolicy, review))
+      installation, humanSourceC, acknowledgement, validationPolicy, review, convergence, repair))
     def bindHumanCompletionC(params: ComponentCreate): Consequence[Option[spec.OperationDefinition]] = humanPort match {
       case Some(port) => port.bindCompletionC(params).map(Some(_))
       case None => Consequence.success(None)
@@ -70,7 +70,7 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
           wire <- if (value.completion.result.result.value.decision == "resolved") for {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store, plan.input,
               value.completion.result.result.value, source.current, next, policy)
-            wire <- RepositorySyncNativeMergeValidation.waitC(source.store, pending, validationPolicy, review)
+            wire <- RepositorySyncNativeProgression.pendingMergeC(source.store, pending, validationPolicy, review, convergence, "", repair)
           } yield wire else humanPort match {
             case Some(port) => port.advanceC(RepositorySyncHumanConflict.Source(source.session, source.store, plan.input,
               value.completion.result.resultReference, value.completion.result.result.value.rationale, next, source.current))
@@ -202,12 +202,14 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
     acknowledgement: String => Consequence[Unit] = _ => Consequence.unit,
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None,
-    human: Option[RepositorySyncHumanConflict.Installation] = None): Consequence[Port] = for {
+    human: Option[RepositorySyncHumanConflict.Installation] = None,
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[Port] = for {
     _ <- F.validateDeclarationC(declaration)
     _ <- policy.validateC
     _ <- if (definition != null) Consequence.unit else invalid("conflict definition is absent")
     _ <- if (human != null) human.fold(Consequence.unit)(_.validateC) else invalid("Human installation selection is invalid")
-  } yield new Port(declaration, definition, policy, acknowledgement, validationPolicy, review, human)
+  } yield new Port(declaration, definition, policy, acknowledgement, validationPolicy, review, human, convergence, repair)
 
   def bindCompletionC(params: ComponentCreate, declaration: F.Declaration,
     definition: DefinitionBinding, policy: I.Policy): Consequence[spec.OperationDefinition] = for {

@@ -10,7 +10,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
@@ -20,10 +20,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Installed public completion/adoption and ordinary evidence preparation on
   * newly created test-owned repositories. No persisted state is seeded/patched.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalPostCompletionSyncCliSpec extends AnyWordSpec with GivenWhenThen with GoalPhasePostCompletionSyncFixture {
   private def _required(name: String): Path = {
     val path = Path.of(sys.props.getOrElse(name, throw new IllegalArgumentException("Missing " + name)))

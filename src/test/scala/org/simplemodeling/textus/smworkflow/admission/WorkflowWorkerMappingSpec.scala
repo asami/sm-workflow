@@ -12,8 +12,10 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /**
  * @since   Sep. 28, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowWorkerMappingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import WorkflowWorkerMapping.*
 

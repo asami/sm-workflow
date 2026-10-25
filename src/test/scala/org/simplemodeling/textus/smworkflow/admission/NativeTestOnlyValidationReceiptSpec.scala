@@ -18,13 +18,16 @@ import GoalPhaseNativeValidation as G
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeWork as W
 import RepositorySyncNativeMergeReview as R
+import RepositorySyncNativeMergeRepair as M
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Current-schema compatibility and actual selected facts, without runtime effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _check = V.Check("focused", 1, Kind.TestOnly)
   private val _goal_check = G.Check("focused", 1, Kind.TestOnly)
@@ -61,6 +64,12 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
   private val _review = R.Request("selected-instance", "9", _snapshot.head, "c" * 40, _snapshot.tree,
     Vector("one.scala"), "actual local diff", "actual remote diff", "required", "Selected product check",
     Vector("focused"), Vector(_actual))
+  private def _merge_repair(receipt: V.Receipt): M.Request = M.Request(_review.copy(checks = Vector(receipt)),
+    Vector(R.Finding("selected-finding", Vector("one.scala"), "Repair the selected changed source")),
+    Vector(M.File("one.scala", "selected source")))
+  private def _merge_repair_wire(request: M.Request, receipt: Json): Json =
+    M.inputCodec.encode(request).hcursor.downField("payload").downField("review").downField("checks")
+      .downArray.withFocus(_ => receipt).top.get
   private def _host = {
     val original = ThreeWorkflowNormalHostFixture.definition(Path.of("/selected/repository"))
     original.copy(goal = original.goal.copy(stepValidation = original.goal.stepValidation.copy(checks = Vector(_goal_check)),
@@ -70,7 +79,12 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
   private def _fields(value: Json)(change: (String, Json) => Option[Json]): Json = value.arrayOrObject(value,
     items => Json.fromValues(items.map(item => _fields(item)(change))),
     fields => Json.obj(fields.toVector.flatMap { case (key, item) => change(key, _fields(item)(change)).map(key -> _) }*))
-  private def _legacy(value: Json): Json = _fields(value)((key, item) => if (key == "kind" || key == "sbt") None else Some(item))
+  private def _historical_receipts(value: Json): Json =
+    if (value.hcursor.get[String]("schemaVersion").toOption.contains(WorkflowSbtCapture.schema))
+      value.as[V.Receipt].toOption.get.copy(processObservation = None).asJson
+    else value.arrayOrObject(value, items => Json.fromValues(items.map(_historical_receipts)),
+      fields => Json.fromFields(fields.toVector.map((key, nested) => key -> _historical_receipts(nested))))
+  private def _legacy(value: Json): Json = _fields(_historical_receipts(value))((key, item) => if (key == "kind" || key == "sbt") None else Some(item))
   private def _invalid_kind(value: Json, kind: Json): Json = _fields(value)((key, item) =>
     Some(if (key == "kind") kind else item))
   private def _invalid_sbt(value: Json, sbt: Json): Json = _fields(value)((key, item) =>
@@ -82,6 +96,81 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
   private def _result(exit: Int, stdout: ProcessExecutionCapture, stderr: ProcessExecutionCapture): SbtExecutionResult =
     SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))), SbtOperation.Test,
       ProcessExecutionResult(ProcessExecutionTermination.Exited(exit), stdout, stderr, Vector.empty, 1L, "selected-sbt"), None)
+
+  "Merge-repair enclosing receipt compatibility" should {
+    "write the historical six-field receipt with null facts and roundtrip the actual repair request" in {
+      Given("a specification-owned merge-repair request with a nested historical receipt and no SBT facts")
+      val receipt = _actual.copy(sbt = None, processObservation = None)
+      val request = _merge_repair(receipt)
+      When("the actual merge-repair input codec writes and reopens its nested review checks")
+      val wire = M.inputCodec.encode(request)
+      val nested = wire.hcursor.downField("payload").downField("review").downField("checks").downArray.focus.get
+      val reopened = M.inputCodec.decode(wire)
+      Then("the exact old six fields include sbt:null and the complete request remains unchanged")
+      nested shouldBe Json.obj("identity" -> receipt.identity.asJson, "termination" -> receipt.termination.asJson,
+        "exitCode" -> receipt.exitCode.asJson, "stdout" -> receipt.stdout.asJson,
+        "stderr" -> receipt.stderr.asJson, "sbt" -> Json.Null)
+      reopened shouldBe Right(request)
+    }
+
+    "read historical absent or null optional facts and retain the old tolerance of unrelated fields" in {
+      Given("the actual repair request and historical receipt shapes with absent or null optional members")
+      val receipt = _actual.copy(exitCode = None, sbt = None, processObservation = None)
+      val request = _merge_repair(receipt)
+      val legacy = Json.obj("identity" -> receipt.identity.asJson, "termination" -> receipt.termination.asJson,
+        "exitCode" -> Json.Null, "stdout" -> receipt.stdout.asJson, "stderr" -> receipt.stderr.asJson, "sbt" -> Json.Null)
+      val variants = Vector(legacy, legacy.mapObject(_.remove("sbt")),
+        legacy.mapObject(_.remove("sbt").remove("exitCode").add("inertDiagnostic", Json.True)))
+      When("the merge-repair input codec reads these nested legacy checks")
+      val reopened = variants.map(value => M.inputCodec.decode(_merge_repair_wire(request, value)))
+      Then("null and absence keep None and unrelated legacy fields do not change the request")
+      reopened shouldBe Vector.fill(variants.size)(Right(request))
+    }
+
+    "roundtrip historical typed facts through the actual nested review and repair request" in {
+      Given("a specification-owned repair request whose historical receipt retains selected TestOnly facts")
+      val receipt = _actual.copy(processObservation = None)
+      val request = _merge_repair(receipt)
+      When("the actual merge-repair input codec encodes and decodes the request")
+      val wire = M.inputCodec.encode(request)
+      val nested = wire.hcursor.downField("payload").downField("review").downField("checks").downArray.focus.get
+      val reopened = M.inputCodec.decode(wire)
+      Then("the exact old six-field shape and typed facts survive without a raw observation")
+      nested shouldBe Json.obj("identity" -> receipt.identity.asJson, "termination" -> receipt.termination.asJson,
+        "exitCode" -> receipt.exitCode.asJson, "stdout" -> receipt.stdout.asJson,
+        "stderr" -> receipt.stderr.asJson, "sbt" -> receipt.sbt.asJson)
+      reopened shouldBe Right(request)
+    }
+
+    "roundtrip the canonical tagged raw observation through the actual repair request" in {
+      Given("a specification-owned repair request with a typed receipt containing shaped CNCF raw captures")
+      val request = _merge_repair(_actual)
+      When("the actual merge-repair input codec writes and reopens the nested raw receipt")
+      val wire = M.inputCodec.encode(request)
+      val nested = wire.hcursor.downField("payload").downField("review").downField("checks").downArray.focus.get
+      val reopened = M.inputCodec.decode(wire)
+      Then("canonical tagged bytes and the complete ProcessExecutionResult survive exactly without executing a process")
+      nested shouldBe _actual.asJson
+      nested.hcursor.get[String]("schemaVersion") shouldBe Right(WorkflowSbtCapture.schema)
+      reopened shouldBe Right(request)
+      reopened.toOption.get.review.checks.head.processObservation shouldBe _actual.processObservation
+    }
+
+    "refuse malformed unknown and present-null tags without falling back to the valid legacy fields" in {
+      Given("a valid historical nested repair receipt with a present tag and malformed new raw observations")
+      val receipt = _actual.copy(processObservation = None)
+      val request = _merge_repair(receipt)
+      val legacy = receipt.asJson
+      val tagged = Vector(Json.Null, Json.True, Json.fromString("unknown-receipt-schema"),
+        Json.fromString(WorkflowSbtCapture.schema)).map(tag => legacy.mapObject(_.add("schemaVersion", tag)))
+      val malformed = Vector(_actual.asJson.mapObject(_.add("process", Json.Null)),
+        _actual.asJson.mapObject(_.add("unrecognized", Json.True)))
+      When("the actual merge-repair input codec consumes each tagged nested check")
+      val rejected = (tagged ++ malformed).map(value => M.inputCodec.decode(_merge_repair_wire(request, value)).isLeft)
+      Then("every present malformed or unknown tag fails instead of reopening through the legacy reader")
+      rejected shouldBe Vector.fill(tagged.size + malformed.size)(true)
+    }
+  }
 
   "Complete typed SBT output" should {
     "retain large shaped successful and nonzero facts through Goal Repository and review codecs without another text ceiling" in {
@@ -135,8 +224,8 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       Given("stored typed output with a NUL or an unpaired UTF-16 surrogate")
       val invalidtext = Vector("bad\u0000text", "bad\ud800text")
       When("the product gate and Goal payload decoder inspect either stored stream")
-      val receipts = invalidtext.flatMap(text => Vector(_receipt(kind = Kind.Test).copy(stdout = text),
-        _receipt(kind = Kind.Test).copy(stderr = text)))
+      val receipts = invalidtext.flatMap(text => Vector(_receipt(kind = Kind.Test).copy(stdout = text, processObservation = None),
+        _receipt(kind = Kind.Test).copy(stderr = text, processObservation = None)))
       Then("typed presence cannot bypass strict ordinary text validation after persistence")
       receipts.foreach { receipt =>
         V.productSuccessful(receipt) shouldBe false
@@ -149,7 +238,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       Given("historical Test receipts, structural captures and recovery diagnostics at and above 65536 UTF-8 bytes")
       val boundary = "x" * 65536
       val over = boundary + "x"
-      val legacy = _receipt(kind = Kind.Test).copy(sbt = None, stdout = boundary)
+      val legacy = _receipt(kind = Kind.Test).copy(sbt = None, stdout = boundary, processObservation = None)
       val goal = _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(legacy))
       When("the existing structural converter, product gate and Goal decoder consume those texts")
       val structural = V.receiptC("index-local", _result(0, _capture(boundary), _capture("")).processResult)
@@ -211,7 +300,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         selected = state.toOption.get.selected) shouldBe true
 
       Given("the same Compile selections with a historical raw Test receipt lacking typed facts")
-      val legacy = _receipt(kind = Kind.Test).copy(sbt = None)
+      val legacy = _receipt(kind = Kind.Test).copy(sbt = None, processObservation = None)
       When("both workflow gates compare those legacy facts with the selected Compile checks")
       val goallegacy = G.successful(Vector(legacy), Vector(compilegoalcheck))
       val repositorylegacy = V.successful(Vector(structural, legacy), merge = false, selected = Vector(compilecheck))
@@ -251,7 +340,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val statewire = _legacy(V.stateCodec.encode(_state))
       val progresswire = _legacy(N.codec.encode(_progress))
       // Work kind describes assigned semantics and is not a Check kind.
-      val workwire = _fields(W.inputCodec.encode(_work))((key, item) => if (key == "sbt") None else Some(item))
+      val workwire = _fields(_historical_receipts(W.inputCodec.encode(_work)))((key, item) => if (key == "sbt") None else Some(item))
       val reviewwire = _legacy(R.inputCodec.encode(_review))
       When("the current-only codecs reopen the old absence shapes as data")
       val goal = G.codec.decode(goalwire).toOption.get
@@ -261,11 +350,11 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val review = R.inputCodec.decode(reviewwire).toOption.get
       val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(_legacy(ThreeWorkflowRuntimeParameters.encode(_host))))
       Then("only historical Test meaning is assigned; no receipt gains selected-suite success or a new execution")
-      goal shouldBe _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None)))
-      state shouldBe _state.copy(selected = Vector(_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None)))
+      goal shouldBe _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None, processObservation = None)))
+      state shouldBe _state.copy(selected = Vector(_check.copy(kind = Kind.Test)), receipts = Vector(_actual.copy(sbt = None, processObservation = None)))
       progress.validation shouldBe Some(state)
-      work.review.get.checks shouldBe Vector(_actual.copy(sbt = None))
-      review.checks shouldBe Vector(_actual.copy(sbt = None))
+      work.review.get.checks shouldBe Vector(_actual.copy(sbt = None, processObservation = None))
+      review.checks shouldBe Vector(_actual.copy(sbt = None, processObservation = None))
       host.goal.stepValidation.checks.head.kind shouldBe Kind.Test
       host.repository.validation.checks.head.kind shouldBe Kind.Test
       V.productSuccessful(state.receipts.head, Kind.Test) shouldBe true
@@ -290,7 +379,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       V.Policy("selected", 1, "required", "Selected", Vector(_check.copy(kind = null))).validateC.isSuccess shouldBe false
     }
 
-    "reject malformed present sbt through every nested receipt codec and retain inert annotations" in {
+    "reject malformed SBT facts and extra new raw-receipt fields through every nested receipt codec" in {
       Given("typed current receipts with either malformed sbt or unused diagnostic annotations")
       val invalid = Vector(Json.Null, Json.True, Json.obj(), _actual.sbt.get.asJson.mapObject(_.add("outcome", Json.fromString("invented"))))
       val annotation: (String, Json) => Option[Json] = (key, item) => Some(item.mapObject(_.add("command", Json.True).add("authority", Json.Null)))
@@ -301,13 +390,13 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
         N.codec.decode(_invalid_sbt(N.codec.encode(_progress), sbt)).isLeft,
         W.inputCodec.decode(_invalid_sbt(W.inputCodec.encode(_work), sbt)).isLeft,
         R.inputCodec.decode(_invalid_sbt(R.inputCodec.encode(_review), sbt)).isLeft) }
-      Then("malformed consumed data fails and inert fields change no typed business fact")
+      Then("malformed consumed data and unknown closed raw fields fail without legacy fallback")
       rejected.flatten.forall(identity) shouldBe true
-      G.codec.decode(_fields(G.codec.encode(_goal))(annotation)) shouldBe Right(_goal)
-      V.stateCodec.decode(_fields(V.stateCodec.encode(_state))(annotation)) shouldBe Right(_state)
-      N.codec.decode(_fields(N.codec.encode(_progress))(annotation)) shouldBe Right(_progress)
-      W.inputCodec.decode(_fields(W.inputCodec.encode(_work))(annotation)) shouldBe Right(_work)
-      R.inputCodec.decode(_fields(R.inputCodec.encode(_review))(annotation)) shouldBe Right(_review)
+      G.codec.decode(_fields(G.codec.encode(_goal))(annotation)).isLeft shouldBe true
+      V.stateCodec.decode(_fields(V.stateCodec.encode(_state))(annotation)).isLeft shouldBe true
+      N.codec.decode(_fields(N.codec.encode(_progress))(annotation)).isLeft shouldBe true
+      W.inputCodec.decode(_fields(W.inputCodec.encode(_work))(annotation)).isLeft shouldBe true
+      R.inputCodec.decode(_fields(R.inputCodec.encode(_review))(annotation)).isLeft shouldBe true
       take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(_fields(ThreeWorkflowRuntimeParameters.encode(_host))(annotation))) shouldBe _host
       G.codec.decode(G.codec.encode(_goal).mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.goal-phase-native-validation.v1")))).isLeft shouldBe true
       N.codec.decode(N.codec.encode(_progress).mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.repository-sync-native-progress.v2")))).isLeft shouldBe true
@@ -331,7 +420,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       G.successful(Vector(_actual), Vector(_goal_check.copy(kind = Kind.Test))) shouldBe false
       G.successful(Vector(_actual, _actual), Vector(_goal_check)) shouldBe false
       V.successful(Vector(structural, _actual.copy(identity = "different")), merge = false, selected = Vector(_check)) shouldBe false
-      V.successful(Vector(structural, _actual.copy(sbt = None)), merge = false, selected = Vector(_check)) shouldBe false
+      V.successful(Vector(structural, _actual.copy(sbt = None, processObservation = None)), merge = false, selected = Vector(_check)) shouldBe false
       R.inputCodec.decode(R.inputCodec.encode(_review.copy(checks = Vector(negative)))).toOption.get.checks.head shouldBe negative
       negative.exitCode shouldBe Some(0)
       negative.sbt.get.outcome shouldBe Outcome.Unverified
@@ -389,7 +478,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
           crossed.isSuccess shouldBe false
         }
         Given("the historical target without sbt and a typed target annotated with unused logs")
-        val historical = _binding_(_target_(_actual.copy(sbt = None)))
+        val historical = _binding_(_target_(_actual.copy(sbt = None, processObservation = None)))
         When("historical storage is reopened and typed evidence is compared with stripped or annotated targets")
         val legacy = take(NativeExternalEvidence.decodeStorageC(take(NativeExternalEvidence.encodeStorageC(evidence.copy(binding = historical)))))
         val annotated = _binding_(_target_(_actual).mapObject(_.add(checkskey, Json.arr(
@@ -422,8 +511,8 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
     "bind actual TestOnly class count and outcome while preserving historical no-facts target shape" in {
       Given("the same assigned review with actual TestOnly variants and historical raw receipts")
       val variants = Vector(_actual, _receipt(tests = 4L), _receipt(classes = Vector("example.OtherSpec")), _receipt(selection = false))
-      val oldwork = _work.copy(review = _work.review.map(_.copy(checks = Vector(_actual.copy(sbt = None)))))
-      val oldreview = _review.copy(checks = Vector(_actual.copy(sbt = None)))
+      val oldwork = _work.copy(review = _work.review.map(_.copy(checks = Vector(_actual.copy(sbt = None, processObservation = None)))))
+      val oldreview = _review.copy(checks = Vector(_actual.copy(sbt = None, processObservation = None)))
       When("host evidence projects the semantic target of each actual assigned review")
       val goals = variants.map(receipt => ThreeWorkflowExternalEvidencePorts.goalReviewTarget(
         _work.copy(review = _work.review.map(_.copy(checks = Vector(receipt))))))

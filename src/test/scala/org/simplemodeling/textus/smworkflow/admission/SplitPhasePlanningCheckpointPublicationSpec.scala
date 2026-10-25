@@ -19,8 +19,10 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "checkpoint", name))
   private val declaration = SplitPhaseManagedStartAssembly.Declaration(f.configuration, collection("instances"), collection("continuations"))

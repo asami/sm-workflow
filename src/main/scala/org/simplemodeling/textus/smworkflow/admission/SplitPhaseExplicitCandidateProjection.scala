@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
   * Host reference allocation and semantic scope refinement remain distinct.
   *
   * @since Oct.  2, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 25, 2026
   */
 private[smworkflow] object SplitPhaseExplicitCandidateProjection {
   final case class AllocationReference(identity: String, revision: String)
@@ -112,9 +112,13 @@ private[smworkflow] object SplitPhaseExplicitCandidateProjection {
       Consequence.success(Vector.empty[CandidateOutcome])) { case (acc, (candidate, allocation)) =>
       acc.flatMap(values => _project_one_c(input, candidate, allocation, Map.empty).map(values :+ _))
     }
-    results.map(values => if (values.forall(_.isInstanceOf[Built]))
-      new Projected(input, values.collect { case built: Built => built })
-      else new Requirements(input, values))
+    results.map { values =>
+      if (values.forall(_.isInstanceOf[Built])) {
+        new Projected(input, values.collect { case built: Built => built })
+      } else {
+        new Requirements(input, values)
+      }
+    }
   }
 
   /** Copy saved views only through a privately native-bound restored frontier.

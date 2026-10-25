@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -14,10 +14,11 @@ import NativeWorkflowCliFixture as F
 /** Fresh isolated ordinary commands retain a genuine large failed Test receipt.
   * Optional installed-command selection applies to both validation and reopening.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalLargeValidationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _executions(root: Path): Vector[Long] = {
     val marker = root.resolve("sbt-executions.txt")
@@ -85,7 +86,7 @@ final class NativeGoalLargeValidationCliSpec extends AnyWordSpec with Matchers w
       When("the fixture submits only its incorrect semantic input and ordinary Advance executes the selected actual Test")
       Files.writeString(value, "incorrect\n")
       val result = V.GoalPhaseWorkResult("completed", "Specification-owned incorrect value.txt input", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reference = V.WorkflowArtifactReference("fixture-large-validation-implementation", "1")
       scenario.call("command", implementation.submitOperation.get, Vector("--sessionId", implementation.submitSessionId.get,
         "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,

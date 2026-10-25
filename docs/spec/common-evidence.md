@@ -6,6 +6,14 @@ owner=sm-workflow
 producer_phase=[Phase 12](../phase/phase-12.md)
 consumer_phase=[Phase 6.4](../phase/phase-6.4.md)
 
+Planned producer extension (2026-10-24):
+[recovery observations](recovery-observations-and-cause-resolution.md) reuse
+actual operation/correction/result Evidence in deterministic Journal/Finding
+projections. Reuse retained payload references rather than copying logs; preserve
+actual partial/unavailable storage observations separately from successful
+business recovery. This introduces no AI recording task or additional Phase 12
+acceptance gate. See the [ROBS delivery plan](../notes/recovery-observations-delivery-plan.md).
+
 ## Responsibility
 
 Journal records actual observations, findings and decisions with their context.

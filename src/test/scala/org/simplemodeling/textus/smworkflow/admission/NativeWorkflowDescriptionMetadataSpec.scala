@@ -14,8 +14,10 @@ import org.scalatest.wordspec.AnyWordSpec
   * nonempty descriptions or that native all-three production hosts are installed.
   * The complete generated Help contract separately requires real descriptions.
   * @since   Oct.  7, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeWorkflowDescriptionMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _operations: Vector[(String, spec.OperationDefinition)] = Vector(
     "GoalPhaseService" -> SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation,

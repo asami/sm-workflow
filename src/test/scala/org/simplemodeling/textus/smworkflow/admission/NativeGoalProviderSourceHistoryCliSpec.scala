@@ -9,7 +9,7 @@ import java.util.Locale
 import org.goldenport.cncf.workflow.{WorkflowConcreteExecutionProfile, WorkflowExecutionHarness as H, WorkflowExecutionProfileParameters}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionPlacement
 import org.goldenport.convert.ValueReader
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -18,10 +18,11 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary commands surround genuine external semantic implementation.
   * Supplied observations check coherence; the parent establishes actual provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.ExternalServiceTestDeclaration])
 final class NativeGoalProviderSourceHistoryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, record, take}
 

@@ -15,7 +15,7 @@ import GoalPhaseNativeRun as F
 /** Current paired native host assembly, invoked through session-resolved inputs.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -38,6 +38,9 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       GoalPhaseCandidateObservationContinuation.operations(port) ++
       GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
       GoalPhaseClosureRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port) ++
+      GoalPhaseLegacyPurposeRepairContinuation.operations(port) ++
+      GoalPhaseReleaseRepairContinuation.operations(port) ++
+      GoalPhaseValidationRepairAdoption.operations(port) ++
       GoalPhaseFailedPhaseRepairAdoption.operations(port) ++ GoalPhaseCompletionPolicyAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still

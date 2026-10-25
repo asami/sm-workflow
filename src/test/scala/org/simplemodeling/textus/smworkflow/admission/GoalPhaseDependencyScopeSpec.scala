@@ -13,9 +13,11 @@ import GoalPhaseDependencyScope.*
 
 /** Specification-owned reports prove input admission, never edits, consent or native success.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDependencyScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[T](value: Consequence[T]): T = value match {
     case Consequence.Success(result) => result

@@ -15,8 +15,10 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Passive successor examples use actual constructed pure scope inputs only.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseScopeProjectionSnapshotSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _fixture(): (W.ProjectionRequired, K.Record, S.Request) = {
     val source = base(Vector.fill(4)(180))

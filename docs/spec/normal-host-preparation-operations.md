@@ -1,5 +1,19 @@
 # Normal native workflow preparation Operations
 
+`prepareEvidence` accepts GoalPhase kind `validation-repair-adoption` with the
+actual complete description, exact adoption DTO, matching reference and execution
+participant. It serializes the existing independent evidence import; preparation
+grants no authority or execution. Full DTOs use normal current Resource transport.
+See [validation repair adoption](goal-phase-validation-repair-adoption.md).
+
+Planned initialization boundary (2026-10-24):
+[project initialization](project-initialization.md) supplies a minimal installed
+entry that does not require an existing project runtime. The preparation Operations
+below still consume a configured context; prepareGoalStart is not itself project
+initialization. Initialization and normal preparation/Start remain distinct, with
+existing installations and Sessions preserved. See the
+[INIT delivery plan](../notes/project-initialization-delivery-plan.md).
+
 Terminology revision 2026-10-23: the target service name is
 `NativeWorkflowPreparationService`, with `--runtime-root` for its configuration
 directory. Caller execution conversion uses Caller names; Human/review/authority
@@ -37,6 +51,21 @@ Every route starts with `org.simplemodeling.textus.SmWorkflow.NativeHostPreparat
 | `recordExecution` | `WorkflowHostExecutionRecordInput` | `session`, `observation`, optional `reference`; actual `issuedWorkContext` is inline |
 
 The six import DTOs have required String fields except participant is optional only in WorkflowEvidencePreparationInput. Human requires it and review forbids it. Metadata validation retains exact nonempty/untrimmed/control-free values, ISO Instant and strict dotted entity collection grammar. ExplicitHuman is required for selected Goal/Repository Start. Evidence permits the exact family/kind combinations and assigned context/result types; Split review is refused. The two execution DTOs carry a required generated WorkflowIssuedWorkContext and exact URI Strings, with reference optional only in recordExecution. Their [finite execution contract](native-host-execution.md#r6--three-generated-public-values-and-two-normal-operations) defines the exact field order, alias checks, outcomes and opaque Session retention.
+
+### Release repair continuation evidence
+
+For a retained legacy Phase-review Human frontier, `prepareEvidence` also
+supports GoalPhase kind `release-repair-continuation`. Read the actual
+`GoalPhaseReleaseRepairContinuationDescriptionResult` as `request` and the
+separately observed `GoalPhaseReleaseRepairContinuationRecoveryInput` as
+`result`, with exact directive `reference`, matching execution worker and
+required participant. This prepares purpose
+`goal-phase-release-repair-continuation`; only independently provisioned Human
+evidence can later admit it. `Defer` requires no prepared row. See the
+[Release continuation contract](goal-phase-release-repair-continuation.md) for
+the exact original-history boundary, fixed `phase-release` host program and
+large-target Resource route. Preparation performs no recovery or workflow work.
+
 
 ### prepareGoalStart
 

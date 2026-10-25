@@ -11,7 +11,7 @@ import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workspace.WorkspaceId
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -21,10 +21,11 @@ import GoalPhaseNativeMetadata as N
 /** Finite transport around external CML/test authoring and ordinary generated-artifact validation.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalCmlValidationAuthoringLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
   import N.given
@@ -398,7 +399,7 @@ final class NativeGoalCmlValidationAuthoringLiveSpec extends AnyWordSpec with Ma
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewwork.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             work.candidate.get.head shouldBe closed.commit.identity
             work.candidate.get.tree shouldBe closed.commit.tree
             work.checksReceipt should not be empty

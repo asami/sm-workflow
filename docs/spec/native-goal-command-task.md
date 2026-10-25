@@ -135,8 +135,17 @@ This authored proof establishes no installed result until the parent executes it
 Follow [native installation](native-client-installation.md) and the
 [normal host contract](normal-three-workflow-host.md). Select absolute normalized
 installed executable, runtime root and already-owned task paths. The task must be a direct child of
-`<runtime-root>/target/sm-workflow/tasks`; each call selects an existing empty output
-directory beneath that task. The explicit executable must be an available executable file; the ordinary host
+`<runtime-root>/target/sm-workflow/tasks`; each call selects an output directory
+beneath that task. Both finite callers create missing output directories with
+private permissions below the already-opened task, then require the final
+directory to be empty before CLI launch. Existing empty directories remain
+supported. The task itself must already exist. Every directory component is
+opened without following symlinks; occupied output, symlinks, ordinary files or
+creation failures stop before CLI launch without deleting or replacing prior
+results. Retained stream files use exclusive creation, preventing concurrent
+calls to the same output from launching duplicate native commands. No automatic
+retry, new Workflow attempt or recovery operation follows preparation failure.
+The explicit executable must be an available executable file; the ordinary host
 configuration/assembly and installed skills must exist. The caller requires no
 checkout launcher, generated classpath, component descriptor or CAR manifest.
 The installed CLI alone selects the published artifact. There is no source
@@ -1223,6 +1232,13 @@ validation owner, with complete successful receipts including Compile and Test;
 TestOnly alone is insufficient. Every unresolved current Step issue must be a
 REVIEW issue from exactly those original findings, with an actual latest FIXED
 repair disposition. Other unresolved issues keep affected review required.
+
+Compile and Test coverage for this primary-candidate rule must come from the
+primary workspace. A dependency's successful checks cannot supply either one.
+Validation and Review reconstruct the same exact primary-plus-captured-dependency
+check selection. A captured dependency still requires ordinary independent
+Review: the retained original review does not contain a dependency-candidate
+snapshot against which this primary terminal-LF proof could compare it.
 
 Before issuing semantic work, the owner reads typed CNCF `TreeChanges` between
 those two actual immutable trees and their actual old/new `BlobContent` values

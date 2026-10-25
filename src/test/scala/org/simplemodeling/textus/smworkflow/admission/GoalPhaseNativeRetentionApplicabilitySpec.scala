@@ -22,8 +22,10 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Native saved inputs are scoped facts, not complete host-declaration witnesses.
   * @since   Oct.  8, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 25, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val candidate = O.Snapshot("a" * 40, "b" * 40)
   private def candidateJson = Json.obj("head" -> Json.fromString(candidate.head), "tree" -> Json.fromString(candidate.tree))
@@ -76,15 +78,14 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
   }
 
   "Native candidate retained format" should {
-    "read current typed candidate facts without host-path witnesses or unused-field refusals" in {
+    "read current candidate facts with compatible nested annotations and optional omissions" in {
       Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R1; Example: E1; a current selected candidate payload")
       val saved = C.Payload("5", "S1", Vector("one.scala"), Vector("one.scala"),
         Some(candidate), Vector("one.scala"), Some("an actual retained diff"))
       val wire = C.codec.encode(saved)
       val nested = payload(wire)
-      val annotated = nested.mapObject(_.add("run", Json.fromString("must-not-execute"))
-        .add("candidate", candidateJson.mapObject(_.add("approve", Json.True))))
-      When("the current codec decodes consumed facts with optional omissions and inert annotations")
+      val annotated = nested.mapObject(_.add("candidate", candidateJson.mapObject(_.add("approve", Json.True))))
+      When("the current codec decodes consumed facts with optional omissions and inert nested annotations")
       val actual = C.codec.decode(replace(wire.mapObject(_.add("diagnostics", Json.True)), annotated))
       val optional = C.codec.decode(replace(wire, nested.mapObject(_.remove("candidate").remove("diff"))))
       Then("unused values have no effect on candidate data and absent optional facts remain absent")
@@ -311,20 +312,35 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
       val wire = V.codec.encode(original)
       val nested = payload(wire)
       val emptywire = V.codec.encode(initial)
+      val process = receipt.processObservation.get
+      val invented = "invented capture".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
       When("the existing v2 codec reads stopped history, absent optional fields and contradictory stopped shapes")
       val restored = V.codec.decode(wire)
       val absent = V.codec.decode(replace(emptywire, payload(emptywire).mapObject(_.remove("stopped"))))
-      val malformed = Vector(Json.Null, Json.True, Json.arr(Json.True), Json.arr(Json.obj()),
-        Json.arr(_attempt_receipt(initial.selected(1), ProcessExecutionTermination.NotStarted).asJson),
-        Json.arr(receipt.copy(exitCode = Some(0)).asJson), Json.arr(receipt.copy(stdout = "invented capture").asJson),
-        Json.arr(receipt.copy(sbt = None).asJson),
-        Json.arr(receipt.copy(sbt = Some(receipt.sbt.get.copy(outcome = WorkflowSbtValidation.Outcome.Failed))).asJson))
-      val rejected = malformed.map(value => V.codec.decode(replace(wire, nested.mapObject(_.add("stopped", value)))))
+      val malformed = Vector("null history" -> Json.Null, "boolean history" -> Json.True,
+        "boolean receipt" -> Json.arr(Json.True), "empty receipt" -> Json.arr(Json.obj()),
+        "ahead of prefix" -> Json.arr(_attempt_receipt(initial.selected(1), ProcessExecutionTermination.NotStarted).asJson),
+        "exited process with NotExecuted facts" -> Json.arr(receipt.copy(processObservation = Some(
+          process.copy(termination = ProcessExecutionTermination.Exited(0)))).asJson),
+        "NotStarted process with captured stdout" -> Json.arr(receipt.copy(processObservation = Some(
+          process.copy(stdout = ProcessExecutionCapture(invented, invented.size.toLong, false)))).asJson),
+        "missing sbt facts" -> Json.arr(receipt.asJson.mapObject(_.remove("sbt"))),
+        "failed facts with NotStarted process" -> Json.arr(receipt.copy(sbt = Some(
+          receipt.sbt.get.copy(outcome = WorkflowSbtValidation.Outcome.Failed))).asJson))
+      val rejected = malformed.map { (name, value) =>
+        val malformedwire = replace(wire, nested.mapObject(_.add("stopped", value)))
+        (name, malformedwire, V.codec.decode(malformedwire))
+      }
       Then("old absent fields decode empty, every actual stopped fact survives and explicit contradictions fail")
       restored shouldBe Right(original)
       absent shouldBe Right(initial)
       payload(emptywire).hcursor.downField("stopped").focus shouldBe None
-      rejected.foreach(_.isLeft shouldBe true)
+      rejected.zipWithIndex.foreach { case ((name, malformedwire, result), index) =>
+        withClue("Malformed stopped history " + index + " (" + name + "): ") {
+          malformedwire should not be wire
+          result.isLeft shouldBe true
+        }
+      }
     }
 
     "roundtrip only the actual ordinary prefix result without inventing future metadata selection" in {
@@ -430,8 +446,8 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
 
     "read current check results without policy copies or nested key preflights" in {
       Given("Spec: docs/spec/goal-phase-native-retention-applicability.md; Rule: R2; Example: E2; actual selected check bindings and result facts")
-      val saved = V.Payload("8", "S1", candidate, Vector(V.Check("focused", 1)),
-        Vector(RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "", "")), Some("passed"))
+      val saved = V.Payload("8", "S1", candidate, Vector(V.Check("focused", 1, WorkflowSbtValidation.Kind.Test)),
+        Vector(_prefix_receipt(WorkflowSbtValidation.Outcome.Succeeded, 0).copy(identity = "focused")), Some("passed"))
       val wire = V.codec.encode(saved)
       val nested = payload(wire)
       val check = nested.hcursor.downField("selected").focus.get.asArray.get.head
@@ -678,7 +694,7 @@ final class GoalPhaseNativeRetentionApplicabilitySpec extends AnyWordSpec with M
         wire.hcursor.get[String]("schemaVersion").toOption.get shouldBe "sm-workflow.goal-phase-native-step-closure.v3"
         actual.toOption.get.input shouldBe input
         actual.toOption.get.input.candidate shouldBe candidate
-        actual.toOption.get.input.reviewEvidence shouldBe "original-review-result"
+        actual.toOption.get.input.reviewEvidence shouldBe Some("original-review-result")
         payload(wire).asObject.get.keys.toSet should not contain "validationTarget"
         payload(wire).asObject.get.keys.toSet should not contain "reviewTarget"
         payload(wire).asObject.get.keys.toSet should not contain "authority"

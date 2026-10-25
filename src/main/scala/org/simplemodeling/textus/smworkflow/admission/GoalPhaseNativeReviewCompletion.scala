@@ -22,7 +22,7 @@ import WorkflowManagedProcessExecution as E
   * Step review. Actual native history selects the source; typed immutable Git
   * facts and fresh selected checks admit ordinary Closing, never a new review.
   * @since   Oct. 19, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReviewCompletion {
@@ -105,10 +105,12 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
         actualvalidation.payload.stopped != null && actualvalidation.payload.outcome != null &&
         actualvalidation.payload.receipts.forall(receipt => receipt != null && receipt.identity != null &&
           receipt.termination != null && receipt.exitCode != null && receipt.stdout != null && receipt.stderr != null &&
-          receipt.sbt != null && receipt.sbt.forall(facts => facts != null && facts.valid)) &&
+          receipt.sbt != null && receipt.sbt.forall(facts => facts != null && facts.valid) &&
+          RepositorySyncNativeMergeValidation.storedProductOutputValid(receipt)) &&
         actualvalidation.payload.stopped.forall(receipt => receipt != null && receipt.identity != null &&
           receipt.termination != null && receipt.exitCode != null && receipt.stdout != null && receipt.stderr != null &&
-          receipt.sbt != null && receipt.sbt.forall(facts => facts != null && facts.valid)),
+          receipt.sbt != null && receipt.sbt.forall(facts => facts != null && facts.valid) &&
+          RepositorySyncNativeMergeValidation.storedProductOutputValid(receipt)),
         "actual completion checks contain incomplete native payload values")
       _ <- GoalPhaseNativeMetadata.validateRetainedC(requiredchecks, actualvalidation.payload.selected,
         actualvalidation.payload.metadata)
@@ -150,10 +152,14 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
             result.result.typeIdentity == W.resultCodec.typeIdentity &&
             _reference(result.resultReference.identity) && _revision(result.resultReference.revision),
             "latest actual repair changes the original Plan, review, directive, generation or target")
-          completechecks = actualvalidation.payload.selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
-            actualvalidation.payload.selected.exists(_.kind == WorkflowSbtValidation.Kind.Test) &&
+          primarychecks = actualvalidation.payload.selected.filter(_.dependency.isEmpty)
+          completechecks = primarychecks.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
+            primarychecks.exists(_.kind == WorkflowSbtValidation.Kind.Test) &&
             actualvalidation.payload.receipts.forall(_.sbt.nonEmpty)
-          eligible = original.candidate.tree != controller.candidate.get.tree && completechecks &&
+          // Prior completion conditions cover the primary candidate only; they
+          // carry no dependency-candidate proof for mechanical completion.
+          eligible = actualvalidation.payload.dependency.isEmpty &&
+            original.candidate.tree != controller.candidate.get.tree && completechecks &&
             GoalPhaseFixIssues.coveredIssuesC(issues, repair, result.result.value, original).isSuccess
         } yield Option.when(eligible)(new Source(from, controller, actualcandidate, actualvalidation,
           repair, result, original, issues))

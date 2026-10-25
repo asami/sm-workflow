@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Constructed local test data, never public ingress, execution or readback.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
 private[admission] object SplitPhasePlanningCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -74,6 +74,8 @@ private[admission] object SplitPhasePlanningCheckpointFixture {
   }
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePlanningCheckpointPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePlanningCheckpointFixture.*
   "Passive checkpoint capture" should {

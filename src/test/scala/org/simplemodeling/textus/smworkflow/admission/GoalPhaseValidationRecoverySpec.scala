@@ -15,17 +15,48 @@ import org.scalatest.wordspec.AnyWordSpec
 import GoalPhaseNativeValidation as V
 import GoalPhaseValidationRecovery as R
 import GoalPhaseOrderedProgression as O
+import GoalPhaseDependencyValidation.given
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Immutable data/chain and production check-program specifications; these facts are test inputs, not host
   * observations or an independent production Human attestation.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val snapshot = O.Snapshot("a" * 40, "b" * 40)
   private val check = V.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+
+  "DV-07 dependency validation recovery subject" should {
+    "retain the dependency alongside the original primary target without granting a new attempt" in {
+      Given("a SPECIFICATION-OWNED unknown attempt for the same Session, candidate and check")
+      val capture = DependencyValidationSpecificationFixture.capture
+      val subject = GoalPhaseDependencyValidation.subject(capture)
+      val original = R.RecoveryTarget("same-session", "selected-plan", "1", capture.primaryBase,
+        capture.primaryBase, "20", "25", "step-1", "cncf-compile", 2, 0, "24", dependency = Some(subject))
+      When("the ordinary recovery codec and independent Human binding select that exact subject")
+      val restored = R.decodeTarget(original.asJson)
+      val binding = take(R.bindingC("org.simplemodeling.SmWorkflow", original, "AuthorizeNewAttempt",
+        "SPECIFICATION-OWNED explicit new attempt, accepting potentially repeated effects", "participant",
+        ContextReference("specification-human-answer", "1")))
+      Then("repository, workspace, base and candidate remain in the actual authorization payload")
+      restored shouldBe Right(original)
+      binding.hcursor.downField("validationRecovery").get[R.RecoveryTarget]("target").toOption shouldBe Some(original)
+      R.selectBinding(binding) shouldBe Right(binding)
+      val crossed = original.copy(dependency = Some(subject.copy(workspace = "another-source")))
+      take(R.bindingC("org.simplemodeling.SmWorkflow", crossed, "AuthorizeNewAttempt",
+        "SPECIFICATION-OWNED distinct subject", "participant", ContextReference("specification-human-answer", "1")))
+        .hcursor.downField("validationRecovery").get[R.RecoveryTarget]("target").toOption should not be Some(original)
+      R.decodeTarget(original.asJson.mapObject(_.add("dependency", Json.Null))).isLeft shouldBe true
+      R.decodeTarget(original.asJson.mapObject(_.add("dependency",
+        subject.asJson.mapObject(_.remove("candidate"))))).isLeft shouldBe true
+      R.decodeTarget(original.copy(dependency = None).asJson).toOption.get.dependency shouldBe None
+      // Decoding and binding perform no native recovery, effect dispatch or history mutation.
+    }
+  }
   private def source: V.Saved = {
     val empty = take(InstanceRecord(InstanceIdentity("validation-recovery-unit"),
       take(GoalPhaseRuntimeCatalog.loadC()).definition, initialRevision, Lifecycle.NotStarted, None,
@@ -435,7 +466,7 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
 
   "Public validation recovery target" should {
     "E11 preserve legacy targets and bind the complete versioned known failed Phase target" should afterWord(
-      "in spec:goal-phase-validation-recovery, example:E11, rules:R4,R8,R9, phase:6.4") {
+      "in spec:goal-phase-validation-recovery, example:E11, rules:R4,R5,R8,R9,R10, phase:6.4") {
       "roundtrip absent extensions and reject null malformed incomplete or crossed authority" in {
         Given("docs/spec/goal-phase-validation-recovery.md R4,R8,R9 E11: legacy unknown and new known failed targets")
         val legacy = R.RecoveryTarget("session", "plan", "1", snapshot, snapshot, "2", "5", "phase:phase-2", "test", 2, 0, "3")
@@ -447,11 +478,17 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
         val rendered = RuntimeContext.PropertyNameContext.default.transformRecord(R.targetRecord(known))
         Then("legacy bytes omit the extension and the new binding retains every authority dimension")
         legacy.asJson.hcursor.downField("knownFailedPhase").focus shouldBe None
+        legacy.asJson.hcursor.downField("terminatedTimeoutPhase").focus shouldBe None
+        known.asJson.hcursor.downField("terminatedTimeoutPhase").focus shouldBe None
+        legacy.terminatedTimeoutPhase shouldBe None
+        known.terminatedTimeoutPhase shouldBe None
         R.decodeTarget(legacy.asJson) shouldBe Right(legacy)
         R.decodeTarget(encoded) shouldBe Right(known)
         take(R.targetC(rendered)) shouldBe known
         R.messageFor(known) should include("KNOWN FAILED")
         R.messageFor(legacy) shouldBe R.message
+        R.choices shouldBe Vector("AuthorizeNewAttempt", "Defer")
+        Vector(legacy, known).foreach(target => R.choicesFor(target) shouldBe R.choices)
         val malformed = Vector(Json.Null, Json.arr(), Json.obj(), extension.asJson.mapObject(_.remove("participant")),
           extension.asJson.mapObject(_.add("exitCode", Json.fromString("1"))),
           extension.asJson.mapObject(_.add("exitCode", Json.fromBigDecimal(BigDecimal("1.5")))),
@@ -470,6 +507,37 @@ final class GoalPhaseValidationRecoverySpec extends AnyWordSpec with Matchers wi
         codec.decode(codec.encode(direction).mapObject(_.add("extra", Json.True))).isLeft shouldBe true
         codec.decode(codec.encode(direction.copy(target = legacy))).isLeft shouldBe true
         codec.decode(codec.encode(direction.copy(participant = "other"))).isLeft shouldBe true
+      }
+      "preserve two-choice preparation and reject LimitedRepair for every non-timeout target" in {
+        Given("docs/spec/goal-phase-validation-recovery.md R4,R5,R8,R10 E11: legacy unknown and known-failed targets with independent fixture Human inputs")
+        val legacy = R.RecoveryTarget("session", "plan", "1", snapshot, snapshot, "2", "5", "phase:phase-2", "test", 2, 0, "3")
+        val known = legacy.copy(knownFailedPhase = Some(R.KnownFailedPhase(R.KnownFailedPhase.schema, "definition", "1",
+          "participant", "session:ordered-validation:2:validation", "5", 1)))
+        val reference = org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference("fixture-human", "1")
+        val execution = org.simplemodeling.textus.smworkflow.value.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+        val now = Instant.parse("2026-10-24T00:00:00Z")
+        When("passive preparation and canonical Human binding receive legacy choices or the timeout-only choice")
+        Vector(legacy, known).foreach { target =>
+          val description = org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryDescriptionResult(target.sessionId,
+            "decision-required", R.messageFor(target), "fixture-component", R.targetRecord(target), R.choices, R.recoveryOperation)
+          def _prepare_(choice: String, choices: Vector[String]) =
+            org.simplemodeling.textus.smworkflow.preparation.NativeValidationRecoveryPreparation.prepareC(description.copy(choices = choices),
+              org.simplemodeling.textus.smworkflow.value.GoalPhaseValidationRecoveryAnswer(choice, "Fixture Human direction"),
+              reference, execution, "participant", "fixture-issuer", now)
+          val binding = take(R.bindingC("fixture-component", target, "Defer", "Fixture Human direction", "participant",
+            ContextReference(reference.identity, reference.revision)))
+          val body = binding.hcursor.downField("validationRecovery").focus.get
+          val altered = binding.mapObject(_.add("validationRecovery", body.mapObject(_.add("answer",
+            body.hcursor.downField("answer").focus.get.mapObject(_.add("choice", Json.fromString("LimitedRepair")))))))
+          Then("both legacy choices prepare unchanged while neither an answer nor a broadened description grants LimitedRepair")
+          R.choices.foreach(choice => _prepare_(choice, R.choices).isSuccess shouldBe true)
+          _prepare_("LimitedRepair", R.choices).isSuccess shouldBe false
+          _prepare_("LimitedRepair", R.timeoutChoices).isSuccess shouldBe false
+          _prepare_("Defer", R.timeoutChoices).isSuccess shouldBe false
+          R.bindingC("fixture-component", target, "LimitedRepair", "Fixture Human direction", "participant",
+            ContextReference(reference.identity, reference.revision)).isSuccess shouldBe false
+          R.selectBinding(altered).isLeft shouldBe true
+        }
       }
     }
     "roundtrip the standard snake_case Record and refuse colliding public names" in {

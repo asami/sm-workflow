@@ -11,7 +11,7 @@ import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMet
 import org.goldenport.cncf.processexecution.SbtScenarioParameters.Value
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workspace.WorkspaceId
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -23,10 +23,11 @@ import org.simplemodeling.textus.smworkflow.admission.typedmetafixture.{TypedMet
 /** Finite public transport for externally authored typed input selection and adoption.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
   import N.given
@@ -523,7 +524,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewed.work.get.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             if (recording.nonEmpty) {
               _checks(scenario, 2) shouldBe before
               _selectors(scenario, 2)
@@ -589,7 +590,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
           Files.writeString(Path.of(scenario.host.target.root).resolve("docs/phase.md"),
             "# Specification-owned negative typed input\n\nExplicit invalid input: " + name + "\n", UTF_8)
           val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned invalid input scenario " + name,
-            Vector.empty, None, None, None, None, None, None, None)
+            Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
           val reference = V.WorkflowArtifactReference("specification-negative-typed-input-" + name, "1")
           When("the normal issued semantic Submit consumes only those stated negative fixture inputs")
           _semantic(scenario, initial, output, semantic, reference)

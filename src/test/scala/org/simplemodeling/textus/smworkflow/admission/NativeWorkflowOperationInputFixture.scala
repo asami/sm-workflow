@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
@@ -53,7 +53,7 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
       V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
         GoalPhaseAcceptanceBoundary.publicReport(result.acceptance), GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport),
         GoalPhasePlanRevision.publicProposal(result.planRevision), GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson))))
+        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation)))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
       V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
     case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->

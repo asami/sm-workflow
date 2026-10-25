@@ -13,8 +13,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class ProfileSelectionJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val selection = Selection("selection-1", StateMachineOperationIdentity("GoalPhaseService", "startGoalPhase"),
     WorkflowDefinitionIdentity("GoalPhaseWorkflow"), WorkflowDefinitionRevision("1"), "human-1",

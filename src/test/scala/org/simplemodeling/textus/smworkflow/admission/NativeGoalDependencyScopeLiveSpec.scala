@@ -7,7 +7,7 @@ import io.circe.Json
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionQuestionWire
@@ -18,10 +18,11 @@ import GoalPhaseDependencyScope as D
 /** Finite native frontiers around separately supplied dependency work and Human evidence.
   * Fixture setup declares the business model; it supplies no semantic result or consent.
   * @since   Oct. 19, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -636,7 +637,7 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
             closed.commit.parent shouldBe initial.work.get.originalBase.head
             closed.commit.tree shouldBe reviewed.work.get.candidate.get.tree
             closed.commit.tree shouldBe waiting.validation.get.candidate.tree
-            closed.review.trim should not be empty
+            closed.review.exists(_.trim.nonEmpty) shouldBe true
             _checks(scenario, 1) shouldBe pids
 
             Given("the actual Step2 implementation request remains unanswered after the isolated Step1 commit")

@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -25,6 +25,55 @@ private[admission] object TypedSbtHostPlanFixture {
     actual
   }
 
+  /** Specification-owned two-repository inputs for ordinary typed Git/SBT admission.
+    * No command is executed and no real host configuration is changed here.
+    */
+  def dependencyPlan(primary: Json, root: Path, executable: Path,
+    binding: GoalPhaseDependencyValidation.Binding, denial: String = "none"): Json = {
+    import org.goldenport.cncf.processexecution.GitOperationKind
+    import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target
+    require(Set("none", "sbt-capability", "workspace-manage")(denial), "Select one explicit fixture grant denial")
+    require(binding.root == root.resolve("repository").toRealPath().toString &&
+      GoalPhaseDependencyValidation.bindingValid(binding), "Select the isolated dependency binding")
+    val workspace = binding.dependency.workspace
+    val git = TypedGitHostPlanFixture.plan(Target(Path.of(binding.root), binding.branch, "origin", "main",
+      root.resolve("unused-upstream.git").toString),
+      kinds = Vector(GitOperationKind.Root, GitOperationKind.Branch, GitOperationKind.Head, GitOperationKind.Tree,
+        GitOperationKind.Status, GitOperationKind.Shallow, GitOperationKind.Replacements, GitOperationKind.MergeHead,
+        GitOperationKind.CommitMetadata, GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff),
+      goalPaths = binding.paths)
+    def _rebind_(value: Json): Json = value.fold(Json.Null, Json.fromBoolean, Json.fromJsonNumber,
+      text => Json.fromString(if (text == TypedGitHostPlanFixture.workspace) workspace
+        else if (text.startsWith("sm-workflow-git-")) "dependency-" + text else text),
+      values => Json.fromValues(values.map(_rebind_)),
+      fields => Json.fromJsonObject(fields.mapValues(_rebind_)))
+    def _array_(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
+    val selectedgit = _rebind_(git)
+    val sbt = binding.checks.flatMap { check =>
+      val operation = check.kind match {
+        case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
+        case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
+        case _ => throw new IllegalArgumentException("This CLI fixture selects ordinary Compile/Test only")
+      }
+      _array_(plan(root, executable, Vector(check.ordinal), operation = operation), "sbtPrograms").map { program =>
+        val identity = workspace + "-" + check.kind.wire
+        program.mapObject(_.add("target", Json.fromString(workspace)).add("identity", Json.fromString(identity))
+          .add("capability", Json.fromString(identity)))
+      }
+    }
+    val gitprograms = _array_(primary, "gitPrograms") ++ _array_(selectedgit, "gitPrograms")
+    val sbtprograms = _array_(primary, "sbtPrograms") ++ sbt
+    val capabilities = (gitprograms ++ sbtprograms).map(_.hcursor.get[String]("capability").toOption.get)
+      .filterNot(capability => denial == "sbt-capability" && sbt.exists(_.hcursor.get[String]("capability").toOption.contains(capability)))
+    val grants = (_array_(primary, "workspaceGrants") ++ _array_(selectedgit, "workspaceGrants"))
+      .filterNot(grant => denial == "workspace-manage" && grant.hcursor.get[String]("workspaceId").toOption.contains(workspace))
+    primary.mapObject(_.add("gitPrograms", Json.fromValues(gitprograms)).add("sbtPrograms", Json.fromValues(sbtprograms))
+      .add("workspaces", Json.fromValues(_array_(primary, "workspaces") ++ _array_(selectedgit, "workspaces")))
+      .add("workspaceGrants", Json.fromValues(grants))
+      .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
+        "capabilities" -> Json.fromValues(capabilities.distinct.map(Json.fromString))))))
+  }
+
   def plan(root: Path, executable: Path, ordinals: Vector[Int], gitPlan: Option[Json] = None,
     executionTimeoutMillis: Long = 180000L, operation: SbtOperation = SbtOperation.Test,
     testClasses: Vector[String] = Vector.empty, stdoutBytes: Int = 131072, stderrBytes: Int = 16384): Json = {
@@ -36,12 +85,13 @@ private[admission] object TypedSbtHostPlanFixture {
           x.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")) &&
         testClasses.distinct == testClasses &&
         testClasses.map(_.split('.').last).distinct.size == testClasses.size
-      case SbtOperation.Compile | SbtOperation.Test => testClasses.isEmpty
+      case SbtOperation.Compile | SbtOperation.Test | SbtOperation.FixCheck => testClasses.isEmpty
     }), "Only bounded exact TestOnly classes or class-free Compile/Test are admitted")
     val operationwire = operation match {
       case SbtOperation.Compile => "compile"
       case SbtOperation.Test => "test"
       case SbtOperation.TestOnly => "test-only"
+      case SbtOperation.FixCheck => "fix-check"
     }
     require(ordinals.nonEmpty && ordinals.forall(value => value >= 1 && value <= 16) &&
       ordinals.distinct == ordinals, "Only distinct selected SBT ordinals 1..16 are admitted")
@@ -132,16 +182,18 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   /** Two finite typed SBT targets share the existing typed Git boundary. */
-  def authoringPlan(root: Path, executable: Path, git: Json): Json = {
-    val ordinary = plan(root, executable, Vector(1), Some(git))
+  def authoringPlan(root: Path, executable: Path, git: Json, compileFirst: Boolean = false, lint: Boolean = false): Json = {
+    val ordinary = plan(root, executable, Vector(1), Some(git),
+      operation = if (compileFirst) SbtOperation.Compile else SbtOperation.Test)
     val selected = plan(root, executable, Vector(2), operation = SbtOperation.TestOnly,
       testClasses = Vector("org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"))
     def array(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
-    val programs = array(ordinary, "sbtPrograms") ++ array(selected, "sbtPrograms")
+    val lintPlan = if (lint) Some(plan(root, executable, Vector(3), operation = SbtOperation.FixCheck)) else None
+    val programs = array(ordinary, "sbtPrograms") ++ array(selected, "sbtPrograms") ++ lintPlan.toVector.flatMap(array(_, "sbtPrograms"))
     val capabilities = (array(ordinary, "gitPrograms") ++ programs).map(_.hcursor.downField("capability").focus.get)
     ordinary.mapObject(_.add("sbtPrograms", Json.fromValues(programs))
-      .add("workspaces", Json.fromValues(array(ordinary, "workspaces") ++ array(selected, "workspaces")))
-      .add("workspaceGrants", Json.fromValues(array(ordinary, "workspaceGrants") ++ array(selected, "workspaceGrants")))
+      .add("workspaces", Json.fromValues(array(ordinary, "workspaces") ++ array(selected, "workspaces") ++ lintPlan.toVector.flatMap(array(_, "workspaces"))))
+      .add("workspaceGrants", Json.fromValues(array(ordinary, "workspaceGrants") ++ array(selected, "workspaceGrants") ++ lintPlan.toVector.flatMap(array(_, "workspaceGrants"))))
       .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
         "capabilities" -> Json.fromValues(capabilities)))))
   }

@@ -12,11 +12,15 @@ import WorkflowManagedProcessExecution as E
 /** Managed intent boundaries surround fixed file and ordinal stage effects.
   * Retained uncertainty never replays an apply/stage effect or rolls back.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeRepairMaterialization {
   def advanceC(store: N.Store, review: RepositorySyncNativeMergeReviewContinuation.SavedReview,
+    input: M.Request, result: M.Result, proposal: InstanceRecord, policy: I.Policy): Consequence[N.Stage] =
+    advanceC(store, M.basis(review), input, result, proposal, policy)
+
+  def advanceC(store: N.Store, review: M.Basis,
     input: M.Request, result: M.Result, proposal: InstanceRecord, policy: I.Policy): Consequence[N.Stage] = for {
     _ <- M.admitC(input, result, policy)
     _ <- if (result.decision == "repaired") Consequence.unit else N.invalid("decision-needed cannot materialize repair")
@@ -41,7 +45,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairMaterialization {
             _ <- if (observed.status == "ready") Consequence.unit
               else N.invalid("repair expected texts changed before the first application intent")
             intent <- store.saveC(N.candidateKey(namespace, "materialization-intent"), "native-repair-materialization-prepared",
-              proposal, review.validated.payload.copy(stage = "MaterializingRepair", validation = None))
+              proposal, review.validated.payload.copy(stage = "MaterializingRepair", validation = None, assessment = None, repairContext = review.reviewContext.orElse(review.validated.payload.repairContext)))
             _ <- store.acknowledgeC("repair-materialization-prepared")
             _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, review.validated)
             applied <- P.applyC(store.core, policy, request)
@@ -81,7 +85,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairMaterialization {
         tree <- G.indexTreeC(store.core)
         saved <- store.saveC(N.candidateKey(namespace, "pending-merge"), "native-repair-candidate-observed", staged.record,
           review.validated.payload.copy(stage = "PendingMergePrepared", indexTree = Some(tree), after = Some(after.observed),
-            validation = None))
+            validation = None, assessment = None, repairContext = review.reviewContext.orElse(review.validated.payload.repairContext)))
         _ <- store.acknowledgeC("repair-candidate-observed")
       } yield saved
     }

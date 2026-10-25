@@ -1,7 +1,41 @@
 # GoalPhase selected validation recovery
 
+The distinct [validation repair adoption](goal-phase-validation-repair-adoption.md)
+contract handles genuine output-limited incomplete results and narrowly qualified
+historical unresolved whole-Phase Test intents. Existing recovery choices remain.
+Caller termination is neither a failed native Test nor a confirmed timeout.
+Explicit independent association/unknown-effects adoption appends one corrective
+Step through the new contract, without amending or rerunning the old check.
+
 Date: October 22, 2026. Implementation contracts: VR-SM-01, SBT-EXECUTION-RECOVERY-001,
-P64-FORMAL-PHASE-FAILURE-01 (explicitly authorized limited public continuation).
+P64-FORMAL-PHASE-FAILURE-01 and P65-TERMINATED-TIMEOUT-DEADLINE-RECOVERY
+(explicitly authorized limited public continuation).
+
+## Dependency subject (October 24, 2026; source extension)
+
+Under [dependency validation](goal-phase-dependency-validation.md), DV-07, the
+existing selected-check recovery target optionally includes the fixed binding
+reference, dependency repository/workspace, base and candidate. The primary
+Session/Plan/base/candidate/source/frontier/check/attempt/intent fields retain
+their meaning. The genuine independent Human evidence binding includes this
+complete subject. Another dependency, workspace or candidate is another target;
+an old answer does not authorize it. Null or incomplete subjects refuse. Legacy
+absence remains absence and asserts no dependency result.
+
+Rejection, terminal NotStarted, actual failure and uncertain outcome retain their
+existing distinct histories. Only existing explicit new-attempt direction can
+authorize a new attempt for an unknown result. Recovery adds no new process
+executor, success receipt or counter reset. Current grants and dependency
+freshness are checked by the ordinary Advance owner. The executable source cases
+in `GoalPhaseValidationRecoverySpec` and `GoalPhaseNativeDependencyValidationSpec`
+exercise subject preservation and unknown-prefix non-replay; they are
+specification-owned inputs, not genuine production Human consent.
+
+An interrupted dependency candidate/staging capture is conservatively retained
+and refused without replay. The existing primary candidate recovery descriptors
+do not yet describe the new dependency stage prefix. Qualifying a public recovery
+route for that prefix requires separately scoped work in its existing owner;
+this extension must not pretend that the old primary-only target authorizes it.
 
 GoalPhase retains the original selected check intent before invoking CNCF's owning
 UnitOfWork. A missing result means its old outcome is unknown. A host configuration
@@ -118,14 +152,17 @@ The normal generated `GoalPhaseService.describeGoalPhaseValidationRecovery`
 Operation takes `sessionId`. It reads actual native history without mutation,
 execution, evidence provisioning or authority acquisition. Only the actual paused
 Validation or PhaseValidation with a saved unresolved selected attempt qualifies
-for the existing unknown path. R8 separately admits a known failed whole-Phase Decision.
+for the existing unknown path. R8 separately admits a known failed whole-Phase
+Decision; R10 admits a confirmed terminated timeout with incomplete SBT facts.
 It restores the original Validation source through `payload.sourceRevision` and
 the admitted native history prefix, rather than treating the latest intent as a
 new Validation source.
 
 The generated description returns `outcome: "decision-required"`,
 `recoveryOperation: "recoverGoalPhaseValidation"`, the actual component instance,
-choices exactly `["AuthorizeNewAttempt", "Defer"]`, and a complete typed target:
+choices exactly `["AuthorizeNewAttempt", "Defer"]` for unknown and known-failed
+targets, or `["AuthorizeNewAttempt", "LimitedRepair", "Defer"]` for a confirmed
+terminated timeout target, and a complete typed target:
 
 ```text
 sessionId, planIdentity, planRevision, base:{head,tree}, candidate:{head,tree},
@@ -137,7 +174,7 @@ intentRevision
 `sessionId`, that exact `target` record, `choice`, `rationale` and
 `reference:{identity,revision}`. It routes the current owning call to the selected
 canonical Session and verifies the actual participant. Missing providers and
-missing/crossed/stale evidence refuse. Both choices require independent host Human
+missing/crossed/stale evidence refuse. Every choice requires independent host Human
 evidence. The target is compared as complete typed data; it is not an opaque
 approval token or a client-selected stage.
 
@@ -159,7 +196,9 @@ The strict selected binding is:
 ```
 
 The evidence purpose is `goal-phase-validation-recovery`. Selection consumes only
-declared typed fields and validates the declared choice. The owning reader verifies
+declared typed fields and validates the choice against the actual decoded target.
+`LimitedRepair` refuses for every non-timeout target. Timeout bindings remain
+strictly canonical, including all answer fields. The owning reader verifies
 the issuer, purpose, complete binding, nonfuture event time, actual participant
 and actual reference. Unknown annotations carry no authority.
 
@@ -173,12 +212,16 @@ is a generated `GoalPhaseValidationRecoveryAnswer` containing `choice` and
 through the existing absolute local file URI inputs. The execution worker must
 equal the participant. Preparation returns existing structured StartupImport
 rows; it performs no import, storage provisioning, recovery, Advance or check.
+Preparation decodes the supplied target and requires the complete ordered
+description choices to equal `choicesFor(target)`. A supplied description cannot
+broaden legacy choices or omit, reorder or add timeout choices.
 
 The trusted host remains responsible for obtaining genuine Human direction and
 independently provisioning its evidence. An AI-created answer, login identity,
 supplied description, supplied files or successful preparation is not Human
 consent. The API accepts HumanNewAttempt direction for the exact described
-unknown target or the distinct known failed whole-Phase target in R8. Historical
+unknown target, the distinct known failed whole-Phase target in R8, or the
+confirmed terminated timeout target in R10. Historical
 provider-observation mode is unsupported; stderr prose, absent results and config
 edits cannot be imported as `NotExecuted` or any other execution fact.
 
@@ -201,6 +244,17 @@ already accepted implementation. The owning chat follows this exact sequence:
    with its actual terminated nonzero exit, and ask whether to authorize one
    fresh trial of the same single check on the exact retained candidate or Defer.
    Never describe that known failure as an unknown outcome.
+   For a `terminatedTimeoutPhase` target, say the actual check terminated with a
+   confirmed timeout and incomplete SBT facts. Present exactly three options:
+   `AuthorizeNewAttempt` (deadline extension), `LimitedRepair`, and `Defer`.
+   Deadline extension authorizes one NEW attempt of the same check on the same
+   candidate; the normal host deadline must actually be adjusted before separate
+   Advance. Authorization does not change the configured value. Limited repair
+   authorizes known-error repair and bounded investigation/preparation, including
+   evidence-based investigation/debugging of a suspected hang as specified in
+   R10. Defer permits deeper investigation without retry. Preserve the old
+   incomplete receipt/output and all Plan/base/accepted-prefix/counter facts;
+   no corrective Step is required merely to extend the deadline.
 3. Have that trusted host prepare and independently provision evidence for the
    exact component instance, target, participant, choice, rationale and actual
    answer reference. Passive `prepareEvidence` alone is not provisioning or
@@ -211,7 +265,14 @@ already accepted implementation. The owning chat follows this exact sequence:
    `new-attempt-authorized` after appending one record. This call executes no
    check, invokes no Advance and performs no semantic Submit. `Defer` returns
    accepted and `deferred` without inventing an outcome or granting a retry.
-5. After accepted authorization, call normal `GoalPhaseService.advanceGoalPhase`
+   Timeout-only `LimitedRepair` returns accepted and
+   `limited-repair-preparation-required` without a history write or retry
+   Direction. Diagnose/plan, then call `describeGoalPhaseFailedPhaseRepair` with
+   a captured concrete proposal and independently authorize
+   `adoptGoalPhaseFailedPhaseRepair`. This selection does not adopt an unknown
+   future Plan or establish check success. Only the adopted Plan issues normal
+   corrective work on separate Advance.
+5. After accepted `AuthorizeNewAttempt`, call normal `GoalPhaseService.advanceGoalPhase`
    once with the same `sessionId`. That call owns the fresh selected attempt
    under current host permissions. A passing Compile/check result still leaves
    actual independent review and ordinary acceptance/closure unfinished. A new
@@ -250,6 +311,17 @@ Step failures, PhaseReview decisions, document conflicts, pending repair, closur
 changed Plan/candidate/check policy, multiple checks, missing results, timeout,
 cancellation, indeterminate/unexecuted/contradictory receipts and generation overflow
 refuse. A successful sibling check is never rerun to recover a multi-check policy.
+
+The R8 `knownFailedPhase` representation continues to exclude timeout and
+incomplete observations. R10 provides a distinct same-candidate recovery target
+for confirmed `TimedOut`/typed `incomplete`. A diagnosed product defect can instead
+use the optional corrective-Plan route specified in
+[failed whole-Phase repair adoption R8](goal-phase-failed-phase-repair-adoption.md).
+It uses the existing describe/adopt failed Phase repair Operations, an explicit
+`sm-workflow.goal-phase-failed-phase-repair-adoption.v2` source with
+`kind: "terminated-timeout"`, a newly bound actual Human direction, and exactly
+one dependent corrective Step followed by ordinary validation on its candidate.
+It neither constructs KnownFailedPhase nor retries the unchanged candidate.
 
 The legacy target encoding and meaning remain unchanged. A new optional
 `knownFailedPhase` object is omitted when absent; absence decodes as legacy.
@@ -307,6 +379,142 @@ is introduced.
 This is a new validation round on the retained candidate, with only the existing
 reconciler's supported prefixes. It provides no broader restart, repair, reset,
 historical outcome settlement or successful-check replay authority.
+
+### R10 — Confirmed terminated timeout and three recovery choices
+
+The existing public describe/prepare/recover Operations admit an optional
+`terminatedTimeoutPhase` target extension. Absence is omitted on the wire and
+preserves every legacy constructor and unknown, dependency and known-failed
+meaning. A present extension is the complete closed
+`GoalPhaseInterruptedValidationRepair.Source`, with `kind: "terminated-timeout"`,
+actual typed `termination: "timed-out"` and `outcome: "incomplete"`. It binds the
+actual workflow and participant, Session/Plan/base/candidate, original validation
+source and current Decision revisions, unique check and terminal attempt, and
+actual intent/result/final validation receipt identities and revisions. Every
+shared outer target field must equal that source. It cannot coexist with
+`knownFailedPhase` or `dependency`. Null, missing, unknown, malformed, noninteger,
+crossed or noncanonical fields refuse. Complete 40- or 64-character lowercase
+hexadecimal Git identities remain supported.
+
+Eligibility uses the same actual terminal-source proof as corrective adoption:
+an unsuspended current final PhaseValidation Decision, all Steps accepted, one
+whole-Phase check, unchanged actual selection/candidate/metadata, complete
+contiguous ordinary attempt history and adjacent terminal result/final receipt.
+Actual document-backed state is checked. Unknown, not-started, cancelled,
+unconfirmed termination, other incomplete receipts, multi-check, Step, pending
+repair, stale or crossed sources cannot supply this timeout authority. Ordinary
+`repairable` still requires a genuine exited nonzero Failed result. Diagnostics
+are retained as output; they do not turn a timeout into Failed or success.
+
+The complete extension participates in the existing
+`goal-phase-validation-recovery` purpose, exact participant/reference/rationale
+binding and independent Human evidence. Unknown and known-failed targets retain
+exactly `AuthorizeNewAttempt` and `Defer`. Only the confirmed timeout target
+offers exactly `AuthorizeNewAttempt`, `LimitedRepair`, `Defer`, in that order.
+Binding, selection, public operation input and passive preparation validate
+choices against the actual decoded target; preparation requires the description's
+complete choices to match that target exactly. Description and passive preparation
+grant no effect; Defer writes nothing and permits deeper investigation without
+retry. `AuthorizeNewAttempt`, labeled deadline extension for the Human, retains its
+existing wire meaning and appends one pure Unit CAS
+Direction, with type `GoalPhaseTerminatedTimeoutValidationRecoveryDirection`,
+schema `sm-workflow.goal-phase-terminated-timeout-validation-recovery.v1` and
+namespace
+`<session>:ordered-terminated-timeout-validation-recovery:<DecisionRevision>@1`.
+It never uses the known-failed or unresolved recovery direction namespace.
+Duplicate, stale, crossed or earlier-choice evidence refuses.
+
+After exact current-target reconstruction and independent Human admission,
+`LimitedRepair` returns the existing result DTO with `accepted: true` and
+`outcome: "limited-repair-preparation-required"`. Its scope is to fix known errors;
+identify the test actually executing at termination from actual start/end
+observations, retained output and, when needed, diagnostic stack/process evidence;
+and investigate/debug a suspected hang and fix established causes. Timeout alone
+is not proof of a hang. The last printed test may already have completed; report
+test identity unknown or evidence missing honestly. Investigation may establish
+normal slow execution or an external wait rather than deadlock. CNCF retains
+ownership of execution and result interpretation. No app regex parser or fabricated
+current-test identity supplies evidence.
+
+LimitedRepair authorizes bounded investigation and preparation only. Its response
+requests diagnosis/planning and directs the caller to existing
+`describeGoalPhaseFailedPhaseRepair` with a captured concrete proposal, followed
+by independently authorized `adoptGoalPhaseFailedPhaseRepair`. Only an adopted
+Plan issues the normal corrective Step through separate ordinary Advance.
+Selection neither adopts an unknown future Plan nor grants retry or check success.
+It performs no Store/history/Plan/counter/Git/SBT mutation and appends no retry
+Direction or Decision-to-Decision event. The original Decision stays current,
+preserving existing interrupted-target proof and all original receipts/output.
+There is no duplicate repair executor or new result field.
+
+The existing `PhaseValidationRetryAdmitted` event and
+`phase-validation-retry-admitted` edge select PhaseValidation and increase only
+work generation by one. Plan identity/revision, base, candidate, accepted Steps,
+repository receipt, repair counters and repair limit remain unchanged. Retained
+traversal re-proves the actual historical source, exact participant/direction and
+adjacent CAS successor. It clears the current validation/decision projections
+for a fresh namespace while retaining the original result, captures and history.
+The recovery call performs no File/Git/SBT, Start, Submit or Advance effect and
+issues no corrective Step. Generic Decision resumption remains unchanged.
+
+A SEPARATE ordinary Advance runs the same fixed check on the same candidate
+under current normal CNCF host configuration and permissions. The existing
+`.textus/config.json` key `textus.subsystem.process-execution.plan` contains a
+JSON STRING. Its decoded `sbtPrograms` selects the exact program by
+target/identity/operation. A host may extend that program's
+`limits.executionTimeoutMillis`, a positive finite Long in milliseconds, while
+preserving every other program and field and the complete finite execution
+limits. CNCF admission and its driver own interpretation and deadline enforcement;
+sm-workflow adds no production config parser, new property, timer or process
+fallback. For deadline extension, the normal host deadline must actually be
+adjusted before separate Advance; authorization does not change its configured
+value. Config editing alone grants no retry or historical outcome. The new
+attempt can genuinely succeed, fail or time out, and retains its own actual
+receipt. Deadline-only recovery requires no fabricated source change, corrective
+Step, new commit or repair-count consumption. A separately diagnosed defect may
+still use the independently authorized corrective route.
+
+E15 (`GoalPhaseTerminatedTimeoutValidationRecoverySpec`) supplies typed
+specification-owned source and target data for strict 40/64 Git identity, complete
+extension/direction and passive-preparation bindings, three timeout choices and
+honest suspected-hang investigation scope. Missing, null, unknown,
+crossed, ambiguous, noninteger, participant/reference and altered bindings refuse;
+legacy unknown and known-failed wire meanings and two-choice preparation remain;
+LimitedRepair and broadened supplied descriptions refuse for those targets.
+These inputs claim no
+production termination attestation.
+
+The installed E15 in `NativeGoalKnownFailedPhaseValidationCliSpec`, named with
+`timeout recovery choices` and `deadline extension`, uses a NEW root marked `deadline-only-timeout-fixture`.
+Before initialization its outside-repository phase-ready input makes the real
+ProductCheck succeed. Ordinary implementation, real Compile, independent fixture
+review and actual local Step commit remain. The marker-scoped build wraps the
+actual Test result, prints and flushes a completion marker, waits finitely for
+150000 milliseconds, then returns that same result. Initial Test limit is
+120000 milliseconds; Compile retains 1200000 milliseconds. The first installed
+Advance must retain an actual TimedOut/incomplete receipt during the wait.
+The description exposes all three choices. Actual passive preparation/import and
+independent LimitedRepair admission return `limited-repair-preparation-required`
+with diagnosis/proposal/adoption guidance and no native state, source, Git or check
+execution change. The completed-Test marker demonstrates why the last output
+cannot identify a still-running test; the fixture claims no hang diagnosis.
+No-direction and Defer execute nothing; missing, crossed and new-null targets
+refuse. Existing normal passive preparation supplies independently provisioned
+fixture-owned Human evidence for the exact new target.
+
+Only the selected Test program's configured deadline changes, from 120000 to
+300000 milliseconds. The fixture asserts the existing JSON-string plan preserves
+every other program and field, while source/build/phase-ready bytes, Git tip/tree/
+reflog, Plan/revision/base/accepted prefix and counters remain identical. One
+public recovery Direction executes no check. A separate installed Advance runs
+the same real Test and finite wait to ReviewPhase, without ImplementStep,
+corrective source changes or a new commit. Repeated Advance is stable and exactly
+two Phase Tests run. The original incomplete receipt/history remain unchanged;
+the new receipt uses a fresh validation namespace. Existing installed manifest
+and runtime class/resource origins are captured, together with
+`deadline-only-timeout-reopened-proof.json` under the isolated fixture root.
+These are qualification assertions, not a claim that the opt-in case has run or
+passed, production Human provenance, or permission to operate a real Session.
 
 E10 (`GoalPhaseOrderedProgressionSpec`) covers pure eligibility, exact retained
 facts, counters, new generation and crossed/repeated-event refusal. E11

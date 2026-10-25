@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Captured file data plus real producer fixture selection; no File/runtime proof.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object GoalPhaseSliceValidationPlanFixture {
@@ -42,6 +42,8 @@ private[admission] object GoalPhaseSliceValidationPlanFixture {
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseSliceValidationPlanSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import N.given
   import GoalPhaseSliceValidationPlanFixture.*

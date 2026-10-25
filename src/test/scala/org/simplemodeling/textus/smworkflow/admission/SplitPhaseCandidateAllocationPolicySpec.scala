@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
 private[admission] object SplitPhaseCandidateAllocationFixture {
   val values = Map[String, ConfigurationValue](
@@ -23,6 +23,8 @@ private[admission] object SplitPhaseCandidateAllocationFixture {
   val policy = take(H.decodeC(host(values)))
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseCandidateAllocationPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseCandidateAllocationFixture.*
   private val _result = S.ResultReference("canonical-result", "1")

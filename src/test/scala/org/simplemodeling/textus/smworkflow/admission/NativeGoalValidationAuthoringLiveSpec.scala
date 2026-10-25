@@ -11,7 +11,7 @@ import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workspace.WorkspaceId
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -21,10 +21,11 @@ import GoalPhaseNativeMetadata as N
 /** Finite transport around actual external test and annotation authoring.
   * Fixture inputs and observations establish no independent review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
   import N.given
@@ -331,7 +332,7 @@ final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Match
             commit.parent shouldBe initial.work.get.originalBase.head
             commit.tree shouldBe _saved(scenario, "review").work.get.candidate.get.tree
             commit.tree shouldBe waiting.validation.get.candidate.tree
-            work.completed.head.review.trim should not be empty
+            work.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
             val scope = json(waiting.authorityContext.get.scope)
             scope.hcursor.downField("parent").focus shouldBe Some(json(work.originalBase.toRecord()))
             scope.hcursor.get[String]("plan").toOption shouldBe Some(work.selectedPlan.identity)

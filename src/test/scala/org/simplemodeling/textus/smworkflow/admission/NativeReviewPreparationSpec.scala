@@ -28,15 +28,17 @@ import NativePreparationFixture.expectedRecordJson
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _now = Instant.parse("2026-10-07T00:00:00Z")
   private val _reference = V.WorkflowArtifactReference("specification-review", "1")
   private val _execution = V.WorkflowExecutionEvidence(Vector(_reference), Some("specification-reviewer"), None, None)
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty)
   private val _receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "diagnostic output", "")
   private val _goal_input = NativeHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = "ReviewStep",
@@ -161,6 +163,44 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
           Preparation.goalC(context, _goal_result.copy(reviewObservations = invalid),
             _reference, _execution, _declared.issuer, _now).isSuccess shouldBe false
         }
+        Consequence.unit
+      }
+    }
+  }
+
+  "Issued Step purpose repair attestation" should {
+    "unbox the generated public wrapper into the exact saved source array and bind its complete original-purpose target" in {
+      Given("a newly issued actual Step contract and one independently supplied purpose defect inside its owned path")
+      val input = _goal_input.copy(purposeRepair = GoalPhasePurposeRepair.capture("ReviewStep", _goal_input.stepIdentity, _goal_input.selectedPlan))
+      val source = GoalPhasePurposeRepair.StepPurpose(1, input.stepIdentity.get, "Missing original-purpose case", Vector("one.scala"))
+      val result = GoalPhaseNativeWork.Result("repair", "Repair this original Step defect", Vector("Missing assigned case"),
+        repairFindingSources = Some(Vector(source)))
+      val publicresult = _goal_result.copy(outcome = result.outcome, summary = result.summary, findings = result.findings,
+        repairFindingSources = GoalPhasePurposeRepair.publicSources(result.repairFindingSources))
+      _with_core { call =>
+        val work = _goal_work(input)
+        val displayed = take(NativeWorkflowOperationOutput.goalWorkRequestC(work, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(_wire(displayed.toRecord())))
+        val supplied = take(V.GoalPhaseWorkResult.createC(_wire(publicresult.toRecord())))
+        val context = decoded.work.get.review.get.reviewContext.get
+        val submitted = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
+        When("the generated public readback and passive preparation meet the runtime binding of the actual result")
+        val prepared = _evidence(take(Preparation.goalC(context, supplied, _reference, _execution, _declared.issuer, _now)))
+        val actual = take(ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(call.core, input, submitted))
+        Then("public wrapper and native array carry the same sources and every source field is independently attested")
+        take(GoalPhasePurposeRepair.internalSourcesC(supplied.repairFindingSources)) shouldBe result.repairFindingSources
+        _verdict(prepared).hcursor.get[Json]("repairFindingSources") shouldBe Right(result.repairFindingSources.get.asJson)
+        decoded.work.get.purposeRepair should not be empty
+        _observe(prepared, Purpose.GoalReview, actual).isSuccess shouldBe true
+        val changed = result.copy(repairFindingSources = Some(Vector(source.copy(rationale = "A different actual purpose rationale"))))
+        val changedbinding = take(ThreeWorkflowExternalEvidencePorts.goalReviewBindingC(call.core, input,
+          submitted.copy(result = submitted.result.copy(value = changed))))
+        _observe(prepared, Purpose.GoalReview, changedbinding).isSuccess shouldBe false
+        val altered = actual.hcursor.downField("attestation").downField("target")
+          .downField("purposeRepair").downField("purpose").withFocus(_ => "A changed original purpose".asJson).top.get
+        _observe(prepared, Purpose.GoalReview, altered).isSuccess shouldBe false
+        Preparation.goalC(context, supplied.copy(repairFindingSources = Some(V.GoalPhaseRepairFindingSources(Vector.empty))),
+          _reference, _execution, _declared.issuer, _now).isSuccess shouldBe false
         Consequence.unit
       }
     }
@@ -410,7 +450,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
         val result = GoalPhaseNativeWork.Result("accept", "Explicit independent coverage", Vector.empty, issueReport = Some(report))
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, None, None,
           GoalPhaseFixIssues.publicReport(result.issueReport), None, GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)))
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("normal formatted output and generated readers carry actual selected issues into public passive preparation")
@@ -488,7 +528,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
         val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, boundary.publicReport(result.acceptance),
           GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
           GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)))
+          result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
         val work = _goal_work(input)
         val native = _submitted(work, result, GoalPhaseNativeWork.resultCodec.typeIdentity)
         When("the normal command formatter and generated readers carry the issued view and result into passive preparation")
@@ -612,7 +652,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
       _with_core { call =>
         val goal = take(NativeReviewContext.goalC(call.core, _goal_work())).get
         val repository = take(NativeReviewContext.repositoryC(call.core, _repository_work))
-        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None, None)
+        val repair = V.GoalPhaseWorkResult("repair", "Fix the assigned case", Vector("Missing assigned case"), None, None, None, None, None, None, None, None, dependencyValidation = None)
         val finding = V.RepositorySyncNativeMergeReviewFinding("missing-case", Vector("one.scala"), "Repair only this native path")
         When("public preparation encodes each selected repair result through the existing binding")
         val goalrepair = _evidence(take(Preparation.goalC(goal, repair, _reference, _execution, _declared.issuer, _now)))

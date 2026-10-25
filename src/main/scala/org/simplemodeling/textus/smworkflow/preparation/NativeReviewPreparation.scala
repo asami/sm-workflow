@@ -4,7 +4,7 @@ import io.circe.Json
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeReviewCompletion, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhaseRepairProgress, NativeExternalEvidence,
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeReviewCompletion, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhasePurposeRepair, GoalPhaseRepairProgress, NativeExternalEvidence,
   RepositorySyncNativeMergeReview, ThreeWorkflowExternalEvidencePorts, WorkflowSbtValidation}
 import io.circe.syntax.*
 import org.simplemodeling.textus.smworkflow.value as V
@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
@@ -23,10 +23,10 @@ object NativeReviewPreparation {
     "instanceIdentity" -> "instance_identity", "protocolVersion" -> "protocol_version")
   private val _goal_names = Vector("sourceRevision" -> "source_revision", "workKind" -> "work_kind",
     "checksReceipt" -> "checks_receipt", "changedPaths" -> "changed_paths",
-    "effectiveAcceptance" -> "effective_acceptance", "validationMetadata" -> "validation_metadata")
+    "effectiveAcceptance" -> "effective_acceptance", "validationMetadata" -> "validation_metadata", "purposeRepair" -> "purpose_repair")
   private val _repository_names = Vector("validatedRevision" -> "validated_revision", "localTip" -> "local_tip",
     "remoteTip" -> "remote_tip", "indexTree" -> "index_tree", "validationMode" -> "validation_mode",
-    "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks")
+    "changedPaths" -> "changed_paths", "selectedChecks" -> "selected_checks", "judgmentMode" -> "judgment_mode")
   private val _check_names = Vector("exitCode" -> "exit_code")
   private val _selection_names = Vector("testClasses" -> "test_classes", "completedSuites" -> "completed_suites",
     "testsRun" -> "tests_run")
@@ -48,9 +48,10 @@ object NativeReviewPreparation {
         observations <- GoalPhaseFindingRecording.internalObservationsC(result.reviewObservations)
         dependency <- GoalPhaseDependencyScope.fromPublicProposalC(result.dependencyProposal)
         conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(result.completionConditions)
+        sources <- GoalPhasePurposeRepair.internalSourcesC(result.repairFindingSources)
         prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.GoalReview, GoalPhaseNativeWork.resultCodec.typeIdentity,
           resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowExternalEvidencePorts.goalReviewVerdict(
-            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report, assessment, issues, revision, observations, dependency, conditions)))
+            GoalPhaseNativeWork.Result(result.outcome, result.summary, result.findings, report, assessment, issues, revision, observations, dependency, conditions, sources)))
       } yield prepared
     }
 
@@ -111,6 +112,13 @@ object NativeReviewPreparation {
   private def _target_c(value: Json, purpose: NativeExternalEvidence.Purpose): Consequence[Json] =
     if (purpose == NativeExternalEvidence.Purpose.GoalReview) for {
       selected <- _project_c(value, _goal_names)
+      contract <- selected.hcursor.downField("purposeRepair").focus match {
+        case None => Consequence.success(Option.empty[Json])
+        case Some(value) => for {
+          normalized <- GoalPhaseNativeMetadata.normalizePublicJson(value).fold(Consequence.stateConflict(_), Consequence.success)
+          parsed <- normalized.as[GoalPhasePurposeRepair.Contract].fold(error => Consequence.stateConflict(error.message), Consequence.success)
+        } yield Some(parsed.asJson)
+      }
       metadata <- selected.hcursor.downField("validationMetadata").focus match {
         case None => Consequence.success(Option.empty[Json])
         case Some(value) => GoalPhaseNativeMetadata.normalizeBatches(value).fold(
@@ -141,8 +149,9 @@ object NativeReviewPreparation {
         case Some(value) => _issues_c(value).map(Some(_))
       }
     } yield selected.mapObject { fields =>
-      val canonical = metadata.fold(fields.remove("test_checks"))(
-        value => fields.remove("test_checks").add("validationMetadata", value))
+      val purposefields = contract.fold(fields)(value => fields.add("purposeRepair", value))
+      val canonical = metadata.fold(purposefields.remove("test_checks"))(
+        value => purposefields.remove("test_checks").add("validationMetadata", value))
       val checks = declaration.orElse(wire).fold(canonical)(checks => canonical.add("testChecks", checks))
       val withissues = issues.fold(checks)(value => checks.add("issues", value))
       progressdeclaration.orElse(progresswire).fold(withissues.remove("repair_progress"))(

@@ -5,7 +5,7 @@ import io.circe.parser.parse
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path, StandardOpenOption}
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -18,10 +18,11 @@ import GoalPhaseAcceptanceBoundary as B
   * review, actual AI authorship, Step acceptance, source-policy-review evidence
   * or whole primary acceptance claim.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.json
 
@@ -99,7 +100,7 @@ final class NativeGoalAcceptanceBoundaryCliSpec extends AnyWordSpec with Matcher
   private def _result(outcome: String, report: V.GoalPhaseAcceptanceReport,
     findings: Vector[String] = Vector.empty): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED acceptance boundary response", findings,
-      Some(report), None, None, None, None, None, None)
+      Some(report), None, None, None, None, None, None, None, dependencyValidation = None)
   private def _submit(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,
     result: V.GoalPhaseWorkResult, reference: V.WorkflowArtifactReference,
     execution: Option[V.WorkflowExecutionEvidence] = None): F.Result =

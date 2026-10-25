@@ -21,7 +21,7 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
   * completion. File safety belongs to the selected document writer. Intermediate
   * recovery and identical replay results are not part of this component contract.
   * @since   Oct.  6, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 25, 2026
   */
 private[smworkflow] object SplitPhaseManagedSelectedApply {
   val appliedProgression = "entry.Applied"
@@ -34,6 +34,29 @@ private[smworkflow] object SplitPhaseManagedSelectedApply {
         value.asString.flatMap(status => E.Status.values.find(_.toString == status))
           .toRight("Selected document effect status is absent")
     }
+
+  /** Observe only the actual applied effect receipt and terminal successor.
+    * An unfinished/unknown application is not permission to replay File effects. */
+  def observeCompletedC(command: SplitPhaseAdvanceTarget, source: F.Observed,
+    declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,
+    core: ActionCall.Core): Consequence[V.SplitPhaseAdvanceResult] = for {
+    _ <- if (source.invocationMode == "APPLY" && source.current.lifecycle == Lifecycle.Completed)
+      Consequence.unit else uncertain("retained application is unfinished; requires its existing recovery route, no replay")
+    storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+      SmWorkflowComponent.componentId, declaration.configuration, Vector(catalog.definition), declaration.instances, declaration.continuations)
+    effects <- storage.bindMechanicalC(K.advanceOperation, _effect_status_codec)
+    applied <- effects.loadRetainedC(WorkflowMechanicalTransition.Reference(
+      command.instanceIdentity + ":selected-application-effect", "1"))(using core.executionContext)
+      .flatMap(_.map(Consequence.success).getOrElse(uncertain("retained applied effect receipt is absent")))
+    _ <- if (applied.receipt.payload.value == E.Status.Applied &&
+        applied.receipt.next.currentProgression.exists(_.value == appliedProgression) &&
+        applied.receipt.next.correlation == source.publicationPostimage.correlation &&
+        applied.receipt.next.identity == source.publicationPostimage.identity)
+      Consequence.unit else invalid("retained effect is not the selected applied result")
+    _ <- F.requireCompletedC(applied.receipt.next, source.current, terminalPrefix + command.instanceIdentity)
+    documents <- SplitPhaseSelectedDocuments.projectC(source.snapshot)
+    payload <- NativeWorkflowOperationOutput.splitSelectedC(source.snapshot, documents, "APPLY", Some("applied"))
+  } yield NativeWorkflowOperationOutput.splitSelected(source.current.identity.value, payload)
 
   def advanceObservedC(command: SplitPhaseAdvanceTarget, original: F.Observed,
     declaration: SplitPhaseManagedStartAssembly.Declaration, catalog: SplitPhaseRuntimeCatalog.Catalog,

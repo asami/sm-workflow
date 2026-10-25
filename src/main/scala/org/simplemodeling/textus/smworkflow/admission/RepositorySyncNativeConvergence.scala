@@ -14,11 +14,11 @@ import RepositorySyncNativeProgressStore as N
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 
-/** Managed effects after actual paired review acceptance. Native intent is
+/** Managed effects after actual formal merge admission or paired review acceptance. Native intent is
   * recorded as normal progression. Intermediate recovery and replay guarantees
   * are not supplied here. Push remains non-forcing; actual convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
@@ -39,11 +39,22 @@ private[smworkflow] object RepositorySyncNativeConvergence {
       Option(value).toRight("Native convergence result is missing").flatMap(_.as[Result].left.map(_.message))
   }
 
-  def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+  def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort,
+    validation: Option[RepositorySyncNativeMergeValidation.Policy] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     _ <- if (authority != null && (accepted.payload.stage == "ReviewAccepted" ||
+        accepted.payload.stage == "MergeAdmitted" ||
         (accepted.payload.stage == "IntegrationValidated" && accepted.payload.mergeHead.isEmpty &&
           accepted.payload.after.nonEmpty))) Consequence.unit
       else N.invalid("convergence requires actual paired merge acceptance or clean integration validation and host authority")
+    _ <- if (accepted.payload.stage != "MergeAdmitted") Consequence.unit else for {
+      policy <- validation.map(Consequence.success).getOrElse(N.invalid("merge admission requires selected validation bindings"))
+      candidate <- store.currentMergeCandidateC(accepted.record)
+      checked <- store.loadC(N.candidateKey(candidate.namespace, "merge-validated")).flatMap(
+        _.map(Consequence.success).getOrElse(N.invalid("merge admission has no saved native validation")))
+      _ <- RepositorySyncNativeMergeValidation.completedC(checked, candidate.pending, policy, merge = true)
+      saved <- RepositorySyncMergeAssessment.admitC(store, checked, policy, candidate.namespace)
+      _ <- if (saved == accepted) Consequence.unit else N.invalid("convergence crosses its actual saved merge admission")
+    } yield ()
     committed <- if (accepted.payload.stage == "IntegrationValidated")
       Consequence.success(accepted.copy(payload = accepted.payload.copy(finalTip = Some(accepted.payload.after.get.head))))
       else commitC(store, accepted, authority)

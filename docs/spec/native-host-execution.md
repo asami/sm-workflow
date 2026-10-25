@@ -1,5 +1,23 @@
 # Native caller execution handoff
 
+## Authorization in delegated delivery — 2026-10-25
+
+Delegate Component, purpose, acceptance conditions and permitted operations with
+the retained authorization reference. Planned file lists are implementation
+inventories, not automatic Human approval boundaries. Necessary extra files and
+their rationale go to sm-workflow; the runtime admits same-boundary updates and
+issues Human requests only for real boundary changes or unresolved authority.
+The skill does not independently require reapproval and does not bypass a formal
+runtime Human request. See [PA-01..07](goal-phase-dependency-scope.md#purpose-based-authorization--adopted-2026-10-25)
+for current-versus-target behavior and public adoption.
+
+Keep exact changed paths for ownership, validation and commit selection, and keep
+explicit user restrictions and separate effect grants. Share one usable delivery
+outcome rather than per-file permission messages. Preserve existing Sessions,
+accepted work, history, counters and results. Already approved restoration proceeds
+under its existing supported route while the new admission contract is delivered.
+
+
 Terminology revision 2026-10-23: [runtime/caller terminology](runtime-caller-terminology.md)
 is authoritative. Host denotes only a network destination. In this document,
 caller execution/dispatch belongs to CallerIntegration, command execution to
@@ -22,6 +40,54 @@ actual generated `WorkflowIssuedWorkContext` from a Request to CNCF's finite
 driver, invoke tools, dispatch an application command or advance a Workflow.
 Actual installed host/tool/provider availability, all three skill families and
 genuine separate chat/session observations remain Phase 6 acceptance obligations.
+
+## Outcome-based delegation
+
+Assign a coherent authorized outcome to one delivery owner: diagnose, implement
+within scope, coordinate required validation/review, and return the usable result
+with actual evidence and remaining limitations. Provide the purpose, acceptance
+conditions, owned scope, existing authority and retained work references once.
+Routine technical choices within that boundary belong to the delivery owner;
+do not require a consumer round trip to freeze each edit, approve a test fixture
+correction or relay every reviewer question. New authority or a material unresolved
+requirement/contract decision retains its actual escalation route.
+
+This delegation boundary does not expand permissions, collapse generated native
+work types, or let semantic workers execute Phase SBT. The owning workflow still
+issues work, runs normal validation and admits results. For the already-authorized
+broken-runtime restoration exception, the producer delivery owner coordinates the
+existing standalone execution facilities. Missing future RRC support does not
+suspend that existing applicable route. Keep RRC implementation in parallel;
+never represent standalone evidence as proof that RRC is installed.
+
+Execution/result collection has one owner. That owner collects the running
+invocation and returns the actual terminal result; consumer chats must not
+independently poll its logs or request progress-only AI turns. Prefer existing
+completion notifications; when a wait is necessary, use the existing cursor and
+bounded wait without repeated unchanged-state polling. User-facing updates use
+already-available observations, not extra execution, probes or status agents.
+Cross-chat messages carry a completed/usable result, material scope/contract change,
+or a decision that the delivery owner cannot resolve. Avoid duplicate progress
+narration and redundant authority rechecks when the attributable direction is
+already established.
+
+Batch independent review at the applicable semantic/acceptance boundary. Reuse
+compile, focused validation and prior review evidence; corrections with no new
+semantic question do not acquire a new individual review gate. Dates, version
+comments and other mechanical conformance edits are handled in the existing batch.
+Review genuine public-contract questions together. A reviewer remains independent
+of implementation, but is attached to the delivery outcome, not used as a consumer
+checkpoint for every internal step. Respect actual tool visibility: if only the
+consumer can reach an existing reviewer, send one consolidated review package and
+return the consolidated findings, rather than bouncing every question through it.
+Changing reviewer alone is not a reason to repeat completed review.
+
+A handoff contains actual changed scope, outcomes, applicable result references,
+remaining failures/uncertainties and the next supported consumer action. Reuse
+existing records; do not create a separate snapshot/approval ledger for delegation.
+Preserve Sessions, work identities, accepted results, history and active/cumulative
+repair counts. An end-to-end responsibility is not permission to bypass real
+runtime decisions, unknown-effect settlement or publication authority.
 
 ## Codex Goal registration
 
@@ -170,6 +236,46 @@ V4 host configuration requires explicit migration to V3 with
 relabeling of historical accepted evidence is permitted. Historical schemas and
 decoding remain readable. See the [retirement contract](registered-sbt-host-execution.md).
 
+## Long-running invocation collection
+
+For Advance or complete taking minutes or hours, preserve the one owned execution
+and collect its actual terminal result. The runtime owns deadlines, heartbeat,
+monitoring and child settlement. The caller does not run a timer-driven tail/read
+of stderr, response-size check, status query or process scan just to establish
+that execution is still pending. Do not add a monitoring agent, scheduled check,
+caller timeout or another execution to fill a quiet interval.
+
+Prefer an existing transport completion notification or pending-call resume. When
+explicit collection is necessary, use the supported wait/resume on the original
+execution handle as needed for eventual result delivery; do not treat every yield
+as an event requiring AI narration, a log probe or another business Operation.
+A transport yield ends neither the process nor the workflow. Keep actual handle
+and output references in the existing continuation context; do not invent a new
+poll ledger. Removing redundant monitoring must not discard a live handle, strand
+its result, detach work without supported delivery, or end the owning workflow as
+complete. Resume normal processing when its actual result becomes available.
+
+Show the matched start and return, plus material changes already exposed by the
+owned invocation: a newly selected check, a failure, cancellation, required action
+or a changed execution condition. Suppress unchanged waiting, repeated heartbeat,
+empty response and elapsed-time-only updates. Runtime telemetry remains available
+in retained evidence; the chat is not a copy of each heartbeat. These display rules
+create no reporting cadence or requirement to invoke AI for liveness. Apply the
+same rule to the owner's own command and to delegated producer work.
+
+An explicit user status question or a concrete new diagnostic need may justify a
+bounded read. State the purpose and observed uncertainty. Silence/empty output
+alone establishes neither hang nor success. Lost transport follows existing
+reconciliation; no blind replay, extra Advance, restart, automatic kill or counter
+refund. Preserve Session/work identity, accepted results, all history, repair
+counts and prior success/failure/UNKNOWN evidence.
+
+Skill text does not implement event delivery. If the available transport requires
+model resumption to collect a result, use that minimum supported mechanism and
+disclose the limitation rather than claiming zero-AI waiting or abandoning the
+pending invocation. A future transport improvement must reuse the execution/result
+owner; no new skill-side monitor is introduced by this contract.
+
 ## Visible sm-workflow exchanges
 
 During `sm-goal-phase`, `sm-repository-sync` and `sm-split-phase`, the owning host narrates command exchanges in the user's
@@ -201,8 +307,9 @@ Advance in one invocation. Announce that pair before the call and report both
 actual responses in order when returned, distinguishing result acceptance from
 the next Workflow instruction. Do not insert a continuation prompt or extra AI
 turn between them, split the action, replay a call, or query status solely to
-produce commentary. While a call is running, keep normal progress updates using
-available output without claiming an unobserved internal state.
+produce commentary. While a call is running, report only material changes already
+available from its owned output. Do not repeat unchanged waiting or create probes
+to supply commentary; follow the long-running invocation collection contract.
 
 Use the existing retained raw outputs as detail links; this display adds no
 event store, wrapper, control state or runtime operation. Keep credentials and
@@ -214,7 +321,7 @@ The same concise checklist is mandatory in all three skills, in normal mode:
 | Moment | Required commentary using actual data |
 | --- | --- |
 | Before | `sm-workflow → <operation>; purpose=<purpose>; Session=<known ID or unknown>; Step=<known Step or unknown>`; include the known Phase/target and exact selected input link when useful. |
-| During | `sm-workflow … <actual [cncf-sbt-event] observation>; transport=<observed running/stopped/unknown>`; surface program-emitted SBT events promptly as output becomes available, including actual validation/runtime observations and supplied repair counts. |
+| During, on material change only | `sm-workflow … <actual observation>; transport=<observed running/stopped/unknown>`; report relevant changes already exposed by the owned invocation. Do not narrate repeated waiting/heartbeat or poll to fill this row. |
 | After | `sm-workflow ← kind=<actual or unknown>; outcome=<actual or unknown>; accepted=<actual or unknown>; message=<actual or unknown>; work=<issued work or unknown>; next=<actual waiting/continuation condition or unknown>`; include supplied current/cumulative repair counts and validation/runtime observations with exact retained-output links. |
 | Failure/uncertainty | State the observed rejection, transport/nonzero/parse failure or missing output and what remains unknown; link exact retained response/stderr. State running/stopped only from observations, without inferring success or a Workflow Wait. |
 
@@ -237,9 +344,9 @@ contents, full argv or environment. Do not add state queries, Submit or Advance
 solely to obtain display data, split the paired completion, replay calls or
 alter continuation/stop rules.
 
-Include supplied actual runtime deadlines, heartbeat, termination/descendant
-settlement observations and durable result references in during/after/failure
-commentary. Runtime telemetry is observation, not a caller deadline or effect
+Report actual deadlines when first observed or changed; include relevant
+termination/descendant settlement and durable result references at handback/failure.
+Keep heartbeat detail in retained runtime output rather than repeating it in chat. Runtime telemetry is observation, not a caller deadline or effect
 authority. Distinguish a forwarded SIGTERM request from runtime-confirmed
 settlement and the durable actual result. Missing observations remain unknown;
 a requested signal, elapsed time or root-process exit alone establishes neither

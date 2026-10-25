@@ -20,8 +20,10 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitPartitionSemanticJsonSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class Fixture(selection: W.Selection, prepared: S.Prepared) {
     def request: S.Request = {

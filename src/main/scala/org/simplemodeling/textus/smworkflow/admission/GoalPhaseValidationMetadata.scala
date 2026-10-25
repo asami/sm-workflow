@@ -7,7 +7,7 @@ import org.goldenport.cncf.workspace.WorkspaceId
 
 /** Bounded metadata selection and exact producer binding, before effect admission.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseValidationMetadata {
@@ -69,6 +69,7 @@ private[smworkflow] object GoalPhaseValidationMetadata {
           }
         }
       }
+      _ <- ValidationTestPolicy.admitC(request.query, bound.map(_.operation))
     } yield new Selection(inventory, request.query, request.supplemental, bound)
 
   private def _request_c(request: Request): Consequence[Unit] =

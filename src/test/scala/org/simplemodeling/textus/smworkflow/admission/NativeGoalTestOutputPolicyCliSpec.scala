@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -14,10 +14,11 @@ import NativeWorkflowCliFixture as F
 
 /** Installed continuation retains the actual Test output under its selected policy.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalTestOutputPolicyCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _executions(root: Path): Vector[Long] = {
     val marker = root.resolve("sbt-executions.txt")
@@ -124,7 +125,7 @@ final class NativeGoalTestOutputPolicyCliSpec extends AnyWordSpec with Matchers 
       When("the semantic worker submits incorrect value.txt and installed Advance executes the actual Test")
       Files.writeString(value, "incorrect\n")
       val result = V.GoalPhaseWorkResult("completed", "Specification-owned incorrect value.txt input", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reference = V.WorkflowArtifactReference("fixture-test-output-policy-implementation", "1")
       scenario.call("command", implementation.submitOperation.get, Vector("--sessionId", implementation.submitSessionId.get,
         "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,

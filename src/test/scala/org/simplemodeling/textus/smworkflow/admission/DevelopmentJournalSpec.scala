@@ -24,9 +24,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure contract specifications. These rows and review inputs are owned by the
   * specification, not production review evidence or direct SQL seeding.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class DevelopmentJournalSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _source = ContextReference("actual-result:日本語/1", "17")
   private val _entry = J.Entry(J.identity(_source), "1", J.kind, "repository", "11", Some("J1"), "actual-session",

@@ -24,9 +24,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic searchable DataStore unit seams, never SQL or workflow acceptance
   * evidence. The connected actual managed SQL route belongs to the CLI spec.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class DevelopmentJournalFindSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _collection = DataStore.CollectionId.EntityStore(EntityCollectionId("spec", "journal", "entries"))
   private val _policy = J.Policy("workflow", _collection)

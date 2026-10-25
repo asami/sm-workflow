@@ -18,7 +18,7 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  */
 private[admission] object SplitPhasePartitionContextFixture {
   val baseData = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))
@@ -47,6 +47,8 @@ private[admission] object SplitPhasePartitionContextFixture {
  * @since   Oct.  2, 2026
  * @version Oct. 21, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePartitionContextFixture.*
   private def _json(raw: String): Json = parser.parse(raw.substring(J.schema.length + 1)).toOption.get

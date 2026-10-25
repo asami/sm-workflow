@@ -7,6 +7,7 @@
 PHASE-6 / S6-01 / S6-01D3J; native authority admission remains Scala-owned.
 @since   Oct. 14, 2026
 @version Oct. 15, 2026
+@version Oct. 25, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -71,8 +72,7 @@ def execute(options):
     with COMMAND.selected_directory(runtime_root):
         for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
             COMMAND.existing_file(path)
-        with COMMAND.selected_directory(task) as task_fd, COMMAND.selected_directory(output) as output_fd:
-            COMMAND.require(not os.listdir(output_fd), "output directory must be empty")
+        with COMMAND.selected_directory(task) as task_fd, COMMAND.selected_output_directory(task_fd, task, output) as output_fd:
             command = preparation_command(options, executable, task_fd)
             context = COMMAND.exchange_context(command, runtime_root, output, COMMAND.routing(task_fd))
             text, response = COMMAND.native_call(command, runtime_root, output_fd, context)

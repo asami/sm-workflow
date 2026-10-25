@@ -15,8 +15,10 @@ import RepositorySyncNativeConflictInput as I
 /** Specification-owned business fixtures exercise pure intake and meaning only;
   * they are not native issued work or independent reviewer/effect evidence.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _paths = Vector("docs/a.md", "src/b.scala")
   private val _policy = I.Policy(_paths.toSet, maximumConflicts = 2, maximumBlobBytes = 32)

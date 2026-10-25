@@ -6,8 +6,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Sep. 25, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class ComponentFactorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _e1 = afterWord(
     "in spec:generated-component-factory, example:E1, rule:COZY-SCAFFOLD-R1, phase:56, slice:CID-03B"

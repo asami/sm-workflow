@@ -10,12 +10,16 @@ import org.goldenport.record.{Record, RecordPresentable}
 /** Named business values at the Operation boundary. JSON is a representation
   * of the named value, never a universal command or completion envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInput {
   def valueC[A](request: Request, name: String)(using reader: ValueReader[A]): Consequence[A] =
     recordC(request, name).flatMap(reader.readC)
+
+  /** Decode the same named business value after its owning Resource read. */
+  def decodeValueC[A](value: Any, name: String)(using reader: ValueReader[A]): Consequence[A] =
+    _record_c(value, name).flatMap(reader.readC)
 
   def optionalValueC[A](request: Request, name: String)(using reader: ValueReader[A]): Consequence[Option[A]] =
     _parameter_c(request, name).flatMap {

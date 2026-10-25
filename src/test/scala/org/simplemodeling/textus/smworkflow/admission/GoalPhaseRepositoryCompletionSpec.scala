@@ -15,9 +15,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned native records exercise admission, not managed execution.
   * Public Operation/SQLite episodes own persistence and no-replay evidence.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseRepositoryCompletionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _child = "selected-repository-child"
   private def initial: InstanceRecord = take(InstanceRecord(InstanceIdentity("selected-goal"),

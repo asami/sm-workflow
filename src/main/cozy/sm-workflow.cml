@@ -520,6 +520,66 @@ OperationResult
 |------+------|--------------|
 | sessionId | string | 1 |
 
+## GoalPhaseValidationRepairDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| proposal | record | 1 |
+| priorInvocation | record | ? |
+
+## GoalPhaseValidationRepairDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseValidationRepairAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| proposal | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseValidationRepairAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseSourceHistoryRecoveryDescriptionResult
 
 ### EXTENDS
@@ -619,6 +679,119 @@ OperationResult
 | reference | WorkflowArtifactReference | 1 |
 
 ## GoalPhaseRemainingPlanAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
+## GoalPhaseReleaseRepairContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseReleaseRepairContinuationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| recoveryOperation | string | 1 |
+| componentInstance | string | 1 |
+
+## GoalPhaseReleaseRepairContinuationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseReleaseRepairContinuationRecoveryResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
+## GoalPhaseReviewPurposeRepairDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseReviewPurposeRepairDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| admissionOperation | string | 1 |
+
+## GoalPhaseReviewPurposeRepairInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| acknowledgeOriginalPurposeDefects | boolean | 1 |
+
+## GoalPhaseReviewPurposeRepairResult
 
 ### EXTENDS
 
@@ -760,6 +933,7 @@ OperationResult
 | ownedPaths | string | * |
 | dependencies | string | * |
 | checks | string | * |
+| actionPolicy | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedPlan
 
@@ -864,7 +1038,8 @@ OperationResult
 |------+------|--------------|
 | step | string | 1 |
 | commit | GoalPhaseNativeCommit | 1 |
-| review | string | 1 |
+| review | string | ? |
+| admission | org.goldenport.record.Record | ? |
 
 ## GoalPhaseRepairDirective
 
@@ -910,6 +1085,9 @@ OperationResult
 | checkFailure | GoalPhaseCheckFailureContext | ? |
 | issues | GoalPhaseIssueState | ? |
 | repairProgress | GoalPhaseRepairProgress | ? |
+| purposeRepair | org.goldenport.record.Record | ? |
+| releaseRepairContract | string | ? |
+| triage | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -984,6 +1162,7 @@ OperationResult
 | stdout | string | 1 |
 | stderr | string | 1 |
 | sbt | WorkflowSbtValidationFacts | ? |
+| processObservation | record | ? |
 
 ## WorkflowSbtTestSelection
 
@@ -1031,6 +1210,9 @@ OperationResult
 | outcome | string | ? |
 | metadata | org.goldenport.record.Record | * |
 | evidenceRecording | EvidenceRecordingState | * |
+| dependencyValidation | org.goldenport.record.Record | ? |
+| assessment | org.goldenport.record.Record | ? |
+| assessmentJournal | JournalRecordingState | ? |
 
 ## EvidenceReference
 
@@ -1284,6 +1466,8 @@ OperationResult
 | reviewContext | WorkflowReviewContext | ? |
 | metadata | org.goldenport.record.Record | * |
 | priorReviews | org.goldenport.record.Record | * |
+| dependencyValidations | org.goldenport.record.Record | * |
+| triageJudgment | org.goldenport.record.Record | ? |
 
 ## GoalPhaseCheckFailureContext
 
@@ -1313,6 +1497,16 @@ OperationResult
 | reviewObservations | GoalPhaseReviewObservations | ? |
 | dependencyProposal | org.goldenport.record.Record | ? |
 | completionConditions | org.goldenport.record.Record | ? |
+| repairFindingSources | GoalPhaseRepairFindingSources | ? |
+| dependencyValidation | org.goldenport.record.Record | ? |
+
+## GoalPhaseRepairFindingSources
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sources | org.goldenport.record.Record | * |
 
 ## GoalPhaseReviewObservation
 
@@ -1449,6 +1643,7 @@ OperationResult
 | accepted | boolean | 1 |
 | outcome | string | 1 |
 | message | string | 1 |
+| journalRecording | JournalRecordingState | ? |
 
 ## GoalPhaseFindingObservationSource
 
@@ -1658,6 +1853,71 @@ OperationResult
 | recording | JournalExecutionObservation | ? |
 | finding | JournalFinding | ? |
 | evidenceStorage | EvidenceStorageObservation | ? |
+| assessment | org.goldenport.record.Record | ? |
+
+## DevelopmentCar
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| group | string | 1 |
+| artifact | string | 1 |
+| version | string | 1 |
+
+## DevelopmentSubject
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| car | DevelopmentCar | 1 |
+| producerComponentId | string | 1 |
+| producerInstanceId | string | 1 |
+| workflow | string | 1 |
+| sessionId | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+
+## DevelopmentStateReadInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| subject | DevelopmentSubject | 1 |
+
+## DevelopmentHistoryReadInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| subject | DevelopmentSubject | 1 |
+| limit | int | ? |
+
+## DevelopmentObservationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| status | string | 1 |
+| observedAt | string | 1 |
+| subject | DevelopmentSubject | ? |
+| state | record | ? |
+| events | record | * |
+| coverage | string | ? |
+| returned | int | ? |
+| truncated | boolean | ? |
+| ownerDetailsUrl | string | ? |
 
 ## JournalReadInput
 
@@ -1813,6 +2073,7 @@ OperationResult
 | convergence | RepositorySyncNativeConvergenceResult | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | repair | RepositorySyncNativeMergeRepairRequest | ? |
+| journalRecording | JournalRecordingState | ? |
 
 ## RepositorySyncConflictBlob
 
@@ -1938,6 +2199,7 @@ OperationResult
 | exitCode | int | 0..1 |
 | stdout | string | 1 |
 | stderr | string | 1 |
+| processObservation | record | ? |
 
 ## RepositorySyncNativeMergeReviewRequest
 
@@ -2002,6 +2264,7 @@ OperationResult
 | review | RepositorySyncNativeMergeReviewRequest | 1 |
 | findings | RepositorySyncNativeMergeReviewFinding | * |
 | files | RepositorySyncNativeMergeRepairFile | * |
+| validationFailure | string | ? |
 
 ## RepositorySyncNativeMergeRepairResult
 
@@ -2100,6 +2363,8 @@ subject-type = GoalPhaseFindingRecordingRequest
 
 ##### OrderedValidation
 
+##### OrderedTriage
+
 ##### OrderedReview
 
 ##### OrderedRepair
@@ -2139,6 +2404,11 @@ when = phase.InspectCandidate, orderedDecision.Retained, findingRecords.Retained
 
 state = OrderedValidation
 when = phase.Validation, orderedDecision.Retained, findingRecords.Retained
+
+##### ordered-triage
+
+state = OrderedTriage
+when = phase.Triage, orderedDecision.Retained, findingRecords.Retained
 
 ##### ordered-review
 
@@ -2203,6 +2473,12 @@ kind = OPERATION
 operation = repairGoalPhaseStep
 input = phase.subject
 
+##### TriageOrderedStep
+
+kind = OPERATION
+operation = triageGoalPhaseStep
+input = phase.subject
+
 ##### ReviewOrderedStep
 
 kind = JUDGMENT
@@ -2260,6 +2536,10 @@ action = ImplementOrderedStep
 #### goal-phase-repair-capability
 
 action = RepairOrderedStep
+
+#### goal-phase-step-triage-capability
+
+action = TriageOrderedStep
 
 #### goal-phase-step-review-capability
 
@@ -2334,6 +2614,30 @@ operation = GoalPhaseService.describeGoalPhaseRemainingPlan
 #### adoptGoalPhaseRemainingPlan
 
 operation = GoalPhaseService.adoptGoalPhaseRemainingPlan
+
+#### describeGoalPhaseReviewPurposeRepair
+
+operation = GoalPhaseService.describeGoalPhaseReviewPurposeRepair
+
+#### describeGoalPhaseReleaseRepairContinuation
+
+operation = GoalPhaseService.describeGoalPhaseReleaseRepairContinuation
+
+#### recoverGoalPhaseReleaseRepairContinuation
+
+operation = GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation
+
+#### admitGoalPhaseReviewPurposeRepair
+
+operation = GoalPhaseService.admitGoalPhaseReviewPurposeRepair
+
+#### describeGoalPhaseValidationRepair
+
+operation = GoalPhaseService.describeGoalPhaseValidationRepair
+
+#### adoptGoalPhaseValidationRepair
+
+operation = GoalPhaseService.adoptGoalPhaseValidationRepair
 
 #### describeGoalPhaseFailedPhaseRepair
 
@@ -2480,8 +2784,23 @@ on = documents-conflicted
 
 ##### TRANSITION
 
+to = Triage
+on = checks-triage-required
+
+##### TRANSITION
+
 to = Review
 on = checks-passed
+
+##### TRANSITION
+
+to = Closing
+on = checks-admitted
+
+##### TRANSITION
+
+to = Decision
+on = checks-judgment-required
 
 ##### TRANSITION
 
@@ -2490,8 +2809,35 @@ on = checks-failed
 
 ##### TRANSITION
 
+to = Decision
+on = checks-incomplete
+
+##### TRANSITION
+
 to = Repair
 on = checks-repair-required
+
+#### Triage
+
+##### TRANSITION
+
+to = Triage
+on = documents-selected
+
+##### TRANSITION
+
+to = Decision
+on = documents-conflicted
+
+##### TRANSITION
+
+to = Closing
+on = triage-clean
+
+##### TRANSITION
+
+to = Review
+on = triage-escalated
 
 #### Review
 
@@ -2536,6 +2882,11 @@ on = documents-conflicted
 
 to = InspectCandidate
 on = repair-result-admitted
+
+##### TRANSITION
+
+to = PhaseInspection
+on = release-repair-result-admitted
 
 ##### TRANSITION
 
@@ -2635,8 +2986,23 @@ on = phase-checks-passed
 
 ##### TRANSITION
 
+to = Repair
+on = phase-checks-repair-required
+
+##### TRANSITION
+
 to = Decision
 on = phase-checks-failed
+
+##### TRANSITION
+
+to = Decision
+on = phase-checks-incomplete
+
+##### TRANSITION
+
+to = Implementation
+on = validation-repair-adopted
 
 #### PhaseReview
 
@@ -2662,10 +3028,20 @@ on = phase-review-accepted
 
 ##### TRANSITION
 
+to = Repair
+on = phase-review-repair-admitted
+
+##### TRANSITION
+
 to = Decision
 on = phase-review-decision-needed
 
 #### PhaseClosing
+
+##### TRANSITION
+
+to = PhaseClosing
+on = release-commit-observed
 
 ##### TRANSITION
 
@@ -2711,6 +3087,11 @@ on = phase-repository-closed
 
 ##### TRANSITION
 
+to = Repair
+on = release-repair-continuation-admitted
+
+##### TRANSITION
+
 to = PhaseValidation
 on = phase-validation-retry-admitted
 
@@ -2718,6 +3099,11 @@ on = phase-validation-retry-admitted
 
 to = Implementation
 on = failed-phase-repair-adopted
+
+##### TRANSITION
+
+to = Implementation
+on = validation-repair-adopted
 
 ##### TRANSITION
 
@@ -2738,6 +3124,11 @@ on = human-document-resumed-InspectCandidate
 
 to = Validation
 on = human-document-resumed-Validation
+
+##### TRANSITION
+
+to = Triage
+on = human-document-resumed-Triage
 
 ##### TRANSITION
 
@@ -3986,9 +4377,17 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### MergeValidated
 
+##### MergeAdmitted
+
+##### MergeTriageClean
+
+##### MergeReviewRequired
+
 ##### ReviewAccepted
 
 ##### ReviewRepairRequired
+
+##### ValidationRepairRequired
 
 ##### RepairProposalAdmitted
 
@@ -4119,6 +4518,21 @@ when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, nativeRepa
 state = ReviewAccepted
 when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
+##### merge-admitted
+
+state = MergeAdmitted
+when = sync.MergeAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### merge-triage-clean
+
+state = MergeTriageClean
+when = sync.MergeTriageClean, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### merge-review-required
+
+state = MergeReviewRequired
+when = sync.MergeReviewRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
 ##### review-repair-required
 
 state = ReviewRepairRequired
@@ -4128,6 +4542,11 @@ when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, nati
 
 state = RepairProposalAdmitted
 when = sync.RepairProposalAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### validation-repair-required
+
+state = ValidationRepairRequired
+when = sync.ValidationRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### repair-decision-required
 
@@ -4484,6 +4903,11 @@ on = native-check-prepared
 
 ##### TRANSITION
 
+to = ValidationRepairRequired
+on = native-validation-repair-required
+
+##### TRANSITION
+
 to = ValidationChecking
 on = native-check-prepared
 
@@ -4551,6 +4975,21 @@ on = human-conflict-cancelled
 
 ##### TRANSITION
 
+to = MergeTriageClean
+on = native-merge-triage-clean
+
+##### TRANSITION
+
+to = MergeReviewRequired
+on = native-merge-review-required
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = native-merge-admitted
+
+##### TRANSITION
+
 to = ReviewAccepted
 on = native-review-accepted
 
@@ -4576,7 +5015,55 @@ on = native-review-rejected
 to = NativeCommitPreparing
 on = native-commit-prepared
 
+#### MergeAdmitted
+
+##### TRANSITION
+
+to = NativeCommitPreparing
+on = native-commit-prepared
+
+#### MergeTriageClean
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = native-merge-admitted
+
+#### MergeReviewRequired
+
+##### TRANSITION
+
+to = ReviewAccepted
+on = native-review-accepted
+
+##### TRANSITION
+
+to = ReviewRepairRequired
+on = native-review-repair-required
+
+##### TRANSITION
+
+to = ReviewDecisionRequired
+on = native-review-decision-required
+
+##### TRANSITION
+
+to = ReviewRejected
+on = native-review-rejected
+
 #### ReviewRepairRequired
+
+##### TRANSITION
+
+to = RepairProposalAdmitted
+on = native-repair-proposal-admitted
+
+##### TRANSITION
+
+to = RepairDecisionRequired
+on = native-repair-decision-required
+
+#### ValidationRepairRequired
 
 ##### TRANSITION
 
@@ -4819,7 +5306,7 @@ GoalPhaseClosureRecoveryResult
 
 ##### DESCRIPTION
 
-Read only the exact currently unresolved selected native Validation check for sessionId. Return decision-required, its complete current target, choices AuthorizeNewAttempt and Defer, and recoveryOperation recoverGoalPhaseValidation. HumanNewAttempt direction leaves the old outcome unknown: a NEW attempt can execute the SAME fixed selected SBT check with current host permissions and possible repeat effects. Original history, Plan, base, candidate and counters remain retained. Description acquires no authority, mutates no storage and performs no effect. Non-unresolved state refuses. Historical provider-observation mode is unsupported; absence of a result or stderr prose cannot establish NotExecuted.
+Read only the exact currently unresolved selected native Validation check, genuine known-failed single whole-Phase Decision, or distinct confirmed terminated TimedOut/incomplete single whole-Phase Decision for sessionId. Return decision-required, its complete current target and recoveryOperation recoverGoalPhaseValidation. Unknown and known-failed targets retain exactly AuthorizeNewAttempt and Defer. Only a confirmed timeout offers exactly AuthorizeNewAttempt, LimitedRepair, Defer, in that order. Present AuthorizeNewAttempt as deadline extension with unchanged wire meaning: one NEW attempt of the SAME candidate/check with actual current host permissions and normal configured deadline, without a required source change or corrective Step. The normal host deadline must actually be adjusted before separate Advance; authorization does not change its configured value. LimitedRepair permits bounded investigation/preparation: fix known errors, identify the test actually executing at termination from actual start/end observations and retained output with diagnostic stack/process evidence when needed, investigate/debug suspected hang and fix established causes. Timeout alone is not proof of hang; the last printed test may already have completed. Report test identity unknown or evidence missing honestly; investigation may establish normal slow execution or external wait rather than deadlock. CNCF owns execution and result interpretation; no app regex parser or fabricated current-test identity supplies evidence. Defer permits deeper investigation without retry. Existing unknown and knownFailedPhase representations retain their meaning and wire when the optional terminatedTimeoutPhase is absent. A present terminatedTimeoutPhase is the complete actual source.kind=terminated-timeout record, mutually exclusive with knownFailedPhase/dependency, strictly canonical and exactly bound to all shared outer Session/Plan/base/candidate/source/frontier/check/attempt/intent fields. Require actual contiguous original intent/result/final receipt proof, all Steps accepted, exact unsuspended Decision and one unchanged whole-Phase candidate/check; missing/UNKNOWN, not-started, cancelled, termination-unconfirmed, other incomplete, Step/multi-check/review/closure/pending-repair/stale/crossed sources refuse this extension. HumanNewAttempt for an unresolved check preserves unknown history. Ordinary .textus/config.json textus.subsystem.process-execution.plan is a JSON string; its exact selected sbtPrograms target/identity/operation has complete finite limits including positive Long executionTimeoutMillis in milliseconds. The host may extend only that selected deadline while preserving all other program fields/programs; CNCF owns interpretation and execution, and sm-workflow production does not parse that plan. Original timeout receipt/output, history, Plan/revision, base, accepted prefix, candidate and counters remain. Description acquires no authority, mutates no storage and performs no effect. Historical provider-observation mode is unsupported; partial output or absence of a result cannot establish a completed outcome or NotExecuted.
 
 ##### TYPE
 
@@ -4847,7 +5334,7 @@ GoalPhaseValidationRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
-Accept explicit HumanNewAttempt direction AuthorizeNewAttempt or Defer for the complete current described target, rationale and actual reference. Independent host Human evidence is required for both choices; authentication or AI output is not consent. AuthorizeNewAttempt appends one authorization while retaining every old unknown intent/outcome and original Plan/counters. A later ordinary advanceGoalPhase creates the new attempt under current host permissions. This Operation executes no check, calls no Advance, is not semantic Submit and does not renew a repair window. Defer preserves the unknown intent and grants no retry. Missing, crossed, stale or duplicated direction refuses. This API does not accept provider observation or manufacture process receipts, NotExecuted, success, review acceptance or closure.
+Accept explicit independently evidenced direction for the complete current described target, rationale, actual participant/reference/issuer/time under existing goal-phase-validation-recovery purpose. Validate the choice against the actual decoded and current target: unknown and known-failed allow only AuthorizeNewAttempt and Defer; confirmed timeout allows exactly AuthorizeNewAttempt, LimitedRepair, Defer. Authentication, AI output and old consumed evidence are not consent. After exact current timeout proof and independent Human admission, LimitedRepair returns the existing result with accepted=true and outcome limited-repair-preparation-required. Request bounded diagnosis/planning for known errors and evidence-based suspected-hang investigation as described above, then describeGoalPhaseFailedPhaseRepair with a captured concrete proposal followed by independently authorized adoptGoalPhaseFailedPhaseRepair. Only an adopted Plan issues the normal corrective Step through separate advanceGoalPhase. LimitedRepair authorizes investigation/preparation, never adoption of an unknown future Plan, retry or check success. It makes no Store/history/Plan/counter/Git/SBT mutation, saves no retry Direction or Decision-to-Decision selection event and leaves the original Decision available for existing interrupted-target proof. Defer also writes nothing and permits deeper investigation without retry. Preserve existing unresolved and known-failed paths. Only AuthorizeNewAttempt on the actual typed confirmed timeout target uses separate GoalPhaseTerminatedTimeoutValidationRecoveryDirection, unchanged schema sm-workflow.goal-phase-terminated-timeout-validation-recovery.v1 and namespace session:ordered-terminated-timeout-validation-recovery:DecisionRevision@1. Re-prove its shared actual terminal source, exact target and no existing direction; save one CAS Direction with pure Unit effect through existing phase-validation-retry-admitted Decision to PhaseValidation. Retained traversal requires the original historical proof, exact participant/reference and adjacent actual successor. Plan/revision/base/candidate/accepted Steps/counters/repair limit remain; generation increases once and new validation projections/namespace are selected. A later SEPARATE ordinary advanceGoalPhase executes the same candidate/check under current normal CNCF deadline configuration; for deadline extension the normal host deadline must actually be adjusted first and authorization changes no configured value. Deadline-only continuation requires no corrective Step or repair-count use. Original timed-out/incomplete output/history never becomes success; the fresh attempt may pass, fail or time out and retains its own receipt. This Operation executes no File/Git/SBT/Start/Submit/Advance effect, supplies no provider observation, manufactured NotExecuted/success, review acceptance or closure, and does not widen general Decision resumption. Missing, unknown/null, crossed, stale, altered binding or duplicate retry direction refuses. No new approval gate is imposed merely by executor/target/runtime representation changes.
 
 ##### TYPE
 
@@ -4959,6 +5446,8 @@ GoalPhaseWholePhaseCandidateRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
+Supply exactly one of input (the complete inline business DTO) or inputResource (an absolute local file: URI without authority, query or fragment containing that same complete DTO). The executing call reads inputResource through its normal CNCF Resource context and configured roots and limits, then uses the identical strict DTO decoder and recovery admission. Input reading adds no candidate Git, staging, source-history, SBT or automatic Advance effect.
+
 Admit separately provisioned independent Human evidence for this exact target, component, participant, reference, choice and rationale under purpose goal-phase-whole-phase-candidate-recovery. AuthorizeNewObservation requires affirmative priorExecutionEnded attested by the trusted independent host from actual terminal prior invocation evidence. The Boolean alone, passive preparation, AI prose, timeout/error and earlier development approval do not prove termination or fresh Human direction. History-only recovery rechecks current frontier and resolved policy and appends one adjacent mechanical direction only, without Git/File/SBT/Advance. Defer requires its exact evidence and appends nothing. Separate ordinary Advance persists a distinct observation-intent before any new Git/File effect, rechecks policy and pinned repository/index, and performs only remaining whole-Phase observation with preserved Step evidence. No normalization/staging loop or old intent replay occurs. Normal PhaseValidation actual typed SBT Test and independent ReviewPhase/closure remain required. A failed new intent stays UNKNOWN/Wait; further recovery chains are outside this limited contract.
 
 ##### TYPE
@@ -4975,7 +5464,8 @@ GoalPhaseWholePhaseCandidateRecoveryInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhaseWholePhaseCandidateRecoveryInput | 1 |
+| input | GoalPhaseWholePhaseCandidateRecoveryInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -5151,9 +5641,185 @@ GoalPhaseRemainingPlanAdoptionInput
 
 GoalPhaseRemainingPlanAdoptionResult
 
+#### describeGoalPhaseReleaseRepairContinuation
+
+##### DESCRIPTION
+
+Describe the exact current unanswered Human from an accepted marker-absent ReviewPhase repair. Preserve the original complete Request, Result, successful checks, Plan, base, completed Steps, repair history and actual required-condition blocker batch. Future marker-bound ReviewPhase requests enter ordinary Release repair directly. Description grants no Human authority and executes no work or Git. Select exactly input or inputResource; the latter is an absolute local file URI authorized through normal Resource access.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReleaseRepairContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReleaseRepairContinuationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReleaseRepairContinuationDescriptionResult
+
+#### recoverGoalPhaseReleaseRepairContinuation
+
+##### DESCRIPTION
+
+ContinueReleaseRepair requires independent actual Human evidence bound to the exact described target, participant, component, reference and rationale. Append one versioned native DecisionSupersession disposition while preserving the old unanswered question and accepted review. Defer writes nothing. A separate Advance rechecks the saved host, source, candidate, head, index and managed scope before issuing Release RepairStep once. No Git, validation, Submit, Advance or commit runs during recovery. Select exactly input or inputResource using normal Resource access for large complete targets.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReleaseRepairContinuationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReleaseRepairContinuationRecoveryInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReleaseRepairContinuationRecoveryResult
+
+#### describeGoalPhaseReviewPurposeRepair
+
+##### DESCRIPTION
+
+Read only the current unanswered Human from an old issued ReviewStep with absent purposeRepair and an accepted untyped decision-needed report. Newly marked ReviewSteps use the ordinary typed route. Describe the exact original assignment, result, unchanged Plan, Step purpose and owned scope, base, accepted prefix, generation, candidate, checks, repair progress and complete ordered OPEN REVIEW issue batch. Refuse stale, exhausted, unknown-effect or conflicting frontiers. Preparation and description grant no Human authority and run no check, Submit, Advance or commit.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReviewPurposeRepairDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairDescriptionResult
+
+#### admitGoalPhaseReviewPurposeRepair
+
+##### DESCRIPTION
+
+Admit a separately provisioned actual Human directive for an old issued ReviewStep with absent purposeRepair and an accepted untyped decision-needed report, acknowledging every described saved blocking finding as an original-purpose defect inside the unchanged selected Step scope. Preserve the original accepted review and unanswered Human question through a separately typed native DecisionSupersession receipt. No Plan revision or new required condition is added. Next separate ordinary Advance issues the same-Step RepairStep once using existing repair budgets and issue verification. Stale, repeated, foreign, exhausted or incompatible direction refuses; no check, Submit, Advance or commit runs here.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseReviewPurposeRepairInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseReviewPurposeRepairResult
+
+#### describeGoalPhaseValidationRepair
+
+##### DESCRIPTION
+
+Passively describe exactly one ordinary whole-Phase Test after every original Step is accepted, using either its actual output-limited incomplete Decision or its latest pending UNKNOWN intent and original caller public source. The complete appended corrective Plan and fixed limitations require one independently admitted actual Human choice. Historical association is adopted by the Human; command equality does not establish native causal proof or descendant settlement. Description acquires no authority and executes no Git, SBT or native write. Supply exactly one of input and inputResource; the latter reads the complete identical DTO through current finite CNCF Resource authorization and strict UTF-8.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseValidationRepairDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseValidationRepairDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseValidationRepairDescriptionResult
+
+#### adoptGoalPhaseValidationRepair
+
+##### DESCRIPTION
+
+Admit the exact described target, complete captured proposal and independently evidenced actual Human answer. Output-limited choices are AdoptRepairPlan/Defer; historical choices are AdoptHistoricalAssociationAndRepairPlanAcceptingUnresolvedEffects/Defer. Reread the bound original source before one guarded pure Direction CAS. Preserve old UNKNOWN/incomplete records, accepted prefix, base and all repair history/counts. Adoption issues no work and runs no Git/SBT/Advance. A separate ordinary Advance checks original scoped candidate/policies before first corrective work and later reuses the durable request. Exactly one of input/inputResource is required with identical closed DTO decoding.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseValidationRepairAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseValidationRepairAdoptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseValidationRepairAdoptionResult
+
 #### describeGoalPhaseFailedPhaseRepair
 
 ##### DESCRIPTION
+
+Confirmed timeout also retains its existing distinct terminated-timeout source contract. A preceding independently evidenced LimitedRepair choice in recoverGoalPhaseValidation returns limited-repair-preparation-required and leaves the original Decision unchanged. After bounded diagnosis/planning, supply a captured concrete proposal here; that selection grants no adoption of an unknown future Plan. Only separately independently authorized adoptGoalPhaseFailedPhaseRepair and later ordinary Advance issue the corrective Step. Known-error and suspected-hang investigation must use actual start/end observations, retained output and diagnostic stack/process evidence when needed; timeout alone or the last printed test does not establish a hang or current-test identity. CNCF owns execution and result interpretation.
+
+Also admit the distinct confirmed TimedOut/incomplete whole-Phase source through explicit v2 target source.kind=terminated-timeout. Bind actual Session, workflow identity/revision, participant, Plan identity/revision, original base, exact candidate, original validation source/current Decision revisions, unique check identity/ordinal, terminal attempt ordinal and actual intent/result/final receipt identities/revisions with timed-out/incomplete facts. Share ordinary contiguous actual-attempt reconciliation with the unchanged known-failed v1 proof. Never use failure-proof fallback, manufacture KnownFailedPhase, convert exit143 or infer completed evidence from partial output. Launch not started, missing/UNKNOWN result, cancelled, termination-unconfirmed, other incomplete, multi-check, Step/review/closure/pending-repair frontiers refuse. The remaining complete Plan/proposal/ownership/check/fixed closure eligibility below applies to both explicit sources.
 
 Passively traverse retained native history to the exact current unsuspended Decision from one genuinely terminated nonzero failed whole-Phase SBT check after all accepted Steps. Capture the raw complete proposal and effective acceptance; bind the original known-failed recovery target, complete Plan, accepted prefix, repair counters, generation, current candidatePaths, complete native Step closure policy and selected corrective checks. Require unchanged Plan identity, Phase, repository, repair limit, Phase checks, Phase review classification and raw/effective acceptance, a fresh revision and exactly one nonempty new Step depending on every original Step. Corrective ownership requires an exact current host candidatePaths entry for every owned path, including any explicitly selected test file outside original Step scopes; directory coverage alone refuses. Require a valid current closure installation with a fixed StepProgram mapping the appended Step identity before description or adoption. Unknown, Step, multi-check, reviewed, suspended, document-backed, unmapped or crossed frontiers refuse. Choices are exactly AdoptRepairPlan and Defer. No source read, Git, SBT, observation, work issuance or transition occurs; a description is not a Human answer.
 
@@ -5182,6 +5848,10 @@ GoalPhaseFailedPhaseRepairDescriptionResult
 #### adoptGoalPhaseFailedPhaseRepair
 
 ##### DESCRIPTION
+
+Any earlier LimitedRepair selection authorizes bounded investigation/preparation only. Independently authorize this exact captured concrete proposal and target; no earlier selection adopts a future Plan, authorizes retry or establishes check success. The unchanged original timeout Decision remains the source for existing interrupted-target proof. Only this adopted Plan may issue its corrective Step through a later separate ordinary Advance.
+
+The distinct source.kind=terminated-timeout uses schema sm-workflow.goal-phase-failed-phase-repair-adoption.v2; the known-failed v1 schema/meaning below remains unchanged. Dispatch by the actual typed terminal source and explicit schema only. Reconstruct the original timeout with its complete bound target/proposal at the historical Decision and exact adjacent CAS successor. Require a new actual Human binding; old or crossed participant/reference/issuer/time/proposal evidence refuses. Preserve timeout/incomplete and partial diagnostic receipts, all accepted Steps/commits/reviews/base and repair counters/limit. Reuse only the existing failed-phase-repair-adopted pure eligibility edge with generation+1. Defer writes nothing; adoption saves one Direction with no Git/File/SBT/Start/Submit/Advance effects. A later separate ordinary Advance issues the corrective Step. General Decision resumption and same-candidate R8 recovery remain unchanged and continue to refuse timeout.
 
 Require independently issued goal-phase-failed-phase-repair-adoption evidence for the exact complete failedPhaseRepairAdoption target and answer(choice,rationale,participant,reference), with actual issuer and time. Reconstruct the current bound failure, Plan, captured proposal, ownership, complete closure policy with the corrective Step fixed commit mapping, and checks; stale, repeated, missing, explicit-null, unknown-field or crossed contracts refuse. Retained reconstruction requires the same complete closure policy and mapping. Defer requires genuine evidence and writes nothing. AdoptRepairPlan appends one guarded mechanical Direction through the fixed Advance binding at session:ordered-failed-phase-repair-adoption:DecisionRevision@1, schema sm-workflow.goal-phase-failed-phase-repair-adoption.v1, with lifecycle edge failed-phase-repair-adopted Decision to Implementation. Retain original native history, completed Steps, commits, reviews, base and repair counters. Clear active candidate/check/review/closure/decision projections and increment generation once. A later separate ordinary advanceGoalPhase issues ImplementStep for the new corrective Step and retains the standard candidate, check, independent review, local Step commit and whole-Phase continuation. This Operation saves direction only and grants no Git/File/SBT/Submit/Advance effect or actual Human answer by itself. Existing same-candidate R8 validation recovery is unchanged.
 
@@ -6012,6 +6682,42 @@ GoalPhaseWorkResult
 
 # SERVICE
 
+## GoalPhaseStepTriageService
+
+### DESCRIPTION
+
+Bounded read-only triage of immediate semantic uncertainty after complete selected
+checks, separate from implementation reasoning and independent detailed review.
+
+### OPERATION
+
+#### triageGoalPhaseStep
+
+##### DESCRIPTION
+
+Return clean, suspicious or genuine semantic decline with summary and attributable
+suspected observations in findings. No edits, checks, review acceptance, confirmed
+blockers, Plan adoption or effect authority. Tool failure is not semantic decline.
+The existing completion owner routes clean to admission or escalates once to review.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseWorkResult
+
+# SERVICE
+
 ## GoalPhaseStepReviewService
 
 ### DESCRIPTION
@@ -6769,6 +7475,7 @@ OperationResult
 | selectedPlan | SplitPhaseSelectedPlanView | ? |
 | stopped | SplitPhaseStoppedResult | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| journalRecording | JournalRecordingState | ? |
 
 ## SplitPhaseHumanScopeCheckpointReference
 
@@ -7120,6 +7827,9 @@ GoalPhaseWorkSubmissionResult
 | decisionContext | GoalPhaseOrderedDecisionContext | ? |
 | checkFailure | GoalPhaseCheckFailureContext | ? |
 | issues | GoalPhaseIssueState | ? |
+| purposeRepair | org.goldenport.record.Record | ? |
+| releaseRepairContract | string | ? |
+| triage | org.goldenport.record.Record | ? |
 
 ## GoalPhaseHumanQuestion
 
@@ -7353,6 +8063,9 @@ GoalPhaseWorkSubmissionResult
 | selectedChecks | string | * |
 | checks | RepositorySyncNativeValidationReceipt | * |
 | reviewContext | WorkflowReviewContext | ? |
+| judgmentMode | string | ? |
+| uncertainties | string | * |
+| priorReview | record | ? |
 
 ## RepositorySyncHumanQuestion
 
@@ -7757,6 +8470,70 @@ EvidenceDueInput
 
 EvidenceDueResult
 
+## DevelopmentObservationService
+
+### DESCRIPTION
+
+Read the exact host-bound native GoalPhase development state or finite committed development event history. Reads never progress a workflow or record events. Unknown, unavailable and changing remain explicit; no raw controller, storage selector, paths or execution inputs are exposed.
+
+### OPERATION
+
+#### readDevelopmentState
+
+##### DESCRIPTION
+
+Observe the configured exact development subject through the retained native Session and recheck its revision once. No effects or inferred completion.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DevelopmentStateReadInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DevelopmentStateReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DevelopmentObservationResult
+
+#### readDevelopmentHistory
+
+##### DESCRIPTION
+
+Read at most one bounded retained v1 event window using the existing managed EventStore authority and lease. Sequence is a decimal string; every full subject and envelope must match.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DevelopmentHistoryReadInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DevelopmentHistoryReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DevelopmentObservationResult
+
 ## JournalService
 
 ### DESCRIPTION
@@ -7975,11 +8752,15 @@ WorkflowPreparedImport
 
 ##### DESCRIPTION
 
-GoalPhase kind failed-phase-repair-adoption requires participant, the actual generated GoalPhaseFailedPhaseRepairDescriptionResult as request and GoalPhaseFailedPhaseRepairAdoptionInput as result, exact target/proposal/choice/reference and matching execution worker. Prepare only the independently observed actual Human direction under purpose goal-phase-failed-phase-repair-adoption and exact failedPhaseRepairAdoption(target,answer) binding. Choices are AdoptRepairPlan and Defer. The returned native external-evidence StartupImport rows neither provision storage nor adopt a Plan nor continue a Workflow. Unknown/missing/explicit-null target, direction or binding fields refuse; no legacy kind or fallback is supported.
+GoalPhase kind review-purpose-repair requires participant, the actual GoalPhaseReviewPurposeRepairDescriptionResult as request and GoalPhaseReviewPurposeRepairInput as result, matching directive reference and execution worker, and explicit acknowledgment of the complete saved original-purpose defect batch. Preparation records separately observed actual Human provenance under goal-phase-review-purpose-repair; it neither grants that consent nor admits a continuation nor rewrites the original review or unanswered question.
+
+GoalPhase kind failed-phase-repair-adoption requires participant, the actual generated GoalPhaseFailedPhaseRepairDescriptionResult as request and GoalPhaseFailedPhaseRepairAdoptionInput as result, exact target/proposal/choice/reference and matching execution worker. Accept unchanged known-failed v1 targets or the distinct complete v2 source.kind=terminated-timeout target from that actual description. Never manufacture KnownFailedPhase or infer a completed result from partial output. Prepare only the independently observed actual new Human direction under purpose goal-phase-failed-phase-repair-adoption and exact failedPhaseRepairAdoption(target,answer) binding, with actual participant, reference, issuer and time. Choices are AdoptRepairPlan and Defer. The returned native external-evidence StartupImport rows neither provision storage nor adopt a Plan nor continue a Workflow. Unknown/missing/explicit-null target, direction or binding fields refuse; no legacy kind or fallback is supported.
+
+GoalPhase kind validation-repair-adoption requires participant, the actual GoalPhaseValidationRepairDescriptionResult and full GoalPhaseValidationRepairAdoptionInput. Bind exactly componentInstance and validationRepairAdoption(target,proposal,answer(choice,rationale,participant,reference)) under native-external-evidence.v7 with actual issuer/time. Historical source uses only AdoptHistoricalAssociationAndRepairPlanAcceptingUnresolvedEffects or Defer and retains exact original public caller provenance and all fixed historical limitations. Preparation does not authenticate source, create Human authority, provision storage, adopt or Advance.
 
 GoalPhase kind completion-policy-adoption requires participant, the actual GoalPhaseCompletionPolicyDescriptionResult as request and GoalPhaseCompletionPolicyAdoptionInput as result, the exact described target and matching independent Human reference and execution worker. Prepare the existing external-evidence import under purpose goal-phase-completion-policy-adoption and completionPolicyAdoption(target,answer). Choices are AdoptLocalCompletion and Defer. Preparation neither adopts direction nor changes a saved Start nor grants repository effects; the public adoption operation owns its guarded self-transition.
 
-Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. It encodes HumanNewAttempt direction only. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
+Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 
 GoalPhase kind closure-recovery requires participant, the actual GoalPhaseClosureRecoveryDescriptionResult as request and GoalPhaseClosureRecoveryAnswer as result, matching execution worker and actual reference. Effect-bearing choices require affirmative priorExecutionEnded independently attested by the trusted production host from actual terminal old invocation evidence. Passive preparation verifies supplied typed binding only; it does not establish real process termination or grant recovery. Defer requires no prior-ended assertion. Ordinary recovery binds the entire exact target and current physical selection.
 

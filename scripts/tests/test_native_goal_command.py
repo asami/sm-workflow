@@ -23,6 +23,8 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import stat
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -622,6 +624,78 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.assertEqual(marker.read_text(), "preserve me")
                 self.assertEqual(list(ordinary.iterdir()), [])
                 self.assertEqual(list((outside / "nested").iterdir()), [])
+
+    def test_missing_output_is_created_privately_without_changing_routing(self):
+        # Given an existing selected task and no output directories beneath it.
+        route = self.retain()
+        before = route.read_bytes()
+        output = self.task / "new-group" / "new-call"
+        process, raw = self.process_output({"sessionId": "actual-goal", "kind": "Wait",
+                                            "message": "Fixture frontier"})
+        # When ordinary Advance is invoked without a separate mkdir operation.
+        status, printed, diagnostic, native = self.call(self.args("advance", output), process)
+        # Then one native call retains its exact output in private directories.
+        self.assertEqual(status, 0)
+        self.assertEqual(diagnostic, "")
+        self.assertEqual(printed, raw.decode())
+        self.assert_one_call(native, self.command("advanceGoalPhase", "--sessionId", "actual-goal"))
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+        self.assertEqual(route.read_bytes(), before)
+        for directory in (output.parent, output):
+            self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
+        # A second invocation cannot overwrite the retained result or launch again.
+        second, _printed, _diagnostic, repeated = self.call(self.args("advance", output), process)
+        self.assertEqual(second, 2)
+        repeated.assert_not_called()
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+
+    def test_output_creation_failure_does_not_launch_or_change_session(self):
+        # Given a retained route and an output whose creation will be denied.
+        route = self.retain()
+        before = route.read_bytes()
+        output = self.task / "cannot-create"
+        process, _raw = self.process_output({})
+        # When the helper cannot create its private output directory.
+        with patch.object(CALLER.os, "mkdir", side_effect=PermissionError("fixture denial")):
+            status, printed, diagnostic, native = self.call(self.args("advance", output), process)
+        # Then it refuses before native launch and preserves the route and absent output.
+        self.assertEqual(status, 2)
+        self.assertEqual(printed, "")
+        self.assertIn("native CLI was not launched", diagnostic)
+        native.assert_not_called()
+        self.assertFalse(output.exists())
+        self.assertEqual(route.read_bytes(), before)
+
+    def test_concurrent_calls_to_missing_output_launch_only_one_native_process(self):
+        # Given two actual helper processes sharing one missing output; the native CLI is
+        # a finite fixture, never a real Workflow or an accepted production result.
+        route = self.retain()
+        before = route.read_bytes()
+        output = self.task / "concurrent-call"
+        invocations = self.root / "fixture-invocations.txt"
+        self.executable.write_text("#!" + sys.executable + "\n"
+            "from pathlib import Path\n"
+            "with Path(" + repr(str(invocations)) + ").open('a') as stream:\n"
+            "    stream.write('invoked\\n')\n"
+            "print('{\"sessionId\":\"actual-goal\",\"kind\":\"Wait\",\"message\":\"Fixture frontier\"}')\n")
+        command = [sys.executable, str(SOURCE), *self.args("advance", output)]
+        children = []
+        try:
+            # When both helpers compete for the same output and their actual processes terminate.
+            for _ in range(2):
+                children.append(subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+            results = [child.communicate(timeout=20) for child in children]
+            # Then only one native fixture was launched, its response survives and the route is unchanged.
+            self.assertEqual(sorted(child.returncode for child in children), [0, 2], results)
+            self.assertEqual(invocations.read_text().splitlines(), ["invoked"])
+            self.assertEqual(json.loads((output / "response.json").read_text()),
+                             {"sessionId": "actual-goal", "kind": "Wait", "message": "Fixture frontier"})
+            self.assertEqual(route.read_bytes(), before)
+        finally:
+            for child in children:
+                if child.poll() is None:
+                    child.kill()
+                child.communicate()
 
     def test_e5_wrong_or_redirected_task_refuses_before_native_call(self):
         """E5 / R3,R4 / PHASE-6 S6-01D3D."""

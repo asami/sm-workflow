@@ -11,9 +11,11 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](c: Consequence[A]): A = c match {
     case Consequence.Success(value) => value
@@ -43,6 +45,36 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "close a captured ordinary Release repair through one delta commit without reopening either completed Step" in {
+      Given("two immutable accepted Steps and a successfully checked whole Phase")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val seen = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+      val checked = take(seen.acceptC(ChecksObserved(all.tipSnapshot, plan.phaseChecks, "phase-check", true)))
+      val event = ReviewAdmitted(work(checked), all.tipSnapshot, "phase-check", "integrated-review",
+        ReviewOutcome.Repair, Some(directive))
+      When("the captured new contract enables phase-level ordinary repair and its accepted result is reinspected")
+      take(checked.acceptC(event)).stage shouldBe Stage.Decision
+      val repair = take(checked.acceptC(event.copy(allowPhaseRepair = true)))
+      val ready = take(repair.acceptC(SemanticCompleted(work(repair), "Corrected the assigned Phase finding")))
+      val delta = all.tipSnapshot.copy(tree = oid('9'))
+      val inspected = take(ready.acceptC(CandidateObserved(delta)))
+      val validated = take(inspected.acceptC(ChecksObserved(delta, plan.phaseChecks, "fresh-phase-check", true)))
+      val accepted = take(validated.acceptC(ReviewAdmitted(work(validated), delta, "fresh-phase-check", "scoped-review", ReviewOutcome.Accept)))
+      val committed = take(accepted.acceptC(ReleaseCommitObserved(Commit(oid('8'), all.tipSnapshot.head, delta.tree))))
+      val closed = take(committed.acceptC(PhaseLocallyCompleted(committed.tipSnapshot, all.completed.map(_.commit), "scoped-review")))
+      Then("one charged repair and one Release commit preserve the exact Plan base ordered prefix and fresh check receipt")
+      ready.stage shouldBe Stage.PhaseInspection
+      repair.next.asInstanceOf[Semantic].key.step shouldBe None
+      closed.stage shouldBe Stage.Closed
+      closed.plan shouldBe all.plan
+      closed.base shouldBe all.base
+      closed.completed shouldBe all.completed
+      closed.tipSnapshot shouldBe Snapshot(oid('8'), delta.tree)
+      closed.repairs shouldBe 1
+      closed.ordinaryRepairs shouldBe 1
+      closed.checksReceipt shouldBe Some("fresh-phase-check")
+    }
+
     "local completion of accepted whole-Phase development" should {
       "produce a Terminal without manufacturing a repository receipt" in {
         Given("GPSYNC-01: all required Step commits and the actual whole-Phase checks and independent review")
@@ -92,6 +124,38 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
     }
     "E1 failed whole-Phase corrective Plan" should afterWord(
       "in spec:goal-phase-failed-phase-repair-adoption, example:E1, rules:R3,R6,R7, phase:P116-CONT-01") {
+      "retain a typed incomplete timeout and use the same pure corrective eligibility without general Decision resumption" in {
+        Given("R3,R6,R8 E1: an accepted complete Plan and a specification-owned confirmed timeout observation")
+        val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+        val inspected = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+        val timeout = GoalPhaseNativeValidation.Payload("10", "phase:" + plan.phase, all.tipSnapshot,
+          Vector(GoalPhaseNativeValidation.Check(plan.phaseChecks.head, 1)),
+          Vector(RepositorySyncNativeMergeValidation.Receipt(plan.phaseChecks.head, "timed-out", None,
+            "partial diagnostics only", "deadline reached", Some(WorkflowSbtValidation.Facts(
+              WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Outcome.Incomplete, None, None)))), Some("failed"))
+        val paused = take(GoalPhaseNativeValidation.observedStateC(inspected, timeout, "actual-timeout-receipt"))
+        val corrective = Step("S3", "Correct the selected test source", Vector("src/test/scala/ProductCheck.scala"),
+          plan.steps.map(_.identity), Vector("focused-1"))
+        val proposed = plan.copy(revision = "timeout-corrective-2", steps = plan.steps :+ corrective)
+        When("the native owner has separately proved the timeout and admitted the exact new Human Direction")
+        val adopted = take(paused.adoptFailedPhaseRepairRevisionC(proposed, "fresh-timeout-human"))
+        Then("only one new generation and corrective assignment change while all historical state and counters remain")
+        paused.stage shouldBe Stage.Decision
+        paused.decisionSource shouldBe Some(Stage.PhaseValidation)
+        timeout.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+        GoalPhaseNativeValidation.repairable(timeout) shouldBe false
+        adopted.generation shouldBe paused.generation + 1
+        adopted.base shouldBe paused.base
+        adopted.completed shouldBe paused.completed
+        adopted.repairs shouldBe paused.repairs
+        adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+        adopted.plan.repairLimit shouldBe paused.plan.repairLimit
+        adopted.plan.steps.take(plan.steps.size) shouldBe plan.steps
+        adopted.next.asInstanceOf[Semantic].key.step shouldBe Some("S3")
+        paused.acceptC(DecisionResumptionAdmitted("generic-resume")).isSuccess shouldBe false
+        paused.adoptRevisionC(proposed, "remaining-plan").isSuccess shouldBe false
+      }
+
       "preserve the accepted prefix and consumed policy while assigning exactly one appended corrective Step" in {
         Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R3,R6 E1: all accepted Steps and a failed whole-Phase check")
         val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
@@ -943,6 +1007,42 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
       inspected.stage shouldBe Stage.PhaseValidation
       inspected.completed shouldBe all.completed
       inspected.repairs shouldBe 0
+    }
+
+    "carry a blocking Release finding through affected checks scoped review and Final" in {
+      Given("the original integrated review of the unchanged accepted Step prefix")
+      val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+      val observed = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+      val checked = take(observed.acceptC(ChecksObserved(all.tipSnapshot, plan.phaseChecks, "whole-checks", true)))
+      val repair = take(checked.acceptC(ReviewAdmitted(work(checked), all.tipSnapshot,
+        "whole-checks", "original-integrated-review", ReviewOutcome.Repair, Some(directive), allowPhaseRepair = true)))
+      repair.stage shouldBe Stage.Repair
+      work(repair).step shouldBe None
+      When("the same release delta is corrected and actual affected checks and review are admitted")
+      val changed = all.tipSnapshot.copy(tree = oid('9'))
+      val inspected = take(take(repair.acceptC(SemanticCompleted(work(repair), "Assigned finding corrected")))
+        .acceptC(CandidateObserved(changed)))
+      val rechecked = take(inspected.acceptC(ChecksObserved(changed, plan.phaseChecks, "affected-checks", true)))
+      rechecked.next.asInstanceOf[Semantic].purpose should include("unresolved Release findings")
+      val accepted = take(rechecked.acceptC(ReviewAdmitted(work(rechecked), changed,
+        "affected-checks", "scoped-review", ReviewOutcome.Accept)))
+      accepted.acceptC(PhaseLocallyCompleted(changed, all.completed.map(_.commit), "scoped-review")).isSuccess shouldBe false
+      val commit = Commit(oid('8'), all.tipSnapshot.head, changed.tree)
+      accepted.acceptC(ReleaseCommitObserved(commit.copy(parent = base.head))).isSuccess shouldBe false
+      accepted.acceptC(ReleaseCommitObserved(commit.copy(tree = oid('7')))).isSuccess shouldBe false
+      val committed = take(accepted.acceptC(ReleaseCommitObserved(commit)))
+      val terminal = take(committed.acceptC(PhaseLocallyCompleted(committed.tipSnapshot,
+        all.completed.map(_.commit), "scoped-review")))
+      Then("Final retains the original Step commits and repair count without another Plan or review")
+      terminal.stage shouldBe Stage.Closed
+      terminal.plan shouldBe plan
+      terminal.base shouldBe base
+      terminal.completed shouldBe all.completed
+      terminal.releaseCommit shouldBe Some(commit)
+      terminal.checksReceipt shouldBe Some("affected-checks")
+      terminal.reviewEvidence shouldBe Some("scoped-review")
+      terminal.repairs shouldBe 1
+      terminal.ordinaryRepairs shouldBe 1
     }
 
     "keep Step closure separate from full Phase closure and select the next Step itself" in {

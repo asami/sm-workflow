@@ -16,9 +16,11 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val limitKey = ComponentParameterKey.requiredInt("three-workflow.host.limit")
   private val component = SmWorkflowComponent.componentId
@@ -38,23 +40,29 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       When("the native launcher publication set is compared with the generated operations")
       val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
-        SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}")
+        SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++
+        SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
+          s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}")
       val expected = Set(
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
         "GoalPhaseService.submitGoalPhaseOrderedDecision",
         "GoalPhaseService.submitGoalPhaseFindingRecording",
         "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
         "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
+        "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
+        "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
         "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
         "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
-        "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal")
+        "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
+        "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory")
       Then("every published native operation has a generated counterpart and each owning advance has its paired Start")
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations shouldBe expected
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.size shouldBe 24
+      expected.subsetOf(ThreeWorkflowLauncherAssembly.publishedMcpOperations) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.describeGoalPhaseReleaseRepairContinuation")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"

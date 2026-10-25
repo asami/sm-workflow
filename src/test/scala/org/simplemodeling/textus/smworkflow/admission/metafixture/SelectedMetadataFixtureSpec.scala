@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Public local declaration providers and three real, isolated registrations.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 class SelectedMetadataEmptyDeclarations extends ValidationDeclarationProvider {
@@ -44,6 +44,7 @@ class SelectedMetadataFocusedDeclarations extends ValidationDeclarationProvider 
   * @version Oct. 18, 2026
   * @author  ASAMI, Tomoharu
   */
+// Intentional helper: instantiated only by explicit metadata/input contract specifications.
 @DoNotDiscover
 @ValidationSpecification(identity = "metadata-fixture", revision = "1",
   declaration = classOf[SelectedMetadataEmptyDeclarations])

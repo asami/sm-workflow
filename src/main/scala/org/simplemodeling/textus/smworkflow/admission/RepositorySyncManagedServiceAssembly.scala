@@ -14,7 +14,7 @@ import RepositorySyncManagedFetch as Fetch
 /** Current trusted-host entry/owning-advance pair with session-resolved inputs.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   /** Normal host-record composition: no injected in-memory selection callback.
@@ -64,15 +64,21 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
         (nativeProgression && validationPolicy.nonEmpty && convergence.get != null))) Consequence.unit
       else Consequence.configurationInvalid("Native convergence requires native progression, validation and current host authority; merge convergence additionally requires paired review")
     review <- nativeReview match {
-      case Some(installation) => RepositorySyncNativeMergeReviewContinuation.bindC(declaration, definition, installation, nativeAcknowledgement).map(Some(_))
+      case Some(installation) => RepositorySyncNativeMergeReviewContinuation.bindC(declaration, definition, installation, nativeAcknowledgement, validationPolicy.flatMap(_.assessment)).map(Some(_))
       case None => Consequence.success(None)
     }
     reviewCompletion <- nativeReview match {
-      case Some(installation) => RepositorySyncNativeMergeReviewContinuation.bindCompletionC(params, declaration, definition, installation).map(Some(_))
+      case Some(installation) => RepositorySyncNativeMergeReviewContinuation.bindCompletionC(params, declaration, definition, installation, validationPolicy.flatMap(_.assessment)).map(Some(_))
       case None => Consequence.success(None)
     }
+    repair <- if (nativeProgression && conflictPolicy.semanticPaths.nonEmpty && validationPolicy.nonEmpty && review.nonEmpty)
+      RepositorySyncNativeMergeRepairContinuation.bindC(declaration, definition, conflictPolicy, validationPolicy.get,
+        review.get, nativeAcknowledgement, convergence).map(Some(_)) else Consequence.success(None)
+    repairCompletion <- if (repair.nonEmpty)
+      RepositorySyncNativeMergeRepairContinuation.bindCompletionC(params, declaration, definition, conflictPolicy,
+        validationPolicy.get, review.get).map(Some(_)) else Consequence.success(None)
     conflicts <- if (conflictPolicy.semanticPaths.nonEmpty)
-      RepositorySyncNativeConflictContinuation.bindC(declaration, definition, conflictPolicy, nativeAcknowledgement, validationPolicy, review, humanConflict).map(Some(_))
+      RepositorySyncNativeConflictContinuation.bindC(declaration, definition, conflictPolicy, nativeAcknowledgement, validationPolicy, review, humanConflict, convergence, repair).map(Some(_))
       else Consequence.success(None)
     completion <- if (conflicts.nonEmpty)
       RepositorySyncNativeConflictContinuation.bindCompletionC(params, declaration, definition, conflictPolicy).map(Some(_))
@@ -81,12 +87,6 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
       case Some(port) => port.bindHumanCompletionC(params)
       case None => Consequence.success(None)
     }
-    repair <- if (nativeProgression && conflictPolicy.semanticPaths.nonEmpty && validationPolicy.nonEmpty && review.nonEmpty)
-      RepositorySyncNativeMergeRepairContinuation.bindC(declaration, definition, conflictPolicy, validationPolicy.get,
-        review.get, nativeAcknowledgement).map(Some(_)) else Consequence.success(None)
-    repairCompletion <- if (repair.nonEmpty)
-      RepositorySyncNativeMergeRepairContinuation.bindCompletionC(params, declaration, definition, conflictPolicy,
-        validationPolicy.get, review.get).map(Some(_)) else Consequence.success(None)
   } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.RepositorySyncServiceService,
     spec.OperationDefinitionGroup(NonEmptyVector.of(
     new Operation(true, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair),

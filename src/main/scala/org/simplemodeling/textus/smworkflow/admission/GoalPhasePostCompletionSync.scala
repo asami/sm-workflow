@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * Only the fresh successful caller may attempt its reserved child Start. Reopen
   * projects completion first and passively observes the child's own persistence.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePostCompletionSync {
@@ -34,7 +34,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     advanceOperation: Option[String] = None)
   final case class Payload(input: R.Input, policy: String,
     direction: Option[GoalPhaseCompletionPolicyAdoption.Direction], synchronization: Synchronization,
-    startReserved: Boolean, findings: N.State)
+    startReserved: Boolean, findings: N.State, developmentOccurredAt: Option[String] = None)
   private given Encoder[N.Pending] = deriveEncoder
   private given Decoder[N.Pending] = deriveDecoder
   private given Encoder[N.Completed] = deriveEncoder
@@ -43,7 +43,8 @@ private[smworkflow] object GoalPhasePostCompletionSync {
   private given Decoder[N.Journaled] = deriveDecoder
   private given Encoder[N.State] = deriveEncoder
   private given Decoder[N.State] = deriveDecoder
-  private given Encoder[Payload] = deriveEncoder
+  private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(fields =>
+    if (fields("developmentOccurredAt").exists(_.isNull)) fields.remove("developmentOccurredAt") else fields))
   private given Decoder[Payload] = deriveDecoder
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseLocalCompletionRecord"
@@ -57,6 +58,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
         encode(payload) == wire && payload.synchronization.childSessionId.forall(_exact) &&
         payload.findings != null && payload.findings.pending != null && payload.findings.pending.isEmpty &&
         payload.findings.completed != null && payload.findings.journaled != null &&
+        payload.developmentOccurredAt != null && payload.developmentOccurredAt.forall(at => scala.util.Try(java.time.Instant.parse(at)).isSuccess) &&
         (!payload.startReserved || payload.synchronization.childSessionId.nonEmpty), (), "Local completion fields differ")
     } yield payload
   }
@@ -72,7 +74,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
       case None => Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])
       case Some(value) => for {
         _ <- _validate_saved_c(session, value.receipt.next, value.receipt.payload.value)
-        completed <- _complete_c(session, value.receipt.next, core, acknowledge)
+        completed <- _complete_c(session, value.receipt.next, d, core, acknowledge)
         observed <- _observe_c(session, d, core, value.receipt.payload.value)
       } yield Some(_output(completed, d, core, value.receipt.payload.value, observed._1, observed._2))
     }
@@ -102,14 +104,15 @@ private[smworkflow] object GoalPhasePostCompletionSync {
       synchronization <- legacy.map(value => Consequence.success((Synchronization("unknown",
         "The existing child retains its own effects and continuation; it is never started again.", Some(value.childSessionId),
         Some("advanceRepositorySync")), false))).getOrElse(_select_c(session, d, core, selected))
-      payload = Payload(selected, localPolicy, direction, synchronization._1, synchronization._2, findings)
+      payload = Payload(selected, localPolicy, direction, synchronization._1, synchronization._2, findings,
+        d.developmentObservation.map(_ => core.executionContext.clock.instant().toString))
       adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(from.identity.value), from,
         from.revision, F.history(from, "phase.Closed", "ordered-local-completion:" + from.identity.value),
         TypedValue(codec.typeIdentity, payload)), ConsequenceT.pure[[X] =>>
           org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
       _ <- acknowledge("goal-local-completion-recorded")
-      completed <- _complete_c(session, saved.receipt.next, core, acknowledge)
+      completed <- _complete_c(session, saved.receipt.next, d, core, acknowledge)
       // Every error above is a real completion failure. Follow-up observations are best effort.
       failure = if (!payload.startReserved) None else try {
         acknowledge("goal-local-before-child-start").flatMap(_ => _start_child_c(d, core, payload, acknowledge))
@@ -193,7 +196,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
         (session.started.receipt.payload.value.completionPolicy.contains(localPolicy) || payload.direction.nonEmpty)) Consequence.unit
       else F.invalid("Local completion has no actual selected PhaseClosing predecessor")
   } yield ()
-  private def _complete_c(session: F.Session, saved: InstanceRecord, core: ActionCall.Core,
+  private def _complete_c(session: F.Session, saved: InstanceRecord, d: F.Declaration, core: ActionCall.Core,
     acknowledge: String => Consequence[Unit]): Consequence[InstanceRecord] = for {
     instances <- session.storage.bindInstancesC()(using core.executionContext)
     current <- instances.loadC(saved.identity)(using core.executionContext).flatMap(
@@ -202,9 +205,18 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     completed <- entry match {
       case None => Consequence.success(current)
       case Some(value) => for {
-        appended <- instances.appendC(saved.identity, saved.revision, value)(using core.executionContext)
+        adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
+        original <- adapter.loadRetainedC(reference(saved.identity.value))(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Local completion payload is absent")))
+        events <- GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, saved.identity.value,
+          value.revision.value, "GoalPhaseCompleted", value.causation.value, core,
+          original.receipt.payload.value.developmentOccurredAt.map(java.time.Instant.parse))
+        committed <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration,
+          WorkflowMechanicalTransition.Reference(saved.identity.value + ":ordered-local-terminal", "1"),
+          saved, saved.revision, value, TypedValue(codec.typeIdentity, original.receipt.payload.value)),
+          ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()), events)(using core.executionContext)
         _ <- acknowledge("goal-local-completed")
-      } yield appended
+      } yield committed.receipt.next
     }
   } yield completed
   /** Admit only the exact missing completion or its actual already saved successor. */

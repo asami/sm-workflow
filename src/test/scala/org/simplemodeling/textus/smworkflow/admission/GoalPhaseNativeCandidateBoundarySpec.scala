@@ -10,9 +10,11 @@ import RepositorySyncManagedGitObservation as G
 
 /** Pure retained proof, compatibility and ownership evidence; no Git effect authority.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _oid(n: Int): String = f"$n%040x"
   private val _anchor = O.Snapshot(_oid(1), _oid(2))

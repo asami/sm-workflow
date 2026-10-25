@@ -6,11 +6,21 @@ lazy val projectIdentityEvidence = settingKey[CozyProjectIdentityEvidence]("Admi
 lazy val skillSourceFiles = taskKey[Seq[(File, String)]]("Exact component-owned semantic skill sources")
 lazy val skillBundle = taskKey[File]("Package the semantic skill sources as a standalone ZIP")
 lazy val checkSkillBundleReproducibility = taskKey[File]("Verify skill ZIP bytes despite source timestamp and ordering changes")
-lazy val runtimeTestOnly = inputKey[Unit]("Prepare official runtime artifacts and run the selected executable specifications")
+lazy val prepareTestArtifacts = taskKey[Unit]("Prepare the fresh component JAR and reproducible skill distribution for tests")
+lazy val runtimeTestOnly = inputKey[Unit]("Select canonical metadata, prepare selected runtime requirements and execute exact tests")
+lazy val labelledFullTests = taskKey[Seq[LabelledTests.Selected]]("Canonical default FULL operations")
+lazy val labelledTestSelection = inputKey[Seq[TestDefinition]]("Inspect canonical test selection without executing selected bodies")
+lazy val prepareFullTests = taskKey[Unit]("Prepare prerequisites required by default FULL metadata")
+lazy val labelledTestExecution = inputKey[Unit]("Internal standard SBT execution for exact metadata-selected suite operations")
 
 lazy val root = project
   .in(file("."))
   .enablePlugins(org.goldenport.cozy.CozyPlugin)
+  .settings(inConfig(Test)(Defaults.testTaskOptions(labelledTestExecution) ++
+    Defaults.defaultTestTasks(labelledTestExecution) ++ Seq(
+      labelledTestExecution / testFilter := (Defaults.selectedFilter _),
+      labelledTestExecution := Defaults.inputTests(labelledTestExecution).evaluated
+    )))
   .settings(
     projectIdentityEvidence := ProjectYamlBuild.admitted(cozyProjectMetadata.value, scalaBinaryVersion.value),
     organization := ProjectYamlBuild.organization(projectIdentityEvidence.value, cozyProjectMetadata.value),
@@ -22,51 +32,57 @@ lazy val root = project
     resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/repository/maven",
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
 
-    // Artifact-dependent selections explicitly prepare the official runtime and
-    // current CAR. Ordinary test/testOnly compilation has no runtime preparation.
-    runtimeTestOnly := Def.inputTaskDyn {
-      val selection = (sbt.complete.DefaultParsers.Space ~> sbt.complete.DefaultParsers.any.*).parsed.mkString
-      cozyPrepareRuntime.value
+    // Lint only handwritten production Scala.
+    Compile / scalafix / unmanagedSources := (Compile / unmanagedSources).value,
+    Compile / scalafix / managedSources := Nil,
+    prepareTestArtifacts := {
       (Compile / packageBin).value
-      (Test / testOnly).toTask(" " + selection)
-    }.evaluated,
-    // Explicit testOnly selection admits these artifact-dependent @DoNotDiscover suites.
-    Test / testOnly / definedTests := (Test / definedTests).value.map { definition =>
-      if (Set("org.simplemodeling.textus.smworkflow.admission.NativeCallerInformationCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.ThreeWorkflowSbtOperationSpec",
-        "org.simplemodeling.textus.smworkflow.admission.GoalPhaseNativeCandidateCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalCheckRepairCliSpec",
-      "org.simplemodeling.textus.smworkflow.admission.NativeGoalLargeValidationCliSpec",
-      "org.simplemodeling.textus.smworkflow.admission.NativeGoalTestOutputPolicyCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalMechanicalReceiptCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalStartupRecoveryCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalRuntimeStabilityCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeInstalledCarAdmissionDiagnosticSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalKnownFailedPhaseValidationCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalFailedPhaseRepairAdoptionCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPostCompletionSyncCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalWholePhaseCandidateRecoveryCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProjectBuildCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalRepairContinuationLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalMetadataCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPlanRevisionCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalDependencyScopeCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalDependencyScopeLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalAcceptanceBoundaryCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalPlanRevisionLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalValidationAuthoringLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalCmlValidationAuthoringLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalSliceValidationPlanLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalTypedInputsLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalFindingRecordingLiveSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalSourceHistoryCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderSourceHistoryCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalScopedQualityClosureCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeGoalProviderRepairCliSpec",
-        "org.simplemodeling.textus.smworkflow.admission.NativeRepositoryProviderConflictCliSpec")(definition.name))
-        new TestDefinition(definition.name, definition.fingerprint, true, definition.selectors)
-      else definition
+      checkSkillBundleReproducibility.value
+      ()
     },
+    labelledFullTests := LabelledTests.select((Test / fullClasspath).value.files,
+      (Test / classDirectory).value, version.value, "FULL", (Test / definedTests).value),
+    Test / test / definedTests := labelledFullTests.value.map(_.definition),
+    prepareFullTests := Def.taskDyn {
+      if (labelledFullTests.value.exists(_.requiresRuntime)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; () }
+      else Def.task { prepareTestArtifacts.value; () }
+    }.value,
+    Test / test := (Test / test).dependsOn(prepareFullTests).value,
+    labelledTestSelection := {
+      val request = LabelledTests.request(sbt.complete.DefaultParsers.spaceDelimited("selection").parsed)
+      val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
+      val selected = LabelledTests.select((Test / fullClasspath).value.files,
+        (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing)
+      val operations = selected.map(_.definition.selectors.length).sum
+      streams.value.log.info(s"Labelled selection: purpose=${request.purpose} suites=${selected.size} operations=$operations runtime=${selected.exists(_.requiresRuntime)}")
+      selected.foreach(value => streams.value.log.info("Selected: " + value.definition.name))
+      selected.map(_.definition)
+    },
+    // Use SBT's standard implementation at a separate internal key: a dynamic
+    // self-reference to the overwritten testOnly key is undefined at runtime.
+    // Native typed TestOnly receives the same selection/preparation.
+    // runtimeTestOnly is only a descriptive alias.
+    Test / testOnly := Def.inputTaskDyn {
+      val request = LabelledTests.request(sbt.complete.DefaultParsers.spaceDelimited("selection").parsed)
+      val loader = (Test / testLoader).value
+      try {
+        val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
+        val selected = LabelledTests.select((Test / fullClasspath).value.files,
+          (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing)
+        streams.value.log.info(s"Labelled execution: purpose=${request.purpose} suites=${selected.size} operations=${selected.map(_.definition.selectors.length).sum} runtime=${selected.exists(_.requiresRuntime)}")
+        // Keep names bound to each suite; never pass a global union of -t names.
+        val runs = Def.sequential(LabelledTests.arguments(selected).map(arguments => (Test / labelledTestExecution).toTask(arguments)))
+        val prepared = if (selected.exists(_.requiresRuntime)) Def.taskDyn {
+          cozyPrepareRuntime.value
+          prepareTestArtifacts.value
+          runs
+        } else Def.taskDyn { prepareTestArtifacts.value; runs }
+        prepared.andFinally(LabelledTests.closeLoader(loader))
+      } catch {
+        case error: Throwable => LabelledTests.closeLoader(loader); throw error
+      }
+    }.evaluated,
+    runtimeTestOnly := (Test / testOnly).evaluated,
     Test / fork := false,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
@@ -83,6 +99,8 @@ lazy val root = project
         "docs/spec/native-host-execution.md",
         "docs/spec/caller-information.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
+        "docs/spec/goal-phase-purpose-repair.md",
+        "docs/spec/goal-phase-release-repair-continuation.md",
         "docs/spec/goal-phase-dependency-scope.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
@@ -134,3 +152,5 @@ lazy val root = project
     cozyCarName := ProjectYamlBuild.carBaseName(projectIdentityEvidence.value, moduleName.value, version.value),
     cozyManifestMetadata ++= ProjectYamlBuild.manifestMetadata(projectIdentityEvidence.value, cozyProjectMetadata.value)
   )
+// Syntactic check only: no SemanticDB or additional compilation prerequisite.
+addCommandAlias("fixCheck", "Compile / scalafix --check")

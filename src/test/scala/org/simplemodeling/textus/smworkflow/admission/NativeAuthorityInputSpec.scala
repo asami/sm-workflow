@@ -15,9 +15,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Finite tool specifications use explicit specification-owned saved files.
   * Fixture process success supplies no genuine operator or task provenance.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeAuthorityInputSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationManagedFixture {
   private def _json(value: Record): Json = io.circe.parser.parse(value.toJsonStringC.toOption.get).toOption.get

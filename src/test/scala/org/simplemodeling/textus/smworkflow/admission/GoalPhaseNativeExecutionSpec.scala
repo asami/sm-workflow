@@ -25,8 +25,10 @@ import SplitPhaseExplicitPartitionFixture.take
 /** All descriptors and observations here are specification-owned data, never
   * genuine installed executor, reviewer, permission or provider provenance.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val profile = WorkflowConcreteExecutionProfile("spec-current", "spec-provider", "spec-model", Map("effort" -> "bounded"))
   private val _other = profile.copy(identity = "spec-other", model = "spec-other-model")

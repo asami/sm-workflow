@@ -12,8 +12,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanDirectionA
 /** Closed answer interpretation; generated payload compatibility is not consent.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

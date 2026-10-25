@@ -21,9 +21,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Specification worker labels/evidence grant no independence, native completion
   * or installed acceptance.
   * @since   Oct. 19, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
   private val _first = O.Snapshot("a" * 40, "c" * 40)

@@ -15,9 +15,11 @@ import GoalPhaseAcceptanceBoundary as A
 /** Pure actual-shaped typed receipt and codec examples only. These are not
   * external command, installed task or real AI/provider execution evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result
@@ -421,7 +423,7 @@ final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers wit
       When("whole-Phase known failure is reconstructed")
       val phaserepair = N.observedStateC(phase, phasepayload, "phase-repair")
       val phasedecision = _take(N.observedStateC(phase, phasepayload.copy(outcome = Some("failed")), "phase-failed"))
-      Then("whole-Phase failure remains Decision and retains closed Step history")
+      Then("initial whole-Phase repair is refused while the failed outcome retains closed Steps in Decision")
       phaserepair.isSuccess shouldBe false
       N.observedStateC(phase, phasepayload.copy(outcome = Some("repair-limit-reached")), "phase-limit").isSuccess shouldBe false
       phasedecision.stage shouldBe O.Stage.Decision

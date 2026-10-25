@@ -11,8 +11,10 @@ import SplitPhaseAICompletionCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Inert AI-completion lineage frame" should {
     "read participant planning and publication postimage without copied native envelopes" in {

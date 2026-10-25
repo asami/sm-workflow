@@ -22,7 +22,7 @@ import GoalPhaseOrderedProgression as O
 /** Immutable Findings derived only at the native accepted business frontier.
   * Storage is the current call's fixed declared Journal, never a file fallback.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalFinding {
@@ -39,8 +39,6 @@ private[smworkflow] object DevelopmentJournalFinding {
     private given Decoder[O.Snapshot] = deriveDecoder
     private given Encoder[O.Commit] = deriveEncoder
     private given Decoder[O.Commit] = deriveDecoder
-    private given Encoder[O.ClosedStep] = deriveEncoder
-    private given Decoder[O.ClosedStep] = deriveDecoder
     given Encoder[Context] = deriveEncoder
     given Decoder[Context] = deriveDecoder
   }
@@ -98,7 +96,7 @@ private[smworkflow] object DevelopmentJournalFinding {
         value.sourceRevision.toLongOption.exists(n => n > 0 && n.toString == value.sourceRevision) &&
         value.stepIdentity != null && value.stepIdentity.forall(_exact) && _snapshot(value.originalBase) &&
         value.completed != null && value.completed.nonEmpty && value.completed.forall(c => c != null &&
-          _exact(c.step) && _exact(c.review) && c.commit != null &&
+          _exact(c.step) && O.validStepAcceptance(c) && c.commit != null &&
           Vector(c.commit.identity, c.commit.parent, c.commit.tree).forall(_oid)) &&
         value.completed.map(_.step).distinct.size == value.completed.size &&
         value.completed.map(_.commit.identity).distinct.size == value.completed.size &&
@@ -197,8 +195,8 @@ private[smworkflow] object DevelopmentJournalFinding {
       entry.recordedAt, entry.observation.summary, None, Some(V.JournalFinding(entry.sourceKind,
         V.GoalPhaseReviewObservation(entry.observation.identity, entry.observation.category, entry.observation.summary, entry.observation.rationale),
         context.sourceRevision, context.planIdentity, context.planRevision, context.eligibilityStage, _snapshot_(context.originalBase),
-        context.completed.map(c => V.GoalPhaseClosedStep(c.step, V.GoalPhaseNativeCommit(c.commit.identity, c.commit.parent, c.commit.tree), c.review)),
-        context.candidate.map(_snapshot_), context.checksReceipt, context.reviewEvidence)), None)
+        context.completed.map(c => V.GoalPhaseClosedStep(c.step, V.GoalPhaseNativeCommit(c.commit.identity, c.commit.parent, c.commit.tree), c.review, c.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)))),
+        context.candidate.map(_snapshot_), context.checksReceipt, context.reviewEvidence)), None, None)
   }
   def view(entry: FindingEntry): String = {
     val context = entry.context
@@ -206,7 +204,7 @@ private[smworkflow] object DevelopmentJournalFinding {
       context.stepIdentity.fold("")(s => " / " + s) + s"\n\n${entry.observation.identity} (${entry.observation.category})\n\n" +
       entry.observation.rationale + s"\n\nSource: ${entry.sourceReference.identity}@${entry.sourceReference.revision} (${entry.sourceKind})\n" +
       s"Eligibility: ${context.eligibilityStage} at native revision ${context.sourceRevision}\n" +
-      context.completed.map(c => s"Step ${c.step}: ${c.commit.identity} (review ${c.review})\n").mkString +
+      context.completed.map(c => s"Step ${c.step}: ${c.commit.identity} (${c.review.fold("admission " + c.admission.map(_.reference).getOrElse("absent"))(r => "review " + r)})\n").mkString +
       s"Recorded: ${entry.recordedAt}\n"
     if (text.length <= 4096) text else text.take(4096 - J.truncationMarker.length) + J.truncationMarker
   }

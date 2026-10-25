@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata a
 
 /** Trusted local schema for one ordinary ConfigMap-consuming registration.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 class TypedMetadataDeclarations extends ValidationDeclarationProvider {
@@ -31,6 +31,7 @@ class TypedMetadataDeclarations extends ValidationDeclarationProvider {
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
+// Intentional helper: instantiated only by explicit metadata/input contract specifications.
 @DoNotDiscover
 @ValidationSpecification(identity = "typed-metadata-fixture", revision = "1", declaration = classOf[TypedMetadataDeclarations])
 class TypedMetadataFixtureSpec extends AnyWordSpec with Matchers with GivenWhenThen {

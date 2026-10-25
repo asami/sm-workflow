@@ -9,9 +9,11 @@ import GoalPhaseOrderedProgression as O
 
 /** Passive formats are data, independently of File authority or native Start.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDocumentSourceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _source = D.Source("docs/phase.md", "docs/checklist.md")
   private val _selection = D.Selection("selected-phase", "participant", _source)

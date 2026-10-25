@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification-owned inputs, never a genuine Human/review issuer.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativePreparationFixture {
@@ -90,11 +90,11 @@ private[admission] trait NativePreparationManagedFixture extends ThreeWorkflowMa
 
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
-  *  version Oct. 15, 2026
-  *  version Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationManagedFixture {
   import NativePreparationFixture.*
@@ -598,6 +598,41 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
         first.record.getString(NativeExternalEvidence.storageField) shouldBe second.record.getString(NativeExternalEvidence.storageField)
         Consequence.unit
       }
+    }
+  }
+
+  "Review remaining Plan direction preparation" should {
+    "bind the added condition actual issue candidate checks and genuine selected worker without creating an old answer" in {
+      Given("a fixture-owned read-only Review target and a new independently observed Human directive")
+      val target = GoalPhaseReviewRepairAdoptionFixture.target
+      val description = V.GoalPhaseRemainingPlanDescriptionResult(target.sessionId, "adoption-required",
+        "Fixture-owned Review continuation", "component", GoalPhaseRemainingPlanAdoption.targetRecord(target),
+        GoalPhaseRemainingPlanAdoption.adoptionOperation)
+      val reference = V.WorkflowArtifactReference("fixture-new-review-direction", "1")
+      val input = V.GoalPhaseRemainingPlanAdoptionInput(target.sessionId, description.target,
+        GoalPhasePlanRevision.publicProposal(Some(target.captured.proposal)).get,
+        "Fixture Human adopts this additional required Step condition", reference)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      def _prepare_(described: V.GoalPhaseRemainingPlanDescriptionResult, supplied: V.GoalPhaseRemainingPlanAdoptionInput,
+        executed: V.WorkflowExecutionEvidence = execution) =
+        org.simplemodeling.textus.smworkflow.preparation.NativeRemainingPlanPreparation.prepareC(described, supplied,
+          reference, executed, "participant", issuer, now)
+      When("passive preparation receives the exact description or crossed target, proposal and worker")
+      val prepared = take(_prepare_(description, input))
+      val saved = take(NativeExternalEvidence.decodeStorageC(prepared.record.getString(NativeExternalEvidence.storageField).get))
+      val crossedtarget = target.copy(reviewRepair = target.reviewRepair.map(_.copy(issueIdentity = "issue-4")))
+      val crossed = Vector(_prepare_(description, input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(crossedtarget))),
+        _prepare_(description, input.copy(proposal = GoalPhasePlanRevision.publicProposal(Some(
+          target.captured.proposal.copy(reason = "Other direction"))).get)),
+        _prepare_(description, input, execution.copy(workerIdentity = Some("unrelated-worker"))))
+      Then("only the exact new direction is bound and the saved evidence contains no old-question answer")
+      crossed.foreach(_.isSuccess shouldBe false)
+      saved.purpose shouldBe Purpose.RemainingPlanAdoption.identity
+      val bound = saved.binding.hcursor.downField("remainingPlanAdoption").get[GoalPhaseRemainingPlanAdoption.Target]("target").toOption.get
+      bound shouldBe target
+      saved.binding.hcursor.downField("humanAttestation").focus shouldBe None
+      prepared.recordIdentity shouldBe NativeExternalEvidence.recordIdentity(Purpose.RemainingPlanAdoption,
+        ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision))
     }
   }
 

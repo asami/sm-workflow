@@ -19,8 +19,7 @@ import GoalPhaseOrderedProgression as O
 /** Finite clerical work reconstructed from actual accepted review completions.
   * Canonical suspension/completion owns persistence; submission has no effects.
   * @since   Oct. 18, 2026
-  *  version Oct. 18, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeFindingRecording {
@@ -55,6 +54,15 @@ private[smworkflow] object GoalPhaseNativeFindingRecording {
       case O.Stage.PhaseClosing => source.findings.pending.forall(p => p.sourceKind == "ReviewPhase" && p.stepIdentity.isEmpty)
       case _ => false
     })
+
+  /** A blocking Phase report is not a recording frontier. Keep its original
+    * observations through affected inspection/checks until Phase acceptance.
+    * Step observations and mixed batches must still satisfy their own frontier.
+    */
+  def awaitsPhaseAcceptance(source: Source): Boolean = source.from.suspension.isEmpty &&
+    source.controller.closureIntent.isEmpty && source.controller.releaseRepairActive &&
+    source.controller.stage == O.Stage.PhaseInspection && source.findings.pending.nonEmpty &&
+    source.findings.pending.forall(p => p.sourceKind == "ReviewPhase" && p.stepIdentity.isEmpty)
   def identity(source: Source): ContinuationIdentity =
     ContinuationIdentity(source.from.identity.value + ":ordered-recording:" + source.from.revision.value)
 

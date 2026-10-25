@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.time.Instant
 import org.goldenport.cncf.workflow.ContextReference
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -14,10 +14,11 @@ import GoalPhaseDependencyScope as D
 /** Ordinary command wiring with SPECIFICATION-OWNED semantics and answers.
   * No genuine Human/provider execution, dependency edit or acceptance is claimed.
   * @since   Oct. 19, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -75,7 +76,7 @@ final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers w
       Vector("Retain current callers and expose the selected operation"),
       Vector(ContextReference("specification-dependent-work", "1")), Vector.empty)
     val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED dependency direction needed",
-      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)), None)
+      Vector.empty, None, None, None, None, None, D.publicProposal(Some(proposal)), None, None, dependencyValidation = None)
     When("ordinary semantic Submit precedes Advance that saves the actual ordered Human question")
     val submitted = scenario.call("command", initial.submitOperation.get,
       Vector("--sessionId", initial.submitSessionId.get, "--result", json(result.toRecord()).noSpaces,

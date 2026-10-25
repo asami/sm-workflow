@@ -19,8 +19,10 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Canonical factory mechanics only. Generated declarations are wiring probes,
   * not native workflow implementations or independent host-evidence fixtures.
   * @since   Oct.  6, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SmWorkflowConfiguredComponentFactorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

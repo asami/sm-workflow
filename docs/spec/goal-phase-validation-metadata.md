@@ -1,5 +1,13 @@
 # Goal Phase validation metadata selection
 
+Migration amendment adopted 2026-10-24:
+[label-driven discovery/selection/preparation](label-driven-test-selection.md)
+replaces DoNotDiscover plus manual class-name enrollment for runnable tests.
+Historical individually enrolled CLI evidence below retains its meaning; it is
+not the target authoring procedure. FULL/default execution must exclude HEAVY
+and external-service requirements before runnable exclusions are removed. See
+[LTEST delivery and acceptance](../notes/label-driven-test-migration-plan.md).
+
 `GoalPhaseValidationMetadata` is the internal bounded discovery, query and exact-binding
 consumer of the accepted CNCF V1 APIs. Its typed `Request` supplies a discovery scope,
 selection query, explicit supplemental logical references and a host-selected logical

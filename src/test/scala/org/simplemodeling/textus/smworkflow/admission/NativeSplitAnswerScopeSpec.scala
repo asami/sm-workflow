@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * not a public input, native history, consent enrollment or execution permit.
   * Normal managed Operation examples exercise genuinely issued questions.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 private[admission] object NativeSplitAnswerEvidenceFixture {
   val owner = ComponentInstanceId(SmWorkflowComponent.componentId, "split-answer-spec")
@@ -74,6 +74,8 @@ private[admission] object NativeSplitAnswerEvidenceFixture {
   }
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeSplitAnswerScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeSplitAnswerEvidenceFixture.*
   private val now = Instant.parse("2026-10-08T00:00:00Z")

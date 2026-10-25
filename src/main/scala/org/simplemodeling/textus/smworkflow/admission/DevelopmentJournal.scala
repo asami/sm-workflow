@@ -24,7 +24,7 @@ import GoalPhaseFindingRecording as R
 /** Immutable business Journal. The business completion commits first; this
   * separate current-call append cannot roll it back or replay it.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournal {
@@ -229,7 +229,10 @@ private[smworkflow] object DevelopmentJournal {
     def _result_(status: String, message: String) = V.JournalReadResult(status, message, None, None)
     val finding = input != null && DevelopmentJournalFinding.sourceC(input.identity).isSuccess
     val evidence = input != null && DevelopmentJournalEvidence.validIdentity(input.identity)
-    if (input == null || input.revision == null || !(finding || evidence || sourceC(input.identity).isSuccess))
+    val merge = input != null && DevelopmentJournalMergeAssessment.validIdentity(input.identity)
+    val split = input != null && DevelopmentJournalSplitRouting.validIdentity(input.identity)
+    val assessment = input != null && DevelopmentJournalAssessment.validIdentity(input.identity)
+    if (input == null || input.revision == null || !(finding || evidence || assessment || merge || split || sourceC(input.identity).isSuccess))
       Consequence.success(_result_("invalid", "Journal identity is invalid or noncanonical"))
     else if (input.revision.exists(_ != "1")) Consequence.success(_result_("unsupportedRevision", "Journal supports revision 1 only"))
     else policy match {
@@ -238,6 +241,15 @@ private[smworkflow] object DevelopmentJournal {
         try {
           val loaded = _bind_c(core, p, input.identity).flatMap(_.loadC()).flatMap {
             case None => Consequence.success(_result_("absent", "Journal entry is absent"))
+            case Some(row) if split => DevelopmentJournalSplitRouting.storedC(row, input.identity).map(e =>
+              V.JournalReadResult("found", "Journal Split routing found", Some(DevelopmentJournalSplitRouting.publicEntry(e)),
+                Some(DevelopmentJournalSplitRouting.view(e))))
+            case Some(row) if merge => DevelopmentJournalMergeAssessment.storedC(row, input.identity).map(e =>
+              V.JournalReadResult("found", "Journal merge assessment found", Some(DevelopmentJournalMergeAssessment.publicEntry(e)),
+                Some(DevelopmentJournalMergeAssessment.view(e))))
+            case Some(row) if assessment => DevelopmentJournalAssessment.storedC(row, input.identity).map(e =>
+              V.JournalReadResult("found", "Journal Step assessment found", Some(DevelopmentJournalAssessment.publicEntry(e)),
+                Some(DevelopmentJournalAssessment.view(e))))
             case Some(row) if evidence => DevelopmentJournalEvidence.storedC(row, input.identity).map(e =>
               V.JournalReadResult("found", "Journal Evidence observation found", Some(DevelopmentJournalEvidence.publicEntry(e)), Some(DevelopmentJournalEvidence.view(e))))
             case Some(row) if finding => DevelopmentJournalFinding.storedC(row, input.identity).map(e =>
@@ -255,7 +267,7 @@ private[smworkflow] object DevelopmentJournal {
         V.JournalFindingRecordingDetail(V.WorkflowArtifactReference(i.sourceReference.identity, i.sourceReference.revision),
           i.sourceKind, i.stepIdentity, V.GoalPhaseReviewObservation(i.observation.identity, i.observation.category,
             i.observation.summary, i.observation.rationale), i.requestedDestination, i.outcome,
-          i.records.map(r => V.GoalPhaseFindingSavedSection(r.file, r.section)), i.rationale)))), None, None)
+          i.records.map(r => V.GoalPhaseFindingSavedSection(r.file, r.section)), i.rationale)))), None, None, None)
   def view(e: Entry): String = {
     val text = s"# ${e.summary}\n\n${e.repositoryIdentity} / ${e.phaseIdentity}${e.stepIdentity.fold("")(s => " / " + s)}\n" +
       s"\nSource: ${e.sourceReference.identity}@${e.sourceReference.revision}\nRecorded: ${e.recordedAt}\n" +

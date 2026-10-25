@@ -11,9 +11,11 @@ import GoalPhaseOrderedProgression as O
 
 /** Captured acceptance is semantic business input, never execution evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDocumentContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _source = D.Source("docs/phase.md", "docs/checklist.md")
   private val _bound = D.Bound(_source,

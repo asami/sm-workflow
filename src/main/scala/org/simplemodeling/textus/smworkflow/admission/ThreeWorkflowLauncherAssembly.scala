@@ -10,7 +10,7 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -32,6 +32,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
     "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
     "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",
     "EvidenceService.manageEvidenceRetention", "EvidenceService.findDueEvidence",
@@ -40,8 +41,11 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
     "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
+    "GoalPhaseService.describeGoalPhaseReleaseRepairContinuation",
+    "GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation",
     "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
     "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
+    "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair",
     "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
     "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
@@ -72,11 +76,12 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       _ <- if (repository.review.nonEmpty && repository.humanConflict.nonEmpty && repository.conflicts.semanticPaths.nonEmpty)
         Consequence.unit else Consequence.configurationInvalid("Three-workflow RepositorySync requires paired semantic conflict, independent review and Human handling")
       goal <- GoalPhaseNativeServiceAssembly.bindRuntimeC(creation, host.goal)
-      sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration,
+      sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
         convergence = Some(repository.convergence), humanConflict = repository.humanConflict)
-      split <- SplitPhaseManagedServiceAssembly.bindRuntimeWorkflowC(creation, host.split, host.splitCatalog,
+      split <- SplitPhaseManagedServiceAssembly.bindRuntimeWorkflowC(creation, host.split.copy(journalPolicy = host.goal.journalPolicy,
+        journalRepository = Some(repository.declaration.input.repositoryIdentity)), host.splitCatalog,
         host.splitStartHuman, host.splitAnswerHuman)
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
@@ -89,5 +94,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         creation, repository.declaration, repositoryDefinition),
       NativeWorkflowPreparationServiceAssembly.bind,
       DevelopmentJournalService.bind(host.goal.journalPolicy),
-      CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy))
+      CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
+      DevelopmentObservationService.bind(host.goal, goalCatalog.definition))
 }

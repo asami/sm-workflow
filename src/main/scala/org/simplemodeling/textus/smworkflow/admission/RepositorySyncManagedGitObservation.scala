@@ -9,7 +9,7 @@ import WorkflowManagedProcessExecution as E
   * Separate observations are not an atomic repository snapshot. The owning
   * progression re-observes preconditions and retains uncertain effect intent.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedGitObservation {
@@ -63,6 +63,26 @@ private[smworkflow] object RepositorySyncManagedGitObservation {
     tracking.map(_.value), counts, mergebase.map(_.value)), merge.map(_.value))
 
   def indexTreeC(core: ActionCall.Core): Consequence[String] = _value_c(core, GitOperation.IndexTree).map(_.value)
+
+  /** The existing observation owner, with an explicitly admitted logical target.
+    * Dependency validation needs local facts, never a remote fetch or convergence.
+    */
+  def observeInWorkspaceC(core: ActionCall.Core, workspace: String): Consequence[Observed] = {
+    def _value_c_[A](operation: GitOperation[A]): Consequence[A] =
+      E.executeGitC(core, operation, workspace).flatMap(_.valueC)
+    for {
+      branch <- _value_c_(GitOperation.Branch)
+      head <- _value_c_(GitOperation.Head)
+      tree <- _value_c_(GitOperation.Tree)
+      shallow <- _value_c_(GitOperation.Shallow)
+      replacements <- _value_c_(GitOperation.Replacements)
+      merge <- _value_c_(GitOperation.MergeHead)
+      dirty <- _value_c_(GitOperation.Status)
+      _ <- if (!shallow && replacements.isEmpty && merge.isEmpty && !dirty.exists(_.unmerged)) Consequence.unit
+        else invalid("dependency observation requires ordinary local Git history without pending merge")
+    } yield Observed(branch, head.value, tree.value, dirty.map(d =>
+      DirtyPath(d.indexCode, d.worktreeCode, d.path.value, d.renamedFrom.map(_.value))), None, None)
+  }
 
   def commitC(core: ActionCall.Core, identity: String): Consequence[Commit] = for {
     oid <- GitObjectId.parseC(identity)

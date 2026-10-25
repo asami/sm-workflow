@@ -13,9 +13,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Immutable specification inputs are not production Human consent.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseSourceHistoryRecoverySpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   private val _snapshot = O.Snapshot("a" * 40, "b" * 40)
   private def _target: R.RecoveryTarget = R.RecoveryTarget("session", "plan", "2", _snapshot, _snapshot,

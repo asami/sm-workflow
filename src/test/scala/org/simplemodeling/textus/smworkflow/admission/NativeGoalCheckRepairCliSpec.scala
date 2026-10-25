@@ -1,7 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.{Files, Path}
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -10,10 +10,11 @@ import NativeWorkflowCliFixture as F
 /** Separate ordinary commands retain actual failed checks and fresh validation.
   * Assigned semantic edits are specification data, not external provider proof.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _executions(root: Path): Vector[Long] = {
     val marker = root.resolve("sbt-executions.txt")
@@ -28,7 +29,7 @@ final class NativeGoalCheckRepairCliSpec extends AnyWordSpec with Matchers with 
       work.issues.toVector.flatMap(_.issues).filter(i => i.repository == work.selectedPlan.repository &&
         work.stepIdentity.contains(i.step) && i.status != "RESOLVED").map(i =>
           V.GoalPhaseIssueDisposition(i.identity, disposition, "Specification-owned observation of assigned value.txt", None))))
-    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None)
+    val result = V.GoalPhaseWorkResult("completed", "Specification-owned correction of assigned value.txt", Vector.empty, None, None, report, None, None, None, None, None, dependencyValidation = None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", NativeCallerExecutionFixture.json(result.toRecord()).noSpaces,
       "--resultReference", NativeCallerExecutionFixture.json(reference.toRecord()).noSpaces))

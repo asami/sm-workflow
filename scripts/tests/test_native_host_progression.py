@@ -240,6 +240,13 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         # the observation hook checks that Submit is flushed before Advance.
         self.assert_success(output, responses, during)
 
+    def test_missing_output_completes_submit_then_advance_once(self):
+        # A missing output is ordinary preparation, not a recovery or replay.
+        output = self.output()
+        output.rmdir()
+        responses = [self.submit_response(), self.advance_response()]
+        self.assert_success(output, responses)
+
     def test_human_complete_prepares_imports_submits_and_advances_once(self):
         # Given actual-shaped independent fixture inputs and an opaque issued Human, using either native spelling.
         for wire in (False, True):
@@ -774,11 +781,12 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         output = self.output()
         valid = {"operation": "compile", "workspaceId": "fixture", "programIdentity": "fixture", "state": "terminal", "exitCode": 1}
         line = "[cncf-sbt-event] " + json.dumps(valid)
+        fixed = "[cncf-sbt-event] " + json.dumps(dict(valid, operation="fix-check"))
         raw = ("[cncf-sbt-event] not-json\n"
                + "[cncf-sbt-event] " + json.dumps(dict(valid, argv=["private-source"])) + "\n"
                + "[cncf-sbt-event] " + json.dumps(dict(valid, programIdentity="x" * 20000)) + "\n"
                + "[cncf-sbt-event] " + json.dumps(dict(valid, state="accepted")) + "\n"
-               + line + "\n").encode()
+               + line + "\n" + fixed + "\n").encode()
 
         program = "import sys; sys.stdout.buffer.write(b'{}'); sys.stderr.buffer.write(" + repr(raw) + ")"
         observed, diagnostic = io.StringIO(), io.StringIO()
@@ -788,8 +796,8 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 CALLER.native_call([sys.executable, "-c", program], self.runtime_root, descriptor, {})
         # Then only valid bounded metadata is displayed, and every original byte is retained.
         events = [json.loads(item) for item in observed.getvalue().splitlines() if json.loads(item)["event"] == "sbt-event"]
-        self.assertEqual([item["rawEvent"] for item in events], [line])
-        self.assertEqual(diagnostic.getvalue(), line + "\n")
+        self.assertEqual([item["rawEvent"] for item in events], [line, fixed])
+        self.assertEqual(diagnostic.getvalue(), line + "\n" + fixed + "\n")
         self.assertEqual((output / "stderr.log").read_bytes(), raw)
         self.assertEqual((output / "response.json").read_bytes(), b"{}")
 
@@ -917,6 +925,21 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(displayed["evidence"], state["evidence"])
         self.assertEqual(displayed["journal"], {"status": "unavailable", "entry": None})
         self.assertNotIn("text", displayed)
+
+    def test_projection_preserves_formal_admission_and_actual_journal_failure_without_review_pass(self):
+        # Given an actual-shaped deterministic outcome with deliberately private policy/source material.
+        assessment = {"branch": "admit", "reason": "Selected checks passed; Release observation retained",
+                      "triage": "not-selected", "review": "not-executed", "validationReference": "native-check:1",
+                      "candidate": {"head": "private"}, "policy": {"source": "private"}}
+        journal = {"status": "indeterminate", "entry": None, "sourceReference": {"identity": "native-check:1", "revision": "1"}}
+        native = {"validation": {"outcome": "passed", "assessment": assessment, "assessmentJournal": journal}}
+        # When ordinary bounded exchange display consumes the supplied public result.
+        actual = CALLER.observation_projection(native)["validation"]
+        # Then omitted AI work stays distinct from CLEAN/PASS and recording failure creates no Entry.
+        self.assertEqual(actual["assessment"], {k: v for k, v in assessment.items() if k not in ("candidate", "policy")})
+        self.assertEqual(actual["assessmentJournal"], journal)
+        self.assertEqual(actual["outcome"], "passed")
+        self.assertEqual(native["validation"]["assessment"]["policy"], {"source": "private"})
 
     def test_all_advance_frontiers_stop_after_two_calls(self):
         # Given accepted Submit followed by each native frontier kind,

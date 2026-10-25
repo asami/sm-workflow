@@ -13,7 +13,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.{Property, Request}
 import org.simplemodeling.textus.smworkflow.value as V
 import org.goldenport.record.Record
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target
 import GoalPhaseOrderedProgression as O
@@ -23,12 +23,13 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Explicit artifact-dependent selection through runtimeTestOnly. Normal sbt
   * owns its native locks; whole workflows use a clean typed Git/SBT host plan.
   */
-@DoNotDiscover
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class ThreeWorkflowSbtOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private def _sbt_executable: Path = {

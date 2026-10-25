@@ -13,9 +13,11 @@ import GoalPhaseScopedQualityAdmission as A
 /** Typed input fixtures exercise the actual adapter and CAM. These examples
   * do not execute a provider or establish normal runtime installation.
   * @since   Oct. 17, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseScopedQualityAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _input = A.Selection("review-1", 3L, "step-1", "candidate-2",
     Vector("src/Selected.scala", "docs/selected.md"), Vector("SelectedModel"),

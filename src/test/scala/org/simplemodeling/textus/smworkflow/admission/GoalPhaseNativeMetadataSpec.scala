@@ -34,7 +34,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared real producer discovery, never a synthetic positive inventory.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object GoalPhaseNativeMetadataFixture {
@@ -59,6 +59,8 @@ private[admission] object GoalPhaseNativeMetadataFixture {
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import N.given
   import GoalPhaseNativeMetadataFixture.*

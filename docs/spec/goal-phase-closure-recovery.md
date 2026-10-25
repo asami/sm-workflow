@@ -1,6 +1,18 @@
 # GoalPhase selected Step closure recovery
 
-Date: 2026-10-22 (Asia/Tokyo)
+Date: 2026-10-24 (Asia/Tokyo)
+
+Planned amendment adopted 2026-10-24: the
+[recovery observation contract](recovery-observations-and-cause-resolution.md)
+and [ROBS delivery plan](../notes/recovery-observations-delivery-plan.md) add
+ordinary continuation for ended/no-commit/in-authority preparation correction,
+plus deterministic Journal/Evidence/Finding recording. Recovery success does
+not resolve the underlying cause. R2/R4 below describe the existing explicit
+Human route; implementation must distinguish the new proven ordinary case from
+uncertain-effect recovery rather than apply that Human requirement to both.
+The bounded ordinary continuation below implements the ended-execution closure
+case. It grants no Journal/Finding delivery work or new semantic acceptance.
+Preserve original receipts, Session/history/counters and accepted evidence.
 
 The normal generated `GoalPhaseService.describeGoalPhaseClosureRecovery(sessionId)`
 and `recoverGoalPhaseClosure(input)` operations support an existing Session paused
@@ -27,7 +39,12 @@ its native Long range and ordinal/attempt require JSON integers.
 Git observation uses existing typed `git_*` operations in the current owning
 UnitOfWork. It reads the installed root, branch, HEAD/tree, index, merge and
 selected state and actual commit metadata, then checks for observation drift.
-Physical `selectedPaths` comes from the actual CNCF selected-read result. The
+Physical `selectedPaths` comes from the typed value of
+`SelectedIndexChanges(selection, originalParentHead)`, including deletions,
+additions and rename destinations. The reviewed-candidate comparison separately
+determines `selectedChangesEmpty`. Selection does not come from declared-path
+metadata or a comparison against current HEAD: it must remain available after
+an exact matching commit already exists. The
 application never discovers selection by reading configuration, argv or Git
 output. Description writes no records and supplies no authority. These separate
 reads are not an atomic filesystem snapshot.
@@ -37,7 +54,21 @@ execution summary remains **unknown**. A later dry-run or unchanged HEAD cannot
 establish historical Failed(1), NotStarted, NotExecuted or success. The current
 observation and any actual saved terminal summary remain distinct facts.
 
-## R2 — Independent Human evidence and prior execution ownership
+## R2 — Existing authority and independent Human direction
+
+An actual saved local `CommitSelected` execution is known ended only when its
+bound summary has termination exactly `Exited(code)`, a matching exit code and
+consistent outcome (`failed` with nonzero code or `succeeded` with zero). An
+absent summary, an unknown/live/cancelled/timed-out termination, an incomplete
+result, nonzero alone, unchanged HEAD alone or stderr text grants no automatic
+continuation. This closed local program disables hooks and signing and has no
+remote effect. Independently existing Step closure authority remains required.
+
+Read-only description returns `continuation-ready`, empty Human choices and
+`advanceGoalPhase` when those saved terminal facts, current typed Git facts and
+existing authority admit one of the two R3 continuations. Otherwise it retains
+`decision-required` and the genuine independent Human route below. Description
+does not persist a continuation or grant authority.
 
 The installed independent evidence purpose is `goal-phase-closure-recovery`.
 `NativeHostPreparationService.prepareEvidence` accepts kind `closure-recovery`
@@ -61,7 +92,23 @@ is fixture-only and never authorizes a real Session.
 history and Git state and creates no mechanical direction. It grants no effect.
 Its current target and independent Human evidence still must match.
 
-## R3 — Immutable direction and separate Advance
+## R3 — Immutable direction or observed continuation
+
+Ordinary Advance may save one small private typed `Continuation(target, action)`
+at the exact execution frontier through the existing guarded mechanical
+receipt/history boundary. It is distinct from Human `Direction`; it fabricates
+no Human reference or `AuthorizeNewAttempt` evidence.
+
+| Automatic action | Required saved execution and actual observation | Ordinary Advance |
+| --- | --- | --- |
+| `retry-preparation` | Actual failed nonzero Exited result; original branch/root, no merge, original parent HEAD/tree, exact reviewed index, selected worktree clean, all pending/selected paths owned | Recheck the exact observation and existing Step closure authority, save one fresh selected structural check and incremented attempt intent, invoke local commit once |
+| `reconcile-commit` | Actual consistent Exited result; actual HEAD is a single-parent child of the original parent with exact reviewed tree/index and clean selected state | Recheck the observation, authority and typed commit metadata, then record normal StepCommitObserved without invoking commit |
+
+The original execution summary and accepted input remain immutable. Each
+ordinary Advance invokes at most one commit; a new failure returns honest Wait
+with its own actual summary. There is no internal retry loop or repair-count
+refund. An unresolved old effect or new authority still uses explicit Human
+direction; no current observation alone substitutes for historical termination.
 
 Recovery compares the supplied target to freshly described current facts and
 appends only an immutable typed mechanical direction with a normal conditional
@@ -82,12 +129,21 @@ The target explicitly binds a corrected physical vector inside unchanged logical
 ownership. A separate Advance rejects drift before saving the new check or
 intent. Host bootstrap independently requires CheckSelectedIndex,
 SelectedIndexChanges and CommitSelected declarations present for the same
-target/selection to agree on their physical vector. Partial kind sets remain
+target/selection to agree on their fixed declared scope. CommitSelected derives
+the actual staged physical paths inside that scope, checks selected worktree
+cleanliness and commits exactly those physical files. Unchanged nonexistent
+future paths are not commit arguments. Partial kind sets remain
 valid; each actual operation still needs its own grant.
 
 Attempts are bounded to 0..255; revision arithmetic refuses exhaustion. History
 traversal follows only the contiguous intent, optional actual execution summary,
-explicit recovery direction, and fresh attempt or observed reconciliation. It
+either explicit recovery direction or observed continuation, and fresh attempt
+or observed reconciliation. A continuation requires its exact saved execution
+frontier; it cannot coexist with Human direction, cross intent/execution rows,
+skip native history or rewrite a target. Reconstruction binds the target to the
+original input, definition, participant, installed root/branch, ownership,
+ordinal and attempt, without live Git. Inherited next-attempt authority is the
+retained genuine direction or observed continuation target. It
 does not reset Start/cursors or invent controller acceptance. Legacy failed EOF
 precheck retry and its bounded correction rules remain intact.
 
@@ -103,15 +159,16 @@ Diagnostics are explanatory only; no stderr parsing controls recovery.
 Failures and incomplete results return honest Wait. A failed commit is never
 reported as a selected-index precheck failure. A prepared-intent interruption
 before a summary leaves the old result unknown. Interruption after a summary
-retains that actual terminal fact; it does not authorize replay. Even a saved
-success without a committed native receipt requires explicit reconciliation or
-independently authorized new-attempt direction under its actual current state.
+retains that actual terminal fact. Only the R2/R3 terminal-result and current
+Git gates may then admit bounded ordinary continuation. A saved success without
+a native committed receipt can reconcile only an actual exact matching child;
+it cannot authorize a new commit attempt.
 
 Git effects and storage are not one atomic transaction. The runtime attestation
-that the old owner ended is required because recovery cannot safely assume an
-old effect is inactive. No process cancellation, stale-owner takeover, automatic
-retry, arbitrary discovery scan, private SQLite mutation or manual production
-commit is part of this contract.
+that the old owner ended remains required for the explicit Human route when the
+saved actual summary cannot establish termination. No process cancellation,
+stale-owner takeover, arbitrary discovery scan, private SQLite mutation or manual
+production commit is part of this contract.
 
 ## R5 — Executable regression evidence
 
@@ -124,13 +181,14 @@ duplicate/gapped rejection and exact single-parent commit reconciliation.
 `GoalPhaseNativeClosureSpec` retains legacy failed EOF retry and correction
 coverage. `NativeGoalClosureRecoveryCliSpec` creates a fresh isolated normal
 Session, performs ordinary Start/implementation/Test/review once, induces an
-actual selected commit pathspec failure, then uses public description, trusted
-fixture preparation, public recovery and a separate ordinary Advance. It checks
-Defer, prior-ended refusal, stale/foreign/selection rejection, physical drift,
-retained history/accepted work/counters and exactly one new actual commit in the
-same Session. A separate fixture arranges an independently observed matching
-prior-owner commit and proves reconciliation creates no duplicate. SQLite reads
-are read-only observations; fixtures never seed or edit native rows.
+actual ended selected commit failure using a fixture-owned `.git/index.lock`,
+removes that lock after actual process termination, then uses read-only public
+description and ordinary Advance without new Human recovery direction. It
+checks retained history/accepted work/counters and exactly one actual commit in
+the same Session. A separate fixture arranges an observed matching prior-owner
+commit and proves ordinary reconciliation creates no duplicate. Unknown-effect
+Human admission, Defer and drift guards remain covered by the pure specs.
+SQLite reads are read-only observations; fixtures never seed or edit native rows.
 
 The optional `smworkflow.spec.installedCommand` system property selects an
 absolute installed normal CLI for those same public calls against the isolated
@@ -138,3 +196,35 @@ host. Parent-selected focused tests, independent review, required publication
 and installed qualification remain acceptance evidence to obtain, not claims
 made by authoring these sources. No real incident Session is operated by the
 specifications.
+
+## R6 — Adoption of an existing Session by a repaired installation
+
+Capture the complete old registered installation before refreshing the producer.
+Keep its `selected` file, concrete generation manifest, runtime modules and CAR
+artifacts intact. Prepare the repaired complete installation separately. Select
+the repaired runtime through the normal installed command; retain the consumer
+host configuration, native stores, index, accepted candidate and Session ID.
+Do not migrate private rows or rerun Start/Submit/accepted Test/review.
+
+For an eligible old actual failure, call
+`describeGoalPhaseClosureRecovery(sessionId)` and follow its `continuation-ready`
+ordinary `advanceGoalPhase` instruction. Description remains read-only. Advance
+rechecks current typed Git state and independent Step closure authority and
+saves its attempt-local continuation before the new bounded effect. Retained
+`.progress.saved` history reopens through ordinary traversal without migration.
+Uncertain/live results retain the explicit independent Human procedure above.
+
+The explicit `@DoNotDiscover` suite
+`NativeGoalClosureContinuationAdoptionCliSpec` requires absolute properties
+`smworkflow.spec.installedCommand`, `smworkflow.spec.legacyRuntimeRoot` and
+`smworkflow.spec.runtimeRoot`. Both runtime roots are complete distinct registered
+installations with actual JAR modules, not source/class directories. Its two
+inherited scenarios start fresh isolated hosts through the old installation,
+declare an unchanged nonexistent owned future path, complete ordinary work and
+one Test/review/closure grant, and retain the old actual pathspec failure. They
+switch only the selected installation, then qualify ordinary retry and
+matching-commit reconciliation while retaining old summaries, original history
+prefix, Session, Plan and accepted evidence. Every semantic answer, independent
+review and authority grant is explicitly specification-owned; no real Human
+consent or real incident Session is supplied by this suite. Publication,
+execution and independent review remain parent-owned acceptance evidence.

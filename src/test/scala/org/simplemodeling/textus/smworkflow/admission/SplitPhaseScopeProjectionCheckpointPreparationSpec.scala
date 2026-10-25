@@ -15,8 +15,10 @@ import SplitPhaseExplicitPartitionFixture.take
   * Actual owning-call capture is specified in the managed checkpoint chapter.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Scope successor capture" should {
     "source-specific locators" which {

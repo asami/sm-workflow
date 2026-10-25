@@ -12,7 +12,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.processexecution.SbtOperation
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, InstanceRecord, ProgressionReference}
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
@@ -26,10 +26,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * The parent alone owns producer publication and activation. A successful Test
   * remains at pending independent review; this fixture supplies no review.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalRuntimeStabilityCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {
   private final case class Generation(identity: String, manifest: Path, jars: Vector[Path])

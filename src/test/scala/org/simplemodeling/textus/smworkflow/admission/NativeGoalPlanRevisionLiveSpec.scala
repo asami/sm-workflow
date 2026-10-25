@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import io.circe.Json
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -17,10 +17,11 @@ import GoalPhasePlanRevision as R
   * The parent supplies actual semantic, Human, review and authority evidence.
   * Retained observations establish no external provenance by themselves.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -446,7 +447,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
             commit.parent shouldBe initial.work.get.originalBase.head
             commit.tree shouldBe reviewed.work.get.candidate.get.tree
             commit.tree shouldBe waiting.validation.get.candidate.tree
-            work.completed.head.review.trim should not be empty
+            work.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
             val scope = json(waiting.authorityContext.get.scope)
             scope.hcursor.downField("parent").focus shouldBe Some(json(work.originalBase.toRecord()))
             scope.hcursor.get[String]("plan").toOption shouldBe Some(work.selectedPlan.identity)

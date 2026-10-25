@@ -20,8 +20,10 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Real pure captures exercise wire data, not native execution or publication.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _completion_first(source: Base, boundary: B.Validated): K.Record = {
     val f = SplitPhaseTypedStartFixture

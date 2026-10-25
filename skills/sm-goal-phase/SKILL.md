@@ -15,6 +15,84 @@ the configured caller entry binding; the caller must independently record and ad
 the exact human selection. Missing binding or selection is not permission to
 manufacture a Start request or run a replacement workflow.
 
+## Runtime-owned repair and stop decisions
+
+New `ReviewPhase` assignments with captured
+`releaseRepairContract: sm-workflow.phase-release-repair.v1` use ordinary
+runtime-owned Release repair within the unchanged Plan. Execute only the issued
+phase-level `RepairStep`; preserve completed Steps and actual check/review
+history. The marker is captured by runtime, never supplied in a semantic reply.
+
+For the exact old marker-absent accepted Phase `repair` followed by its still
+unanswered Human, use public
+`describeGoalPhaseReleaseRepairContinuation` and
+`recoverGoalPhaseReleaseRepairContinuation` with the returned complete target.
+Present exactly `ContinueReleaseRepair` and `Defer`. Only separately admitted
+actual Human evidence under `goal-phase-release-repair-continuation`, prepared
+through normal kind `release-repair-continuation`, authorizes Continue. Existing
+engineering approval is not that direction. Defer writes nothing; recovery
+records only the new direction. A separate ordinary Advance owns new work and
+its one repair charge. Use the normal `inputResource` route and actual configured
+read roots/byte cap for large targets. Do not reconstruct, shorten or rewrite a
+target, answer the old question, resubmit the accepted review or manipulate
+native storage. Follow the [Release contract](../../docs/spec/goal-phase-release-repair-continuation.md)
+for exact eligibility, fresh affected checks/scoped review and normal Final
+authority with fixed `phase-release` host program.
+
+The runtime owns repair continuation, convergence assessment and the hard bound
+of 10 automatic repair batches per counting window. AI supplies diagnosis,
+semantic repair results and evidence; it does not create another repair loop,
+counter, approval gate or stopping policy in prose, proposals or runner handoffs.
+Do not add "one execution only", "no fixes after failure" or approval per failed
+check to an already-authorized repair scope. Failure blocks adoption of an
+unqualified candidate, not ordinary repair of that candidate.
+
+Present an actual runtime Human request as such. Distinguish a genuine new
+authority/scope requirement or missing runtime capability from that request;
+caller-authored restrictions are not runtime requirements. Honor explicit human
+restrictions, but do not treat an AI-authored clause as an independently requested
+human limit. Reuse the user's existing authorization through the supported route.
+Unknown/live effects remain observation/collection work, never blind replay.
+
+Use runtime-issued continuation, assessment and limits. A failed test alone is
+not divergence; evidence of sustained regression/oscillation is assessed by the
+runtime. AI BLOCKED remains a semantic report through the existing typed route,
+not an independently enacted stop. Do not select an arbitrary lower limit such
+as 3. An explicitly human-selected lower bound remains attributable and visible.
+
+The target restoration controller uses the common execution-side repair policy.
+Until RRC is delivered, continue already-authorized restoration through the
+existing applicable standalone execution route described under Product SBT
+ownership. RRC absence is not a new stop condition or approval requirement.
+Delegate the bounded restoration outcome to one producer owner; do not create
+a skill/helper repair controller, counter or substitute runtime Human decision.
+Track the RRC capability gap in parallel, without making its completion a
+prerequisite for fixing/qualifying the existing runtime. Existing real limits,
+execution permissions and unknown-effect handling remain in force. Do not
+silently debit/reset the suspended consumer's counter or claim RRC acceptance.
+Preserve the Session, accepted work, all history, counters and validation results.
+Policy adoption uses supported public operations; never edit Session storage,
+re-Start, replay accepted Submit or reset counts to adopt this policy.
+
+## Delegate a coherent outcome
+
+Apply the [common delegation contract](../../docs/spec/native-host-execution.md#outcome-based-delegation).
+Assign one owner the authorized deliverable, acceptance conditions, relevant
+scope and evidence: diagnosis, correction, required validation coordination and
+handoff. The owner handles routine technical decisions within that scope without
+asking the consumer to freeze each edit or relay each reviewer question. This
+organizes responsibility; it does not merge native issued work types or grant
+semantic workers command authority. Normal Phase validation remains runtime-owned.
+
+Keep a single owner of process/result collection. Consumers use the returned
+result rather than polling the same logs or requesting progress-only AI turns.
+Report completion, material scope/contract changes and decisions the owner cannot
+resolve; ordinary user-facing progress can use already-available observations.
+Batch independent review of unresolved semantic questions at the applicable
+acceptance boundary. Do not add review round trips for dates/comments, routine
+local fixes or unchanged evidence. Preserve mandated independent review and
+reuse its results; the implementer cannot certify their own independent review.
+
 ## Codex Goal registration at host entry
 
 For an explicit user request to start or resume Phase development, the owning
@@ -47,6 +125,33 @@ alternate attempts, without granting new dispatch or retry authority. INLINE
 work is parent work, not a subagent call. This is presentation only: add no
 agent, model probe, AI invocation, polling or saved record solely for display.
 
+## Long-running invocation collection
+
+Follow [passive result collection](../../docs/spec/native-host-execution.md#long-running-invocation-collection).
+Keep the existing owned Advance/complete invocation alive and collect its actual
+result. Do not periodically tail/read logs, stat the response file, query status,
+scan processes or create a monitoring agent/automation solely because the result
+has not arrived. Do not generate repeated "still waiting" commentary or AI turns
+solely for liveness/display. This applies to the caller's own long-running command,
+not only to waiting for another development chat.
+
+Prefer the transport's existing completion notification or pending-call resume.
+If the transport requires explicit result collection, use its supported wait/resume
+for the same execution handle only as needed; a yielded wait is not completion.
+Do not add separate log/status probes or commentary after each yielded wait.
+Transport-required collection is distinct from monitoring and must not be removed
+in a way that loses the result or strands the Phase. Keep the current handle and
+retained output reference in existing continuation context, not a new poll ledger.
+After the actual result, follow the ordinary continuation route. No new Advance,
+retry, cancellation, timeout or detached execution is authorized by silence.
+
+A concrete newly observed failure, lost transport, or explicit user status request
+may require a bounded diagnostic read. State that purpose; an empty response or
+quiet log alone is neither failure nor hang. Preserve Session, accepted work,
+history, repair counts and all outcomes. If the tool cannot notify without model
+resumption, report that transport limitation honestly; do not claim skill text
+makes waiting AI-free or replace required result collection with silent abandonment.
+
 ## Visible command exchanges
 
 Distinguish preparation, the matched execution interval and actual handback
@@ -58,7 +163,7 @@ commentary in normal mode, using this fixed concise checklist:
 
 - Preparation: **⚙️ sm-workflow 呼び出し準備** — `sm-workflow → operation=<operation>; purpose=<purpose>; Session=<known ID or unknown>; Step=<known Step or unknown>`. Include the known Phase/target and selected input link. Preparation, including helper launch intent, is not confirmed runtime execution.
 - Started: **⚙️ 🔵 ▶ sm-workflow 実行開始 ━━━━━━━━━━━** — repeat the operation and known Session/Step; `制御：sm-workflow`. Emit only on observed CLI/runtime start or actual running output.
-- During: **⚙️ 🔵 │ sm-workflow 実行中** — prefix every progress commentary for that call; show actual SBT/runtime observations, supplied repair counts and `制御：sm-workflow`. Tool output alone does not end the interval.
+- During: **⚙️ 🔵 │ sm-workflow 実行中** — use only for a material change already exposed by the owned invocation (for example a new check, failure, cancellation or required action), with actual observations and `制御：sm-workflow`. Repeated waiting/heartbeat, elapsed time or an empty response is not a new commentary event. Tool output alone does not end the interval.
 - Returned: **⚙️ 🔵 ◀ sm-workflow 応答受信・制御返却 ━━━━━━━━━━━** — repeat the matching operation and known Session/Step; `制御：親チャット`. Preserve `sm-workflow ← kind=<actual or unknown>; outcome=<actual or unknown>; accepted=<actual or unknown>; message=<actual or unknown>; work=<issued work or unknown>; next=<actual or unknown>`, supplied counters and retained-output links. Response receipt is not Workflow completion.
 - Failure/uncertainty: use **⚙️ 🔴 sm-workflow 起動前エラー** when non-execution is confirmed (no execution interval); **⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー** only when the owned call has ended; or **⚙️ 🟡 │ sm-workflow 実行状態不明** when execution/termination is unknown. Do not close an uncertain interval as completed or imply that its runtime stopped. Preserve diagnostics and exact retained-output links.
 
@@ -90,9 +195,10 @@ outputs without dumping secret source contents, full argv or environment.
 Do not add state queries, Submit or Advance just for display, split paired
 completion, replay calls or change the existing stop/continuation rules.
 
-Include supplied actual runtime deadlines, heartbeat, managed-descendant
-settlement observations and durable result references in during/after/failure
-commentary. Telemetry creates no caller deadline. A forwarded SIGTERM is only
+Report supplied runtime deadlines when first observed or changed, and relevant
+managed-descendant settlement and durable result references at handback/failure.
+Retain heartbeat details in runtime output; do not narrate each heartbeat or
+repeat an unchanged waiting state. Telemetry creates no caller deadline. A forwarded SIGTERM is only
 a request; runtime-confirmed settlement and the actual durable result establish
 cancellation. Missing observations stay unknown; signals, elapsed time or root
 exit alone establish no cleanup, durable state or validation success. Preserve
@@ -106,10 +212,37 @@ admitted UoW. Consume its actual observations; do not create, launch, wait for
 or complete a per-check AI command runner or use the retired registered SBT
 caller bridge. Explicit V4-to-V3 host migration removes `registeredSbtHost`;
 there is no automatic fallback or stored Session edit. Historical records and
-accepted evidence retain their meaning. Independent top-level development
-tests/publication still use `cncf_command_runner` and native sbt locks; product
-SBT within the installed CLI's UoW is platform-owned. See the
+accepted evidence retain their meaning. Product SBT within the installed CLI's
+UoW is platform-owned. See the
 [product SBT lifecycle](../../docs/spec/native-host-execution.md#product-sbt-lifecycle).
+
+Classify validation by its purpose, not the repository being developed or the
+label attached to the command. Checks needed for issued implementation, repair,
+Step acceptance or Phase completion belong to this workflow, including when
+developing sm-workflow itself. Calling them "independent development tests",
+"supplementary checks" or a worker's pre-Submit sanity check does not move them
+to `cncf_command_runner`. Apply this rule before general top-level SBT routing.
+
+Pass this boundary in implementation/repair assignments: edit the issued scope
+and return the actual semantic result and any missing validation requirement;
+do not launch SBT or prepare/delegate a runner intake. The caller Submits that
+result and uses ordinary Advance so the runtime executes the selected checks,
+waits, retains actual outcomes and continues through its configured progression.
+If selection, Submit-to-validation progression or execution is missing, report
+the concrete gap and correct that connection; do not silently run checks outside
+the workflow or claim unobserved validation success.
+
+The independent route remains for separately scoped work outside this Phase's
+validation, such as a standalone test request or restoration of a broken runtime
+that cannot execute its own checks. State that purpose and scope using existing
+task context; this is no new approval or per-command classification artifact.
+Use `cncf_command_runner` and native sbt locks for that separate work, without
+treating its receipt as automatic Phase acceptance. Preserve ongoing work,
+Session identity, history, repair counts and existing validation evidence when
+adopting this rule. Collect an already-running invocation rather than killing
+or duplicating it, retain its original attribution, and reuse applicable evidence
+through existing supported admission. Do not restart the Session, resubmit
+accepted work or rerun successful checks solely to change the execution route.
 
 The parent directly invokes the escalated ordinary installed CLI and waits for
 its actual response, even when Advance takes an hour or longer. There is no
@@ -220,14 +353,57 @@ no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Journal results and purpose-driven lookup
 
-Consume optional `journalRecording` and automatic `findingRecording.journaled`
-from the actual returned business view. Show each supplied Journal status,
+Consume optional `journalRecording`, automatic `findingRecording.journaled`,
+and native `validation.assessmentJournal` from the actual returned business view. Show each supplied Journal status,
 actual Entry identity/revision, and short message/source reference when supplied;
 keep the operation's business acceptance and outcome distinct. `recorded` and
 `alreadyRecorded` name only supplied real Entry references. Report `unavailable`,
 `conflict`, `indeterminate`, `disabled`, absent fields and unknown outcomes
 honestly, without inventing Entries, zero counts or success. Reuse the supplied
 view; never query another operation merely to fill display fields.
+
+A native Step `admission` with absent `review` is formal reviewless acceptance
+under the saved PLAN policy and actual checks. It is not independent review PASS
+or AI CLEAN. Consume the actual `validation.assessment` and retained unresolved
+observations; do not request an AI waiver, synthesize a review reference or
+resubmit accepted work to make the old required-review shape. A selected required
+review and the integrated Phase review retain their own real issued routes.
+
+## Selected lint and semantic triage
+
+`fix-check` is the typed CNCF check-only SBT operation. The project owns the
+nonempty `fixCheck` Scalafix profile. Consume actual durable check results;
+missing, timed-out, uncertain, unavailable and OFF are distinct from PASS.
+Known check failures use the existing assigned FIX, not an AI waiver. An
+intentional lint exception requires an actual applicable prior Human decision.
+Use standard rule-scoped suppression with its source reason and decision
+reference; preserve the original finding and failed result, and recheck the
+exception plus unrelated violations. Do not disable the Action or claim the
+original implementation was corrected. Ordinary correction needs no new Human
+question, and an already admitted applicable exception needs no duplicate approval.
+
+Perform `TriageStep` only when actually issued. Use a separate read-only context
+through the configured execution profile; the existing `sm_workflow_analysis`
+role can perform this bounded semantic work when selected. Preserve its actual
+configured model/effort and scope; do not run a model comparison or replace a
+required independent reviewer with triage. Read the supplied candidate diff,
+passed check receipts, assessment triggers, structural availability and applicable
+prior decisions. Do not execute commands or edit source in the triage worker.
+Return the issued `GoalPhaseWorkResult` with only `outcome`, `summary` and
+`findings`: `clean` requires empty findings, `suspicious` requires attributable
+observations and the scope needing review, and semantic `decline` states the
+actual inability to judge. These observations are not confirmed blocking issues.
+Omit acceptance, fix/issue reports, Plan/dependency proposals and review reports.
+Transport or tool failure leaves this work open; it is never semantic DECLINE.
+
+CLEAN returns through formal admission and creates no independent review PASS.
+SUSPICIOUS/DECLINE issues one detailed review using the original evidence and
+triage judgment. Required planned review bypasses triage. Do not repeat triage
+on an unchanged candidate or replay settled checks to obtain another judgment.
+Absent optional scenario mapping means the detector is OFF, not verified clean;
+partial mapping cannot prove missing coverage. The runtime only joins explicitly
+selected path/Operation/scenario facts and keeps observations distinct from
+actual check failures. CBD remains OFF.
 
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
@@ -241,7 +417,8 @@ Use ordinary provided `JournalService.findJournalEntries` or
 `JournalService.readJournalEntry` only for a concrete lookup purpose. Pass their
 generated input as `--input` JSON through the existing installed command.
 Find requires `repositoryIdentity`; optional exact filters are `phaseIdentity`,
-`sessionIdentity`, `kind` (only `ExecutionObservation` or `Finding`) and
+`sessionIdentity`, `kind` (`ExecutionObservation`, `Finding`, `EvidenceStorageObservation`
+or `StepAssessment`, as supported by the selected runtime) and
 `sourceReference` with its actual complete identity/revision tuple. Never
 fabricate a partial source. Optional `recordedFrom` is from-inclusive and
 `recordedBefore` is to-exclusive; both require whole-second UTC
@@ -329,12 +506,32 @@ For an issued semantic request:
    condition and may contain applicable excluded conditions; `advisories`
    contains nonblocking ideas. Use only `satisfied`, `unsatisfied` or
    `not-evaluated` with honest nonblank detail. Completed/accept requires all
-   applicable required conditions satisfied and empty findings. Review repair
-   requires at least one unsatisfied required condition, and `findings` must
-   equal those unsatisfied required details in report order. An excluded idea
-   or advisory never creates repair scope. Required not-evaluated prevents
+   applicable required conditions satisfied and empty findings, with no
+   `repairFindingSources`. The legacy required-only review repair form omits
+   sources and requires `findings` to equal the unsatisfied required details
+   in report order. A newly issued ReviewStep with an actual `purposeRepair`
+   contract also permits independently judged defects in that original Step
+   purpose and owned scope, without per-finding Human approval. For this form,
+   public `repairFindingSources` is `{sources:[...]}` (the native saved result
+   uses an array). Supply one closed tagged source per finding in ordinal
+   order: `{kind:"required-condition",findingOrdinal,conditionIdentity}` or
+   `{kind:"step-purpose",findingOrdinal,stepIdentity,rationale,affectedPaths}`.
+   Include every applicable required failure with its exact detail in report
+   order; evaluate every required condition, and keep purpose paths inside the
+   captured Step ownership. Never add the contract to old issued work or add
+   sources to an old request, ReviewPhase, completed or accept result. An
+   excluded idea or advisory never creates repair scope. Required not-evaluated prevents
    acceptance; a structurally valid decision-needed report uses the existing
    independent Human route. For an unconfigured Plan omit the report.
+   For an old issued ReviewStep with absent `purposeRepair`, an already accepted
+   untyped decision-needed report and an unanswered Human, the caller may separately
+   describe `describeGoalPhaseReviewPurposeRepair`
+   and prepare kind `review-purpose-repair`. Only a separately provisioned actual
+   Human directive acknowledging the complete described saved finding/OPEN issue
+   batch may call `admitGoalPhaseReviewPurposeRepair`. Engineering approval and
+   passive preparation grant no live direction. Preserve the original verdict,
+   question, Plan, base, prefix and repair history; the next ordinary Advance
+   owns same-Step repair. This legacy continuation adds no condition or Plan revision.
 4. Hand the actual result and control back to the caller. Report rejection or uncertain submission;
    do not replay, select the next operation or implement a polling/advance loop.
 
@@ -387,6 +584,27 @@ metadata alone do not establish installed-skill execution or Step acceptance.
 
 ## Issued dependency scope
 
+The authorization boundary is **Component, purpose, acceptance conditions and
+operations**, following [PA-01..07](../../docs/spec/goal-phase-dependency-scope.md#purpose-based-authorization--adopted-2026-10-25).
+Submit additional files with their reason and relationship to that boundary to
+sm-workflow through its supported work-result route. The runtime decides whether
+existing approval covers the update. Do not preemptively request user permission
+because a file is absent from a planned list; do not ignore a genuine runtime Human
+request. Ask the user only for the actual issued Human decision, reusing attributable
+existing direction through the public procedure when applicable.
+
+Within the admitted boundary, runtime admission of additional necessary files
+continues the same work without a new Human answer. Keep actual file attribution
+and explicit user exclusions. Do not broaden Component, purpose, acceptance or
+operation permissions yourself. This is not permission to stage unrelated work.
+The producer must implement/adopt the new decision contract: until then, report
+an unsupported update accurately, retain pending requests and use the real public
+route. No fabricated approval, store edit or Session reset is permitted. Continue
+already approved restoration without waiting for this future correction.
+
+The following payload details describe the existing runtime ABI. They do not
+redefine a planned file inventory as the target Human authorization boundary.
+
 Follow the existing [dependency-scope contract](../../docs/spec/goal-phase-dependency-scope.md).
 Ordinary public Usage Contract use and inspection need no dependency-change
 proposal. Internal changes to a dependency Component, including a Component in
@@ -421,9 +639,11 @@ second caller loop. Consume issued `decisionContext` only as the actual requesti
 result and proposal, with `decisionReference` from the retained genuine Human
 answer; a claimed AI reference cannot replace it.
 
-Approval covers that one exact linked unit, its acceptance and dependent work.
-Reuse the saved scope without asking again per selected file; a new out-of-scope
-proposal requires a new question. Rejection retains its actual rationale; Defer
+Approval covers the admitted linked outcome under Component, purpose, acceptance
+and operations. Under PA-01..07, additional necessary files are submitted for
+runtime admission without presuming a new Human question. A real boundary change
+is decided through the runtime's formal request. The legacy exact-proposal ABI
+below still requires genuine evidence for any Human decision it actually issues. Rejection retains its actual rationale; Defer
 and Cancel remain paused. Continuation retains the same semantic kind, Plan,
 original base, completed Steps and repair counts. Approval neither makes a
 reviewer an editor nor executes linked work. Target, File, command, Git, SBT and
@@ -437,6 +657,27 @@ actual Human direction, linked dependency editing, execution or acceptance;
 those require their own genuine evidence and existing admission gates.
 
 ## Issued repair and independent review
+
+Normal Phase SBT validation belongs exclusively to runtime Submit/Advance,
+including validation of sm-workflow itself. Never substitute direct SBT or an
+"independent development test" runner for an issued Step/Phase check. The runtime
+uses the CNCF typed SBT JVM policy: default Xmx >=4 GiB, configurable through
+`cncf.sbt.jvm.maximum-heap-mib`, preserving larger target `.jvmopts` settings.
+Do not add per-check fixed JAVA_OPTS or alter global config to compensate for a
+missing producer implementation. Report the actual missing runtime capability
+and retain the same Session, history, counters and results. Config adoption does
+not replay accepted Submit or authorize a new attempt after an uncertain effect.
+
+An issued `RepairStep` with no Step identity after all selected Steps have closed
+repairs the release delta within the original Plan ownership. Use its actual
+failed-check context or original integrated review and exact required issue IDs.
+Preserve the accepted Step prefix and repair window. Return the same typed repair
+result; do not create a corrective Step, propose ordinary in-scope repair for new
+adoption, execute validation or perform a Final commit. Runtime applies selected
+affected validation and issues any necessary scoped `ReviewPhase` with prior
+reports. That review judges unresolved findings, the repair delta and affected
+meaning while retaining applicable original conclusions. A real scope expansion
+or an exhausted repair window still uses its existing genuine Human route.
 
 When the issued ContextBundle supplies selected Slice validation-plan Sources,
 use only each issued exact path, identity, Slice reference and required condition
@@ -522,8 +763,8 @@ completed-Step progress and existing document policy, validating that policy
 against the adopted Plan and fixed candidate paths. Rejection, defer and cancel
 retain the old documents, policy and progress; no file restoration is implied.
 Ordinary document refresh and progress keep their existing owners at the next
-fresh frontier. Checks, independent review, Step commit and
-Phase closure retain their mandatory gates. Review reports gaps as findings
+fresh frontier. Required checks, PLAN-selected Step assessment/review, independent
+Phase review, Step commit and Phase closure retain their owning gates. Review reports gaps as findings
 for later repair, with only the disjoint ReviewPhase proposal case below.
 
 An actual `ReviewPhase` with a genuine integrated finding after all accepted

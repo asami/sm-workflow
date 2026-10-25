@@ -29,9 +29,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Fixture-ignored documents exercise acquisition and decisions, not tracked
   * document writeback, Step commits, SBT/provider execution or full B2 acceptance.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDocumentLiveOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _source = D.Source("verification-inputs/phase.md", "verification-inputs/checklist.md")

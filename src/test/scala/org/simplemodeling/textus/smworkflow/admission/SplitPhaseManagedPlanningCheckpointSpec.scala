@@ -42,8 +42,10 @@ import SplitPhaseExplicitPartitionFixture.take
   * Shared transaction, replay and interruption guarantees are not re-specified.
   *
   * @since   Oct.  2, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseManagedPlanningCheckpointSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "managedcheckpoint", name))
   private def target(p: F.Purpose) = collection(p.toString.toLowerCase)

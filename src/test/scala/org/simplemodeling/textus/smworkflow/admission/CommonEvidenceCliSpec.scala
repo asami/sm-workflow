@@ -16,9 +16,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual Test producer and fresh ordinary CLI reads share only managed storage.
   * Semantic work is specification-owned; no real development Session is changed.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class CommonEvidenceCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _installed_call(executable: Path, root: Path, operation: String, input: RecordPresentable): NativeWorkflowCliFixture.Result = {
     val directory = Files.createTempDirectory(root, "installed-evidence-call-")

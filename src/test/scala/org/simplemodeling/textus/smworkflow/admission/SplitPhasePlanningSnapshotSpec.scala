@@ -13,8 +13,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePlanningSnapshotSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def objectives(s: Base, threshold: Long = 300): O.Records = O.Records(
     Some(O.CostPolicy(O.CostPolicyReference("cost", "1"), s.source.reference, s.source.authority,

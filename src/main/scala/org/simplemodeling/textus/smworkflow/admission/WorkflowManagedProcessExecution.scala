@@ -14,15 +14,16 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
   /** Logical Git intent interpreted in the owning call's current UnitOfWork. */
-  def executeGitC[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[GitExecutionResult[A]] = for {
+  def executeGitC[A](core: ActionCall.Core, operation: GitOperation[A],
+    workspaceIdentity: String = "sm-workflow-repository"): Consequence[GitExecutionResult[A]] = for {
     _ <- if (core != null && core.executionContext != null && operation != null) Consequence.unit
       else Consequence.stateConflict("Workflow typed Git owning call or intent is absent")
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(workspaceIdentity)
     target = GitTarget(workspace)
     execution = new Execution(core)
     result <- execution.runGitC(execution.prepareGit(target, operation))
@@ -60,6 +61,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+      case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
     }
     execution = new Execution(core)
     result <- execution.runSbtC(execution.prepareSbt(target, kind))
@@ -84,15 +86,17 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   /** Admission and uncertain execution remain distinct from observed process facts. */
   def repositoryValidationAttemptC(core: ActionCall.Core, ordinal: Int,
-    kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Consequence[SbtExecutionAttempt] = for {
+    kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
+    workspaceIdentity: Option[String] = None): Consequence[SbtExecutionAttempt] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0 && ordinal <= 16) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
-    workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
+    workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
     target = SbtTarget(workspace)
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
+      case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
     }
     execution = new Execution(core)
     result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, kind))
@@ -153,12 +157,14 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
+      case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check(target)
     }
     def runSbtC(program: ExecUowM[SbtExecutionResult]): Consequence[SbtExecutionResult] = executeProgram(program)
     def prepareSbtAttempt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionAttempt] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile_attempt(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only_attempt(target)
+      case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check_attempt(target)
     }
     def runSbtAttemptC(program: ExecUowM[SbtExecutionAttempt]): Consequence[SbtExecutionAttempt] = executeProgram(program)
     def prepareGit[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {

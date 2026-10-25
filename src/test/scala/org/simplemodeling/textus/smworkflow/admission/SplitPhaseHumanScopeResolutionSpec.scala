@@ -12,8 +12,10 @@ import SplitPhaseExplicitPartitionFixture.*
 /** Passive data contracts, separate from the native use-case specification.
   *
   * @since Oct.  5, 2026
-  * @version Oct. 10, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseHumanScopeResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _record = {
     val source = base(Vector.fill(4)(180))

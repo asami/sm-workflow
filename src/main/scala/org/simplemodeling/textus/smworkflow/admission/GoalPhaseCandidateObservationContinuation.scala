@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{Decoder, Encoder, Json, DecodingFailure}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
@@ -22,11 +22,13 @@ import GoalPhaseNativeCandidate as C
 import GoalPhaseCandidateRecovery as R
 import RepositorySyncManagedGitObservation as G
 import GoalPhaseNativeCandidateBoundary as B
+import GoalPhaseDependencyValidation as D
+import D.given
 
 /** Fresh independent Human direction after a separately authorized observation failed.
   * Historical uncertainty and every completed effect remain immutable.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateObservationContinuation {
@@ -52,28 +54,49 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
   final case class Dirty(index: String, worktree: String, path: String, renamedFrom: Option[String])
   object Dirty {
     given Encoder[Dirty] = deriveEncoder[Dirty]
-    given Decoder[Dirty] = deriveDecoder[Dirty]
+    given Decoder[Dirty] = _closed(Set("index", "worktree", "path", "renamedFrom"), deriveDecoder[Dirty])
   }
   final case class RepositorySnapshot(root: String, branch: String, head: String, tree: String,
     dirty: Vector[Dirty], indexTree: String)
   object RepositorySnapshot {
     given Encoder[RepositorySnapshot] = deriveEncoder[RepositorySnapshot]
-    given Decoder[RepositorySnapshot] = deriveDecoder[RepositorySnapshot]
+    given Decoder[RepositorySnapshot] = _closed(Set("root", "branch", "head", "tree", "dirty", "indexTree"), deriveDecoder[RepositorySnapshot])
   }
   final case class PriorObservation(directionSourceRevision: String, directionRecordRevision: String,
     intentIdentity: String, intentRevision: String, intentRecordRevision: String, intent: C.Payload,
-    outcome: String, termination: String)
+    outcome: String, termination: String, dependencyPrefix: Vector[R.DependencyFact] = Vector.empty)
   object PriorObservation {
-    given Encoder[PriorObservation] = deriveEncoder[PriorObservation]
-    given Decoder[PriorObservation] = deriveDecoder[PriorObservation]
+    given Encoder[PriorObservation] = deriveEncoder[PriorObservation].mapJson(_.mapObject(_.filter {
+      case ("dependencyPrefix", value) => !value.asArray.exists(_.isEmpty)
+      case _ => true
+    }))
+    private val _decoder: Decoder[PriorObservation] = deriveDecoder
+    given Decoder[PriorObservation] = Decoder.instance { c =>
+      val wire = if (c.downField("dependencyPrefix").focus.isEmpty) c.value.mapObject(_.add("dependencyPrefix", Json.arr())) else c.value
+      _decoder(wire.hcursor).flatMap(p =>
+        if (c.value.asObject.exists(_.keys.toSet == Set("directionSourceRevision", "directionRecordRevision", "intentIdentity",
+          "intentRevision", "intentRecordRevision", "intent", "outcome", "termination") ++
+          c.downField("dependencyPrefix").focus.map(_ => "dependencyPrefix"))) Right(p)
+        else Left(DecodingFailure("Prior observation fields differ", c.history)))
+    }
   }
   final case class Target(original: R.RecoveryTarget, controller: R.Controller,
     originalDirectionIdentity: String, originalDirectionRevision: String, originalDirectionRecordRevision: String,
     directionSourceRevision: String, frontierRevision: String, priorObservations: Vector[PriorObservation],
-    maximumDiffBytes: Long, repository: RepositorySnapshot)
+    maximumDiffBytes: Long, repository: RepositorySnapshot, dependencyRepository: Option[RepositorySnapshot] = None)
   object Target {
-    given Encoder[Target] = deriveEncoder[Target]
-    given Decoder[Target] = deriveDecoder[Target]
+    given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter {
+      case ("dependencyRepository", value) => !value.isNull
+      case _ => true
+    }))
+    private val _decoder: Decoder[Target] = deriveDecoder
+    given Decoder[Target] = Decoder.instance(c => _decoder(c).flatMap(t =>
+      if (c.value.asObject.exists(_.keys.toSet == Set("original", "controller", "originalDirectionIdentity",
+        "originalDirectionRevision", "originalDirectionRecordRevision", "directionSourceRevision", "frontierRevision",
+        "priorObservations", "maximumDiffBytes", "repository") ++
+        c.downField("dependencyRepository").focus.map(_ => "dependencyRepository")) &&
+        !c.downField("dependencyRepository").focus.exists(_.isNull) && validTarget(t)) Right(t)
+      else Left(DecodingFailure("Observation target fields or subject differ", c.history))))
   }
   final case class Direction(target: Target, reference: ContextReference, participant: String, rationale: String,
     choice: String = "AuthorizeNewObservation")
@@ -91,8 +114,49 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
   def targetC(value: Record): Consequence[Target] =
     if (value == null) invalid("target is absent") else value.toJsonStringC.flatMap(text =>
-      io.circe.parser.parse(text).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
-        .flatMap(decodeTarget).fold(invalid(_), Consequence.success))
+      io.circe.parser.parse(text).left.map(_.message).flatMap(decodePublicTarget)
+        .fold(invalid(_), Consequence.success))
+
+  /** Interpret public omissions without changing the exact durable target codec. */
+  def decodePublicTarget(value: Json): Either[String, Target] = for {
+    supplied <- Option(value).toRight("Public candidate observation target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    original <- R.decodePublicTarget(wire.hcursor.downField("original").focus.getOrElse(Json.Null))
+    controller <- R.publicController(wire.hcursor.downField("controller").focus.getOrElse(Json.Null))
+    repository <- _public_repository(wire.hcursor.downField("repository").focus.getOrElse(Json.Null))
+    dependency <- wire.hcursor.downField("dependencyRepository").focus match {
+      case None => Right(None)
+      case Some(snapshot) => _public_repository(snapshot).map(Some(_))
+    }
+    _ <- R.publicMembers(wire, "priorObservations", false)(p => for {
+      _ <- R.publicCandidatePayload(p.hcursor.downField("intent").focus.getOrElse(Json.Null))
+      _ <- R.publicMembers(p, "dependencyPrefix", true)(fact =>
+        R.publicCandidatePayload(fact.hcursor.downField("payload").focus.getOrElse(Json.Null)))
+    } yield ())
+    canonical = wire.mapObject(fields => {
+      val required = fields.add("original", original.asJson).add("controller", controller.asJson)
+        .add("repository", repository.asJson)
+      dependency.fold(required)(snapshot => required.add("dependencyRepository", snapshot.asJson))
+    })
+    target <- decodeTarget(canonical)
+  } yield target
+
+  private val _public_dirty_decoder: Decoder[Dirty] = deriveDecoder[Dirty]
+  private def _public_dirty(value: Json): Either[String, Dirty] = for {
+    fields <- value.asObject.toRight("Public dirty entry must be an object")
+    _ <- Either.cond(Set("index", "worktree", "path").subsetOf(fields.keys.toSet) &&
+      fields.keys.forall(Set("index", "worktree", "path", "renamedFrom").contains) &&
+      fields.values.forall(!_.isNull), (), "Public dirty fields are missing, unknown or null")
+    dirty <- _public_dirty_decoder(value.hcursor).left.map(_.message)
+  } yield dirty
+
+  private def _public_repository(value: Json): Either[String, RepositorySnapshot] = for {
+    _ <- R.publicNonNullObject(value, "repository snapshot")
+    entries <- value.hcursor.get[Vector[Json]]("dirty").left.map(_.message)
+    dirty <- entries.foldLeft[Either[String, Vector[Dirty]]](Right(Vector.empty))((result, item) =>
+      for { previous <- result; decoded <- _public_dirty(item) } yield previous :+ decoded)
+    repository <- value.mapObject(_.add("dirty", dirty.asJson)).as[RepositorySnapshot].left.map(_.message)
+  } yield repository
   def decodeTarget(value: Json): Either[String, Target] = for {
     wire <- Option(value).toRight("Candidate observation continuation target is absent")
     target <- wire.as[Target].left.map(_.message)
@@ -114,15 +178,20 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
       p != null && Vector(p.directionSourceRevision, p.directionRecordRevision, p.intentRecordRevision).forall(_revision) &&
       p.directionSourceRevision == (if (i == 0) t.original.sourceRevision else t.priorObservations(i - 1).directionRecordRevision) &&
       BigInt(p.directionRecordRevision) == (if (i == 0) BigInt(t.originalDirectionRecordRevision)
-        else BigInt(t.priorObservations(i - 1).intentRecordRevision) + 1) &&
+        else BigInt(observationFrontier(t.priorObservations(i - 1))) + 1) &&
       p.intentIdentity == t.original.sessionId + ":ordered-candidate:" + p.directionRecordRevision + ":observation-intent" &&
       p.intentRevision == "1" && BigInt(p.intentRecordRevision) == BigInt(p.directionRecordRevision) + 1 &&
-      p.intent == t.original.stagingPrefix.last.result.copy(sourceRevision = p.directionRecordRevision) &&
+      p.intent == (if (i == 0) R.preparedPayload(t.original) else observationPayload(t.priorObservations(i - 1)))
+        .copy(sourceRevision = p.directionRecordRevision) && observationPrefixValid(t.original, p) &&
       p.outcome == "UNKNOWN" && p.termination == "termination-unconfirmed"
     } && t.directionSourceRevision == t.priorObservations.last.directionRecordRevision &&
-    t.frontierRevision == t.priorObservations.last.intentRecordRevision &&
+    t.frontierRevision == observationFrontier(t.priorObservations.last) &&
     BigInt(t.frontierRevision) < BigInt(Long.MaxValue) - 2 &&
-    t.maximumDiffBytes > 0 && t.maximumDiffBytes <= GitDiffParameters.maximumBytes && validRepository(t.original, t.repository)
+    t.maximumDiffBytes > 0 && t.maximumDiffBytes <= GitDiffParameters.maximumBytes && validRepository(t.original, t.repository) &&
+    t.dependencyRepository != null && (R.preparedPayload(t.original).dependencyAdmission match {
+      case None => t.dependencyRepository.isEmpty
+      case Some(admission) => t.dependencyRepository.exists(validDependencyRepository(admission, _))
+    })
 
   def validRepository(original: R.RecoveryTarget, snapshot: RepositorySnapshot): Boolean = snapshot != null &&
     snapshot.root == original.root && snapshot.branch == original.branch &&
@@ -135,9 +204,47 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
     B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)),
       original.inspection.selectedPaths, false)
 
-  def observationEligible(target: Target): Boolean = validTarget(target) &&
+  def observationFrontier(value: PriorObservation): String = value.dependencyPrefix.lastOption
+    .map(_.recordRevision).getOrElse(value.intentRecordRevision)
+  def observationPayload(value: PriorObservation): C.Payload = value.dependencyPrefix.lastOption.map(_.payload).getOrElse(value.intent)
+  def preparedPayload(target: Target): C.Payload = observationPayload(target.priorObservations.last)
+  def observationPrefixValid(original: R.RecoveryTarget, value: PriorObservation): Boolean =
+    value.dependencyPrefix != null && (value.intent.dependencyAdmission match {
+      case None => value.dependencyPrefix.isEmpty
+      case Some(admission) if value.intent.dependencyStaged == admission.binding.paths =>
+        val facts = value.dependencyPrefix
+        (value.intent.dependency.nonEmpty && facts.isEmpty) || (value.intent.dependency.isEmpty && facts.size <= 2 &&
+          facts.zipWithIndex.forall { (fact, index) =>
+            val key = if (index == 0) "dependency-observation-intent" else "dependency-observation-result"
+            fact != null && fact.key == key && fact.identity == original.sessionId + ":ordered-candidate:" +
+              value.directionRecordRevision + ":" + key && fact.revision == "1" && _revision(fact.recordRevision) &&
+              BigInt(fact.recordRevision) == BigInt(value.intentRecordRevision) + index + 1 && fact.payload != null &&
+              C.codec.decode(C.codec.encode(fact.payload)).isRight &&
+              (if (index == 0) fact.payload == value.intent else fact.payload.dependency.exists(c =>
+                D.capturedForC(c, original.sessionId, original.controller.plan, original.inspection.step,
+                  original.controller.generation, value.directionRecordRevision, original.controller.base, admission).isSuccess &&
+                fact.payload == value.intent.copy(dependency = Some(c), dependencyOrigin = Some(D.CandidateOrigin(
+                  original.sourceRevision, value.directionRecordRevision, fact.recordRevision)))))
+          })
+      case _ => false
+    })
+  def validDependencyRepository(admission: D.Admission, snapshot: RepositorySnapshot): Boolean =
+    D.admissionValid(admission) && _valid_dependency_repository(admission.binding,
+      GoalPhaseNativeDependencyValidation.cumulativePaths(admission), snapshot)
+  def validDependencyRepository(binding: D.Binding, snapshot: RepositorySnapshot): Boolean =
+    _valid_dependency_repository(binding, binding.paths, snapshot)
+  private def _valid_dependency_repository(binding: D.Binding, owned: Vector[String], snapshot: RepositorySnapshot): Boolean = snapshot != null &&
+    D.bindingValid(binding) && snapshot.root == binding.root && snapshot.branch == binding.branch &&
+    snapshot.head == binding.base.head && snapshot.tree == binding.base.tree && _object(snapshot.indexTree) &&
+    snapshot.dirty != null && snapshot.dirty.forall(p => p != null && p.index != null && p.index.length == 1 &&
+      p.worktree != null && p.worktree.length == 1 && owned.contains(p.path) && p.renamedFrom != null &&
+      p.renamedFrom.forall(owned.contains)) && snapshot.dirty.map(_.path).distinct.size == snapshot.dirty.size &&
+    B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)), owned, false)
+  def observationEligible(target: Target): Boolean = validTarget(target) && R.observationAllowed(target.original) &&
     B.scopedDirty(target.repository.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)),
-      target.original.inspection.selectedPaths, true)
+      target.original.inspection.selectedPaths, true) && target.dependencyRepository.forall(snapshot =>
+        B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)),
+          GoalPhaseNativeDependencyValidation.cumulativePaths(R.preparedPayload(target.original).dependencyAdmission.get), true))
 
   def snapshot(root: String, observed: G.Observed, indexTree: String): RepositorySnapshot =
     RepositorySnapshot(root, observed.branch, observed.head, observed.tree,
@@ -194,7 +301,7 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
   val codec = new WorkflowResultJsonV1.PayloadCodec[Direction] {
     val typeIdentity = "GoalPhaseCandidateObservationContinuationDirection"
     def encode(value: Direction): Json = {
-      val legacy = value.choice == "AuthorizeNewObservation"
+      val legacy = value.choice == "AuthorizeNewObservation" && value.target.original.inspection.dependencyAdmission.isEmpty
       Json.obj("schemaVersion" -> (if (legacy) "sm-workflow.goal-phase-candidate-observation-continuation.v1"
         else "sm-workflow.goal-phase-candidate-observation-continuation.v2").asJson,
         "payload" -> (if (legacy) value.asJson.mapObject(_.remove("choice")) else value.asJson))
@@ -212,7 +319,8 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
       decoded <- schema match {
         case "sm-workflow.goal-phase-candidate-observation-continuation.v1" if explicit.isEmpty =>
           payload.mapObject(_.add("choice", "AuthorizeNewObservation".asJson)).as[Direction].left.map(_.message)
-        case "sm-workflow.goal-phase-candidate-observation-continuation.v2" if explicit.contains("ReviseWork".asJson) =>
+            .flatMap(d => Either.cond(d.target.original.inspection.dependencyAdmission.isEmpty, d, "Legacy direction cannot authorize a dependency subject"))
+        case "sm-workflow.goal-phase-candidate-observation-continuation.v2" if explicit.exists(v => v == "ReviseWork".asJson || v == "AuthorizeNewObservation".asJson) =>
           payload.as[Direction].left.map(_.message)
         case _ => Left("Candidate observation continuation schema or explicit choice differs")
       }
@@ -231,7 +339,7 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
   /** Pure retained facts, including the actual adjacent failed intent, determine the chain. */
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, original: R.RecoveryTarget, previous: Option[Target], maximumDiffBytes: Long,
-    repository: RepositorySnapshot): Consequence[Target] = for {
+    repository: RepositorySnapshot, dependencyRepository: Option[RepositorySnapshot] = None): Consequence[Target] = for {
     _ <- if (R.validTarget(original) && controller.stage == O.Stage.InspectCandidate &&
         R.controllerSnapshot(controller) == original.controller && session.participantIdentity == original.participant &&
         from.identity.value == original.sessionId && from.definition.workflowIdentity.value == original.definitionIdentity &&
@@ -249,14 +357,15 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
     record <- R.adjacentC(session.current, from, intent.receipt.next, "ordered-candidate:observation-intent")
     candidate <- adapter.loadRetainedC(_observation_reference(from, "candidate"))(using core.executionContext)
     _ <- if (candidate.isEmpty) Consequence.unit else invalid("the authorized observation already has a candidate successor")
+    dependency <- R.dependencyPrefixC(session, core, from, record)
     prior = previous.toVector.flatMap(_.priorObservations) :+ PriorObservation(
       previous.map(_.directionSourceRevision).getOrElse(original.sourceRevision), from.revision.value.toString,
       _observation_reference(from, "observation-intent").identity, "1", record.revision.value.toString,
-      intent.receipt.payload.value, "UNKNOWN", "termination-unconfirmed")
+      intent.receipt.payload.value, "UNKNOWN", "termination-unconfirmed", dependency._2)
     target = Target(original, R.controllerSnapshot(controller),
       original.sessionId + ":ordered-candidate-recovery:" + original.sourceRevision, "1",
       (original.frontierRevision.toLong + 1).toString, from.revision.value.toString,
-      record.revision.value.toString, prior, maximumDiffBytes, repository)
+      dependency._1.revision.value.toString, prior, maximumDiffBytes, repository, dependencyRepository)
     _ <- if (validTarget(target)) Consequence.unit else invalid("prior observation chain, snapshot or budget is incomplete or crossed")
   } yield target
 
@@ -295,7 +404,7 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
         d.candidatePaths.startsWith(captured.original.candidatePaths)) Consequence.unit
       else invalid("retained direction candidate policy is not a safe ordered extension of its captured original")
     actual <- currentTargetC(session, d.copy(candidatePaths = captured.original.candidatePaths), core, from,
-      controller, original, previous, captured.maximumDiffBytes, captured.repository)
+      controller, original, previous, captured.maximumDiffBytes, captured.repository, captured.dependencyRepository)
     _ <- if (actual == captured) Consequence.unit else invalid("retained direction crosses its actual predecessor chain")
   } yield actual
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
@@ -356,6 +465,9 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
       } yield result
     }
   }
+  private def _closed[A](keys: Set[String], decoder: Decoder[A]): Decoder[A] = Decoder.instance(c =>
+    if (c.value.asObject.exists(_.keys.toSet == keys)) decoder(c)
+    else Left(DecodingFailure("Observation continuation fields differ", c.history)))
   private def _revision(value: String): Boolean = value != null && value.toLongOption.exists(n => n > 0 && n.toString == value)
   private def _object(value: String): Boolean = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)

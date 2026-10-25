@@ -11,8 +11,10 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitCandidateAdmissibilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def assess(e: E.Enumerated, proofs: Vector[Option[B.Validated]]): Outcome = take(assessC(take(loadC(e, proofs))))
   private def one(minutes: Vector[Int], handoffs: Vector[(Int, Int)] = Vector.empty, overhead: Int = 0): Assessment = {

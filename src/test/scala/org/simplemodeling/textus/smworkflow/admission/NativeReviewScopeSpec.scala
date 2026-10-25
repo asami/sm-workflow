@@ -47,9 +47,11 @@ private[admission] object NativeReviewEvidenceFixture {
 
 /** Real target/disposition selection, not whole input or transport certification.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeReviewScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeReviewEvidenceFixture.*
   private val now = Instant.parse("2026-10-08T00:00:00Z")
@@ -58,6 +60,40 @@ final class NativeReviewScopeSpec extends AnyWordSpec with Matchers with GivenWh
     declared.issuer, "actual-reviewer", binding, now.minusSeconds(1).toString)
   private def read(purpose: Purpose, binding: Json) = decodeStorageC(encodeStorageC(record(purpose, binding)).toOption.get).toOption.get
   private def observe(value: Evidence, purpose: Purpose, binding: Json) = observeC(value, declared, purpose, "result-at-1", binding, now)
+
+  "Typed original-purpose scope" should {
+    "attest every contract and source field and reject malformed or foreign sources before normalization can erase them" in {
+      Given("an actual issued Step contract and one independently supplied source inside that scope")
+      val contract = GoalPhasePurposeRepair.Contract(GoalPhasePurposeRepair.identity, "step", "Original purpose", Vector("one.scala"))
+      val source = GoalPhasePurposeRepair.StepPurpose(1, "step", "Original-purpose defect", Vector("one.scala"))
+      val target = goalInput.mapObject(_.add("purposeRepair", contract.asJson))
+      val verdict = Json.obj("outcome" -> "repair".asJson, "repairSummary" -> "Repair original purpose".asJson,
+        "findings" -> Vector("Actual purpose defect").asJson, "repairFindingSources" -> Json.arr((source: GoalPhasePurposeRepair.Source).asJson))
+      val original = binding(Purpose.GoalReview, Some(target), Some(verdict))
+      val saved = read(Purpose.GoalReview, original)
+      When("the exact target and verdict meet the independent stored evidence")
+      val observed = observe(saved, Purpose.GoalReview, original)
+      Then("all meaningful fields survive selection and any changed meaning requires fresh evidence")
+      observed.isSuccess shouldBe true
+      val contracts = Vector(contract.copy(purpose = "Different purpose"), contract.copy(ownedPaths = Vector("one.scala", "two.scala")))
+      contracts.foreach(value => observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview,
+        Some(target.mapObject(_.add("purposeRepair", value.asJson))), Some(verdict))).isSuccess shouldBe false)
+      val changed = (source.copy(rationale = "Different independent rationale"): GoalPhasePurposeRepair.Source).asJson
+      observe(saved, Purpose.GoalReview, binding(Purpose.GoalReview, Some(target),
+        Some(verdict.mapObject(_.add("repairFindingSources", Json.arr(changed)))))).isSuccess shouldBe false
+      val malformed = Vector(Json.Null, Json.arr(), Json.arr((source: GoalPhasePurposeRepair.Source).asJson.mapObject(_.add("conditionIdentity", "irrelevant".asJson))),
+        Json.arr((source.copy(stepIdentity = "foreign"): GoalPhasePurposeRepair.Source).asJson),
+        Json.arr((source.copy(affectedPaths = Vector("outside.scala")): GoalPhasePurposeRepair.Source).asJson),
+        Json.arr((source.copy(findingOrdinal = 2): GoalPhasePurposeRepair.Source).asJson))
+      malformed.foreach { value =>
+        NativeReviewScope.select(Purpose.GoalReview, binding(Purpose.GoalReview, Some(target),
+          Some(verdict.mapObject(_.add("repairFindingSources", value))))).isLeft shouldBe true
+      }
+      NativeReviewScope.select(Purpose.GoalReview, binding(Purpose.GoalReview, Some(goalInput), Some(verdict))).isLeft shouldBe true
+      NativeReviewScope.select(Purpose.GoalReview, binding(Purpose.GoalReview,
+        Some(target.mapObject(_.add("purposeRepair", contract.asJson.mapObject(_.add("unknown", true.asJson))))), Some(verdict))).isLeft shouldBe true
+    }
+  }
 
   "Structured Goal issue scope" should afterWord(
     "in spec:goal-phase-fix-issues, failure:P62-C-REVIEW-SCOPE-01, phase:6.2"

@@ -9,6 +9,7 @@ PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @version Oct. 15, 2026
 @version Oct. 16, 2026
 @version Oct. 19, 2026
+@version Oct. 25, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -99,6 +100,8 @@ DISPLAY_KEYS = frozenset({
     "stdoutReference", "stdout_reference", "stderrReference", "stderr_reference", "outputReference", "output_reference",
     "evidenceRecording", "evidence_recording", "evidence", "observation", "journal", "entry",
     "sourceReference", "source_reference", "observedAt", "observed_at",
+    "assessment", "assessmentJournal", "assessment_journal", "branch", "reason", "triage", "review",
+    "validationReference", "validation_reference",
 })
 
 
@@ -197,6 +200,31 @@ def selected_directory(path):
             child = os.open(part, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def selected_output_directory(task_fd, task, output):
+    """Prepare output below the pinned task without following symlinks."""
+    parts = output.relative_to(task).parts
+    require(parts, "output must be beneath the selected task")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.dup(task_fd)
+    try:
+        try:
+            for part in parts:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+                child = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+        except OSError as error:
+            raise CallerError("cannot prepare output directory; native CLI was not launched") from error
+        require(not os.listdir(descriptor), "output directory must be empty; native CLI was not launched")
         yield descriptor
     finally:
         os.close(descriptor)
@@ -678,7 +706,7 @@ def native_call(command, runtime_root, output_fd, context):
                             optional = {"pid", "termination", "exitCode", "elapsedMillis"} | BUDGET_FIELDS
                             budgets = BUDGET_FIELDS & event.keys()
                             if not (required <= event.keys() <= required | optional
-                                    and event["operation"] in {"compile", "test", "test-only"}
+                                    and event["operation"] in {"compile", "test", "test-only", "fix-check"}
                                     and event["state"] in {"launching", "started", "waiting", "terminal", "uncertain"}
                                     and all(nonblank(event[name]) and len(event[name]) <= 1024
                                             for name in ("workspaceId", "programIdentity"))
@@ -963,8 +991,7 @@ def execute(options):
     with selected_directory(runtime_root):
         for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
             existing_file(path)
-        with selected_directory(task) as task_fd, selected_directory(output) as output_fd:
-            require(not os.listdir(output_fd), "output directory must be empty")
+        with selected_directory(task) as task_fd, selected_output_directory(task_fd, task, output) as output_fd:
             if options["action"] == "complete":
                 complete(options, executable, runtime_root, task_fd, output_fd)
                 return

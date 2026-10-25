@@ -1,5 +1,14 @@
 # Development Journal runtime, Finding, Find and skill delivery
 
+Planned extension (2026-10-24):
+[recovery observations and cause resolution](recovery-observations-and-cause-resolution.md)
+adds actual operation/recovery producers to the common Journal/Finding owner,
+with zero additional AI calls. Recovery success and unresolved cause remain
+separate. Existing review-origin producers below keep their actual meaning;
+runtime signals must not masquerade as review acceptance. Delivery and
+same-Session adoption are tracked by the
+[ROBS plan](../notes/recovery-observations-delivery-plan.md).
+
 The retained Phase 11 J1 producer is the actual
 `GoalPhaseService.submitGoalPhaseFindingRecording` Operation. Its canonical
 managed completion commits the native `InstanceRecord` before the Journal

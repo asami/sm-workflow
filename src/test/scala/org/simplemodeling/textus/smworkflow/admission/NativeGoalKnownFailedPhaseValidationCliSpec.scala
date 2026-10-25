@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.parser.parse
+import io.circe.syntax.*
 import java.net.URI
 import java.nio.file.{Files, Path}
 import java.util.UUID
@@ -9,11 +10,13 @@ import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.convert.ValueReader
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.processexecution.SbtOperation
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.cncf.workflow.*
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
@@ -21,19 +24,21 @@ import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseNativeValidation as N
 import GoalPhaseOrderedProgression as O
 import GoalPhaseValidationRecovery as R
+import GoalPhaseTerminatedTimeoutValidationRecovery as T
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Input-only shared fixture for a real Compile Step and one real Phase Test.
   * The external readiness marker is outside the candidate and repository.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends GoalPhaseValidationRecoveryOperationFixture {
   protected def known_phase_checks: Vector[String] = Vector("phase-test")
+  protected def known_repair_limit: Int = 2
   override protected def _recovery_plan = O.Plan("known-failed-phase-plan", "1", "phase-2", "sm-workflow",
     Vector(O.Step("step-1", "Complete the selected Compile Step", Vector("value.txt"), Vector.empty, Vector("compile"))),
-    known_phase_checks, repairLimit = 2)
+    known_phase_checks, repairLimit = known_repair_limit)
   override protected def recoveryHost(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = super.recoveryHost(root)
     original.copy(goal = original.goal.copy(
@@ -76,7 +81,7 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
         "resolvers += \"SimpleModeling.org\" at \"https://www.simplemodeling.org/repository/maven\"\n" +
         "addSbtPlugin(\"org.goldenport\" % \"sbt-cozy\" % \"0.1.18-SNAPSHOT\")\n")
       Files.writeString(repository.resolve("src/main/scala/CompileConsumer.scala"),
-        "/** @since Oct. 22, 2026\n  * @version Oct. 22, 2026\n  * @author ASAMI, Tomoharu\n  */\nobject CompileConsumer { val value = 42 }\n")
+        "/** @since Oct. 22, 2026\n  * @version Oct. 25, 2026\n  * @author ASAMI, Tomoharu\n  */\nobject CompileConsumer { val value = 42 }\n")
       Files.writeString(repository.resolve("build.sbt"), """enablePlugins(org.goldenport.cozy.CozyPlugin)
         |scalaVersion := "3.3.8"
         |resolvers += Resolver.defaultLocal
@@ -94,7 +99,7 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
         |import org.scalatest.wordspec.AnyWordSpec
         |
         |/** @since Oct. 22, 2026
-        |  * @version Oct. 22, 2026
+        |  * @version Oct. 25, 2026
         |  * @author ASAMI, Tomoharu
         |  */
         |final class KnownFailedProductSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -156,12 +161,47 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
   * fixture, Step commit and execution belongs only to this newly created root.
   * Fixture-owned evidence does not claim production Human provenance.
   * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
+  *  version Oct. 22, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseKnownFailedPhaseValidationFixture {
+  private def _deadline_fixture(root: Path): Boolean = Files.isRegularFile(root.resolve("deadline-only-timeout-fixture"))
+  override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
+    super._prepare_sbt_build_(root, scenario)
+    val build = root.resolve("repository/build.sbt")
+    if (_deadline_fixture(root) && !Files.readString(build).contains("DEADLINE_ONLY_REAL_TEST_COMPLETED_WAIT")) {
+      Files.writeString(build, Files.readString(build) + """
+        |Test / test := {
+        |  val actual = (Test / test).result.value
+        |  println("DEADLINE_ONLY_REAL_TEST_COMPLETED_WAIT")
+        |  System.out.flush()
+        |  Thread.sleep(150000L)
+        |  actual match {
+        |    case Value(_) => ()
+        |    case Inc(failure) => throw new MessageOnlyException(failure.toString)
+        |  }
+        |}
+        |""".stripMargin)
+    }
+  }
+  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
+    val original = super.process_plan(root, scenario, goal)
+    if (!_deadline_fixture(root)) original
+    else original.mapObject(_.add("sbtPrograms", Json.fromValues(original.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.map { program =>
+      if (program.hcursor.get[String]("target").toOption.contains("sm-workflow-repository-validation-2") &&
+          program.hcursor.get[String]("operation").toOption.contains("test"))
+        program.mapObject(_.add("limits", program.hcursor.downField("limits").focus.get.mapObject(
+          _.add("executionTimeoutMillis", Json.fromLong(120000L)))))
+      else program
+    })))
+  }
+  // These NEW qualification Sessions exercise known-failed recovery rather
+  // than the distinct automatic Release FIX route selected by a positive limit.
+  override protected def known_repair_limit: Int = 0
   private def _required(property: String): Path = {
     val path = Path.of(sys.props.getOrElse(property, throw new IllegalArgumentException("Missing " + property)))
     require(path.isAbsolute, property + " must be absolute")
@@ -233,7 +273,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
     def acceptStep(reviewcall: Invocation): Unit = {
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact Step", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reference = V.WorkflowArtifactReference("installed-known-step-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
@@ -252,7 +292,12 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
     }
     def direction(described: Invocation, choice: String, name: String): V.GoalPhaseValidationRecoveryInput = {
       val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
-      val rationale = if (take(R.targetC(description.target)).knownFailedPhase.nonEmpty)
+      val target = take(R.targetC(description.target))
+      val rationale = if (target.terminatedTimeoutPhase.nonEmpty && choice == "LimitedRepair")
+        "Fixture-owned Human authorizes bounded investigation of known errors and suspected hang before any concrete corrective proposal"
+        else if (target.terminatedTimeoutPhase.nonEmpty)
+        "Fixture-owned independent direction for one same-candidate attempt under the extended normal host execution deadline"
+        else if (target.knownFailedPhase.nonEmpty)
         "Fixture-owned independent direction for the known failed Phase check"
         else "Fixture-owned independent direction for a NEW attempt; the old outcome remains unknown and may repeat effects"
       val answer = V.GoalPhaseValidationRecoveryAnswer(choice, rationale)
@@ -263,6 +308,241 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
         "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", Some("participant"))
       _import_prepared(call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(input))))
       V.GoalPhaseValidationRecoveryInput(identity, description.target, choice, answer.rationale, reference)
+    }
+  }
+
+  "E15 installed confirmed timeout deadline-only validation" should afterWord(
+    "in spec:goal-phase-validation-recovery, example:E15, rules:R4,R5,R10, phase:6.5") {
+    "offer timeout recovery choices and retain the timeout through LimitedRepair then revalidate after a configured deadline extension" in {
+      Given("docs/spec/goal-phase-validation-recovery.md R4,R5,R10 E15: a NEW isolated native Session with real successful ProductCheck, finite fixed wait and actual installed runtime")
+      val executable = _required("smworkflow.spec.installedCommand")
+      val installations = _required("smworkflow.spec.runtimeRoot")
+      Files.isExecutable(executable) shouldBe true
+      val selection = _read(installations.resolve("selected"))
+      val generation = selection.hcursor.get[String]("installation_id").toOption.get
+      val manifest = installations.resolve(generation).resolve("runtime-installation.json").toRealPath()
+      val modules = _read(manifest).hcursor.get[Vector[Json]]("modules").toOption.get
+      val jars = modules.map(module => manifest.getParent.resolve(module.hcursor.get[String]("path").toOption.get).toRealPath())
+      jars.foreach(path => Files.isRegularFile(path) shouldBe true)
+      val root = newKnownRoot("installed-deadline-only-timeout")
+      Files.writeString(root.resolve("deadline-only-timeout-fixture"), "Only this isolated fixture selects the same finite wait on both trials\n")
+      Files.writeString(root.resolve("phase-ready"), "ready before initialization and unchanged across both trials\n")
+      Files.writeString(root.resolve("expected-manifest.txt"), manifest.toString + "\n")
+      Files.writeString(root.resolve("expected-runtime-files.txt"), jars.mkString("", "\n", "\n"))
+      var identity = ""
+      var implementation = Option.empty[V.GoalPhaseAdvanceResult]
+      inKnownEpisode(root, initialize = true, componentInstance = "default") { episode =>
+        identity = episode.start().sessionId
+        implementation = Some(episode.advance(identity))
+        episode.submitImplementation(implementation.get).accepted shouldBe true
+      }
+      val config = root.resolve(".textus/config.json")
+      Files.writeString(config, Vector(1, 2).foldLeft(_read(config)) { (value, ordinal) =>
+        value.mapObject(_.add("cncf.sbt.runtime-binding.sm-workflow-repository-validation-" + ordinal, Json.fromString("installed")))
+      }.noSpaces)
+      val cli = new Cli(root, executable, installations, identity)
+      When("ordinary installed Compile, independent Step review and local closure lead to the initial real whole-Phase Test timeout")
+      val stepcall = cli.advance()
+      val step = stepcall.business[V.GoalPhaseAdvanceResult]
+      step.work.get.kind shouldBe "ReviewStep"
+      step.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      cli.acceptStep(stepcall)
+      val timeoutcall = cli.advance()
+      val waiting = timeoutcall.business[V.GoalPhaseAdvanceResult]
+      val described = cli.describe()
+      val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+      val target = take(R.targetC(description.target))
+      var before = Option.empty[InstanceRecord]
+      var old = Option.empty[N.Saved]
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        before = Some(episode.current(identity))
+        old = episode.retained(identity, target.sourceRevision, "validation")
+      }
+      val repository = root.resolve("repository")
+      val sourcepaths = Vector("value.txt", "build.sbt", "project/build.properties", "project/plugins.sbt",
+        "src/main/scala/CompileConsumer.scala", "src/test/scala/ProductCheck.scala")
+      val sources = sourcepaths.map(path => path -> Files.readAllBytes(repository.resolve(path)).toVector)
+      val gitpaths = Vector(".git/refs/heads/main", ".git/HEAD", ".git/logs/HEAD", ".git/index")
+      val git = gitpaths.map(path => path -> Files.readAllBytes(repository.resolve(path)).toVector)
+      val closedtip = Files.readString(repository.resolve(".git/refs/heads/main")).trim
+      val originaltree = target.candidate.tree
+      val readiness = Files.readAllBytes(root.resolve("phase-ready")).toVector
+      Then("the typed timeout is genuinely incomplete despite real completed Test output and all original candidate and Step facts remain")
+      waiting.kind shouldBe "Wait"
+      description.message should include("confirmed terminated timeout")
+      description.choices shouldBe Vector("AuthorizeNewAttempt", "LimitedRepair", "Defer")
+      description.message should include("Timeout alone is not proof of a hang")
+      description.message should include("last printed test may already have completed")
+      target.knownFailedPhase shouldBe None
+      target.terminatedTimeoutPhase should not be empty
+      target.candidate.head shouldBe closedtip
+      old.get.payload.receipts.head.termination shouldBe "timed-out"
+      old.get.payload.receipts.head.exitCode shouldBe None
+      old.get.payload.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+      old.get.payload.receipts.head.stdout should include("DEADLINE_ONLY_REAL_TEST_COMPLETED_WAIT")
+      N.repairable(old.get.payload) shouldBe false
+      phaseExecutions(root).size shouldBe 1
+      cli.advance().business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
+      phaseExecutions(root).size shouldBe 1
+
+      When("normal passive preparation and import supply exact independent LimitedRepair evidence before public recovery")
+      val limited = cli.direction(described, "LimitedRepair", "installed-e15-timeout-limited-repair")
+      cli.recover(limited.copy(reference = V.WorkflowArtifactReference("missing-limited-repair-human", "1"))).exit should not be 0
+      val limitedresult = cli.recover(limited).business[V.GoalPhaseValidationRecoveryResult]
+      Then("bounded diagnosis and planning are requested without adopting a Plan appending retry direction or changing any native or repository fact")
+      limitedresult.accepted shouldBe true
+      limitedresult.outcome shouldBe "limited-repair-preparation-required"
+      limitedresult.message should include("fix known errors")
+      limitedresult.message should include("actual start/end observations")
+      limitedresult.message should include("diagnostic stack/process evidence")
+      limitedresult.message should include("Timeout alone is not proof of a hang")
+      limitedresult.message should include("describeGoalPhaseFailedPhaseRepair")
+      limitedresult.message should include("independently authorized adoptGoalPhaseFailedPhaseRepair")
+      limitedresult.message should include("separate advanceGoalPhase")
+      limitedresult.message should include("does not adopt an unknown future Plan")
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        episode.current(identity).history shouldBe before.get.history
+        episode.current(identity).revision shouldBe before.get.revision
+        N.codec.encode(episode.retained(identity, target.sourceRevision, "validation").get.payload) shouldBe N.codec.encode(old.get.payload)
+      }
+      sources.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      git.filterNot(_._1 == ".git/index").foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      phaseExecutions(root).size shouldBe 1
+
+      When("normal passive preparation supplies exact new Human direction and crossed or null targets precede genuine Defer")
+      val authorized = cli.direction(described, "AuthorizeNewAttempt", "installed-e15-timeout-human")
+      val invalid = Vector(authorized.copy(reference = V.WorkflowArtifactReference("missing-e15-human", "1")),
+        authorized.copy(target = R.targetRecord(target.copy(candidate = target.base))),
+        authorized.copy(target = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("terminatedTimeoutPhase", Json.Null)))))
+        .map(cli.recover)
+      val deferred = cli.direction(described, "Defer", "installed-e15-timeout-defer")
+      val deferresult = cli.recover(deferred).business[V.GoalPhaseValidationRecoveryResult]
+      Then("crossed authority refuses and Defer neither writes native history nor executes another check")
+      invalid.foreach(_.exit should not be 0)
+      deferresult.outcome shouldBe "deferred"
+      cli.advance().business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        episode.current(identity).history shouldBe before.get.history
+        episode.current(identity).revision shouldBe before.get.revision
+      }
+      sources.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      // Managed read-only Git commands may refresh index stat data. Tip, object
+      // tree and reflog remain the acceptance identities; index bytes are saved
+      // here to identify the complete original fixture state in the proof.
+      git.filterNot(_._1 == ".git/index").foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      phaseExecutions(root).size shouldBe 1
+
+      Given("the exact same source build readiness marker Plan candidate and fixed Test task with its unchanged 150-second wait")
+      val configbefore = _read(config)
+      val planfield = "textus.subsystem.process-execution.plan"
+      val planbefore = parse(configbefore.hcursor.get[String](planfield).toOption.get).toOption.get
+      val programs = planbefore.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+      val selected = programs.filter(program => program.hcursor.get[String]("target").toOption.contains("sm-workflow-repository-validation-2") &&
+        program.hcursor.get[String]("operation").toOption.contains("test"))
+      selected.size shouldBe 1
+      val originalprogram = selected.head
+      originalprogram.hcursor.downField("limits").get[Long]("executionTimeoutMillis").toOption shouldBe Some(120000L)
+      val extendedprogram = originalprogram.mapObject(_.add("limits", originalprogram.hcursor.downField("limits").focus.get.mapObject(
+        _.add("executionTimeoutMillis", Json.fromLong(300000L)))))
+      val planextended = planbefore.mapObject(_.add("sbtPrograms", Json.fromValues(programs.map(program =>
+        if (program == originalprogram) extendedprogram else program))))
+      val configextended = configbefore.mapObject(_.add(planfield, Json.fromString(planextended.noSpaces)))
+      When("fixture setup changes only the selected ordinary process-program execution deadline from 120000 to 300000 milliseconds")
+      Files.writeString(config, configextended.noSpaces)
+      Then("every other configuration field program and limit remains exact and no product or Git byte changes")
+      configextended.mapObject(_.add(planfield, configbefore.hcursor.downField(planfield).focus.get)) shouldBe configbefore
+      planextended.mapObject(_.add("sbtPrograms", Json.fromValues(programs))) shouldBe planbefore
+      extendedprogram.mapObject(_.add("limits", originalprogram.hcursor.downField("limits").focus.get)) shouldBe originalprogram
+      extendedprogram.hcursor.downField("limits").focus.get.mapObject(_.add("executionTimeoutMillis", Json.fromLong(120000L))) shouldBe
+        originalprogram.hcursor.downField("limits").focus.get
+      sources.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      git.filterNot(_._1 == ".git/index").foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      Files.readAllBytes(root.resolve("phase-ready")).toVector shouldBe readiness
+
+      When("public recovery accepts the exact independently prepared timeout direction under current normal configuration")
+      val recovered = cli.recover(authorized).business[V.GoalPhaseValidationRecoveryResult]
+      val duplicate = cli.recover(authorized)
+      var directed = Option.empty[InstanceRecord]
+      var direction = Option.empty[T.Direction]
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        directed = Some(episode.current(identity))
+        episode.prepare(call => for {
+          catalog <- GoalPhaseRuntimeCatalog.loadC()
+          storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+            SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
+          reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, T.codec)
+          retained <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(identity + ":ordered-terminated-timeout-validation-recovery:" +
+            before.get.revision.value, "1"))(using call.executionContext)
+          _ = direction = retained.map(_.receipt.payload.value)
+        } yield ())
+      }
+      Then("exactly one adjacent separate Direction is saved with no source Git SBT or semantic implementation effect")
+      recovered.outcome shouldBe "new-attempt-authorized"
+      duplicate.exit should not be 0
+      directed.get.revision shouldBe before.get.revision.next
+      directed.get.history.dropRight(1) shouldBe before.get.history
+      directed.get.currentProgression shouldBe Some(ProgressionReference("phase.PhaseValidation"))
+      direction.get.target shouldBe target
+      direction.get.reference shouldBe org.goldenport.cncf.workflow.ContextReference(authorized.reference.identity, authorized.reference.revision)
+      phaseExecutions(root).size shouldBe 1
+      sources.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      git.filterNot(_._1 == ".git/index").foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+
+      When("a separate ordinary installed Advance runs the same real Test and identical finite wait under the extended deadline")
+      val freshcall = cli.advance()
+      val fresh = freshcall.business[V.GoalPhaseAdvanceResult]
+      val repeated = cli.advance().business[V.GoalPhaseAdvanceResult]
+      Then("the same candidate reaches independent ReviewPhase with no corrective Step source edit or new commit and the old timeout stays incomplete")
+      fresh.work.get.kind shouldBe "ReviewPhase"
+      fresh.work.get.selectedPlan shouldBe implementation.get.work.get.selectedPlan
+      fresh.work.get.originalBase shouldBe implementation.get.work.get.originalBase
+      fresh.work.get.candidate.get.head shouldBe target.candidate.head
+      fresh.work.get.candidate.get.tree shouldBe originaltree
+      fresh.work.get.completed.size shouldBe 1
+      fresh.work.get.completed.head.commit.identity shouldBe closedtip
+      fresh.repairProgress shouldBe waiting.repairProgress
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
+      fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      repeated shouldBe fresh
+      phaseExecutions(root).size shouldBe 2
+      sources.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      git.filterNot(_._1 == ".git/index").foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      Files.readAllBytes(root.resolve("phase-ready")).toVector shouldBe readiness
+      _read(installations.resolve("selected")) shouldBe selection
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        val current = episode.current(identity)
+        current.history.take(before.get.history.size) shouldBe before.get.history
+        current.history.count(_.causation.value.startsWith("ordered-terminated-timeout-validation-recovery:")) shouldBe 1
+        current.history.count(_.causation.value.startsWith("ordered-failed-phase-repair-adoption:")) shouldBe 0
+        val preserved = episode.retained(identity, target.sourceRevision, "validation").get
+        N.codec.encode(preserved.payload) shouldBe N.codec.encode(old.get.payload)
+        preserved.record.history shouldBe old.get.record.history
+        preserved.record.revision shouldBe old.get.record.revision
+        val freshsource = directed.get.revision.value.toString
+        freshsource should not be target.sourceRevision
+        val actual = episode.retained(identity, freshsource, "validation").get
+        actual.payload.candidate shouldBe target.candidate
+        actual.payload.selected shouldBe old.get.payload.selected
+        actual.payload.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+        Files.writeString(root.resolve("deadline-only-timeout-reopened-proof.json"), Json.obj(
+          "sessionId" -> Json.fromString(identity), "originalTimeout" -> N.codec.encode(preserved.payload),
+          "newValidation" -> N.codec.encode(actual.payload), "newSourceRevision" -> Json.fromString(freshsource),
+          "direction" -> T.codec.encode(direction.get), "configBefore" -> configbefore, "configAfter" -> configextended,
+          "plan" -> parse(_json(fresh.work.get.selectedPlan)).toOption.get,
+          "base" -> parse(_json(fresh.work.get.originalBase)).toOption.get,
+          "repairProgress" -> parse(_json(fresh.repairProgress.get)).toOption.get,
+          "originalHistorySize" -> Json.fromInt(before.get.history.size), "gitHead" -> Json.fromString(closedtip),
+          "gitTree" -> Json.fromString(originaltree), "installedManifest" -> Json.fromString(manifest.toString)).spaces2)
+      }
+      val origins = Files.readString(root.resolve("phase-test-origins.tsv")).linesIterator.toVector
+      origins.size shouldBe 6
+      origins.foreach { line =>
+        val fields = line.split('\t').toVector
+        fields.size shouldBe 3
+        jars should contain(Path.of(URI.create(fields(1))).toRealPath())
+        fields(2) should startWith("jar:" + fields(1) + "!/")
+      }
     }
   }
 
@@ -426,7 +706,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.candidate.get.tree shouldBe target.candidate.tree
       fresh.work.get.completed.size shouldBe 1
       fresh.work.get.completed.head.commit.identity shouldBe closedtip.trim
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
@@ -579,7 +859,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       fresh.work.get.review.get.checks.head.sbt.get.kind shouldBe "test"
       fresh.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
       fresh.work.get.review.get.checks.head.exitCode shouldBe Some(0)
-      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      fresh.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 0))
       phaseExecutions(root).size shouldBe 2
       val terminal = freshcall.events.filter(_.hcursor.get[String]("state").contains("terminal"))
       terminal.size shouldBe 1

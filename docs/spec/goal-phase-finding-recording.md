@@ -3,6 +3,14 @@
 Spec ID: `goal-phase-finding-recording`. Since: Oct. 18, 2026. Version: Oct. 19, 2026.
 Author: ASAMI, Tomoharu.
 
+Planned extension adopted 2026-10-24:
+[recovery observations](recovery-observations-and-cause-resolution.md) require
+an explicit operation-sourced Finding producer through common Journal services.
+The review-origin wire/provenance rules below do not already implement that
+producer. Do not fabricate review observations or issue clerical AI work to record
+runtime recovery. Successful recovery leaves cause disposition unresolved until
+supported closure. See the [ROBS plan](../notes/recovery-observations-delivery-plan.md).
+
 R1. Actual ReviewStep and ReviewPhase results may carry optional
 `reviewObservations`, including an explicitly empty `items` vector. Each
 observation has an exact identity matching `[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}`,

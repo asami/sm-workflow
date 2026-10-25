@@ -1,5 +1,63 @@
 # Normal typed SBT validation
 
+## Runtime-owned JVM memory (October 24, 2026)
+
+Normal SBT validation is started, awaited and collected only by sm-workflow
+through the CNCF typed SBT DSL. The shared producer owns JVM option resolution;
+the component and semantic skills must not implement a second launcher or add
+fixed JAVA_OPTS separately to every validation program.
+
+The selected sm-workflow runtime project's ordinary `.textus/config.json` can
+set the shared property:
+
+```json
+{ "cncf.sbt.jvm.maximum-heap-mib": 8192 }
+```
+
+The default is 4096 MiB and numeric increases are supported. The effective
+maximum also preserves larger settings in the actual SBT workspace `.jvmopts`
+and the producer's supported explicit launcher options. A dependency checkout's
+`.jvmopts` does not configure a build launched with a different primary cwd.
+Only Xmx is selected; this does not reserve 4 GiB or impose that Xms. The CNCF
+`typed-sbt-execution` SBT-JVM-01 contract defines precedence and errors.
+
+Skills submit issued work and use the existing Advance route for validation.
+They do not launch SBT, construct an independent runner intake for Phase checks,
+or replay an accepted Submit after a preparation correction. Source/runtime
+restoration validation remains distinct from the active Phase's acceptance.
+Retain the original Session, failed attempts, repair counters and applicable
+results. A newly configured launch supplies a new observed result; configuration
+alone supplies none. Manual shell SBT outside this route uses standard SBT
+configuration, with concrete shared home-config edits confirmed by the human.
+
+## Approved dependency checks (October 24, 2026; source contract)
+
+[Dependency validation](goal-phase-dependency-validation.md), DV-04..06,
+extends the existing typed Git/SBT route with an optional captured dependency
+subject. The host declares fixed checks and a logical dependency workspace; the
+semantic result selects references only. It supplies no executable, argv, root,
+success result or effect grant. Native capture and each check still require the
+existing workspace/capability owners to admit their actual effects.
+
+The primary candidate/base remain separate. Both check sets must complete
+successfully before review. Public views expose primary receipts and dependency
+capture/checks/executions separately. The actual attempt target and operation are
+matched even for rejection or uncertainty. `TestOnly` exit zero without verified
+suite execution remains unverified. Freshness is checked before and after each
+dependency check; drift refuses continuation after retaining the observed result.
+Review completion and closure recheck the same captured subject. These are
+before/after observations under ordinary checkout ownership, not an atomic or
+hermetic build snapshot. No dependency commit or publication is implied.
+
+Executable source coverage: `GoalPhaseDependencyValidationSpec`,
+`GoalPhaseNativeDependencyValidationSpec`, `NativeGoalDependencyValidationCliSpec`
+and the dependency-subject cases in `GoalPhaseValidationRecoverySpec`. The CLI
+suite uses canonical FOCUSED/HEAVY metadata with a runtime requirement and is
+explicitly selected through ordinary `testOnly`; no class enrollment is needed.
+It needs regenerated public DTOs and the normal owning native validation route;
+authoring it does not establish that any suite has executed. Historical results
+below retain their original, narrower scope.
+
 Planned diagnostic consumer (2026-10-23):
 [incremental SBT failure diagnosis](incremental-sbt-failure-diagnosis.md) reuses
 these typed execution facts and retained evidence. It adds extraction, requested
@@ -40,14 +98,30 @@ implementation results and check receipts.
 
 CNCF owns the finite native capture limits for managed typed SBT execution.
 After a typed result returns, application receipt admission requires nonnegative
-byte counts equal to the actual captured bytes, untruncated stdout and stderr,
-strict UTF-8 text without NUL, the selected identity and operation kind, and the
-existing termination/outcome mapping. It imposes no second application byte
+byte counts equal to the actual captured bytes, the selected identity and operation kind,
+and the actual termination/outcome mapping. Successful results require complete
+strict UTF-8 stdout and stderr without NUL. Output-limit and unconfirmed incomplete
+results preserve raw captures, including truncated output. It imposes no second application byte
 ceiling on complete typed SBT output. Retained typed receipts use the same strict
 text validity without the historical 65536-byte limit, including genuine nonzero
 failed results. Structural Git captures and legacy receipts without typed `sbt`
 facts keep their 65536-byte text bound; Goal recovery diagnostics and rationale
-keep their existing bound. No receipt fields or schema versions change.
+keep their existing bound. Historical receipts retain their original shape. New
+typed receipts use the closed nested `sm-workflow.native-sbt-validation-receipt.v2`
+wire: canonical Base64 bytes, exact counts/truncation, full actual termination,
+elapsed time, program identity and an explicitly empty artifact vector. The
+optional public `processObservation` discloses these facts. Diagnostic text is
+`complete`, `prefix`, or `unavailable`, with exact undecoded trailing-byte count;
+replacement characters are never invented. Invalid new wire cannot fall back
+to the historical reader. Output-limit diagnostics are never `Exited(143)`.
+
+Actual Goal output-limit persists `incomplete` and an explicit Decision.
+RepositorySync retains incomplete and Wait. TerminationUnconfirmed stays
+unconfirmed; neither supplies complete successful validation. The distinct
+[validation repair adoption](goal-phase-validation-repair-adoption.md) route
+appends one corrective Step after the complete original accepted Plan.
+`WorkflowSbtCaptureSpec` authors the actual40MiB/2162-history encoder capacity
+control under the unchanged64MiB maximum; it does not claim an execution pass.
 
 `NativeTestOnlyValidationReceiptSpec` covers large actual-shaped captures,
 including multibyte and near-two-MiB stdout, large stderr, positive/nonzero facts,
@@ -79,14 +153,14 @@ SBT owns its native locks and legitimate tool/JVM children. Product execution
 requires neither a global wrapper nor scripted, Java/SBT JAR fallback, custom
 executor main, isolated caches or permission-symlink workarounds.
 
-Development validation follows the latest AGENTS policy: the registered
-`cncf_command_runner` uses the machine's shared serial wrapper for independent
-top-level SBT invocations and releases its lock before the next invocation.
-That development scheduling rule adds no product runtime prerequisite.
-`runtimeTestOnly` prepares official Cozy runtime artifacts and packages the
-current CAR before its supplied Test/testOnly selection. Ordinary test/testOnly
-compilation performs neither preparation. Existing shared-fixture fork=false
-and parallelExecution=false settings remain.
+Development validation follows AGENTS: the registered `cncf_command_runner`
+uses the stable `run-sbt-serial.sh` entry, while sbt owns required native locks.
+Independent top-level invocations can run concurrently without a global lock.
+The label adapter applies the same preparation to ordinary `testOnly` and its
+`runtimeTestOnly` alias when selected operations require runtime artifacts.
+Ordinary `test` selects FULL and excludes HEAVY/external-service work. Compilation
+alone performs no runtime preparation. See [label selection](label-driven-test-selection.md).
+Existing shared-fixture fork=false and parallelExecution=false settings remain.
 
 `TypedSbtHostPlanFixture` constructs public host JSON and the selected build
 without executing a tool. Its reusable `normalExecutable` resolves only

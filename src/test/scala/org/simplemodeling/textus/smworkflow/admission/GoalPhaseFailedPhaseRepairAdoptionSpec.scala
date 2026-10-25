@@ -17,9 +17,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure wire/preparation evidence. The native suite owns real failure proof.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseFailedPhaseRepairAdoptionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _oid(value: Char): String = value.toString * 40
   private val _base = O.Snapshot(_oid('a'), _oid('b'))
@@ -150,6 +152,12 @@ final class GoalPhaseFailedPhaseRepairAdoptionSpec extends AnyWordSpec with Matc
       Then("only complete exact non-null contracts round trip")
       decoded shouldBe Right(_target)
       restored shouldBe Right(_direction)
+      direction.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.goal-phase-failed-phase-repair-adoption.v1")
+      A.decodeBoundTarget(target) shouldBe Right(Left(_target))
+      take(A.boundTargetC(A.targetRecord(_target))) shouldBe Left(_target)
+      A.interruptedCodec.decode(direction).isLeft shouldBe true
+      A.decodeBoundTarget(target.mapObject(_.add("source", Json.obj(
+        "kind" -> Json.fromString("terminated-timeout"))))).isLeft shouldBe true
       invalidtargets.foreach(A.decodeTarget(_).isLeft shouldBe true)
       invaliddirections.foreach(A.codec.decode(_).isLeft shouldBe true)
     }

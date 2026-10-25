@@ -11,8 +11,10 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val operations: Vector[OperationDefinition] = Vector(
     SmWorkflowComponent.RepositorySyncServiceService.StartRepositorySyncOperation,

@@ -1,5 +1,13 @@
 # Information returned by the existing caller
 
+The private exact public-source selector is shared with
+[validation repair adoption](goal-phase-validation-repair-adoption.md). Existing
+caller-information Operations still require their genuine issuedWorkContext;
+the native historical adapter never manufactures a semantic request. Selection
+does not authenticate a page or associate it with an old native intent.
+Historical association and unresolved effects require explicit independent
+Human adoption through the distinct new contract.
+
 The normal `NativeWorkflowPreparationService.prepareCallerInformation` Operation
 returns `WorkflowCallerInformationRequest` for an actual issuedWorkContext. It
 retains the original handle, Session, run, continuation, expected revision,

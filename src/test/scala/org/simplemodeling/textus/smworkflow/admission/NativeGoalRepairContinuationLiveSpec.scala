@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import io.circe.Json
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -16,10 +16,11 @@ import NativeWorkflowCliFixture as F
   * Public files retain observations; the parent establishes external provenance.
   * No stage supplies Human, independent review or effect-authority evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -118,7 +119,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
       V.GoalPhaseFixConvergenceAssessment("STALLED", "HIGH",
         "The unchanged incorrect input supplies no progress toward the actual failed Test requirement")))
     val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic batch leaves value.txt incorrect",
-      Vector.empty, None, assessment, report, None, None, None, None)
+      Vector.empty, None, assessment, report, None, None, None, None, None, dependencyValidation = None)
     val submitted = _retain(output, name, scenario.call("command", request.submitOperation.get,
       Vector("--sessionId", request.submitSessionId.get, "--result", json(result.toRecord()).noSpaces,
         "--resultReference", json(V.WorkflowArtifactReference("p62-fixture-" + name, "1").toRecord()).noSpaces)))
@@ -462,7 +463,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
           commit.parent shouldBe work.originalBase.head
           commit.tree shouldBe waiting.validation.get.candidate.tree
           commit.tree should not be work.originalBase.tree
-          work.completed.head.review.trim should not be empty
+          work.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
           val scope = json(waiting.authorityContext.get.scope)
           scope.hcursor.downField("parent").focus shouldBe Some(json(work.originalBase.toRecord()))
           scope.hcursor.get[String]("plan").toOption shouldBe Some(work.selectedPlan.identity)

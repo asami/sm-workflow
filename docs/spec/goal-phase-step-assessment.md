@@ -161,6 +161,48 @@ delta and affected meaning; a settled condition verified by repair/checks needs
 no extra semantic call. Changing the candidate does not automatically replay all
 triage, lint or reviews, nor does it automatically preserve an inapplicable CLEAN.
 
+The native Release connection reuses `RepairStep` with an absent Step identity
+after every selected Step has closed. Its assignment contains the actual failed
+Phase check or the original integrated review and its unresolved issue IDs. This
+is repair of the accepted release scope, not a new Plan Step. A newly issued
+`ReviewPhase` captures the runtime's Release repair contract; an admitted blocking
+result reserves one unit from the existing Release repair window. An actual
+selected failed check reserves repair only while that Release repair is active.
+The first whole-Phase failure retains its Decision route, and an old marker-absent
+review retains its explicit continuation route. The original base, Plan, closed Step
+commits and history remain intact. Unknown process effects and old retained
+`failed` outcomes keep their existing observation/decision meaning.
+
+Ordinary Advance inspects the fresh release candidate within the original owned
+path union and applies the selected Phase checks. The selected checks are never
+waived; this minimum connection reruns that fixed affected set and retains older
+results as history rather than pretending they validate a changed tree. A scoped
+`ReviewPhase` receives prior reports and assesses the actual finding, repair delta
+and affected meaning. Exhausted repairs or a real requirement/authority expansion
+retain the genuine Human route; ordinary in-scope repair adds no adoption question.
+
+Explicit nonblocking observations from a blocking Phase review retain their
+original result reference through Release FIX, affected inspection and checks.
+They become eligible for recording only after the affected Phase review is
+accepted, together with any new Phase observations. This deferral does not
+accept Step observations at a Phase frontier or allow mixed recording scopes.
+With the existing file recording policy, the checked and reviewed Release delta
+stays staged while only the assigned Markdown additions are staged. The runtime
+pins the completed-Step parent and reviewed tree, rejects post-review changes
+outside those destinations (including unstaged changes to the Release delta),
+and proves the final recording delta against that reviewed tree. Recording
+does not replay validation or authorize an early Final commit.
+
+When that accepted release tree differs from the closed Step tip, Final requires
+the existing Phase effect authority and an explicitly configured local Git program
+named `phase-release` in the closure policy. It is a physical program binding,
+not a semantic Step. The runtime checks the index, actual selected paths and
+original parent, saves intent before execution, retains the actual result, and
+accepts only the exact candidate tree in a single-parent commit. Closed Steps and
+repair counts are unchanged. An unresolved intent is retained without replay.
+Local completion then consumes this Final commit; synchronization keeps its
+separate selected completion policy. Final launches no additional check or review.
+
 The accepted Scala lint exception route remains: user-decided rule-scoped
 suppression with source reason, actual lint recheck and applicable validation.
 Do not repeatedly escalate the same already accepted intent without new relevant
@@ -227,3 +269,105 @@ acceptance using an adequate existing profile. Model comparison stays with the
 future Phase 9 work, without a Local LLM evaluation prerequisite.
 Current Phase 6.4/12 execution and earlier accepted evidence are not modified.
 See the [adoption handoff](../journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
+
+## Native Step policy and admission (Q1)
+
+A selected ordered Step may carry `actionPolicy` in its saved PLAN. Absence
+retains the original required independent Step review. The Q1 shape is:
+
+```json
+{
+  "identity": "local-code",
+  "kind": "code",
+  "detailedReview": "conditional",
+  "scalaLint": "off",
+  "carLint": "off",
+  "observations": []
+}
+```
+
+`kind` is `code` or `documentation`; `detailedReview` is `conditional` or
+`required`. In Q1 both lint Actions are explicitly `off`; this reports selection,
+not a lint PASS. Q3 supplies the applicable enabled lint and conditional triage
+connections. No live Session's saved policy is upgraded implicitly.
+
+Each observation retains an `identity`, exact `source` identity/revision,
+`question`, `timing` (`immediate` or `release`), `reason`, and optional
+`plannedStep`. A Release deferral in this minimum connection must name an actual
+later Step. Immediate observations and explicitly required detailed review
+continue through the existing independent review route. They cannot take
+reviewless admission. Q3 adds triage for the selected unresolved semantic signal.
+
+The native validation owner computes assessment only from its complete successful
+selected receipts and exact candidate. A code Step requires a typed Compile and
+a typed TestOnly with actual nonzero behavioral test and completed-suite counts.
+It checks the fixed selections before execution and checks actual results again
+before admission. Missing, partial, uncertain or failed evidence keeps its existing
+validation, recovery or FIX route. A semantic worker cannot submit assessment in
+place of those receipts.
+
+An admitted Step carries its actual validation reference, candidate, policy,
+selected checks, branch and reason in a formal `admission`. `review` is absent;
+no empty string, made-up independent PASS or AI CLEAN replaces it. Independent
+commit authority binds the actual admission reference and candidate. Native Git
+prechecks, intent/result recording, recovery and the accepted commit chain retain
+the existing owning boundaries. Historical reviewed Steps keep their review
+reference and existing wire representation.
+
+The runtime appends `StepAssessment` to the existing common Journal after saving
+the native result. The public validation view returns `assessment` and the
+separate `assessmentJournal` recording state; normal Journal read/find supports
+this kind. Unresolved observations remain part of the assessment. A disabled,
+unavailable, conflicting or indeterminate Journal reports its real state without
+replaying validation, inventing an Entry reference or calling an AI recorder.
+
+
+## Q3 typed lint and bounded triage connection
+
+New Plans may explicitly select `scalaLint: required` together with a selected
+native check whose kind is `fix-check`, and `semanticTriage: conditional`.
+Absent `semanticTriage` retains the old immediate-observation review route;
+absent `actionPolicy` retains required independent review. Historical encodings
+omit the new default/absent fields. No saved Plan is silently upgraded.
+
+The app projects CNCF's actual `FixCheck` result into the same separate durable
+native check receipts as Compile/TestOnly. FixCheck has no fabricated test
+selection, suite count or semantic verdict. The project alias runs
+`Compile / scalafix --check` with sbt-scalafix 0.12.1 and the nonempty
+DisableSyntax/noFinalize syntactic profile. This detects finalizer overrides,
+consistent with explicit managed lifecycle/UoW cleanup. It does not ban local
+variables, null, exceptions or infrastructure code wholesale. Tests and generated
+sources are outside the selected handwritten Compile lint scope; no SemanticDB
+or extra semantic compilation gate is introduced. Standard rule-specific
+`DisableSyntax.noFinalize` suppression must retain the actual prior Human decision,
+local scope and reason. Execution acceptance remains pending actual Q3 checks.
+
+A selected `scenarioInventory` optionally supplies an exact source reference,
+a `complete` flag and unique mappings of Operation identity, relative source
+`paths`, and executable `scenarios`. Runtime joins actual candidate changed paths
+to these declared mappings. Only a complete inventory can yield a missing-scenario
+observation; partial input is explicitly `partial` and proves no absence. No
+inventory selects no detector (OFF), not a zero-warning coverage claim. This
+small join cannot establish semantic Given/Then coverage or infer mappings from
+prose. Unsupported alternative/Guard and test-target detectors remain OFF.
+
+Complete successful checks plus a selected immediate observation or a supported
+structural warning issue `TriageStep` unless detailed review is required. The
+request contains actual changed paths/diff, typed receipts and original assessment.
+Mapped execution forces a context separate from the implementation context.
+Genuine semantic CLEAN creates admission without a review reference;
+SUSPICIOUS/DECLINE retains the judgment reference and goes directly to independent
+ReviewStep without changing the repair count. A rejected transport-shaped reply
+keeps the same pending request. The common Journal records original assessment
+and actual triage disposition after their respective native commits; recording
+failure does not replay semantic work. Subsequent review receives the original
+triage reference, observations and actual check evidence.
+
+The Phase 6.5 development Session's Plan2 remains on its admitted Compile and
+conditional-lint-route TestOnly selections, with its original independent review.
+That suite exercises the adopted profile through typed FixCheck in disposable
+real Scala 3.3.8 projects. It is not a claim that Plan2 acquired a root FixCheck
+selection or that a root lint command ran. Future explicit selections use the
+new typed route. The prior purpose-repair/selected-closure producer integrations
+retain their original qualification; new consumer compilation and review apply
+to the integrated delta without replaying accepted live effects.

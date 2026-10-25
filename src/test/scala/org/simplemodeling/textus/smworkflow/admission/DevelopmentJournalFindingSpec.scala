@@ -19,9 +19,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic Storage and pure business values test immutable append semantics.
   * They are not native receipts, real commit evidence or production review proof.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class DevelopmentJournalFindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _source = ContextReference("actual-review:日本語/1", "17")
   private val _observation = R.Observation("naming-1", "HYGIENE", "Clarify the accepted name",

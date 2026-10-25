@@ -23,9 +23,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Application quality examples with explicit fixture provenance. Native effects,
   * real providers and production independent review are not proved by these tests.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _behavior = B.Condition("behavior", "all", true, "Implement selected behavior")
   private val _extra = B.Condition("extra", "all", true, "Additional robustness")
@@ -178,12 +180,13 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
     "retain adoption effective conditions reports and advisories through saved Start Work Result and public Record JSON" in {
       Given("spec:goal-phase-acceptance-boundary E3 R2,R5; a captured Plan and actual typed report")
       val payload = GoalPhaseNativeRun.Payload("participant", "/owned/root", "main", _plan, _base)
-      val result = _result()
+      val selection = DependencyValidationSpecificationFixture.selection
+      val result = _result().copy(dependencyValidation = Some(selection))
       val publicwork = NativeWorkflowOperationOutput.goalWork(_request)
       val publicresult = V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings, B.publicReport(result.acceptance),
         GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport), None,
         GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-        result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)))
+        result.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation))
       When("saved codecs and normal strict generated Record readers consume their own structured JSON")
       val start = GoalPhaseNativeRun.codec.decode(GoalPhaseNativeRun.codec.encode(payload))
       val work = S.inputCodec.decode(S.inputCodec.encode(_request))
@@ -198,6 +201,7 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
       B.internalAdoption(wireplan.acceptance) shouldBe _plan.acceptance
       B.internalEffective(wireplan.effectiveAcceptance) shouldBe _plan.effectiveAcceptance
       B.internalReport(wireresult.acceptance) shouldBe result.acceptance
+      GoalPhaseDependencyValidation.fromPublicC(wireresult.dependencyValidation).toOption shouldBe Some(Some(selection))
       Given("invalid nested nulls in pure typed public/internal projections")
       val invalid = Some(B.Report(Vector(null), null))
       When("the boundary owner projects them without converting them into valid defaults")

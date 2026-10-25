@@ -21,9 +21,11 @@ import NativeHumanEvidenceFixture as F
 /** Specification-owned questions and references exercise contracts only.
   * These examples establish neither retained native consent nor effect authority.
   * @since   Oct. 19, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDependencyDecisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[T](value: Consequence[T]): T = value match {
     case Consequence.Success(result) => result

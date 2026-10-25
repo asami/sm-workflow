@@ -13,9 +13,11 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Real retained completion, unrelated bytes and paired child behavior.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class GoalPhasePostCompletionSyncSpec extends AnyWordSpec with GivenWhenThen with GoalPhasePostCompletionSyncFixture {
   private val _observation = GoalPhaseFindingRecording.Observation("completion-observation", "HYGIENE",
     "Retain the accepted reviewer observation", "This nonblocking observation needs the ordinary finite recording disposition")
@@ -469,10 +471,17 @@ final class GoalPhasePostCompletionSyncSpec extends AnyWordSpec with GivenWhenTh
         result.kind shouldBe "Terminal"
         completed.lifecycle shouldBe Lifecycle.Completed
         completed.history.dropRight(1) shouldBe closed.get.history
+        completed.history.size shouldBe closed.get.history.size + 1
         completed.revision shouldBe closed.get.revision.next
+        completed.currentProgression shouldBe None
+        completed.suspension shouldBe None
         phaseExecutions(root) shouldBe executions
-        e.advance(identity) shouldBe result
+        When("a second passive Advance consumes that actual Completed projection")
+        val passive = e.advance(identity)
+        Then("the identical Terminal and native revision are retained with zero accepted execution increments")
+        passive shouldBe result
         sameInstance(e.current(identity), completed)
+        phaseExecutions(root) shouldBe executions
       }
     }
 

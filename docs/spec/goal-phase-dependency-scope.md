@@ -1,7 +1,103 @@
 # GoalPhase dependency scope
 
+## Purpose-based authorization — adopted 2026-10-25
+
+This section is the target decision contract. It supersedes file-list approval
+semantics in the legacy contract below; it does not claim that the installed
+runtime already implements the change. Existing records retain their historical
+meaning. Deliver the runtime change and public same-Session adoption together.
+
+PA-01. Authorization is bounded by Component, purpose, acceptance conditions and
+permitted operations. Retain the actual user direction and any explicit exclusions.
+A planned file list records implementation scope; it is not an exhaustive Human
+permission list unless the human explicitly imposed that restriction. Being in
+the same repository alone does not establish the same Component or purpose.
+
+PA-02. The AI submits necessary additional files and their rationale through the
+ordinary typed work-result route. It explains how they serve the existing purpose
+and acceptance conditions and whether operations change. This is a scope update
+request to sm-workflow, not an AI decision that Human approval is required.
+sm-workflow compares it with retained authorization and records one of:
+
+- Within the existing boundary: admit the scope update and continue the same work
+  without a new Human decision.
+- A real boundary change or unresolved authorization: issue the ordinary Human
+  request describing the precise changed boundary or missing fact.
+- Invalid input or unavailable runtime support: report that condition as such;
+  do not disguise it as missing user consent.
+
+The caller asks the user only when sm-workflow actually issues a Human request.
+It must neither invent an approval gate nor ignore, auto-answer or fabricate
+evidence for a genuine pending request. Existing attributable user direction
+must be reused through the supported public route rather than requested again.
+
+PA-03. Adding, renaming or discovering a necessary implementation/test file is
+not by itself a change of authority. A different Component, unrelated purpose,
+changed acceptance obligation, newly required operation or explicit user exclusion
+is a real boundary issue. No filename-prefix heuristic can prove semantic scope.
+Use the issued work's rationale and existing authorization references; do not add
+a mandatory AI classifier, reviewer, filesystem scan or approval ledger per file.
+Runtime owns the admission rule; ordinary AI work supplies semantic evidence.
+
+PA-04. Authorization and concrete effect targets are distinct. Retain exact actual
+paths for ownership, attribution, validation and commit selection. Only admitted
+changed files enter the candidate; planned-but-absent and unrelated dirty files
+are not staged automatically. Reuse existing workspace/path and operation grant
+checks. A scope update grants no new Git/SBT, publication, installation, network
+or configuration authority. Broader authorization never means stage everything.
+
+PA-05. Replace equality with the union of Human-approved file lists in dependency
+validation with the retained authorization plus runtime-admitted scope updates.
+Keep prior selections/receipts immutable; append the current scope revision through
+existing history. Candidate capture and validation bind the actual current files.
+New changes may require affected validation; existing results remain retained and
+reusable only for what they actually prove. Do not relax drift or unknown-effect
+handling to achieve continuation.
+
+PA-06. Adopt this policy in an active Session through a public, attributable
+continuation using existing user direction. Preserve Goal/Session, original base,
+Plan and accepted Steps, pending obligations, approval/rejection records, all
+attempts and active/cumulative repair counts. Record the adoption without rewriting
+old file approvals or interpreting a previous rejection as approval. No restart,
+accepted re-Submit, storage edit, counter refund or blanket revalidation is allowed.
+An explicit human file prohibition remains binding. Historical decoding is not a
+second file-gated execution policy for newly adopted work.
+
+PA-07. Before producer delivery, use the actual installed request shape and return
+path; do not invent a field, operation or successful admission. If legacy runtime
+asks for Human direction, relay the real request and the reason. Reconcile already
+available direction through its public route; do not silently continue past it.
+Identify unsupported same-purpose adoption as a producer gap. Already approved
+restoration can continue without waiting for this correction or RRC completion.
+
+## Legacy file-bound contract and evidence
+
+The sections below describe the original wire contract and retained verification.
+Their file-list-as-approval behavior is superseded by PA-01..07 for the new target,
+not evidence that the new target is implemented. Keep original evidence intact.
+
+
 Spec ID: `goal-phase-dependency-scope`.
 @since Oct. 19, 2026. @version Oct. 19, 2026. @author ASAMI, Tomoharu.
+
+## Connection to dependency validation (October 24, 2026)
+
+The [dependency validation contract](goal-phase-dependency-validation.md),
+DV-01..08, consumes actual saved `ApproveDependencyScope` completions. It does
+not infer consent from a worker's description, a proposal object or host settings.
+One current unclosed Step may select one dependency binding by reference. Its
+literal paths equal the union of the saved proposals for that same Step,
+requester/dependency and Usage Contract. The implementation accumulates genuine
+answer references, including a separately approved classifier unit, without
+rewriting the original issued assignment or widening either approval.
+
+The proposal continues to grant no Git/SBT permissions. Capturing the dependency
+base/candidate and checking the result belong to the ordinary native candidate
+and validation owners. Existing work adopted against actual Git objects is
+identified as adoption; it is never described as an earlier Start observation.
+Legacy scope approval alone supplies no dependency-validation success. Source
+specification, generation, executable qualification and Phase acceptance remain
+separate; this extension has no claimed production qualification here.
 
 `GoalPhaseDependencyScope` is the package-private, pure input owner for
 PHASE-6.2/P62-DECISION. Its existing native consumers connect a proposed dependency

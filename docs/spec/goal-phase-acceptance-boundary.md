@@ -1,5 +1,26 @@
 # GoalPhase effective acceptance boundary
 
+Newly issued ReviewStep work may additionally use the explicit typed
+[Step purpose repair contract](goal-phase-purpose-repair.md). Its sources cover
+every required failure exactly and bind additional independent purpose defects
+to the issued Step scope. The legacy required-only form and all accept gates
+below remain; ReviewPhase keeps its existing required-condition semantics.
+
+Updated 2026-10-23: a phase-only configured boundary can honestly return
+`decision-needed` with an actual finding and no applicable Step observations.
+The legacy untyped form cannot return `repair` without unsatisfied applicable required
+observations whose ordered details exactly equal the findings. Excluded ideas
+and advisory-only results never become repair evidence. The separate narrow
+[remaining Plan adoption](goal-phase-remaining-plan-adoption.md#narrow-review-decision-continuation-r8r12)
+contract lets an independently admitted actual Human add exactly one fresh
+required `scope=step` condition for newly issued and future unaccepted work,
+bound to the actual saved Review finding, candidate and successful checks.
+Existing raw/effective conditions and their sources remain exact. The old
+review stays `decision-needed`; no unsatisfied historical observation is
+fabricated, excluded condition promoted, or accepted work reassessed. Ordinary
+repair Submit, candidate/check admission and independent review remain owed.
+The source regressions are pending parent-owned execution and review.
+
 This contract defines application quality for a selected GoalPhase task. It
 does not define CNCF execution policy or issue permission, independent review,
 Human consent, artifact, mutation, commit or repository authority. Workflow
@@ -130,7 +151,7 @@ acceptance. Excluded observations can be unsatisfied/not-evaluated without
 blocking it. Unknown observations are rejected; other nonblocking ideas belong
 in advisories. Phase review additionally observes `phase-closure`.
 
-Review repair requires an actual unsatisfied required condition and exact
+Legacy untyped review repair requires an actual unsatisfied required condition and exact
 ordered projection of its observation details into findings:
 
 ```json
@@ -148,7 +169,7 @@ ordered projection of its observation details into findings:
 }
 ```
 
-This equality defines semantic repair scope, with no unchanged-record proof.
+This equality defines the legacy untyped semantic repair scope, with no unchanged-record proof.
 Other required not-evaluated observations do not prevent repair of known
 required failures, but still prevent acceptance. Excluded-only/advisory-only
 repair fails before a state write or repair-count change. Structurally valid

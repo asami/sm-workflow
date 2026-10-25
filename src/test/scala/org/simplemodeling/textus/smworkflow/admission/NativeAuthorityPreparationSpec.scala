@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Native closing inputs and metadata are specification-owned inputs only.
   * They are not genuine independently issued operator permission.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 private[admission] object NativeAuthorityPreparationFixture {
   val now = Instant.parse("2026-10-07T00:00:00Z")
@@ -83,6 +83,8 @@ private[admission] object NativeAuthorityPreparationFixture {
   *  version Oct. 14, 2026
   * @version Oct. 18, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeAuthorityPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationManagedFixture {
   import NativeAuthorityPreparationFixture.*

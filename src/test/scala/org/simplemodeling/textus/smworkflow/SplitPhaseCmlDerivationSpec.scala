@@ -10,8 +10,10 @@ import org.scalatest.wordspec.AnyWordSpec
   * No SBT process or dependency publication is started by this specification.
   *
   * @since Oct.  4, 2026
-  * @version Oct. 13, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class SplitPhaseCmlDerivationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _execute(argv: Vector[String], log: Path): String = {
     val process = new ProcessBuilder(argv*).redirectErrorStream(true).redirectOutput(log.toFile).start()

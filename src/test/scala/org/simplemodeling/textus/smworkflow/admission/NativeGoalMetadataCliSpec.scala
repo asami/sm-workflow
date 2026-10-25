@@ -8,7 +8,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workspace.WorkspaceId
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetadataFixtureSpec
@@ -22,10 +22,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Semantic Submit is specification-owned input, never provider, Human or
   * independent review evidence. Every successful example stops pending review.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalMetadataCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import N.given
   private val _suite = classOf[SelectedMetadataFixtureSpec].getName
@@ -86,7 +87,7 @@ final class NativeGoalMetadataCliSpec extends AnyWordSpec with Matchers with Giv
     Files.writeString(Path.of(scenario.host.target.root).resolve("docs/phase.md"),
       "# Owned native qualification candidate\n\nMetadata selected through the owning native UoW.\n")
     val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned assigned docs/phase.md edit",
-      Vector.empty, None, None, None, None, None, None, None)
+      Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", json(semantic.toRecord()).noSpaces,
       "--resultReference", json(_reference.toRecord()).noSpaces)).business[V.GoalPhaseWorkSubmissionResult]

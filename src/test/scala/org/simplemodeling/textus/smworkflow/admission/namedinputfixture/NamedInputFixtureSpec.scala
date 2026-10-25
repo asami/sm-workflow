@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata a
 
 /** Trusted exact input names that collide under ordinary property naming.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 class NamedInputDeclarations extends ValidationDeclarationProvider {
@@ -30,6 +30,7 @@ class NamedInputDeclarations extends ValidationDeclarationProvider {
   * @version Oct. 19, 2026
   * @author  ASAMI, Tomoharu
   */
+// Intentional helper: instantiated only by explicit metadata/input contract specifications.
 @DoNotDiscover
 @ValidationSpecification(identity = "named-inputs", revision = "1", declaration = classOf[NamedInputDeclarations])
 class NamedInputFixtureSpec extends AnyWordSpec with Matchers with GivenWhenThen {

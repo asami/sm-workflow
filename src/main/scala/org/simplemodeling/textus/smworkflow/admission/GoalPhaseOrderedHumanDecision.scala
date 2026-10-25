@@ -21,7 +21,7 @@ import GoalPhasePlanRevision as R
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
@@ -61,7 +61,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   final case class Input(work: S.Request, requestingResult: ContextReference, result: S.Result, reason: String,
     repairProgress: Option[GoalPhaseRepairProgress.Snapshot] = None,
     planRevision: Option[R.Captured] = None,
-    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None)
+    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
+    developmentOccurredAt: Option[String] = None)
   final case class Answer(choice: String, rationale: String)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, question: WorkflowInteraction[Input, Nothing],
@@ -100,8 +101,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         val progress = value.repairProgress.fold(fields)(progress => fields.add("repairProgress",
           summon[io.circe.Encoder[GoalPhaseRepairProgress.Snapshot]].apply(progress)))
         val revision = value.planRevision.fold(progress)(captured => progress.add("planRevision", summon[io.circe.Encoder[R.Captured]].apply(captured)))
-        value.sourceHistoryRecovery.fold(revision)(target => revision.add("sourceHistoryRecovery",
+        val recovery = value.sourceHistoryRecovery.fold(revision)(target => revision.add("sourceHistoryRecovery",
           summon[io.circe.Encoder[GoalPhaseSourceHistoryRecovery.RecoveryTarget]].apply(target)))
+        value.developmentOccurredAt.fold(recovery)(at => recovery.add("developmentOccurredAt", Json.fromString(at)))
       }
     def decode(value: Json): Either[String, Input] = for {
       fields <- Option(value).flatMap(_.asObject)
@@ -124,7 +126,12 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case None => Right(None)
         case Some(value) => GoalPhaseSourceHistoryRecovery.decodeTarget(value).map(Some(_))
       }
-    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery)
+      occurred <- fields("developmentOccurredAt") match {
+        case None => Right(None)
+        case Some(value) => value.asString.filter(at => scala.util.Try(java.time.Instant.parse(at)).isSuccess)
+          .toRight("Invalid development occurrence time").map(Some(_))
+      }
+    } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery, occurred)
   }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] = new WorkflowResultJsonV1.PayloadCodec[Answer] {
     val typeIdentity = "GoalPhaseOrderedDecisionAnswer"
@@ -165,7 +172,14 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       plan <- existing match {
         case Some(_) => Consequence.success(projected)
         case None => for {
-          saved <- questions.suspendC(projected.intent, projected.question)(using core.executionContext)
+          offered <- issuedChoicesC(projected.question)
+          events <- if (offered.exists(Set("AdoptPlanRevision", "ApproveDependencyScope")))
+            NativeWorkflowOperationOutput.decisionInputC(projected.question).flatMap(input =>
+              GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, source.from.identity.value,
+                projected.pending.revision.value, "ApprovalRequested", identity(source).value, core,
+                input.developmentOccurredAt.map(java.time.Instant.parse)))
+            else Consequence.success(Vector.empty[org.goldenport.cncf.event.EventRecord])
+          saved <- questions.suspendC(projected.intent, projected.question, events)(using core.executionContext)
           _ <- acknowledgement("ordered-human-issued")
         } yield projected.copy(pending = saved.instance)
       }
@@ -265,8 +279,18 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       plan: Prepared, submitted: ContinuationResult[Answer]): Consequence[spec.OperationDefinition] = for {
       questions <- plan.source.session.storage.bindDecisionC(completionOperation, inputCodec)
       instances <- plan.source.session.storage.bindInstancesC()(using core.executionContext)
-      native <- _completion_c(plan.source.session.storage)
       expected <- _completed_c(plan, submitted)
+      events <- submitted.result.value.choice match {
+          case "AdoptPlanRevision" | "ApproveDependencyScope" =>
+            GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, plan.pending.identity.value,
+              expected.revision.value, "ApprovalAccepted", submitted.resultReference.identity, core)
+          case "RejectPlanRevision" | "RejectDependencyScope" =>
+            GoalPhaseDevelopmentEvents.recordsC(d.developmentObservation, plan.pending.identity.value,
+              expected.revision.value, "ApprovalRejected", submitted.resultReference.identity, core)
+          case _ => Consequence.success(Vector.empty[org.goldenport.cncf.event.EventRecord])
+        }
+      native <- plan.source.session.storage.bindDecisionCompletionC(completionOperation, inputCodec, answerCodec, closingType,
+        (_, _) => Consequence.success(events))
       bound <- {
         val codec = new WorkflowCompletionServiceOperation.Codec[Answer] {
           val resultTypeIdentity = answerCodec.typeIdentity
@@ -394,7 +418,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           }
         } yield Input(source.input, source.result.resultReference, source.result.result.value,
           source.sourceHistoryRecovery.fold(source.controller.decision.get)( _ => GoalPhaseSourceHistoryRecovery.message),
-          Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery)
+          Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery,
+          d.developmentObservation.map(_ => core.executionContext.clock.instant().toString))
       }
       _ <- if (input != null && input.result != null) Consequence.unit
         else F.invalid("saved Human question has no actual business input")

@@ -14,12 +14,13 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.workflow.WorkflowExecutionProfileParameters
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
+import GoalPhaseDependencyValidation.given
 
 /** Ordinary installed composition. These are fixed targets and policies, not
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -27,15 +28,24 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
   final case class Target(root: String, localBranch: String, remote: String, remoteBranch: String, endpoint: String)
   final case class Goal(input: GoalPhaseStartInput, candidatePaths: Vector[String],
     stepValidation: GoalPhaseNativeValidation.Policy, phaseValidation: GoalPhaseNativeValidation.Policy,
-    review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy)
+    review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy,
+    dependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
   final case class Repository(input: RepositorySyncStartInput,
     validation: RepositorySyncNativeMergeValidation.Policy, conflicts: RepositorySyncNativeConflictInput.Policy,
     review: RepositorySyncNativeMergeReview.Policy)
   final case class Definition(schemaVersion: String, target: Target, goal: Goal, repository: Repository)
 
   // Bottom-up derivation also bounds compiler expansion for the nested policies.
-  private given Encoder[Goal] = deriveEncoder
-  private given Decoder[Goal] = deriveDecoder
+  private given Encoder[Goal] = deriveEncoder[Goal].mapJson(_.mapObject(fields =>
+    if (fields("dependencyValidation").exists(_.isNull)) fields.remove("dependencyValidation") else fields))
+  private val _goal_decoder: Decoder[Goal] = deriveDecoder
+  private given Decoder[Goal] = Decoder.instance { cursor =>
+    if (cursor.downField("dependencyValidation").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Dependency validation binding must be absent or a complete object", cursor.history))
+    else _goal_decoder(cursor).flatMap(value =>
+      if (value.dependencyValidation != null && value.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Right(value)
+      else Left(io.circe.DecodingFailure("Invalid dependency validation host binding", cursor.history)))
+  }
   private given Encoder[Repository] = deriveEncoder
   private given Decoder[Repository] = deriveDecoder
 
@@ -67,11 +77,25 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Consequence.success(value)
       case _ => Consequence.configurationInvalid("GoalPhase completion policy is unsupported")
     })
+  val validationRepairCallerSource = ComponentParameterKey.optional(
+    "sm-workflow.goal-phase.validation-repair.caller-source", ComponentParameterDecoder[GoalPhaseValidationPriorInvocation.CallerSourcePolicy] {
+      case value: ConfigurationValue.ObjectValue => json(value).as[GoalPhaseValidationPriorInvocation.CallerSourcePolicy]
+        .fold(e => Consequence.configurationInvalid(e.message), Consequence.success)
+      case _ => Consequence.configurationInvalid("Validation repair caller-source requires its exact closed structured policy")
+    })
+  val developmentObservation: ComponentParameterKey[DevelopmentOperationalView.Configuration] = ComponentParameterKey.optional(
+    "sm-workflow.development-observation", ComponentParameterDecoder {
+      case value: ConfigurationValue.ObjectValue => DevelopmentOperationalView.decodeConfigurationC(json(value))
+      case ConfigurationValue.StringValue(value) => io.circe.parser.parse(value).fold(
+        _ => Consequence.configurationInvalid("Development observation configuration is invalid"),
+        DevelopmentOperationalView.decodeConfigurationC)
+      case _ => Consequence.configurationInvalid("Development observation requires a closed structured configuration")
+    })
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy)
+      completionPolicy, validationRepairCallerSource, developmentObservation)
   lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -84,6 +108,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Consequence.configurationInvalid("Three-workflow runtime definition is not configured"))
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       selectedpolicy <- parameters.resolve(completionPolicy).map(_.value.getOrElse(GoalPhasePostCompletionSync.localPolicy))
+      callersource <- parameters.resolve(validationRepairCallerSource).map(_.value)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
@@ -93,10 +118,11 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       findingpolicy <- GoalPhaseFindingRecording.resolvePolicyC(parameters)
       journalpolicy <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
       evidencepolicy <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection))
+      observation <- parameters.resolve(developmentObservation).map(_.value)
       target <- targetC(settings.target)
       evidence <- NativeExternalEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
-        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications)
+        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications, journalpolicy)
       ports = new ThreeWorkflowExternalEvidencePorts(evidence)
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,
@@ -116,11 +142,16 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseCandidateObservationContinuation.Installation(ports.candidateObservationContinuation)),
         Some(GoalPhaseWholePhaseCandidateRecovery.Installation(ports.wholePhaseCandidateRecovery)),
         Some(GoalPhaseFailedPhaseRepairAdoption.Installation(ports.failedPhaseRepairAdoption)),
-        Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy)
+        Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy,
+        Some(GoalPhaseLegacyPurposeRepairContinuation.Installation(ports.reviewPurposeRepair)), settings.goal.dependencyValidation,
+        Some(GoalPhaseValidationRepairAdoption.Installation(ports.validationRepairAdoption)), callersource, observation,
+        Some(GoalPhaseReleaseRepairContinuation.Installation(ports.releaseRepairContinuation)))
+      _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
+        else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,
-        executionprofiles, executionorigin, splitclassifications)
+        executionprofiles, executionorigin, splitclassifications, journalpolicy, Some(settings.repository.input.repositoryIdentity))
     } yield ThreeWorkflowLauncherAssembly.RuntimeComposition(goal, split, splitCatalog, ports.splitStart, ports.splitAnswer)
 
   private def targetC(value: Target): Consequence[RepositoryGitRuntimePrograms.Target] =

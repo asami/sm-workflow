@@ -13,8 +13,10 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Supplied public-source examples are fixture observations, not actual operator
   * answers or proof of the real Session's interrupted process.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeCallerInformationOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationOperationFixture {
   import NativeCallerExecutionFixture.{issued, take, record}
@@ -57,6 +59,8 @@ final class NativeCallerInformationOperationSpec extends AnyWordSpec with Matche
         first.sourceReference.identity shouldBe "codex:fixture-thread:fixture-turn:fixture-item"
         first.toRecord().keySet should not contain "completionEvidence"
         first.toRecord().keySet should not contain "datastore"
+        org.simplemodeling.textus.smworkflow.caller.NativeCallerInformationSource.selectC(
+          _source, "commandExecution", _page()).isSuccess shouldBe true
       }
     }
 

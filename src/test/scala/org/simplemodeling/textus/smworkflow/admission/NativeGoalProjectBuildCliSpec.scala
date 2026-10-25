@@ -12,7 +12,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.processexecution.SbtOperation
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{DefinitionBinding, InstanceRecord, ProgressionReference}
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
@@ -25,10 +25,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * owns a fresh managed host, repository, Session and finite child lifecycle.
   * Publication, runtime selection, execution and review belong to the parent.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalProjectBuildCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {
   private var _kind = WorkflowSbtValidation.Kind.Compile

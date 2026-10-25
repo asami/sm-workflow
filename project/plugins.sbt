@@ -3,3 +3,5 @@ resolvers += Resolver.defaultLocal
 
 val sbtCozyVersion = sys.props.getOrElse("sbt.cozy.version", sys.env.getOrElse("SBT_COZY_VERSION", "0.1.18-SNAPSHOT"))
 addSbtPlugin("org.goldenport" % "sbt-cozy" % sbtCozyVersion)
+
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.12.1")

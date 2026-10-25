@@ -1,5 +1,18 @@
 # Explicit bounded Plan revision
 
+Updated 2026-10-23: the separate
+[remaining Plan adoption](goal-phase-remaining-plan-adoption.md#narrow-review-decision-continuation-r8r12)
+contract now includes a narrow saved ReviewStep `decision-needed` continuation.
+This requires one actual OPEN review finding, one fresh required Step condition,
+an otherwise exact Plan and independently admitted Human direction. Ordinary
+reviewer Plan proposals and ordinary repair acceptance remain unchanged. The
+new revision explicitly retains every old raw/effective condition and source;
+it governs new and future unaccepted work without reassessing historical work.
+Retained native supersession selects RepairStep and consumes one ordinary
+repair, preserving Session/base/prefix/history and the unanswered old question.
+This source update still requires parent-owned focused validation, independent
+review and isolated installed qualification before delivery.
+
 `GoalPhasePlanRevision` owns the pure proposal/capture/adoption boundary for
 PHASE-6.2 TS03. H2/H3 connect it to ordinary semantic Submit, actual saved Human
 questions, independent evidence admission, atomic Human completion and the sole

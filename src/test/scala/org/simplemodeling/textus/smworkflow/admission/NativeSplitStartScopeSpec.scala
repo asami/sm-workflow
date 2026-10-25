@@ -14,8 +14,10 @@ import SplitPhaseTypedStartHumanVerification.StartContext
 
 /** Passive scope/storage examples, not independent Human or actual execution.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeSplitStartScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val start = SplitPhaseTypedStartFixture.record
   private val owner = ComponentInstanceId(SmWorkflowComponent.componentId, "direct-spec")

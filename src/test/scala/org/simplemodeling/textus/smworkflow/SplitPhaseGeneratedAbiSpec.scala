@@ -11,8 +11,10 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhaseStartInput
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val operations: Vector[OperationDefinition] = Vector(
     SmWorkflowComponent.SplitPhaseServiceService.StartSplitPhaseOperation,

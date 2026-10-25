@@ -32,6 +32,36 @@ cache. It never runs PendingDiff/Test/staging or writes Workflow history.
 
 ## R2 — Separate Human and prior invocation evidence
 
+The public Operation accepts exactly one input representation: existing
+`--input '<complete business JSON>'` or `--inputResource file:///absolute/path.json`.
+The Resource contains the entire unchanged `GoalPhaseWholePhaseCandidateRecoveryInput`,
+including its complete target and independently supplied Human reference. It is
+not a target locator or evidence shortcut. Missing or simultaneous representations
+refuse. Only an absolute local file URI without authority, query or fragment is
+accepted; escape spaces and other URI characters normally.
+
+The executing call reads the resource once through CNCF's normal Resource service
+and its configured roots, read limit and failure handling. It then uses the same
+strict business decoder and unchanged recovery admission as inline input.
+Malformed or incomplete DTOs, explicit null, foreign/stale targets, absent or
+invalid Human evidence and unconfirmed prior termination still refuse. This
+input read precedes history-only admission; recovery performs no candidate Git,
+staging, source-history write or SBT effect. No new size check or direct host-file
+read is added in the application. Configure sufficient normal Resource read
+capacity for the complete DTO; increasing Git's diff limit alone does not do so.
+
+Example using the normal installed command and the owning host:
+
+```sh
+sm-workflow --runtime-root /absolute/owning-host command \
+  org.simplemodeling.textus.SmWorkflow.GoalPhaseService.recoverGoalPhaseWholePhaseCandidate \
+  --inputResource file:///absolute/complete-recovery-input.json --json
+```
+
+This is the existing recovery Operation, not Start, Submit, a preparatory import,
+or automatic Advance. A transport repair by itself changes no target, Human
+authority, Plan, counters, accepted results or retained failure history.
+
 `recoverGoalPhaseWholePhaseCandidate(input)` requires separately provisioned
 independent evidence with purpose `goal-phase-whole-phase-candidate-recovery`,
 binding the complete target, component instance, actual participant/reference,

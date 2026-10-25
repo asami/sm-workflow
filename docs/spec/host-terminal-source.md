@@ -1,5 +1,11 @@
 # Codex terminal information through the existing caller
 
+The withdrawn provider remains withdrawn. The
+[validation repair adoption](goal-phase-validation-repair-adoption.md) route
+uses the caller's ordinary public API read and an opaque full-page Resource.
+Current native selection adds no provider, process acquisition service, fabricated
+issuedWorkContext or descendant-settlement observation.
+
 Status: caller-return implementation, isolated installed round trip and normal runtime adoption verified, 2026-10-23; actual retained-Session progression remains separately owned.
 
 The current executable ingress is [caller-information](caller-information.md).

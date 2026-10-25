@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Privately constructed fresh typed Start/AI result, not public human ingress
   * and not a native commit witness. Shared only by inert executable examples.
   * @since   Oct.  2, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
 private[admission] object SplitPhaseAICompletionCheckpointFixture {
   val f = SplitPhaseTypedStartFixture
@@ -65,6 +65,8 @@ private[admission] object SplitPhaseAICompletionCheckpointFixture {
   def targets = take(U.bindTargetsC(host, declaration))
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseAICompletionCheckpointFixture.*
   "Original AI-completion capture" should {

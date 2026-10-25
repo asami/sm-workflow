@@ -17,9 +17,11 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Recording ports establish consumer behavior only, never actual provider acceptance.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseScopedQualityReviewSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GoalPhaseScopedQualityReview.*
   import ConfigurationValue.*

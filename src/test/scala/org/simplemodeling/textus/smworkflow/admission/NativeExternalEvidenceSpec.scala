@@ -12,8 +12,10 @@ import NativeExternalEvidence.*
 
 /**
  * @since   Oct.  7, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeExternalEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-10-07T00:00:00Z")
   private val declared = Declaration("workflow", DataStore.CollectionId.EntityStore(

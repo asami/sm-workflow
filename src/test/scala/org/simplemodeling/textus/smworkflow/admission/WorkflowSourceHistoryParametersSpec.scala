@@ -14,8 +14,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Per-call parameter composition contract; normal CLI syntax belongs to C2.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowSourceHistoryParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ConfigurationValue.*
   import WorkflowSourceHistoryParameters.*

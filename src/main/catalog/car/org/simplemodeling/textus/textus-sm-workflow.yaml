@@ -6,14 +6,15 @@ artifactId: textus-sm-workflow
 latestSnapshot: 0.1.0-SNAPSHOT
 status: active
 aliases: []
-tags: []
+tags:
+  - development-observation
 terms: []
 versions:
   - version: 0.1.0-SNAPSHOT
     channel: snapshot
     status: active
     component: org.simplemodeling.textus.SmWorkflow
-    publishedAt: 2026-10-23T15:05:14.043805+09:00
+    publishedAt: 2026-10-25T19:06:00.544902+09:00
     file: repository/car/org/simplemodeling/textus/textus-sm-workflow/0.1.0-SNAPSHOT/textus-sm-workflow-0.1.0-SNAPSHOT.car
     runtime:
       cncf:

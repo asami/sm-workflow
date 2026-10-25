@@ -8,17 +8,18 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /** Opt-in evidence for ordinary CAR admission against one materialized runtime.
   * This diagnostic neither selects an installation nor operates on a Session.
   * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeInstalledCarAdmissionDiagnosticSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class Cleanup(terminated: Boolean, evidence: Json)
   private final case class StackCapture(evidence: Json, failure: Option[String])

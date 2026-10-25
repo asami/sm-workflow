@@ -12,9 +12,11 @@ import NativeWorkflowCliFixture as F
   * Task labels and selected test inputs are not real chats, consent, review,
   * installed semantic skill use, or Step/Phase acceptance.
   * @since   Oct. 13, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.ExternalServiceTestDeclaration])
 final class NativeWorkflowCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _metadata(example: String, rules: String) =
     afterWord(s"in spec:native-client-installation, example:$example, rules:$rules, phase:sm-workflow-6" +

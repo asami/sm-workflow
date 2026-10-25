@@ -11,9 +11,11 @@ import SplitPhaseExplicitPartitionFixture.*
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitReasoningSemanticSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _assigned_reply_spec = afterWord("in spec:split-phase-reasoning-interface, example:E2, rules:R2, phase:2")
   private val _context = S.ContextReference("reasoning-context", "1")

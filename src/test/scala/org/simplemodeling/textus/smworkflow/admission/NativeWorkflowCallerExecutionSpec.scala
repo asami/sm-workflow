@@ -17,9 +17,11 @@ import WorkflowExecutionHarness as H
 /** Actual public WorkOrder projection with specification-owned host observations.
   * This library fixture does not install a provider or establish two real chats.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeWorkflowCallerExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _profile = WorkflowConcreteExecutionProfile("fixture-profile", "fixture-provider", "fixture-model", Map.empty)
   private val _origin = WorkflowExecutorDescriptor("fixture-origin", _profile)

@@ -4,10 +4,11 @@ import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import GoalPhaseDependencyValidation.given
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.processexecution.SbtExecutionAttempt
+import org.goldenport.cncf.processexecution.{SbtExecutionAttempt, SbtOperation, SbtTarget}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
@@ -26,13 +27,14 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
   final case class Check(identity: String, ordinal: Int, kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     metadata: Option[N.Profile] = None, hostIdentity: Option[String] = None,
-    operation: Option[D.OperationReference] = None)
+    operation: Option[D.OperationReference] = None,
+    dependency: Option[String] = None)
   object Check {
     import N.given
     given Encoder[Check] = Encoder.instance(value => {
@@ -40,7 +42,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       val kind = if (value.kind == WorkflowSbtValidation.Kind.Test) fields else fields.mapObject(_.add("kind", value.kind.asJson))
       val metadata = value.metadata.fold(kind)(m => kind.mapObject(_.add("metadata", m.asJson)))
       val host = value.hostIdentity.fold(metadata)(h => metadata.mapObject(_.add("hostIdentity", h.asJson)))
-      value.operation.fold(host)(o => host.mapObject(_.add("operation", o.asJson)))
+      val operation = value.operation.fold(host)(o => host.mapObject(_.add("operation", o.asJson)))
+      value.dependency.fold(operation)(d => operation.mapObject(_.add("dependency", d.asJson)))
     })
     given Decoder[Check] = Decoder.instance(cursor => for {
       identity <- cursor.get[String]("identity")
@@ -49,13 +52,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
       metadata <- N.optional[N.Profile](cursor, "metadata")
       host <- N.optional[String](cursor, "hostIdentity")
       operation <- N.optional[D.OperationReference](cursor, "operation")
-    } yield Check(identity, ordinal, kind, metadata, host, operation))
+      dependency <- N.optional[String](cursor, "dependency")
+    } yield Check(identity, ordinal, kind, metadata, host, operation, dependency))
   }
   final case class Policy(identity: String, revision: Int, checks: Vector[Check]) {
     def validateC: Consequence[Unit] =
       if (id(identity) && revision > 0 && checks != null && checks.nonEmpty && checks.size <= 16 &&
           checks.forall(c => c != null && id(c.identity) && c.kind != null && c.ordinal > 0 && c.ordinal <= 16 &&
-            c.metadata != null && c.hostIdentity != null && c.operation != null && c.hostIdentity.isEmpty && c.operation.isEmpty &&
+            c.metadata != null && c.hostIdentity != null && c.operation != null && c.dependency != null && c.dependency.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty &&
             c.metadata.forall(p => c.kind == WorkflowSbtValidation.Kind.TestOnly && N.profileValid(p))) &&
           checks.map(_.identity).distinct.size == checks.size && checks.map(_.ordinal).distinct.size == checks.size)
         Consequence.unit else F.invalid("native validation host bindings are incomplete")
@@ -67,18 +71,21 @@ private[smworkflow] object GoalPhaseNativeValidation {
   final case class Payload(sourceRevision: String, step: String, candidate: O.Snapshot,
     selected: Vector[Check], receipts: Vector[V.Receipt], outcome: Option[String], metadata: Vector[N.Batch] = Vector.empty,
     stopped: Vector[V.Receipt] = Vector.empty, admissionFailures: Vector[AdmissionFailure] = Vector.empty,
-    uncertainties: Vector[Uncertainty] = Vector.empty, newAttempts: Vector[NewAttempt] = Vector.empty)
+    uncertainties: Vector[Uncertainty] = Vector.empty, newAttempts: Vector[NewAttempt] = Vector.empty,
+    dependency: Option[GoalPhaseDependencyValidation.Capture] = None,
+    dependencyExecutions: Vector[GoalPhaseDependencyValidation.Execution] = Vector.empty,
+    assessment: Option[GoalPhaseStepAssessment.Result] = None)
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(value => value.mapObject(fields =>
-      Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts").foldLeft(fields) { (prior, key) =>
+      Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(fields) { (prior, key) =>
         if (prior(key).exists(_.asArray.exists(_.isEmpty))) prior.remove(key) else prior
-      }))
+      }.filter { case (key, value) => (key != "dependency" && key != "assessment") || !value.isNull }))
     private val _decoder: Decoder[Payload] = deriveDecoder
     given Decoder[Payload] = Decoder.instance { cursor =>
-      val normalized = Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts").foldLeft(cursor.value) { (prior, key) =>
+      val normalized = Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(cursor.value) { (prior, key) =>
         if (cursor.downField(key).focus.isEmpty) prior.mapObject(_.add(key, Json.arr())) else prior
       }
-      _decoder.decodeJson(normalized).flatMap(value => if (_valid_payload(value)) Right(value)
+      _decoder.decodeJson(normalized).flatMap(value => if (!cursor.downField("dependency").focus.exists(_.isNull) && _valid_payload(value)) Right(value)
         else Left(DecodingFailure("Invalid native validation payload", cursor.history)))
     }
   }
@@ -98,6 +105,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private[admission] final case class Attempt(intent: Option[Saved], result: Option[Saved], recovery: Option[Saved] = None)
   private[admission] final case class CheckProgress(saved: Saved, nextAttempt: Option[Int])
   private[admission] final case class TerminalFailedAttempt(attempt: Int, intent: Saved, result: Saved, validation: Saved)
+  private[admission] final case class OutputLimitedAttempt(attempt: Int, intent: Saved, result: Saved, validation: Saved)
+  private[admission] enum TerminalOutcome {
+    case Failed, TerminatedTimeout
+  }
+  private[admission] final case class TerminalAttempt(outcome: TerminalOutcome, attempt: Int,
+    intent: Saved, result: Saved, validation: Saved)
 
   /** Same host-policy selection for fresh Validation and issued semantic context. */
   private[admission] def selectedChecksC(d: F.Declaration, plan: O.Plan,
@@ -114,6 +127,13 @@ private[smworkflow] object GoalPhaseNativeValidation {
       policy.checks.find(_.identity == identity).fold[Consequence[Vector[Check]]](
         F.invalid("required plan check has no fixed host program: " + identity))(c => Consequence.success(values :+ c))
     }}
+    _ <- if (step.flatMap(id => plan.steps.find(_.identity == id)).flatMap(_.actionPolicy).exists(_.kind == "code") &&
+        !(selected.exists(_.kind == WorkflowSbtValidation.Kind.Compile) &&
+          selected.exists(_.kind == WorkflowSbtValidation.Kind.TestOnly)))
+      F.invalid("code Step policy requires fixed Compile and focused TestOnly programs before execution") else Consequence.unit
+    _ <- if (step.flatMap(id => plan.steps.find(_.identity == id)).flatMap(_.actionPolicy).exists(_.scalaLint == "required") &&
+        !selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      F.invalid("required Scala lint has no fixed FixCheck program before execution") else Consequence.unit
   } yield selected
 
   private[admission] def sourceInstructionsC(d: F.Declaration, plan: O.Plan,
@@ -131,37 +151,49 @@ private[smworkflow] object GoalPhaseNativeValidation {
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State,
     from: Option[InstanceRecord] = None,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
-    recordingPaths: Vector[String] = Vector.empty): Consequence[Option[Saved]] = for {
+    recordingPaths: Vector[String] = Vector.empty,
+    allowRepairDirection: Boolean = false): Consequence[Option[Saved]] = for {
     store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths)
     retained <- store.loadC("validation")
-    actual <- retained.fold(store.pendingSelectionC)(x => store.completedC(x).map(Some(_)))
+    actual <- retained.fold(if (allowRepairDirection) store.pendingRepairSelectionC else store.pendingSelectionC)(x => store.completedC(x).map(Some(_)))
   } yield actual
 
   def preconditionsC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State,
     from: Option[InstanceRecord] = None,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
-    recordingPaths: Vector[String] = Vector.empty): Consequence[Unit] =
-    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths).flatMap(_.preconditionsC)
+    recordingPaths: Vector[String] = Vector.empty,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Unit] =
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths,
+      dependencyChain).flatMap(_.preconditionsC)
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
     from: Option[InstanceRecord] = None,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
-    recordingPaths: Vector[String] = Vector.empty): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
-    store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths)
+    recordingPaths: Vector[String] = Vector.empty,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths, dependencyChain)
     retained <- store.loadC("validation")
     actual <- retained match {
       case Some(value) => store.completedC(value)
       case None => _checks_c(store)
     }
     evidence <- store.evidenceC(actual.payload)
+    journal <- DevelopmentJournalAssessment.recordC(d, core, session.current.identity.value, actual.payload)
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
+      case Some("passed") if actual.payload.assessment.exists(_.branch == "admit") =>
+        "Actual checks passed and formal Step admission is retained. Triage and detailed review were not executed; native commit authority and closure remain separate."
+      case Some("passed") if actual.payload.assessment.exists(_.branch == "triage") =>
+        "Actual required native checks passed; selected semantic uncertainty requires bounded triage. Independent review and closure are not accepted."
+      case Some("passed") if actual.payload.assessment.exists(_.branch == "decision") =>
+        "Actual checks passed; the retained immediate observation requires judgment before continuation."
       case Some("passed") => "Actual required native checks passed. Independent review work, acceptance and Step/Phase closure remain unfinished."
       case Some("repair-required") => "Actual terminated selected Step check failure is retained for assigned semantic repair. Fresh native inspection, checks and independent review remain unfinished."
       case Some("repair-limit-reached") => "Actual terminated selected Step check failure exhausted the positive repair window. Only verified Human ContinueRepairs can renew that window; the original diagnostics remain retained."
       case Some("failed") => "Actual failed or indeterminate checks are retained at Decision. No automatic replay or review acceptance."
+      case Some("incomplete") => "Actual output-limited incomplete checks and retained raw prefixes are saved at Decision. Describe validation repair for a concrete independently admitted corrective Plan."
       case _ if continuable(actual) && actual.payload.stopped.lastOption.exists(r =>
           actual.payload.selected.lift(actual.payload.receipts.size).exists(_.identity == r.identity)) =>
         "The selected native check is confirmed not-executed after bounded runtime startup recovery; no product result exists. After preparation correction, the next ordinary Advance uses the standing selected scope."
@@ -174,7 +206,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
           ". No automatic replay. Describe validation recovery for an explicit independent Human decision about a NEW attempt."
       case _ => "A native check intent has no recorded result. Observe or request a genuine decision; checks are not automatically replayed."
     })
-  } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload).copy(evidenceRecording = evidence)))
+  } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)
+    .copy(evidenceRecording = evidence, assessmentJournal = journal)))
 
   private[admission] def recoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
@@ -182,6 +215,13 @@ private[smworkflow] object GoalPhaseNativeValidation {
     Consequence[GoalPhaseValidationRecovery.RecoveryTarget] =
     _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
       .flatMap(_.recoveryTargetC)
+
+  private[admission] def repairRecoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String]):
+    Consequence[GoalPhaseValidationRecovery.RecoveryTarget] =
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
+      .flatMap(_.repairRecoveryTargetC)
 
   private[admission] def appendRecoveryC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
@@ -192,24 +232,46 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   /** Read-only proof for the original Decision, including every retained prior attempt. */
   private[admission] def terminalFailedAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved): Consequence[TerminalFailedAttempt] = for {
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved): Consequence[TerminalFailedAttempt] =
+    terminalAttemptC(session, d, core, candidate, controller, failed, TerminalOutcome.Failed)
+      .map(value => TerminalFailedAttempt(value.attempt, value.intent, value.result, value.validation))
+
+  /** Both repair sources use the ordinary retained intent/result reconciliation.
+    * The closed outcome is checked before loading and never inferred from exit 143.
+    */
+  private[admission] def terminalAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved,
+    expected: TerminalOutcome): Consequence[TerminalAttempt] = for {
     entry <- session.current.history.filter(_.revision.value.toString == failed.payload.sourceRevision) match {
       case Vector(value) => Consequence.success(value)
       case _ => F.invalid("known failed validation source is absent or ambiguous")
     }
     source <- GoalPhaseNativeHistory.prefixC(session.current, entry.revision)
     store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty)
-    terminal <- store.terminalFailedAttemptC(failed)
+    terminal <- store.terminalAttemptC(failed, expected)
   } yield terminal
+
+  private[admission] def outputLimitedAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, limited: Saved): Consequence[OutputLimitedAttempt] = for {
+    entry <- session.current.history.filter(_.revision.value.toString == limited.payload.sourceRevision) match {
+      case Vector(value) => Consequence.success(value)
+      case _ => F.invalid("output-limited validation source is absent or ambiguous")
+    }
+    source <- GoalPhaseNativeHistory.prefixC(session.current, entry.revision)
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty)
+    actual <- store.actualTerminalAttemptC(limited, "incomplete", outputLimited(limited.payload))
+  } yield OutputLimitedAttempt(actual._1, actual._2, actual._3, actual._4)
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
-    from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String]): Consequence[Store] = for {
+    from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Store] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     _ <- documentpolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
-    selected <- selectedChecksC(d, controller.plan, step)
+    primary <- selectedChecksC(d, controller.plan, step)
+    selected <- GoalPhaseNativeDependencyValidation.checksC(primary, candidate.payload.dependency)
     scope = step.getOrElse("phase:" + controller.plan.phase)
     owned = if (whole) controller.plan.steps.flatMap(_.ownedPaths).distinct else controller.plan.steps(controller.cursor).ownedPaths
     _ <- L.bindingsC(selected, scope, owned, d.candidatePaths)
@@ -238,10 +300,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else F.invalid("native checks require the actual saved candidate")
     prefix = if (selected.exists(_.metadata.nonEmpty)) selected.takeWhile(_.metadata.isEmpty) else Vector.empty
     initial = Payload(frontier.revision.value.toString, scope, candidate.payload.candidate.get,
-      if (prefix.nonEmpty) prefix else selected, Vector.empty, None)
+      if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = candidate.payload.dependency)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, d, core, candidate, frontier, controller, selected, initial,
-      None, acknowledgement, documentpolicy, recordingpaths)
+      None, acknowledgement, documentpolicy, recordingpaths, dependencyChain)
     retained <- store.loadC("selection")
     actual <- retained match {
       case Some(saved) => store.retainedSelectionC(saved)
@@ -272,9 +334,11 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _check_loop_c(store: Store, initial: Saved): Consequence[Saved] =
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.receipts.size != index || !successful(current.payload.receipts, store.initial.selected)) Consequence.success(current)
-      else runCheckC(check, index)(() => store._check_progress_c(current, index), () => store.preconditionsC,
+      else runCheckC(check, index, store.initial.dependency.nonEmpty || store.dependencyChain.exists(_.accepted.nonEmpty))(
+        () => store._check_progress_c(current, index), () => store.preconditionsC,
         store.saveC, store.acknowledgeC,
-        selected => if (selected.operation.isEmpty) E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind)
+        selected => if (selected.operation.isEmpty) GoalPhaseNativeDependencyValidation.workspaceC(selected, store.initial.dependency)
+          .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace))
           else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _)),
         payload => store.evidenceC(payload).map(_ => ()))
     }}
@@ -283,7 +347,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     * admitted prefix, then commits a fresh intent before its owning typed UoW.
     * Only a newly saved actual NotStarted observation permits one fresh dispatch.
     */
-  private[admission] def runCheckC(check: Check, index: Int)(
+  private[admission] def runCheckC(check: Check, index: Int, verifyAfter: Boolean = false)(
     progressC: () => Consequence[CheckProgress], preconditionsC: () => Consequence[Unit],
     saveC: (String, InstanceRecord, Payload) => Consequence[Saved],
     acknowledgeC: String => Consequence[Unit], runC: Check => Consequence[SbtExecutionAttempt],
@@ -300,6 +364,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
             saved <- saveC(_attempt_key("result", index, attempt), prepared.record, payload)
             _ <- acknowledgeC("goal-check-recorded:" + check.identity)
             _ <- evidenceC(saved.payload)
+            _ <- if ((verifyAfter || check.dependency.nonEmpty) && actual.isInstanceOf[SbtExecutionAttempt.Observed]) preconditionsC()
+              else Consequence.unit
             next <- actual match {
               case SbtExecutionAttempt.Observed(_) if remaining > 0 &&
                   saved.payload.stopped.size == progress.saved.payload.stopped.size + 1 &&
@@ -315,18 +381,37 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private[admission] def attemptPayloadC(previous: Payload, check: Check, attempt: Int,
     actual: SbtExecutionAttempt): Consequence[Payload] = actual match {
-    case SbtExecutionAttempt.Observed(result) => V.sbtReceiptC(check.identity, check.kind, result).map { receipt =>
-      if (_not_executed(receipt)) previous.copy(stopped = previous.stopped :+ receipt)
-      else previous.copy(receipts = previous.receipts :+ receipt)
-    }
-    case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) => _diagnostic_c(conclusion.show).map { diagnostic =>
-      previous.copy(admissionFailures = previous.admissionFailures :+ AdmissionFailure(check.identity, attempt, diagnostic))
-    }
-    case SbtExecutionAttempt.Uncertain(_, _, conclusion) => _diagnostic_c(conclusion.show).map { diagnostic =>
-      previous.copy(uncertainties = previous.uncertainties :+ Uncertainty(check.identity, attempt, diagnostic))
-    }
+    case SbtExecutionAttempt.Observed(result) => for {
+      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      _ <- _attempt_target_c(check, workspace, result.target, result.operation)
+      receipt <- V.sbtReceiptC(check.identity, check.kind, result)
+      execution = workspace.map(w => GoalPhaseDependencyValidation.Execution(check.identity, attempt, w, check.kind.wire))
+      executions = previous.dependencyExecutions ++ execution
+    } yield if (_not_executed(receipt)) previous.copy(stopped = previous.stopped :+ receipt, dependencyExecutions = executions)
+      else previous.copy(receipts = previous.receipts :+ receipt, dependencyExecutions = executions)
+    case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) => for {
+      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      _ <- _attempt_target_c(check, workspace, target, operation)
+      diagnostic <- _diagnostic_c(conclusion.show)
+    } yield previous.copy(admissionFailures = previous.admissionFailures :+ AdmissionFailure(check.identity, attempt, diagnostic))
+    case SbtExecutionAttempt.Uncertain(target, operation, conclusion) => for {
+      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      _ <- _attempt_target_c(check, workspace, target, operation)
+      diagnostic <- _diagnostic_c(conclusion.show)
+    } yield previous.copy(uncertainties = previous.uncertainties :+ Uncertainty(check.identity, attempt, diagnostic))
     case _ => F.invalid("native check has no typed UoW attempt")
   }
+
+  private def _attempt_target_c(check: Check, workspace: Option[String], target: SbtTarget,
+    operation: SbtOperation): Consequence[Unit] =
+    if (target != null && operation != null && workspace.forall(w => target.workspaceId.value == w) &&
+        (operation match {
+          case SbtOperation.Compile => check.kind == WorkflowSbtValidation.Kind.Compile
+          case SbtOperation.Test => check.kind == WorkflowSbtValidation.Kind.Test
+          case SbtOperation.TestOnly => check.kind == WorkflowSbtValidation.Kind.TestOnly
+          case SbtOperation.FixCheck => check.kind == WorkflowSbtValidation.Kind.FixCheck
+        })) Consequence.unit
+    else F.invalid("native check attempt differs from its exact target or operation")
 
   private def _diagnostic_c(value: String): Consequence[String] =
     if (_stored_text(value) && value.trim.nonEmpty) Consequence.success(value)
@@ -342,15 +427,23 @@ private[smworkflow] object GoalPhaseNativeValidation {
         inspected <- if (store.controller.stage.toString == store.validationStage &&
             store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
           else GoalPhaseNativeCandidate.observedStateC(store.controller, store.candidate.payload, store.documentPolicy, store.recordingPaths)
-        outcome = if (passed) "passed" else if (!store.whole && inspected.plan.repairLimit > 0 &&
+        outcome = if (passed) "passed" else if (outputLimited(current.payload)) "incomplete" else if ((!store.whole || inspected.releaseRepairActive) && inspected.plan.repairLimit > 0 &&
           inspected.generation < Long.MaxValue && repairable(current.payload)) {
           if (inspected.repairs < inspected.plan.repairLimit) "repair-required" else "repair-limit-reached"
         } else "failed"
-        payload = current.payload.copy(outcome = Some(outcome))
-        validated <- observedStateC(inspected, payload, store.reference("validation").identity)
+        completed = current.payload.copy(outcome = Some(outcome))
+        assessment <- if (passed && !store.whole && inspected.plan.steps(inspected.cursor).actionPolicy.nonEmpty)
+          GoalPhaseStepAssessment.assessC(inspected, completed, store.reference("validation").identity, store.candidate.payload.changedPaths).map(Some(_))
+          else Consequence.success(Option.empty[GoalPhaseStepAssessment.Result])
+        payload = completed.copy(assessment = assessment)
+        validated <- observedStateC(inspected, payload, store.reference("validation").identity, store.candidate.payload.changedPaths)
         target = validated.stage.toString
         event = (if (store.whole) "phase-" else "") + (outcome match {
+          case "passed" if assessment.exists(_.branch == "admit") => "checks-admitted"
+          case "passed" if assessment.exists(_.branch == "triage") => "checks-triage-required"
+          case "passed" if assessment.exists(_.branch == "decision") => "checks-judgment-required"
           case "passed" => "checks-passed"
+          case "incomplete" => "checks-incomplete"
           case "repair-required" => "checks-repair-required"
           case _ => "checks-failed"
         })
@@ -365,7 +458,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val frontier: InstanceRecord,
     val controller: O.State, val requested: Vector[Check], val initial: Payload,
     val selectionRecord: Option[InstanceRecord], acknowledgement: String => Consequence[Unit],
-    val documentPolicy: Option[GoalPhaseDocumentProgress.Policy], val recordingPaths: Vector[String]) {
+    val documentPolicy: Option[GoalPhaseDocumentProgress.Policy], val recordingPaths: Vector[String],
+    val dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]) {
     val plan = controller.plan
     val base = candidate.payload.continuation.map(_.parent).getOrElse(controller.candidateBase)
     val whole = controller.cursor == plan.steps.size
@@ -401,7 +495,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:selection", frontier.currentProgression)
       _ <- N.validateRetainedC(requested, saved.payload.selected, saved.payload.metadata)
     } yield new Store(adapter, session, d, core, candidate, frontier, controller, requested,
-      saved.payload, Some(saved.record), acknowledgement, documentPolicy, recordingPaths)
+      saved.payload, Some(saved.record), acknowledgement, documentPolicy, recordingPaths, dependencyChain)
     def prepareSelectionC: Consequence[(Store, Saved)] =
       if (selectionRecord.nonEmpty || !requested.exists(_.metadata.nonEmpty))
         Consequence.success((this, Saved(selectionRecord.getOrElse(frontier), initial)))
@@ -458,10 +552,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
       } yield latest
       _load_(0, Vector.empty)
     }
-    def terminalFailedAttemptC(failed: Saved): Consequence[TerminalFailedAttempt] = for {
-      _ <- if (whole && initial.selected.size == 1 && failed.payload.outcome.contains("failed") &&
-          repairable(failed.payload) && failed.payload.receipts.size == 1) Consequence.unit
-        else F.invalid("known failed validation requires one completed terminal Failed check")
+    def terminalAttemptC(failed: Saved, expected: TerminalOutcome): Consequence[TerminalAttempt] = for {
+      actual <- actualTerminalAttemptC(failed, "failed", terminalOutcome(failed.payload).contains(expected))
+    } yield TerminalAttempt(expected, actual._1, actual._2, actual._3, actual._4)
+    def actualTerminalAttemptC(failed: Saved, expectedOutcome: String, eligible: Boolean):
+      Consequence[(Int, Saved, Saved, Saved)] = for {
+      _ <- if (whole && initial.selected.size == 1 && failed.payload.outcome.contains(expectedOutcome) &&
+          eligible && failed.payload.receipts.size == 1) Consequence.unit
+        else F.invalid("Phase repair requires its exact single typed terminal check")
       verified <- _verified_attempts_c(Saved(selectionRecord.getOrElse(frontier), initial), 0, initial)
       (progress, attempts) = verified
       pair <- attempts.lastOption match {
@@ -473,20 +571,28 @@ private[smworkflow] object GoalPhaseNativeValidation {
       saved <- loadC("validation").flatMap(_.map(Consequence.success)
         .getOrElse(F.invalid("original failed validation receipt is absent")))
       _ <- if (saved == failed && compatible(saved.payload) &&
-          saved.payload == result.payload.copy(outcome = Some("failed"))) Consequence.unit
+          saved.payload == result.payload.copy(outcome = Some(expectedOutcome))) Consequence.unit
         else F.invalid("known failed validation differs from its complete terminal result")
       _ <- _adjacent_record_c(result.record, saved.record, "ordered-validation:validation",
         Some(ProgressionReference("phase.Decision")))
-    } yield TerminalFailedAttempt(attempts.size - 1, intent, result, saved)
+    } yield (attempts.size - 1, intent, result, saved)
     def pendingSelectionC: Consequence[Option[Saved]] =
       for {
         saved <- _chain_saved_c(Saved(selectionRecord.getOrElse(frontier), initial))
         _ <- _latest_c(saved)
       } yield Option.when(saved.record.revision.value > frontier.revision.value)(saved)
-    private def _unresolved_c: Consequence[(Saved, Saved, Int, Int)] = for {
+    def pendingRepairSelectionC: Consequence[Option[Saved]] = for {
+      saved <- _chain_saved_c(Saved(selectionRecord.getOrElse(frontier), initial))
+      current <- _actual_record_c
+      next <- GoalPhaseNativeHistory.nextC(current, saved.record)
+      _ <- if (current == saved.record || next.exists(_.causation.value ==
+          "ordered-validation-repair-adoption:" + saved.record.revision.value)) Consequence.unit
+        else F.invalid("Retained pending check has an unrelated later native record")
+    } yield Option.when(saved.record.revision.value > frontier.revision.value)(saved)
+    private def _unresolved_c(strict: Boolean = true): Consequence[(Saved, Saved, Int, Int)] = for {
       completed <- loadC("validation")
       _ <- if (completed.isEmpty) Consequence.unit else F.invalid("completed validation has no recovery decision")
-      saved <- pendingSelectionC.flatMap(_.map(Consequence.success)
+      saved <- (if (strict) pendingSelectionC else pendingRepairSelectionC).flatMap(_.map(Consequence.success)
         .getOrElse(F.invalid("validation recovery has no actual unresolved saved intent")))
       index = saved.payload.receipts.size
       _ <- if (index < saved.payload.selected.size && saved.payload.outcome.isEmpty &&
@@ -513,20 +619,22 @@ private[smworkflow] object GoalPhaseNativeValidation {
           else result.isEmpty && intent == saved)) Consequence.unit
         else F.invalid("validation recovery is stale or already authorized")
     } yield (saved, intent, index, ordinal)
-    def recoveryTargetC: Consequence[GoalPhaseValidationRecovery.RecoveryTarget] = _unresolved_c.map {
+    def recoveryTargetC: Consequence[GoalPhaseValidationRecovery.RecoveryTarget] = _recovery_target_c(true)
+    def repairRecoveryTargetC: Consequence[GoalPhaseValidationRecovery.RecoveryTarget] = _recovery_target_c(false)
+    private def _recovery_target_c(strict: Boolean): Consequence[GoalPhaseValidationRecovery.RecoveryTarget] = _unresolved_c(strict).map {
       case (saved, intent, index, ordinal) =>
         val check = saved.payload.selected(index)
         GoalPhaseValidationRecovery.RecoveryTarget(frontier.identity.value, plan.identity, plan.revision,
           session.started.receipt.payload.value.base, initial.candidate, initial.sourceRevision,
           saved.record.revision.value.toString, initial.step, check.identity, check.ordinal, ordinal,
-          intent.record.revision.value.toString)
+          intent.record.revision.value.toString, dependency = check.dependency.flatMap(_ => initial.dependency).map(GoalPhaseDependencyValidation.subject))
     }
     def appendRecoveryC(expected: GoalPhaseValidationRecovery.RecoveryTarget, authorization: NewAttempt): Consequence[Saved] = for {
       actual <- recoveryTargetC
       _ <- if (actual == expected && authorization != null && authorization.checkIdentity == actual.checkIdentity &&
           authorization.attempt == actual.attempt && authorization.intentRevision == actual.intentRevision)
         Consequence.unit else F.invalid("new-attempt authorization crosses its complete current recovery target")
-      unresolved <- _unresolved_c
+      unresolved <- _unresolved_c()
       (saved, _, index, ordinal) = unresolved
       payload = saved.payload.copy(newAttempts = saved.payload.newAttempts :+ authorization)
       next <- saveC(_attempt_key("recovery", index, ordinal), saved.record, payload)
@@ -560,6 +668,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
           from.currentProgression.contains(ProgressionReference("phase." + validationStage))) Consequence.unit
         else F.invalid("check intent/result has no actual unsuspended Validation frontier")
       target = payload.outcome.map {
+        case "passed" if payload.assessment.exists(_.branch == "admit") => "Closing"
+        case "passed" if payload.assessment.exists(_.branch == "triage") => "Triage"
+        case "passed" if payload.assessment.exists(_.branch == "decision") => "Decision"
         case "passed" => reviewStage
         case "repair-required" => "Repair"
         case _ => "Decision"
@@ -575,16 +686,18 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _ <- if (saved != null && compatible(saved.payload)) Consequence.unit
         else F.invalid("retained check outcome crosses its selected candidate or binding")
       _ <- if (saved.payload.receipts == prefix.payload.receipts && _same_attempt_facts(saved.payload, prefix.payload) &&
+          saved.payload.dependencyExecutions == prefix.payload.dependencyExecutions &&
           (prefix.payload.receipts.size == initial.selected.size || !successful(prefix.payload.receipts, initial.selected)))
         Consequence.unit else F.invalid("retained outcome has no actual complete or failed check chain")
       inspected <- if (controller.stage.toString == validationStage && controller.candidate.contains(initial.candidate))
         Consequence.success(controller)
         else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy, recordingPaths)
-      state <- observedStateC(inspected, saved.payload, reference("validation").identity)
+      state <- observedStateC(inspected, saved.payload, reference("validation").identity, candidate.payload.changedPaths)
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:validation",
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
     def preconditionsC: Consequence[Unit] = for {
+      _ <- GoalPhaseNativeDependencyValidation.chainFreshnessC(core, dependencyChain, initial.dependency.toVector)
       parent <- B.parentC(controller.tipSnapshot, candidate.payload.continuation)
       _ <- if (parent == base && (controller.candidateParent.isEmpty || controller.candidateBase == parent)) Consequence.unit
         else F.invalid("native validation candidate parent differs from its retained proof")
@@ -595,7 +708,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
           tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
-          (!whole || candidate.payload.selectedPaths.forall(managementPaths.contains)) &&
+          (!whole || (if (controller.releaseRepairActive) B.pathsOwned(candidate.payload.selectedPaths, ownedPaths)
+            else candidate.payload.selectedPaths.forall(managementPaths.contains))) &&
           B.scopedDirty(actual.dirty, scoped, true)) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")
       oid <- GitObjectId.parseC(parent.head)
@@ -673,7 +787,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
                   saved.payload.uncertainties.dropRight(1) == current.saved.payload.uncertainties &&
                   saved.payload.uncertainties.lastOption.exists(f => f.checkIdentity == initial.selected(index).identity && f.attempt == ordinal) &&
                   saved.payload.copy(uncertainties = current.saved.payload.uncertainties) == current.saved.payload
-                _ <- if (Vector(stopped, completed, rejected, uncertain).count(identity) == 1) Consequence.unit
+                executions = if (initial.selected(index).dependency.nonEmpty && (stopped || completed))
+                  current.saved.payload.dependencyExecutions :+ GoalPhaseDependencyValidation.Execution(
+                    initial.selected(index).identity, ordinal, initial.dependency.get.admission.binding.dependency.workspace,
+                    initial.selected(index).kind.wire) else current.saved.payload.dependencyExecutions
+                _ <- if (Vector(stopped, completed, rejected, uncertain).count(identity) == 1 &&
+                    saved.payload.dependencyExecutions == executions) Consequence.unit
                   else F.invalid("Retained result rewrites its prefix or contradicts its single terminal receipt")
                 next <- if (!stopped && !rejected) Consequence.success(Option.empty[Int])
                   else if (ordinal == Int.MaxValue) F.invalid("Retained check attempt ordinal is exhausted")
@@ -752,6 +871,24 @@ private[smworkflow] object GoalPhaseNativeValidation {
         recovered || rejected || stopped || completed
       }
 
+  /** The Store has admitted the actual chain; only its missing mechanical outcome may settle. */
+  private[admission] def completedFailurePending(saved: Saved): Boolean =
+    saved != null && saved.record != null && _valid_payload(saved.payload) && saved.payload.outcome.isEmpty &&
+      saved.record.validateC.isSuccess && saved.record.suspension.isEmpty &&
+      saved.record.currentProgression.contains(ProgressionReference("phase.PhaseValidation")) &&
+      saved.payload.sourceRevision.toLongOption.exists(v => v > 0 && v.toString == saved.payload.sourceRevision &&
+        v < saved.record.revision.value && saved.record.history.exists(entry => entry.revision.value == v &&
+          entry.currentProgression == saved.record.currentProgression && entry.suspension.isEmpty)) &&
+      repairable(saved.payload) && {
+        val payload = saved.payload
+        val index = payload.receipts.size - 1
+        index >= 0 && payload.selected.lift(index).exists { check =>
+          val attempt = payload.stopped.count(_.identity == check.identity) +
+            payload.admissionFailures.count(_.checkIdentity == check.identity) + payload.newAttempts.count(_.checkIdentity == check.identity)
+          saved.record.causation.value == "ordered-validation:" + _attempt_key("result", index, attempt)
+        }
+      }
+
   private def _not_executed(receipt: V.Receipt): Boolean = receipt != null && receipt.termination == "not-started" &&
     receipt.exitCode != null && receipt.exitCode.isEmpty && receipt.stdout == "" && receipt.stderr == "" &&
     receipt.sbt != null && receipt.sbt.exists(f => f != null && f.valid && f.outcome == WorkflowSbtValidation.Outcome.NotExecuted)
@@ -809,13 +946,15 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _compatible_payload(initial: Payload, payload: Payload): Boolean =
     _valid_payload(payload) && payload.sourceRevision == initial.sourceRevision && payload.step == initial.step &&
-      payload.candidate == initial.candidate && payload.selected == initial.selected && payload.metadata == initial.metadata
+      payload.candidate == initial.candidate && payload.selected == initial.selected && payload.metadata == initial.metadata &&
+      payload.dependency == initial.dependency
 
   private def _same_attempt_facts(left: Payload, right: Payload): Boolean =
     left.stopped == right.stopped && left.admissionFailures == right.admissionFailures &&
       left.uncertainties == right.uncertainties && left.newAttempts == right.newAttempts
 
   private def _attempt_facts_prefix(prefix: Payload, value: Payload): Boolean =
+    value.dependencyExecutions.take(prefix.dependencyExecutions.size) == prefix.dependencyExecutions &&
     value.stopped.take(prefix.stopped.size) == prefix.stopped &&
       value.admissionFailures.take(prefix.admissionFailures.size) == prefix.admissionFailures &&
       value.uncertainties.take(prefix.uncertainties.size) == prefix.uncertainties &&
@@ -824,7 +963,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   /** Only an actual typed interrupted prefix can settle without a fresh host process. */
   private def _returned_interruption(payload: Payload): Boolean =
     _returned_failure(payload) && payload.outcome.isEmpty && payload.receipts.lastOption.exists { last =>
-      Set("cancelled", "timed-out", "termination-unconfirmed")(last.termination) &&
+      Set("cancelled", "timed-out", "termination-unconfirmed", "output-limit-exceeded")(last.termination) &&
         last.exitCode.isEmpty && last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Incomplete)
     }
 
@@ -835,7 +974,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         val facts = last.sbt.get
         (last.termination, last.exitCode, facts.outcome) match {
           case ("exited", Some(exit), WorkflowSbtValidation.Outcome.Failed) => exit != 0
-          case ("indeterminate" | "cancelled" | "timed-out" | "termination-unconfirmed", None, WorkflowSbtValidation.Outcome.Incomplete) => true
+          case ("indeterminate" | "cancelled" | "timed-out" | "termination-unconfirmed" | "output-limit-exceeded" | "launch-failed" | "artifact-limit-exceeded", None, WorkflowSbtValidation.Outcome.Incomplete) => true
           case ("exited", Some(0), WorkflowSbtValidation.Outcome.Unverified) => facts.kind == WorkflowSbtValidation.Kind.TestOnly
           case _ => false
         }
@@ -852,9 +991,31 @@ private[smworkflow] object GoalPhaseNativeValidation {
           last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Failed)
       }
 
+  /** TimedOut is the producer's confirmed termination variant. Other incomplete
+    * observations grant neither corrective adoption nor same-candidate retry.
+    */
+  private[admission] def terminalOutcome(payload: Payload): Option[TerminalOutcome] =
+    if (payload == null) None
+    else if (repairable(payload)) Some(TerminalOutcome.Failed)
+    else Option.when(_valid_payload(payload) && payload.receipts.nonEmpty &&
+      successful(payload.receipts.dropRight(1), payload.selected) &&
+      payload.receipts.zip(payload.selected).forall { (receipt, check) =>
+        receipt.sbt.exists(facts => facts != null && facts.valid && facts.kind == check.kind)
+      } && payload.receipts.last.termination == "timed-out" && payload.receipts.last.exitCode.isEmpty &&
+      payload.receipts.last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Incomplete))(
+        TerminalOutcome.TerminatedTimeout)
+
+  private[admission] def outputLimited(payload: Payload): Boolean = _valid_payload(payload) &&
+    payload.receipts.nonEmpty && successful(payload.receipts.dropRight(1), payload.selected) &&
+    payload.receipts.last.sbt.exists(_.outcome == WorkflowSbtValidation.Outcome.Incomplete) &&
+    payload.receipts.last.processObservation.exists(_.termination match {
+      case org.goldenport.cncf.processexecution.ProcessExecutionTermination.OutputLimitExceeded(_) => true
+      case _ => false
+    })
+
   /** One owner reconstructs new and retained outcomes; old failed records stay Decision. */
   private[admission] def observedStateC(controller: O.State, payload: Payload,
-    receiptIdentity: String): Consequence[O.State] = {
+    receiptIdentity: String, changedPaths: Vector[String] = Vector.empty): Consequence[O.State] = {
     if (controller == null || !_valid_payload(payload) || !_text(receiptIdentity) ||
         !(controller.stage == O.Stage.Validation || controller.stage == O.Stage.PhaseValidation) ||
         payload.step != (if (controller.cursor == controller.plan.steps.size) "phase:" + controller.plan.phase
@@ -863,24 +1024,37 @@ private[smworkflow] object GoalPhaseNativeValidation {
     else {
       val required = if (controller.cursor == controller.plan.steps.size) controller.plan.phaseChecks
         else controller.plan.steps(controller.cursor).checks
-      val declared = N.declaredIdentities(payload.selected)
+      val declared = N.declaredIdentities(payload.selected.filter(_.dependency.isEmpty))
       val full = declared == required
       val failurecoverage = full || (declared.nonEmpty && declared == required.take(declared.size) &&
         payload.selected.forall(c => c.metadata.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty) && _returned_failure(payload))
       payload.outcome match {
       case Some("passed") if full && payload.receipts.size == payload.selected.size && successful(payload.receipts, payload.selected) =>
-        controller.acceptC(O.ChecksObserved(payload.candidate, required, receiptIdentity, true))
+        if (controller.cursor < controller.plan.steps.size && controller.plan.steps(controller.cursor).actionPolicy.nonEmpty)
+          GoalPhaseStepAssessment.assessC(controller, payload, receiptIdentity, changedPaths).flatMap { expected =>
+            if (payload.assessment.contains(expected)) controller.acceptC(O.StepAssessed(expected))
+            else F.invalid("formal Step assessment differs from the saved Plan and actual validation facts")
+          }
+        else if (payload.assessment.isEmpty) controller.acceptC(O.ChecksObserved(payload.candidate, required, receiptIdentity, true))
+        else F.invalid("unselected assessment cannot replace the saved required-review contract")
+      case Some("incomplete") if failurecoverage && outputLimited(payload) =>
+        controller.acceptC(O.IncompleteChecksObserved(payload.candidate, required, receiptIdentity))
       case Some("failed") if failurecoverage && payload.receipts.nonEmpty && !successful(payload.receipts, payload.selected) =>
         controller.acceptC(O.ChecksObserved(payload.candidate, required, receiptIdentity, false))
-      case Some(outcome) if failurecoverage && repairable(payload) && controller.cursor < controller.plan.steps.size &&
+      case Some(outcome) if failurecoverage && repairable(payload) &&
+          (controller.cursor < controller.plan.steps.size || controller.releaseRepairActive) &&
           controller.plan.repairLimit > 0 && controller.generation < Long.MaxValue &&
           ((outcome == "repair-required" && controller.repairs < controller.plan.repairLimit) ||
             (outcome == "repair-limit-reached" && controller.repairs >= controller.plan.repairLimit)) =>
         val failed = payload.selected(payload.receipts.size - 1)
         val exit = payload.receipts.last.exitCode.get
-        val directive = O.RepairDirective("Correct selected Step check " + failed.identity + " (" + failed.kind.wire +
+        val scope = if (controller.cursor == controller.plan.steps.size) "Release" else "Step"
+        val ownership = failed.dependency.flatMap(_ => payload.dependency).map(d =>
+          "approved linked dependency " + d.admission.binding.dependency.repository + " at " +
+            d.admission.binding.paths.mkString(", ")).getOrElse("selected " + scope + " " + payload.step)
+        val directive = O.RepairDirective("Correct selected " + scope + " check " + failed.identity + " (" + failed.kind.wire +
           ") after actual exit " + exit,
-          Vector("Correct semantic source within selected Step " + payload.step + " using the retained actual diagnostics for " +
+          Vector("Correct semantic source within " + ownership + " using the retained actual diagnostics for " +
             failed.identity + "; runtime must inspect the fresh candidate and rerun selected checks before independent review."))
         controller.acceptC(O.RepairableChecksObserved(payload.candidate, required, receiptIdentity, directive))
       case _ => F.invalid("native check outcome is incomplete or contradicts its actual selected receipts")
@@ -893,8 +1067,22 @@ private[smworkflow] object GoalPhaseNativeValidation {
     Vector(payload.candidate.head, payload.candidate.tree).forall(value => value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
     payload.selected != null && payload.selected.nonEmpty && payload.selected.size <= 16 &&
     N.validateRuntimeC(payload.selected, payload.metadata).isSuccess &&
+    payload.receipts != null && payload.stopped != null &&
+    payload.dependency != null && payload.dependency.forall(GoalPhaseDependencyValidation.captureValid) &&
+    payload.selected.forall(c => c.dependency != null && c.dependency.forall(identity => payload.dependency.exists(d =>
+      d.admission.binding.identity == identity && d.admission.binding.checks.exists(_.copy(dependency = Some(identity)) == c)))) &&
+    payload.dependency.forall(d => payload.selected.filter(_.dependency.nonEmpty) ==
+      d.admission.binding.checks.map(_.copy(dependency = Some(d.admission.binding.identity)))) &&
+    payload.dependencyExecutions != null && payload.dependencyExecutions.forall(e =>
+      GoalPhaseDependencyValidation.executionValid(e) && payload.dependency.exists(d =>
+        e.workspace == d.admission.binding.dependency.workspace && payload.selected.exists(c =>
+          c.dependency.nonEmpty && c.identity == e.check && c.kind.wire == e.operation))) &&
+    payload.dependencyExecutions.map(e => e.check -> e.attempt).distinct.size == payload.dependencyExecutions.size &&
+    payload.dependencyExecutions.size == (payload.receipts ++ payload.stopped).count(r =>
+      payload.selected.exists(c => c.dependency.nonEmpty && c.identity == r.identity)) &&
     payload.receipts != null && payload.receipts.size <= payload.selected.size && payload.outcome != null &&
-    payload.outcome.forall(Set("passed", "failed", "repair-required", "repair-limit-reached")) &&
+    payload.assessment != null && (payload.assessment.isEmpty || payload.outcome.contains("passed")) &&
+    payload.outcome.forall(Set("passed", "failed", "incomplete", "repair-required", "repair-limit-reached")) &&
     payload.receipts.zip(payload.selected).forall { (receipt, check) =>
       receipt != null && receipt.identity == check.identity && receipt.exitCode != null && receipt.sbt != null &&
         V.storedProductOutputValid(receipt) &&

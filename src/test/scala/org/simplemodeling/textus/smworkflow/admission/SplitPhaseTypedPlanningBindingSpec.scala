@@ -11,8 +11,10 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseTypedPlanningBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val knownFacts = facts.copy(partition = SplitPhasePartitionContextFixture.baseData.records,
     boundary = facts.boundary.copy(handoffs = facts.boundary.handoffs.copy(edges =

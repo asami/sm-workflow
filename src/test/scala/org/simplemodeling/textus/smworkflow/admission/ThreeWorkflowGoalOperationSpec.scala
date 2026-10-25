@@ -29,9 +29,11 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
@@ -135,11 +137,13 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
     }
     for ((withDecisions, mapped, boundary, renewWindow) <- Vector((false, false, false, false), (true, false, false, false),
       (true, true, false, false), (true, true, true, false), (false, false, false, true))) {
-    "Public Goal review and closing authority preparation" should afterWord(
-      "in spec:native-host-review-preparation, example:E1, rules:R1,R3,R4,R5, phase:6; spec:native-host-authority-preparation, example:E5, rules:R1,R4,R5, phase:6; spec:native-host-authority-preparation, example:E6, rules:R1,R4,R5, phase:6" +
-        (if (mapped) "; spec:goal-phase-native-execution, example:E5,E6, rules:R1,R2,R3,R4,R5,R6, phase:6; spec:native-host-execution, example:E7,E8,E9, rules:R1,R2,R3,R4,R5, phase:6" else "") +
-        (if (boundary) "; spec:goal-phase-acceptance-boundary, example:E7,E8,E9, rules:R1,R2,R3,R4,R5,R6, phase:6" else "")
-    ) {
+    // Trace: spec:native-host-review-preparation, example:E1, rules:R1,R3,R4,R5, phase:6;
+    // spec:native-host-authority-preparation, example:E5, rules:R1,R4,R5, phase:6;
+    // spec:native-host-authority-preparation, example:E6, rules:R1,R4,R5, phase:6.
+    // mapped: spec:goal-phase-native-execution, example:E5,E6, rules:R1,R2,R3,R4,R5,R6, phase:6;
+    // spec:native-host-execution, example:E7,E8,E9, rules:R1,R2,R3,R4,R5, phase:6.
+    // boundary: spec:goal-phase-acceptance-boundary, example:E7,E8,E9, rules:R1,R2,R3,R4,R5,R6, phase:6.
+    "Public Goal review and closing authority preparation" should afterWord("normal review and authority") {
     (if (renewWindow) "retain exhausted independent review and renew one bounded repair window through the actual Human question"
       else if (boundary) "close the configured fixture Phase with saved explicit exclusions and independently prepared bounded repair"
       else if (mapped) "close the mapped fixture Phase with saved dispositions, replacement mapping and verified Human resumption"
@@ -541,7 +545,7 @@ final class ThreeWorkflowGoalOperationSpec extends AnyWordSpec with GivenWhenThe
               V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, B.publicReport(value.acceptance),
                 GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
                 GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
-                value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))), reference, evidence,
+                value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation)), reference, evidence,
               "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
             _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
           } yield ())

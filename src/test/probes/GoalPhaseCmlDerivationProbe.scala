@@ -6,7 +6,7 @@ import org.goldenport.kaleidox.{Config => KaleidoxConfig, Model}
 
 /** Exercise the actual Scala2.12 producer for the ordered phase and Decision roles.
   * @since   Oct.  6, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   */
 object GoalPhaseCmlDerivationProbe {
   def main(args: Array[String]): Unit = {
@@ -52,7 +52,16 @@ object GoalPhaseCmlDerivationProbe {
     require(workflow.providedOperations.map(_.operation.name).toSet == Set("startGoalPhase", "advanceGoalPhase",
       "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
-      "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan"), "Provided Operations differ")
+      "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
+      "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
+      "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
+      "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",
+      "describeGoalPhaseCandidateRecovery", "recoverGoalPhaseCandidate",
+      "describeGoalPhaseWholePhaseCandidateRecovery", "recoverGoalPhaseWholePhaseCandidate",
+      "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
+      "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
+      "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair"), "Provided Operations differ")
     println("accepted workflow=GoalPhaseWorkflow version=goal-phase-business-operation-v7 combinations=13 phaseClosure=1")
   }
 }

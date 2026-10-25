@@ -17,9 +17,11 @@ import WorkflowSbtValidation as T
 
 /** Pure semantic admission and real-shaped public/internal payload examples.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseFixAssessmentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

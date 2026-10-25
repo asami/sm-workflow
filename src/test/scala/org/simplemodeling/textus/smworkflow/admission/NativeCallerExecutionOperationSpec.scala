@@ -20,9 +20,11 @@ import WorkflowExecutionHarness as H
 /** Normal configured Operations and specification-owned executor observations.
   * These examples establish no installed provider, real task or two-chat claim.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeCallerExecutionOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationOperationFixture {
   import NativeCallerExecutionFixture.*

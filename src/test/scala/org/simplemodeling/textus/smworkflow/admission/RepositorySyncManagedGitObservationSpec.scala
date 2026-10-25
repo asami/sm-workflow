@@ -16,9 +16,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Fixed ProcessBuilder setup creates inputs only, never Workflow history.
   * Producer decoder/security examples are reused rather than duplicated here.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncManagedGitObservationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private def _fresh(): Path = Files.createTempDirectory(Files.createDirectories(

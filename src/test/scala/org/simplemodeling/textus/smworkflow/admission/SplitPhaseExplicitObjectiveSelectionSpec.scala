@@ -10,8 +10,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitCandida
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitObjectiveSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def duration(source: Base, finalOnly: Set[Vector[Int]] = Set.empty,
     handoffs: Map[Vector[Int], Vector[(Int, Int)]] = Map.empty): A.DurationRanked = {

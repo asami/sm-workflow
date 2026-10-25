@@ -22,9 +22,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * Supplied reviewer and execution facts confer no independent review or execution authority.
   * These episodes neither provision importer output nor operate a Workflow Session.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeLargeReviewPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationOperationFixture {
   private def _field(input: Record, key: String, value: String): Record =

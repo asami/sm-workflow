@@ -11,8 +11,10 @@ import SplitPhasePartitionContextFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseMechanicalPlanningContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def planning(value: C.Record) = C.preparePlanningC(value, value.facts, instance, configuration, catalog)
   private val knownFacts = facts.copy(partition = baseData.records, boundary = facts.boundary.copy(handoffs =

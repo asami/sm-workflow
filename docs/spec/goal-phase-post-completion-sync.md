@@ -25,6 +25,25 @@ Never label an unsynchronized result as synchronized or a running/unknown effect
 as stopped. A storage failure before durable Phase completion is a completion
 failure; it must not be swallowed as a harmless synchronization problem.
 
+Final Git success, a durable local-completion payload and the native Completed
+lifecycle are distinct facts. The existing mechanical storage contract admits
+only an unsuspended Active source followed by Active, or by Completed with
+empty progression and suspension. A saved Active/`phase.Closed` local-completion
+receipt followed by a refused terminal write remains a real completion failure.
+Ordinary `advanceGoalPhase` consumes that exact saved receipt and appends only
+its missing adjacent Completed successor. It does not repeat Final, checks,
+review, accepted Submit, staging or source-history reflection. A later passive
+Advance returns the same Terminal with unchanged native revision and history.
+
+`GoalPhasePostCompletionSyncSpec` extends its existing completion-storage-boundary
+acknowledgement failure/reopen case to count exactly that one append and zero
+subsequent execution increments. The isolated installed case in
+`NativeGoalReleaseRepairContinuationCliSpec` additionally requires an actual
+SQLite terminal-write refusal and reopen under one newly selected immutable
+image; its qualification conditions are in
+[the release contract](goal-phase-release-repair-continuation.md).
+These additions are evidence obligations, not an unexecuted validation claim.
+
 Unrelated uncommitted work is not a global-clean prerequisite for Phase
 completion. Use the accepted candidate, actual required commit results and
 recorded work ownership. Outstanding work belonging to this Phase must still be

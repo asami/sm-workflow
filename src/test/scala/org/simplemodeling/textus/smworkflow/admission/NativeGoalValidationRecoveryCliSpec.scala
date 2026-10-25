@@ -20,9 +20,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * acknowledgement interruption is installed by the isolated test host before
   * any effect; no private native row or invented execution receipt is written.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseValidationRecoveryOperationFixture {
   private val primary = Path.of("").toAbsolutePath.normalize

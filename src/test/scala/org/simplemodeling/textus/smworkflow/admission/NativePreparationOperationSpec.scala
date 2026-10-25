@@ -22,9 +22,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual public passive preparation and normal resource ownership, not authority issuance.
   * Existing NativeWorkflowCliSpec owns separate StartupImport and Start/Advance episodes.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativePreparationOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationOperationFixture {
   private def _response(value: Consequence[OperationResponse]): Record = take(value) match {

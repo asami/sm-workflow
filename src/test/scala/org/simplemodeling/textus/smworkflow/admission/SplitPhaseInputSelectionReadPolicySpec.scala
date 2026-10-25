@@ -11,8 +11,10 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseInputSelectionReadPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseInputSelectionReadPolicy.*
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "splitrecords", name))

@@ -15,9 +15,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Selected-window projections only; no external Human or review execution.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseRepairProgressSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _plan = H.plan.copy(repairLimit = 1)
   private val _base = H.snapshot

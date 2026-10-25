@@ -13,10 +13,11 @@ import GoalPhaseOrderedProgression as O
 
 /** Planning/codec evidence only: not execution, consent or Skill integration.
   * @since   Oct.  8, 2026
-  *  version Oct. 11, 2026
-  * @version Oct. 16, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

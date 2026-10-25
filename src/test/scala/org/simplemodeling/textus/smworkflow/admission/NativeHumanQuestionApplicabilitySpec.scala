@@ -13,8 +13,10 @@ import RepositorySyncNativeConflictInput as Conflict
 
 /** Original Human meaning is consumed; reference resolution is not a body seal.
   * @since   Oct.  8, 2026
-  * @version Oct. 11, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeHumanQuestionApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val snapshot = Ordered.Snapshot("a" * 40, "b" * 40)
   private val plan = Ordered.Plan("plan", "1", "phase", "repository", Vector(

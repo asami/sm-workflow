@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive caller observations reuse the original issued continuation. They do
   * not complete semantic work, authenticate Human consent or execute a command.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object NativeCallerInformation {
@@ -80,21 +80,9 @@ private[smworkflow] object NativeCallerInformation {
   /** This is attributable public source, not an authenticated permission token.
     * The caller retains the actual tool exchange; runtime never fetches it again.
     */
-  private def _source_item_c(request: V.WorkflowCallerInformationRequest, raw: String): Consequence[Json] = for {
-    page <- io.circe.parser.parse(raw).fold(e => _invalid(e.message), Consequence.success)
-    _ <- if (page.hcursor.downField("thread").get[String]("id").toOption.contains(request.source.threadId)) Consequence.unit
-      else _invalid("public source names a different caller thread")
-    turns <- page.hcursor.get[Vector[Json]]("turns").fold(e => _invalid(e.message), Consequence.success)
-    selected = turns.filter(_.hcursor.get[String]("id").toOption.contains(request.source.turnId))
-    _ <- if (selected.size == 1) Consequence.unit else _invalid("exact public source turn is missing or duplicated")
-    items <- selected.head.hcursor.get[Vector[Json]]("items").fold(e => _invalid(e.message), Consequence.success)
-    selecteditems = items.filter(_.hcursor.get[String]("id").toOption.contains(request.source.itemId))
-    _ <- if (selecteditems.size == 1) Consequence.unit else _invalid("exact public source item is missing or duplicated")
-    item = selecteditems.head
-    expected = if (request.kind == "human-message") "userMessage" else if (request.kind == "execution-terminal") "commandExecution" else "agentMessage"
-    _ <- if (item.hcursor.get[String]("type").toOption.contains(expected)) Consequence.unit
-      else _invalid("public source item has a different information kind")
-  } yield item
+  private def _source_item_c(request: V.WorkflowCallerInformationRequest, raw: String): Consequence[Json] =
+    NativeCallerInformationSource.selectC(request.source,
+      if (request.kind == "human-message") "userMessage" else if (request.kind == "execution-terminal") "commandExecution" else "agentMessage", raw)
 
   private def _valid_source(value: V.WorkflowCodexSourceLocator): Boolean = value != null &&
     Vector(value.threadId, value.turnId, value.itemId).forall(s => _exact(s) && !s.contains(':'))

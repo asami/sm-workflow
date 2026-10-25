@@ -364,3 +364,10 @@ Phase 7 consumes this accepted lower-cost workflow plus 6.4 evidence storage.
 Phase 9 convergence and Phase 10 CBD integration stay separately owned. Existing
 SplitPhase/RepositorySync production eligibility and GoalPhase's single-repository
 use boundary remain; this Phase does not implement workspace/artifact overlays.
+
+## Phase 6.5 delivery evidence snapshot (2026-10-24)
+
+At this snapshot, Q1 through Q3-S had accepted independent reviews and native Step
+commits in the existing Session. Q4 client integration, full validation, integrated
+Phase review and local closure were pending. Later delivery evidence belongs in the
+[actual evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).

@@ -1,5 +1,16 @@
 # GoalPhase Fix assessment
 
+## Runtime control correction — 2026-10-25
+
+The [runtime-owned repair contract](runtime-owned-repair-control.md) governs the
+target continuation, convergence and ten-cycle ceiling. The advisory assessment
+payload below remains semantic input, not AI authority to stop or continue.
+The existing configurable-limit behavior described below is the implementation
+baseline, not permission to invent a lower caller limit or exceed ten under the
+new policy. Deliver the [bounded correction](../phase/runtime-repair-control-correction.md)
+with public adoption preserving existing Sessions, counts and results; do not
+claim the new guard is installed merely because this specification changed.
+
 The optional `GoalPhaseWorkResult.fixAssessment` records the AI's semantic claims
 about one actual `RepairStep`, from either retained TEST failure or independent
 REVIEW findings. It is not a command, acceptance route, scope grant or independent

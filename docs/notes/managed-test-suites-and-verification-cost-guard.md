@@ -62,6 +62,16 @@ Class/specification-level metadata provides defaults/shared context; operation/s
 
 No separate YAML/registry is required to add an ordinary test to SMOKE/ADMISSION/FULL/HEAVY: changing the source annotation/property changes the declared Test Architecture and is itself a reviewable Candidate change.
 
+Migration adopted 2026-10-24: runnable specifications must follow this rule rather
+than DoNotDiscover plus build.sbt class-name re-enrollment. Intentional disabled
+or helper exclusions retain an explicit reason. The
+[selection contract](../spec/label-driven-test-selection.md) and
+[LTEST plan](label-driven-test-migration-plan.md) separate discovery, selection
+and preparation. Ordinary FULL/default runs exclude HEAVY and external-service
+work even when metadata overlaps; contradictory membership is exposed rather
+than silently executed. SQLite and eligible test-owned same-JVM loopback servers
+remain allowed. Removing annotations alone is not an accepted migration.
+
 ### Selection
 
 Project-level queries:
@@ -588,6 +598,14 @@ and AI hints, and avoid imposing additional expensive collection merely to make
 every convergence judgment exact.
 
 ### Cycle limits
+
+2026-10-25 clarification: normative repair ownership and the ten-cycle ceiling
+are defined by [runtime-owned repair control](../spec/runtime-owned-repair-control.md).
+The [RRC correction](../phase/runtime-repair-control-correction.md) delivers the
+minimal guard early, before Phase 9's broader routing work. Existing code's
+configurable limits (including captured 3) are not proof of that target behavior.
+Preserve active counts and results through public policy adoption; no caller
+prompt may install a competing stop condition or counting window.
 
 Keep two separate counts within the current logical Slice/Candidate Fix loop:
 

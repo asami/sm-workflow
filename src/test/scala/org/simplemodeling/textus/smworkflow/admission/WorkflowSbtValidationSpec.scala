@@ -13,9 +13,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _classes = Vector("example.FirstSpec", "example.SecondSpec")
   private def _capture(text: String): ProcessExecutionCapture = {
@@ -61,7 +63,7 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
         Kind.TestOnly -> SbtOperation.TestOnly)
       When("native receipts project those actual uncertain terminations")
       val receipts = kinds.flatMap { (kind, operation) =>
-        Vector(ProcessExecutionTermination.LaunchFailed -> "indeterminate", ProcessExecutionTermination.Cancelled -> "cancelled",
+        Vector(ProcessExecutionTermination.LaunchFailed -> "launch-failed", ProcessExecutionTermination.Cancelled -> "cancelled",
           ProcessExecutionTermination.TimedOut -> "timed-out", ProcessExecutionTermination.TerminationUnconfirmed -> "termination-unconfirmed")
           .map { (termination, expected) => take(V.sbtReceiptC("selected", kind, _result(operation, termination))) -> expected }
       }
@@ -199,9 +201,14 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Given("actual TestOnly negative and incomplete process terminations")
       val terminations = Vector(ProcessExecutionTermination.Exited(1), ProcessExecutionTermination.TimedOut,
         ProcessExecutionTermination.Cancelled, ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout))
-      When("complete bounded captures are retained as typed negative receipts")
-      val receipts = terminations.map(termination => take(V.sbtReceiptC("focused", Kind.TestOnly,
-        _result(SbtOperation.TestOnly, termination))))
+      When("bounded captures with the actual output-limit truncation are retained as typed negative receipts")
+      val receipts = terminations.map { termination =>
+        val result = _result(SbtOperation.TestOnly, termination)
+        val observed = if (termination == ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout))
+          result.copy(processResult = result.processResult.copy(stdout = result.processResult.stdout.copy(truncated = true)))
+        else result
+        take(V.sbtReceiptC("focused", Kind.TestOnly, observed))
+      }
       Then("none passes and failed or incomplete facts carry no positive selection or reason")
       receipts.map(_.sbt.get.outcome) shouldBe Vector(Outcome.Failed, Outcome.Incomplete, Outcome.Incomplete, Outcome.Incomplete)
       receipts.foreach { receipt =>

@@ -7,7 +7,7 @@ import io.circe.{Decoder, Json}
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -17,10 +17,11 @@ import GoalPhaseFindingRecording as R
 /** Finite ordinary CLI transport around separately performed real semantic work.
   * Public files and preparation alone establish no genuine review or authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, take}
 
@@ -271,7 +272,7 @@ final class NativeGoalFindingRecordingLiveSpec extends AnyWordSpec with Matchers
     commit.identity should not be commit.parent
     commit.parent shouldBe request.originalBase.head
     commit.tree shouldBe reviewed.candidate.get.tree
-    request.completed.head.review.trim should not be empty
+    request.completed.head.review.exists(_.trim.nonEmpty) shouldBe true
     val sources = _review_sources(scenario)
     sources.last._1.outcome shouldBe "accept"
     val observations = sources.flatMap(_._1.reviewObservations.toVector.flatMap(_.items))

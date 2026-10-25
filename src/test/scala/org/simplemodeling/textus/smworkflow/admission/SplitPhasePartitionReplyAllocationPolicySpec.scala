@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 11, 2026
+ * @version Oct. 24, 2026
  */
 private[admission] object SplitPhasePartitionReplyFixture {
   val values = Map[String, ConfigurationValue](
@@ -52,6 +52,8 @@ private[admission] object SplitPhasePartitionReplyFixture {
     take(SplitPhaseTypedPartitionWorkIssue.prepareC(bound, take(policy.allocateC(bound))))
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePartitionReplyAllocationPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhasePartitionReplyFixture.*
   "Issue-time partition reply allocation" should {

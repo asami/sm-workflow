@@ -11,8 +11,10 @@ import SplitPhaseExplicitPartitionSemantic as S
 /** Business-reference representation only. The real normal Operation specs
   * own executable evidence; this does not validate the shared store/transaction.
   * @since   Oct. 12, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExecutionFrontierSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Split's execution frontier references" should {
     "address each actual session and native revision without a second mutable index" in {

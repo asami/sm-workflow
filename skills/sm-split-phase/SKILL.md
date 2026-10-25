@@ -23,6 +23,33 @@ executable as the approval prefix. Follow the
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
 
+## Long-running invocation collection
+
+Follow [passive result collection](../../docs/spec/native-host-execution.md#long-running-invocation-collection).
+Keep the existing owned Advance/complete invocation alive and collect its actual
+result. Do not periodically tail/read logs, stat the response file, query status,
+scan processes or create a monitoring agent/automation solely because the result
+has not arrived. Do not generate repeated "still waiting" commentary or AI turns
+solely for liveness/display. This applies to the caller's own long-running command,
+not only to waiting for another development chat.
+
+Prefer the transport's existing completion notification or pending-call resume.
+If the transport requires explicit result collection, use its supported wait/resume
+for the same execution handle only as needed; a yielded wait is not completion.
+Do not add separate log/status probes or commentary after each yielded wait.
+Transport-required collection is distinct from monitoring and must not be removed
+in a way that loses the result or strands the Phase. Keep the current handle and
+retained output reference in existing continuation context, not a new poll ledger.
+After the actual result, follow the ordinary continuation route. No new Advance,
+retry, cancellation, timeout or detached execution is authorized by silence.
+
+A concrete newly observed failure, lost transport, or explicit user status request
+may require a bounded diagnostic read. State that purpose; an empty response or
+quiet log alone is neither failure nor hang. Preserve Session, accepted work,
+history, repair counts and all outcomes. If the tool cannot notify without model
+resumption, report that transport limitation honestly; do not claim skill text
+makes waiting AI-free or replace required result collection with silent abandonment.
+
 ## Visible command exchanges
 
 Distinguish preparation, the matched execution interval and actual handback
@@ -34,7 +61,7 @@ commentary in normal mode, using this fixed concise checklist:
 
 - Preparation: **⚙️ sm-workflow 呼び出し準備** — `sm-workflow → operation=<operation>; purpose=<purpose>; Session=<known ID or unknown>; Step=<known Step or unknown>`. Include the known Phase/target and selected input link. Preparation, including helper launch intent, is not confirmed runtime execution.
 - Started: **⚙️ 🔵 ▶ sm-workflow 実行開始 ━━━━━━━━━━━** — repeat the operation and known Session/Step; `制御：sm-workflow`. Emit only on observed CLI/runtime start or actual running output.
-- During: **⚙️ 🔵 │ sm-workflow 実行中** — prefix every progress commentary for that call; show actual SBT/runtime observations, supplied repair counts and `制御：sm-workflow`. Tool output alone does not end the interval.
+- During: **⚙️ 🔵 │ sm-workflow 実行中** — use only for a material change already exposed by the owned invocation (for example a new check, failure, cancellation or required action), with actual observations and `制御：sm-workflow`. Repeated waiting/heartbeat, elapsed time or an empty response is not a new commentary event. Tool output alone does not end the interval.
 - Returned: **⚙️ 🔵 ◀ sm-workflow 応答受信・制御返却 ━━━━━━━━━━━** — repeat the matching operation and known Session/Step; `制御：親チャット`. Preserve `sm-workflow ← kind=<actual or unknown>; outcome=<actual or unknown>; accepted=<actual or unknown>; message=<actual or unknown>; work=<issued work or unknown>; next=<actual or unknown>`, supplied counters and retained-output links. Response receipt is not Workflow completion.
 - Failure/uncertainty: use **⚙️ 🔴 sm-workflow 起動前エラー** when non-execution is confirmed (no execution interval); **⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー** only when the owned call has ended; or **⚙️ 🟡 │ sm-workflow 実行状態不明** when execution/termination is unknown. Do not close an uncertain interval as completed or imply that its runtime stopped. Preserve diagnostics and exact retained-output links.
 
@@ -66,9 +93,10 @@ outputs without dumping secret source contents, full argv or environment.
 Do not add state queries, Submit or Advance just for display, split paired
 completion, replay calls or change the existing stop/continuation rules.
 
-Include supplied actual runtime deadlines, heartbeat, managed-descendant
-settlement observations and durable result references in during/after/failure
-commentary. Telemetry creates no caller deadline. A forwarded SIGTERM is only
+Report supplied runtime deadlines when first observed or changed, and relevant
+managed-descendant settlement and durable result references at handback/failure.
+Retain heartbeat details in runtime output; do not narrate each heartbeat or
+repeat an unchanged waiting state. Telemetry creates no caller deadline. A forwarded SIGTERM is only
 a request; runtime-confirmed settlement and the actual durable result establish
 cancellation. Missing observations stay unknown; signals, elapsed time or root
 exit alone establish no cleanup, durable state or validation success. Preserve
@@ -184,16 +212,17 @@ view; never query another operation merely to fill display fields.
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
 An already-issued file-only recording retains its exact captured destinations,
-assigned edits and typed completion contract. RepositorySync and SplitPhase gain
-no automatic Journal producer in this Phase: consume only real supplied fields;
-do not invent a recording duty. Existing caller controls, consent, effect authority
+assigned edits and typed completion contract. The normal Split Advance may return a `SplitRouting` observation from the common
+Journal. It describes the actual retained frontier and selected operation, not
+proof that a provider ran. Repeated pending or terminal observations reuse their
+native source. Consume only actual supplied fields; do not invent a recording duty. Existing caller controls, consent, effect authority
 and the first-attempt escalated direct installed CLI rule still apply.
 
 Use ordinary provided `JournalService.findJournalEntries` or
 `JournalService.readJournalEntry` only for a concrete lookup purpose. Pass their
 generated input as `--input` JSON through the existing installed command.
 Find requires `repositoryIdentity`; optional exact filters are `phaseIdentity`,
-`sessionIdentity`, `kind` (only `ExecutionObservation` or `Finding`) and
+`sessionIdentity`, `kind` (including `SplitRouting`) and
 `sourceReference` with its actual complete identity/revision tuple. Never
 fabricate a partial source. Optional `recordedFrom` is from-inclusive and
 `recordedBefore` is to-exclusive; both require whole-second UTC
@@ -279,3 +308,14 @@ result. Missing evidence stays explicit rather than becoming fabricated success.
 ## Caller information
 
 Follow [caller information return](../../docs/spec/caller-information.md). When the runtime requests an attributable observation, keep the original issuedWorkContext and exact source locator. Use observations already available to this caller or its ordinary public tools. Return available, partial or unavailable through prepare-information/record-information with --runtime-root. Display the kind, source reference, availability and retained continuation; preserve raw source in its artifact rather than paraphrasing it as proof. This return performs no Submit, recovery or Advance and confers no Human consent. Never start another model or source provider to acquire this information.
+
+## Unknown-only completion and reuse
+
+The issued partition request contains the already-known independent estimate and
+boundary gaps at that frontier. Answer those gaps together; preserve known inputs
+and host-assigned result and resolution references. Do not predict gaps belonging
+to later stages, choose a mechanical partition, or add a second AI review.
+Repeated Advance or process reopen consumes the saved answer and current retained
+frontier through the normal runtime, without resubmitting the answer.
+Capability/transport failure is not a semantic DecisionNeeded judgment; preserve
+the actual outcome and the existing independent Human channel.

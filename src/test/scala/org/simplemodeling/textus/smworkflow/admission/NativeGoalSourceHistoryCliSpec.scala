@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -16,7 +16,7 @@ import NativeWorkflowCliFixture as F
 /** Ordinary commands connect current resolved settings to candidate history and checks.
   * Semantic edits are controlled fixture input, not genuine AI or acceptance evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with GivenWhenThen { this: AnyWordSpec =>
@@ -91,7 +91,7 @@ private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with
     Given("the issued implementation and fixture-authored semantic code without any claimed check or review evidence")
     When("the fixture writes the compiled value and a separate normal Submit completes only semantic work")
     Files.writeString(source, text, UTF_8)
-    val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic edit of HistoryExample value", Vector.empty, None, None, None, None, None, None, None)
+    val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic edit of HistoryExample value", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
     val reference = V.WorkflowArtifactReference("fixture-cli-source-history-implementation", "1")
     val submitted = _call_(request.submitOperation.get,
       Vector("--sessionId", request.submitSessionId.get,
@@ -161,7 +161,8 @@ private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with
 
 }
 
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalSourceHistoryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   "Ordinary GoalPhase source-history commands" should afterWord(
     "in spec:source-history-resolved-configuration, example:P61-COMMAND-C3, rule:owning-workflow") {

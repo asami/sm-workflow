@@ -29,9 +29,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. Selected source edits, reviews and authority rows are explicit
   * specification inputs; no production provider evidence is claimed.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _source = D.Source("docs/phase.md", "docs/checklist.md")
@@ -188,7 +190,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
             GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
             GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson))),
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation)),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), result.evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
@@ -290,7 +292,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         second.kind shouldBe "ImplementStep"
         second.stepIdentity shouldBe Some("step-2")
         second.completed.size shouldBe 1
-        second.completed.head.review shouldBe accepted.resultReference.identity
+        second.completed.head.review shouldBe Some(accepted.resultReference.identity)
       }
     }
 
@@ -337,7 +339,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
         input.selectedPlan.revision shouldBe "2"
         input.originalBase shouldBe originalbase.get
         input.completed.size shouldBe 1
-        input.completed.head.review shouldBe accepted.resultReference.identity
+        input.completed.head.review shouldBe Some(accepted.resultReference.identity)
         progress.map(_.payload.outcome) shouldBe Vector(Some("updated"))
         firstprojection.get.steps.map(_.commit) shouldBe input.completed.map(_.commit)
         firstprojection.get.steps.map(_.review) shouldBe input.completed.map(_.review)

@@ -21,9 +21,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * The explicitly selected Git-only policy has no product-test assurance.
   * Fixture authority proves behavior, not final operator/reviewer acceptance.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class ThreeWorkflowTypedGitOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _git_only = V.Policy("typed-git-only", 1, "explicit-no-product-tests",

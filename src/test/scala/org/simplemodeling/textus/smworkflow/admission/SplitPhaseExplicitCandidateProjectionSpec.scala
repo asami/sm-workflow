@@ -12,8 +12,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitCandidateProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def allocationRecords(enumerated: E.Enumerated): Records = {
     val source = enumerated.input.boundary.shape.records.source

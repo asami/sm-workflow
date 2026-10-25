@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -26,6 +26,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * no replacement metadata, operation execution, storage or command grants are used.
  * A description emitted only as a Scala comment does not satisfy this contract.
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
@@ -41,7 +43,11 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "describeGoalPhaseWholePhaseCandidateRecovery", "recoverGoalPhaseWholePhaseCandidate",
       "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
       "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
-      "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair"
+      "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
+      "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
+      "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
+      "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair"
     ),
     SmWorkflowComponent.SplitPhaseServiceService -> Vector(
       "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
@@ -51,6 +57,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
+    SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal",
       "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
@@ -60,6 +67,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.GoalPhaseImplementationServiceService -> Vector("implementGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseRepairWorkServiceService -> Vector("repairGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseStepReviewServiceService -> Vector("reviewGoalPhaseStep"),
+    SmWorkflowComponent.GoalPhaseStepTriageServiceService -> Vector("triageGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseReviewServiceService -> Vector("reviewGoalPhase"),
     SmWorkflowComponent.GoalPhaseFindingRecordingServiceService -> Vector("recordGoalFindings"),
     SmWorkflowComponent.MergeReviewServiceService -> Vector("reviewNativePendingMerge"),

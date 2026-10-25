@@ -22,9 +22,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * standard native codec bytes; no private row is ever seeded or changed.
   * Optional installed-command qualification uses the same isolated host.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
@@ -209,7 +211,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
   private def _submit(fixture: Implemented, request: V.GoalPhaseAdvanceResult, name: String,
     outcome: String = "completed", execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
     val result = V.GoalPhaseWorkResult(outcome, "Test-owned selected semantic disposition", Vector.empty,
-      None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None)
     val reference = V.WorkflowArtifactReference(name, "1")
     _goal(fixture, request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", _json(result), "--resultReference", _json(reference)) ++
@@ -267,7 +269,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     val reference = V.WorkflowArtifactReference(name + "-review-1", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("test-independent-reviewer"), None, None)
     val result = V.GoalPhaseWorkResult("accept", "Test-owned selected semantic disposition", Vector.empty,
-      None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None)
     def _file_(name: String, value: RecordPresentable): String = {
       val file = scenario.root.resolve(name + ".json")
       Files.writeString(file, _json(value))
@@ -356,7 +358,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       Given("a separately prepared ordinary independent Review result requesting one same-Step source-header repair")
       val finding = "Maintain the former prefix source during this ordinary same-Step repair"
       val reviewresult = V.GoalPhaseWorkResult("repair", "Test-owned independent review requests the selected source maintenance",
-        Vector(finding), None, None, None, None, None, None, None)
+        Vector(finding), None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reviewreference = V.WorkflowArtifactReference("later-ordinary-repair-review", "1")
       val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("test-independent-reviewer"), None, None)
       def _file_(name: String, value: RecordPresentable): String = {
@@ -393,7 +395,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
           issue.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "Test-owned observation of the assigned source maintenance", None))
       val repairresult = V.GoalPhaseWorkResult("completed", "Test-owned ordinary repair of the assigned former prefix source",
-        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions)), None, None, None, None)
+        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions)), None, None, None, None, None, dependencyValidation = None)
       val repairreference = V.WorkflowArtifactReference("later-ordinary-repair-completed", "1")
       When("ordinary RepairStep completion is followed by a fresh normal Advance")
       _goal(fixture, repair.submitOperation.get, Vector("--sessionId", repair.submitSessionId.get,

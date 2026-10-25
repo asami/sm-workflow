@@ -20,8 +20,10 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct. 13, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def prepared: S.Prepared = {
     val source = base(Vector(260, 180, 260), Vector(EdgeDisposition.Unresolved, EdgeDisposition.Either))

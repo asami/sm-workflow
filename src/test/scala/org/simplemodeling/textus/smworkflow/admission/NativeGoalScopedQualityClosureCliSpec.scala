@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.cncf.processexecution.GitOperationKind
 import org.goldenport.convert.ValueReader
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -19,10 +19,11 @@ import NativeWorkflowCliFixture as F
   * The parent must establish native local effect authorization before execution.
   * Saved inputs attribute observations; they authenticate no operator or provider.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{record, take}
 
@@ -256,7 +257,7 @@ final class NativeGoalScopedQualityClosureCliSpec extends AnyWordSpec with Match
       work.completed.map(_.step) shouldBe Vector("step-1")
       val closed = work.completed.head
       val commit = closed.commit
-      closed.review.trim should not be empty
+      closed.review.exists(_.trim.nonEmpty) shouldBe true
       commit.identity should not be beforehead
       commit.parent shouldBe beforehead
       commit.tree shouldBe reviewed.work.get.candidate.get.tree

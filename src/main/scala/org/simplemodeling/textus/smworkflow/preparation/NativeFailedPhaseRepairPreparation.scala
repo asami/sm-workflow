@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive conversion of actual described repair and independently observed
   * Human direction to existing external-evidence StartupImport rows.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeFailedPhaseRepairPreparation {
@@ -27,14 +27,19 @@ object NativeFailedPhaseRepairPreparation {
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) &&
         _exact(participant) && _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Failed Phase repair preparation requires the actual description, adoption input, matching worker/reference, issuer and time")
-    target <- A.targetC(description.target)
-    supplied <- A.targetC(input.target)
+    target <- A.boundTargetC(description.target)
+    supplied <- A.boundTargetC(input.target)
     proposal <- GoalPhasePlanRevision.fromPublicProposalC(Some(input.proposal))
-    _ <- if (target == supplied && target.recovery.sessionId == description.sessionId &&
-        proposal.contains(target.captured.proposal) && target.recovery.knownFailedPhase.exists(_.participant == participant))
+    matches = target.fold(value => value.recovery.sessionId == description.sessionId &&
+      proposal.contains(value.captured.proposal) && value.recovery.knownFailedPhase.exists(_.participant == participant),
+      value => value.source.sessionId == description.sessionId && proposal.contains(value.captured.proposal) &&
+        value.source.participant == participant)
+    _ <- if (target == supplied && matches)
       Consequence.unit else Consequence.stateConflict("Failed Phase repair preparation crosses its described target, proposal or participant")
-    binding <- A.bindingC(description.componentInstance, target, input.choice, input.rationale,
-      participant, ContextReference(reference.identity, reference.revision))
+    binding <- target.fold(A.bindingC(description.componentInstance, _, input.choice, input.rationale,
+      participant, ContextReference(reference.identity, reference.revision)),
+      A.bindingC(description.componentInstance, _, input.choice, input.rationale,
+        participant, ContextReference(reference.identity, reference.revision)))
     purpose = NativeExternalEvidence.Purpose.FailedPhaseRepairAdoption
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
     encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,

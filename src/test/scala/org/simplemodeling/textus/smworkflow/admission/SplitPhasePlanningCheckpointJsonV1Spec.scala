@@ -12,8 +12,10 @@ import SplitPhasePlanningCheckpointFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def json(raw: String, schema: String = J.schema): Json = parser.parse(raw.substring(schema.length + 1)).toOption.get
   private def raw(value: Json, schema: String = J.schema): String = schema + ":" + value.noSpaces

@@ -12,8 +12,10 @@ import SplitPhasePartitionContextFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhasePartitionContextRetentionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final class Storage extends SplitPhasePartitionContextRetention.Port {
     var actual = Option.empty[Record]

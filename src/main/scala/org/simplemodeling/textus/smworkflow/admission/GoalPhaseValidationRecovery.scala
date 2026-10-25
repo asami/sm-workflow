@@ -14,11 +14,13 @@ import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseOrderedProgression as O
+import GoalPhaseInterruptedValidationRepair as I
+import GoalPhaseDependencyValidation.given
 
 /** Explicit HumanNewAttempt direction preserves an unknown historical outcome.
   * Description and authorization neither observe nor execute a selected check.
   * @since   Oct. 20, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseValidationRecovery {
@@ -26,11 +28,26 @@ private[smworkflow] object GoalPhaseValidationRecovery {
   val describeOperation = "describeGoalPhaseValidationRecovery"
   val recoveryOperation = "recoverGoalPhaseValidation"
   val choices = Vector("AuthorizeNewAttempt", "Defer")
+  val timeoutChoices = Vector("AuthorizeNewAttempt", "LimitedRepair", "Defer")
+  def choicesFor(target: RecoveryTarget): Vector[String] =
+    if (target.terminatedTimeoutPhase.nonEmpty) timeoutChoices else choices
+  val limitedRepairScope = "LimitedRepair authorizes bounded investigation and preparation: fix known errors; identify the test actually " +
+    "executing at termination from actual start/end observations, retained output and, when needed, diagnostic stack/process evidence. " +
+    "Investigate/debug a suspected hang and fix established causes. Timeout alone is not proof of a hang; the last printed test " +
+    "may already have completed. Report test identity unknown or evidence missing honestly. Investigation may establish normal " +
+    "slow execution or an external wait rather than deadlock. CNCF owns execution and result interpretation; no app regex parser " +
+    "or fabricated current-test identity supplies evidence."
+  val limitedRepairMessage = limitedRepairScope + " Perform diagnosis/planning, then call describeGoalPhaseFailedPhaseRepair " +
+    "with a captured concrete proposal, followed by independently authorized adoptGoalPhaseFailedPhaseRepair. Only an adopted Plan " +
+    "issues the normal corrective Step through a separate advanceGoalPhase. This selection does not adopt an unknown future Plan, " +
+    "authorize a retry or establish check success. The original Decision, receipt/output, history, Plan and counters remain intact."
   val message = "HumanNewAttempt decision: the old selected check outcome remains unknown. AuthorizeNewAttempt permits a NEW attempt " +
     "of the SAME fixed selected SBT check using current host permissions; it may repeat effects of the old attempt. " +
     "Original native history, Plan, base, candidate and repair counters remain retained. Authorization only appends direction; " +
     "a later ordinary advanceGoalPhase executes the new attempt. Defer grants no execution. " +
-    "This is not a provider observation, semantic Submit, check success, review acceptance or Phase closure."
+    "This is not a provider observation, semantic Submit, check success, review acceptance or Phase closure. " +
+    "For a concrete one-Step corrective Plan after all original Steps, describeGoalPhaseValidationRepair provides a distinct " +
+    "output-limited or independently Human-adopted historical-association route with its complete source and unresolved-effects limitations."
 
   final case class KnownFailedPhase(schemaVersion: String, definitionIdentity: String, definitionRevision: String,
     participant: String, failedReceiptIdentity: String, failedReceiptRevision: String, exitCode: Int)
@@ -48,24 +65,47 @@ private[smworkflow] object GoalPhaseValidationRecovery {
       "The original failed receipt, native history, completed Steps, Plan, base and repair counters remain retained. " +
       "Authorization only appends independent Human direction; a later ordinary advanceGoalPhase runs the fresh trial. " +
       "Defer grants no execution. No check success, review acceptance or Phase closure is implied."
+    else if (target.terminatedTimeoutPhase.nonEmpty)
+      "The selected whole-Phase check has a confirmed terminated timeout with typed incomplete outcome. " +
+        "Choose AuthorizeNewAttempt (deadline extension), LimitedRepair, or Defer. AuthorizeNewAttempt admits one NEW attempt of the " +
+        "SAME retained candidate and single check under actual current host permissions and normal configured execution deadline. " +
+        "For deadline extension, the normal host deadline must actually be adjusted before a separate advanceGoalPhase; authorization " +
+        "does not change its configured value. Deadline extension alone requires no source repair or corrective Step. " +
+        limitedRepairScope + " " +
+        "The original timeout receipt/output, native history, Plan/revision, base, accepted Steps and repair counters remain retained. " +
+        "AuthorizeNewAttempt only appends independent Human retry direction; a later separate ordinary advanceGoalPhase executes the new attempt. " +
+        "LimitedRepair writes nothing and requires a concrete proposal and separate independent adoption before corrective work. " +
+        "Defer writes nothing and permits deeper investigation without retry. No old outcome becomes success and no review acceptance or Phase closure is implied."
     else message
+
+  given Encoder[I.Source] = deriveEncoder[I.Source]
+  given Decoder[I.Source] = deriveDecoder[I.Source]
 
   final case class RecoveryTarget(sessionId: String, planIdentity: String, planRevision: String,
     base: O.Snapshot, candidate: O.Snapshot, sourceRevision: String, frontierRevision: String,
     step: String, checkIdentity: String, checkOrdinal: Int, attempt: Int, intentRevision: String,
-    knownFailedPhase: Option[KnownFailedPhase] = None)
+    knownFailedPhase: Option[KnownFailedPhase] = None,
+    dependency: Option[GoalPhaseDependencyValidation.RecoverySubject] = None,
+    terminatedTimeoutPhase: Option[I.Source] = None)
   object RecoveryTarget {
     given Encoder[RecoveryTarget] = deriveEncoder[RecoveryTarget].mapJson(_.mapObject(fields =>
-      if (fields("knownFailedPhase").exists(_.isNull)) fields.remove("knownFailedPhase") else fields))
+      fields.filter { case (key, value) => !Set("knownFailedPhase", "dependency", "terminatedTimeoutPhase")(key) || !value.isNull }))
     private val _decoder: Decoder[RecoveryTarget] = deriveDecoder
     given Decoder[RecoveryTarget] = Decoder.instance(cursor => {
       val extension = cursor.downField("knownFailedPhase").focus
-      if (extension.exists(value => value.isNull || !value.isObject ||
+      val timeout = cursor.downField("terminatedTimeoutPhase").focus
+      if (timeout.exists(value => value.isNull || !value.isObject))
+        Left(io.circe.DecodingFailure("Terminated timeout extension must be absent or a complete object", cursor.history))
+      else if (cursor.downField("dependency").focus.exists(_.isNull))
+        Left(io.circe.DecodingFailure("Dependency recovery subject must be absent or a complete object", cursor.history))
+      else if (extension.exists(value => value.isNull || !value.isObject ||
           !value.asObject.exists(_.keys.toSet == Set("schemaVersion", "definitionIdentity", "definitionRevision",
             "participant", "failedReceiptIdentity", "failedReceiptRevision", "exitCode")) ||
           !value.hcursor.downField("exitCode").focus.flatMap(_.asNumber).flatMap(_.toInt).isDefined))
         Left(io.circe.DecodingFailure("Known failed Phase extension requires a complete object and integer exit code", cursor.history))
-      else _decoder(cursor).flatMap(value => if (value.knownFailedPhase.forall(KnownFailedPhase.valid)) Right(value)
+      else _decoder(cursor).flatMap(value => if (value.knownFailedPhase.forall(KnownFailedPhase.valid) &&
+          value.dependency.forall(GoalPhaseDependencyValidation.recoveryValid) &&
+          (timeout.isEmpty || (validTarget(value) && value.asJson == cursor.value))) Right(value)
         else Left(io.circe.DecodingFailure("Invalid known failed Phase extension", cursor.history)))
     })
   }
@@ -93,6 +133,7 @@ private[smworkflow] object GoalPhaseValidationRecovery {
   } yield target
 
   def validTarget(value: RecoveryTarget): Boolean = value != null &&
+    value.dependency != null && value.dependency.forall(GoalPhaseDependencyValidation.recoveryValid) &&
     Vector(value.sessionId, value.planIdentity, value.planRevision, value.step, value.checkIdentity).forall(exact) &&
     snapshot(value.base) && snapshot(value.candidate) && value.checkOrdinal > 0 && value.checkOrdinal <= 16 &&
     value.attempt >= 0 && value.attempt < Int.MaxValue &&
@@ -101,12 +142,20 @@ private[smworkflow] object GoalPhaseValidationRecovery {
     value.knownFailedPhase != null && value.knownFailedPhase.forall(v => KnownFailedPhase.valid(v) &&
       value.step.startsWith("phase:") && v.failedReceiptRevision == value.frontierRevision &&
       value.intentRevision.toLong < v.failedReceiptRevision.toLong &&
-      v.failedReceiptIdentity == value.sessionId + ":ordered-validation:" + value.sourceRevision + ":validation")
+      v.failedReceiptIdentity == value.sessionId + ":ordered-validation:" + value.sourceRevision + ":validation") &&
+    value.terminatedTimeoutPhase != null && value.terminatedTimeoutPhase.forall(source =>
+      I.validSource(source) && value.knownFailedPhase.isEmpty && value.dependency.isEmpty &&
+      value.sessionId == source.sessionId && value.planIdentity == source.planIdentity && value.planRevision == source.planRevision &&
+      value.base == source.base && value.candidate == source.candidate && value.sourceRevision == source.sourceRevision &&
+      value.frontierRevision == source.decisionRevision && value.step == source.step &&
+      value.checkIdentity == source.checkIdentity && value.checkOrdinal == source.checkOrdinal &&
+      value.attempt == source.attempt && value.intentRevision == source.intent.revision)
 
   def bindingC(component: String, target: RecoveryTarget, choice: String, rationale: String,
     participant: String, reference: ContextReference): Consequence[Json] =
-    if (!exact(component) || !validTarget(target) || !choices.contains(choice) || !text(rationale) ||
+    if (!exact(component) || !validTarget(target) || !choicesFor(target).contains(choice) || !text(rationale) ||
         !exact(participant) || target.knownFailedPhase.exists(_.participant != participant) ||
+        target.terminatedTimeoutPhase.exists(_.participant != participant) ||
         reference == null || !exact(reference.identity) || !exact(reference.revision))
       _invalid("Human binding requires the exact target, declared choice, rationale, participant and actual reference")
     else Consequence.success(Json.obj("componentInstance" -> Json.fromString(component),
@@ -127,13 +176,16 @@ private[smworkflow] object GoalPhaseValidationRecovery {
     participant <- answer.get[String]("participant").left.map(_.message)
     identity <- answer.downField("reference").get[String]("identity").left.map(_.message)
     revision <- answer.downField("reference").get[String]("revision").left.map(_.message)
-    _ <- Either.cond(exact(component) && choices.contains(choice) && text(rationale) &&
+    _ <- Either.cond(exact(component) && choicesFor(target).contains(choice) && text(rationale) &&
       Vector(participant, identity, revision).forall(exact) &&
-      target.knownFailedPhase.forall(_.participant == participant), (), "Validation recovery Human direction is invalid")
-  } yield Json.obj("componentInstance" -> Json.fromString(component), "validationRecovery" -> Json.obj(
+      target.knownFailedPhase.forall(_.participant == participant) &&
+      target.terminatedTimeoutPhase.forall(_.participant == participant), (), "Validation recovery Human direction is invalid")
+    selected = Json.obj("componentInstance" -> Json.fromString(component), "validationRecovery" -> Json.obj(
     "target" -> target.asJson, "answer" -> Json.obj("choice" -> Json.fromString(choice),
       "rationale" -> Json.fromString(rationale), "participant" -> Json.fromString(participant),
       "reference" -> Json.obj("identity" -> Json.fromString(identity), "revision" -> Json.fromString(revision)))))
+    _ <- Either.cond(target.terminatedTimeoutPhase.isEmpty || selected == supplied, (), "Timeout recovery binding fields differ")
+  } yield selected
 
   def admitC(d: GoalPhaseNativeRun.Declaration, core: ActionCall.Core, target: RecoveryTarget,
     input: V.GoalPhaseValidationRecoveryInput, participant: String): Consequence[Unit] = for {
@@ -157,10 +209,13 @@ private[smworkflow] object GoalPhaseValidationRecovery {
       else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity =>
         Action(request, identity, None, port))
       else NativeWorkflowOperationInput.valueC[V.GoalPhaseValidationRecoveryInput](request, "input").flatMap { input =>
-        if (input == null || !exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
+        if (input == null || !exact(input.sessionId) || input.reference == null ||
             !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
           _invalid("input requires a declared Human direction and actual reference")
-        else Consequence.success(Action(request, input.sessionId, Some(input), port))
+        else targetC(input.target).flatMap { target =>
+          if (!choicesFor(target).contains(input.choice)) _invalid("input choice is undeclared for the actual decoded target")
+          else Consequence.success(Action(request, input.sessionId, Some(input), port))
+        }
       }
   }
   private final case class Action(request: Request, sessionId: String, input: Option[V.GoalPhaseValidationRecoveryInput],

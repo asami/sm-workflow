@@ -11,16 +11,17 @@ import GoalPhaseWorkClassification.given
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
   final case class Step(identity: String, purpose: String, ownedPaths: Vector[String],
     dependencies: Vector[String], checks: Vector[String],
-    workClassification: Option[GoalPhaseWorkClassification.Assignment] = None)
+    workClassification: Option[GoalPhaseWorkClassification.Assignment] = None,
+    actionPolicy: Option[GoalPhaseStepAssessment.Policy] = None)
   object Step {
     given Encoder[Step] = deriveEncoder[Step].mapJson(_.mapObject(_.filter {
-      case ("workClassification", value) => !value.isNull
+      case ("workClassification" | "actionPolicy", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Step] = deriveDecoder
@@ -38,6 +39,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Decoder[Plan] = deriveDecoder
   }
   final case class Snapshot(head: String, tree: String)
+  object Snapshot {
+    given Encoder[Snapshot] = deriveEncoder
+    given Decoder[Snapshot] = deriveDecoder
+  }
   final case class HistoryCommit(identity: String, tree: String, parents: Vector[String])
   final case class CandidateContinuation(parent: Snapshot, lineage: Vector[HistoryCommit])
   /** A retained proof is interpreted against the immutable accepted Step tip. */
@@ -54,12 +59,28 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         !commit.parents.exists(value.lineage.take(index).map(_.identity).contains)
       }
   final case class Commit(identity: String, parent: String, tree: String)
-  final case class ClosedStep(step: String, commit: Commit, review: String)
+  object Commit {
+    given Encoder[Commit] = deriveEncoder
+    given Decoder[Commit] = deriveDecoder
+  }
+  final case class ClosedStep(step: String, commit: Commit, review: Option[String],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+  object ClosedStep {
+    def apply(step: String, commit: Commit, review: String): ClosedStep = new ClosedStep(step, commit, Some(review))
+    given Encoder[ClosedStep] = deriveEncoder[ClosedStep].mapJson(_.mapObject(_.filter {
+      case ("admission", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[ClosedStep] = deriveDecoder
+  }
+  def validStepAcceptance(step: ClosedStep): Boolean = step != null && step.review != null && step.admission != null &&
+    ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
+      step.admission.exists(GoalPhaseStepAssessment.validAdmission)))
   enum Stage {
-    case Implementation, InspectCandidate, Validation, Review, Repair, Closing,
+    case Implementation, InspectCandidate, Validation, Triage, Review, Repair, Closing,
       PhaseInspection, PhaseValidation, PhaseReview, PhaseClosing, Decision, Closed
   }
-  enum WorkKind { case ImplementStep, RepairStep, ReviewStep, ReviewPhase }
+  enum WorkKind { case ImplementStep, RepairStep, TriageStep, ReviewStep, ReviewPhase }
   final case class WorkKey(plan: String, revision: String, phase: String, repository: String, step: Option[String],
     kind: WorkKind, generation: Long)
   sealed trait Next
@@ -84,10 +105,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class PhaseFindingRecordsObserved(reviewed: Snapshot, finalCandidate: Snapshot, paths: Vector[String]) extends Event
   final case class ChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, passed: Boolean) extends Event
+  final case class IncompleteChecksObserved(snapshot: Snapshot, selected: Vector[String], receipt: String) extends Event
+  final case class TriageAdmitted(key: WorkKey, assessment: GoalPhaseStepAssessment.Result,
+    judgment: GoalPhaseStepTriage.Judgment) extends Event
+  final case class StepAssessed(assessment: GoalPhaseStepAssessment.Result) extends Event
   final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, directive: RepairDirective) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
-    evidence: String, outcome: ReviewOutcome, repairDirective: Option[RepairDirective] = None) extends Event
+    evidence: String, outcome: ReviewOutcome, repairDirective: Option[RepairDirective] = None,
+    allowPhaseRepair: Boolean = false) extends Event
   /** Mechanical admission by the native completion owner; this event grants no effect authority. */
   final case class CoveredReviewCompletionObserved(snapshot: Snapshot, checksReceipt: String,
     originalGeneration: Long, originalCandidate: Snapshot, originalReviewReference: String,
@@ -106,6 +132,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     commits: Vector[Commit], receipt: String) extends Event
   /** Accepted committed development is complete independently of synchronization. */
   final case class PhaseLocallyCompleted(snapshot: Snapshot, commits: Vector[Commit], review: String) extends Event
+  /** Actual Final commit of the accepted release delta; closed Steps stay immutable. */
+  final case class ReleaseCommitObserved(commit: Commit) extends Event
   final case class NativeFailure(reason: String) extends Event
   final case class DocumentConflictObserved(conflicts: Vector[String]) extends Event
   /** A verified Human may ask for the same semantic work again, not authorize
@@ -114,7 +142,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class DecisionResumptionAdmitted(evidence: String) extends Event
   /** Host-verified consent for one exhausted positive Step repair window only. */
   final case class RepairContinuationAdmitted(evidence: String) extends Event
-  /** Eligibility only; the native owner independently verifies Human direction. */
+  /** Eligibility only; the native owner proves the distinct actual terminal
+    * Failed or confirmed timeout source and independently verifies Human direction.
+    * The historical receipt remains unchanged; no corrective Step is required.
+    */
   final case class PhaseValidationRetryAdmitted(snapshot: Snapshot, selected: Vector[String],
     failedReceipt: String, direction: String) extends Event
   /** Pure eligibility only; the native owner authenticates the actual Human direction. */
@@ -129,17 +160,38 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val decisionSource: Option[Stage], val documentDecision: Boolean = false,
     val ordinaryRepairs: Int = 0, val pendingRepair: Option[RepairDirective] = None,
     val phaseReviewedCandidate: Option[Snapshot] = None, val phaseRecordingPaths: Vector[String] = Vector.empty,
-    val candidateParent: Option[Snapshot] = None) {
+    val candidateParent: Option[Snapshot] = None,
+    val stepAdmission: Option[GoalPhaseStepAssessment.Admission] = None,
+    val releaseCommit: Option[Commit] = None) {
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
-    private def tip = completed.lastOption.map(_.commit.identity).getOrElse(base.head)
-    def tipSnapshot: Snapshot = completed.lastOption.map(s => Snapshot(s.commit.identity, s.commit.tree)).getOrElse(base)
+    private def tip = tipSnapshot.head
+    def tipSnapshot: Snapshot = releaseCommit.map(c => Snapshot(c.identity, c.tree))
+      .orElse(completed.lastOption.map(s => Snapshot(s.commit.identity, s.commit.tree))).getOrElse(base)
+    def releaseRepairActive: Boolean = phaseWide && repairs > 0 && repairDirective.nonEmpty
     def candidateBase: Snapshot = candidateParent.getOrElse(tipSnapshot)
     private def checks = if (phaseWide) plan.phaseChecks else step.checks
     private def key(kind: WorkKind) = WorkKey(plan.identity, plan.revision, plan.phase, plan.repository,
       if (phaseWide) None else Some(step.identity), kind, generation)
     private def semantic(kind: WorkKind, purpose: String) = Semantic(key(kind), purpose,
       completed, plan, base, candidate, checksReceipt, repairDirective)
+
+    /** Eligibility only. The native owner admits a separate actual Human
+      * directive and supersedes the retained unanswered legacy question. */
+    private[admission] def continueLegacyReleaseRepairC(evidence: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && _valid_directive(directive) &&
+          directive.findings.size <= 128 && directive.findings.forall(GoalPhasePurposeRepair.text)) Consequence.unit
+        else invalid("legacy Release continuation requires its independently admitted exact blocker batch")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseReview) && !documentDecision &&
+          phaseWide && completed.map(_.step) == plan.steps.map(_.identity) && pendingRepair.isEmpty &&
+          closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && releaseCommit.isEmpty &&
+          generation < Long.MaxValue && repairs < plan.repairLimit && candidate.exists(validSnapshot) &&
+          checksReceipt.exists(text)) Consequence.unit
+        else invalid("legacy Release continuation requires the original completed-Plan Phase review Decision with remaining allowance")
+      next <- success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
+        newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive), reason = None, clear = true)
+    } yield next
 
     /** Business context only: this projection grants no issue or execution authority. */
     def protectedStepCount(issued: Boolean): Int = cursor +
@@ -183,7 +235,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else invalid("Plan adoption cannot redefine accepted Step conditions or Usage Contract")
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
-      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit)
 
     /** Separate explicit remaining-work adoption. Historical accepted Step
       * contracts stay in their original retained native requests and results;
@@ -212,18 +265,77 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else invalid("Remaining Plan adoption must preserve the accepted prefix, every Step scope and closure policy")
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
-      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit)
 
-    /** Eligibility only: the native owner must prove the original terminated
-      * failed Phase validation and independently admit the Human direction.
+    /** Eligibility only. The native owner binds the actual Review finding and
+      * new condition to an independently admitted Human directive. This consumes
+      * one ordinary repair; no past acceptance observation is manufactured.
+      */
+    private[admission] def adoptRemainingReviewRevisionC(proposed: Plan, evidence: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- validatePlanC(proposed)
+      _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && directive != null && text(directive.reason) &&
+          directive.findings != null && directive.findings.size == 1 &&
+          directive.reason.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384 &&
+          directive.findings.forall(finding => finding != null && finding.trim.nonEmpty && !finding.contains('\u0000') &&
+            finding.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384)) Consequence.unit
+        else invalid("Review remaining Plan adoption requires its independently admitted directive and exact finding")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && cursor < plan.steps.size && cursor == completed.size &&
+          generation < Long.MaxValue && repairs < plan.repairLimit &&
+          candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
+        else invalid("Review remaining Plan adoption requires an unanswered current-Step Review Decision with remaining repair allowance")
+      condition <- reviewRepairConditionC(plan, proposed.copy(effectiveAcceptance = None))
+      expected = plan.effectiveAcceptance.map(boundary => boundary.copy(conditions = boundary.conditions :+
+        GoalPhaseAcceptanceBoundary.EffectiveCondition(condition.identity, condition.scope, condition.required,
+          condition.description, "adopted")))
+      _ <- if (proposed.effectiveAcceptance == expected) Consequence.unit
+        else invalid("Review remaining Plan adoption must preserve every saved effective condition and its source")
+    } yield new State(proposed, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
+      None, None, None, None, None, repositoryReceipt, Some(directive), None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit)
+
+    /** Separate unchanged-Plan continuation of an independently directed legacy
+      * review batch. Native receipt reconstruction owns the actual Human origin.
+      */
+    private[admission] def continueLegacyPurposeRepairC(evidence: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && directive != null &&
+          GoalPhasePurposeRepair.text(directive.reason) && directive.findings != null &&
+          directive.findings.nonEmpty && directive.findings.size <= 128 && directive.findings.forall(GoalPhasePurposeRepair.text))
+        Consequence.unit else invalid("legacy purpose continuation requires the independently admitted exact finding batch")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty &&
+          cursor < plan.steps.size && cursor == completed.size && generation < Long.MaxValue && repairs < plan.repairLimit &&
+          candidate.exists(validSnapshot) && checksReceipt.exists(text)) Consequence.unit
+        else invalid("legacy purpose continuation requires its unanswered Step Review and remaining ordinary repair allowance")
+    } yield new State(plan, Stage.Repair, cursor, generation + 1, repairs + 1, base, completed,
+      None, None, None, None, None, repositoryReceipt, Some(directive), None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs + 1, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit)
+
+    /** Eligibility only: the native owner must prove the original terminal
+      * Failed or confirmed TimedOut/incomplete Phase validation through its
+      * distinct source contract and independently admit the Human direction.
       * Accepted Steps remain immutable; only one new corrective Step is added.
       */
-    def adoptFailedPhaseRepairRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+    def adoptFailedPhaseRepairRevisionC(proposed: Plan, evidence: String): Consequence[State] =
+      _adopt_validation_repair_revision_c(proposed, evidence, false)
+
+    def adoptValidationRepairRevisionC(proposed: Plan, evidence: String): Consequence[State] =
+      _adopt_validation_repair_revision_c(proposed, evidence, true)
+
+    private def _adopt_validation_repair_revision_c(proposed: Plan, evidence: String, historical: Boolean): Consequence[State] = for {
       _ <- validatePlanC(proposed)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
       _ <- if (text(evidence) && !evidence.exists(c => Character.isISOControl(c))) Consequence.unit
         else invalid("Failed Phase repair adoption requires its independent Human direction")
-      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseValidation) &&
+      _ <- if (((stage == Stage.Decision && decisionSource.contains(Stage.PhaseValidation)) ||
+          (historical && stage == Stage.PhaseValidation)) &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty &&
           phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && reviewEvidence.isEmpty &&
           cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -240,7 +352,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else invalid("Failed Phase repair adoption must retain the complete accepted Plan and append exactly one dependent corrective Step")
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
-      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None)
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit)
 
     /** Compare already captured effective contracts; the declaration owner captures them. */
     def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
@@ -281,7 +394,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else decision, repositoryReceipt, if (clear) None else repairDirective,
           if (clear) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
           if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
-          if (clear) None else candidateParent))
+          if (clear) None else candidateParent, stepAdmission = if (clear) None else stepAdmission,
+          releaseCommit = releaseCommit))
       }
     }
 
@@ -291,12 +405,17 @@ private[smworkflow] object GoalPhaseOrderedProgression {
 
     def next: Next = stage match {
       case Stage.Implementation => semantic(WorkKind.ImplementStep, step.purpose)
-      case Stage.Repair => semantic(WorkKind.RepairStep, step.purpose)
+      case Stage.Repair => semantic(WorkKind.RepairStep, if (phaseWide)
+        "Repair only the assigned blocking Release findings within the unchanged Plan scope; retain closed Steps and applicable prior judgments"
+        else step.purpose)
       case Stage.InspectCandidate => Inspect(false, tip)
       case Stage.PhaseInspection => Inspect(true, base.head)
       case Stage.Validation | Stage.PhaseValidation => Validate(candidate.get, checks, phaseWide)
+      case Stage.Triage => semantic(WorkKind.TriageStep, step.purpose)
       case Stage.Review => semantic(WorkKind.ReviewStep, step.purpose)
-      case Stage.PhaseReview => semantic(WorkKind.ReviewPhase, "Review the whole selected Phase")
+      case Stage.PhaseReview => semantic(WorkKind.ReviewPhase, if (releaseRepairActive)
+        "Review the unresolved Release findings, repair delta and affected meaning; retain the prior integrated Phase review"
+        else "Review the whole selected Phase")
       case Stage.Closing | Stage.PhaseClosing => closureIntent match {
         case None => BeginClosure(candidate.get, phaseWide)
         case Some(value) => ObserveClosure(value, phaseWide)
@@ -323,10 +442,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           ((stage == Stage.Implementation && value == key(WorkKind.ImplementStep)) ||
             (stage == Stage.Repair && value == key(WorkKind.RepairStep))) &&
           (!exempt || (stage == Stage.Repair && ordinaryRepairs > 0 && repairs > 0)) =>
-        success(Stage.InspectCandidate, newOrdinaryRepairs = ordinaryRepairs - (if (exempt) 1 else 0), clear = true)
+        success(if (phaseWide) Stage.PhaseInspection else Stage.InspectCandidate,
+          newOrdinaryRepairs = ordinaryRepairs - (if (exempt) 1 else 0), clear = true)
       case CandidateObserved(value) if validSnapshot(value) && value.head == tip &&
           (stage == Stage.InspectCandidate || stage == Stage.PhaseInspection) &&
-          (!phaseWide || completed.lastOption.exists(_.commit.tree == value.tree)) =>
+          (!phaseWide || tipSnapshot.tree == value.tree || releaseRepairActive) =>
         success(if (phaseWide) Stage.PhaseValidation else Stage.Validation,
           newCandidate = Some(value))
       case CandidateContinuationObserved(value, continuation) if stage == Stage.InspectCandidate && !phaseWide &&
@@ -345,21 +465,51 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           paths.size <= 256 && paths.distinct == paths && paths.forall(p => path(p) && p.endsWith(".md")) &&
           plan.steps.forall(step => paths.forall(step.ownedPaths.contains)) =>
         success(Stage.PhaseClosing, newCandidate = Some(value), newPhaseReviewed = Some(reviewed), newPhasePaths = paths)
+      case IncompleteChecksObserved(value, selected, receipt) if candidate.contains(value) &&
+          selected == checks && text(receipt) && (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
+        success(Stage.Decision, reason = Some("Selected native checks incomplete: " + receipt))
       case ChecksObserved(value, selected, receipt, passed) if candidate.contains(value) &&
           selected == checks && text(receipt) &&
-          (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
+          (stage == Stage.PhaseValidation || (stage == Stage.Validation && (!passed || step.actionPolicy.isEmpty))) =>
         if (passed) success(if (phaseWide) Stage.PhaseReview else Stage.Review,
           newChecks = Some(receipt))
         else success(Stage.Decision, reason = Some("Selected native checks failed: " + receipt))
+      case StepAssessed(assessment) if stage == Stage.Validation && !phaseWide && GoalPhaseStepAssessment.validResult(assessment) &&
+          step.actionPolicy.contains(assessment.policy) && candidate.contains(assessment.candidate) &&
+          assessment.checks == checks && text(assessment.validationReference) &&
+          Set("admit", "detailed-review", "triage", "decision")(assessment.branch) =>
+        assessment.branch match {
+          case "admit" if GoalPhaseStepAssessment.validAdmission(GoalPhaseStepAssessment.admission(assessment)) =>
+            success(Stage.Closing, newChecks = Some(assessment.validationReference),
+              newadmission = Some(GoalPhaseStepAssessment.admission(assessment)))
+          case "triage" if assessment.triage == "required" && assessment.triageJudgment.isEmpty =>
+            success(Stage.Triage, newChecks = Some(assessment.validationReference))
+          case "detailed-review" if assessment.policy.detailedReview == "required" ||
+              assessment.policy.observations.exists(_.timing == "immediate") || assessment.scenarioSignals.exists(_.missing.nonEmpty) =>
+            success(Stage.Review, newChecks = Some(assessment.validationReference))
+          case "decision" if assessment.policy.observations.exists(_.timing == "immediate") =>
+            success(Stage.Decision, newChecks = Some(assessment.validationReference), reason = Some(assessment.reason))
+          case _ => invalid("assessment branch contradicts its selected policy")
+        }
+      case TriageAdmitted(value, assessment, judgment) if stage == Stage.Triage && !phaseWide &&
+          value == key(WorkKind.TriageStep) && GoalPhaseStepAssessment.validResult(assessment) &&
+          assessment.branch == "triage" && step.actionPolicy.contains(assessment.policy) &&
+          candidate.contains(assessment.candidate) && checksReceipt.contains(assessment.validationReference) &&
+          assessment.checks == checks && GoalPhaseStepTriage.valid(judgment) =>
+        val resolved = GoalPhaseStepAssessment.triaged(assessment, judgment)
+        if (!GoalPhaseStepAssessment.validResult(resolved)) invalid("triage contradicts its selected policy")
+        else if (judgment.outcome == "clean") success(Stage.Closing,
+          newadmission = Some(GoalPhaseStepAssessment.admission(resolved)))
+        else success(Stage.Review)
       case RepairableChecksObserved(value, selected, receipt, directive) if
-          stage == Stage.Validation && !phaseWide && candidate.contains(value) &&
+          (stage == Stage.Validation || (stage == Stage.PhaseValidation && releaseRepairActive)) && candidate.contains(value) &&
           selected == checks && text(receipt) && _valid_directive(directive) =>
         if (generation < Long.MaxValue && repairs < plan.repairLimit)
           success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
             newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive), clear = true)
         else success(Stage.Decision, newChecks = Some(receipt), newDirective = Some(directive),
           newPendingRepair = Option.when(plan.repairLimit > 0 && generation < Long.MaxValue)(directive),
-          reason = Some("Selected Step repair window requires a Human decision: " + receipt))
+          reason = Some("Selected repair window requires a Human decision: " + receipt))
       case CoveredReviewCompletionObserved(snapshot, validation, originalgeneration, originalcandidate,
           originalreview, completion) if stage == Stage.Review && !phaseWide &&
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(validation) &&
@@ -368,24 +518,22 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           originalcandidate.head == snapshot.head && snapshot.head == candidateBase.head &&
           originalcandidate.tree != snapshot.tree && text(originalreview) && text(completion) &&
           closureIntent.isEmpty => success(Stage.Closing, newReview = Some(originalreview))
-      case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive) if
+      case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive, allowphaserepair) if
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(evidence) &&
           ((stage == Stage.Review && value == key(WorkKind.ReviewStep)) ||
             (stage == Stage.PhaseReview && value == key(WorkKind.ReviewPhase))) => outcome match {
         case ReviewOutcome.Accept => success(if (phaseWide) Stage.PhaseClosing else Stage.Closing,
           newReview = Some(evidence))
-        // Phase repair needs a new explicitly selected amendment, not mutation of
-        // already closed Step commits or a fabricated re-open/refunded budget.
-        case ReviewOutcome.Repair if !phaseWide && generation < Long.MaxValue && repairs < plan.repairLimit =>
+        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && generation < Long.MaxValue && repairs < plan.repairLimit =>
           if (directive.exists(_valid_directive))
             success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
               newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = directive, clear = true)
           else invalid("repair requires the independent review's assigned reason and findings")
-        case ReviewOutcome.Repair if !phaseWide && plan.repairLimit > 0 &&
+        case ReviewOutcome.Repair if (!phaseWide || allowphaserepair) && plan.repairLimit > 0 &&
             repairs >= plan.repairLimit && generation < Long.MaxValue && directive.exists(_valid_directive) =>
           success(Stage.Decision, newReview = Some(evidence), newDirective = directive,
             newPendingRepair = directive,
-            reason = Some("Independent review exhausted the selected Step repair window: " + evidence))
+            reason = Some("Independent review exhausted the selected repair window: " + evidence))
         case _ => success(Stage.Decision, reason = Some("Independent review requires a Human decision: " + evidence))
       }
       case ClosureIntentSaved(value, identity) if candidate.contains(value) && text(identity) &&
@@ -398,7 +546,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
       case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
-          closureIntent.contains(intent) && checksReceipt.nonEmpty && reviewEvidence.nonEmpty &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
           validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
           candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
           paths.distinct == paths && paths.forall(value => path(value) &&
@@ -409,6 +557,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
           commits == completed.map(_.commit) => success(Stage.Closed)
+      case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && releaseRepairActive && releaseCommit.isEmpty &&
+          closureIntent.isEmpty && checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validCommit(commit) &&
+          commit.parent == tipSnapshot.head && commit.identity != tipSnapshot.head &&
+          candidate.exists(c => c.head == tipSnapshot.head && c.tree == commit.tree && c.tree != tipSnapshot.tree) =>
+        success(Stage.PhaseClosing, newCandidate = Some(Snapshot(commit.identity, commit.tree)),
+          newPhaseReviewed = None, newPhasePaths = Vector.empty, newreleasecommit = Some(commit))
       case PhaseRepositoryClosed(intent, original, finalTip, commits, receipt) if
           stage == Stage.PhaseClosing && closureIntent.contains(intent) && original == base.head &&
           finalTip == tip && commits == completed.map(_.commit) && text(receipt) =>
@@ -422,7 +576,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Consequence.success(new State(plan, Stage.Decision, cursor, generation, repairs, base, completed,
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
-          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent))
+          repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent,
+          stepAdmission = stepAdmission, releaseCommit = releaseCommit))
       case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -431,9 +586,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         success(Stage.PhaseValidation, newGeneration = generation + 1, newChecks = None, newReview = None,
           newIntent = None, reason = None, newPhaseReviewed = None, newPhasePaths = Vector.empty)
       case RepairContinuationAdmitted(evidence) if stage == Stage.Decision && text(evidence) &&
-          !documentDecision && !phaseWide && plan.repairLimit > 0 && repairs >= plan.repairLimit &&
+          !documentDecision && plan.repairLimit > 0 && repairs >= plan.repairLimit &&
           generation < Long.MaxValue && pendingRepair.exists(_valid_directive) &&
-          decisionSource.exists(Set(Stage.Validation, Stage.Review)) =>
+          decisionSource.exists(Set(Stage.Validation, Stage.Review, Stage.PhaseValidation, Stage.PhaseReview)) =>
         success(Stage.Repair, newGeneration = generation + 1, newRepairs = 1,
           newOrdinaryRepairs = 1, newDirective = pendingRepair, newPendingRepair = None,
           reason = None, clear = true)
@@ -448,11 +603,12 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     }
 
     private def _close_step_c(commit: Commit): Consequence[State] = {
-      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence.get)
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission)
       val nextcursor = cursor + 1
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
-        nextcursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None))
+        nextcursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None,
+        stepAdmission = None, releaseCommit = releaseCommit))
     }
 
     private def success(nextStage: Stage, newCandidate: Option[Snapshot] = candidate,
@@ -466,6 +622,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newPhaseReviewed: Option[Snapshot] = phaseReviewedCandidate,
       newPhasePaths: Vector[String] = phaseRecordingPaths,
       newcandidateparent: Option[Snapshot] = candidateParent,
+      newadmission: Option[GoalPhaseStepAssessment.Admission] = stepAdmission,
+      newreleasecommit: Option[Commit] = releaseCommit,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -474,7 +632,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       ordinaryRepairs = newOrdinaryRepairs, pendingRepair = newPendingRepair,
       phaseReviewedCandidate = if (clear) None else newPhaseReviewed,
       phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths,
-      candidateParent = if (clear) None else newcandidateparent))
+      candidateParent = if (clear) None else newcandidateparent,
+      stepAdmission = if (clear) None else newadmission, releaseCommit = newreleasecommit))
   }
 
   def startC(plan: Plan, initial: Snapshot): Consequence[State] = for {
@@ -482,6 +641,33 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     _ <- if (validSnapshot(initial)) Consequence.unit else invalid("native initial Git snapshot is missing")
   } yield new State(plan, Stage.Implementation, 0, 1, 0, initial, Vector.empty,
     None, None, None, None, None, None, None, None)
+
+  /** Exact raw delta for the narrow Review continuation. Existing exclusions,
+    * defaults and Usage Contract retain their original meaning and ordering.
+    */
+  private[admission] def reviewRepairConditionC(current: Plan, proposed: Plan):
+      Consequence[GoalPhaseAcceptanceBoundary.Condition] = for {
+    _ <- validatePlanC(current)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(current)
+    _ <- validatePlanC(proposed)
+    _ <- if (current.effectiveAcceptance.exists(boundary =>
+        GoalPhaseAcceptanceBoundary.applicable(boundary, "ReviewStep").isEmpty) &&
+        proposed.effectiveAcceptance.isEmpty && proposed.revision != current.revision &&
+        proposed.copy(revision = current.revision, acceptance = current.acceptance) ==
+          current.copy(effectiveAcceptance = None)) Consequence.unit
+      else invalid("Review continuation requires a configured boundary without applicable Step conditions and an otherwise exact Plan")
+    prior <- current.acceptance.map(Consequence.success).getOrElse(
+      invalid("Review continuation requires the saved adopted Usage Contract"))
+    adoption <- proposed.acceptance.map(Consequence.success).getOrElse(invalid("Review continuation requires its added condition"))
+    _ <- if (adoption.usage == prior.usage && adoption.conditions.size == prior.conditions.size + 1 &&
+        adoption.conditions.take(prior.conditions.size) == prior.conditions) Consequence.unit
+      else invalid("Review continuation may only append one raw condition to the unchanged Usage Contract")
+    condition = adoption.conditions.last
+    _ <- if (condition.scope == "step" && condition.required &&
+        !current.effectiveAcceptance.get.conditions.exists(_.identity == condition.identity) &&
+        !prior.conditions.exists(_.identity == condition.identity)) Consequence.unit
+      else invalid("Review continuation requires one fresh required Step condition; exclusions cannot be promoted")
+  } yield condition
 
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||
@@ -496,10 +682,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (s == null || !text(s.purpose) || s.ownedPaths == null || s.ownedPaths.isEmpty ||
           s.ownedPaths.size > 256 || s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
           !identities(s.dependencies) || !s.dependencies.forall(ids.take(index).contains) ||
-          !identities(s.checks) || s.checks.isEmpty || s.workClassification == null ||
+          !identities(s.checks) || s.checks.isEmpty || s.workClassification == null || s.actionPolicy == null ||
           s.workClassification.exists(value => value == null || value.validateC.toOption.isEmpty))
         invalid("Step coverage, earlier dependencies, selected checks or WorkClassification are invalid")
-      else Consequence.unit
+      else s.actionPolicy.fold(Consequence.unit)(GoalPhaseStepAssessment.validateC(_, s, plan))
     }}
   }
   private def identities(values: Vector[String]) = values != null && values.size <= 64 &&

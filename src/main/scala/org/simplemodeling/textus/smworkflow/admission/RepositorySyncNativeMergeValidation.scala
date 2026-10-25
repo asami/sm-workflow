@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -35,24 +35,52 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       kind <- WorkflowSbtValidation.checkKind(cursor)
     } yield Check(identity, ordinal, kind))
   }
-  final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check]) {
+  final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check],
+    assessment: Option[RepositorySyncMergeAssessment.Policy] = None) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
         reason.trim.nonEmpty && reason.length <= 4096 && checks != null && checks.size <= 16 &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
           c.kind != null && c.ordinal > 0 && c.ordinal <= 16) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
-        ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty))) Consequence.unit
+        assessment != null &&
+        ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty)))
+      assessment.fold(Consequence.unit)(RepositorySyncMergeAssessment.validateC)
       else N.invalid("pending-merge validation policy is incomplete or contradictory")
   }
+  object Policy {
+    given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
+      case ("assessment", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Policy] = deriveDecoder
+  }
   final case class Receipt(identity: String, termination: String, exitCode: Option[Int], stdout: String, stderr: String,
-    sbt: Option[WorkflowSbtValidation.Facts] = None)
+    sbt: Option[WorkflowSbtValidation.Facts] = None,
+    processObservation: Option[ProcessExecutionResult] = None)
   object Receipt {
     given Encoder[Receipt] = Encoder.instance(value => {
+      if (value.processObservation.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.schema.asJson,
+        "identity" -> value.identity.asJson, "sbt" -> value.sbt.get.asJson,
+        "process" -> WorkflowSbtCapture.encode(value.processObservation.get))
+      else {
       val fields = Json.obj("identity" -> value.identity.asJson, "termination" -> value.termination.asJson,
         "exitCode" -> value.exitCode.asJson, "stdout" -> value.stdout.asJson, "stderr" -> value.stderr.asJson)
       value.sbt.fold(fields)(facts => fields.mapObject(_.add("sbt", facts.asJson)))
+      }
     })
-    given Decoder[Receipt] = Decoder.instance(cursor => for {
+    given Decoder[Receipt] = Decoder.instance(cursor => if (cursor.downField("schemaVersion").focus.nonEmpty) for {
+      schema <- cursor.get[String]("schemaVersion")
+      _ <- Either.cond(schema == WorkflowSbtCapture.schema && cursor.keys.exists(_.toSet ==
+        Set("schemaVersion", "identity", "sbt", "process")), (), DecodingFailure("Unknown or malformed raw SBT receipt", cursor.history))
+      identity <- cursor.get[String]("identity")
+      facts <- cursor.get[WorkflowSbtValidation.Facts]("sbt")
+      raw <- cursor.get[Json]("process")
+      process <- WorkflowSbtCapture.decode(raw).left.map(DecodingFailure(_, cursor.history))
+      _ <- Either.cond((id(identity) || (identity.startsWith("metadata:") && GoalPhaseNativeMetadata.runtimeIdentityValid(identity))) &&
+        WorkflowSbtCapture.valid(process, facts), (), DecodingFailure("Contradictory raw SBT observation", cursor.history))
+    } yield Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
+      WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value, Some(facts), Some(process))
+    else for {
       identity <- cursor.get[String]("identity")
       termination <- cursor.get[String]("termination")
       exit <- cursor.get[Option[Int]]("exitCode")
@@ -61,6 +89,24 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       sbt <- if (cursor.keys.exists(_.exists(_ == "sbt"))) cursor.get[WorkflowSbtValidation.Facts]("sbt").map(Some(_))
         else Right(None)
     } yield Receipt(identity, termination, exit, stdout, stderr, sbt))
+
+    /** The historical merge-repair parent derived six fields, including sbt:null. */
+    val mergeRepairEncoder: Encoder[Receipt] = Encoder.instance(value =>
+      if (value.processObservation.nonEmpty) summon[Encoder[Receipt]].apply(value)
+      else Json.obj("identity" -> value.identity.asJson, "termination" -> value.termination.asJson,
+        "exitCode" -> value.exitCode.asJson, "stdout" -> value.stdout.asJson,
+        "stderr" -> value.stderr.asJson, "sbt" -> value.sbt.asJson))
+
+    val mergeRepairDecoder: Decoder[Receipt] = Decoder.instance(cursor =>
+      if (cursor.downField("schemaVersion").focus.nonEmpty) summon[Decoder[Receipt]].apply(cursor)
+      else for {
+        identity <- cursor.get[String]("identity")
+        termination <- cursor.get[String]("termination")
+        exit <- cursor.get[Option[Int]]("exitCode")
+        stdout <- cursor.get[String]("stdout")
+        stderr <- cursor.get[String]("stderr")
+        sbt <- cursor.get[Option[WorkflowSbtValidation.Facts]]("sbt")
+      } yield Receipt(identity, termination, exit, stdout, stderr, sbt))
   }
   final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt])
   private given Encoder[State] = deriveEncoder
@@ -200,6 +246,42 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def applies(state: State, policy: Policy): Boolean =
     state.mode == policy.mode && state.selected.forall(check => policy.checks.exists(_ == check))
 
+  private[admission] def knownFailure(value: N.Stage, policy: Policy): Boolean =
+    value.payload.stage == "ValidationChecking" && value.payload.validation.exists { state =>
+      val offset = state.receipts.size - 3
+      applies(state, policy) && offset >= 0 && state.selected.lift(offset).exists { check =>
+        val failed = state.receipts.last
+        successful(state.receipts.dropRight(1), merge = true, selected = state.selected) &&
+          failed.identity == check.identity && _receipt_kind(failed, check.kind) &&
+          storedProductOutputValid(failed) && failed.termination == "exited" && failed.exitCode.exists(_ != 0)
+      }
+    }
+
+  /** Read the retained executed prefix only. Incomplete intents, missing results
+    * and uncertain terminations cannot become a known-failure repair source. */
+  private[admission] def retainedFailureC(store: N.Store, pending: N.Stage, policy: Policy,
+    namespace: String): Consequence[Option[N.Stage]] = for {
+    results <- (0 until policy.checks.size + 2).foldLeft(Consequence.success(Vector.empty[N.Stage])) { (prior, index) =>
+      prior.flatMap(values => store.loadC(N.candidateKey(namespace, "validation-result-" + index))
+        .map(found => values ++ found.toVector))
+    }
+    selected = results.lastOption.filter(value => knownFailure(value, policy) && value.payload.validation.exists(state =>
+      state.sourceRevision == pending.record.revision.value.toString && state.receipts.size == results.size))
+  } yield selected
+
+  private[admission] def prepareFailureC(store: N.Store, failed: N.Stage, policy: Policy,
+    namespace: String): Consequence[N.Stage] = for {
+    _ <- if (knownFailure(failed, policy) && policy.assessment.nonEmpty) Consequence.unit
+      else N.invalid("check-origin repair requires an actual known failure and explicitly selected policy")
+    retained <- store.loadC(N.candidateKey(namespace, "validation-repair-required"))
+    selected <- retained match {
+      case Some(saved) if saved.payload == failed.payload.copy(stage = "ValidationRepairRequired") => Consequence.success(saved)
+      case Some(_) => N.invalid("check-origin repair source crosses retained validation")
+      case None => store.saveC(N.candidateKey(namespace, "validation-repair-required"), "native-validation-repair-required",
+        failed.record, failed.payload.copy(stage = "ValidationRepairRequired"))
+    }
+  } yield selected
+
 
   private[admission] def preconditionsC(store: N.Store, pending: N.Stage): Consequence[Unit] = for {
     native <- G.inspectC(store.core)
@@ -246,9 +328,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def sbtReceiptC(identity: String, kind: WorkflowSbtValidation.Kind,
     result: SbtExecutionResult): Consequence[Receipt] = for {
     facts <- WorkflowSbtValidation.factsC(kind, result)
-    receipt <- _receipt_c(identity, result.processResult, id(identity) ||
-      (identity != null && identity.startsWith("metadata:") && GoalPhaseNativeMetadata.runtimeIdentityValid(identity)), false)
-  } yield receipt.copy(sbt = Some(facts))
+    _ <- if ((id(identity) || (identity != null && identity.startsWith("metadata:") &&
+        GoalPhaseNativeMetadata.runtimeIdentityValid(identity))) && WorkflowSbtCapture.valid(result.processResult, facts))
+      Consequence.unit else N.uncertain("typed SBT observation has invalid identity, capture or contradictory actual facts; intent is not replayable")
+    process = result.processResult
+  } yield Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
+    WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value, Some(facts), Some(process))
 
   private def _receipt_kind(receipt: Receipt, expected: WorkflowSbtValidation.Kind): Boolean =
     receipt != null && expected != null && receipt.sbt != null && (receipt.sbt match {
@@ -260,13 +345,20 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     expectedKind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Boolean =
     _receipt_kind(receipt, expectedKind) && receipt.termination == "exited" && receipt.exitCode != null &&
       receipt.exitCode.contains(0) && storedProductOutputValid(receipt) &&
+      receipt.processObservation.forall(p => !p.stdout.truncated && !p.stderr.truncated &&
+        WorkflowSbtCapture.text(p.stdout).textStatus == "complete" && WorkflowSbtCapture.text(p.stderr).textStatus == "complete") &&
       receipt.sbt.forall(_.outcome == WorkflowSbtValidation.Outcome.Succeeded)
 
   /** CNCF bounds actual typed SBT captures; historical untyped text keeps its local bound. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
-    receipt != null && receipt.sbt != null && (receipt.sbt match {
+    receipt != null && receipt.sbt != null && receipt.processObservation != null && (receipt.processObservation match {
+      case Some(process) => receipt.sbt.exists(facts => WorkflowSbtCapture.valid(process, facts)) &&
+        receipt.termination == WorkflowSbtCapture.termination(process) && receipt.exitCode == WorkflowSbtCapture.exitCode(process) &&
+        receipt.stdout == WorkflowSbtCapture.text(process.stdout).value && receipt.stderr == WorkflowSbtCapture.text(process.stderr).value
+      case None => receipt.sbt match {
       case None => _stored_text(receipt.stdout) && _stored_text(receipt.stderr)
       case Some(facts) => facts != null && facts.valid && _ordinary_text(receipt.stdout) && _ordinary_text(receipt.stderr)
+      }
     })
 
   /** Structural failures newly common to both parents block. Findings inherited

@@ -19,9 +19,11 @@ import GoalPhaseValidationMetadata as V
 
 /** Actual local metadata discovery and bounded exact selection, without execution.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _fixture_class = classOf[SelectedMetadataFixtureSpec]
   private val _loader = _fixture_class.getClassLoader

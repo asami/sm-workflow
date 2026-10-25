@@ -42,7 +42,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -310,6 +310,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     } yield ()
     def execute(): Consequence[OperationResponse] = task(this).map(_ => OperationResponse.Scalar("specification-setup"))
   }
+  protected def local_subject_capabilities: Vector[String] = Vector("user")
+
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
     hostParameters: Map[String, String] = Map.empty,
@@ -337,7 +339,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     val directory = Files.createDirectories(root.resolve(".textus"))
     Files.writeString(directory.resolve("config.json"), Json.obj(raw.toVector.map((key, value) => key -> Json.fromString(value))*).noSpaces)
     Files.writeString(directory.resolve("assembly.yaml"),
-      """subsystem: direct-repository-spec
+      s"""subsystem: direct-repository-spec
         |components: []
         |security:
         |  authentication:
@@ -346,7 +348,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |    local_subject:
         |      id: participant
         |      roles: [user]
-        |      capabilities: [user]
+        |      capabilities: ${local_subject_capabilities.mkString("[", ", ", "]")}
         |      security_level: user
         |config:
         |  textus.subsystem.user-mode: standalone
@@ -475,6 +477,8 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   }
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   "Mapped Repository review" should afterWord("in spec:repository-sync-native-execution, example:E5, rules:R1,R2,R3,R4,R5") {
@@ -655,9 +659,9 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
     forwarded.submitSessionId should not be Some(outer)
   }
 
-  "RepositorySync public Operations on the production three-workflow composition" should afterWord(
-    "in spec:native-host-repository-effect-preparation, example:E6, rules:R1,R2,R3,R4,R6, phase:6; spec:native-issued-work-context, example:O-Repository, rules:R1,R2,R4,R6, phase:6"
-  ) {
+  // Trace: spec:native-host-repository-effect-preparation, example:E6, rules:R1,R2,R3,R4,R6, phase:6;
+  // spec:native-issued-work-context, example:O-Repository, rules:R1,R2,R4,R6, phase:6.
+  "RepositorySync public Operations on the production three-workflow composition" should afterWord("normal effects and issued Repository work") {
     "preserve an execution refused for absent Push authority and complete a new separately provisioned execution" in {
       Given("owned Equal local and bare repositories, current managed selection and no effect provisioning; all inputs are specification-owned")
       val work = Files.createDirectories(Path.of("target/sm-workflow/work/direct-repository-operation").toAbsolutePath)

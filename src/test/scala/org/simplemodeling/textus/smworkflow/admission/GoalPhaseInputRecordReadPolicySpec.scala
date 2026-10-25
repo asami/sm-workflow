@@ -10,8 +10,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseInputRecordReadPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GoalPhaseInputRecordReadPolicy.*
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "hostrecords", name))

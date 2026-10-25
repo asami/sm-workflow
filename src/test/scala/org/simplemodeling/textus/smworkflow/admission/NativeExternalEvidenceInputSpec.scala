@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.cli.RunMode
@@ -18,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed finite tool input fixture; files contain only specification facts.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeExternalEvidenceToolFixture {
@@ -35,7 +36,8 @@ private[admission] object NativeExternalEvidenceToolFixture {
     Map("family" -> family, "kind" -> kind, "request" -> "request.json", "result" -> "result.json",
       "reference" -> "reference.json", "execution-evidence" -> "execution.json", "issuer" -> issuer,
       "occurred-at" -> now.minusSeconds(60).toString, "collection" -> collection) ++
-      (if (kind == "human") Map("participant" -> participantIdentity) else Map.empty[String, String])
+      (if (Set("human", "candidate-recovery", "candidate-observation-continuation")(kind))
+        Map("participant" -> participantIdentity) else Map.empty[String, String])
   def files(request: RecordPresentable, answer: RecordPresentable, resultReference: V.WorkflowArtifactReference = reference,
     executionEvidence: V.WorkflowExecutionEvidence = execution): Map[String, String] = Map(
     "request.json" -> take(request.toRecord().toJsonStringC), "result.json" -> take(answer.toRecord().toJsonStringC),
@@ -53,9 +55,10 @@ private[admission] object NativeExternalEvidenceToolFixture {
     prepareRecord(family, kind, request, answer, participantIdentity, resultReference, executionEvidence).flatMap(_.toJsonStringC)
   def prepareNormalCommand(family: String, kind: String, request: RecordPresentable, answer: RecordPresentable,
     participantIdentity: String = participant, resultReference: V.WorkflowArtifactReference = reference,
-    executionEvidence: V.WorkflowExecutionEvidence = execution): Consequence[String] = {
+    executionEvidence: V.WorkflowExecutionEvidence = execution,
+    transformRequest: String => String = identity): Consequence[String] = {
     val selected = files(request, answer, resultReference, executionEvidence)
-      .updated("request.json", normalCommandJson(request))
+      .updated("request.json", transformRequest(normalCommandJson(request)))
     Main.prepareC(arguments(family, kind, participantIdentity), path => selected.get(path)
       .map(Consequence.success).getOrElse(Consequence.stateConflict("Specification file absent"))).flatMap(_.toJsonStringC)
   }
@@ -73,14 +76,16 @@ private[admission] object NativeExternalEvidenceToolFixture {
 /** Passive input specifications execute only during parent-selected validation.
   * Fixture success is not genuine independent review, Human consent or task completion.
   * @since   Oct. 14, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativePreparationManagedFixture {
   import NativePreparationFixture.*
   private val _tool = NativeExternalEvidenceToolFixture
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
 
   "T1 Own Goal review input" should afterWord("in spec:native-host-evidence-tool, example:T1, rules:R1,R2,R3,R4, phase:6") {
@@ -127,6 +132,44 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     }
   }
 
+  "Typed purpose source public input" should {
+    "retain the exact boxed sources and reject raw explicit null or unknown wrapper fields before generated decoding" in {
+      Given("a marked actual Step WorkOrder and a generated public result with one typed original-purpose source")
+      withCore { call =>
+        val original = goalWork("ReviewStep")
+        val order = original.current.asInstanceOf[org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]]
+        val oldinput = order.request.input.get.value
+        val input = oldinput.copy(purposeRepair = GoalPhasePurposeRepair.capture("ReviewStep", oldinput.stepIdentity, oldinput.selectedPlan))
+        val issued = original.copy(current = order.copy(request = order.request.copy(input = Some(order.request.input.get.copy(value = input)))))
+        val output = take(NativeWorkflowOperationOutput.goalWorkRequestC(issued, call.core))
+        val source: GoalPhasePurposeRepair.Source = GoalPhasePurposeRepair.StepPurpose(1, input.stepIdentity.get,
+          "The original purpose has an actual defect", Vector("one.scala"))
+        val value = _goal_result.copy(outcome = "repair", summary = "Repair original purpose", findings = Vector("Missing original case"),
+          repairFindingSources = GoalPhasePurposeRepair.publicSources(Some(Vector(source))))
+        val files = _tool.files(output, value)
+        val raw = io.circe.parser.parse(files("result.json")).toOption.get
+        val malformed = Vector(Json.Null, Json.obj("sources" -> Json.arr(source.asJson), "unknown" -> Json.fromBoolean(true)),
+          Json.obj("sources" -> Json.Null), Json.obj("sources" -> Json.arr(source.asJson.mapObject(_.add("conditionIdentity", Json.fromString("irrelevant"))))))
+        When("the normal finite public adapter consumes the exact public payload and each malformed raw variant")
+        val accepted = _tool.prepareRecord("GoalPhase", "review", output, value)
+        val invalidresults = malformed.map(wrapper => raw.mapObject(_.add("repairFindingSources", wrapper))) ++ Vector(
+          raw.mapObject(_.remove("repairFindingSources").add("repair_finding_sources", Json.Null)),
+          raw.mapObject(_.add("repair_finding_sources", Json.Null)))
+        val rejected = invalidresults.map { invalid =>
+          val changed = files.updated("result.json", invalid.noSpaces)
+          Main.prepareC(_tool.arguments("GoalPhase", "review"), path => Consequence.success(changed(path)))
+        }
+        Then("the evidence contains the native exact array while no null or unobserved field disappears into success")
+        _tool.evidence(take(accepted)).binding.hcursor.downField("attestation").downField("result").downField("verdict")
+          .get[Json]("repairFindingSources") shouldBe Right(Json.arr(source.asJson))
+        rejected.zipWithIndex.foreach { (result, index) =>
+          withClue("Malformed public source wrapper variant " + index + ": ") { result.isSuccess shouldBe false }
+        }
+        Consequence.unit
+      }
+    }
+  }
+
   "T3 Explicit own and forwarded Human answers" should afterWord("in spec:native-host-evidence-tool, example:T3, rules:R1,R2,R3,R4,R5, phase:6") {
     "export Goal and Repository Human rows only with a supplied participant and actual answer" in {
       Given("actual production projections of fixture Goal and Repository Decisions and an unchanged forwarded Repository Human")
@@ -158,7 +201,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     "refuse Split review and unassigned outputs while managed Direct consumers exercise both full public Human outputs" in {
       Given("Split has Human preparation but no review kind, and an ordinary unassigned Wait output")
       val wait = V.SplitPhaseAdvanceResult("fixture-session", "Wait", "No assigned input", None, None, None,
-        Some("waiting"), None, None, None, None, None, None, None, None, None)
+        Some("waiting"), None, None, None, None, None, None, None, None, None, None)
       When("the tool receives unsupported review or a Human request without an assigned context")
       val review = _tool.prepareRecord("SplitPhase", "review", wait, splitAnswer())
       val absent = _tool.prepareRecord("SplitPhase", "human", wait, splitAnswer())

@@ -4,7 +4,7 @@ import io.circe.Json
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.time.Instant
 import org.goldenport.record.Record
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -13,10 +13,11 @@ import NativeWorkflowCliFixture as F
 /** The caller source is an actual retained public tool result. The workflow is
   * a fresh isolated fixture; it is not the interrupted production Session.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeCallerInformationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.{json, mapping, origin}
 

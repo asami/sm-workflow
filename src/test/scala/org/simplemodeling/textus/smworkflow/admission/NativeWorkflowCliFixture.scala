@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -37,7 +37,8 @@ private[admission] object NativeWorkflowCliFixture {
 
   def publicPlan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
-      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks)),
+      value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
+        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
       A.publicEffective(value.effectiveAcceptance))
 
@@ -93,6 +94,47 @@ private[admission] object NativeWorkflowCliFixture {
     Files.writeString(descriptor, original.replace("components: []",
       "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
     new Scenario(root, host, plan, None, None)
+  }
+
+  /** Public CLI continuation of a real direct-operation producer. Only the normal
+    * assembly descriptor is selected here; no Workflow data is reconstructed. */
+  final class ProducerClient(val root: Path) {
+    require(root.isAbsolute && Files.isRegularFile(root.resolve(".textus/config.json")))
+    private val descriptor = root.resolve(".textus/assembly.yaml")
+    private val original = Files.readString(descriptor)
+    require(original.contains("components: []"), "Select the actual direct producer descriptor once")
+    Files.writeString(descriptor, original.replace("components: []",
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+    private var index = 0
+    def call(service: String, operation: String, parameters: Vector[String]): Result = {
+      require(Set("SplitPhaseService", "RepositorySyncService", "JournalService")(service))
+      val argv = Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
+        _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
+        "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
+        s"--textus.assembly.descriptor=$descriptor", "command", s"$_component.$service.$operation") ++
+        parameters ++ Vector("--json")
+      val logs = Files.createDirectories(root.resolve("consumer-logs"))
+      val stdout = logs.resolve(s"$index.stdout.json")
+      val stderr = logs.resolve(s"$index.stderr")
+      index += 1
+      require(!Files.exists(stdout) && !Files.exists(stderr), "Retain every actual invocation")
+      val process = new ProcessBuilder(argv.asJava).directory(root.toFile)
+        .redirectOutput(stdout.toFile).redirectError(stderr.toFile).start()
+      process.getOutputStream.close()
+      val invocation = Invocation(argv, process.pid(), stdout, stderr)
+      try {
+        require(process.waitFor(240, TimeUnit.SECONDS), "Owned public CLI exceeded fixture deadline\n" + invocation.logs)
+        Result(process.exitValue(), invocation)
+      } finally {
+        if (process.isAlive) {
+          process.destroy()
+          if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            require(process.waitFor(5, TimeUnit.SECONDS), "Owned public CLI did not terminate")
+          }
+        }
+      }
+    }
   }
 
   final class Scenario private[NativeWorkflowCliFixture] (
@@ -175,11 +217,12 @@ private[admission] object NativeWorkflowCliFixture {
       _run(_launcher ++ Vector(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
-    def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String]): Result = {
+    def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
+      installations: Option[Path] = None): Result = {
       require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
         "Select an actual absolute installed command")
       _run(Vector(executable.toString, "--runtime-root", root.toString, "command", s"$_component.$service.$operation") ++
-        parameters ++ Vector("--json"))
+        parameters ++ Vector("--json"), installations)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
@@ -209,8 +252,9 @@ private[admission] object NativeWorkflowCliFixture {
     /** Finite test-owned Git arrangement and observation only. Workflow candidate
       * staging, checks and Step commits always use normal typed host programs.
       */
-    private def _candidate_git(arguments: Vector[String]): String = {
-      require(repairContinuation, "Candidate continuation requires the isolated two-Step host")
+    private def _candidate_git(arguments: Vector[String], retainWhitespace: Boolean = false): String = {
+      require(repairContinuation || arguments.headOption.exists(Set("rev-parse", "diff", "status", "show")),
+        "Candidate mutation requires the isolated two-Step host; other fixtures permit only Git observation")
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root,
@@ -218,8 +262,19 @@ private[admission] object NativeWorkflowCliFixture {
         "-c", "user.useConfigOnly=true")
       val result = _run(prefix ++ arguments)
       require(result.exitCode == 0, result.invocation.logs)
-      Files.readString(result.invocation.stdout).trim
+      val output = Files.readString(result.invocation.stdout)
+      if (retainWhitespace) output else output.trim
     }
+    /** Finite post-review corruption, owned only by the Release recording test. */
+    def stageReleaseRecordingCounterexample(): Unit = {
+      require(root.getFileName.toString.startsWith("p65-release-fix-recording-"),
+        "Only the isolated Release recording counterexample owns this arrangement")
+      val result = _run(Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-c", "core.hooksPath=/dev/null", "-C", host.target.root,
+        "--literal-pathspecs", "add", "--", "docs/usage.md"))
+      require(result.exitCode == 0, result.invocation.logs)
+    }
+
     def prepareCandidateBaseline(): Unit = {
       Files.writeString(Path.of(host.target.root).resolve("docs/user.md"), "Original user document\n")
       _candidate_git(Vector("add", "--", "docs/user.md"))
@@ -251,6 +306,33 @@ private[admission] object NativeWorkflowCliFixture {
     def candidateParent: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD^"))
     def candidateIndex: String = _candidate_git(Vector("diff", "--cached", "--name-only", "--"))
     def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
+    /** Read the actual checked tree after normal source-history preparation.
+      * Preserve all whitespace when comparing check-only execution with its input.
+      */
+    def candidateSource(tree: String, path: String): String = {
+      require(tree.matches("[0-9a-f]{40}") && host.goal.candidatePaths.contains(path),
+        "Observe only a selected source from the actual candidate tree")
+      _candidate_git(Vector("show", s"$tree:$path"), retainWhitespace = true)
+    }
+
+    /** Local specification repository arrangement, never native Workflow proof. */
+    private[NativeWorkflowCliFixture] def prepareDependencyBase(repository: Path): GoalPhaseOrderedProgression.Snapshot = {
+      require(repository.isAbsolute && repository.normalize == repository && repository.startsWith(root) &&
+        repository != Path.of(host.target.root), "Dependency arrangement must be a separate scenario-owned repository")
+      def _git_(arguments: Vector[String]): String = {
+        val result = _run(Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+          "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "gc.auto=0",
+          "-C", repository.toString, "-c", "user.name=Dependency Specification",
+          "-c", "user.email=dependency@example.invalid") ++ arguments)
+        require(result.exitCode == 0, result.invocation.logs)
+        Files.readString(result.invocation.stdout).trim
+      }
+      _git_(Vector("init", "--initial-branch=main"))
+      _git_(Vector("add", "--", ".gitignore", "build.sbt", "project/build.properties",
+        "src/test/scala/ProductCheck.scala", "value.txt"))
+      _git_(Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Specification-owned dependency base"))
+      GoalPhaseOrderedProgression.Snapshot(_git_(Vector("rev-parse", "HEAD")), _git_(Vector("rev-parse", "HEAD^{tree}")))
+    }
 
     /** Arrange a completed prior-owner effect only in a fresh closure test host.
       * Production closure and recovery continue to use their typed Git UoW.
@@ -314,11 +396,18 @@ private[admission] object NativeWorkflowCliFixture {
     private def _output = Vector("--json")
     private def _client_options = port.toVector.flatMap(selected =>
       Vector("--baseurl", s"http://127.0.0.1:$selected"))
-    private def _launcher = Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
-      _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
-      "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
-      s"--textus.assembly.descriptor=$_assembly")
-    private def _spawn(argv: Vector[String]): (Process, Invocation) = {
+    private def _launcher = sys.props.get("smworkflow.spec.installedCommand") match {
+      case Some(command) =>
+        val executable = Path.of(command)
+        require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
+          "Select an actual absolute installed command; no source-launcher fallback")
+        Vector(command, "--runtime-root", root.toString)
+      case None => Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
+        _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
+        "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
+        s"--textus.assembly.descriptor=$_assembly")
+    }
+    private def _spawn(argv: Vector[String], installations: Option[Path] = None): (Process, Invocation) = {
       val logs = Files.createDirectories(root.resolve("logs"))
       val index = _log_index
       _log_index += 1
@@ -328,7 +417,7 @@ private[admission] object NativeWorkflowCliFixture {
       val builder = new ProcessBuilder(argv.asJava).directory(root.toFile)
         .redirectOutput(stdout.toFile).redirectError(stderr.toFile)
       if (sys.props.get("smworkflow.spec.installedCommand").contains(argv.head))
-        sys.props.get("smworkflow.spec.installations").foreach(value =>
+        installations.map(_.toString).orElse(sys.props.get("smworkflow.spec.installations")).foreach(value =>
           builder.environment().put("SM_WORKFLOW_INSTALLATIONS", value))
       if (argv.head == "/usr/bin/git") {
         builder.environment().clear()
@@ -344,11 +433,11 @@ private[admission] object NativeWorkflowCliFixture {
       catch { case NonFatal(error) => _stop(process); throw error }
       (process, invocation)
     }
-    private def _run(argv: Vector[String]): Result = {
+    private def _run(argv: Vector[String], installations: Option[Path] = None): Result = {
       val bound = TimeUnit.SECONDS.toNanos(if (_sbt_repair.nonEmpty) 240 else 60)
       val remaining = _server_deadline.fold(bound)(_ - System.nanoTime())
       require(remaining > 0, "Owned server scenario deadline expired")
-      val (process, invocation) = _spawn(argv)
+      val (process, invocation) = _spawn(argv, installations)
       try {
         if (!process.waitFor(math.min(remaining, bound), TimeUnit.NANOSECONDS))
           throw new AssertionError("Owned process exceeded its deadline\n" + invocation.logs)
@@ -448,14 +537,23 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     /** Fixed setup only, before Start; this cannot accept or rewrite Workflow work. */
-    private[NativeWorkflowCliFixture] def _prepare_authoring_build(cml: Boolean = false): Unit = {
+    private[NativeWorkflowCliFixture] def _prepare_authoring_build(cml: Boolean = false, lint: Boolean = false): Unit = {
       TypedSbtHostPlanFixture.buildAuthoring(root, cml)
+      if (lint) {
+        val repository = Path.of(host.target.root)
+        Files.writeString(repository.resolve("project/plugins.sbt"), "addSbtPlugin(\"ch.epfl.scala\" % \"sbt-scalafix\" % \"0.12.1\")\n")
+        Files.copy(Path.of(".scalafix.conf").toAbsolutePath, repository.resolve(".scalafix.conf"))
+        Files.createDirectories(repository.resolve("src/main/scala-generated"))
+        Files.writeString(repository.resolve("src/main/scala-generated/GeneratedFinalizer.scala"),
+          "final class GeneratedFinalizer { override protected def finalize(): Unit = () }\n")
+        Files.writeString(repository.resolve("build.sbt"), "\nCompile / unmanagedSourceDirectories := (Compile / unmanagedSourceDirectories).value.filterNot(_.getName == \"scala-generated\")\nCompile / managedSources += baseDirectory.value / \"src/main/scala-generated/GeneratedFinalizer.scala\"\nCompile / scalafix / unmanagedSources := (Compile / unmanagedSources).value\nCompile / scalafix / managedSources := Nil\naddCommandAlias(\"fixCheck\", \"Compile / scalafix --check\")\n", java.nio.file.StandardOpenOption.APPEND)
+      }
       val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
         "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
         "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root)
       val commands = Vector(Vector("--literal-pathspecs", "add", "--", ".gitignore", "build.sbt",
         "project/build.properties", "src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala",
-        "docs/validation.md"),
+        "docs/validation.md") ++ (if (lint) Vector("project/plugins.sbt", ".scalafix.conf", "src/main/scala-generated/GeneratedFinalizer.scala") else Vector.empty),
         Vector("-c", "user.name=Native Workflow Fixture", "-c", "user.email=native-workflow@example.invalid",
           "-c", "user.useConfigOnly=true", "commit", "--no-verify", "--no-gpg-sign", "-m",
           "Initial owned authoring build inputs"),
@@ -578,6 +676,95 @@ private[admission] object NativeWorkflowCliFixture {
       bootstrapSelectedInput, httpMethods, denyGit, mappedExecution)
     scenario.prepareRepository()
     scenario
+  }
+
+  /** Two repositories under one isolated host; only a later ordinary Advance runs checks.
+    * Fixture setup/adoption is SPECIFICATION-OWNED, never genuine Human consent.
+    */
+  def freshDependency(name: String, denial: String = "none",
+    bindingTransform: GoalPhaseDependencyValidation.Binding => GoalPhaseDependencyValidation.Binding = value => value): Scenario = {
+    import io.circe.syntax.*
+    import GoalPhaseDependencyValidation as DV
+    val executable = TypedSbtHostPlanFixture.normalExecutable
+    val initial = fresh(name, sbtRepair = Some(executable), repairContinuation = true)
+    val dependencyroot = initial.root.resolve("dependency")
+    TypedSbtHostPlanFixture.build(dependencyroot, true)
+    val repository = dependencyroot.resolve("repository").toRealPath()
+    Files.writeString(repository.resolve("value.txt"), "initial\n")
+    val base = initial.prepareDependencyBase(repository)
+    val binding = DV.Binding("specification-cncf-validation", 1, "step-1",
+      GoalPhaseDependencyScope.Component("org.simplemodeling.control", initial.plan.repository, "sm-workflow-repository"),
+      GoalPhaseDependencyScope.Component("org.goldenport.cncf", "goldenport-cncf", "cncf-source"),
+      repository.toString, "main", Vector("value.txt"), base,
+      "SPECIFICATION-OWNED adoption against the actual isolated Git objects; no retrospective Start capture",
+      Vector(GoalPhaseNativeValidation.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
+        GoalPhaseNativeValidation.Check("cncf-test", 3, WorkflowSbtValidation.Kind.Test)))
+    val selectedbinding = bindingTransform(binding)
+    require(DV.bindingValid(selectedbinding), "Select a valid-shaped specification binding; native Git owns actual matching")
+    val host = initial.host.copy(goal = initial.host.goal.copy(dependencyValidation = Some(selectedbinding)))
+    val scenario = new Scenario(initial.root, host, initial.plan, None, Some(executable),
+      startingLogIndex = 100, repairContinuation = true)
+    val config = initial.root.resolve(".textus/config.json")
+    val current = parse(Files.readString(config)).fold(error => throw new AssertionError(error.message), identity)
+    val primary = parse(current.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get)
+      .fold(error => throw new AssertionError(error.message), identity)
+    val processes = TypedSbtHostPlanFixture.dependencyPlan(primary, dependencyroot, executable, binding, denial)
+    Files.writeString(config, current.mapObject(_.add("sm-workflow.runtime.definition",
+      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))
+      .add("textus.subsystem.process-execution.plan", Json.fromString(processes.noSpaces))).noSpaces)
+    scenario
+  }
+
+  /** Release FIX keeps the accepted Step and uses a distinct fixed Final program. */
+  def freshReleaseFix(name: String, executable: Path, recording: Boolean = false,
+    requiredCondition: Boolean = false, repairLimit: Int = 1): Scenario = {
+    val original = fresh(name, sbtRepair = Some(executable))
+    val paths = if (recording) findingRecordingPaths else Vector("value.txt", "docs/usage.md")
+    val host = original.host.copy(goal = original.host.goal.copy(candidatePaths = paths,
+      closure = original.host.goal.closure.copy(programs = Vector(
+        GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)))))
+    val plan = original.plan.copy(repairLimit = repairLimit, steps = original.plan.steps.map(_.copy(ownedPaths = paths,
+      purpose = "Write expected newline and document the exact accepted product input")),
+      acceptance = Option.when(requiredCondition)(A.Adoption("Retain the exact accepted input contract", Vector(
+        A.Condition("usage-contract", "phase", true, "The usage document describes exactly expected followed by LF")))))
+    val scenario = new Scenario(original.root, host, plan, None, Some(executable), startingLogIndex = 100)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected Step", "Complete accepted Release FIX"),
+      goalSelections = Vector(paths, paths.filterNot(_ == "value.txt")))
+    val process = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1), Some(git))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject { fields =>
+      val selected = fields.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
+      if (recording) selected.add(GoalPhaseFindingRecording.declaration.name,
+        Json.fromString(_finding_recording_policy().noSpaces)) else selected
+    }.noSpaces)
+    if (recording) scenario._prepare_finding_recording_baseline()
+    scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
+    scenario
+  }
+
+  /** Read only the retained test host and business Plan; never seed native history. */
+  def reopenReleaseFix(root: Path, executable: Path, startingLogIndex: Int, recording: Boolean = false): Scenario = {
+    require(root.isAbsolute && root.normalize == root && root.toRealPath() == root &&
+      root.getParent == _primary.resolve("target/sm-workflow/work/native-cli"), "Select the retained isolated Release fixture")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).toOption.get
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(config.hcursor.get[String](
+      "sm-workflow.runtime.definition").toOption.get).toOption.get), "Retained Release host")
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
+    val paths = if (recording) findingRecordingPaths else Vector("value.txt", "docs/usage.md")
+    require(host.goal.candidatePaths == paths && plan.steps.size == 1 && plan.steps.head.identity == "step-1" &&
+      plan.steps.head.ownedPaths == paths &&
+      host.goal.closure.programs == Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)), "Retain the exact Release fixture contract")
+    require(startingLogIndex > 0 && !Files.exists(root.resolve(s"logs/$startingLogIndex.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$startingLogIndex.stderr")), "Never overwrite an earlier stage output")
+    new Scenario(root, host, plan, None, Some(executable), startingLogIndex)
   }
 
   /** Normal isolated metadata host input; each denial changes one SBT grant only. */
@@ -1163,6 +1350,54 @@ private[admission] object NativeWorkflowCliFixture {
     Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(
       TypedSbtHostPlanFixture.authoringPlan(scenario.root, executable, _authoring_git(scenario.host)).noSpaces))).noSpaces)
     scenario._prepare_authoring_build()
+    scenario
+  }
+
+  /** Specification-owned code Step: actual Compile/TestOnly, normal authority and native Git commit.
+    * No workflow records, checks, review results or admission are seeded.
+    */
+  def freshStepAssessment(name: String, executable: Path,
+    overridePolicy: Option[GoalPhaseStepAssessment.Policy] = None, lint: Boolean = false,
+    repairLimit: Option[Int] = None): Scenario = {
+    require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
+    require(repairLimit.forall(n => n >= 0 && n <= 64), "Select the fresh fixture Plan's bounded repair limit")
+    val initial = fresh(name)
+    val paths = authoringPaths :+ "src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala"
+    val original = _authoring_host(initial.root)
+    val compile = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+    val focused = GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly)
+    val selectedChecks = Vector(compile, focused) ++ (if (lint) Vector(GoalPhaseNativeValidation.Check("scala-lint", 3, WorkflowSbtValidation.Kind.FixCheck)) else Vector.empty)
+    val host = original.copy(goal = original.goal.copy(candidatePaths = paths,
+      stepValidation = original.goal.stepValidation.copy(checks = selectedChecks),
+      phaseValidation = original.goal.phaseValidation.copy(checks = Vector(focused))))
+    val old = _authoring_plan()
+    val observation = GoalPhaseStepAssessment.Observation("later-integration",
+      org.goldenport.cncf.workflow.ContextReference(old.identity, old.revision),
+      "Confirm the planned later integration at Release", "release",
+      "The local code boundary and subsequent prerequisites are satisfied; the second Step owns the narrative", Some("step-2"))
+    val policy = GoalPhaseStepAssessment.Policy("local-code", "code", "conditional", "off", "off", Vector(observation))
+    val selected = old.copy(steps = Vector(
+      old.steps.head.copy(ownedPaths = paths, checks = selectedChecks.map(_.identity), actionPolicy = Some(overridePolicy.getOrElse(policy))),
+      old.steps.last.copy(checks = Vector("focused"))), phaseChecks = Vector("focused"),
+      repairLimit = repairLimit.getOrElse(old.repairLimit))
+    val scenario = new Scenario(initial.root, host, selected, None, Some(executable), startingLogIndex = 100)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected continuation Step 1", "Complete selected continuation Step 2"),
+      goalSelections = Vector(paths, Vector("docs/validation.md")))
+    val process = TypedSbtHostPlanFixture.authoringPlan(scenario.root, executable, git, compileFirst = true, lint = lint)
+    val journal = JournalHost(DevelopmentJournal.Policy("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
+      org.simplemodeling.model.datatype.EntityCollectionId("smworkflow", "cli", "development_journal"))))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject(fields => journal.values.foldLeft(fields
+      .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))) {
+        case (values, (key, value)) => values.add(key, Json.fromString(value))
+      }).noSpaces)
+    scenario._prepare_authoring_build(lint = lint)
     scenario
   }
 

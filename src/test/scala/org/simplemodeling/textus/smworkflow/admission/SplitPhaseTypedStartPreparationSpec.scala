@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * Test allocations are data only, not genuine human ingress or Start.
  * @since   Oct.  2, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  */
 private[admission] object SplitPhaseTypedStartFixture {
   val original = SplitPhasePartitionContextFixture
@@ -48,6 +48,8 @@ private[admission] object SplitPhaseTypedStartFixture {
   val partition = take(C.prepareC(context, facts, instance, configuration, catalog))
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseTypedStartFixture.*
   private def _json(raw: String) = parser.parse(raw.substring(J.schema.length + 1)).toOption.get

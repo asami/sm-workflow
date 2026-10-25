@@ -9,8 +9,10 @@ import org.simplemodeling.textus.smworkflow.admission.SplitPhaseExplicitDuration
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitDurationCalibrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val policy = PolicyRecord(Reference("policy", "1"), Policy("duration-v1", 2, 100, 900,
     BigDecimal(3), BigDecimal(120), BigDecimal(2), 15, Map("scala" -> 10)))

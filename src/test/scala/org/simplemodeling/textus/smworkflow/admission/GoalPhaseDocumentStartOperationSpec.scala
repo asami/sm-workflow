@@ -24,9 +24,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Isolated selected documents and fixed repository setup; public Start/Advance
   * own admission, document acquisition, history and the first work issue.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDocumentStartOperationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _source = D.Source("verification-inputs/phase.md", "verification-inputs/checklist.md")

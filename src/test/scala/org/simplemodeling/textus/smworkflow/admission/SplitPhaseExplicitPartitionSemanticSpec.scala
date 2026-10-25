@@ -13,8 +13,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposa
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitPartitionSemanticSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class Fixture(source: Base, selection: W.Selection, context: Prepared)
   private def fixture(unknown: Set[Int] = Set(1), edges: Set[Int] = Set(0)): Fixture = {

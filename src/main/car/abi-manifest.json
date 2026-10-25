@@ -71,9 +71,40 @@
         },
         {
           "name": "GoalPhaseFindingRecordingService"
+        },
+        {
+          "name": "DevelopmentObservationService"
         }
       ],
       "operations": [
+        {
+          "service": "GoalPhaseService",
+          "name": "describeGoalPhaseReleaseRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalPhaseReleaseRepairContinuationDescriptionInput",
+          "output": "GoalPhaseReleaseRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "recoverGoalPhaseReleaseRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalPhaseReleaseRepairContinuationRecoveryInput",
+          "output": "GoalPhaseReleaseRepairContinuationRecoveryResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "describeGoalPhaseValidationRepair",
+          "kind": "COMMAND",
+          "input": "GoalPhaseValidationRepairDescriptionInput",
+          "output": "GoalPhaseValidationRepairDescriptionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "adoptGoalPhaseValidationRepair",
+          "kind": "COMMAND",
+          "input": "GoalPhaseValidationRepairAdoptionInput",
+          "output": "GoalPhaseValidationRepairAdoptionResult"
+        },
         {
           "service": "GoalPhaseService",
           "name": "describeGoalPhaseFailedPhaseRepair",
@@ -416,50 +447,429 @@
           "kind": "COMMAND",
           "input": "WorkflowCallerInformationRecordInput",
           "output": "WorkflowCallerInformationResult"
+        },
+        {
+          "service": "DevelopmentObservationService",
+          "name": "readDevelopmentState",
+          "kind": "COMMAND",
+          "input": "DevelopmentStateReadInput",
+          "output": "DevelopmentObservationResult"
+        },
+        {
+          "service": "DevelopmentObservationService",
+          "name": "readDevelopmentHistory",
+          "kind": "COMMAND",
+          "input": "DevelopmentHistoryReadInput",
+          "output": "DevelopmentObservationResult"
         }
       ],
       "types": [
         {
+          "name": "GoalPhaseReleaseRepairContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReleaseRepairContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "recoveryOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReleaseRepairContinuationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseReleaseRepairContinuationRecoveryResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseValidationRepairDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposal",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "priorInvocation",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseValidationRepairDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "adoptionOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseValidationRepairAdoptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposal",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseValidationRepairAdoptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "GoalPhaseFailedPhaseRepairDescriptionInput",
           "kind": "value",
           "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "proposal", "type": "record", "multiplicity": "1", "required": true }
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposal",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            }
           ]
         },
         {
           "name": "GoalPhaseFailedPhaseRepairDescriptionResult",
           "kind": "value",
           "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "outcome", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "message", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "componentInstance", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "target", "type": "record", "multiplicity": "1", "required": true },
-            { "name": "choices", "type": "string", "multiplicity": "*", "required": false },
-            { "name": "adoptionOperation", "type": "string", "multiplicity": "1", "required": true }
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "adoptionOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
           ]
         },
         {
           "name": "GoalPhaseFailedPhaseRepairAdoptionInput",
           "kind": "value",
           "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "target", "type": "record", "multiplicity": "1", "required": true },
-            { "name": "proposal", "type": "record", "multiplicity": "1", "required": true },
-            { "name": "choice", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "rationale", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "reference", "type": "WorkflowArtifactReference", "multiplicity": "1", "required": true }
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposal",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
           ]
         },
         {
           "name": "GoalPhaseFailedPhaseRepairAdoptionResult",
           "kind": "value",
           "fields": [
-            { "name": "sessionId", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "accepted", "type": "boolean", "multiplicity": "1", "required": true },
-            { "name": "outcome", "type": "string", "multiplicity": "1", "required": true },
-            { "name": "message", "type": "string", "multiplicity": "1", "required": true }
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
           ]
         },
         {
@@ -869,6 +1279,12 @@
           "kind": "value",
           "fields": [
             {
+              "name": "releaseRepairContract",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
               "name": "instanceIdentity",
               "type": "string",
               "multiplicity": "1",
@@ -1135,6 +1551,12 @@
             {
               "name": "sbt",
               "type": "WorkflowSbtValidationFacts",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "processObservation",
+              "type": "record",
               "multiplicity": "?",
               "required": false
             }
@@ -1714,6 +2136,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "processObservation",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -4140,6 +4568,12 @@
           "kind": "value",
           "fields": [
             {
+              "name": "releaseRepairContract",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
               "name": "kind",
               "type": "string",
               "multiplicity": "1",
@@ -4491,6 +4925,186 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            }
+          ]
+        },
+        {
+          "name": "DevelopmentCar",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "group",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "artifact",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "version",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DevelopmentSubject",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "car",
+              "type": "DevelopmentCar",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producerComponentId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "producerInstanceId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workflow",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "phaseIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DevelopmentStateReadInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "subject",
+              "type": "DevelopmentSubject",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DevelopmentHistoryReadInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "subject",
+              "type": "DevelopmentSubject",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "limit",
+              "type": "int",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DevelopmentObservationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "subject",
+              "type": "DevelopmentSubject",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "events",
+              "type": "record",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "coverage",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "returned",
+              "type": "int",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "truncated",
+              "type": "boolean",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "ownerDetailsUrl",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         }

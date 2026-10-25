@@ -16,9 +16,11 @@ import SplitPhaseExplicitPartitionFixture.take
  * Decoder refusals for malformed, duplicate, partial, unsafe and invalid-stage
  * records reuse the qualified CNCF GitExecutionSpec producer examples.
  * @since   Oct.  6, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   override protected def conflict_path(scenario: String): Option[String] =

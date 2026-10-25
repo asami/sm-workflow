@@ -15,8 +15,10 @@ import SplitPhaseTypedStartFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseTypedPartitionCompletionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _binding = take(T.bindPartitionC(prepared, partition))
   private def issue = SplitPhasePartitionReplyFixture.issue(_binding)

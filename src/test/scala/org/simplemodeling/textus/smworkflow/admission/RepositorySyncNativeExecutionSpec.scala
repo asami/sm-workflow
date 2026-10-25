@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification inputs only: no installed provider or authority.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object RepositoryExecutionFixture {
@@ -75,6 +75,8 @@ private[admission] object RepositoryExecutionFixture {
   * @version Oct. 16, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositoryExecutionFixture.*
   private val _handle = WorkflowHandle(SmWorkflowComponent.componentId, WorkflowDefinitionIdentity("SpecRepository"),

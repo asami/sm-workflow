@@ -17,8 +17,10 @@ import SplitPhaseExplicitPartitionFixture.*
   * admission, storage publication, public advance or Human approval.
   *
   * @since Oct.  4, 2026
-  * @version Oct.  4, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseScopeProjectionComputationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private final case class Fixture(need: W.ProjectionRequired, checkpoint: K.Record, request: S.Request)
 

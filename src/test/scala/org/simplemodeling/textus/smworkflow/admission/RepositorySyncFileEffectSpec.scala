@@ -11,9 +11,11 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual typed File composition and semantic assigned-text policy.
   * Filesystem algorithms, encoding and root defenses remain producer contracts.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _workspace = "sm-workflow-repository"
   private val paths = Set("first.txt", "second.txt")

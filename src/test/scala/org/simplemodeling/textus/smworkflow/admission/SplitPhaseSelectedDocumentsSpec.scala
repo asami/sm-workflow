@@ -13,8 +13,10 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 /**
  * Deterministic material only; not a filesystem-effect or APPLY acceptance spec.
  * @since   Oct.  6, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseSelectedDocumentsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def snapshot(s: Base, allocate: Boolean = true): R.Record = {
     val input = take(E.loadC(s.initial, s.records))

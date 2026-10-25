@@ -27,9 +27,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * The existing normal-host acknowledgement hook arranges interruption only.
   * No private row is seeded or changed; all Human input is specification-owned.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture
     with ThreeWorkflowManagedRepositoryFixture {
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
@@ -455,7 +457,7 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
         plan.steps.head.copy(purpose = "Reconcile Human-requested current requirements")))
       val proposal = GoalPhasePlanRevision.Proposal("revision-work-plan-proposal", "1", "SPECIFICATION-OWNED requirement reconciliation", proposed)
       val result = V.GoalPhaseWorkResult("decision-needed", "Current requirements require actual Human Plan revision",
-        Vector.empty, None, None, None, GoalPhasePlanRevision.publicProposal(Some(proposal)), None, None, None)
+        Vector.empty, None, None, None, GoalPhasePlanRevision.publicProposal(Some(proposal)), None, None, None, None, dependencyValidation = None)
       When("an ordinary semantic Submit and separate Advance enter the actual existing Human question")
       _goal(fixture, issued.submitOperation.get, Vector("--sessionId", issued.submitSessionId.get,
         "--result", _json(result), "--resultReference", _json(V.WorkflowArtifactReference("revision-work-decision-result", "1"))))
@@ -845,7 +847,7 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
       def _submit_(request: V.GoalPhaseAdvanceResult, name: String, outcome: String,
         execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
         val result = V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED retained Phase replay", Vector.empty,
-          None, None, None, None, None, None, None)
+          None, None, None, None, None, None, None, None, dependencyValidation = None)
         val arguments = Vector("--sessionId", request.submitSessionId.get, "--result", _json(result),
           "--resultReference", _json(V.WorkflowArtifactReference(name, "1"))) ++
           execution.toVector.flatMap(value => Vector("--executionEvidence", _json(value)))
@@ -855,7 +857,7 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
         val request = observed.business[V.GoalPhaseAdvanceResult]
         val reference = V.WorkflowArtifactReference(name, "1")
         val result = V.GoalPhaseWorkResult("accept", "SPECIFICATION-OWNED independent acceptance", Vector.empty,
-          None, None, None, None, None, None, None)
+          None, None, None, None, None, None, None, None, dependencyValidation = None)
         val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("independent-" + name), None, None)
         val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", observed.invocation.stdout.toUri.toASCIIString,
           _file_(name + "-result", result), _file_(name + "-reference", reference), _file_(name + "-execution", execution),

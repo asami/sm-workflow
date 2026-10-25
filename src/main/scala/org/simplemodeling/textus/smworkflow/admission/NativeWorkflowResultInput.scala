@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -76,7 +76,8 @@ private[smworkflow] object NativeWorkflowResultInput {
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       Vector(
         _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, request =>
-          NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result").flatMap[Value](value =>
+          NativeWorkflowOperationInput.recordC(request, "result").flatMap(GoalPhasePurposeRepair.validatePublicResultC)
+            .flatMap(_ => NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result")).flatMap[Value](value =>
             for {
               report <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
               issues <- GoalPhaseFixIssues.internalReportC(value.issueReport)
@@ -84,8 +85,11 @@ private[smworkflow] object NativeWorkflowResultInput {
               observations <- GoalPhaseFindingRecording.internalObservationsC(value.reviewObservations)
               dependency <- GoalPhaseDependencyScope.fromPublicProposalC(value.dependencyProposal)
               conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)
+              sources <- GoalPhasePurposeRepair.internalSourcesC(value.repairFindingSources)
+              validation <- GoalPhaseDependencyValidation.fromPublicC(value.dependencyValidation)
             } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
-                GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions))),
+                GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions, sources,
+                dependencyValidation = validation))),
         _work(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseFindingRecordingResult](request, "result").map[Value](value =>
             GoalPhaseFindingRecording.Result(value.outcome, value.summary, value.items.map(item =>

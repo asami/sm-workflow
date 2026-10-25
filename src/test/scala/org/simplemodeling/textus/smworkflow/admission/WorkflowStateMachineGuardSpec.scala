@@ -10,8 +10,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual application CML progression; common completion guarantees are not re-specified.
   * @since   Oct.  2, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowStateMachineGuardSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Application CML progression" should {
     "keep a committed Step distinct from whole-Phase repository closure" in {

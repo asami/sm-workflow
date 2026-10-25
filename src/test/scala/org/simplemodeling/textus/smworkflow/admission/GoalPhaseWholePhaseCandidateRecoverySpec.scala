@@ -22,9 +22,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure codec and independently supplied fixture evidence; no real invocation or Human proof.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
   private val _candidate = O.Snapshot(_base.head, "c" * 40)
@@ -94,6 +96,12 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Ma
       W.codec.decode(wire.mapObject(_.add("extra", Json.True))).isLeft shouldBe true
       W.decodeTarget(target.asJson.mapObject(_.add("extra", Json.True))).isLeft shouldBe true
       W.decodeTarget(target.asJson.mapObject(_.add("extra", Json.Null))).isLeft shouldBe true
+      val controllerwire = target.asJson.hcursor.downField("controller").focus.get
+      val invalidcontrollers = Vector(
+        controllerwire.mapObject(_.add("extra", Json.True)),
+        controllerwire.mapObject(_.add("candidate", Json.Null)),
+        controllerwire.mapObject(_.remove("stage")))
+      invalidcontrollers.foreach(value => W.decodeTarget(target.asJson.mapObject(_.add("controller", value))).isLeft shouldBe true)
       W.codec.decode(wire.mapObject(_.add("schemaVersion", Json.fromString("selected-step-v1")))).isLeft shouldBe true
       W.codec.decode(W.codec.encode(direction.copy(priorExecutionEnded = false))).isLeft shouldBe true
       R.decodeTarget(target.asJson).isLeft shouldBe true
@@ -152,6 +160,14 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Ma
         managed.copy(repository = managed.repository.copy(dirty = Vector(K.Dirty("M", "M", path, None)))))
       Then("only the complete successful adjacent prefix permits the remaining observation")
       valid shouldBe Right(managed)
+      val dirtywire = managed.asJson.hcursor.downField("repository").downField("dirty").focus.get.asArray.get.head
+      val invaliddirty = Vector(dirtywire.mapObject(_.add("renamedFrom", Json.Null)),
+        dirtywire.mapObject(_.add("extra", Json.True)), dirtywire.mapObject(_.remove("path")))
+      invaliddirty.foreach(value => {
+        val changed = managed.asJson.mapObject(_.add("repository", managed.asJson.hcursor.downField("repository").focus.get
+          .mapObject(_.add("dirty", Json.arr(value)))))
+        W.decodeTarget(changed).isLeft shouldBe true
+      })
       invalid.foreach(t => W.decodeTarget(t.asJson).isLeft shouldBe true)
       W.decodeTarget(managed.asJson.mapObject(_.add("historyPrefix", Json.arr()))).isLeft shouldBe true
     }

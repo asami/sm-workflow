@@ -11,8 +11,10 @@ import NativeExternalEvidence.*
 
 /** Selected grants do not attest that full commands or Plan bodies stayed equal.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeAuthorityScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val now = Instant.parse("2026-10-08T00:00:00Z")
   private val declared = Declaration("workflow", DataStore.CollectionId.EntityStore(

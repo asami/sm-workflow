@@ -11,11 +11,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- *  version Oct.  8, 2026
- *  version Oct.  9, 2026
- *  version Oct. 13, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 25, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCncfConsumerSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value
@@ -38,7 +37,8 @@ final class GoalPhaseCncfConsumerSpec extends AnyWordSpec with Matchers with Giv
       binding.workflowRevision.value shouldBe "goal-phase-business-operation-v7"
       workflow.workflow.requiredSpi.map(_.capability).toSet shouldBe Set(
         "goal-phase-implementation-capability", "goal-phase-repair-capability",
-        "goal-phase-step-review-capability", "goal-phase-review-capability", "goal-phase-ordered-human-capability",
+        "goal-phase-step-review-capability", "goal-phase-step-triage-capability",
+        "goal-phase-review-capability", "goal-phase-ordered-human-capability",
         "goal-phase-finding-recording-capability")
       binding.validateC shouldBe Consequence.success(binding)
     }

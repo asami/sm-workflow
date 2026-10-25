@@ -13,7 +13,7 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -34,7 +34,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
         Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual Human handling is required for the retained repair decision; no effects or consent are inferred.", "RepairDecisionRequired"))
       case None if session.started.current.currentProgression.exists(p =>
-          Set("sync.ReviewRepairRequired", "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value)) =>
+          Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value)) =>
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "The current native repair requires its installed fixed policy and paired continuation.", "native-repair-unavailable")))
       case None if session.started.current.history.exists(_.currentProgression.contains(
@@ -43,12 +43,15 @@ private[smworkflow] object RepositorySyncNativeProgression {
         candidate <- store.currentMergeCandidateC(session.started.current)
         accepted <- review.fold(Consequence.success(Option.empty[Stage]))(_.acceptedC(identity, core))
         output <- (accepted, convergence) match {
-          case (Some(value), Some(authority)) => RepositorySyncNativeConvergence.advanceC(store, value, authority)
-          case _ => RepositorySyncNativeMergeValidation.waitC(store, candidate.pending, validationPolicy, review, candidate.namespace)
+          case (Some(value), Some(authority)) => for {
+            journal <- DevelopmentJournalMergeAssessment.recordC(store, value.payload, value.record)
+            result <- RepositorySyncNativeConvergence.advanceC(store, value, authority, validationPolicy)
+          } yield result.copy(journalRecording = journal)
+          case _ => pendingMergeC(store, candidate.pending, validationPolicy, review, convergence, candidate.namespace, repair)
         }
       } yield output
       case None => _advance_session_c(session, declaration, definition, core, fetchAcknowledgement, acknowledgement,
-        conflicts, validationPolicy, review, convergence)
+        conflicts, validationPolicy, review, convergence, repair)
     }
   } yield output
 
@@ -78,9 +81,10 @@ private[smworkflow] object RepositorySyncNativeProgression {
         after.counts.contains(RepositorySyncManagedGitObservation.Counts(0, 0)) &&
         after.trackingTip.contains(tip) && after.mergeBase.contains(tip)) Consequence.unit
       else invalid("saved convergence contradicts its final tip, tree or clean equal observation")
+    journal <- DevelopmentJournalMergeAssessment.recordC(store, saved.payload, saved.record)
     result = RepositorySyncNativeConvergence.Result(current.identity.value, saved.payload.root,
       session.context.localBranch, session.context.trackingRemote, session.context.trackingBranch, tip, tree)
-  } yield NativeWorkflowOperationOutput.repositoryComplete(current.identity.value, result)
+  } yield NativeWorkflowOperationOutput.repositoryComplete(current.identity.value, result).copy(journalRecording = journal)
 
   /** The native suspension is the already selected assignment. Fetch and
     * completed-stage discovery do not run merely to display pending work. */
@@ -122,7 +126,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
     validationpolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     fetched <- Fetch.fetchC(session, declaration, core, fetchacknowledgement)
     identity = session.started.current.identity.value
     store <- bindC(session, declaration, core, acknowledgement)
@@ -144,14 +149,14 @@ private[smworkflow] object RepositorySyncNativeProgression {
         case None => review.fold(Consequence.success(Option.empty[Stage]))(_.acceptedC(identity, core))
       }
       wire <- accepted match {
-        case Some(value) => RepositorySyncNativeConvergence.advanceC(store, value, convergence.get).map(Some(_))
+        case Some(value) => RepositorySyncNativeConvergence.advanceC(store, value, convergence.get, validationpolicy).map(Some(_))
         case None => Consequence.success(None)
       }
     } yield wire else Consequence.success(None)
     wire <- continued match {
       case Some(value) => Consequence.success(value)
       case None => progressC(store, fetched._1, fetched._2.after.get,
-        conflicts, validationpolicy, review, convergence)
+        conflicts, validationpolicy, review, convergence, repair)
     }
   } yield wire
 
@@ -160,7 +165,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
     conflicts: Option[RepositorySyncNativeConflictContinuation.Port],
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
-    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     preserved <- RepositorySyncNativePreservation.preserveC(store, fetched, observed)
     integrated <- RepositorySyncNativeIntegration.integrateC(store, preserved)
     detail = if (integrated.payload.stage == "MergeConflicted")
@@ -171,7 +177,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
     wire <- if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
       conflicts.get.advanceC(store.identity, store.core)
       else if (integrated.payload.stage == "PendingMergePrepared")
-        RepositorySyncNativeMergeValidation.waitC(store, integrated, validationPolicy, review)
+        pendingMergeC(store, integrated, validationPolicy, review, convergence, "", repair)
       else if (integrated.payload.stage == "Integrated" && validationPolicy.nonEmpty) for {
         checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, validationPolicy.get)
         wire <- if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
@@ -183,4 +189,34 @@ private[smworkflow] object RepositorySyncNativeProgression {
       } yield wire
       else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
   } yield wire
+
+  private[admission] def pendingMergeC(store: Store, pending: Stage,
+    validation: Option[RepositorySyncNativeMergeValidation.Policy],
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
+    convergence: Option[RepositorySyncNativeConvergence.AuthorityPort], namespace: String,
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None):
+      Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = validation match {
+    case Some(policy) if policy.assessment.nonEmpty => for {
+      checked <- RepositorySyncNativeMergeValidation.advanceC(store, pending, policy, namespace)
+      assessed <- if (checked.payload.stage == "MergeValidated")
+        RepositorySyncMergeAssessment.admitC(store, checked, policy, namespace)
+        else Consequence.success(checked)
+      wire <- if (RepositorySyncNativeMergeValidation.knownFailure(assessed, policy) && repair.nonEmpty) for {
+        _ <- RepositorySyncNativeMergeValidation.prepareFailureC(store, assessed, policy, namespace)
+        work <- repair.get.advanceC(store.identity, store.core)
+      } yield work
+      else if (assessed.payload.stage == "MergeAdmitted" && convergence.nonEmpty) for {
+        journal <- DevelopmentJournalMergeAssessment.recordC(store, assessed.payload, assessed.record)
+        result <- RepositorySyncNativeConvergence.advanceC(store, assessed, convergence.get, Some(policy))
+      } yield result.copy(journalRecording = journal)
+        else if (assessed.payload.stage == "MergeValidated" && review.nonEmpty)
+          review.get.advanceC(store.identity, store.core)
+        else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
+          if (assessed.payload.stage == "MergeAdmitted") "Actual merge admitted; current host convergence authority is required."
+          else if (assessed.payload.stage == "MergeValidated") "Actual merge uncertainty or selected required review needs the installed independent semantic route."
+          else "Failed, missing or indeterminate selected checks remain retained; no check replay or merge admission.",
+          assessed.payload.stage))
+    } yield wire
+    case _ => RepositorySyncNativeMergeValidation.waitC(store, pending, validation, review, namespace)
+  }
 }

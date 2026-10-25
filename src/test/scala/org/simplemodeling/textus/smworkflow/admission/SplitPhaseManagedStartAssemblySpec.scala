@@ -19,8 +19,10 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseManagedStartAssemblySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

@@ -20,9 +20,11 @@ import GoalPhaseDocumentPlan as P
 /** Pure proposal/controller examples with explicit fixture answer references.
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[T](value: Consequence[T]): T = value match {
     case Consequence.Success(result) => result

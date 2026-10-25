@@ -22,9 +22,11 @@ import RepositorySyncNativeProgressStore as N
   * specification-owned inputs/evidence and reads actual native records. This
   * is no genuine AI review, live task repair or Phase acceptance evidence.
   * @since   Oct. 15, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private val _replacement = "repaired shared line\n"

@@ -281,17 +281,18 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
 
     def test_a5_selected_directories_and_output_refusal(self):
         """A5 / R4,R6 / native-runtime_root-authority-preparation; selected symlink-free empty write directory."""
-        for case in ("missing-output", "occupied-output", "symlink-output", "symlink-ancestor", "foreign-task",
+        for case in ("file-output", "occupied-output", "symlink-output", "symlink-ancestor", "foreign-task",
                      "output-is-task", "foreign-output", "relative-executable", "unnormalized-runtime_root"):
             with self.subTest(case=case):
-                # Given a missing/occupied/symlinked output or a path outside the exact selected runtime_root task.
+                # Given a file/occupied/symlinked output or a path outside the exact selected runtime_root task.
                 route = self.retain()
                 retained = route.read_bytes()
                 self.write_request(self.wait())
                 output = self.output()
                 argv = self.args(output)
-                if case == "missing-output":
+                if case == "file-output":
                     output.rmdir()
+                    output.write_text("preserve this file")
                 elif case == "occupied-output":
                     (output / "retained.txt").write_text("preserved")
                 elif case == "symlink-output":
@@ -330,6 +331,28 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                 self.assertEqual(route.read_bytes(), retained)
                 if case == "occupied-output":
                     self.assertEqual((output / "retained.txt").read_text(), "preserved")
+                if case == "file-output":
+                    self.assertEqual(output.read_text(), "preserve this file")
+
+    def test_missing_authority_output_is_created_before_passive_preparation(self):
+        # Given a retained route and an absent output below a new private group.
+        route = self.retain()
+        before = route.read_bytes()
+        self.write_request(self.wait())
+        output = self.task / "new-authority-group" / "prepare"
+        argv = self.args(output)
+        process, raw = self.process_output({"datastore": []})
+        # When passive preparation creates the output and calls the finite native fixture.
+        status, printed, diagnostic, native = self.call(argv, process)
+        # Then the exact response is retained without changing the route, with private directories.
+        self.assertEqual(status, 0)
+        self.assertEqual(diagnostic, "")
+        self.assertEqual(printed, raw.decode())
+        self.assert_one_call(native, self.command(argv))
+        self.assertEqual((output / "response.json").read_bytes(), raw)
+        self.assertEqual(route.read_bytes(), before)
+        for directory in (output.parent, output):
+            self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
 
     def test_a6_exact_routing_and_prerequisite_refusal(self):
         """A6 / R1,R4,R6 / native-runtime_root-authority-preparation; retained exact route and prepared launcher."""

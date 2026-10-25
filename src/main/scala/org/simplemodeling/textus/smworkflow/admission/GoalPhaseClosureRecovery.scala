@@ -25,7 +25,7 @@ import WorkflowManagedProcessExecution as E
 /** Explicit recovery of an unresolved selected Step commit. Old intent and
   * terminal observations are immutable; direction never executes a commit.
   * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseClosureRecovery {
@@ -33,6 +33,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   val describeOperation = "describeGoalPhaseClosureRecovery"
   val recoveryOperation = "recoverGoalPhaseClosure"
   val choices = Vector("AuthorizeNewAttempt", "ReconcileCommit", "Defer")
+  val continuationMessage = "The saved actual local selected commit execution ended and its current typed Git " +
+    "observation permits mechanical continuation under the existing Step closure authority. Use ordinary " +
+    "advanceGoalPhase for this same Session. No new Human recovery direction or repeated Test/review is required."
   val message = "The original commit intent remains unknown unless its actual execution summary was saved. " +
     "Independent trusted Human evidence must attest that its prior execution owner ended. AuthorizeNewAttempt " +
     "permits a NEW commit attempt and may repeat an old effect; ReconcileCommit records only an actual matching " +
@@ -43,8 +46,6 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   // Derive each small nested contract once before composing recovery codecs.
   private given _snapshot_encoder: Encoder[O.Snapshot] = deriveEncoder
   private given _snapshot_decoder: Decoder[O.Snapshot] = deriveDecoder
-  private given _input_encoder: Encoder[K.Input] = deriveEncoder
-  private given _input_decoder: Decoder[K.Input] = deriveDecoder
   private given _dirty_path_encoder: Encoder[G.DirtyPath] = deriveEncoder
   private given _dirty_path_decoder: Decoder[G.DirtyPath] = deriveDecoder
   private given _commit_encoder: Encoder[G.Commit] = deriveEncoder
@@ -70,9 +71,10 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     participant: String, planIdentity: String, planRevision: String, step: String, generation: Long,
     sourceRevision: String, frontierRevision: String, intentIdentity: String, intentRevision: String,
     intentRecordRevision: String, ordinal: Int, attempt: Int, parent: O.Snapshot, candidate: O.Snapshot,
-    reviewEvidence: String, ownedPaths: Vector[String], observation: Observation, execution: Option[Execution]) {
+    reviewEvidence: Option[String], ownedPaths: Vector[String], observation: Observation, execution: Option[Execution],
+    admission: Option[GoalPhaseStepAssessment.Admission] = None) {
     def input: K.Input = K.Input(sessionId, sourceRevision, planIdentity, planRevision, step, generation,
-      parent, candidate, reviewEvidence)
+      parent, candidate, reviewEvidence, admission)
   }
   object RecoveryTarget {
     given Encoder[RecoveryTarget] = Encoder.instance(value => Json.obj(
@@ -96,7 +98,8 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       "reviewEvidence" -> value.reviewEvidence.asJson,
       "ownedPaths" -> value.ownedPaths.asJson,
       "observation" -> value.observation.asJson,
-      "execution" -> value.execution.asJson))
+      "execution" -> value.execution.asJson).mapObject(fields =>
+        value.admission.fold(fields)(a => fields.add("admission", a.asJson))))
     given Decoder[RecoveryTarget] = Decoder.instance(cursor => for {
       sessionid <- cursor.get[String]("sessionId")
       definitionidentity <- cursor.get[String]("definitionIdentity")
@@ -115,13 +118,14 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       attempt <- cursor.get[Int]("attempt")
       parent <- cursor.get[O.Snapshot]("parent")
       candidate <- cursor.get[O.Snapshot]("candidate")
-      reviewevidence <- cursor.get[String]("reviewEvidence")
+      reviewevidence <- cursor.get[Option[String]]("reviewEvidence")
+      admission <- cursor.get[Option[GoalPhaseStepAssessment.Admission]]("admission")
       ownedpaths <- cursor.get[Vector[String]]("ownedPaths")
       observation <- cursor.get[Observation]("observation")
       execution <- cursor.get[Option[Execution]]("execution")
     } yield RecoveryTarget(sessionid, definitionidentity, definitionrevision, participant, planidentity, planrevision,
       step, generation, sourcerevision, frontierrevision, intentidentity, intentrevision, intentrecordrevision,
-      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution))
+      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution, admission))
   }
   final case class Direction(target: RecoveryTarget, choice: String, rationale: String,
     participant: String, reference: ContextReference, priorExecutionEnded: Boolean)
@@ -131,6 +135,25 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   }
   final case class ExecutionSaved(record: InstanceRecord, payload: Execution)
   final case class DirectionSaved(record: InstanceRecord, payload: Direction)
+  final case class Continuation(target: RecoveryTarget, action: String)
+  object Continuation {
+    given Encoder[Continuation] = deriveEncoder
+    given Decoder[Continuation] = deriveDecoder
+  }
+  final case class ContinuationSaved(record: InstanceRecord, payload: Continuation)
+
+  /** A finite actual exit, never a diagnostic or an inferred absence of effect. */
+  def terminalExecution(value: Execution): Boolean = validExecution(value) && value.exitCode.exists { code =>
+    value.termination.contains("Exited(" + code + ")") &&
+      ((value.outcome == "failed" && code != 0) || (value.outcome == "succeeded" && code == 0))
+  }
+  def continuationAction(target: RecoveryTarget): Option[String] =
+    Option(target).filter(validTarget).filter(_.execution.exists(terminalExecution)).flatMap { actual =>
+      if (choiceC(actual, "ReconcileCommit").isSuccess) Some("reconcile-commit")
+      else if (actual.execution.exists(result => result.outcome == "failed" && result.exitCode.exists(_ != 0)) &&
+          choiceC(actual, "AuthorizeNewAttempt").isSuccess) Some("retry-preparation")
+      else None
+    }
 
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
@@ -157,7 +180,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   def validPaths(values: Vector[String]): Boolean = values != null && values.nonEmpty && values.size <= 256 &&
     values.distinct == values && values.forall(path => path != null && GitPath.parseC(path).isSuccess)
   def validExecution(value: Execution): Boolean = value != null && value.input != null &&
-    Vector(value.input.instance, value.input.plan, value.input.planRevision, value.input.step, value.input.reviewEvidence).forall(_exact) &&
+    Vector(value.input.instance, value.input.plan, value.input.planRevision, value.input.step).forall(_exact) &&
+    O.validStepAcceptance(O.ClosedStep(value.input.step, O.Commit("", "", ""), value.input.reviewEvidence, value.input.admission)) &&
+    value.input.admission.forall(_.assessment.candidate == value.input.candidate) &&
     _revision(value.input.sourceRevision) && value.input.generation > 0 &&
     _snapshot(value.input.parent) && _snapshot(value.input.candidate) && value.input.candidate.head == value.input.parent.head &&
     value.ordinal > 0 && value.ordinal <= 64 && value.attempt >= 0 && value.attempt < 256 &&
@@ -169,7 +194,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     value.selectedPaths.distinct == value.selectedPaths && value.selectedPaths.forall(p => p != null && GitPath.parseC(p).isSuccess)
   def validTarget(value: RecoveryTarget): Boolean = value != null &&
     Vector(value.sessionId, value.definitionIdentity, value.definitionRevision, value.participant,
-      value.planIdentity, value.planRevision, value.step, value.reviewEvidence).forall(_exact) &&
+      value.planIdentity, value.planRevision, value.step).forall(_exact) &&
+    O.validStepAcceptance(O.ClosedStep(value.step, O.Commit("", "", ""), value.reviewEvidence, value.admission)) &&
+    value.admission.forall(_.assessment.candidate == value.candidate) &&
     value.generation > 0 && value.ordinal > 0 && value.ordinal <= 64 && value.attempt >= 0 && value.attempt < 255 &&
     Vector(value.sourceRevision, value.frontierRevision, value.intentRecordRevision).forall(_revision) &&
     value.sourceRevision.toLong < value.intentRecordRevision.toLong &&
@@ -179,7 +206,8 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     validPaths(value.ownedPaths) && _observation_valid(value.observation) &&
     value.observation.selectedPaths.forall(path => value.ownedPaths.exists(_covers(_, path))) &&
     value.execution != null && value.execution.forall(result => validExecution(result) && result.input == value.input &&
-      result.ordinal == value.ordinal && result.attempt == value.attempt) &&
+      result.ordinal == value.ordinal && result.attempt == value.attempt &&
+      result.selectedPaths.forall(path => value.ownedPaths.exists(_covers(_, path)))) &&
     BigInt(value.frontierRevision) == BigInt(value.intentRecordRevision) + value.execution.size
 
   private def _observation_valid(value: Observation): Boolean = value != null && _exact(value.root) &&
@@ -267,6 +295,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       _text(value.rationale) && value.participant == value.target.participant && value.priorExecutionEnded &&
       value.reference != null && _exact(value.reference.identity) && _exact(value.reference.revision) &&
       choiceC(value.target, value.choice).isSuccess)
+  val continuationCodec: WorkflowResultJsonV1.PayloadCodec[Continuation] = _codec[Continuation](
+    "GoalPhaseClosureContinuation", "sm-workflow.goal-phase-closure-continuation.v1", value => value != null &&
+      continuationAction(value.target).contains(value.action))
 
   /** Capture only actual typed terminal facts, before projecting valueC. */
   def executionC(input: K.Input, ordinal: Int, attempt: Int,
@@ -324,6 +355,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     selected <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, candidate))
     differences <- selected.valueC
     parent <- GitObjectId.parseC(input.parent.head)
+    physical <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, parent)).flatMap(_.valueC)
     pending <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
     commit <- G.commitC(core, before.observed.head)
     after <- G.inspectC(core)
@@ -333,7 +365,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
         before.observed.branch == d.target.localBranch) Consequence.unit
       else _invalid("actual Git observation drifted or crossed the installed target")
   } yield Observation(root, before.observed.branch, before.observed.head, before.observed.tree, index,
-    before.mergeHead, before.observed.dirty, selected.selectedPaths.map(_.value), differences.isEmpty,
+    before.mergeHead, before.observed.dirty, physical.map(_.path.value), differences.isEmpty,
     pending.map(_.value), commit)
 
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
@@ -342,16 +374,25 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     (input, ordinal, progress) = retained
     pending <- progress.pending.filter(saved => saved.record.causation.value == cause("intent", saved.payload.attempt))
       .map(Consequence.success).getOrElse(_invalid("recovery requires an actual unresolved commit intent"))
-    _ <- if (progress.nextAttempt.isEmpty && progress.direction.isEmpty && progress.record == session.current)
+    _ <- if (progress.nextAttempt.isEmpty && progress.direction.isEmpty && progress.continuation.isEmpty && progress.record == session.current)
       Consequence.unit else _invalid("recovery direction is stale, already used or not at the exact current frontier")
     observed <- observeC(d, core, input, ordinal)
     target = RecoveryTarget(input.instance, from.definition.workflowIdentity.value, from.definition.workflowRevision.value,
       session.participantIdentity, input.plan, input.planRevision, input.step, input.generation,
       input.sourceRevision, progress.record.revision.value.toString, reference(input, "intent", pending.payload.attempt).identity,
       "1", pending.record.revision.value.toString, ordinal, pending.payload.attempt, input.parent, input.candidate,
-      input.reviewEvidence, controller.plan.steps(controller.cursor).ownedPaths, observed, progress.execution.map(_.payload))
+      input.reviewEvidence, controller.plan.steps(controller.cursor).ownedPaths, observed, progress.execution.map(_.payload), input.admission)
     _ <- if (validTarget(target)) Consequence.unit else _invalid("actual unresolved closure target is invalid")
   } yield target
+
+  def continueC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    target: RecoveryTarget): Consequence[Unit] = for {
+    action <- continuationAction(target).map(Consequence.success).getOrElse(_invalid("actual execution and Git facts do not permit continuation"))
+    _ <- if (session.current.revision.value.toString == target.frontierRevision) Consequence.unit
+      else _invalid("continuation frontier changed")
+    _ <- saveC(session, d, core, target.input, "continuation", target.attempt, session.current,
+      Continuation(target, action), continuationCodec)
+  } yield ()
 
   def appendC(session: F.Session, d: F.Declaration, core: ActionCall.Core, target: RecoveryTarget,
     input: V.GoalPhaseClosureRecoveryInput): Consequence[Unit] = for {

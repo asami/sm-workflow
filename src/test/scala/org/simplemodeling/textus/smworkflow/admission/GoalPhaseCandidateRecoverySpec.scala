@@ -4,10 +4,12 @@ import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import java.time.Instant
-import org.goldenport.cncf.context.RuntimeContext
+import org.goldenport.convert.ValueReader
+import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.datastore.DataStore
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.prop.TableDrivenPropertyChecks.*
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.simplemodeling.textus.smworkflow.preparation.NativeCandidateRecoveryPreparation as P
 import org.simplemodeling.textus.smworkflow.value as V
@@ -18,9 +20,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contract and passive preparation evidence; these inputs grant no real Human authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
   private def _target: R.RecoveryTarget = {
@@ -49,7 +53,113 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
   private val _now = Instant.parse("2026-10-22T00:00:00Z")
   private def _description(target: R.RecoveryTarget): V.GoalPhaseCandidateRecoveryDescriptionResult =
     V.GoalPhaseCandidateRecoveryDescriptionResult(target.sessionId, "decision-required", R.message, "component",
-      R.targetRecord(target), R.choices, R.recoveryOperation)
+      R.targetRecord(target), R.choicesFor(target), R.recoveryOperation)
+
+  private def _public_description(target: R.RecoveryTarget): V.GoalPhaseCandidateRecoveryDescriptionResult = {
+    val text = NativeExternalEvidenceToolFixture.normalCommandJson(_description(target))
+    take(summon[ValueReader[V.GoalPhaseCandidateRecoveryDescriptionResult]].readC(take(new RecordDecoder().json(text))))
+  }
+
+  private def _prepare_wire(target: R.RecoveryTarget, edit: Json => Json = identity) =
+    NativeExternalEvidenceToolFixture.prepareNormalCommand("GoalPhase", "candidate-recovery", _description(target),
+      _answer.copy(choice = R.choicesFor(target).head), "participant", _reference, _execution,
+      text => {
+        val wire = io.circe.parser.parse(text).fold(error => fail(error.message), identity)
+        val selected = GoalPhaseNativeMetadata.normalizePublicJson(wire.hcursor.downField("target").focus.get)
+          .fold(fail(_), identity)
+        wire.mapObject(_.add("target", edit(selected))).noSpaces
+      })
+
+  private def _dependency_target(count: Int): R.RecoveryTarget = {
+    val original = _target
+    val fixture = DependencyValidationSpecificationFixture
+    val requester = fixture.requester.copy(repository = original.controller.plan.repository)
+    val admission = fixture.admission.copy(binding = fixture.binding.copy(requester = requester, base = fixture.primaryBase),
+      approvals = fixture.approvals.map(a => a.copy(proposal = a.proposal.copy(requester = requester))))
+    val inspection = original.inspection.copy(dependencyAdmission = Some(admission))
+    val stages = original.stagingPrefix.map(p => p.copy(
+      intent = p.intent.copy(dependencyAdmission = Some(admission)), result = p.result.copy(dependencyAdmission = Some(admission))))
+    val capture = fixture.capture.copy(session = original.sessionId,
+      plan = ContextReference(original.controller.plan.identity, original.controller.plan.revision),
+      generation = original.controller.generation, sourceRevision = original.sourceRevision,
+      primaryBase = original.controller.base, admission = admission,
+      candidate = fixture.capture.candidate.copy(head = admission.binding.base.head))
+    val initial = stages.last.result
+    val keys = admission.binding.paths.indices.flatMap(i => Vector("dependency-stage-intent-" + i,
+      "dependency-stage-result-" + i)).toVector ++ Vector("dependency-observation-intent", "dependency-observation-result")
+    val prefix = keys.take(count).zipWithIndex.map { (key, index) =>
+      val staged = admission.binding.paths.take(math.min((index + 1) / 2, admission.binding.paths.size))
+      val payload = initial.copy(dependencyStaged = staged, dependency = Option.when(key == "dependency-observation-result")(capture))
+      R.DependencyFact(key, original.sessionId + ":ordered-candidate:" + original.sourceRevision + ":" + key,
+        "1", (original.frontierRevision.toLong + index + 1).toString, payload)
+    }
+    original.copy(inspection = inspection, stagingPrefix = stages, dependencyPrefix = prefix,
+      frontierRevision = (original.frontierRevision.toLong + count).toString)
+  }
+
+  "Dependency candidate recovery and passive Human preparation" should {
+    "distinguish an unknown stage from an unknown observation without inventing stage success" in {
+      Given("two specification-owned approval references and every bounded contiguous preparation prefix")
+      val cases = Table(("prefixLength", "choices", "subject"),
+        (0, Vector("ReviseWork", "Defer"), "dependency"),
+        (1, Vector("ReviseWork", "Defer"), "dependency"),
+        (2, Vector("ReviseWork", "Defer"), "dependency"),
+        (3, Vector("ReviseWork", "Defer"), "dependency"),
+        (4, Vector("AuthorizeNewObservation", "Defer"), "dependency"),
+        (5, Vector("AuthorizeNewObservation", "Defer"), "dependency"),
+        (6, Vector("AuthorizeNewObservation", "Defer"), "primary"))
+      When("the existing pure target and preparation owners select the remaining obligation")
+      Then("only recorded staging admits a distinct observation and every old unknown stays unknown")
+      forAll(cases) { (count, choices, subject) =>
+        val target = _dependency_target(count)
+        R.decodeTarget(target.asJson) shouldBe Right(target)
+        take(R.targetC(_public_description(target).target)) shouldBe target
+        take(_prepare_wire(target))
+        R.choicesFor(target) shouldBe choices
+        R.remainingSubject(R.preparedPayload(target)) shouldBe subject
+        val answer = _answer.copy(choice = choices.head)
+        P.prepareC(_description(target), answer, _reference, _execution, "participant", "test-host", _now).isSuccess shouldBe true
+        P.prepareC(_description(target).copy(choices = choices.reverse), answer, _reference, _execution,
+          "participant", "test-host", _now).isSuccess shouldBe false
+        target.oldObservationOutcome shouldBe "UNKNOWN"
+        target.oldObservationTermination shouldBe "termination-unconfirmed"
+      }
+    }
+
+    "retain completed capture provenance and reject gapped crossed or widened dependency facts" in {
+      Given("a completed dependency capture before the still-unobserved primary candidate")
+      val target = _dependency_target(6)
+      val prepared = R.preparedPayload(target)
+      val origin = prepared.dependencyOrigin.get
+      val last = target.dependencyPrefix.last
+      val invalid = Vector(target.copy(dependencyPrefix = target.dependencyPrefix.reverse),
+        target.copy(dependencyPrefix = target.dependencyPrefix.drop(1)),
+        target.copy(dependencyPrefix = target.dependencyPrefix.updated(0, target.dependencyPrefix.head.copy(identity = "foreign"))),
+        target.copy(dependencyPrefix = target.dependencyPrefix.updated(5, last.copy(recordRevision = "64"))),
+        target.copy(dependencyPrefix = target.dependencyPrefix.updated(5, last.copy(payload = last.payload.copy(
+          dependency = last.payload.dependency.map(c => c.copy(primaryBase = c.admission.binding.base)))))),
+        target.copy(dependencyPrefix = target.dependencyPrefix.updated(5, last.copy(payload = last.payload.copy(
+          dependency = last.payload.dependency.map(c => c.copy(sourceRevision = "51")))))))
+      When("an immutable prefix is decoded rather than migrated or inferred from current Git")
+      Then("the original observation namespace remains bound and every crossed alternative refuses")
+      origin.stageSourceRevision shouldBe target.sourceRevision
+      origin.observationSourceRevision shouldBe target.sourceRevision
+      origin.resultRecordRevision shouldBe last.recordRevision
+      prepared.dependency shouldBe last.payload.dependency
+      prepared.dependency.get.primaryBase should not be prepared.dependency.get.admission.binding.base
+      invalid.foreach(t => R.decodeTarget(t.asJson).isLeft shouldBe true)
+      R.decodeTarget(target.asJson.mapObject(_.add("dependencyPrefix", Json.Null))).isLeft shouldBe true
+      R.decodeTarget(target.asJson.mapObject(_.add("remainingSubject", Json.fromString("other-repository")))).isLeft shouldBe true
+      val direction = R.Direction(target, ContextReference(_reference.identity, _reference.revision), "participant", _answer.rationale)
+      R.codec.decode(R.codec.encode(direction)) shouldBe Right(direction)
+      R.codec.decode(R.codec.encode(direction).mapObject(_.add("schemaVersion",
+        Json.fromString("sm-workflow.goal-phase-candidate-recovery.v1")))).isLeft shouldBe true
+      val incomplete = _dependency_target(1)
+      R.bindingC("component", incomplete, "AuthorizeNewObservation", _answer.rationale, "participant",
+        ContextReference(_reference.identity, _reference.revision)).isSuccess shouldBe false
+      R.codec.decode(R.codec.encode(direction.copy(target = incomplete, choice = "ReviseWork"))).isRight shouldBe true
+    }
+  }
 
   "GoalPhase candidate recovery E9 retained Phase evidence" should afterWord("in spec:goal-phase-candidate-recovery, example:E9, rules:R1,R4, phase:CB-CC04-CAND-02") {
     "validate exact closed Step structure without consulting current Git" in {
@@ -103,7 +213,7 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
     "retain the entire Plan controller native prefix and old uncertainty through public naming" in {
       Given("CC04-CAND-01: a full original inspection, successful history pair and two successful staging pairs")
       val target = _target
-      val record = RuntimeContext.PropertyNameContext.default.transformRecord(R.targetRecord(target))
+      val record = _public_description(target).target
       val direction = R.Direction(target, ContextReference(_reference.identity, _reference.revision), "participant", _answer.rationale)
       When("the public target and dedicated durable direction roundtrip")
       val restored = R.targetC(record)
@@ -114,6 +224,63 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
       target.oldObservationOutcome shouldBe "UNKNOWN"
       target.oldObservationTermination shouldBe "termination-unconfirmed"
       R.choices shouldBe Vector("AuthorizeNewObservation", "Defer")
+    }
+  }
+
+  "Public recovery wire presence" should {
+    "decode present optional Controller values and preserve historical internal nulls" in {
+      Given("a target and Controller with present typed optional values")
+      val target = _target
+      val directive = O.RepairDirective("Retained finding", Vector("finding-1"))
+      val controller = target.controller.copy(candidate = Some(_base), candidateParent = Some(_base),
+        phaseReviewedCandidate = Some(_base), checksReceipt = Some("checks"), reviewEvidence = Some("review"),
+        closureIntent = Some("closure"), decision = Some("decision"), repositoryReceipt = Some("repository"),
+        decisionSource = Some("Implementation"), repairDirective = Some(directive), pendingRepair = Some(directive))
+      When("the public Controller and canonical internal Controller are decoded")
+      val publiccontroller = R.publicController(controller.asJson)
+      val internalcontroller = target.controller.asJson.as[R.Controller]
+      Then("both exact Controllers are preserved")
+      publiccontroller shouldBe Right(controller)
+      internalcontroller shouldBe Right(target.controller)
+    }
+
+    "reject null and malformed members before Record erases their presence" in {
+      Given("a valid formatted request and the declared required and optional members")
+      val target = _target
+      When("real preparation receives the valid baseline and malformed member variants")
+      Then("the baseline succeeds and every malformed optional member refuses")
+      take(_prepare_wire(target))
+      val optional = Vector("candidate", "candidateParent", "checksReceipt", "reviewEvidence", "closureIntent",
+        "decision", "repositoryReceipt", "repairDirective", "decisionSource", "pendingRepair", "phaseReviewedCandidate")
+      optional.foreach { name =>
+        Vector(Json.Null, Json.arr()).foreach { bad =>
+          _prepare_wire(target, _.mapObject(fields => fields.add("controller",
+            fields("controller").get.mapObject(_.add(name, bad))))).isSuccess shouldBe false
+        }
+      }
+      val required = Vector("plan", "stage", "cursor", "generation", "repairs", "base", "tip", "completed",
+        "documentDecision", "ordinaryRepairs", "phaseRecordingPaths")
+      Then("omitted required, unknown, colliding and explicit null members refuse")
+      required.foreach { name =>
+        _prepare_wire(target, _.mapObject(fields => fields.add("controller",
+          fields("controller").get.mapObject(_.remove(name))))).isSuccess shouldBe false
+      }
+      _prepare_wire(target, _.mapObject(fields => fields.add("controller",
+        fields("controller").get.mapObject(_.add("foreign", Json.Null))))).isSuccess shouldBe false
+      _prepare_wire(target, _.mapObject(fields => fields.add("controller",
+        fields("controller").get.mapObject(_.add("ordinary_repairs", Json.fromInt(0)))))).isSuccess shouldBe false
+      Vector("dependencyAdmission", "dependency", "dependencyOrigin", "dependencyStaged", "candidate", "diff").foreach { name =>
+        _prepare_wire(target, _.mapObject(fields => fields.add("inspection",
+          fields("inspection").get.mapObject(_.add(name, Json.Null))))).isSuccess shouldBe false
+      }
+      _prepare_wire(target, _.mapObject(_.add("dependencyPrefix", Json.Null))).isSuccess shouldBe false
+      Given("the corresponding dependency-bearing request")
+      val bound = _dependency_target(6)
+      When("real preparation receives the complete and omitted-admission dependency subjects")
+      Then("the complete dependency baseline succeeds and its incomplete subject refuses")
+      take(_prepare_wire(bound))
+      _prepare_wire(bound, _.mapObject(fields => fields.add("inspection",
+        fields("inspection").get.mapObject(_.remove("dependencyAdmission"))))).isSuccess shouldBe false
     }
   }
   "GoalPhase candidate recovery E2 prefix admission" should afterWord("in spec:goal-phase-candidate-recovery, example:E2, rules:R1, phase:CC04-CAND-01") {

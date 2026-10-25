@@ -11,9 +11,11 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def readJson(path: String): Json =
     parse(Files.readString(Paths.get(path))).fold(error => fail(error.message), identity)
@@ -68,7 +70,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         operations.find(op => text(op, "service") == service && text(op, "name") == name)
           .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("the distribution identifies this component and exactly the normal seven, six and six participant Operations")
+      Then("the distribution identifies this component and exactly the authored eleven, six and six participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
@@ -76,7 +78,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
       names("GoalPhaseService") should contain theSameElementsAs Vector(
         "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
-        "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair")
+        "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
+        "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
+        "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair")
       names("SplitPhaseService") should contain theSameElementsAs Vector(
         "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
         "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
@@ -120,9 +124,13 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "advanceGoalPhase" -> "GoalPhaseAdvanceInput",
         "describeGoalPhaseFailedPhaseRepair" -> "GoalPhaseFailedPhaseRepairDescriptionInput",
         "adoptGoalPhaseFailedPhaseRepair" -> "GoalPhaseFailedPhaseRepairAdoptionInput",
+        "describeGoalPhaseValidationRepair" -> "GoalPhaseValidationRepairDescriptionInput",
+        "adoptGoalPhaseValidationRepair" -> "GoalPhaseValidationRepairAdoptionInput",
         "advanceSplitPhase" -> "SplitPhaseAdvanceInput",
         "advanceRepositorySync" -> "RepositorySyncAdvanceInput",
         "startGoalPhase" -> "GoalPhaseStartInput",
+        "describeGoalPhaseReleaseRepairContinuation" -> "GoalPhaseReleaseRepairContinuationDescriptionInput",
+        "recoverGoalPhaseReleaseRepairContinuation" -> "GoalPhaseReleaseRepairContinuationRecoveryInput",
         "submitGoalPhaseWorkResult" -> "GoalPhaseWorkResult",
         "submitGoalPhaseFindingRecording" -> "GoalPhaseFindingRecordingResult",
         "submitGoalPhaseOrderedDecision" -> "GoalPhaseOrderedDecisionAnswer",
@@ -138,6 +146,23 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitRepositoryConflictDecision" -> "RepositorySyncHumanConflictAnswer")
           .view.mapValues(value => Some(value)).toMap
       valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionId")
+      valueFields("GoalPhaseReleaseRepairContinuationDescriptionInput") shouldBe Vector("sessionId")
+      valueFields("GoalPhaseReleaseRepairContinuationDescriptionResult") shouldBe
+        Vector("sessionId", "outcome", "message", "target", "choices", "recoveryOperation", "componentInstance")
+      valueFields("GoalPhaseReleaseRepairContinuationRecoveryInput") shouldBe Vector("sessionId", "target", "choice", "rationale", "reference")
+      valueFields("GoalPhaseReleaseRepairContinuationRecoveryResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
+      Vector("GoalPhaseWorkRequest", "GoalPhaseWorkView").foreach { name =>
+        val field = array(types.find(value => text(value, "name") == name).get, "fields")
+          .find(value => text(value, "name") == "releaseRepairContract").get
+        text(field, "type") shouldBe "string"
+        text(field, "multiplicity") shouldBe "?"
+      }
+      valueFields("GoalPhaseValidationRepairDescriptionInput") shouldBe Vector("sessionId", "proposal", "priorInvocation")
+      valueFields("GoalPhaseValidationRepairDescriptionResult") shouldBe Vector("sessionId", "outcome", "message", "componentInstance", "target", "choices", "adoptionOperation")
+      valueFields("GoalPhaseValidationRepairAdoptionInput") shouldBe Vector("sessionId", "target", "proposal", "choice", "rationale", "reference")
+      valueFields("GoalPhaseValidationRepairAdoptionResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
+      valueFields("GoalPhaseNativeCheckReceipt") should contain ("processObservation")
+      valueFields("RepositorySyncNativeValidationReceipt") should contain ("processObservation")
       valueFields("SplitPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity", "contextIdentity")
       valueFields("RepositorySyncAdvanceInput") should contain theSameElementsAs Vector("sessionIdentity", "instanceIdentity")
       valueFields("GoalPhaseStartInput") should contain theSameElementsAs Vector("phaseIdentity", "repositoryIdentity")
@@ -178,6 +203,22 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("GoalPhaseWorkResult") shouldBe Vector("outcome", "summary", "findings", "acceptance", "fixAssessment",
         "issueReport", "planRevision", "reviewObservations")
       valueFields("GoalPhaseAdvanceResult").takeRight(3) shouldBe Vector("validation", "repairProgress", "findingRecording")
+
+      And("the ordinary development observation ABI exports two bounded typed inputs without storage selectors")
+      names("DevelopmentObservationService") should contain theSameElementsAs Vector("readDevelopmentState", "readDevelopmentHistory")
+      Vector("readDevelopmentState" -> "DevelopmentStateReadInput", "readDevelopmentHistory" -> "DevelopmentHistoryReadInput").foreach {
+        (name, input) =>
+          text(operation("DevelopmentObservationService", name), "input") shouldBe input
+          text(operation("DevelopmentObservationService", name), "output") shouldBe "DevelopmentObservationResult"
+          text(operation("DevelopmentObservationService", name), "kind") shouldBe "COMMAND"
+      }
+      valueFields("DevelopmentCar") shouldBe Vector("group", "artifact", "version")
+      valueFields("DevelopmentSubject") shouldBe Vector("car", "producerComponentId", "producerInstanceId", "workflow",
+        "sessionId", "repositoryIdentity", "phaseIdentity")
+      valueFields("DevelopmentStateReadInput") shouldBe Vector("schemaVersion", "subject")
+      valueFields("DevelopmentHistoryReadInput") shouldBe Vector("schemaVersion", "subject", "limit")
+      valueFields("DevelopmentObservationResult") shouldBe Vector("schemaVersion", "status", "observedAt", "subject", "state",
+        "events", "coverage", "returned", "truncated", "ownerDetailsUrl")
     }
   }
 }

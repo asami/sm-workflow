@@ -13,8 +13,10 @@ import NativeWorkflowIssuedWorkContext as P
 
 /** Specification-owned canonical WorkOrders, never task or review evidence.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeWorkflowIssuedWorkContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _codec(identity: String): WorkflowResultJsonV1.PayloadCodec[String] =
     new WorkflowResultJsonV1.PayloadCodec[String] {

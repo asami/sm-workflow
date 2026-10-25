@@ -17,9 +17,11 @@ import RepositorySyncNativeMergeValidation as R
 
 /** Pure business examples use actual-shaped receipts, never genuine host acts.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

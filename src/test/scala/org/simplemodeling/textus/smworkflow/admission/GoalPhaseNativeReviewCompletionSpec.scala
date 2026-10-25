@@ -23,8 +23,10 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure actual-shaped history, completions, checks and producer values confer
   * no actual independence, command execution or installed acceptance.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
   private val _old = O.Snapshot(_base.head, "c" * 40)
@@ -67,7 +69,8 @@ final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matcher
     def selectC = Q.selectC(from, controller, Some(candidate), Some(validation),
       Some(repair -> result), issues, Vector(prior), checks)
   }
-  private def _fixture(checks: Vector[V.Check] = _checks, report: W.Result = _report): Fixture = {
+  private def _fixture(checks: Vector[V.Check] = _checks, report: W.Result = _report,
+    dependencychecks: Vector[V.Check] = Vector.empty): Fixture = {
     val plan = _plan.copy(steps = _plan.steps.updated(0, _plan.steps.head.copy(checks = checks.map(_.identity))))
     val initial = take(O.startC(plan, _base))
     val implemented = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "implemented")))
@@ -96,16 +99,29 @@ final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matcher
     val inspected = take(ready.acceptC(O.CandidateObserved(_current)))
     val inspectionrecord = _append(repairrecord, "InspectCandidate", result.resultReference.identity)
     val candidaterecord = _append(inspectionrecord, "Validation", "ordered-candidate:candidate")
+    val dependency = Option.when(dependencychecks.nonEmpty) {
+      val original = DependencyValidationSpecificationFixture.capture
+      val admission = original.admission.copy(binding = original.admission.binding.copy(step = "S1", checks = dependencychecks),
+        approvals = original.admission.approvals.map(_.copy(step = "S1")))
+      original.copy(session = candidaterecord.identity.value, plan = ContextReference(plan.identity, plan.revision),
+        step = "S1", generation = ready.generation, sourceRevision = inspectionrecord.revision.value.toString,
+        primaryBase = _base, admission = admission)
+    }
+    val selected = take(GoalPhaseNativeDependencyValidation.checksC(checks, dependency))
     val candidate = GoalPhaseNativeCandidate.Saved(candidaterecord, GoalPhaseNativeCandidate.Payload(
-      inspectionrecord.revision.value.toString, "S1", _paths, _paths, Some(_current), _paths, Some("current selected diff")))
+      inspectionrecord.revision.value.toString, "S1", _paths, _paths, Some(_current), _paths, Some("current selected diff"),
+      dependencyAdmission = dependency.map(_.admission),
+      dependencyStaged = dependency.toVector.flatMap(_.admission.binding.paths), dependency = dependency))
     val validationrecord = _append(candidaterecord, "Review", "ordered-validation:validation")
     val validation = V.Saved(validationrecord, V.Payload(candidaterecord.revision.value.toString, "S1", _current,
-      checks, _receipts(checks), Some("passed")))
+      selected, _receipts(selected), Some("passed"), dependency = dependency,
+      dependencyExecutions = dependency.toVector.flatMap(capture => selected.filter(_.dependency.nonEmpty).map(check =>
+        GoalPhaseDependencyValidation.Execution(check.identity, 0, capture.admission.binding.dependency.workspace, check.kind.wire)))))
     val checksreference = validationrecord.identity.value + ":ordered-validation:" + candidaterecord.revision.value + ":validation"
     val controller = take(V.observedStateC(inspected, validation.payload, checksreference))
     val issues = take(I.validationC(validationrecord.identity.value, plan.repository, repairedissues,
       validation.payload, checksreference))
-    Fixture(validationrecord, controller, candidate, validation, repair, result, prior, issues, checks)
+    Fixture(validationrecord, controller, candidate, validation, repair, result, prior, issues, selected)
   }
   private def _source(fixture: Fixture): Q.Source = take(fixture.selectC).get
   private def _change(path: String, oldblob: String, newblob: String): GitTreeChange =
@@ -248,6 +264,44 @@ final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matcher
       incompletechecks.foreach(value => take(value) shouldBe None)
       source.controller.stage shouldBe O.Stage.Review
       source.prior.result.outcome shouldBe "repair"
+    }
+
+    "refuse direct forged raw success and incomplete observations before covered review completion" in {
+      Given("an otherwise eligible successful review-completion fixture and a genuine-shaped incomplete raw process")
+      val fixture = _fixture()
+      val empty = ProcessExecutionCapture(Vector.empty, 0L, false)
+      val prefix = ProcessExecutionCapture(Vector('x'.toByte), 1L, true)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stderr),
+        empty, prefix, Vector.empty, 1L, "selected-sbt")
+      val first = fixture.validation.payload.receipts.head
+      val crossed = first.copy(processObservation = Some(process))
+      val incomplete = crossed.copy(termination = "output-limit-exceeded", exitCode = None, stdout = "", stderr = "x",
+        sbt = first.sbt.map(_.copy(outcome = WorkflowSbtValidation.Outcome.Incomplete)))
+      When("direct in-memory selection receives raw observations without first passing a wire decoder")
+      val outcomes = Vector(crossed, incomplete).map { receipt =>
+        fixture.copy(validation = fixture.validation.copy(payload = fixture.validation.payload.copy(
+          receipts = receipt +: fixture.validation.payload.receipts.tail))).selectC
+      }
+      Then("neither forged success nor a retained prefix can supply complete successful review proof")
+      outcomes.foreach(value => value.isSuccess && take(value).nonEmpty shouldBe false)
+    }
+
+    "retain ordinary review when dependency checks cannot establish covered primary completion" in {
+      Given("passed typed checks in a second workspace and primary repair conditions with no dependency-candidate proof")
+      val fixtures = Vector(
+        _fixture(_checks.take(1), dependencychecks = Vector(V.Check("dependency-test", 3, WorkflowSbtValidation.Kind.Test))),
+        _fixture(_checks.drop(1), dependencychecks = Vector(V.Check("dependency-compile", 3, WorkflowSbtValidation.Kind.Compile))),
+        _fixture(dependencychecks = Vector(V.Check("dependency-compile", 3, WorkflowSbtValidation.Kind.Compile))))
+      When("the completion selector checks the exact combined saved results")
+      val selections = fixtures.map(_.selectC)
+      Then("foreign-workspace coverage never closes the primary repair or replaces dependency review")
+      selections.foreach(value => take(value) shouldBe None)
+      fixtures.foreach { fixture =>
+        fixture.validation.payload.dependency.nonEmpty shouldBe true
+        V.codec.decode(V.codec.encode(fixture.validation.payload)) shouldBe Right(fixture.validation.payload)
+        fixture.controller.stage shouldBe O.Stage.Review
+        fixture.prior.result.outcome shouldBe "repair"
+      }
     }
 
     "leave ordinary affected review required when a conditioned file becomes binary after successful typed reads" in {

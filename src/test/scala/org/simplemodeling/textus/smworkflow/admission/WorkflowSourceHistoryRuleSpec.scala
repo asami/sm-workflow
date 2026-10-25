@@ -9,8 +9,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Executable C1 contract; fixtures supply external data without file access.
   * @since   Oct. 17, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 24, 2026
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class WorkflowSourceHistoryRuleSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import WorkflowSourceHistoryRule.*
 

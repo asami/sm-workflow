@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * in a native validation batch. Neither incomplete results nor Compile are logs
   * selected for archival. Action outcomes and repair accounting are unchanged.
   * @since   Oct. 20, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeEvidence {
@@ -26,7 +26,9 @@ private[smworkflow] object GoalPhaseNativeEvidence {
           payload.admissionFailures.count(_.checkIdentity == receipt.identity) + payload.newAttempts.count(_.checkIdentity == receipt.identity)
         val key = "check-result-" + index + (if (attempt == 0) "" else "-retry-" + attempt)
         val reference = ContextReference(session + ":ordered-validation:" + payload.sourceRevision + ":" + key, "1")
-        val source = CommonEvidence.Source(reference, repository, phase,
+        val actualrepository = payload.selected(index).dependency.flatMap(_ => payload.dependency)
+          .map(_.admission.binding.dependency.repository).getOrElse(repository)
+        val source = CommonEvidence.Source(reference, actualrepository, phase,
           Option(payload.step).filterNot(_.startsWith("phase:")), session, "stdout",
           if (RepositorySyncNativeMergeValidation.productSuccessful(receipt, payload.selected(index).kind)) "passed" else "failed")
         Selected(receipt, source)

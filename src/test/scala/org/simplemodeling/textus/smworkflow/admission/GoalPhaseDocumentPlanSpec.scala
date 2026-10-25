@@ -10,9 +10,11 @@ import GoalPhaseOrderedProgression as O
 
 /** Pure document examples; no source authentication, execution or progress evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDocumentPlanSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _plan = O.Plan("explicit-plan", "1", "PHASE-6.1", "sm-workflow",
     Vector(O.Step("S1", "Decode explicit documents", Vector("src/one.scala"), Vector.empty, Vector("focused-one")),

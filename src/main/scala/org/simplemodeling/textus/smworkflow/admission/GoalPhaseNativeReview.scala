@@ -14,7 +14,7 @@ import GoalPhaseOrderedProgression as O
 /** Actual selected semantic review context and independent host admission.
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
@@ -35,18 +35,23 @@ private[smworkflow] object GoalPhaseNativeReview {
   final case class Context(changedPaths: Vector[String],
     diff: String, checks: Vector[RepositorySyncNativeMergeValidation.Receipt],
     metadata: Vector[GoalPhaseNativeMetadata.Batch] = Vector.empty,
-    priorReviews: Vector[Prior] = Vector.empty)
+    priorReviews: Vector[Prior] = Vector.empty,
+    dependencyValidations: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
+    triageJudgment: Option[GoalPhaseStepTriage.Judgment] = None)
   object Context {
     given Encoder[Context] = deriveEncoder[Context].mapJson(value => value.mapObject(fields =>
-      Vector("metadata", "priorReviews").foldLeft(fields)((retained, key) =>
-        if (retained(key).exists(_.asArray.exists(_.isEmpty))) retained.remove(key) else retained)))
+      Vector("metadata", "priorReviews", "dependencyValidations").foldLeft(fields)((retained, key) =>
+        if (retained(key).exists(_.asArray.exists(_.isEmpty))) retained.remove(key) else retained).filter { case (key, value) => key != "triageJudgment" || !value.isNull }))
     private val _decoder: Decoder[Context] = deriveDecoder
     given Decoder[Context] = Decoder.instance { cursor =>
-      val normalized = Vector("metadata", "priorReviews").foldLeft(cursor.value)((retained, key) =>
+      val normalized = Vector("metadata", "priorReviews", "dependencyValidations").foldLeft(cursor.value)((retained, key) =>
         if (cursor.downField(key).focus.isEmpty) retained.mapObject(_.add(key, Json.arr())) else retained)
       _decoder.decodeJson(normalized).flatMap(value => if (value.metadata != null &&
           value.metadata.forall(batch => GoalPhaseNativeMetadata.bindC(batch).isSuccess) &&
-          _priors_valid(value.priorReviews)) Right(value)
+          _priors_valid(value.priorReviews) && value.dependencyValidations != null && value.dependencyValidations.size <= 64 &&
+          value.dependencyValidations.forall(p => p != null && p.dependency.exists(GoalPhaseDependencyValidation.captureValid) &&
+            p.outcome.contains("passed") && GoalPhaseNativeValidation.codec.decode(GoalPhaseNativeValidation.codec.encode(p)).contains(p)) &&
+          value.triageJudgment != null && value.triageJudgment.forall(GoalPhaseStepTriage.valid)) Right(value)
         else Left(DecodingFailure("Invalid retained review metadata or prior reports", cursor.history)))
     }
   }
@@ -71,6 +76,7 @@ private[smworkflow] object GoalPhaseNativeReview {
         next = existing.filterNot(value => value.kind == prior.kind && value.step == prior.step) :+ prior
         _ <- _check(_priors_valid(next), "prior review history exceeds the bounded Step and Phase reports")
       } yield next
+      case "TriageStep" => GoalPhaseStepTriage.admitC(request, submitted.result.value).map(_ => existing)
       case "ImplementStep" | "RepairStep" => S.admitSemanticResultC(request, submitted.result.value).map(_ => existing)
       case _ => F.invalid("completion has no assigned implementation, repair or review kind")
     }
@@ -161,7 +167,13 @@ private[smworkflow] object GoalPhaseNativeReview {
     * It reconstructs from actual completions, never from a submitted stage.
     */
   def completedStateC(result: S.Result, evidence: String,
-    controller: O.State): Consequence[O.State] = for {
+    controller: O.State): Consequence[O.State] = _completed_state_c(result, evidence, controller, None)
+
+  def completedRequestC(request: S.Request, result: S.Result, evidence: String,
+    controller: O.State): Consequence[O.State] = _completed_state_c(result, evidence, controller, Some(request))
+
+  private def _completed_state_c(result: S.Result, evidence: String,
+    controller: O.State, request: Option[S.Request]): Consequence[O.State] = for {
     _ <- if (result != null &&
         _bounded(result.summary, 16384) && result.summary.trim.nonEmpty &&
         result.findings != null && result.findings.size <= 128 && result.findings.forall(f => _bounded(f, 16384) && f.trim.nonEmpty) &&
@@ -180,7 +192,18 @@ private[smworkflow] object GoalPhaseNativeReview {
     _ <- GoalPhaseFixAssessment.admitC(work.key.kind.toString, result.outcome, result.fixAssessment)
     _ <- GoalPhaseFindingRecording.admitObservationsC(work.key.kind.toString, result.reviewObservations)
     _ <- GoalPhaseDependencyScope.admitResultC(work.key.kind.toString, result.outcome, result.dependencyProposal)
-    _ <- GoalPhaseAcceptanceBoundary.admitC(controller.plan, work.key.kind.toString, result)
+    _ <- request match {
+      case Some(actual) => for {
+        _ <- _check(S.releaseRepairContractValid(actual), "review admission has an invalid captured Release repair contract")
+        _ <- _check(actual != null && actual.kind == work.key.kind.toString && actual.stepIdentity == work.key.step &&
+          actual.selectedPlan == controller.plan && actual.originalBase == controller.base &&
+          actual.completed == controller.completed && actual.generation == controller.generation &&
+          actual.purpose == work.purpose && actual.candidate == work.candidate && actual.checksReceipt == work.checksReceipt,
+          "review admission crosses its actual issued request")
+        _ <- GoalPhaseAcceptanceBoundary.admitRequestC(actual, result)
+      } yield ()
+      case None => GoalPhaseAcceptanceBoundary.admitC(controller.plan, work.key.kind.toString, result)
+    }
     outcome = result.outcome match {
       case "accept" => O.ReviewOutcome.Accept
       case "repair" => O.ReviewOutcome.Repair
@@ -188,7 +211,7 @@ private[smworkflow] object GoalPhaseNativeReview {
     }
     directive = if (result.outcome == "repair") Some(O.RepairDirective(result.summary, result.findings)) else None
     next <- controller.acceptC(O.ReviewAdmitted(work.key, work.candidate.get, work.checksReceipt.get,
-      evidence, outcome, directive))
+      evidence, outcome, directive, allowPhaseRepair = request.exists(_.releaseRepairContract.contains(S.RELEASE_REPAIR_CONTRACT))))
   } yield next
   private def _bounded(value: String, maximum: Int) = value != null && !value.contains('\u0000') &&
     value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= maximum

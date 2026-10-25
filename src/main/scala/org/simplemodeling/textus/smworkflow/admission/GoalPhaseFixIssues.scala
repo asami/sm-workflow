@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -65,10 +65,36 @@ private[smworkflow] object GoalPhaseFixIssues {
 
   def unresolved(issue: Issue): Boolean = issue.status != "RESOLVED"
   def relevant(request: W.Request, issue: Issue): Boolean =
-    issue.repository == request.selectedPlan.repository &&
-      (request.kind == "ReviewPhase" || request.stepIdentity.contains(issue.step))
+    (issue.repository == request.selectedPlan.repository ||
+      request.checkFailure.toVector.flatMap(_.validation.dependency).exists(_.admission.binding.dependency.repository == issue.repository) ||
+      request.review.toVector.flatMap(_.dependencyValidations).flatMap(_.dependency).exists(_.admission.binding.dependency.repository == issue.repository)) &&
+      (request.kind == "ReviewPhase" || request.stepIdentity.contains(issue.step) ||
+        (request.kind == "RepairStep" && request.stepIdentity.isEmpty &&
+          request.completed.map(_.step) == request.selectedPlan.steps.map(_.identity)))
   def assigned(request: W.Request): Vector[Issue] = request.issues.toVector.flatMap(_.issues)
-    .filter(issue => relevant(request, issue) && unresolved(issue))
+    .filter(issue => relevant(request, issue) && unresolved(issue) &&
+      (request.kind != "RepairStep" || request.stepIdentity.nonEmpty ||
+        (request.checkFailure match {
+          case None => request.review.toVector.flatMap(_.priorReviews).findLast(_.kind == "ReviewPhase").exists(prior =>
+            prior.result.outcome == "repair" && issue.evidenceReference == prior.resultIdentity &&
+              request.repairDirective.exists(_.findings.contains(issue.summary)))
+          case Some(failure) =>
+            request.review.toVector.flatMap(_.priorReviews).findLast(_.kind == "ReviewPhase").exists(prior =>
+              prior.result.outcome == "repair" && issue.source == "REVIEW" &&
+                issue.repository == request.selectedPlan.repository && issue.evidenceReference == prior.resultIdentity &&
+                prior.result.findings.contains(issue.summary)) || _release_check_issue(request, issue, failure)
+        })))
+
+  private def _release_check_issue(request: W.Request, issue: Issue, failure: W.CheckFailureContext): Boolean = {
+    val payload = failure.validation
+    GoalPhaseNativeValidation.repairable(payload) && payload.receipts.zip(payload.selected).lastOption.exists { (receipt, check) =>
+      val repository = check.dependency.flatMap(_ => payload.dependency)
+        .map(_.admission.binding.dependency.repository).getOrElse(request.selectedPlan.repository)
+      issue.source == "TEST" && issue.repository == repository && issue.step == payload.step &&
+        issue.sourceIdentity.contains(check.kind.wire + ":" + check.identity) &&
+        !GoalPhaseNativeValidation.successful(Vector(receipt), Vector(check))
+    }
+  }
 
   def validateC(value: State): Consequence[Unit] = _check(value != null && value.issues != null &&
     value.issues.size <= 16384 && value.issues.forall(_issue) &&
@@ -93,7 +119,7 @@ private[smworkflow] object GoalPhaseFixIssues {
     current = request.issues.getOrElse(_empty)
     reports = result.issueReport.toVector.flatMap(_.dispositions)
     next <- request.kind match {
-      case "ImplementStep" => _check(result.issueReport.isEmpty,
+      case "ImplementStep" | "TriageStep" => _check(result.issueReport.isEmpty,
         "initial implementation cannot supply an issue report").map(_ => current)
       case "RepairStep" => _repair_c(request, result, current, reports, evidence)
       case "ReviewStep" | "ReviewPhase" => _review_c(request, result, current, reports, evidence)
@@ -213,8 +239,10 @@ private[smworkflow] object GoalPhaseFixIssues {
     known = payload.outcome.exists(Set("passed", "failed", "repair-required", "repair-limit-reached"))
     next = if (!known) state else payload.receipts.zip(payload.selected).zipWithIndex.foldLeft(state) {
       case (prior, ((receipt, check), index)) =>
+        val actualrepository = check.dependency.flatMap(_ => payload.dependency)
+          .map(_.admission.binding.dependency.repository).getOrElse(repository)
         val source = check.kind.wire + ":" + check.identity
-        val existing = prior.issues.find(i => i.repository == repository && i.step == payload.step &&
+        val existing = prior.issues.find(i => i.repository == actualrepository && i.step == payload.step &&
           i.source == "TEST" && i.sourceIdentity.contains(source))
         if (GoalPhaseNativeValidation.successful(Vector(receipt), Vector(check))) existing.fold(prior)(issue =>
           _update(prior, issue.copy(status = "RESOLVED", evidenceReference = evidence), evidence))
@@ -222,7 +250,7 @@ private[smworkflow] object GoalPhaseFixIssues {
           val diagnostics = receipt.stderr.codePoints().limit(2048).toArray.map(cp => new String(Character.toChars(cp))).mkString
           val summary = "Selected check " + check.identity + " (" + check.kind.wire + ") failed with exit " + receipt.exitCode.get +
             (if (diagnostics.trim.isEmpty) "" else ": " + diagnostics)
-          existing.fold(_new(prior, repository, payload.step, "TEST", Some(source), summary, evidence))(issue =>
+          existing.fold(_new(prior, actualrepository, payload.step, "TEST", Some(source), summary, evidence))(issue =>
             _update(prior, issue.copy(status = if (issue.status == "RESOLVED") "REOPENED" else issue.status,
               summary = summary, evidenceReference = evidence), evidence))
         } else prior

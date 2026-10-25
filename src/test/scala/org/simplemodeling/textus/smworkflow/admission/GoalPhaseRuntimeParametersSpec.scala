@@ -18,8 +18,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value

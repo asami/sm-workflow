@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Selected public context of the actual owning WorkOrder. Canonical CNCF
   * encoding owns the generic contracts; this view grants no execution authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 14, 2026
+  * @version Oct. 25, 2026
   */
 private[smworkflow] object NativeWorkflowIssuedWorkContext {
   enum Mode(val value: String) {
@@ -24,6 +24,7 @@ private[smworkflow] object NativeWorkflowIssuedWorkContext {
   }
 
   def goalModeC(kind: String): Consequence[Mode] = kind match {
+    case "TriageStep" => Consequence.success(Mode.Analysis)
     case "ImplementStep" | "RepairStep" => Consequence.success(Mode.Implementation)
     case "ReviewStep" | "ReviewPhase" => Consequence.success(Mode.Review)
     case _ => Consequence.stateConflict("Issued Goal work has no supported semantic mode")

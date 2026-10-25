@@ -20,7 +20,7 @@ import CommonEvidenceLifecycle as L
 /** Explicit specification-owned File and indexed-store seams. These observations
   * specify business projection semantics, never physical gzip or live Phase closure.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object CommonEvidenceLifecycleFixture {
@@ -131,6 +131,8 @@ private[admission] object CommonEvidenceLifecycleFixture {
     take(E.archiveManagedC(store, policy, source(name, session), "実際の出力\n", "identity", clock))._2.get
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class CommonEvidenceLifecycleSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import CommonEvidenceLifecycleFixture.*
   private def _input(id: String): V.EvidenceReadInput = V.EvidenceReadInput(id, Some("1"))

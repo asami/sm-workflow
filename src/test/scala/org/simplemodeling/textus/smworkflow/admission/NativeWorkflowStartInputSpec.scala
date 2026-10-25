@@ -13,8 +13,10 @@ import ProfileStartAdmission.{Selection, SelectionOrigin}
 
 /**
  * @since   Oct. 11, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeWorkflowStartInputSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
     case Consequence.Success(result) => result

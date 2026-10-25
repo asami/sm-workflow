@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Passive typed/wire fixtures only; no enrolled Human or model execution.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeHumanEvidenceFixture {
@@ -111,6 +111,8 @@ private[admission] object NativeHumanEvidenceFixture {
   }
 }
 
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class NativeHumanDecisionScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeHumanEvidenceFixture.*
   private val now = Instant.parse("2026-10-08T00:00:00Z")

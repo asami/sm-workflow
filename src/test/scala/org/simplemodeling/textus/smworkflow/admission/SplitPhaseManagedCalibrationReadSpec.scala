@@ -23,8 +23,10 @@ import SplitPhaseCalibrationReadPolicy.Purpose
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseManagedCalibrationReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value

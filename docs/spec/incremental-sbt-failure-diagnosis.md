@@ -132,8 +132,12 @@ normal compilation. A compile-only result or empty selection is not focused-test
 success. Reuse unaffected validation. Full/heavy tests retain their planned
 Step/Release ownership; neither each fix nor each diagnosis request mandates a
 full run. If isolation cannot reproduce an order-dependent failure, explicitly
-select the necessary broader scope. Phase 9 retains convergence/provider-routing
-policy, including its existing automatic-Fix limit, without a second counter.
+select the necessary broader scope. Reuse the
+[runtime-owned repair control](runtime-owned-repair-control.md) and its bounded
+early correction for convergence stops and the ten-cycle ceiling, without a
+second counter or caller-owned approval loop. Phase 9 retains broader convergence
+refinement and provider routing; their completion is not required for ordinary
+same-scope repair continuation.
 
 ## Transport and preservation
 

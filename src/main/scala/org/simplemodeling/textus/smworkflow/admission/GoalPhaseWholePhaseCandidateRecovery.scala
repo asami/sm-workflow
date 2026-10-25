@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.processexecution.{GitDiffParameters, GitObjectId, GitOperation}
@@ -29,7 +30,7 @@ import RepositorySyncManagedGitObservation as G
 /** One independently authorized remaining observation of an original whole-Phase inspection.
   * Retained UNKNOWN history is immutable. Failed new intents have no retry contract.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
@@ -68,6 +69,12 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     inspectionRecordRevision: String, inspection: C.Payload, stagingPrefix: Vector[R.StagePair],
     oldObservationOutcome: String, oldObservationTermination: String, repository: K.RepositorySnapshot, policy: Policy)
   object Target {
+    // This complete public target omits nested absent Options. Its outer
+    // canonical comparison still rejects every unknown or noncanonical field;
+    // do not impose other recovery codecs' explicit-null wire shapes.
+    private given Decoder[R.Controller] = deriveDecoder[R.Controller]
+    private given Decoder[K.Dirty] = deriveDecoder[K.Dirty]
+    private given Decoder[K.RepositorySnapshot] = deriveDecoder[K.RepositorySnapshot]
     given Encoder[Target] = deriveEncoder[Target].mapJson(_.deepDropNullValues)
     given Decoder[Target] = deriveDecoder[Target]
   }
@@ -147,7 +154,7 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     t.controller != null && O.validatePlanC(t.controller.plan).isSuccess && t.controller.stage == "PhaseInspection" &&
     t.controller.cursor == t.controller.plan.steps.size && t.controller.completed != null &&
     t.controller.completed.size == t.controller.cursor && t.controller.completed.map(_.step) == t.controller.plan.steps.map(_.identity) &&
-    t.controller.completed.forall(s => s != null && s.commit != null && _exact(s.review) &&
+    t.controller.completed.forall(s => s != null && s.commit != null && O.validStepAcceptance(s) &&
       Vector(s.commit.identity, s.commit.parent, s.commit.tree).forall(_object)) &&
     t.controller.generation >= 0 && t.controller.repairs >= 0 && t.controller.ordinaryRepairs >= 0 &&
     t.controller.ordinaryRepairs <= t.controller.repairs && _snapshot(t.controller.base) && _snapshot(t.controller.tip) &&
@@ -370,23 +377,30 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else recoveryOperation)) _invalid("operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, id, None, port))
-      else NativeWorkflowOperationInput.valueC[V.GoalPhaseWholePhaseCandidateRecoveryInput](request, "input").flatMap { input =>
-        if (input == null || !_exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
-            !_text(input.rationale) || !_exact(input.reference.identity) || !_exact(input.reference.revision)) _invalid("explicit Human input is incomplete")
-        else Consequence.success(Action(request, input.sessionId, Some(input), port))
-      }
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, Some(id), None, port))
+      else NativeWholePhaseRecoveryInput.selectC(request).map(source => Action(request, None, Some(source), port))
   }
-  private final case class Action(request: Request, sessionId: String, input: Option[V.GoalPhaseWholePhaseCandidateRecoveryInput],
+  private final case class Action(request: Request, sessionId: Option[String], input: Option[NativeWholePhaseRecoveryInput.Source],
     port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionId))
+        supplied <- input match {
+          case None => Consequence.success(Option.empty[V.GoalPhaseWholePhaseCandidateRecoveryInput])
+          case Some(source) => NativeWholePhaseRecoveryInput.readC(source, reference => read_resource_text(reference, Some(UTF_8))).flatMap { value =>
+            if (value == null || !_exact(value.sessionId) || value.reference == null || !choices.contains(value.choice) ||
+                !_text(value.rationale) || !_exact(value.reference.identity) || !_exact(value.reference.revision))
+              _invalid("explicit Human input is incomplete")
+            else Consequence.success(Some(value))
+          }
+        }
+        id <- supplied.map(_.sessionId).orElse(sessionId).map(Consequence.success)
+          .getOrElse(_invalid("Session is absent"))
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(id))
         selected = core.copy(executionContext = context)
-        output <- input match {
-          case None => port.describeWholePhaseCandidateRecoveryC(sessionId, selected).map(NativeWorkflowOperationOutput.response(_))
+        output <- supplied match {
+          case None => port.describeWholePhaseCandidateRecoveryC(id, selected).map(NativeWorkflowOperationOutput.response(_))
           case Some(value) => port.recoverWholePhaseCandidateC(value, selected).map(NativeWorkflowOperationOutput.response(_))
         }
       } yield output

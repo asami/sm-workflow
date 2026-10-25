@@ -22,9 +22,11 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Consumer cases below connect those observations to actual typed File/UoW;
   * SQL and fresh-process public retrieval have separate connected coverage.
   * @since   Oct. 20, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _now = Instant.parse("2026-10-20T10:00:00Z")
   private val _policy = E.Policy("workflow", DataStore.CollectionId.EntityStore(EntityCollectionId("spec", "evidence", "entries")),

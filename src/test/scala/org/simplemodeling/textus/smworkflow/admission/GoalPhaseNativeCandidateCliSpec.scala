@@ -2,7 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
@@ -11,10 +11,11 @@ import NativeWorkflowCliFixture as F
 /** Normal isolated CLI regression with explicitly specification-owned semantics,
   * review attestations and local effect grants. No live Session or external AI.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import NativeCallerExecutionFixture.json
   private final case class Episode(scenario: F.Scenario, task: Path,
@@ -26,7 +27,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
   private def _reference(name: String) = V.WorkflowArtifactReference("candidate-continuation-spec-" + name, "1")
   private def _result(outcome: String) = V.GoalPhaseWorkResult(outcome,
     "SPECIFICATION-OWNED selected candidate disposition", Vector.empty,
-    None, None, None, None, None, None, None)
+    None, None, None, None, None, None, None, None, dependencyValidation = None)
   private def _submit_call(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult, name: String,
     outcome: String, execution: Option[V.WorkflowExecutionEvidence]): F.Result =
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

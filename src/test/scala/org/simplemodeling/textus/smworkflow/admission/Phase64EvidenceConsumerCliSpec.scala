@@ -15,9 +15,11 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outputs. No production Session, accepted result or timestamp is changed.
   * New producer DTOs and implementation classes are deliberately not imported.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class Phase64EvidenceConsumerCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _call(executable: Path, root: Path, operation: String, input: Json): NativeWorkflowCliFixture.Result = {
     val directory = Files.createTempDirectory(root, "consumer-evidence-call-")

@@ -14,7 +14,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
@@ -22,21 +22,46 @@ import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseFailedPhaseRepairAdoption as A
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeValidation as N
+import GoalPhaseInterruptedValidationRepair as I
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Fresh isolated real Git/Compile/Test fixture. Optional installed selection
   * drives the same public Operations through the actual installed executable.
   * Fixture evidence asserts no production Human provenance.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseKnownFailedPhaseValidationFixture {
   private val _product = "src/test/scala/ProductCheck.scala"
   private val _step = "failed-phase-corrective-step"
   private val _primary = Path.of("").toAbsolutePath.normalize
+  private def _timeout_fixture(root: Path): Boolean = Files.isRegularFile(root.resolve("terminated-timeout-fixture"))
+  override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
+    super._prepare_sbt_build_(root, scenario)
+    val build = root.resolve("repository/build.sbt")
+    if (_timeout_fixture(root) && !Files.readString(build).contains("TERMINATED_TIMEOUT_FIXTURE_WAIT")) {
+      // Run the ordinary real Test first, then wait finitely only on its actual
+      // failure. The typed host deadline, rather than a mocked result, terminates
+      // this owning SBT process. The repaired ordinary Test has no wait.
+      Files.writeString(build, Files.readString(build) + """
+        |Test / test := {
+        |  val actual = (Test / test).result.value
+        |  actual match {
+        |    case Value(_) => ()
+        |    case Inc(failure) =>
+        |      println("TERMINATED_TIMEOUT_FIXTURE_WAIT_AFTER_REAL_TEST_FAILURE")
+        |      System.out.flush()
+        |      Thread.sleep(180000L)
+        |      throw new MessageOnlyException(failure.toString)
+        |  }
+        |}
+        |""".stripMargin)
+    }
+  }
   override protected def recoveryHost(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
     val original = super.recoveryHost(root)
     original.copy(goal = original.goal.copy(candidatePaths = Vector("value.txt", _product, "src/main/scala"),
@@ -51,7 +76,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
     val compile = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git),
       executionTimeoutMillis = 1200000L, operation = SbtOperation.Compile)
     val test = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2),
-      executionTimeoutMillis = 1200000L, operation = SbtOperation.Test)
+      executionTimeoutMillis = if (_timeout_fixture(root)) 120000L else 1200000L, operation = SbtOperation.Test)
     def _array_(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
     val programs = _array_(compile, "sbtPrograms") ++ _array_(test, "sbtPrograms")
     compile.mapObject(_.add("sbtPrograms", Json.fromValues(programs))
@@ -142,6 +167,19 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       _import_prepared(call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(evidence))))
       input
     }
+    def limitedRepair(described: Invocation): V.GoalPhaseValidationRecoveryInput = {
+      val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+      val answer = V.GoalPhaseValidationRecoveryAnswer("LimitedRepair",
+        "Fixture Human authorizes known-error repair and evidence-based suspected-hang investigation before a concrete proposal")
+      val reference = V.WorkflowArtifactReference("fixture-timeout-limited-repair-human", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "validation-recovery",
+        described.stdout.toUri.toASCIIString, _file("limited-answer", answer), _file("limited-reference", reference),
+        _file("limited-execution", execution), "normal-development-host", "2026-10-07T00:00:00Z",
+        "entity:smworkflow.cli.host_evidence", Some("participant"))
+      _import_prepared(call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(evidence))))
+      V.GoalPhaseValidationRecoveryInput(identity, description.target, answer.choice, answer.rationale, reference)
+    }
     def submit(request: V.GoalPhaseAdvanceResult, reference: V.WorkflowArtifactReference,
       result: V.GoalPhaseWorkResult, execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
       goal(request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get, "--result", _json(result),
@@ -152,7 +190,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val name = review.work.get.stepIdentity.get
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact candidate", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reference = V.WorkflowArtifactReference("repair-fixture-review-" + name, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
@@ -394,7 +432,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       val repairedsource = Files.readString(product)
       cli.submit(implementation, V.WorkflowArtifactReference("fixture-corrective-implementation", "1"),
         V.GoalPhaseWorkResult("completed", "The explicitly selected source repair already exists", Vector.empty,
-          None, None, None, None, None, None, None))
+          None, None, None, None, None, None, None, None, dependencyValidation = None))
       var correctivefrontier = Option.empty[InstanceRecord]
       inKnownEpisode(root, componentInstance = "default") { episode => correctivefrontier = Some(episode.current(identity)) }
       When("ordinary Advance normalizes the corrective source through goldenport, captures only the repair scope, runs its real Compile and requests independent ReviewStep")
@@ -486,6 +524,239 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
           "originalHistorySize" -> Json.fromInt(before.get.history.size),
           "retainedCausations" -> Json.fromValues(current.history.map(entry => Json.fromString(entry.causation.value))),
           "continuedPlanRevision" -> Json.fromString(phase.work.get.selectedPlan.revision)).spaces2)
+      }
+    }
+  }
+
+  "E5 same-Session confirmed timeout corrective adoption" should afterWord(
+    "in spec:goal-phase-failed-phase-repair-adoption, example:E5, rules:R1,R2,R3,R4,R5,R6,R7,R8, phase:6.5") {
+    "offer timeout recovery choices for a real terminated timeout then ordinarily implement check review commit and validate one corrective Step" in {
+      Given("docs/spec/goal-phase-failed-phase-repair-adoption.md R1-R8 E5: a NEW isolated Session with real Test failure output, a finite fixture wait and a short typed execution deadline")
+      val root = newKnownRoot("terminated-timeout-repair-adoption")
+      Files.writeString(root.resolve("terminated-timeout-fixture"), "Only this new isolated fixture selects the finite timeout input\n")
+      var identity = ""
+      var original = Option.empty[V.GoalPhaseAdvanceResult]
+      inKnownEpisode(root, initialize = true, componentInstance = "default") { episode =>
+        identity = episode.start().sessionId
+        original = Some(episode.advance(identity))
+        episode.submitImplementation(original.get).accepted shouldBe true
+      }
+      val config = root.resolve(".textus/config.json")
+      val historysettings = _read(_primary.resolve("examples/source-history/goldenport-config.json")).asObject.get
+      Files.writeString(config, _read(config).mapObject(fields =>
+        historysettings.toVector.foldLeft(fields)((selected, entry) => selected.add(entry._1, entry._2))).noSpaces)
+      if (sys.props.contains("smworkflow.spec.installedCommand")) {
+        Files.writeString(config, Vector(1, 2).foldLeft(_read(config)) { (value, ordinal) =>
+          value.mapObject(_.add("cncf.sbt.runtime-binding.sm-workflow-repository-validation-" + ordinal, Json.fromString("installed")))
+        }.noSpaces)
+      }
+      val cli = new Cli(root, identity)
+      When("ordinary Compile, independent Step review and local Step closure lead to actual Test timeout")
+      val firstreview = cli.advance()
+      firstreview.business[V.GoalPhaseAdvanceResult].work.get.kind shouldBe "ReviewStep"
+      cli.acceptStep(firstreview)
+      val interruptedcall = cli.advance()
+      interruptedcall.business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
+      var before = Option.empty[InstanceRecord]
+      inKnownEpisode(root, componentInstance = "default")(episode => before = Some(episode.current(identity)))
+      val closedtip = Files.readString(root.resolve("repository/.git/refs/heads/main"))
+      val product = root.resolve("repository").resolve(_product)
+      val originalsource = Files.readString(product)
+      val repository = root.resolve("repository")
+      val preservedpaths = Vector("value.txt", "build.sbt", "project/build.properties", "project/plugins.sbt",
+        "src/main/scala/CompileConsumer.scala", _product, ".git/refs/heads/main", ".git/HEAD", ".git/logs/HEAD")
+      val preserved = preservedpaths.map(path => path -> Files.readAllBytes(repository.resolve(path)).toVector)
+      val retrycall = cli.goal(GoalPhaseValidationRecovery.describeOperation, Vector("--sessionId", identity))
+      val retrydescription = retrycall.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+      val retrytarget = take(GoalPhaseValidationRecovery.targetC(retrydescription.target))
+      var retainedtimeout = Option.empty[N.Saved]
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        retainedtimeout = episode.retained(identity, retrytarget.sourceRevision, "validation")
+      }
+      Then("the timeout offers deadline extension limited repair and deferral while retaining actual incomplete output")
+      retrydescription.choices shouldBe Vector("AuthorizeNewAttempt", "LimitedRepair", "Defer")
+      retrydescription.message should include("AuthorizeNewAttempt (deadline extension)")
+      retrydescription.message should include("Timeout alone is not proof of a hang")
+      retrytarget.knownFailedPhase shouldBe None
+      retrytarget.terminatedTimeoutPhase should not be empty
+
+      When("actual normal preparation and import provide exact LimitedRepair Human evidence before any corrective proposal or adoption")
+      val limited = cli.limitedRepair(retrycall)
+      val limitedresult = cli.goal(GoalPhaseValidationRecovery.recoveryOperation, Vector("--input", _json(limited)))
+        .business[V.GoalPhaseValidationRecoveryResult]
+      Then("only bounded diagnosis and planning are authorized and the original Decision remains available for separate concrete proposal adoption")
+      limitedresult.accepted shouldBe true
+      limitedresult.outcome shouldBe "limited-repair-preparation-required"
+      limitedresult.message should include("fix known errors")
+      limitedresult.message should include("actual start/end observations")
+      limitedresult.message should include("retained output")
+      limitedresult.message should include("diagnostic stack/process evidence")
+      limitedresult.message should include("last printed test may already have completed")
+      limitedresult.message should include("test identity unknown or evidence missing")
+      limitedresult.message should include("normal slow execution or an external wait")
+      limitedresult.message should include("CNCF owns execution and result interpretation")
+      limitedresult.message should include("describeGoalPhaseFailedPhaseRepair")
+      limitedresult.message should include("independently authorized adoptGoalPhaseFailedPhaseRepair")
+      limitedresult.message should include("separate advanceGoalPhase")
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        episode.current(identity).history shouldBe before.get.history
+        episode.current(identity).revision shouldBe before.get.revision
+        N.codec.encode(episode.retained(identity, retrytarget.sourceRevision, "validation").get.payload) shouldBe
+          N.codec.encode(retainedtimeout.get.payload)
+      }
+      preserved.foreach((path, bytes) => Files.readAllBytes(repository.resolve(path)).toVector shouldBe bytes)
+      phaseExecutions(root).size shouldBe 1
+
+      Given("the actual retained failed Test diagnostics and finite fixture wait support a captured concrete corrective proposal without claiming a hang")
+      val oldplan = _recovery_plan
+      val corrective = O.Step(_step, "Correct the actual timed-out product Test source", Vector(_product),
+        oldplan.steps.map(_.identity), Vector("compile"))
+      val proposed = oldplan.copy(revision = "terminated-timeout-repair-2", steps = oldplan.steps :+ corrective)
+      val proposal = GoalPhasePlanRevision.Proposal("fixture-timeout-repair", "1", "Correct the failing test and its finite failure wait", proposed)
+      When("read-only corrective description captures that concrete proposal at the unchanged original timeout Decision")
+      val described = cli.describe(proposal)
+      val description = described.business[V.GoalPhaseFailedPhaseRepairDescriptionResult]
+      val target = take(A.boundTargetC(description.target)).toOption.get
+      var originalvalidation = Option.empty[N.Saved]
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        originalvalidation = episode.retained(identity, target.source.sourceRevision, "validation")
+        episode.current(identity).history shouldBe before.get.history
+      }
+      Then("the actual timeout retains incomplete typed facts and partial diagnostics without becoming a known Failed result")
+      val receipt = originalvalidation.get.payload.receipts.head
+      receipt.termination shouldBe "timed-out"
+      receipt.exitCode shouldBe None
+      receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+      receipt.stdout should include("*** FAILED ***")
+      receipt.stdout should include("TERMINATED_TIMEOUT_FIXTURE_WAIT_AFTER_REAL_TEST_FAILURE")
+      Files.readString(interruptedcall.stderr) should include("TimedOut")
+      N.repairable(originalvalidation.get.payload) shouldBe false
+      target.source.kind shouldBe I.kind
+      target.source.decisionRevision shouldBe before.get.revision.value.toString
+      target.source.validation.revision shouldBe before.get.revision.value.toString
+      target.source.base shouldBe O.Snapshot(original.get.work.get.originalBase.head, original.get.work.get.originalBase.tree)
+      target.plan shouldBe oldplan
+      target.completed.map(_.commit.identity) shouldBe Vector(closedtip.trim)
+      target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 2)
+      phaseExecutions(root).size shouldBe 1
+      Files.readString(product) shouldBe originalsource
+      retrytarget.knownFailedPhase shouldBe None
+      retrytarget.terminatedTimeoutPhase shouldBe Some(target.source)
+      Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+
+      When("the actual v2 description prepares Defer then a separate new Human direction for the exact corrective proposal")
+      val deferred = cli.direction(described, proposal, "Defer", "fixture-timeout-defer")
+      cli.adopt(deferred).business[V.GoalPhaseFailedPhaseRepairAdoptionResult].outcome shouldBe "deferred"
+      val oldhuman = cli.adopt(deferred.copy(choice = "AdoptRepairPlan"))
+      val crossed = cli.adopt(deferred.copy(target = A.targetRecord(target.copy(
+        source = target.source.copy(candidate = target.source.base)))))
+      Then("Defer writes nothing and old or crossed Human scope grants no adoption or effect")
+      oldhuman.exit should not be 0
+      crossed.exit should not be 0
+      inKnownEpisode(root, componentInstance = "default")(episode => episode.current(identity).history shouldBe before.get.history)
+      phaseExecutions(root).size shouldBe 1
+      Files.readString(product) shouldBe originalsource
+      Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+
+      When("the newly prepared actual Human direction adopts the complete timeout target")
+      val authorized = cli.direction(described, proposal, "AdoptRepairPlan", "fixture-timeout-adopt-new-human")
+      cli.adopt(authorized).business[V.GoalPhaseFailedPhaseRepairAdoptionResult].outcome shouldBe "failed-phase-repair-adopted"
+      cli.adopt(authorized).exit should not be 0
+      var directed = Option.empty[InstanceRecord]
+      var saveddirection = Option.empty[A.InterruptedDirection]
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        directed = Some(episode.current(identity))
+        episode.prepare(call => for {
+          catalog <- GoalPhaseRuntimeCatalog.loadC()
+          storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+            SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
+          reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, A.interruptedCodec)
+          retained <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(identity + ":ordered-failed-phase-repair-adoption:" +
+            before.get.revision.value, "1"))(using call.executionContext)
+          _ = saveddirection = retained.map(_.receipt.payload.value)
+        } yield ())
+      }
+      Then("one adjacent v2 Direction retains the original history and has no File Git or SBT effect before Advance")
+      directed.get.revision shouldBe before.get.revision.next
+      directed.get.history.dropRight(1) shouldBe before.get.history
+      directed.get.currentProgression shouldBe Some(ProgressionReference("phase.Implementation"))
+      saveddirection.get.target shouldBe target
+      saveddirection.get.reference shouldBe ContextReference(authorized.reference.identity, authorized.reference.revision)
+      A.interruptedCodec.encode(saveddirection.get).hcursor.get[String]("schemaVersion").toOption shouldBe Some(I.schema)
+      Files.readString(product) shouldBe originalsource
+      Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+      phaseExecutions(root).size shouldBe 1
+
+      When("the original accepted recovery-implementation reference is resubmitted with an altered payload before any corrective assignment is issued")
+      val late = cli.goal(original.get.submitOperation.get, Vector("--sessionId", original.get.submitSessionId.get,
+        "--result", _json(V.GoalPhaseWorkResult("completed", "Late altered old implementation result", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None)),
+        "--resultReference", _json(V.WorkflowArtifactReference("recovery-implementation", "1"))))
+      Then("the historical original result has no pending assignment and refuses without changing the adopted instance or repository effects")
+      late.exit should not be 0
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        val current = episode.current(identity)
+        current.history shouldBe directed.get.history
+        current.revision shouldBe directed.get.revision
+      }
+      Files.readString(product) shouldBe originalsource
+      Files.readString(root.resolve("repository/.git/refs/heads/main")) shouldBe closedtip
+      phaseExecutions(root).size shouldBe 1
+
+      When("a separate ordinary Advance traverses v2 and issues only the corrective implementation")
+      val implementation = cli.advance().business[V.GoalPhaseAdvanceResult]
+      cli.advance().business[V.GoalPhaseAdvanceResult] shouldBe implementation
+      Then("the original base accepted prefix and repair counts remain with exactly one new generation")
+      implementation.work.get.kind shouldBe "ImplementStep"
+      implementation.work.get.stepIdentity shouldBe Some(_step)
+      implementation.work.get.selectedPlan.revision shouldBe proposed.revision
+      implementation.work.get.completed.map(_.commit.identity) shouldBe Vector(closedtip.trim)
+      implementation.work.get.originalBase shouldBe original.get.work.get.originalBase
+      implementation.issuedWorkContext.get.continuationId should not be original.get.issuedWorkContext.get.continuationId
+      implementation.repairProgress shouldBe original.get.repairProgress
+      phaseExecutions(root).size shouldBe 1
+
+      When("the issued corrective Step makes an actual source change and continues through ordinary checks review and local commit")
+      val predicate = "val ready = Files.isRegularFile(root.resolve(\"phase-ready\"))"
+      originalsource should include(predicate)
+      Files.writeString(product, originalsource.replace(predicate, "val ready = true"))
+      cli.submit(implementation, V.WorkflowArtifactReference("fixture-timeout-corrective-implementation", "1"),
+        V.GoalPhaseWorkResult("completed", "The exact corrective test source is repaired", Vector.empty,
+          None, None, None, None, None, None, None, None, dependencyValidation = None))
+      val correctionreview = cli.advance()
+      val review = correctionreview.business[V.GoalPhaseAdvanceResult]
+      Then("the new candidate has its own real successful Compile and independently assigned ReviewStep")
+      review.work.get.kind shouldBe "ReviewStep"
+      review.work.get.stepIdentity shouldBe Some(_step)
+      review.work.get.review.get.changedPaths shouldBe Vector(_product)
+      review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      phaseExecutions(root).size shouldBe 1
+      cli.acceptStep(correctionreview)
+      When("ordinary Step closure then runs a new whole-Phase Test on the corrective candidate")
+      val phase = cli.advance().business[V.GoalPhaseAdvanceResult]
+      cli.advance().business[V.GoalPhaseAdvanceResult] shouldBe phase
+      Then("the same Session retains both accepted commits and the immutable original timeout while requesting independent Phase review")
+      phase.work.get.kind shouldBe "ReviewPhase"
+      phase.work.get.completed.map(_.step) shouldBe Vector("step-1", _step)
+      phase.work.get.completed.head.commit.identity shouldBe closedtip.trim
+      phase.work.get.completed.last.commit.parent shouldBe closedtip.trim
+      phase.work.get.review.get.checks.head.exitCode shouldBe Some(0)
+      phase.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
+      phase.repairProgress shouldBe implementation.repairProgress
+      phaseExecutions(root).size shouldBe 2
+      inKnownEpisode(root, componentInstance = "default") { episode =>
+        val current = episode.current(identity)
+        current.history.take(before.get.history.size) shouldBe before.get.history
+        current.history.count(_.causation.value.startsWith("ordered-failed-phase-repair-adoption:")) shouldBe 1
+        val retained = episode.retained(identity, target.source.sourceRevision, "validation").get
+        N.codec.encode(retained.payload) shouldBe N.codec.encode(originalvalidation.get.payload)
+        retained.record.history shouldBe originalvalidation.get.record.history
+        retained.record.revision shouldBe originalvalidation.get.record.revision
+        Files.writeString(root.resolve("terminated-timeout-reopened-proof.json"), Json.obj(
+          "sessionId" -> Json.fromString(identity), "originalTimeout" -> N.codec.encode(retained.payload),
+          "direction" -> A.interruptedCodec.encode(saveddirection.get),
+          "continuedPlanRevision" -> Json.fromString(phase.work.get.selectedPlan.revision),
+          "originalHistorySize" -> Json.fromInt(before.get.history.size)).spaces2)
       }
     }
   }

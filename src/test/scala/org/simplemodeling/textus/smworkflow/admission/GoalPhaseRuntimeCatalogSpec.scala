@@ -10,9 +10,10 @@ import java.nio.charset.StandardCharsets
 
 /**
  * @since   Oct.  6, 2026
- *  version Oct. 13, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val workflow = Files.readString(Path.of("target/cozy/statemachine-workflow-abi.json"), StandardCharsets.UTF_8)
   private val producer = Files.readString(Path.of("target/cozy/candidate-admission-producer-abi.json"), StandardCharsets.UTF_8)

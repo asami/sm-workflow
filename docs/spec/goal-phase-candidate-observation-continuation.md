@@ -180,3 +180,67 @@ byte after an append. Both preserve full native records and stored payload JSON,
 old UNKNOWN/termination-unconfirmed intents, source bytes and modification time,
 index and check counts on passive or refused calls; reordered prefixes refuse
 without changing those facts. No schema or public API version changes.
+
+## Dependency candidate interruption (CC51-S1)
+
+Recovery binds the exact saved dependency admission, repository/workspace/root/branch,
+base, selected paths, Plan/Step/generation and contiguous native effect prefix.
+Legacy primary-only targets retain their historical encoding and claim no dependency.
+Explicit nulls, foreign bindings, substituted payloads and gaps refuse admission.
+
+### Public target omission and raw JSON admission
+
+Use the [candidate-recovery public Controller and payload contract](goal-phase-candidate-recovery.md#public-target-omission-and-raw-json-admission)
+for both the original target and this continuation's Controller, prior observation
+intents and dependency facts. Preserve the closed durable codecs, exact original
+Controller equality, source revisions, subject, budget and repository checks.
+
+| Public member | Absent | Explicit null | Present | Wrong type |
+| --- | --- | --- | --- | --- |
+| Dirty `renamedFrom`, in either repository snapshot | None | Refuse | Decode String and validate | Refuse |
+| Dirty `index`, `worktree`, `path`; required snapshot fields | Refuse | Refuse | Decode declared type and validate | Refuse |
+| Target `dependencyRepository` | None only if the original has no dependency admission | Refuse | Decode snapshot and match the admitted dependency | Refuse |
+| PriorObservation `dependencyPrefix` | Existing legacy empty vector, not proof of completed effects | Refuse | Decode exact contiguous facts | Refuse |
+
+Unknown Dirty members and property-name collisions refuse. Canonical internal
+Dirty encoding retains all four keys, including null for absent `renamedFrom`;
+its strict internal decoder is unchanged. Internal `dependencyRepository` null
+remains invalid, as do existing dependency-extension nulls. No absent required
+field becomes a default, empty repository or successful observation.
+
+The existing preparation request reader validates the raw JSON target using
+this same typed public owner before Record conversion and generated description
+decoding. Object null fields otherwise disappear during Record conversion and
+cannot be distinguished from omission by the later `targetC(Record)`. That
+Record-only entrance handles declared omissions without promising lost-presence
+checks. Use the existing resource read exactly once; do not introduce another
+Operation, reader, permission gate or general recursive null policy.
+
+Specifications exercise actual Command formatting, JSON and generated-description
+decoding for primary-only and dependency-bearing targets. They exercise explicit
+null, wrong type, unknown closed-shape fields and alias collisions at the raw
+preparation entrance, preserving all historical internal roundtrips and binding
+refusal cases. These fixture answers never authorize a real Session recovery.
+The passive preparation owner derives choices from this decoded subject, never from
+an editable caller choice list. The existing independent Human evidence port remains
+required. Description and direction append in candidate recovery perform no Git,
+File or SBT effects; the observation-continuation description alone retains its
+existing explicit typed Git snapshot effects for each selected repository.
+
+An unresolved dependency stage intent (or unfinished staging prefix) offers only
+same-Step `ReviseWork` or `Defer`. Revision uses the existing controller event,
+retains all receipts/index effects/unknowns/bases/counters and increments the semantic
+generation; it never dispatches an old intent. Fully recorded staging permits one
+separately authorized new remaining observation, with a distinct native intent.
+Completed dependency capture retains its actual source and receipt provenance across
+directions; only the remaining primary observation is authorized in that case.
+An unknown dependency observation permits a distinct independently authorized
+observation, never staging or history replay. A later unknown requires another
+fresh observation-continuation target/answer. Every old unknown remains UNKNOWN with
+termination-unconfirmed. No supplied snapshot, consent or source edit is validation.
+
+At effect time the existing typed Git owner brackets primary and dependency freshness
+and checks exact scope/grants/bases/index/diff. Completed captures are freshness
+checked and referenced, not recaptured under the direction's source revision.
+Ordinary separate Advance, selected validation, independent review and closure retain
+their owners; no additional workflow or automatic replay is introduced.

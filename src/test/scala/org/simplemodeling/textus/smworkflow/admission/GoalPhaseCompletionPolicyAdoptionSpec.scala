@@ -11,9 +11,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Strict normal Starts and legacy codec evidence, without store fabrication.
   * @since   Oct. 23, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class GoalPhaseCompletionPolicyAdoptionSpec extends AnyWordSpec with GivenWhenThen with GoalPhasePostCompletionSyncFixture {
   override protected def goal_completion_policy: String = GoalPhasePostCompletionSync.strictPolicy
 

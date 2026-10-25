@@ -8,8 +8,10 @@ import SplitPhaseExplicitProposalPrecheck.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 24, 2026
  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SplitPhaseExplicitProposalPrecheckSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val source = SourceRecord(SourceReference("source", "4"), PhaseIdentity("77"), AuthorityReference("authority", "2"))
   private val items = Vector("work-1", "work-2", "work-3").map(WorkItemIdentity(_))

@@ -17,9 +17,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val policy = V.Policy("original-policy", 1, "required", "Original selected rationale", Vector(V.Check("focused", 1)))
   private val receipts = Vector("index-local", "index-remote", "focused").map(id => V.Receipt(id, "exited", Some(0), "", ""))

@@ -14,7 +14,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
-import org.scalatest.{DoNotDiscover, GivenWhenThen}
+import org.scalatest.{GivenWhenThen}
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
@@ -27,10 +27,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * private state seeding or production Session is involved. Fixture provenance
   * claims only its actual completed test-owned prior invocation.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
-@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec with GivenWhenThen
     with GoalPhaseKnownFailedPhaseValidationFixture {
   private def _required(property: String): Path = {
@@ -135,6 +136,13 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
     def advance(): Invocation = goal("advanceGoalPhase", Vector("--sessionId", identity))
     def describe(): Invocation = goal(W.describeOperation, Vector("--sessionId", identity))
     def recover(input: V.GoalPhaseWholePhaseCandidateRecoveryInput): Invocation = goal(W.recoveryOperation, Vector("--input", _json(input)))
+    def recoverResource(input: V.GoalPhaseWholePhaseCandidateRecoveryInput, minimumBytes: Int = 0): Invocation = {
+      val text = _json(input)
+      val path = Files.createTempDirectory(root, "recovery-resource-").resolve("complete input.json")
+      Files.writeString(path, text + (" " * math.max(0, minimumBytes - text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)))
+      Files.size(path) should be >= minimumBytes.toLong
+      goal(W.recoveryOperation, Vector("--inputResource", path.toUri.toASCIIString))
+    }
     private def _file(name: String, value: RecordPresentable): String = {
       val path = Files.createTempDirectory(root, name + "-").resolve("input.json")
       Files.writeString(path, _json(value))
@@ -149,7 +157,7 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
     def acceptStep(reviewcall: Invocation): Unit = {
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture review of the actual Compile Step", Vector.empty,
-        None, None, None, None, None, None, None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None)
       val reference = V.WorkflowArtifactReference("whole-step-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
@@ -183,7 +191,7 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
 
   "Whole-Phase remaining candidate recovery E5 installed continuation" should afterWord(
     "in spec:goal-phase-whole-phase-candidate-recovery, example:E5, rules:R1,R2,R3,R4, phase:6.4") {
-    "retain the original empty-selection inspection and execute one actual Test before independent ReviewPhase" in {
+    "recover a complete input above argv capacity from a Resource and return to ordinary Phase validation" in {
       Given("SM-WHOLE-CAND-01 R1: a NEW isolated normal fixture, actual installed command and real Compile Step")
       val executable = _required("smworkflow.spec.installedCommand")
       val installations = _required("smworkflow.spec.runtimeRoot")
@@ -257,7 +265,12 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
       val missing = V.GoalPhaseWholePhaseCandidateRecoveryInput(identity, description.target, "AuthorizeNewObservation",
         "Input Boolean alone is no proof", V.WorkflowArtifactReference("missing-human", "1"), true)
       When("public recover refuses missing evidence and ordinary Advance preserves the original stop")
-      cli.recover(missing).exit should not be 0
+      cli.recoverResource(missing).exit should not be 0
+      cli.goal(W.recoveryOperation, Vector("--inputResource", root.resolve("absent.json").toUri.toASCIIString)).exit should not be 0
+      val malformed = root.resolve("malformed-recovery.json")
+      Files.writeString(malformed, "{\"sessionId\":null}")
+      cli.goal(W.recoveryOperation, Vector("--inputResource", malformed.toUri.toASCIIString)).exit should not be 0
+      cli.goal(W.recoveryOperation, Vector("--input", _json(missing), "--inputResource", malformed.toUri.toASCIIString)).exit should not be 0
       cli.advance().business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
       Then("the exact history receipts and process count remain unchanged")
       _same_record(_current(root, identity), before)
@@ -279,11 +292,14 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
       priorInvocationEnded shouldBe true
       val authorization = cli.direction(described, "AuthorizeNewObservation", "whole-authorize", priorInvocationEnded)
       When("ended=false, crossed reference and stale policy refuse before exact history-only authorization")
-      cli.recover(authorization.copy(priorExecutionEnded = false)).exit should not be 0
-      cli.recover(authorization.copy(reference = V.WorkflowArtifactReference("crossed-human", "1"))).exit should not be 0
+      cli.recoverResource(authorization.copy(priorExecutionEnded = false)).exit should not be 0
+      cli.recoverResource(authorization.copy(reference = V.WorkflowArtifactReference("crossed-human", "1"))).exit should not be 0
       val stale = target.copy(policy = target.policy.copy(maximumDiffBytes = target.policy.maximumDiffBytes - 1))
-      cli.recover(authorization.copy(target = W.targetRecord(stale))).exit should not be 0
-      cli.recover(authorization).business[V.GoalPhaseWholePhaseCandidateRecoveryResult].outcome shouldBe "new-observation-authorized"
+      cli.recoverResource(authorization.copy(target = W.targetRecord(stale))).exit should not be 0
+      cli.recoverResource(authorization.copy(sessionId = "foreign-session")).exit should not be 0
+      // The fixture explicitly permits the larger resource through CNCF's normal read setting.
+      Files.writeString(config, _read(config).mapObject(_.add("textus.resource.read.max-bytes", 2097152.asJson)).noSpaces)
+      cli.recoverResource(authorization, minimumBytes = 1287170).business[V.GoalPhaseWholePhaseCandidateRecoveryResult].outcome shouldBe "new-observation-authorized"
       val directed = _current(root, identity)
       Then("one adjacent direction preserves every old fact without File/Git/SBT effects")
       directed.history.dropRight(1) shouldBe before.history

@@ -9,9 +9,11 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native append/projection inputs, not product effects or provider evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeHistorySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _initial: InstanceRecord = take(InstanceRecord(InstanceIdentity("verification-history"),
     take(GoalPhaseRuntimeCatalog.loadC()).definition, initialRevision, Lifecycle.NotStarted, None,

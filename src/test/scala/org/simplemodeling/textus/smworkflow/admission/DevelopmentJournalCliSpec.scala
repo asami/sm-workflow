@@ -13,9 +13,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * All selected review/recording input is specification-owned, not external
   * reviewer evidence. No SQL row or workflow envelope is seeded by this spec.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Oct. 24, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class DevelopmentJournalCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "JournalService through the ordinary fresh-process CNCF CLI" should {
     "read the actual connected producer's complete immutable entry after producer closure" in {
