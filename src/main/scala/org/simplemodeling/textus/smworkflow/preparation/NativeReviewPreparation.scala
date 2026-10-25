@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
@@ -165,7 +165,8 @@ object NativeReviewPreparation {
     } yield selected.mapObject(_.add("checks", projected))
 
   private def _progress_c(value: Json): Consequence[Json] = for {
-    normalized <- _project_c(value, Vector("automaticCount" -> "automatic_count", "ordinaryCount" -> "ordinary_count"))
+    normalized <- _project_c(value, Vector("automaticCount" -> "automatic_count", "ordinaryCount" -> "ordinary_count",
+      "runtimePolicy" -> "runtime_policy", "selectedLimit" -> "selected_limit", "effectiveLimit" -> "effective_limit"))
     snapshot <- normalized.as[GoalPhaseRepairProgress.Snapshot].fold(
       error => Consequence.stateConflict(error.message), Consequence.success)
   } yield snapshot.asJson

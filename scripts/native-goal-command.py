@@ -92,6 +92,7 @@ DISPLAY_KEYS = frozenset({
     "repairProgress", "repair_progress", "generation", "repairCount", "repair_count", "repairLimit", "repair_limit",
     "current", "cumulative", "limit", "currentWindow", "current_window", "cumulativeRepairCount", "cumulative_repair_count",
     "automaticCount", "automatic_count", "ordinaryCount", "ordinary_count",
+    "runtimePolicy", "runtime_policy", "selectedLimit", "selected_limit", "effectiveLimit", "effective_limit",
     "validation", "validationChecks", "validation_checks", "validationProgress", "validation_progress",
     "runtimeProgress", "runtime_progress", "checks", "checkIdentity", "check_identity", "checkOrdinal", "check_ordinal",
     "status", "exitCode", "exit_code", "termination", "elapsedMillis", "elapsed_millis", "durationMillis", "duration_millis",

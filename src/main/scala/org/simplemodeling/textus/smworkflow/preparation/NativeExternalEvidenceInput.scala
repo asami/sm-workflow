@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Finite conversion of explicit issued output and supplied external facts to
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -22,10 +22,10 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) &&
+          Set("review", "human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption")(options("kind"))) options.contains("participant")
+          (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
+          (if (Set("human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -99,6 +99,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         description <- summon[ValueReader[V.GoalPhaseCompletionPolicyDescriptionResult]].readC(request)
         input <- summon[ValueReader[V.GoalPhaseCompletionPolicyAdoptionInput]].readC(result)
         prepared <- NativeCompletionPolicyPreparation.prepareC(description, input, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "GoalPhase" if options("kind") == "repair-policy-adoption" => for {
+        description <- summon[ValueReader[V.GoalPhaseRepairPolicyDescriptionResult]].readC(request)
+        input <- summon[ValueReader[V.GoalPhaseRepairPolicyAdoptionInput]].readC(result)
+        prepared <- NativeRepairPolicyPreparation.prepareC(description, input, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "failed-phase-repair-adoption" => for {

@@ -104,7 +104,7 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
     }
   }
   private def _progress(request: V.GoalPhaseAdvanceResult): Unit =
-    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   private def _accepted(result: F.Result, request: V.GoalPhaseAdvanceResult): Unit = {
     if (request.kind == "Human") {
       val accepted = result.business[V.GoalPhaseOrderedDecisionSubmissionResult]

@@ -402,7 +402,7 @@ final class NativeGoalRuntimeStabilityCliSpec extends AnyWordSpec with GivenWhen
     result.work.get.kind shouldBe "ReviewStep"
     result.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
     result.work.get.originalBase shouldBe fixture.request.work.get.originalBase
-    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   }
 
   private def _retained(fixture: Implemented, cli: InstalledCli, completed: Invocation,

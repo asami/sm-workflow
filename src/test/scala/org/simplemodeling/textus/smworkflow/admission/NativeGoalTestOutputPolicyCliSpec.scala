@@ -139,7 +139,7 @@ final class NativeGoalTestOutputPolicyCliSpec extends AnyWordSpec with Matchers 
       Then("public RepairStep retains complete stdout and stderr with the original Goal, base and selected plan")
       repair.kind shouldBe "Request"
       repair.sessionId shouldBe started.sessionId
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       val work = repair.work.get
       work.kind shouldBe "RepairStep"
       work.originalBase shouldBe original.originalBase

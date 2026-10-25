@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -145,7 +145,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseCompletionPolicyAdoption.Installation(ports.completionPolicyAdoption)), selectedpolicy,
         Some(GoalPhaseLegacyPurposeRepairContinuation.Installation(ports.reviewPurposeRepair)), settings.goal.dependencyValidation,
         Some(GoalPhaseValidationRepairAdoption.Installation(ports.validationRepairAdoption)), callersource, observation,
-        Some(GoalPhaseReleaseRepairContinuation.Installation(ports.releaseRepairContinuation)))
+        Some(GoalPhaseReleaseRepairContinuation.Installation(ports.releaseRepairContinuation)),
+        Some(GoalPhaseRepairPolicyAdoption.Installation(ports.repairPolicyAdoption)))
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

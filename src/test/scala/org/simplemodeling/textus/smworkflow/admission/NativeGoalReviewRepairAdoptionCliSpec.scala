@@ -225,7 +225,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       repair.work.get.stepIdentity shouldBe Some("step-1")
       repair.work.get.selectedPlan shouldBe initial.work.get.selectedPlan
       repair.work.get.originalBase shouldBe initial.work.get.originalBase
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       cli.advance(session).business[V.GoalPhaseAdvanceResult] shouldBe repair
       _checks(scenario).size shouldBe 1
       Given("the assigned fixture-owned correction changes the candidate documentation and retains actual product behavior")
@@ -296,7 +296,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       cli.goal(A.adoptionOperation, olddirection).business[V.GoalPhaseRemainingPlanAdoptionResult].accepted shouldBe true
       val firstrepair = cli.advance(session).business[V.GoalPhaseAdvanceResult]
       firstrepair.work.get.kind shouldBe "RepairStep"
-      firstrepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10))
+      firstrepair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       Files.writeString(repository.resolve("docs/phase.md"), "# Original guide\n\nFirst entry preserves the expected newline.\n")
       _complete(cli, revised, firstrepair, "mixed-old-repaired")
       val second = _close_step(cli, revised, cli.advance(session), "mixed-old-pass").business[V.GoalPhaseAdvanceResult]
@@ -329,7 +329,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       target.originalResult.repairFindingSources shouldBe None
       target.findings.map(_.findingOrdinal) shouldBe Vector(1, 2)
       target.findings.map(_.issueIdentity).distinct.size shouldBe 2
-      oldassigned.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 10))
+      oldassigned.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 10)
       target.completed.map(_.commit.identity) shouldBe prefix.map(_.commit.identity)
       target.plan.revision shouldBe "2"
@@ -367,7 +367,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       repair.work.get.decisionContext shouldBe Some(V.GoalPhaseOrderedDecisionContext(originalresult, P.origin,
         direction.rationale, Some(reference)))
       repair.work.get.issues.get.issues.filter(i => target.findings.exists(_.issueIdentity == i.identity)).map(_.status) shouldBe Vector("OPEN", "OPEN")
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       reopened shouldBe repair
       cli.goal(P.admissionOperation, direction).exit should not be 0
       cli.goal(A.adoptionOperation, olddirection).exit should not be 0
@@ -484,7 +484,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       repair.work.get.kind shouldBe "RepairStep"
       repair.work.get.originalBase shouldBe initial.work.get.originalBase
       repair.work.get.completed shouldBe initial.work.get.completed
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       repair.work.get.repairDirective.get.findings shouldBe Vector(finding)
       repair.work.get.issues.get.issues.find(_.identity == target.reviewRepair.get.issueIdentity).get.status shouldBe "OPEN"
       cli.advance(started.sessionId).business[V.GoalPhaseAdvanceResult] shouldBe repair

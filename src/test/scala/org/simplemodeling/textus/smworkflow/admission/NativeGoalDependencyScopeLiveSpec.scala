@@ -110,7 +110,7 @@ final class NativeGoalDependencyScopeLiveSpec extends AnyWordSpec with Matchers 
     }
   }
   private def _progress(value: V.GoalPhaseAdvanceResult): Unit = {
-    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
     value.completion shouldBe None
   }
   private def _plan(scenario: F.Scenario, plan: V.GoalPhaseOrderedPlan): Unit = {

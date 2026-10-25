@@ -806,6 +806,65 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseRepairPolicyDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| restoration | record | ? |
+
+## GoalPhaseRepairPolicyDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseRepairPolicyAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseRepairPolicyAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| evidenceRecording | EvidenceRecordingState | * |
+
 ## GoalPhaseCompletionPolicyDescriptionInput
 
 - input-kind :: COMMAND
@@ -1059,6 +1118,9 @@ OperationResult
 | automaticCount | int | 1 |
 | ordinaryCount | int | 1 |
 | limit | int | 1 |
+| runtimePolicy | string | ? |
+| selectedLimit | int | ? |
+| effectiveLimit | int | ? |
 
 ## GoalPhaseWorkRequest
 
@@ -2655,6 +2717,14 @@ operation = GoalPhaseService.describeGoalPhaseCompletionPolicy
 
 operation = GoalPhaseService.adoptGoalPhaseCompletionPolicy
 
+#### describeGoalPhaseRepairPolicy
+
+operation = GoalPhaseService.describeGoalPhaseRepairPolicy
+
+#### adoptGoalPhaseRepairPolicy
+
+operation = GoalPhaseService.adoptGoalPhaseRepairPolicy
+
 #### recoverGoalPhaseValidation
 
 operation = GoalPhaseService.recoverGoalPhaseValidation
@@ -2697,6 +2767,11 @@ to = Implementation
 on = ordered-plan-selected
 
 #### Implementation
+
+##### TRANSITION
+
+to = Implementation
+on = repair-policy-adopted
 
 ##### TRANSITION
 
@@ -2748,6 +2823,11 @@ on = implementation-decision-needed
 ##### TRANSITION
 
 to = InspectCandidate
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = InspectCandidate
 on = human-source-history-new-attempt
 
 ##### TRANSITION
@@ -2771,6 +2851,11 @@ to = Validation
 on = candidate-observed
 
 #### Validation
+
+##### TRANSITION
+
+to = Validation
+on = repair-policy-adopted
 
 ##### TRANSITION
 
@@ -2822,6 +2907,11 @@ on = checks-repair-required
 ##### TRANSITION
 
 to = Triage
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Triage
 on = documents-selected
 
 ##### TRANSITION
@@ -2840,6 +2930,11 @@ to = Review
 on = triage-escalated
 
 #### Review
+
+##### TRANSITION
+
+to = Review
+on = repair-policy-adopted
 
 ##### TRANSITION
 
@@ -2871,6 +2966,11 @@ on = review-decision-needed
 ##### TRANSITION
 
 to = Repair
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Repair
 on = documents-selected
 
 ##### TRANSITION
@@ -2898,6 +2998,11 @@ on = repair-decision-needed
 ##### TRANSITION
 
 to = Closing
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Closing
 on = documents-selected
 
 ##### TRANSITION
@@ -2921,6 +3026,11 @@ to = PhaseInspection
 on = last-step-closed
 
 #### PhaseInspection
+
+##### TRANSITION
+
+to = PhaseInspection
+on = repair-policy-adopted
 
 ##### TRANSITION
 
@@ -2967,6 +3077,11 @@ on = phase-candidate-observed
 ##### TRANSITION
 
 to = PhaseValidation
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = PhaseValidation
 on = documents-selected
 
 ##### TRANSITION
@@ -3009,6 +3124,11 @@ on = validation-repair-adopted
 ##### TRANSITION
 
 to = PhaseReview
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = PhaseReview
 on = documents-selected
 
 ##### TRANSITION
@@ -3037,6 +3157,11 @@ to = Decision
 on = phase-review-decision-needed
 
 #### PhaseClosing
+
+##### TRANSITION
+
+to = PhaseClosing
+on = repair-policy-adopted
 
 ##### TRANSITION
 
@@ -3084,6 +3209,16 @@ to = Closed
 on = phase-repository-closed
 
 #### Decision
+
+##### TRANSITION
+
+to = Decision
+on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Repair
+on = repair-policy-resumed
 
 ##### TRANSITION
 
@@ -5876,6 +6011,62 @@ GoalPhaseFailedPhaseRepairAdoptionInput
 ###### TYPE
 
 GoalPhaseFailedPhaseRepairAdoptionResult
+
+#### describeGoalPhaseRepairPolicy
+
+##### DESCRIPTION
+
+Read retained native history only. Describe the exact Session, participant, original Plan/base/accepted prefix, frontier revision/cause, generation, counts, original/current selected/effective policy and current stage/decision/source/question. Optional restoration identifies the actual producer Session/repository and separate suspended consumer Session/repository/work purpose; it grants no consumer access or authority. Eligible sources are an idle native frontier, an unanswered exhausted-budget Human, or a completed unchanged-scope RepairStep decision. Collect active work and reconcile unknown effects first. Do not infer unseen caller text or origin. Supported choices are AdoptRuntimePolicy, RetainSelectedLimit and Defer. Description changes no state and executes no repository or SBT work.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseRepairPolicyDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseRepairPolicyDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseRepairPolicyDescriptionResult
+
+#### adoptGoalPhaseRepairPolicy
+
+##### DESCRIPTION
+
+Require independent Human evidence under goal-phase-repair-policy-adoption, exactly binding the current complete target, choice, rationale, participant and reference, including an optional restoration link. AdoptRuntimePolicy selects sm-workflow.repair-trend.v1 and corrects the allowance to 10. RetainSelectedLimit enables the policy with the explicitly selected allowance at most 10. Defer writes nothing. Append one guarded native direction, superseding an eligible unanswered question without an answer. Preserve original Start/Plan/document selection, accepted work, counts, generation, failed and unknown receipts, candidate/validation contexts and cumulative history. Adoption neither reserves/refunds a batch nor opens a new window. A separate ordinary Advance reserves an eligible unreserved batch once; an already reserved RepairStep resumes its same batch. Reject stale/crossed/malformed/null fields, unrelated scope/authority/document decisions and unknown effects. Record available actual direction facts through existing Evidence/Journal owners independently of the business outcome; recording failure never replays the action or manufactures acceptance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseRepairPolicyAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseRepairPolicyAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseRepairPolicyAdoptionResult
 
 #### describeGoalPhaseCompletionPolicy
 
@@ -8759,6 +8950,9 @@ GoalPhase kind failed-phase-repair-adoption requires participant, the actual gen
 GoalPhase kind validation-repair-adoption requires participant, the actual GoalPhaseValidationRepairDescriptionResult and full GoalPhaseValidationRepairAdoptionInput. Bind exactly componentInstance and validationRepairAdoption(target,proposal,answer(choice,rationale,participant,reference)) under native-external-evidence.v7 with actual issuer/time. Historical source uses only AdoptHistoricalAssociationAndRepairPlanAcceptingUnresolvedEffects or Defer and retains exact original public caller provenance and all fixed historical limitations. Preparation does not authenticate source, create Human authority, provision storage, adopt or Advance.
 
 GoalPhase kind completion-policy-adoption requires participant, the actual GoalPhaseCompletionPolicyDescriptionResult as request and GoalPhaseCompletionPolicyAdoptionInput as result, the exact described target and matching independent Human reference and execution worker. Prepare the existing external-evidence import under purpose goal-phase-completion-policy-adoption and completionPolicyAdoption(target,answer). Choices are AdoptLocalCompletion and Defer. Preparation neither adopts direction nor changes a saved Start nor grants repository effects; the public adoption operation owns its guarded self-transition.
+
+GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhaseRepairPolicyDescriptionResult and GoalPhaseRepairPolicyAdoptionInput, exact target/choice/rationale/reference and matching independent worker, issuer and time. Prepare only the existing external-evidence import under goal-phase-repair-policy-adoption and repairPolicyAdoption(target,answer). Choices are AdoptRuntimePolicy, RetainSelectedLimit and Defer. Preparation has no workflow or authority effect and does not authenticate caller-origin claims. Optional restoration is exact business context; no consumer operation or count modification follows.
+
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

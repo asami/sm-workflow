@@ -378,7 +378,7 @@ final class NativeGoalProjectBuildCliSpec extends AnyWordSpec with GivenWhenThen
     review.work.get.kind shouldBe "ReviewStep"
     review.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
     review.work.get.originalBase shouldBe fixture.request.work.get.originalBase
-    review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
     captured.events.count(_.hcursor.get[String]("state").contains("started")) shouldBe 1
     val terminal = captured.events.filter(_.hcursor.get[String]("state").contains("terminal"))
     terminal.size shouldBe 1

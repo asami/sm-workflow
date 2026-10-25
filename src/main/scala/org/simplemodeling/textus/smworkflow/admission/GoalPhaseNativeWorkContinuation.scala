@@ -25,7 +25,7 @@ import GoalPhaseNativeReviewCompletion as Q
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -157,6 +157,32 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case _ => F.sessionC(identity, d, definition, core).flatMap(_advance_session_c(_, core))
       }
     } yield result
+
+    def describeRepairPolicyC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyDescriptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyDescriptionResult] =
+      _repair_policy_source_c(input.sessionId, core).flatMap(GoalPhaseRepairPolicyAdoption.describeC(_, input.restoration, core))
+
+    def adoptRepairPolicyC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyAdoptionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRepairPolicyAdoptionResult] =
+      _repair_policy_source_c(input.sessionId, core).flatMap(GoalPhaseRepairPolicyAdoption.adoptC(_, d, core, input))
+
+    private def _repair_policy_source_c(identity: String, core: ActionCall.Core): Consequence[GoalPhaseRepairPolicyAdoption.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      selected <- located match {
+        case Frontier(cursor) if cursor.from == source.current && cursor.controller.closureIntent.isEmpty =>
+          Consequence.success(GoalPhaseRepairPolicyAdoption.Source(source, cursor.from, cursor.controller,
+            lastResult = cursor.lastresult))
+        case Human(human, _) => for {
+          next <- GoalPhaseNativeHistory.nextC(source.current, human.from)
+          _ <- if (next.exists(entry => entry.revision == source.current.revision && entry.suspension.nonEmpty))
+            Consequence.unit else F.invalid("Repair policy adoption requires the exact unanswered Human question")
+        } yield GoalPhaseRepairPolicyAdoption.Source(source, source.current, human.controller, Some(human),
+          Some(human.input -> human.result))
+        case _ => F.invalid("Collect issued work and reconcile unknown native effects before repair policy adoption")
+      }
+    } yield selected
 
     def describeCompletionPolicyC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseCompletionPolicyDescriptionResult] =
@@ -620,7 +646,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     private def _initial_cursor_c(source: F.Session): Consequence[Cursor] = for {
       from <- GoalPhaseNativeHistory.prefixC(source.current, source.started.receipt.next.revision)
-      controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
+      controller <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base,
+        source.started.receipt.payload.value.repairPolicy)
     } yield Cursor(from, controller, source.started.receipt.payload.value.documents, None, None, None, None)
 
     /** The sole read-only traversal follows only contiguous actual predecessors. */
@@ -690,9 +717,18 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             _ <- if (boundary.continuationIdentity.value == H.identity(decision).value) Consequence.unit
               else F.invalid("actual Human suspension differs from its Decision source")
             port <- _human_port_c
-            adopted <- if (decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
+            policyfollowing <- GoalPhaseNativeHistory.nextC(source.current, pending)
+            policy <- if (policyfollowing.exists(_.causation.value.startsWith("ordered-repair-policy-adoption:")))
+              GoalPhaseRepairPolicyAdoption.retainedC(GoalPhaseRepairPolicyAdoption.Source(source, pending,
+                cursor.controller, Some(decision), Some(decision.input -> decision.result)), core).map(Some(_))
+              else Consequence.success(Option.empty[GoalPhaseRepairPolicyAdoption.Resumed])
+            adopted <- if (policy.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
               else GoalPhaseRemainingPlanAdoption.retainedC(decision, core, Some(d))
-            result <- adopted match {
+            result <- if (policy.nonEmpty) {
+              val resumed = policy.get
+              _walk_c(source, cursor.copy(from = resumed.record, controller = resumed.controller),
+                soughtwork, soughthuman, soughtrecording, core, historyonly)
+            } else adopted match {
               case Some(value) => for {
                 policy <- value.documents.map(documents => P.policyC(value.controller.plan, documents, d.candidatePaths).map(Some(_)))
                   .getOrElse(Consequence.success(Option.empty[P.Policy]))
@@ -736,7 +772,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               }
             }
           } yield result else for {
-            prepared <- _retained_work_c(source, cursor, pending, core)
+            issuecursor <- if (cursor.controller.policyRepairPending) cursor.controller.dispatchPolicyRepairC
+              .map(state => cursor.copy(controller = state)) else Consequence.success(cursor)
+            prepared <- _retained_work_c(source, issuecursor, pending, core)
             identity = ContinuationIdentity(boundary.continuationIdentity.value)
             result <- if (soughtwork.contains(identity)) Consequence.success[Located](Work(prepared))
               else for {
@@ -791,6 +829,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughtwork: Option[ContinuationIdentity], soughthuman: Option[ContinuationIdentity],
       soughtrecording: Option[ContinuationIdentity],
       core: ActionCall.Core, historyonly: Boolean): Consequence[Located] = cursor.controller.stage match {
+      case _ if entry.causation.value.startsWith("ordered-repair-policy-adoption:") => for {
+        retained <- GoalPhaseRepairPolicyAdoption.retainedC(GoalPhaseRepairPolicyAdoption.Source(
+          source, cursor.from, cursor.controller, lastResult = cursor.lastresult), core)
+        result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.controller),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
       case O.Stage.Decision if entry.causation.value.startsWith("ordered-validation-repair-adoption:") &&
           cursor.candidate.nonEmpty && cursor.validation.nonEmpty =>
         _resume_validation_repair_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -1335,7 +1379,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
         else _wait_cursor_c(cursor, "Whole-Phase checks and review are retained; repository closure remains unavailable.")
       case O.Stage.Decision =>
-        if (d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
+        if (cursor.controller.policyRepairPending) cursor.controller.dispatchPolicyRepairC.flatMap(state =>
+          _semantic_frontier_c(source, cursor.copy(controller = state), core))
+        else if (d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
             Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)))) for {
           decision <- _human_source_c(source, cursor)
           port <- _human_port_c

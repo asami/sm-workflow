@@ -44,6 +44,8 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.ContinueGoalPhaseCandidateObservationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCompletionPolicyOperation,
     SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseCompletionPolicyOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseRepairPolicyOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseRepairPolicyOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseFailedPhaseRepairOperation,
     SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseFailedPhaseRepairOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseValidationRepairOperation,
@@ -113,6 +115,8 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
         "continueGoalPhaseCandidateObservation" -> Some("GoalPhaseCandidateObservationContinuationInput"),
         "describeGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyDescriptionInput"),
         "adoptGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyAdoptionInput"),
+        "describeGoalPhaseRepairPolicy" -> Some("GoalPhaseRepairPolicyDescriptionInput"),
+        "adoptGoalPhaseRepairPolicy" -> Some("GoalPhaseRepairPolicyAdoptionInput"),
         "describeGoalPhaseFailedPhaseRepair" -> Some("GoalPhaseFailedPhaseRepairDescriptionInput"),
         "adoptGoalPhaseFailedPhaseRepair" -> Some("GoalPhaseFailedPhaseRepairAdoptionInput"),
         "describeGoalPhaseValidationRepair" -> Some("GoalPhaseValidationRepairDescriptionInput"),
@@ -125,6 +129,10 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
         Some("GoalPhaseReviewPurposeRepairDescriptionResult")
       provided.find(_.name == "admitGoalPhaseReviewPurposeRepair").get.resultType shouldBe
         Some("GoalPhaseReviewPurposeRepairResult")
+      provided.find(_.name == "describeGoalPhaseRepairPolicy").get.resultType shouldBe
+        Some("GoalPhaseRepairPolicyDescriptionResult")
+      provided.find(_.name == "adoptGoalPhaseRepairPolicy").get.resultType shouldBe
+        Some("GoalPhaseRepairPolicyAdoptionResult")
     }
 
     "resolve the seven real semantic, triage, Human and recording capabilities in the ordered definition" in {

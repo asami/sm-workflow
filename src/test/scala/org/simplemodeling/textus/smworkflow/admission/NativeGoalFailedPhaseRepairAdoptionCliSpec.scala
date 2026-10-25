@@ -276,7 +276,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       target.closurePolicy shouldBe recoveryHost(root).goal.closure
       target.captured.proposal shouldBe proposal
       target.captured.plan.steps.take(oldplan.steps.size) shouldBe oldplan.steps
-      target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 2)
+      target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2))
       phaseExecutions(root).size shouldBe 1
       inKnownEpisode(root, componentInstance = "default")(episode => episode.current(identity).history shouldBe before.get.history)
 
@@ -637,7 +637,7 @@ final class NativeGoalFailedPhaseRepairAdoptionCliSpec extends AnyWordSpec with 
       target.source.base shouldBe O.Snapshot(original.get.work.get.originalBase.head, original.get.work.get.originalBase.tree)
       target.plan shouldBe oldplan
       target.completed.map(_.commit.identity) shouldBe Vector(closedtip.trim)
-      target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 2)
+      target.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2))
       phaseExecutions(root).size shouldBe 1
       Files.readString(product) shouldBe originalsource
       retrytarget.knownFailedPhase shouldBe None

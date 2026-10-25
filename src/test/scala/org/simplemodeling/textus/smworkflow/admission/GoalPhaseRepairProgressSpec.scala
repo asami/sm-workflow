@@ -172,8 +172,8 @@ final class GoalPhaseRepairProgressSpec extends AnyWordSpec with Matchers with G
       request.repairProgress shouldBe Some(P.Snapshot(1, 1, 1))
       question.repairProgress shouldBe Some(P.Snapshot(1, 0, 1))
       decoded shouldBe Right(question)
-      take(P.publicOptionC(question.repairProgress)) shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 1))
-      take(P.publicOptionC(request.repairProgress)) shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      take(P.publicOptionC(question.repairProgress)) shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 1, None, None, None))
+      take(P.publicOptionC(request.repairProgress)) shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, None, None, None))
 
       Given("that actual current controller capture and its unmodified prior Work in the saved typed Human question")
       val decision = H.goalQuestion.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]]

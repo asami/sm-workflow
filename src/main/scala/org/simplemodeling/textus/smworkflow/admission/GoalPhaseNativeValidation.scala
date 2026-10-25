@@ -180,6 +180,15 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case None => _checks_c(store)
     }
     evidence <- store.evidenceC(actual.payload)
+    repairevidence <- if (controller.repairControl.nonEmpty && repairable(actual.payload) &&
+        actual.payload.outcome.exists(Set("repair-required", "repair-limit-reached"))) for {
+      inspected <- if (controller.candidate.contains(actual.payload.candidate)) Consequence.success(controller)
+        else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy, recordingPaths)
+      reference = session.current.identity.value + ":ordered-validation:" + actual.payload.sourceRevision + ":validation"
+      state <- observedStateC(inspected, actual.payload, reference, candidate.payload.changedPaths)
+      recorded <- GoalPhaseRuntimeRepairControl.recordC(d, core, session.current.identity.value,
+        ContextReference(reference, "1"), "failed", GoalPhaseRuntimeRepairControl.facts(state))
+    } yield recorded else Consequence.success(Vector.empty[org.simplemodeling.textus.smworkflow.value.EvidenceRecordingState])
     journal <- DevelopmentJournalAssessment.recordC(d, core, session.current.identity.value, actual.payload)
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
@@ -207,7 +216,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       case _ => "A native check intent has no recorded result. Observe or request a genuine decision; checks are not automatically replayed."
     })
   } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)
-    .copy(evidenceRecording = evidence, assessmentJournal = journal)))
+    .copy(evidenceRecording = evidence ++ repairevidence, assessmentJournal = journal)))
 
   private[admission] def recoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
@@ -427,9 +436,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
         inspected <- if (store.controller.stage.toString == store.validationStage &&
             store.controller.candidate.contains(store.initial.candidate)) Consequence.success(store.controller)
           else GoalPhaseNativeCandidate.observedStateC(store.controller, store.candidate.payload, store.documentPolicy, store.recordingPaths)
-        outcome = if (passed) "passed" else if (outputLimited(current.payload)) "incomplete" else if ((!store.whole || inspected.releaseRepairActive) && inspected.plan.repairLimit > 0 &&
+        outcome = if (passed) "passed" else if (outputLimited(current.payload)) "incomplete" else if ((!store.whole || inspected.releaseRepairActive) && inspected.effectiveRepairLimit > 0 &&
           inspected.generation < Long.MaxValue && repairable(current.payload)) {
-          if (inspected.repairs < inspected.plan.repairLimit) "repair-required" else "repair-limit-reached"
+          if (inspected.repairs < inspected.effectiveRepairLimit) "repair-required" else "repair-limit-reached"
         } else "failed"
         completed = current.payload.copy(outcome = Some(outcome))
         assessment <- if (passed && !store.whole && inspected.plan.steps(inspected.cursor).actionPolicy.nonEmpty)
@@ -444,7 +453,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           case "passed" if assessment.exists(_.branch == "decision") => "checks-judgment-required"
           case "passed" => "checks-passed"
           case "incomplete" => "checks-incomplete"
-          case "repair-required" => "checks-repair-required"
+          case "repair-required" if validated.stage == O.Stage.Repair => "checks-repair-required"
           case _ => "checks-failed"
         })
         _ <- if (validated.stage.toString == target && domain.statemachine.GoalPhaseRunLifecycle.permits(store.validationStage, event, target))
@@ -1043,9 +1052,9 @@ private[smworkflow] object GoalPhaseNativeValidation {
         controller.acceptC(O.ChecksObserved(payload.candidate, required, receiptIdentity, false))
       case Some(outcome) if failurecoverage && repairable(payload) &&
           (controller.cursor < controller.plan.steps.size || controller.releaseRepairActive) &&
-          controller.plan.repairLimit > 0 && controller.generation < Long.MaxValue &&
-          ((outcome == "repair-required" && controller.repairs < controller.plan.repairLimit) ||
-            (outcome == "repair-limit-reached" && controller.repairs >= controller.plan.repairLimit)) =>
+          controller.effectiveRepairLimit > 0 && controller.generation < Long.MaxValue &&
+          ((outcome == "repair-required" && controller.repairs < controller.effectiveRepairLimit) ||
+            (outcome == "repair-limit-reached" && controller.repairs >= controller.effectiveRepairLimit)) =>
         val failed = payload.selected(payload.receipts.size - 1)
         val exit = payload.receipts.last.exitCode.get
         val scope = if (controller.cursor == controller.plan.steps.size) "Release" else "Step"
@@ -1054,9 +1063,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
             d.admission.binding.paths.mkString(", ")).getOrElse("selected " + scope + " " + payload.step)
         val directive = O.RepairDirective("Correct selected " + scope + " check " + failed.identity + " (" + failed.kind.wire +
           ") after actual exit " + exit,
-          Vector("Correct semantic source within " + ownership + " using the retained actual diagnostics for " +
+          Vector(if (controller.repairControl.nonEmpty) "Native check " + failed.identity + " (" + failed.kind.wire +
+            ") failed with actual exit " + exit + " within " + ownership
+          else "Correct semantic source within " + ownership + " using the retained actual diagnostics for " +
             failed.identity + "; runtime must inspect the fresh candidate and rerun selected checks before independent review."))
-        controller.acceptC(O.RepairableChecksObserved(payload.candidate, required, receiptIdentity, directive))
+        // A failed check identity and raw output do not provide a complete typed
+        // unresolved-finding catalog. Budget applies; convergence stays unknown.
+        controller.acceptC(O.RepairableChecksObserved(payload.candidate, required, receiptIdentity, directive,
+          comparableFindings = false))
       case _ => F.invalid("native check outcome is incomplete or contradicts its actual selected receipts")
       }
     }

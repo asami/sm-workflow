@@ -213,7 +213,7 @@ final class NativeGoalStartupRecoveryCliSpec extends AnyWordSpec with GivenWhenT
     result.work.get.kind shouldBe "ReviewStep"
     result.work.get.selectedPlan shouldBe request.work.get.selectedPlan
     result.work.get.originalBase shouldBe request.work.get.originalBase
-    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    result.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   }
 
   private def _same_selection(first: N.Payload, later: N.Payload): Unit = {
@@ -277,7 +277,7 @@ final class NativeGoalStartupRecoveryCliSpec extends AnyWordSpec with GivenWhenT
       Then("one bounded extra dispatch also observes actual NotStarted, retaining success and both stopped attempts without repair")
       waiting.sessionId shouldBe identity
       waiting.kind shouldBe "Wait"
-      waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       val pids = compileExecutions(root)
       pids.size shouldBe 1
       pids.head should not be ProcessHandle.current().pid()
@@ -420,7 +420,7 @@ final class NativeGoalStartupRecoveryCliSpec extends AnyWordSpec with GivenWhenT
         old.isAlive shouldBe true
         waiting.kind shouldBe "Wait"
         waiting.sessionId shouldBe identity
-        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+        waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
         compileExecutions(root) shouldBe Vector(pid)
         concurrent.events shouldBe empty
         withRecoveryEpisode(root) { episode =>

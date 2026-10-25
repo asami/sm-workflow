@@ -41,7 +41,7 @@ final class NativeGoalDependencyScopeCliSpec extends AnyWordSpec with Matchers w
     path.toUri.toASCIIString
   }
   private def _progress(value: V.GoalPhaseAdvanceResult): Unit =
-    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    value.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   private def _untouched(selected: Selected): Unit = {
     Files.readString(Path.of(selected.scenario.host.target.root).resolve("value.txt"), UTF_8) shouldBe "initial\n"
     Files.readString(selected.scenario.root.resolve("dependency-source.scala"), UTF_8) shouldBe selected.dependencytext

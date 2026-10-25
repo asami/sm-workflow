@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Completion operations cannot issue these records. Configuration selects the
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -48,6 +48,7 @@ private[smworkflow] object NativeExternalEvidence {
     case FailedPhaseRepairAdoption extends Purpose(GoalPhaseFailedPhaseRepairAdoption.purpose)
     case ValidationRepairAdoption extends Purpose(GoalPhaseValidationRepairAdoption.purpose)
     case CompletionPolicyAdoption extends Purpose(GoalPhaseCompletionPolicyAdoption.purpose)
+    case RepairPolicyAdoption extends Purpose(GoalPhaseRepairPolicyAdoption.purpose)
   }
   final case class Declaration(storeName: String, collection: DataStore.CollectionId, issuer: String)
   final case class Evidence(schemaVersion: String, purpose: String, lookupIdentity: String,
@@ -159,7 +160,7 @@ private[smworkflow] object NativeExternalEvidence {
     } else if (purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
-        purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
+        purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.RepairPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
         purpose == Purpose.ReleaseRepairContinuation) {
       val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
         else if (purpose == Purpose.ValidationRepairAdoption) selected.hcursor.downField("validationRepairAdoption").downField("answer")
@@ -170,6 +171,7 @@ private[smworkflow] object NativeExternalEvidence {
         else if (purpose == Purpose.ClosureRecovery) selected.hcursor.downField("closureRecovery").downField("answer")
         else if (purpose == Purpose.FailedPhaseRepairAdoption) selected.hcursor.downField("failedPhaseRepairAdoption").downField("answer")
         else if (purpose == Purpose.CompletionPolicyAdoption) selected.hcursor.downField("completionPolicyAdoption").downField("answer")
+        else if (purpose == Purpose.RepairPolicyAdoption) selected.hcursor.downField("repairPolicyAdoption").downField("answer")
         else if (purpose == Purpose.ReviewPurposeRepair) selected.hcursor.downField("reviewPurposeRepair").downField("directive")
         else if (purpose == Purpose.ReleaseRepairContinuation) selected.hcursor.downField("releaseRepairContinuation").downField("directive")
         else selected.hcursor.downField("remainingPlanAdoption").downField("directive")
@@ -209,6 +211,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.FailedPhaseRepairAdoption => GoalPhaseFailedPhaseRepairAdoption.selectBinding(value)
       case Purpose.ValidationRepairAdoption => GoalPhaseValidationRepairAdoption.selectBinding(value)
       case Purpose.CompletionPolicyAdoption => GoalPhaseCompletionPolicyAdoption.selectBinding(value)
+      case Purpose.RepairPolicyAdoption => GoalPhaseRepairPolicyAdoption.selectBinding(value)
     }
     selected.fold(Consequence.stateConflict(_), Consequence.success)
   }

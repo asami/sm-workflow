@@ -1,7 +1,7 @@
 # Runtime repair control correction
 
 Date: 2026-10-25 (Asia/Tokyo)
-Status: planned; skill wording adopted, runtime qualification pending
+Status: producer implementation/qualification delivered 2026-10-26; live consumer adoption pending
 Owner: sm-workflow development; first consumer: textus-control-center development
 Contract: [runtime-owned repair control](../spec/runtime-owned-repair-control.md)
 
@@ -41,31 +41,44 @@ or authorize a second caller-owned repair controller.
 
 ## Acceptance checklist
 
-- [ ] RRC-01: A terminated fixture failure within approved scope produces ordinary
+- [x] RRC-01: A terminated fixture failure within approved scope produces ordinary
   repair and revalidation, without a new Human request or caller-added run limit.
-- [ ] RRC-02: Qualified candidate adoption remains blocked until real checks pass;
+- [x] RRC-02: Qualified candidate adoption remains blocked until real checks pass;
   failure does not prevent the authorized repair itself. Live/unknown effects are
   collected/reconciled without duplicate execution; actual new authority still
   follows its real decision route.
-- [ ] RRC-03: Improving work continues; sustained regression/oscillation stops
+- [x] RRC-03: Improving work continues; sustained regression/oscillation stops
   through runtime policy before ten. A single failure/temporary expansion and
   unknown observations do not falsely establish divergence.
-- [ ] RRC-04: Batch ten can succeed; unresolved work cannot issue automatic batch
+- [x] RRC-04: Batch ten can succeed; unresolved work cannot issue automatic batch
   eleven. Hygiene/minor fixes count automatically; reads/tests/reviews are not
   extra repair batches; replacing a worker never renews the window.
-- [ ] RRC-05: Existing Session policy adoption preserves identity, accepted work,
+- [x] RRC-05: Existing Session policy adoption preserves identity, accepted work,
   active/cumulative counts, history and evidence. Accidental 3 -> 10 does not reset
   consumed cycles; old approval waits are reconciled with the actual new direction.
 - [ ] RRC-06: Restoration has an explicit existing producer work owner linked to
   the suspended consumer; neither skill nor helper implements its own loop or
   silently modifies the consumer count. Original consumer continuation is proven.
-- [ ] RRC-07: Available caller-added stop signals, actual runtime Human requests
+- [x] RRC-07: Available caller-added stop signals, actual runtime Human requests
   and genuine authority gaps are distinguishable using existing record owners;
   records add no AI calls and do not claim unseen caller facts or resolved causes.
 - [ ] RRC-08: Deployed skill, bundled skill and installed runtime agree. Reuse
   applicable tests/reviews and retain original failures. Live consumer adoption
   is recorded separately; documentation change alone checks off none of RRC-01..08.
-- [ ] RRC-09: A not-yet-installed RRC capability does not block an existing
+- [x] RRC-09: A not-yet-installed RRC capability does not block an existing
   authorized standalone restoration. One delivery owner coordinates execution and
   consolidated review; no per-edit consumer freeze or duplicate result polling.
   Standalone qualification is not relabeled as RRC or consumer acceptance.
+
+## Producer delivery boundary — 2026-10-26
+
+The common owner and public adoption are implemented and independently reviewed.
+Focused source and isolated installed qualification, normal local publication and
+runtime activation are complete. Completed results were recovered from their
+original receipts after caller interruption. No successful check/publication was
+repeated to obtain a chat summary. See the [producer delivery](../journal/2026/10/2026-10-25-runtime-repair-control-producer-delivery.md).
+
+RRC-06 and RRC-08 remain open only for actual consumer selection/adoption and
+continuation. The isolated same-Session restoration link and failure-to-FIX tests
+prove producer capability, not acceptance in a live consumer. That owner retains
+all live Operations. No earlier acceptance is reopened.

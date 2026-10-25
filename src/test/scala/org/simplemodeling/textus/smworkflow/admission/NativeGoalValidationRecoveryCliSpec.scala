@@ -157,7 +157,7 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       val target = take(R.targetC(description.target))
       Then("the returned exact original target remains unresolved without executing Compile")
       waiting.kind shouldBe "Wait"
-      waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      waiting.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       repeatedwaiting.kind shouldBe "Wait"
       repeatedwaiting.sessionId shouldBe identity
       repeatedwaiting.repairProgress shouldBe waiting.repairProgress
@@ -208,7 +208,7 @@ final class NativeGoalValidationRecoveryCliSpec extends AnyWordSpec with GivenWh
       review.work.get.selectedPlan.revision shouldBe target.planRevision
       review.work.get.originalBase.head shouldBe target.base.head
       review.work.get.originalBase.tree shouldBe target.base.tree
-      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
       compileExecutions(root).size shouldBe 1
       compileExecutions(root).head should not be ProcessHandle.current().pid()
 

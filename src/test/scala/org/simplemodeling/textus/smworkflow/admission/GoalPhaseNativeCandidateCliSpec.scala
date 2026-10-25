@@ -129,7 +129,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
       review.work.get.review.get.diff should not include "Unrelated user edits"
       scenario.candidateIndex shouldBe "docs/phase.md"
       _executions(scenario).size shouldBe beforechecks.size + 1
-      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+      review.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
 
       Given("the retained exact candidate/check receipts and a pending independent review request")
       When("a separate ordinary Advance reconstructs the accepted native prefix without resubmitting completed work")

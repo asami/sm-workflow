@@ -90,7 +90,7 @@ private[admission] trait NativePreparationManagedFixture extends ThreeWorkflowMa
 
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -251,6 +251,56 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
   }
 
   "R3/R4 saved Human repair progress preparation" should {
+    "preserve all six runtime repair progress members across public aliases and refuse crossed or malformed policy context" in {
+      Given("a specification Human question with distinct saved counts and the existing selected runtime policy")
+      withCore { call =>
+        val policy = GoalPhaseRuntimeRepairControl.version
+        val assigned = GoalPhaseRepairProgress.Snapshot(1, 1, 2, Some(policy), Some(10), Some(10))
+        val current = assigned.copy(ordinaryCount = 0)
+        val question = _goal.progressQuestion(assigned, current)
+        When("native output crosses the generated reader and passive preparation under canonical snake and kebab names")
+        val output = take(NativeWorkflowOperationOutput.goalHumanC(question, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(wire(output)))
+        val context = decoded.human.get.humanDecisionContext.get
+        val raw = json(context.question)
+        val contexts = Vector(context, context.copy(question = PropertyNameContext.default.transformRecord(context.question)),
+          context.copy(question = PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase).transformRecord(context.question)))
+        val prepared = contexts.map(value => take(Preparation.goalC(value, goalAnswer, reference, execution,
+          participant, issuer, now.minusSeconds(60))))
+        val target = take(ThreeWorkflowExternalEvidencePorts.goalHumanBindingC(context.componentInstance,
+          question, _goal.goalAnswer, participant))
+        Then("all spellings bind exactly the native six-member current and assignment snapshots")
+        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2, Some(policy), Some(10), Some(10)))
+        prepared.map(value => evidence(value).binding).distinct.size shouldBe 1
+        prepared.foreach(value => observe(evidence(value), Purpose.GoalHuman, target).isSuccess shouldBe true)
+
+        Given("changed policy context at either consumed progress position and malformed or contradictory supplied aliases")
+        val sourcepaths = Vector(Vector("source", "repairProgress"), Vector("source", "assignment", "repairProgress"))
+        val bindingpaths = sourcepaths.map(Vector("humanAttestation", "question") ++ _)
+        val changed = Vector("runtimePolicy" -> Json.fromString("other-policy"), "selectedLimit" -> Json.fromInt(9),
+          "effectiveLimit" -> Json.fromInt(9))
+        val crossed = bindingpaths.flatMap(path => changed.map { case (name, value) =>
+          _goal.alter(target, path)(_.mapObject(_.add(name, value)))
+        })
+        val invalid = Vector("runtimePolicy" -> Json.fromString("other-policy"), "selectedLimit" -> Json.fromString("ten"),
+          "effectiveLimit" -> Json.fromInt(9))
+        val aliases = Vector("runtime_policy" -> Json.fromString("other-policy"), "selected_limit" -> Json.fromInt(9),
+          "effective_limit" -> Json.fromInt(9))
+        val malformed = sourcepaths.flatMap(path => (invalid ++ aliases ++
+          Vector("runtimePolicy", "selectedLimit", "effectiveLimit").map(_ -> Json.Null)).map { case (name, value) =>
+          _goal.alter(raw, path)(_.mapObject(_.add(name, value)))
+        })
+        When("native evidence observation compares changed targets and preparation consumes malformed policy input")
+        val crossedresults = crossed.map(observe(evidence(prepared.head), Purpose.GoalHuman, _))
+        val refused = malformed.map(value => Preparation.goalC(context.copy(question = record(value)),
+          goalAnswer, reference, execution, participant, issuer, now))
+        Then("neither changed policy context nor malformed colliding or partial progress can reuse the original evidence")
+        crossedresults.foreach(_.isSuccess shouldBe false)
+        refused.foreach(_.isSuccess shouldBe false)
+        Consequence.unit
+      }
+    }
+
     "preserve separate current and assignment snapshots through public wire and the managed Reader" in {
       Given("a specification-issued Human question with saved current 1/0/2 and prior assignment 1/1/2")
       withCore { call =>
@@ -266,7 +316,7 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
           participant, issuer, now.minusSeconds(60))))
         val target = take(ThreeWorkflowExternalEvidencePorts.goalHumanBindingC(context.componentInstance, question, _goal.goalAnswer, participant))
         Then("the exact current and prior counts survive independently without duplicate display fields")
-        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2))
+        decoded.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 0, 2, None, None, None))
         prepared.foreach(p => observe(evidence(p), Purpose.GoalHuman, target).isSuccess shouldBe true)
         prepared.map(p => evidence(p).binding).distinct.size shouldBe 1
         json(output.toRecord()).hcursor.downField("human").downField("repairProgress").focus shouldBe None

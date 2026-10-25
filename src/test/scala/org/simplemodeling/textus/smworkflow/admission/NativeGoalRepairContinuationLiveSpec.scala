@@ -75,7 +75,7 @@ final class NativeGoalRepairContinuationLiveSpec extends AnyWordSpec with Matche
     pids
   }
   private def _progress(request: V.GoalPhaseAdvanceResult, current: Int, total: Int): Unit =
-    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(current, total, 2))
+    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(current, total, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   private def _ordinary(scenario: F.Scenario, output: Path): Unit = {
     val product = scenario.invocations.filterNot(_.argv.head == "/usr/bin/git")
     product should not be empty

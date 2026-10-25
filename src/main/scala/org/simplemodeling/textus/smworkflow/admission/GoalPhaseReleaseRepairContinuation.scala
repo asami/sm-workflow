@@ -173,7 +173,7 @@ private[smworkflow] object GoalPhaseReleaseRepairContinuation {
         value.commit != null && value.review.forall(_exact)) &&
       target.completed.map(_.step) == target.plan.steps.map(_.identity) && target.generation > 0 && target.generation < Long.MaxValue &&
       GoalPhaseRepairProgress.validateOptionC(Some(target.repairProgress)).isSuccess &&
-      target.repairProgress.automaticCount < target.repairProgress.limit && target.repairProgress.limit == target.plan.repairLimit &&
+      target.repairProgress.automaticCount < target.repairProgress.effectiveLimit.getOrElse(target.repairProgress.limit) && target.repairProgress.limit == target.plan.repairLimit &&
       _host_valid(target.host), "Release continuation target or saved host is incomplete")
     original <- W.inputCodec.decode(target.originalRequest).fold(F.invalid(_), Consequence.success)
     _ <- _check(original.instanceIdentity == target.sessionId && original.sourceRevision == target.assignmentSourceRevision &&

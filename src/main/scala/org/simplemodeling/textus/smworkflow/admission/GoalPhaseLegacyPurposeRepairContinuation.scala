@@ -170,7 +170,7 @@ private[smworkflow] object GoalPhaseLegacyPurposeRepairContinuation {
     target.plan.steps.lift(target.completed.size).exists(step => step.identity == target.contract.stepIdentity &&
       step.purpose == target.contract.purpose && step.ownedPaths == target.contract.ownedPaths) &&
     _snapshot(target.candidate) && GoalPhaseRepairProgress.validateOptionC(Some(target.repairProgress)).isSuccess &&
-    target.repairProgress.automaticCount < target.repairProgress.limit && target.findings != null && target.findings.nonEmpty &&
+    target.repairProgress.automaticCount < target.repairProgress.effectiveLimit.getOrElse(target.repairProgress.limit) && target.findings != null && target.findings.nonEmpty &&
     target.findings.size <= 128 && target.findings.forall(_finding) &&
     target.findings.map(_.findingOrdinal) == (1 to target.findings.size).toVector &&
     target.findings.map(_.issueIdentity).distinct.size == target.findings.size &&

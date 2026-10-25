@@ -115,7 +115,7 @@ final class NativeGoalValidationAuthoringLiveSpec extends AnyWordSpec with Match
     }
   }
   private def _progress(request: V.GoalPhaseAdvanceResult): Unit = {
-    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
     request.completion shouldBe None
   }
   private def _work(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult,

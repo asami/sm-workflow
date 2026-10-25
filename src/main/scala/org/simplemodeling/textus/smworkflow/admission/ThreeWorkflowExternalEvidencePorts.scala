@@ -14,7 +14,7 @@ import NativeExternalEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -98,6 +98,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val completionPolicyAdoption: GoalPhaseCompletionPolicyAdoption.EvidencePort = new GoalPhaseCompletionPolicyAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
       _admit_evidence_c(core, Purpose.CompletionPolicyAdoption, key(reference.identity, reference.revision), binding)
+  }
+  val repairPolicyAdoption: GoalPhaseRepairPolicyAdoption.EvidencePort = new GoalPhaseRepairPolicyAdoption.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.RepairPolicyAdoption, key(reference.identity, reference.revision), binding)
   }
   val failedPhaseRepairAdoption: GoalPhaseFailedPhaseRepairAdoption.EvidencePort = new GoalPhaseFailedPhaseRepairAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =

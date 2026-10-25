@@ -39,7 +39,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
     if (Files.exists(marker)) Files.readString(marker, UTF_8).linesIterator.map(_.toLong).toVector else Vector.empty
   }
   private def _progress(request: V.GoalPhaseAdvanceResult): Unit =
-    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2))
+    request.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(0, 0, 2, Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
   private def _reference(name: String): V.WorkflowArtifactReference =
     V.WorkflowArtifactReference("specification-plan-revision-" + name, "1")
   private def _save(scenario: F.Scenario, name: String, value: String): String = {

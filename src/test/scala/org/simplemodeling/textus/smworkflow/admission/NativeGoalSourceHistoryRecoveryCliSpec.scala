@@ -382,7 +382,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       repair.work.get.selectedPlan shouldBe episode.completed.work.get.selectedPlan
       repair.work.get.originalBase shouldBe episode.completed.work.get.originalBase
       repair.work.get.completed shouldBe episode.completed.work.get.completed
-      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1))
+      repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 1, Some("sm-workflow.repair-trend.v1"), Some(1), Some(1)))
       executions(fixture.scenario).size shouldBe 2
 
       Given("the assigned repair removes a former prefix file's managed header while preserving valid compiled source")
