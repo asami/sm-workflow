@@ -51,7 +51,8 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     convergence: R.AuthorityPort,
     conflicts: RepositorySyncNativeConflictInput.Policy = RepositorySyncNativeConflictInput.noSemanticPaths,
     review: Option[RepositorySyncNativeMergeReview.Installation] = None,
-    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None) {
+    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None,
+    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None) {
     def validateC(d: F.Declaration): Consequence[Unit] = for {
       _ <- Fetch.validateDeclarationC(declaration)
       _ <- if (authority != null && convergence != null &&
@@ -65,11 +66,14 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
       _ <- conflicts.validateC
       _ <- review.fold(Consequence.unit)(_.validateC)
       _ <- humanConflict.fold(Consequence.unit)(_.validateC)
+      _ <- if (repositoryContinuation != null) repositoryContinuation.fold(Consequence.unit)(_.validateC)
+        else F.invalid("Repository continuation installation is absent")
     } yield ()
     def bindServiceC(params: ComponentCreate, acknowledge: String => Consequence[Unit]): Consequence[spec.ServiceDefinition] =
       RepositorySyncManagedServiceAssembly.bindC(params, declaration,
         nativeProgression = true, nativeAcknowledgement = acknowledge, conflictPolicy = conflicts,
-        validationPolicy = Some(validation), nativeReview = review, convergence = Some(convergence), humanConflict = humanConflict)
+        validationPolicy = Some(validation), nativeReview = review, convergence = Some(convergence), humanConflict = humanConflict,
+        repositoryContinuation = repositoryContinuation)
   }
   final case class Payload(input: Input, childSessionId: String,
     result: Option[V.RepositorySyncNativeConvergenceResult], developmentOccurredAt: Option[String] = None)

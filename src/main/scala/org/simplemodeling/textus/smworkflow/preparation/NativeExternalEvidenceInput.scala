@@ -22,15 +22,24 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          Set("review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
           (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("human", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
+          (if (Set("human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
       _ <- NativePreparationInput.collectionC(options("collection"))
-      request <- if (options("family") == "GoalPhase" &&
+      request <- if (options("family") == "RepositorySync" && options("kind") == "validation-continuation")
+        readText(options("request")).flatMap { text => for {
+          json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
+          target <- json.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
+          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicTarget(target)
+            .fold(_invalid(_), _ => Consequence.unit)
+          record <- new org.goldenport.record.io.RecordDecoder().json(text)
+        } yield record }
+        else if (options("family") == "GoalPhase" &&
           Set("candidate-recovery", "candidate-observation-continuation")(options("kind")))
         readText(options("request")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
@@ -42,7 +51,14 @@ private[smworkflow] object NativeExternalEvidenceInput {
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
         } yield record }
         else NativePreparationInput.readC(options("request"), readText)
-      result <- if (options("family") == "GoalPhase" && options("kind") == "review")
+      result <- if (options("family") == "RepositorySync" && options("kind") == "validation-continuation")
+        readText(options("result")).flatMap { text => for {
+          json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
+          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicAnswer(json)
+            .fold(_invalid(_), _ => Consequence.unit)
+          record <- new org.goldenport.record.io.RecordDecoder().json(text)
+        } yield record }
+        else if (options("family") == "GoalPhase" && options("kind") == "review")
         readText(options("result")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
           _ <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePurposeRepair.validatePublicResultJsonC(json)
@@ -185,6 +201,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
             else _invalid("Goal review result type differs from its assigned context"))
         }
       } yield prepared
+      case "RepositorySync" if options("kind") == "validation-continuation" => for {
+        description <- summon[ValueReader[V.RepositorySyncValidationContinuationDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.RepositorySyncValidationContinuationAnswer]].readC(result)
+        prepared <- NativeRepositoryValidationContinuationPreparation.prepareC(description, answer, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "RepositorySync" => for {
         output <- summon[ValueReader[V.RepositorySyncAdvanceResult]].readC(request)
         _ <- _kind_c(output.kind, human)

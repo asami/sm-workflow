@@ -176,8 +176,13 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       case Some(value) => for {
         _ <- completedC(value, pending, policy, merge)
       } yield value
-      case None => checksC(store, pending, policy,
-        State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, Vector.empty), merge, namespace)
+      case None =>
+        val prefix = if (!merge) pending.payload.continuation.filter(_.choice == "AuthorizeNewValidation")
+          .map(_.target.successfulPrefix).getOrElse(Vector.empty) else Vector.empty
+        if (prefix.nonEmpty && !RepositorySyncValidationContinuation.validPrefix(prefix, policy))
+          N.invalid("continuation seed is not a successful contiguous selected prefix")
+        else checksC(store, pending, policy,
+          State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, prefix), merge, namespace)
     }
   } yield selected
 
@@ -186,8 +191,10 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     val structural = if (merge) 2 else 1
     val checks = Vector(Check("index-local", 0)) ++ (if (merge) Vector(Check("index-remote", 0)) else Vector.empty) ++ selection.selected
     val checking = if (merge) "ValidationChecking" else "IntegrationValidationChecking"
-    checks.zipWithIndex.foldLeft(Consequence.success(pending)) { case (prior, (check, index)) => prior.flatMap { current =>
-      if (current.payload.validation.exists(s => s.receipts.size < index || !successful(s.receipts, merge, s.selected))) Consequence.success(current)
+    val seeded = if (selection.receipts.nonEmpty) pending.copy(payload = pending.payload.copy(validation = Some(selection))) else pending
+    checks.zipWithIndex.foldLeft(Consequence.success(seeded)) { case (prior, (check, index)) => prior.flatMap { current =>
+      if (index < selection.receipts.size) Consequence.success(current)
+      else if (current.payload.validation.exists(s => s.receipts.size < index || !successful(s.receipts, merge, s.selected))) Consequence.success(current)
       else for {
         retained <- store.loadC(N.candidateKey(namespace, "validation-result-" + index))
         selected <- retained match {

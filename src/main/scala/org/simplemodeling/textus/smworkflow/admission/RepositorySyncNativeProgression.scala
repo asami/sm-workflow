@@ -26,10 +26,17 @@ private[smworkflow] object RepositorySyncNativeProgression {
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
+    continuationstore <- bindC(session, declaration, core, acknowledgement)
+    continuation <- RepositorySyncValidationContinuation.selectedC(continuationstore, session.started.current)
     output <- if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
       case Some(boundary) => _pending_c(session, boundary, core)
+      case None if continuation.nonEmpty => validationPolicy match {
+        case Some(policy) => RepositorySyncValidationContinuation.advanceC(continuationstore, continuation.get,
+          session.started.current, policy, convergence)
+        case None => invalid("adopted validation continuation requires the current selected validation policy")
+      }
       case None if session.started.current.currentProgression.contains(WorkflowInstancePersistence.ProgressionReference("sync.RepairDecisionRequired")) =>
         Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual Human handling is required for the retained repair decision; no effects or consent are inferred.", "RepairDecisionRequired"))
@@ -59,8 +66,10 @@ private[smworkflow] object RepositorySyncNativeProgression {
     * Reading a completed result admits no new effects or transitions. */
   private def _retained_terminal_c(session: Fetch.Session, declaration: Fetch.Declaration,
     core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
-    store <- bindC(session, declaration, core, acknowledgement)
+    base <- bindC(session, declaration, core, acknowledgement)
     current = session.started.current
+    selected <- RepositorySyncValidationContinuation.selectedC(base, current)
+    store = selected.fold(base)(value => base.scoped(value.namespace, Some(value.direction)))
     _ <- if (current.lifecycle == Lifecycle.Completed && current.suspension.isEmpty &&
         current.currentProgression.isEmpty && current.identity.value == store.identity &&
         current.causation.value == "native-repository-completed:" + store.identity) Consequence.unit

@@ -26,7 +26,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     after: Option[Git.Observed] = None, method: Option[String] = None, mergeHead: Option[String] = None,
     validation: Option[RepositorySyncNativeMergeValidation.State] = None,
     finalTip: Option[String] = None, assessment: Option[RepositorySyncMergeAssessment.Result] = None,
-    repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None)
+    repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None,
+    continuation: Option[RepositorySyncValidationContinuation.Direction] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -35,7 +36,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -55,7 +56,14 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     val original: RepositorySyncManagedFetch.Payload, val context: RepositorySyncManagedFetch.StartContext,
     val identity: String,
     adapter: WorkflowManagedMechanicalTransition[Payload], storage: WorkflowComponentStorage,
-    acknowledgement: String => Consequence[Unit]) {
+    acknowledgement: String => Consequence[Unit],
+    val namespace: String = "",
+    val continuation: Option[RepositorySyncValidationContinuation.Direction] = None) {
+    def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None): Store =
+      new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction)
+    def key(key: String): String = candidateKey(namespace, key)
+    def reference(key: String): WorkflowMechanicalTransition.Reference =
+      WorkflowMechanicalTransition.Reference(identity + ":native-" + this.key(key), "1")
     /** The current native history selects the actual candidate receipt. A
       * reference is an ordinary progression link, not an unchanged-data seal.
       */
@@ -88,6 +96,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case Some(value) =>
           val p = value.receipt.payload.value
           if (p.root == original.repositoryRoot &&
+              (namespace.isEmpty || p.continuation == continuation) &&
               value.receipt.next.identity.value == identity &&
               value.receipt.next.currentProgression.exists(_.value == "sync." + p.stage))
             Consequence.success(Some(Stage(value.receipt.next, p)))
@@ -101,10 +110,10 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         else invalid("native transition is not declared by CML")
       entry = HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, Lifecycle.Active,
         Some(ProgressionReference("sync." + payload.stage)), from.correlation,
-        CausationReference("native-repository:" + identity + ":" + key),
+        CausationReference("native-repository:" + identity + ":" + this.key(key)),
         from.derivedCompositeOccurrence, from.committedPredecessor, None)
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, reference(key),
-        from, from.revision, entry, TypedValue(codec.typeIdentity, payload)),
+        from, from.revision, entry, TypedValue(codec.typeIdentity, payload.copy(continuation = continuation.orElse(payload.continuation)))),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield Stage(saved.receipt.next, saved.receipt.payload.value)
 
@@ -123,7 +132,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       completed <- instances.appendC(prepared.record.identity, prepared.record.revision, entry)(using core.executionContext)
     } yield completed
 
-    def payload(stage: String, before: Git.Observed): Payload = Payload(stage, original.repositoryRoot, before)
+    def payload(stage: String, before: Git.Observed): Payload =
+      Payload(stage, original.repositoryRoot, before, continuation = continuation)
     def scopeC(actual: Git.Observed): Consequence[Unit] = Git.rootC(core).flatMap(root =>
       if (root == original.repositoryRoot && actual.branch == context.localBranch) Consequence.unit
       else invalid("actual root/branch crosses the original host mapping"))
@@ -131,7 +141,6 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       case Consequence.Success(_) => Consequence.unit
       case _ => uncertain("native " + stage + " acknowledgement interrupted; observe on a later call")
     }
-    private def reference(key: String) = WorkflowMechanicalTransition.Reference(identity + ":native-" + key, "1")
   }
   def bindC(session: RepositorySyncManagedFetch.Session, declaration: RepositorySyncManagedFetch.Declaration,
     core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[Store] =

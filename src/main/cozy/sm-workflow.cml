@@ -865,6 +865,79 @@ OperationResult
 | message | string | 1 |
 | evidenceRecording | EvidenceRecordingState | * |
 
+## RepositorySyncValidationContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## RepositorySyncValidationContinuationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## RepositorySyncValidationContinuationAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| rationale | string | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+
+## RepositorySyncValidationContinuationAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+| executionEvidence | WorkflowExecutionEvidence | 1 |
+
+## RepositorySyncValidationContinuationAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseCompletionPolicyDescriptionInput
 
 - input-kind :: COMMAND
@@ -4496,6 +4569,8 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### IntegrationValidationChecking
 
+##### ValidationContinuationAdmitted
+
 ##### IntegrationValidated
 
 ##### PendingMergePrepared
@@ -4612,6 +4687,11 @@ when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retai
 
 state = IntegrationValidated
 when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+
+##### validation-continuation-admitted
+
+state = ValidationContinuationAdmitted
+when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
 
 ##### merge-conflicted
 
@@ -4865,6 +4945,14 @@ operation = RepositorySyncService.startRepositorySync
 
 operation = RepositorySyncService.advanceRepositorySync
 
+#### describeRepositorySyncValidationContinuation
+
+operation = RepositorySyncService.describeRepositorySyncValidationContinuation
+
+#### adoptRepositorySyncValidationContinuation
+
+operation = RepositorySyncService.adoptRepositorySyncValidationContinuation
+
 #### submitRepositorySyncWorkResult
 
 operation = RepositorySyncService.submitRepositorySyncWorkResult
@@ -5007,6 +5095,11 @@ on = native-check-prepared
 
 ##### TRANSITION
 
+to = ValidationContinuationAdmitted
+on = native-validation-continuation-admitted
+
+##### TRANSITION
+
 to = IntegrationValidationChecking
 on = native-check-prepared
 
@@ -5019,6 +5112,23 @@ on = native-check-recorded
 
 to = IntegrationValidated
 on = native-validation-admitted
+
+#### ValidationContinuationAdmitted
+
+##### TRANSITION
+
+to = Integrated
+on = integration-observed
+
+##### TRANSITION
+
+to = Preserving
+on = preservation-started
+
+##### TRANSITION
+
+to = LocalStatePreserved
+on = local-state-preserved
 
 #### IntegrationValidated
 
@@ -6547,6 +6657,62 @@ RepositorySyncAdvanceInput
 ###### TYPE
 
 RepositorySyncAdvanceResult
+
+#### describeRepositorySyncValidationContinuation
+
+##### DESCRIPTION
+
+Observe the exact active unsuspended nonmerge IntegrationValidationChecking resultless intent under equal, local-ahead or fast-forward integration. Bind current Session revision/causation, original root/branch/remote/endpoint and FULL_STATE scope, selected checks/policy, actual candidate and intent references/revisions, successful receipt prefix, HEAD/tree/tracking/index and complete dirty paths including index/worktree and rename codes. Return AuthorizeNewValidation, AdoptCurrentFullState and Defer plus the separate ordinary Advance route. Refuse merge/unmerged state, changed HEAD/tracking, known failure results, checkpoint/materialization interruption, later review/Human/mutation and completed/cancelled Session with the existing owner route. No storage mutation or continuation adoption follows description.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncValidationContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncValidationContinuationDescriptionResult
+
+#### adoptRepositorySyncValidationContinuation
+
+##### DESCRIPTION
+
+Admit only the complete exact target, typed choice/rationale and existing direction artifact/execution under dedicated independent repository-sync-validation-continuation evidence. The trusted host must externally verify original invocation terminal or not-started lifecycle before provisioning priorExecutionEnded=true and acceptOriginalUncertainty=true; passive preparation never proves termination or supplies consent. Preserve the original UNKNOWN intent and all historical results. AuthorizeNewValidation requires the unchanged clean candidate and reuses only its validated successful prefix in a fresh namespace. AdoptCurrentFullState explicitly covers all described staged and unstaged FULL_STATE paths, invalidates old check scope and allows mixed staging only there. It authorizes current selected path contents at normal staging time, not an immutable content seal or byte-identical Human review. Additional/removed paths, status/index/HEAD/tracking drift refuse. Append only one managed ValidationContinuationAdmitted transition. Defer writes nothing; stale/duplicate direction refuses without effects. Separate ordinary Advance preserves a fresh checkpoint when needed and runs unfinished checks and normal convergence under current grants. Fetch and the old checkpoint are never repeated. Every new resultless invocation requires fresh public adoption and independent terminal evidence. This bounded contract does not recover arbitrary merge, commit, push or fetch interruptions.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncValidationContinuationAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncValidationContinuationAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncValidationContinuationAdoptionResult
 
 #### submitRepositorySyncWorkResult
 
@@ -8953,6 +9119,8 @@ GoalPhase kind completion-policy-adoption requires participant, the actual GoalP
 
 GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhaseRepairPolicyDescriptionResult and GoalPhaseRepairPolicyAdoptionInput, exact target/choice/rationale/reference and matching independent worker, issuer and time. Prepare only the existing external-evidence import under goal-phase-repair-policy-adoption and repairPolicyAdoption(target,answer). Choices are AdoptRuntimePolicy, RetainSelectedLimit and Defer. Preparation has no workflow or authority effect and does not authenticate caller-origin claims. Optional restoration is exact business context; no consumer operation or count modification follows.
 
+
+RepositorySync kind validation-continuation requires participant, the actual RepositorySyncValidationContinuationDescriptionResult and strict RepositorySyncValidationContinuationAnswer, matching execution worker, existing direction artifact reference, issuer and time. Bind every target/answer field under dedicated repository-sync-validation-continuation purpose. An adopting answer requires independently host-attested priorExecutionEnded=true and acceptOriginalUncertainty=true. The trusted host must verify actual terminal or not-started lifecycle externally before provisioning; live or unknown termination refuses. Passive preparation only encodes supplied facts: it cannot observe termination, manufacture consent, issue/provision evidence, adopt or execute. The old UNKNOWN effects remain unknown.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

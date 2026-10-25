@@ -127,7 +127,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,
         settings.repository.conflicts, Some(RepositorySyncNativeMergeReview.Installation(settings.repository.review,
-          ports.repositoryReview)), Some(RepositorySyncHumanConflict.Installation(ports.repositoryHuman)))
+          ports.repositoryReview)), Some(RepositorySyncHumanConflict.Installation(ports.repositoryHuman)),
+        Some(RepositorySyncValidationContinuation.Installation(ports.repositoryValidationContinuation)))
       goal = GoalPhaseNativeRun.Declaration(persistence.configuration, persistence.instances, persistence.continuations,
         settings.goal.input, target, settings.goal.candidatePaths, Some(settings.goal.stepValidation),
         Some(GoalPhaseNativeReview.Installation(settings.goal.review, ports.goalReview)),

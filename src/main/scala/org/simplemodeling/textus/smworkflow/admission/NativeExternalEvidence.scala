@@ -37,6 +37,7 @@ private[smworkflow] object NativeExternalEvidence {
     case RepositoryHuman extends Purpose(RepositorySyncHumanConflict.purpose)
     case GoalHuman extends Purpose(GoalPhaseOrderedHumanDecision.purpose)
     case SourceHistoryRecovery extends Purpose(GoalPhaseSourceHistoryRecovery.purpose)
+    case RepositoryValidationContinuation extends Purpose(RepositorySyncValidationContinuation.purpose)
     case CandidateRecovery extends Purpose(GoalPhaseCandidateRecovery.purpose)
     case CandidateObservationContinuation extends Purpose(GoalPhaseCandidateObservationContinuation.purpose)
     case WholePhaseCandidateRecovery extends Purpose(GoalPhaseWholePhaseCandidateRecovery.purpose)
@@ -157,12 +158,13 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
-    } else if (purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.CandidateRecovery ||
+    } else if (purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
         purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.RepairPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
         purpose == Purpose.ReleaseRepairContinuation) {
       val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
+        else if (purpose == Purpose.RepositoryValidationContinuation) selected.hcursor.downField("repositoryValidationContinuation").downField("answer")
         else if (purpose == Purpose.ValidationRepairAdoption) selected.hcursor.downField("validationRepairAdoption").downField("answer")
         else if (purpose == Purpose.SourceHistoryRecovery) selected.hcursor.downField("sourceHistoryRecovery").downField("answer")
         else if (purpose == Purpose.CandidateRecovery) selected.hcursor.downField("candidateRecovery").downField("answer")
@@ -200,6 +202,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.SplitStart => NativeSplitStartScope.select(purpose, value)
       case Purpose.SplitAnswer => NativeSplitAnswerScope.select(purpose, value)
       case Purpose.SourceHistoryRecovery => GoalPhaseSourceHistoryRecovery.selectBinding(value)
+      case Purpose.RepositoryValidationContinuation => RepositorySyncValidationContinuation.selectBinding(value)
       case Purpose.CandidateRecovery => GoalPhaseCandidateRecovery.selectBinding(value)
       case Purpose.CandidateObservationContinuation => GoalPhaseCandidateObservationContinuation.selectBinding(value)
       case Purpose.WholePhaseCandidateRecovery => GoalPhaseWholePhaseCandidateRecovery.selectBinding(value)

@@ -18,7 +18,9 @@ private[smworkflow] object RepositorySyncNativePreservation {
     store.loadC("preserved").flatMap {
       case Some(value) => Consequence.success(value)
       case None => for {
-        _ <- if (emptyOrFullyStaged(before.dirty)) Consequence.unit
+        _ <- store.continuation.filter(_.choice == "AdoptCurrentFullState").fold(Consequence.unit)(direction =>
+          RepositorySyncValidationContinuation.requireAdoptedScopeC(store, direction.target))
+        _ <- if (store.continuation.exists(_.choice == "AdoptCurrentFullState") || emptyOrFullyStaged(before.dirty)) Consequence.unit
           else invalid("FULL_STATE admits only an empty or completely staged index; mixed staging is not normalized")
         saved <- if (before.dirty.isEmpty) store.saveC("preserved", "local-state-preserved", fetched,
           store.payload("LocalStatePreserved", before).copy(after = Some(before), method = Some("clean")))
@@ -34,9 +36,13 @@ private[smworkflow] object RepositorySyncNativePreservation {
     actual <- Git.observeC(store.core)
     _ <- store.scopeC(actual)
     _ <- unchangedHeadC(intent.payload.before, actual)
-    _ <- if (fullyStaged(actual.dirty)) Consequence.unit
+    _ <- store.continuation.filter(_.choice == "AdoptCurrentFullState").fold(Consequence.unit)(direction =>
+      RepositorySyncValidationContinuation.requireAdoptedScopeC(store, direction.target))
+    _ <- if (fullyStaged(actual.dirty) && !store.continuation.exists(_.choice == "AdoptCurrentFullState")) Consequence.unit
       else Effects.executeGitC(store.core, GitOperation.StageFullState).flatMap(_.valueC)
-    tree <- Git.indexTreeC(store.core)
+    tree <- if (store.continuation.exists(_.choice == "AdoptCurrentFullState"))
+      capturedAdoptedIndexC(intent.payload.before, () => Git.indexTreeC(store.core), () => Git.observeC(store.core))
+      else Git.indexTreeC(store.core)
     indexed <- store.saveC("index-captured", "index-captured", intent.record,
       intent.payload.copy(stage = "IndexCaptured", indexTree = Some(tree)))
     creating <- store.saveC("checkpoint-creating", "checkpoint-creating", indexed.record,
@@ -55,6 +61,22 @@ private[smworkflow] object RepositorySyncNativePreservation {
     saved <- store.saveC("preserved", "local-state-preserved", pending.record,
       pending.payload.copy(stage = "LocalStatePreserved", after = Some(after), method = Some("checkpoint")))
   } yield saved
+
+  private[admission] def capturedAdoptedIndexC(before: Git.Observed, readTree: () => Consequence[String],
+    readObserved: () => Consequence[Git.Observed]): Consequence[String] = for {
+    firsttree <- readTree()
+    staged <- readObserved()
+    _ <- adoptedStagedC(before, staged)
+    lasttree <- readTree()
+    _ <- if (firsttree == lasttree) Consequence.unit
+      else invalid("adopted FULL_STATE index changed concurrently across the post-stage scope observation; checkpoint creation refuses index drift")
+  } yield firsttree
+
+  private[admission] def adoptedStagedC(before: Git.Observed, staged: Git.Observed): Consequence[Unit] = for {
+    _ <- unchangedHeadC(before, staged)
+    _ <- if (fullyStaged(staged.dirty) && paths(staged.dirty) == paths(before.dirty)) Consequence.unit
+      else invalid("adopted FULL_STATE work changed during staging; a complete staged clean worktree within the exact adopted path/rename scope is required before checkpoint creation")
+  } yield ()
 
   private def unchangedHeadC(before: Git.Observed, actual: Git.Observed): Consequence[Unit] =
     if (before.branch == actual.branch && before.head == actual.head && before.tree == actual.tree &&

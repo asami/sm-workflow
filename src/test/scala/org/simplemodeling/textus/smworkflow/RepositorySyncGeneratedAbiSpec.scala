@@ -22,7 +22,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncValidationContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation)
   private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -44,7 +46,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       absent.foreach(_.isSuccess shouldBe false)
       val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("all six Provided operations declare business types without control envelopes")
+      And("all Provided operations declare business types without control envelopes")
       operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startRepositorySync" -> Some("RepositorySyncStartInput"),
@@ -52,7 +54,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "submitRepositorySyncWorkResult" -> Some("RepositorySyncConflictResult"),
         "submitNativeMergeReview" -> Some("RepositorySyncNativeMergeReviewResult"),
         "submitNativeMergeRepair" -> Some("RepositorySyncNativeMergeRepairResult"),
-        "submitRepositoryConflictDecision" -> Some("RepositorySyncHumanConflictAnswer"))
+        "submitRepositoryConflictDecision" -> Some("RepositorySyncHumanConflictAnswer"),
+        "describeRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationDescriptionInput"),
+        "adoptRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationAdoptionInput"))
     }
 
     "consume the repository business selection without an unused policy version" in {

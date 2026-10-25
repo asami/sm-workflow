@@ -80,4 +80,28 @@ private[admission] object ThreeWorkflowNormalHostFixture {
       Vector(SplitPhaseCandidateAllocationPolicy.prefix, SplitPhasePartitionReplyAllocationPolicy.prefix).flatMap(p =>
         Vector(p + "policy-identity" -> "normal-host", p + "policy-revision" -> "1", p + "namespace" -> "cli"))
   }
+
+  /** Public normal-host options for an isolated Repository continuation clone.
+    * A missing typed binding leaves a real dispatched validation intent without
+    * manufacturing a process result; all Git programs remain ordinary typed ones.
+    */
+  def repositoryValidationContinuationValues(root: Path, host: ThreeWorkflowRuntimeParameters.Definition,
+    executable: Path, missingBinding: Boolean): Map[String, String] = {
+    val selected = host.target
+    val git = TypedGitHostPlanFixture.plan(org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target(
+      Path.of(selected.root), selected.localBranch, selected.remote, selected.remoteBranch, selected.endpoint))
+    val full = TypedSbtHostPlanFixture.plan(root, executable, Vector(1), Some(git))
+      .mapObject(fields => fields.add("workspaces", fields("workspaces").get.mapArray(_.map(
+        _.mapObject(_.add("root", Json.fromString(selected.root)))))))
+    val plan = if (missingBinding) {
+      val removedcapabilities = full.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+        .map(_.hcursor.get[Json]("capability").toOption.get).toSet
+      full.mapObject(fields => fields.add("sbtPrograms", Json.arr()).add("grants",
+        fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
+          grant("capabilities").get.mapArray(_.filterNot(removedcapabilities))))))))
+    } else full
+    Map("sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(host).noSpaces,
+      "textus.subsystem.process-execution.plan" -> plan.noSpaces,
+      "textus.resource.url.file.roots" -> root.toString)
+  }
 }

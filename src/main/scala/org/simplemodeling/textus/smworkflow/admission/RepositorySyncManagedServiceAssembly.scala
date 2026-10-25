@@ -29,11 +29,12 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     nativeReview: Option[RepositorySyncNativeMergeReview.Installation] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
-    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None): Consequence[spec.ServiceDefinition] =
+    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None,
+    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None): Consequence[spec.ServiceDefinition] =
     if (params == null)
       Consequence.configurationInvalid("RepositorySync host assembly requires its owning Subsystem")
     else bindC(params, declaration, acknowledgement, nativeProgression,
-      nativeAcknowledgement, conflictPolicy, validationPolicy, nativeReview, convergence, humanConflict)
+      nativeAcknowledgement, conflictPolicy, validationPolicy, nativeReview, convergence, humanConflict, repositoryContinuation)
 
   def bindC(params: ComponentCreate, declaration: Fetch.Declaration,
     acknowledgement: () => Consequence[Unit] = () => Consequence.unit,
@@ -43,7 +44,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy] = None,
     nativeReview: Option[RepositorySyncNativeMergeReview.Installation] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
-    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None): Consequence[spec.ServiceDefinition] = for {
+    humanConflict: Option[RepositorySyncHumanConflict.Installation] = None,
+    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None): Consequence[spec.ServiceDefinition] = for {
     _ <- Fetch.validateDeclarationC(declaration)
     _ <- if (params != null && acknowledgement != null && nativeAcknowledgement != null && conflictPolicy != null) Consequence.unit
       else Consequence.configurationInvalid("RepositorySync managed host dependencies are incomplete")
@@ -55,6 +57,9 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     _ <- if (validationPolicy != null && (validationPolicy.isEmpty || nativeProgression)) Consequence.unit
       else Consequence.configurationInvalid("Merge validation requires its owning native progression")
     _ <- validationPolicy.fold(Consequence.unit)(_.validateC)
+    _ <- if (repositoryContinuation != null && (repositoryContinuation.isEmpty ||
+        (nativeProgression && validationPolicy.nonEmpty))) repositoryContinuation.fold(Consequence.unit)(_.validateC)
+      else Consequence.configurationInvalid("Repository validation continuation requires native progression and selected validation")
     _ <- if (nativeProgression || conflictPolicy.semanticPaths.isEmpty) Consequence.unit
       else Consequence.configurationInvalid("Conflict work cannot be installed without its owning native progression")
     _ <- if (nativeReview != null && (nativeReview.isEmpty || (nativeProgression && validationPolicy.nonEmpty))) Consequence.unit
@@ -91,7 +96,9 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.of(
     new Operation(true, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair),
     new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
-    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector)))
+    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector ++
+      repositoryContinuation.toVector.flatMap(installation => RepositorySyncValidationContinuation.operations(
+        declaration, definition, validationPolicy.get, installation, nativeAcknowledgement)))))
 
   private final class Operation(start: Boolean, declaration: Fetch.Declaration, definition: DefinitionBinding,
     acknowledgement: () => Consequence[Unit],
