@@ -100,6 +100,51 @@ org.simplemodeling.textus.smworkflow
 |------+------|--------------|
 | sessionId | string | 1 |
 
+## GoalPhaseDiagnosticSelection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| kind | string | 1 |
+| reason | string | 1 |
+| check | string | ? |
+| stream | string | ? |
+| occurrenceLine | int | ? |
+| path | string | ? |
+
+## GoalPhaseDiagnosticInformationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| requestIdentity | string | 1 |
+| selections | GoalPhaseDiagnosticSelection | * |
+| knownEvidence | EvidenceReference | * |
+| historyAfter | string | ? |
+
+## GoalPhaseDiagnosticInformationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| requestIdentity | string | 1 |
+| status | string | 1 |
+| message | string | 1 |
+| items | org.goldenport.record.Record | * |
+| recording | EvidenceRecordingState | ? |
+| history | org.goldenport.record.Record | * |
+| historyStatus | string | 1 |
+| historyHasMore | boolean | 1 |
+| historyNext | string | ? |
+
 ## SplitPhaseAdvanceInput
 
 - input-kind :: COMMAND
@@ -5214,6 +5259,34 @@ on = native-convergence-observed
 Own the selected Phase's entry, assigned semantic/Human completion, mechanical progression, explicit validation and Step closure recovery and independently directed remaining-Plan adoption. The normal factory publishes startGoalPhase, advanceGoalPhase, submitGoalPhaseWorkResult, submitGoalPhaseOrderedDecision, describeGoalPhaseValidationRecovery, recoverGoalPhaseValidation, describeGoalPhaseSourceHistoryRecovery, recoverGoalPhaseSourceHistory, describeGoalPhaseClosureRecovery, recoverGoalPhaseClosure, describeGoalPhaseRemainingPlan and adoptGoalPhaseRemainingPlan. Session context resolves pending work and native state; callers supply business inputs or requested results, not control envelopes or stages. Configured managed Step/Phase checks, review, closure and repository effects retain their owning authority. Other declarations are not additional normal public stages. Accepted review or a Human answer alone does not establish committed Step, Phase completion or release.
 
 ### OPERATION
+
+#### resolveGoalPhaseDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve one batched NeedInformation request against the exact currently issued RepairStep with retained failed-check context. Select failure-context, cause-chain, suite-context, execution-context, full-output or source-file with a reason. Retained logs are immutable; source-file reads use the managed repository File workspace and identify current observation with candidate applicability unverified. Empty selections restore a finite page of delivered Evidence references for a replacement worker; historyAfter continues that page. knownEvidence suppresses repeat payloads only for an exact retained batch already known to the caller. Persist requested facts and unavailable results in Common Evidence and its Journal producer. This operation neither completes work nor advances the Session, executes SBT, grants file authority or consumes repair allowance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
 
 #### advanceGoalPhase
 

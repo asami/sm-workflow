@@ -80,6 +80,29 @@ are proposed semantic result variants, not claims of installed API availability:
 | RepairProposal | Cause hypotheses, supporting evidence, affected scope, repair units, dependencies, proposed edits and focused validation selection |
 | UnableToDiagnose | Missing source, external prerequisite, unresolved design/scope question or remaining uncertainty; retain the reason without inventing a repair |
 
+D2 source contract: `GoalPhaseService.resolveGoalPhaseDiagnosticInformation`
+accepts the exact current `issuedWorkContext`, a request identity and a batch of
+typed selections with reasons. It is a side read of the outstanding `RepairStep`
+with retained check failure, not an accepted semantic completion or another work
+assignment. Its selections are `failure-context`, `cause-chain`, `suite-context`,
+`execution-context`, `full-output` and `source-file`. Unsupported selectors return
+an explicit unavailable item. Suite attribution without a retained structured
+interval expands to execution context and stays partial. File reads use the
+managed repository workspace within selected ownership; their candidate
+applicability is unverified, with the actual observation time retained.
+
+The immutable delivered batch uses Common Evidence and its Evidence Journal
+producer. Repeating the same request identity returns that observed batch;
+changing its selections or candidate refuses reuse. A fresh request identity
+observes current files again. `knownEvidence` suppresses a repeated batch's text
+only when the caller already has that exact Evidence reference. Empty selections
+restore a page of delivered references, including storage availability and the
+normal Evidence read route for full prior facts. `historyAfter` pages the remaining
+rounds; twenty items per request/page is not an interaction-round limit. No-new-
+information and unavailable items remain stored facts. Journal unavailability
+is reported independently of delivery and original SBT outcome. This is the
+source contract; installed CLI and connected consumer acceptance remain D4 work.
+
 An information request reuses existing Session/work/continuation/execution
 references and selects source material through managed resource access. Supply
 semantic units such as one failure with context, its cause chain, suite setup,

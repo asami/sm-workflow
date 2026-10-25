@@ -5,8 +5,11 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import java.time.Instant
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
+import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
+import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore, SearchableDataStore, Query,
+  QueryDirective, QueryProjection, QueryOrder, OrderDirection, QueryLimit}
+import org.goldenport.cncf.directive.{Query as Q}
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.value as V
@@ -47,7 +50,9 @@ private[smworkflow] object DevelopmentJournalEvidence {
     "schemaVersion" -> Json.fromString(_schema), "payload" -> entry.asJson).noSpaces,
     "kind" -> kind, "repositoryIdentity" -> entry.metadata.repositoryIdentity, "phaseIdentity" -> entry.metadata.phaseIdentity,
     "sessionIdentity" -> entry.metadata.sessionIdentity, "sourceIdentity" -> source(entry).identity,
-    "sourceRevision" -> source(entry).revision, "recordedAt" -> entry.recordedAt, "revision" -> "1"))
+    "sourceRevision" -> source(entry).revision, "recordedAt" -> entry.recordedAt, "revision" -> "1",
+    "producerSourceIdentity" -> entry.metadata.sourceReference.identity,
+    "producerSourceRevision" -> entry.metadata.sourceReference.revision))
   def storedC(row: Record, id: String): Consequence[Entry] = {
     val parsed = for {
       raw <- row.getString(J.storageField).toRight("Journal Evidence payload is absent")
@@ -60,7 +65,13 @@ private[smworkflow] object DevelopmentJournalEvidence {
     parsed.fold(Consequence.stateConflict(_), entry => for {
       _ <- validateC(entry)
       expected <- rowC(entry)
-      _ <- if (expected.fields.forall(f => row.getString(f.key.toString) == expected.getString(f.key.toString))) Consequence.unit
+      // Historical rows predate the optional producer index. Their original
+      // payload/scope remains valid; present index values must still agree.
+      _ <- if (expected.fields.forall { f =>
+          val key = f.key.toString
+          (Set("producerSourceIdentity", "producerSourceRevision")(key) && row.getString(key).isEmpty) ||
+            row.getString(key) == expected.getString(key)
+        }) Consequence.unit
         else Consequence.stateConflict("Journal Evidence stored scope differs")
     } yield entry)
   }
@@ -100,4 +111,42 @@ private[smworkflow] object DevelopmentJournalEvidence {
   def view(e: Entry): String = s"# Evidence ${e.observation.status}\n\nEvidence: ${e.metadata.evidence.identity}@1\n" +
     s"Source: ${e.metadata.sourceReference.identity}@${e.metadata.sourceReference.revision}\n" +
     s"Action: ${e.metadata.actionOutcome}\nOutput: ${e.metadata.outputIdentity}\n${e.observation.message}\n"
+
+  final case class ProducerPage(status: String, entries: Vector[Entry], hasMore: Boolean, next: Option[String])
+  /** A finite projection of the existing immutable Journal, not another ledger.
+    * The cursor pages all delivered rounds; the page size is not a round limit.
+    */
+  def producerPageC(policy: Option[J.Policy], owningCore: ActionCall.Core, repository: String, session: String,
+    producer: ContextReference, after: Option[String]): Consequence[ProducerPage] = policy match {
+    case None => Consequence.success(ProducerPage("disabled", Vector.empty, false, None))
+    case Some(p) =>
+      final class ProducerQuery extends ProcedureActionCall {
+        val core = owningCore
+        def searchC(): Consequence[ProducerPage] = component_datastore(p.storeName) match {
+          case store: SearchableDataStore =>
+            val clauses = Vector[Q.Expr](Q.Eq("kind", kind), Q.Eq("repositoryIdentity", repository),
+              Q.Eq("sessionIdentity", session), Q.Eq("producerSourceIdentity", producer.identity),
+              Q.Eq("producerSourceRevision", producer.revision)) ++ after.map(Q.Gt("id", _))
+            val fields = DevelopmentJournalFind.projectionFields ++ Vector("producerSourceIdentity", "producerSourceRevision")
+            store.search(p.collection, QueryDirective(Query.Expr(Q.And(clauses)), QueryProjection.Fields(fields),
+              QueryOrder.By("id", OrderDirection.Asc), QueryLimit.Limit(21), 0)).flatMap { found =>
+              found.records.foldLeft(Consequence.success(Vector.empty[Entry])) { (acc, row) => for {
+                entries <- acc
+                id <- row.getString(store.recordKey("id")).map(Consequence.success)
+                  .getOrElse(Consequence.stateConflict("Evidence Journal physical identity is absent"))
+                entry <- storedC(row, id)
+                _ <- if (entry.metadata.repositoryIdentity == repository && entry.metadata.sessionIdentity == session &&
+                    entry.metadata.sourceReference == V.WorkflowArtifactReference(producer.identity, producer.revision)) Consequence.unit
+                  else Consequence.stateConflict("Evidence Journal producer scope differs")
+              } yield entries :+ entry }.map { entries =>
+                ProducerPage("found", entries.take(20), entries.size > 20,
+                  Option.when(entries.size > 20)(entries(19).identity))
+              }
+            }
+          case _ => Consequence.stateConflict("Evidence Journal store is not searchable")
+        }
+        def execute(): Consequence[OperationResponse] = Consequence.stateConflict("Evidence producer query is not a public Operation")
+      }
+      Consequence.success(new ProducerQuery().searchC().fold(_ => ProducerPage("unavailable", Vector.empty, false, None), v => v))
+  }
 }

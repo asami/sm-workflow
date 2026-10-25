@@ -63,6 +63,26 @@ typed incomplete prefixes with distinct prefix output identities. An association
 or source projection alone does not prove that archival succeeded.
 This source change is not installed-route or connected D1–D4 acceptance.
 
+D2 adds one declared information operation on the same GoalPhase service. The
+native Port walks contiguous retained history and requires the exact currently
+open failure-bearing RepairStep and canonical WorkOrder context before reading.
+The operation does not call Advance, Submit, Git, SBT or a semantic provider.
+Reasoned selections expand original retained occurrence context, cause/stack
+lines, execution-wide output or an owned repository source file through File/UoW.
+Unattributable suite context remains partial; unknown formats retain the full
+available output route. Current source reads do not assert candidate equality.
+
+Delivered batches use immutable Common Evidence associations keyed by the work
+continuation/revision and request identity. Their metadata's source reference is
+indexed by the existing Evidence Journal producer; a finite paged query supplies
+replacement-worker references without copying raw logs into Journal. Historical
+Journal payloads remain readable without the optional new producer index. A
+repeated batch reuses the retained observation; a fresh identity is required to
+observe edited source. Context-loss recovery reads retained facts through the
+normal Evidence service. Storage/Journal availability is distinct from source
+availability and original check failure. D2 focused evidence and later D4 native
+connection are separate acceptance scopes.
+
 Deliver one failed SBT check, one additional-information round, one repair unit and
 one actual focused validation first. Include truthful empty/partial extraction
 and unavailable-source behavior within that connection. Do not first build a

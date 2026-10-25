@@ -12,7 +12,10 @@ Delivery detail: [D1 through D4](../notes/incremental-sbt-failure-diagnosis-plan
 Execution started on 2026-10-25 through the installed `sm-goal-phase` caller.
 Plan `phase-6.6-incremental-sbt-failure-diagnosis`, revision 1, captures D1–D4 and
 all sixteen P66 conditions. The original base is
-`2110f194c11f031a600a2c117da1a1761f618890`. D1 is the first issued implementation;
+`2110f194c11f031a600a2c117da1a1761f618890`. D1 was natively accepted and committed as
+`cdefff3d2928c87973abf00ad5f06d850cf8b28d` after compile, lint and seven focused
+tests passed. Its conditional Step assessment admitted without executing an
+independent Step review. D2 is the current issued implementation;
 the checklist remains pending until the corresponding actual evidence is available.
 The completed Phase 6.4/6.5 Sessions and their evidence are retained.
 

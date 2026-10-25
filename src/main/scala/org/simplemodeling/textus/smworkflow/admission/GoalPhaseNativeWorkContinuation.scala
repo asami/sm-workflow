@@ -125,6 +125,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
   final class Port private[GoalPhaseNativeWorkContinuation](d: F.Declaration, definition: DefinitionBinding,
     acknowledgement: String => Consequence[Unit]) {
+    def diagnosticInformationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationResult] = for {
+      _ <- IncrementalSbtDiagnosisInformation.validateC(input)
+      source <- F.retainedSessionC(input.issuedWorkContext.runId, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      prepared <- located match {
+        case Work(value) if value.input.kind == "RepairStep" && value.input.checkFailure.nonEmpty => Consequence.success(value)
+        case _ => F.invalid("Diagnostic information requires the current uncompleted RepairStep with retained check failure")
+      }
+      mode <- NativeWorkflowIssuedWorkContext.goalModeC(prepared.input.kind)
+      actual <- NativeWorkflowIssuedWorkContext.fromIssuedC(prepared.work, mode, S.inputCodec)
+      _ <- IncrementalSbtDiagnosisInformation.sameWorkC(actual, input.issuedWorkContext)
+      result <- IncrementalSbtDiagnosisInformation.resolveC(d, core, prepared.input, input)
+    } yield result
+
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       retained <- F.retainedSessionC(identity, d, definition, core)
       completed <- GoalPhasePostCompletionSync.retainedC(retained, d, core, acknowledgement)
