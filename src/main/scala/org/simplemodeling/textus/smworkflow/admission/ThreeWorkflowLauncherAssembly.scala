@@ -32,6 +32,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
+    "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
     "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
     "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
@@ -79,6 +81,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         Consequence.unit else Consequence.configurationInvalid("Three-workflow RepositorySync requires paired semantic conflict, independent review and Human handling")
       goal <- GoalPhaseNativeServiceAssembly.bindRuntimeC(creation, host.goal)
       standalone <- StandaloneFixService.bindC(creation, host.goal)
+      task <- GoalTaskService.bindC(creation, host.goal)
       sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
@@ -90,7 +93,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
     } yield Vector(
-      standalone,
+      standalone, task,
       NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(goal, creation, host.goal, goalCatalog.definition),
         creation, host.goal, goalCatalog.definition),
       NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),

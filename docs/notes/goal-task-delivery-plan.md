@@ -1,7 +1,7 @@
 # sm-goal-task and shared ad hoc execution delivery
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: planned; no installed capability or acceptance claimed
+Status: P67-T2 source entry prepared; native validation and installed acceptance pending
 Owner: sm-workflow development
 Specification: [GoalTask](../spec/goal-task.md)
 Handoff: [English developer instructions](../journal/2026/10/2026-10-24-goal-task-handoff.md)
@@ -55,6 +55,13 @@ without moving ongoing Phase repairs, replaying accepted Submit or rerunning
 successful checks solely for installation. Report actual availability separately
 from planned API/skill names. Commit/push this documentation is not part of the
 current planning request.
+
+## P67-T2 source boundary
+
+The [public runtime contract](../spec/goal-task-runtime.md) describes the shared
+T1 runtime, initial development input, independent integrated Task review and
+typed selected commit. Native validation and an actual installed Task commit
+episode remain required; fixture observations close no acceptance checkbox.
 
 ## Acceptance checklist — pending
 

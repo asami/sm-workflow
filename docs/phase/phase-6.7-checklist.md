@@ -37,3 +37,7 @@ Retain GTASK/SFIX requirement IDs as cross-references; do not duplicate their ru
 
 Remaining variants are [Phase 17](phase-17-checklist.md); their unfinished work
 does not block this Phase. Existing validation is reused only where applicable.
+
+T2 source handoff: [2026-10-27 implementation boundary](../journal/2026/10/2026-10-27-phase-6.7-t2-source-handoff.md).
+Source implementation and bounded executable specifications do not close these
+phase-scoped conditions; actual native/installed evidence remains required.

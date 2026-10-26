@@ -1,6 +1,6 @@
 # Phase 6.7: Ad Hoc Task and Standalone Fix Delivery
 
-Status: active; P67-T1 source implementation prepared, native validation and installed acceptance pending
+Status: active; P67-T1 retained completion, P67-T2 source prepared; Phase and installed acceptance pending
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
 Predecessor: consume the qualified Phase 6.5 execution and Phase 6.6 diagnosis paths
@@ -100,3 +100,10 @@ Phase 17 retains multi-unit composition, wider inputs, dirty/related-repository
 selection and investigation integration. Phase 7 owns workspace/artifact support,
 Phase 9 provider/model optimization, and Phase 14 investigation itself. CBD and
 LLM evaluation are not added to 6.7.
+
+## T2 source boundary
+
+[GoalTask runtime](../spec/goal-task-runtime.md) connects journal/direct input,
+shared bounded execution, integrated review and selected local commit. Selected
+native validation and installed Task effects are owned by the runtime; this
+source handoff does not close any phase-scoped acceptance condition.

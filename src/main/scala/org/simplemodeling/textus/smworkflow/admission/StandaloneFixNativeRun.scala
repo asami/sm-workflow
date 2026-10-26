@@ -9,7 +9,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtExecutionAttempt}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitSelectionId, GitExecutionOutcome, SbtExecutionAttempt}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeIdentity, *}
@@ -20,16 +20,8 @@ import StandaloneFixExecution as S
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 
-/** Standalone business ownership over canonical CNCF persistence and execution.
-  * No Phase Start, Plan, Step acceptance, commit or private command driver.
-  * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
-  */
-private[smworkflow] object StandaloneFixNativeRun {
-  val startOperation = StateMachineOperationIdentity("StandaloneFixService", "startStandaloneFix")
-  val advanceOperation = StateMachineOperationIdentity("StandaloneFixService", "advanceStandaloneFix")
-  val completionOperation = StateMachineOperationIdentity("StandaloneFixService", "submitStandaloneFixWorkResult")
-  val closingType = StateMachineResultTypeReference("StandaloneFixView")
+/** Shared retained runtime data. Existing standalone identity and schema stay unchanged. */
+private[smworkflow] object BoundedWorkRuntime {
   final case class Host(configuration: Configuration, instances: DataStore.CollectionId,
     continuations: DataStore.CollectionId, repository: String, root: String, branch: String,
     paths: Vector[String], checks: Vector[GoalPhaseNativeValidation.Check],
@@ -40,22 +32,54 @@ private[smworkflow] object StandaloneFixNativeRun {
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
     d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy)
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
-    implementationWorker: Option[String] = None)
-  given Encoder[Payload] = deriveEncoder
+    implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None)
+  private given Encoder[G.DirtyPath] = deriveEncoder
+  private given Decoder[G.DirtyPath] = deriveDecoder
+  given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
+    case ("unrelated" | "implementationWorkers", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Payload] = deriveDecoder
+}
+
+/** Standalone business ownership over canonical CNCF persistence and execution.
+  * No Phase Start, Plan, Step acceptance, commit or private command driver.
+  * @since   Oct. 26, 2026
+  * @version Oct. 26, 2026
+  */
+private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
+  type Host = BoundedWorkRuntime.Host
+  val Host = BoundedWorkRuntime.Host
+  type Payload = BoundedWorkRuntime.Payload
+  val Payload = BoundedWorkRuntime.Payload
+  def host(d: GoalPhaseNativeRun.Declaration): Host = BoundedWorkRuntime.host(d)
+}
+private[smworkflow] object GoalTaskNativeRun extends BoundedWorkNativeRun(true)
+
+/** Both entries use one native progression owner and the same typed executor. */
+private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
+  import BoundedWorkRuntime.*
+  import BoundedWorkRuntime.given
+  private val entry = if (task) "GoalTask" else "StandaloneFix"
+  private val wire = if (task) "goal-task" else "standalone-fix"
+  val startOperation = StateMachineOperationIdentity(entry + "Service", "start" + entry)
+  val advanceOperation = StateMachineOperationIdentity(entry + "Service", "advance" + entry)
+  val completionOperation = StateMachineOperationIdentity(entry + "Service", "submit" + entry + "WorkResult")
+  val closingType = StateMachineResultTypeReference(entry + "View")
   def codec[A: Encoder: Decoder](identity: String): WorkflowResultJsonV1.PayloadCodec[A] =
     new WorkflowResultJsonV1.PayloadCodec[A] {
       val typeIdentity = identity
-      def encode(value: A) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.standalone-fix.v1"), "payload" -> value.asJson)
+      def encode(value: A) = Json.obj("schemaVersion" -> Json.fromString(("sm-workflow." + wire + ".v1")), "payload" -> value.asJson)
       def decode(value: Json): Either[String, A] = for {
         version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
-        _ <- Either.cond(version == "sm-workflow.standalone-fix.v1", (), "Standalone schema differs")
+        _ <- Either.cond(version == ("sm-workflow." + wire + ".v1"), (), "Standalone schema differs")
         payload <- value.hcursor.get[A]("payload").left.map(_.message)
       } yield payload
     }
-  val stateCodec = codec[Payload]("StandaloneFixNativeState")
-  val inputCodec = codec[S.Work]("StandaloneFixWorkRequest")
-  val resultCodec = codec[S.Result]("StandaloneFixWorkResult")
+  lazy val stateCodec = codec[Payload](entry + "NativeState")
+  lazy val inputCodec = codec[S.Work](entry + "WorkRequest")
+  lazy val resultCodec = codec[S.Result](entry + "WorkResult")
+  private def terminal(stage: String): Boolean = if (task) Set("Completed", "NoChange")(stage) else Set("Accepted", "NoChange")(stage)
   private def reference(id: String, revision: Long) = WorkflowMechanicalTransition.Reference(id + ":standalone-state:" + revision, "1")
   private def empty = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
   def storageC(h: Host, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
@@ -63,16 +87,22 @@ private[smworkflow] object StandaloneFixNativeRun {
       SmWorkflowComponent.componentId, h.configuration, Vector(definition), h.instances, h.continuations)
   def history(from: InstanceRecord, cause: String, accepted: Boolean = false): HistoryEntry =
     HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, if (accepted) Lifecycle.Completed else Lifecycle.Active,
-      if (accepted) None else Some(ProgressionReference("fix.Running")), from.correlation,
+      if (accepted) None else Some(ProgressionReference(if (task) "task.Running" else "fix.Running")), from.correlation,
       CausationReference(cause), from.derivedCompositeOccurrence, from.committedPredecessor, None)
   def saveC(h: Host, storage: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
+    projection <- if (task && terminal(payload.state.stage)) recordEvidenceObservedC(h, core,
+      from.identity.value, from.revision.next.value,
+      Json.obj("state" -> payload.state.asJson, "workflowRevision" -> Json.fromLong(from.revision.next.value)),
+      "completion", payload.state.stage).map(Some(_)) else Consequence.success(None)
+    selected = projection.fold(payload)(p => payload.copy(state = payload.state.copy(
+      evidenceReferences = (payload.state.evidenceReferences ++ p.references).distinct, projectionWarning = p.warning)))
     mechanical <- storage.bindMechanicalC(advanceOperation, stateCodec)
     saved <- mechanical.executeC(WorkflowMechanicalTransition.Intent(h.configuration,
       reference(from.identity.value, from.revision.next.value), from, from.revision,
-      history(from, "standalone-state:" + from.revision.next.value, Set("Accepted", "NoChange")(payload.state.stage)),
-      TypedValue(stateCodec.typeIdentity, payload)), empty)(using core.executionContext)
-    _ <- if (Set("Accepted", "NoChange")(payload.state.stage)) recordEvidenceC(h, core,
+      history(from, "standalone-state:" + from.revision.next.value, terminal(payload.state.stage)),
+      TypedValue(stateCodec.typeIdentity, selected)), empty)(using core.executionContext)
+    _ <- if (!task && terminal(payload.state.stage)) recordEvidenceC(h, core,
       saved.receipt.next.identity.value, saved.receipt.next.revision.value,
       Json.obj("state" -> payload.state.asJson, "workflowRevision" -> Json.fromLong(saved.receipt.next.revision.value)),
       "completion", payload.state.stage).map(_ => ()) else Consequence.unit
@@ -89,12 +119,13 @@ private[smworkflow] object StandaloneFixNativeRun {
     selections: ProfileStartAdmission.CallScopedSelectionPort, h: Host, definition: DefinitionBinding,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- S.inputC(input)
+    _ <- if (input.task.nonEmpty == task) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
     _ <- if (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p))) Consequence.unit
       else invalid("Requested repository/paths exceed the configured host bindings")
     selected = input.checks.flatMap(id => h.checks.find(_.identity == id))
     state <- S.startC(input, participant, selected)
-    binding = ProfileStartAdmission.Binding(startOperation, definition.workflowIdentity, definition.workflowRevision, "StandaloneFixInput")
+    binding = ProfileStartAdmission.Binding(startOperation, definition.workflowIdentity, definition.workflowRevision, (entry + "Input"))
     // Freeze one actual managed read, so metadata admission and complete-input
     // equality cannot accidentally consume two different selection observations.
     chosen <- selections.loadForCallC(selection, core)
@@ -102,14 +133,17 @@ private[smworkflow] object StandaloneFixNativeRun {
       def loadC(id: String) = if (id == selection) Consequence.success(chosen)
         else invalid("Selection read crossed its actual managed identity")
     }
-    _ <- ProfileStartAdmission.admitC(binding, TypedValue("StandaloneFixInput", input.asJson), selection, participant, key, actualSelection)
-    _ <- if (chosen.flatMap(_.selectedInput).exists(v => v.typeIdentity == "StandaloneFixInput" && v.value == input.asJson))
+    _ <- ProfileStartAdmission.admitC(binding, TypedValue((entry + "Input"), input.asJson), selection, participant, key, actualSelection)
+    _ <- if (chosen.flatMap(_.selectedInput).exists(v => v.typeIdentity == (entry + "Input") && v.value == input.asJson))
       Consequence.unit else invalid("Actual human selection does not bind this complete standalone request")
     root <- G.rootC(core)
     observed <- G.observeC(core)
     _ <- if (root == h.root && observed.branch == h.branch && observed.dirty.forall(d =>
-      S.owned(d.path, input.ownedPaths) && d.renamedFrom.forall(S.owned(_, input.ownedPaths)))) Consequence.unit
+      (S.owned(d.path, input.ownedPaths) && d.renamedFrom.forall(S.owned(_, input.ownedPaths))) ||
+      (task && Set(' ', '?')(d.index) && !d.renamedFrom.exists(S.owned(_, input.ownedPaths))))) Consequence.unit
       else invalid("Start preserves unrelated work by refusing a crossed repository or dirty scope")
+    _ <- if (!task || !observed.dirty.exists(d => S.owned(d.path, input.ownedPaths))) Consequence.unit
+      else invalid("Task Start requires clean selected ownership so pre-existing edits cannot be silently captured")
     identity <- core.executionContext.security.session.flatMap(_.sessionId).map(x => Consequence.success(InstanceIdentity(x)))
       .getOrElse(invalid("Standalone Start requires its canonical session"))
     store <- storageC(h, definition, core)
@@ -118,8 +152,9 @@ private[smworkflow] object StandaloneFixNativeRun {
       CorrelationReference(key), CausationReference("standalone-started"), None, None, None, Vector.empty).validateC
     _ <- instances.createC(initial)(using core.executionContext)
     active <- instances.appendC(identity, initial.revision, history(initial, "standalone-started"))(using core.executionContext)
-    saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head), core)
-  } yield view(saved, state, "Started", "Standalone request retained; normal Advance owns the selected checks")
+    saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head, unrelated = if (task) Some(observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))) else None), core)
+  } yield view(saved, state, "Started", if (task) "Task request retained; normal Advance owns implementation and selected checks"
+    else "Standalone request retained; normal Advance owns the selected checks")
 
   def advanceC(id: String, h: Host, definition: DefinitionBinding, core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     storage <- storageC(h, definition, core)
@@ -152,7 +187,10 @@ private[smworkflow] object StandaloneFixNativeRun {
               "semantic-" + payload.state.stage, done.result.value.outcome)
             retained = next.copy(evidenceReferences = next.evidenceReferences ++ references)
             saved <- saveC(h, storage, current, payload.copy(state = retained,
-              implementationWorker = if (payload.state.stage == "Repair") done.evidence.workerIdentity else payload.implementationWorker), core)
+              implementationWorker = if (Set("Repair", "Implement")(payload.state.stage)) done.evidence.workerIdentity else payload.implementationWorker,
+              implementationWorkers = if (task && Set("Repair", "Implement")(payload.state.stage))
+                Some((payload.implementationWorkers.getOrElse(Vector.empty) ++ done.evidence.workerIdentity.toVector).distinct)
+                else payload.implementationWorkers), core)
           } yield saved
         } else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
@@ -211,8 +249,11 @@ private[smworkflow] object StandaloneFixNativeRun {
         saved <- saveC(h, store, record, payload.copy(state = next), core)
         response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield response
-      case "Repair" | "Review" => issueC(h, store, record, payload, core)
-      case "Accepted" | "NoChange" => Consequence.success(view(record, s, "Terminal", s.message))
+      case "Repair" | "Review" | "Implement" => issueC(h, store, record, payload, core)
+      case "CommitReady" => commitC(h, store, record, payload, core)
+      case "CommitIntent" | "CommitUnknown" => reconcileC(h, store, record, payload, core)
+      case "CommitFailed" => Consequence.success(view(record, s, "Incomplete", s.message))
+      case "Completed" | "Accepted" | "NoChange" => Consequence.success(view(record, s, "Terminal", s.message))
       case "Human" => Consequence.success(view(record, s, "Human", s.message))
       case _ => Consequence.success(view(record, s, "Wait", s.message + "; retained intent is not executable permission"))
     }
@@ -222,7 +263,7 @@ private[smworkflow] object StandaloneFixNativeRun {
     before <- G.observeC(core)
     root <- G.rootC(core)
     _ <- if (root == payload.root && before.branch == payload.branch && before.head == payload.baseHead &&
-      before.dirty.forall(d => S.owned(d.path, payload.state.input.ownedPaths) && d.renamedFrom.forall(S.owned(_, payload.state.input.ownedPaths))))
+      dirtyCovers(payload, before.dirty))
       Consequence.unit else invalid("Candidate observation crosses the adopted root, HEAD or ownership")
     _ <- payload.state.input.ownedPaths.foldLeft(Consequence.unit) { (previous, path) => previous.flatMap(_ =>
       E.stageGoalCandidateC(core, h.paths.indexOf(path) + 1).flatMap(_.valueC).map(_ => ())) }
@@ -231,7 +272,7 @@ private[smworkflow] object StandaloneFixNativeRun {
     diff <- E.executeGitC(core, GitOperation.PendingDiff(head)).flatMap(_.valueC)
     tree <- G.indexTreeC(core)
     after <- G.observeC(core)
-    _ <- if (after.head == before.head && after.dirty.forall(_.worktree == ' ') &&
+    _ <- if (after.head == before.head && dirtyCovers(payload, after.dirty) && after.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(_.worktree == ' ') &&
       selected.forall(p => S.owned(p.value, payload.state.input.ownedPaths))) Consequence.unit
       else invalid("Candidate changed during observation or contains unrelated staged work")
   } yield S.Candidate(before.head, tree, selected.map(_.value), diff.text)
@@ -242,13 +283,75 @@ private[smworkflow] object StandaloneFixNativeRun {
     tree <- G.indexTreeC(core)
     _ <- if (root == payload.root && current.branch == payload.branch && current.head == payload.baseHead &&
       payload.state.candidate.exists(c => c.head == current.head && c.tree == tree) &&
-      current.dirty.forall(d => d.worktree == ' ' && S.owned(d.path, payload.state.input.ownedPaths))) Consequence.unit
+      dirtyCovers(payload, current.dirty) && current.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(_.worktree == ' ')) Consequence.unit
       else invalid("Actual candidate changed; previous checks cannot be accepted for different bytes")
   } yield ()
 
+  private def dirtyCovers(payload: Payload, dirty: Vector[G.DirtyPath]): Boolean = {
+    val owners = payload.state.input.ownedPaths
+    dirty.filterNot(d => S.owned(d.path, owners)) == payload.unrelated.getOrElse(Vector.empty) &&
+      dirty.filter(d => S.owned(d.path, owners)).forall(d => !d.unmerged && d.renamedFrom.forall(S.owned(_, owners)))
+  }
+  private[admission] def implementationFreshC(payload: Payload, core: ActionCall.Core): Consequence[Unit] = for {
+    root <- G.rootC(core)
+    actual <- G.observeC(core)
+    _ <- if (root == payload.root && actual.branch == payload.branch && actual.head == payload.baseHead &&
+      dirtyCovers(payload, actual.dirty)) Consequence.unit else invalid("Implementation crossed the retained target or unrelated work")
+  } yield ()
+
+  /** The logical selection must be registered in the actual CNCF host. The
+    * Task never substitutes a Phase Step's commit selection or invents consent. */
+  private def commitC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+    core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
+    _ <- freshC(payload, core)
+    selection <- GitSelectionId.parseC("goal-task")
+    parent <- GitObjectId.parseC(payload.baseHead)
+    checked <- E.executeGitC(core, GitOperation.CheckSelectedIndex(selection, parent)).flatMap(_.valueC)
+    changes <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, parent)).flatMap(_.valueC)
+    _ <- if (checked.findingKeys.isEmpty && changes.map(_.path.value).toSet == payload.state.candidate.toVector.flatMap(_.paths).toSet &&
+      changes.nonEmpty) Consequence.unit else invalid("Task commit selection differs from the reviewed actual delta")
+    _ <- freshC(payload, core)
+    next = payload.state.copy(stage = "CommitIntent", message = "Typed selected commit intent retained; observe before any retry")
+    intent <- saveC(h, store, from, payload.copy(state = next), core)
+    _ <- freshC(payload, core)
+    actual <- E.executeGitC(core, GitOperation.CommitSelected(selection))
+    p = actual.processResult
+    observed = S.CommitExecution(actual.outcome.toString, actual.selectedPaths.map(_.value),
+      WorkflowSbtCapture.termination(p), WorkflowSbtCapture.exitCode(p),
+      WorkflowSbtCapture.text(p.stdout).value, WorkflowSbtCapture.text(p.stderr).value)
+    state = next.copy(stage = actual.outcome match {
+      case GitExecutionOutcome.Failed(_) => "CommitFailed"
+      case _ => "CommitUnknown"
+    }, commitExecution = Some(observed), message = "Actual typed commit result retained: " + actual.outcome.toString)
+    saved <- saveC(h, store, intent, payload.copy(state = state), core)
+    response <- if (actual.outcome == GitExecutionOutcome.Succeeded && actual.selectedPaths.map(_.value).toSet ==
+      payload.state.candidate.toVector.flatMap(_.paths).toSet) reconcileC(h, store, saved, payload.copy(state = state), core)
+      else Consequence.success(view(saved, state, "Incomplete", state.message))
+  } yield response
+
+  /** Reconcile a matching actual commit; never rerun a retained uncertain effect. */
+  private def reconcileC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+    core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
+    root <- G.rootC(core)
+    observed <- G.observeC(core)
+    response <- if (root == payload.root && observed.branch == payload.branch && observed.head != payload.baseHead &&
+      payload.state.candidate.exists(_.tree == observed.tree) &&
+      observed.dirty == payload.unrelated.getOrElse(Vector.empty)) for {
+      commit <- G.commitC(core, observed.head)
+      _ <- if (commit.parents == Vector(payload.baseHead)) Consequence.unit else invalid("Observed Task commit has different ancestry")
+      next <- S.committedC(payload.state, S.Commit(commit.identity, payload.baseHead, commit.tree))
+      saved <- saveC(h, store, from, payload.copy(state = next), core)
+      retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+    } yield view(saved, retained.state, "Terminal", retained.state.message)
+    else Consequence.success(view(from, payload.state, "Incomplete",
+      "Task commit remains UNKNOWN; accepted implementation, checks and review are retained without replay"))
+  } yield response
+
   private def requiredC(kind: String): Consequence[StateMachineRequiredOperation] = {
-    val capability = if (kind == "Review") "standalone-fix-review-capability" else "standalone-fix-repair-capability"
-    val found = domain.statemachine.workflow.StandaloneFixWorkflowStateMachineWorkflow4.workflow.requiredOperations.filter(_.identity.capability == capability)
+    val capability = wire + (if (kind == "Review") "-review-capability" else if (kind == "Implement") "-implementation-capability" else "-repair-capability")
+    val operations = if (task) domain.statemachine.workflow.GoalTaskWorkflowStateMachineWorkflow5.workflow.requiredOperations
+      else domain.statemachine.workflow.StandaloneFixWorkflowStateMachineWorkflow4.workflow.requiredOperations
+    val found = operations.filter(_.identity.capability == capability)
     if (found.size != 1) invalid("Standalone Required SPI is not uniquely derived")
     else {
       val spi = found.head
@@ -261,7 +364,7 @@ private[smworkflow] object StandaloneFixNativeRun {
   }
   private def issueC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
-    _ <- freshC(payload, core)
+    _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core) else freshC(payload, core)
     required <- requiredC(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
     bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.",
@@ -269,7 +372,7 @@ private[smworkflow] object StandaloneFixNativeRun {
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))
     continuation = Continuation(StateMachineRunIdentity(from.identity.value),
       ContinuationIdentity(from.identity.value + ":standalone:" + from.revision.next.value), StateMachineRevision(from.revision.next.value.toString), required, bundle)
-    entry = HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, Lifecycle.Active,
+    historyentry = HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, Lifecycle.Active,
       from.currentProgression, from.correlation, CausationReference("standalone-issued:" + work.kind),
       from.derivedCompositeOccurrence, from.committedPredecessor,
       Some(SuspensionBoundary(NativeIdentity(continuation.continuationId.value), from.revision.next,
@@ -281,29 +384,37 @@ private[smworkflow] object StandaloneFixNativeRun {
         required.operation, Some(TypedValue(inputCodec.typeIdentity, work)), required.resultType, bundle,
         required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
       ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
-        ReasoningLevel.Standard, work.kind == "Review"), MinimalPresentation("Standalone " + work.kind, payload.state.input.objective)))
+        ReasoningLevel.Standard, work.kind == "Review"), MinimalPresentation(entry + " " + work.kind, payload.state.input.objective)))
     selected <- GoalPhaseNativeExecution.bindIssuedC(interaction, h.profiles, h.origin)
     issued <- store.bindIssuedC(completionOperation, inputCodec)
     _ <- issued.suspendC(WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,
-      h.configuration, from, from.revision, entry, ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available)), selected)(using core.executionContext)
-    pending <- from.appendC(from.revision, entry)
+      h.configuration, from, from.revision, historyentry, ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available)), selected)(using core.executionContext)
+    pending <- from.appendC(from.revision, historyentry)
     response <- requestViewC(pending, selected, core)
   } yield response
 
+  private final case class Projection(references: Vector[ContextReference], warning: Option[String])
   private def recordEvidenceC(h: Host, core: ActionCall.Core, session: String, revision: Long,
-    facts: Json, output: String, outcome: String): Consequence[Vector[ContextReference]] = h.evidence match {
-    case None => Consequence.success(Vector.empty)
+    facts: Json, output: String, outcome: String): Consequence[Vector[ContextReference]] =
+    recordEvidenceObservedC(h, core, session, revision, facts, output, outcome).map(_.references)
+
+  private def recordEvidenceObservedC(h: Host, core: ActionCall.Core, session: String, revision: Long,
+    facts: Json, output: String, outcome: String): Consequence[Projection] = h.evidence match {
+    case None => Consequence.success(Projection(Vector.empty, Some("Common Evidence projection is not installed")))
     case Some(policy) => try {
       val source = CommonEvidence.Source(ContextReference(session + ":standalone:" + output + ":" + revision, "1"),
-        h.repository, "standalone-fix", None, session, output, outcome)
+        h.repository, wire, None, session, output, outcome)
       CommonEvidence.archiveManagedC(CommonEvidence.storage(core, policy), policy, source,
         facts.noSpaces, "identity", core.executionContext.clock).flatMap {
         case (_, Some((allocation, observation))) =>
           DevelopmentJournalEvidence.recordC(h.journal, core, allocation, observation)
-            .map(_ => Vector(ContextReference(allocation.identity, "1")))
-        case _ => Consequence.success(Vector.empty)
-      }.recoverWith(_ => Consequence.success(Vector.empty))
-    } catch { case scala.util.control.NonFatal(_) => Consequence.success(Vector.empty) }
+            .map(_ => Projection(Vector(ContextReference(allocation.identity, "1")),
+              if (h.journal.isEmpty) Some("Common Journal projection is not installed") else None))
+        case _ => Consequence.success(Projection(Vector.empty, Some("Common Evidence archive returned no allocation")))
+      }.recoverWith(_ => Consequence.success(Projection(Vector.empty,
+        Some("Common Evidence or Journal projection failed; actual execution and commit remain retained"))))
+    } catch { case scala.util.control.NonFatal(_) => Consequence.success(Projection(Vector.empty,
+      Some("Common Evidence or Journal projection failed; actual execution and commit remain retained"))) }
   }
 
   def requestViewC(record: InstanceRecord, actual: WorkflowInteraction[S.Work, Nothing], core: ActionCall.Core): Consequence[V.StandaloneFixView] = actual.current match {
@@ -322,5 +433,5 @@ private[smworkflow] object StandaloneFixNativeRun {
     V.StandaloneFixView(record.identity.value, kind, message, recordC(state.asJson).toOption, None, None, None, None, None,
       S.diagnostics(state, record.revision.value.toString).flatMap(d => recordC(d.asJson).toOption), None)
   def recordC(json: Json): Consequence[org.goldenport.record.Record] = new org.goldenport.record.io.RecordDecoder().json(json.noSpaces)
-  def invalid[A](message: String): Consequence[A] = Consequence.stateConflict("Standalone native fix: " + message)
+  def invalid[A](message: String): Consequence[A] = Consequence.stateConflict((if (task) "GoalTask native work: " else "Standalone native fix: ") + message)
 }

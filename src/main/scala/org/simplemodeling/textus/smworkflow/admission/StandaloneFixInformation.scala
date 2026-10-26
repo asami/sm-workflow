@@ -19,7 +19,9 @@ import StandaloneFixNativeRun as N
   */
 private[smworkflow] object StandaloneFixInformation {
   def resolveC(h: N.Host, definition: WorkflowInstancePersistence.DefinitionBinding, core: ActionCall.Core,
-    input: V.GoalPhaseDiagnosticInformationInput): Consequence[V.GoalPhaseDiagnosticInformationResult] = for {
+    input: V.GoalPhaseDiagnosticInformationInput, engine: BoundedWorkNativeRun = StandaloneFixNativeRun): Consequence[V.GoalPhaseDiagnosticInformationResult] = {
+    val N = engine
+    for {
     _ <- I.validateC(input)
     store <- N.storageC(h, definition, core)
     issued <- store.bindIssuedC(N.completionOperation, N.inputCodec)
@@ -37,7 +39,7 @@ private[smworkflow] object StandaloneFixInformation {
     context <- NativeWorkflowIssuedWorkContext.fromIssuedC(actual, NativeWorkflowIssuedWorkContext.Mode.Implementation, N.inputCodec)
     _ <- I.sameWorkC(context, input.issuedWorkContext)
     source = CommonEvidence.Source(ContextReference(context.continuationId, context.expectedRevision),
-      h.repository, "standalone-fix", None, work.session, "diagnostic-information:" + input.requestIdentity, "failed")
+      h.repository, if (engine.task) "goal-task" else "standalone-fix", None, work.session, "diagnostic-information:" + input.requestIdentity, "failed")
     history <- DevelopmentJournalEvidence.producerPageC(h.journal, core, h.repository, work.session, source.reference, input.historyAfter)
     delivery <- if (input.selections.isEmpty || h.evidence.isEmpty) Consequence.success(None)
       else {
@@ -71,4 +73,5 @@ private[smworkflow] object StandaloneFixInformation {
           "storageStatus" -> Json.fromString(e.observation.status)))), history.status, history.hasMore, history.next))
     }
   } yield result
+  }
 }
