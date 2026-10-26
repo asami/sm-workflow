@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -537,8 +537,9 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     /** Fixed setup only, before Start; this cannot accept or rewrite Workflow work. */
-    private[NativeWorkflowCliFixture] def _prepare_authoring_build(cml: Boolean = false, lint: Boolean = false): Unit = {
-      TypedSbtHostPlanFixture.buildAuthoring(root, cml)
+    private[NativeWorkflowCliFixture] def _prepare_authoring_build(cml: Boolean = false, lint: Boolean = false,
+      discoverAllTests: Boolean = false): Unit = {
+      TypedSbtHostPlanFixture.buildAuthoring(root, cml, discoverAllTests)
       if (lint) {
         val repository = Path.of(host.target.root)
         Files.writeString(repository.resolve("project/plugins.sbt"), "addSbtPlugin(\"ch.epfl.scala\" % \"sbt-scalafix\" % \"0.12.1\")\n")
@@ -1358,7 +1359,7 @@ private[admission] object NativeWorkflowCliFixture {
     */
   def freshStepAssessment(name: String, executable: Path,
     overridePolicy: Option[GoalPhaseStepAssessment.Policy] = None, lint: Boolean = false,
-    repairLimit: Option[Int] = None): Scenario = {
+    repairLimit: Option[Int] = None, discoverAllTests: Boolean = false, focusedFirst: Boolean = false): Scenario = {
     require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
     require(repairLimit.forall(n => n >= 0 && n <= 64), "Select the fresh fixture Plan's bounded repair limit")
     val initial = fresh(name)
@@ -1366,7 +1367,8 @@ private[admission] object NativeWorkflowCliFixture {
     val original = _authoring_host(initial.root)
     val compile = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
     val focused = GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly)
-    val selectedChecks = Vector(compile, focused) ++ (if (lint) Vector(GoalPhaseNativeValidation.Check("scala-lint", 3, WorkflowSbtValidation.Kind.FixCheck)) else Vector.empty)
+    val selectedChecks = (if (focusedFirst) Vector(focused, compile) else Vector(compile, focused)) ++
+      (if (lint) Vector(GoalPhaseNativeValidation.Check("scala-lint", 3, WorkflowSbtValidation.Kind.FixCheck)) else Vector.empty)
     val host = original.copy(goal = original.goal.copy(candidatePaths = paths,
       stepValidation = original.goal.stepValidation.copy(checks = selectedChecks),
       phaseValidation = original.goal.phaseValidation.copy(checks = Vector(focused))))
@@ -1397,7 +1399,7 @@ private[admission] object NativeWorkflowCliFixture {
       .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))) {
         case (values, (key, value)) => values.add(key, Json.fromString(value))
       }).noSpaces)
-    scenario._prepare_authoring_build(lint = lint)
+    scenario._prepare_authoring_build(lint = lint, discoverAllTests = discoverAllTests)
     scenario
   }
 

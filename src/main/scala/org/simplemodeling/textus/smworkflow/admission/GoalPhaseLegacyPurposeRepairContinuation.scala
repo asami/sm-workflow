@@ -63,6 +63,7 @@ private[smworkflow] object GoalPhaseLegacyPurposeRepairContinuation {
   final case class ExistingRemainingPlan(payload: A.Payload) extends StoredDisposition
   final case class LegacyPurposeRepair(payload: Payload) extends StoredDisposition
   final case class ReleaseRepair(payload: GoalPhaseReleaseRepairContinuation.Payload) extends StoredDisposition
+  final case class DependencySourceRevision(payload: GoalPhaseDependencySourceRevision.Direction) extends StoredDisposition
   trait EvidencePort { def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] }
   final case class Installation(evidence: EvidencePort) {
     def validateC: Consequence[Unit] = _check(evidence != null, "independent Human directive provider is absent")
@@ -76,13 +77,21 @@ private[smworkflow] object GoalPhaseLegacyPurposeRepairContinuation {
       case LegacyPurposeRepair(payload) => Json.obj("schemaVersion" -> schema.asJson, "origin" -> origin.asJson, "payload" -> payload.asJson)
       case ReleaseRepair(payload) => Json.obj("schemaVersion" -> GoalPhaseReleaseRepairContinuation.schema.asJson,
         "origin" -> GoalPhaseReleaseRepairContinuation.origin.asJson, "payload" -> payload.asJson)
+      case DependencySourceRevision(payload) => Json.obj("schemaVersion" -> GoalPhaseDependencySourceRevision.schema.asJson,
+        "origin" -> GoalPhaseDependencySourceRevision.origin.asJson, "payload" -> payload.asJson)
     }
     def decode(value: Json): Either[String, StoredDisposition] = Option(value).toRight("Decision disposition is absent").flatMap { supplied =>
       if (supplied.hcursor.downField("schemaVersion").focus.isEmpty) {
         if (_keys(supplied, Set("target", "directive", "participant", "rationale")))
           A.codec.decode(supplied).map(ExistingRemainingPlan(_))
         else Left("Old Decision disposition has contradictory or unknown fields")
-      } else if (supplied.hcursor.get[String]("schemaVersion").contains(GoalPhaseReleaseRepairContinuation.schema)) for {
+      } else if (supplied.hcursor.get[String]("schemaVersion").contains(GoalPhaseDependencySourceRevision.schema)) for {
+        _ <- Either.cond(_keys(supplied, Set("schemaVersion", "origin", "payload")) &&
+          supplied.hcursor.get[String]("origin").contains(GoalPhaseDependencySourceRevision.origin), (),
+          "Dependency source disposition has contradictory version, origin or fields")
+        payload <- supplied.hcursor.get[GoalPhaseDependencySourceRevision.Direction]("payload").left.map(_.message)
+      } yield DependencySourceRevision(payload)
+      else if (supplied.hcursor.get[String]("schemaVersion").contains(GoalPhaseReleaseRepairContinuation.schema)) for {
         _ <- Either.cond(_keys(supplied, Set("schemaVersion", "origin", "payload")) &&
           supplied.hcursor.get[String]("origin").contains(GoalPhaseReleaseRepairContinuation.origin), (),
           "Release disposition has contradictory or unknown fields/origin")

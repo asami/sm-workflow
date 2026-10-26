@@ -138,7 +138,7 @@ private[admission] object NativeValidationRepairInstalledFixture extends Matcher
       B.applicable(boundary, request.work.get.kind).map(c => V.GoalPhaseAcceptanceObservation(c.identity,
         if (c.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED observed " + c.description)), Vector.empty))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + request.work.get.kind + " " + outcome, Vector.empty,
-      acceptance, None, None, None, None, None, None, None, dependencyValidation = None)
+      acceptance, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   }
   def complete(cli: Cli, plan: O.Plan, request: V.GoalPhaseAdvanceResult, name: String): Unit =
     cli.submit(request, result(plan, request, "completed"), V.WorkflowArtifactReference(name, "1"))

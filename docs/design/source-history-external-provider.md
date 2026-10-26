@@ -1,5 +1,19 @@
 # 外部規則によるソース履歴comment driverの最小実装案
 
+## Recovery correction — 2026-10-26
+
+[SHR-01..06](../spec/goal-phase-source-history-recovery.md#same-authority-comment-recovery--adopted-2026-10-26)
+extends the existing pure comment driver and managed File/UoW path. Keep the
+retained effective rule/date and make normalization idempotent. Native candidate
+continuation reads the affected current comment, records its postcondition or
+performs bounded normalization, and appends attributable reconciliation while the
+old UNKNOWN receipt remains unchanged. Do not add a generic effect-replay engine,
+lock/hash protocol or AI recovery controller. Extend existing public continuation
+for pending legacy Human questions; test it with the normal installed caller.
+The historical implementation/qualification below remains evidence for its original
+scope. It does not prove this new recovery behavior.
+
+
 status=selected-app-only-contract; C1-C2-focused-3-suites-54-tests-qualified-not-accepted; C3-native-cli-2-suites-6-tests-qualified; C4-genuine-edit-connected-review-admission-commit-pending
 date=2026-10-17
 owner=sm-workflow Phase 6.1 / P61-COMMAND

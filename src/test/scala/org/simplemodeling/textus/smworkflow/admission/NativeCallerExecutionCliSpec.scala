@@ -76,7 +76,7 @@ final class NativeCallerExecutionCliSpec extends AnyWordSpec with Matchers with 
       completed.completionEvidence.get.execution.get.profileIdentity shouldBe primary.identity
 
       Given("R8: the actual returned generated completionEvidence and independently supplied compatible semantic result/reference")
-      val result = V.GoalPhaseWorkResult("completed", "Specification-owned assigned semantic work", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+      val result = V.GoalPhaseWorkResult("completed", "Specification-owned assigned semantic work", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       When("a separate ordinary Goal Submit uses the issued named route and that exact completionEvidence")
       val submitted = scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
         "--result", json(result.toRecord()).noSpaces, "--resultReference", json(artifact.toRecord()).noSpaces,

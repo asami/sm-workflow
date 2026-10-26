@@ -12,7 +12,7 @@ import GoalPhaseRuntimeRepairControl as R
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -253,6 +253,29 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           checksReceipt.exists(text)) Consequence.unit
         else invalid("legacy Release continuation requires the original completed-Plan Phase review Decision with remaining allowance")
       next <- _reserve_repair_c(directive, evidence, "Legacy Release repair allowance exhausted")
+    } yield next
+
+    /** Eligibility only. The native owner proves the exact retained terminal
+      * failed check and appends a distinct admission; old failed events stay Decision.
+      */
+    private[admission] def continueInitialPhaseCheckRepairC(failedReceipt: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(failedReceipt) && !failedReceipt.exists(_.isControl) && _valid_directive(directive) &&
+          directive.findings.size <= 128 && directive.findings.forall(GoalPhasePurposeRepair.text)) Consequence.unit
+        else invalid("initial Phase check repair requires its exact failed receipt and bounded directive")
+      _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.PhaseValidation) &&
+          decision.contains("Selected native checks failed: " + failedReceipt) && !documentDecision &&
+          phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
+          completed.forall(validStepAcceptance) && repairs == 0 && ordinaryRepairs == 0 &&
+          repairDirective.isEmpty && pendingRepair.isEmpty && closureIntent.isEmpty &&
+          reviewEvidence.isEmpty && phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty &&
+          releaseCommit.isEmpty && repositoryReceipt.isEmpty && candidate.exists(validSnapshot) &&
+          repairControl.exists(_.policy == R.version) && effectiveRepairLimit > repairs &&
+          generation < Long.MaxValue) Consequence.unit
+        else invalid("initial Phase check repair requires its completed-Plan failed Decision and adopted remaining runtime allowance")
+      next <- _reserve_repair_c(directive, failedReceipt, "Initial Phase check repair allowance exhausted", comparable = false)
+      _ <- if (next.stage == Stage.Repair) Consequence.unit
+        else invalid("initial Phase check repair has no reservable ordinary batch")
     } yield next
 
     /** Business context only: this projection grants no issue or execution authority. */

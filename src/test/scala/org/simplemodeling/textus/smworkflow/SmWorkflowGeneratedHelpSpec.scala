@@ -36,16 +36,20 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
+      "resolveGoalPhaseDiagnosticInformation",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
       "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
       "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",
+      "describeGoalPhaseSourceHistoryNormalization", "adoptGoalPhaseSourceHistoryNormalization",
       "describeGoalPhaseCandidateRecovery", "recoverGoalPhaseCandidate",
       "describeGoalPhaseWholePhaseCandidateRecovery", "recoverGoalPhaseWholePhaseCandidate",
       "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
       "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
+      "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision",
       "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
       "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
       "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseRepairPolicy", "adoptGoalPhaseRepairPolicy",
       "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
       "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair"
     ),
@@ -55,6 +59,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     ),
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
       "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
+      "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),

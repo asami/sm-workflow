@@ -590,7 +590,7 @@ final class NativeGoalTypedInputsLiveSpec extends AnyWordSpec with Matchers with
           Files.writeString(Path.of(scenario.host.target.root).resolve("docs/phase.md"),
             "# Specification-owned negative typed input\n\nExplicit invalid input: " + name + "\n", UTF_8)
           val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned invalid input scenario " + name,
-            Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+            Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
           val reference = V.WorkflowArtifactReference("specification-negative-typed-input-" + name, "1")
           When("the normal issued semantic Submit consumes only those stated negative fixture inputs")
           _semantic(scenario, initial, output, semantic, reference)

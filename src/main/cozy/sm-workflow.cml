@@ -100,6 +100,51 @@ org.simplemodeling.textus.smworkflow
 |------+------|--------------|
 | sessionId | string | 1 |
 
+## GoalPhaseDiagnosticSelection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| kind | string | 1 |
+| reason | string | 1 |
+| check | string | ? |
+| stream | string | ? |
+| occurrenceLine | int | ? |
+| path | string | ? |
+
+## GoalPhaseDiagnosticInformationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| requestIdentity | string | 1 |
+| selections | GoalPhaseDiagnosticSelection | * |
+| knownEvidence | EvidenceReference | * |
+| historyAfter | string | ? |
+
+## GoalPhaseDiagnosticInformationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| issuedWorkContext | WorkflowIssuedWorkContext | 1 |
+| requestIdentity | string | 1 |
+| status | string | 1 |
+| message | string | 1 |
+| items | org.goldenport.record.Record | * |
+| recording | EvidenceRecordingState | ? |
+| history | org.goldenport.record.Record | * |
+| historyStatus | string | 1 |
+| historyHasMore | boolean | 1 |
+| historyNext | string | ? |
+
 ## SplitPhaseAdvanceInput
 
 - input-kind :: COMMAND
@@ -636,6 +681,64 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseDependencySourceRevisionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| proposal | record | 1 |
+
+## GoalPhaseDependencySourceRevisionDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseDependencySourceRevisionAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhaseDependencySourceRevisionAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseRemainingPlanDescriptionInput
 
 - input-kind :: COMMAND
@@ -924,6 +1027,76 @@ OperationResult
 | executionEvidence | WorkflowExecutionEvidence | 1 |
 
 ## RepositorySyncValidationContinuationAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
+## GoalPhaseSourceHistoryNormalizationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseSourceHistoryNormalizationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## GoalPhaseSourceHistoryNormalizationAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| rationale | string | 1 |
+| priorExecutionEnded | boolean | 1 |
+
+## GoalPhaseSourceHistoryNormalizationAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| priorExecutionEnded | boolean | 1 |
+
+## GoalPhaseSourceHistoryNormalizationAdoptionResult
 
 ### EXTENDS
 
@@ -1234,6 +1407,7 @@ OperationResult
 | choice | string | 1 |
 | rationale | string | 1 |
 | decisionReference | WorkflowArtifactReference | ? |
+| inventoryContinuation | Record | ? |
 
 ## GoalPhaseOrderedDecisionResultReference
 
@@ -1348,6 +1522,7 @@ OperationResult
 | dependencyValidation | org.goldenport.record.Record | ? |
 | assessment | org.goldenport.record.Record | ? |
 | assessmentJournal | JournalRecordingState | ? |
+| diagnostics | org.goldenport.record.Record | * |
 
 ## EvidenceReference
 
@@ -1613,6 +1788,7 @@ OperationResult
 | changedPaths | string | * |
 | diff | string | 1 |
 | validation | GoalPhaseNativeValidationView | 1 |
+| initialPhaseRepair | WorkflowArtifactReference | ? |
 
 ## GoalPhaseWorkResult
 
@@ -1634,6 +1810,7 @@ OperationResult
 | completionConditions | org.goldenport.record.Record | ? |
 | repairFindingSources | GoalPhaseRepairFindingSources | ? |
 | dependencyValidation | org.goldenport.record.Record | ? |
+| diagnosticRepair | org.goldenport.record.Record | ? |
 
 ## GoalPhaseRepairFindingSources
 
@@ -2714,6 +2891,14 @@ operation = GoalPhaseService.recoverGoalPhaseClosure
 
 operation = GoalPhaseService.describeGoalPhaseSourceHistoryRecovery
 
+#### describeGoalPhaseSourceHistoryNormalization
+
+operation = GoalPhaseService.describeGoalPhaseSourceHistoryNormalization
+
+#### adoptGoalPhaseSourceHistoryNormalization
+
+operation = GoalPhaseService.adoptGoalPhaseSourceHistoryNormalization
+
 #### describeGoalPhaseCandidateRecovery
 
 operation = GoalPhaseService.describeGoalPhaseCandidateRecovery
@@ -2745,6 +2930,14 @@ operation = GoalPhaseService.recoverGoalPhaseSourceHistory
 #### describeGoalPhaseRemainingPlan
 
 operation = GoalPhaseService.describeGoalPhaseRemainingPlan
+
+#### describeGoalPhaseDependencySourceRevision
+
+operation = GoalPhaseService.describeGoalPhaseDependencySourceRevision
+
+#### adoptGoalPhaseDependencySourceRevision
+
+operation = GoalPhaseService.adoptGoalPhaseDependencySourceRevision
 
 #### adoptGoalPhaseRemainingPlan
 
@@ -2907,6 +3100,11 @@ on = human-source-history-new-attempt
 
 to = InspectCandidate
 on = human-source-history-deferred
+
+##### TRANSITION
+
+to = InspectCandidate
+on = source-history-normalization-adopted
 
 ##### TRANSITION
 
@@ -3297,6 +3495,21 @@ on = repair-policy-resumed
 
 to = Repair
 on = release-repair-continuation-admitted
+
+##### TRANSITION
+
+to = Repair
+on = initial-phase-check-repair-admitted
+
+##### TRANSITION
+
+to = Implementation
+on = dependency-inventory-continued-Implementation
+
+##### TRANSITION
+
+to = Repair
+on = dependency-inventory-continued-Repair
 
 ##### TRANSITION
 
@@ -5459,6 +5672,34 @@ Own the selected Phase's entry, assigned semantic/Human completion, mechanical p
 
 ### OPERATION
 
+#### resolveGoalPhaseDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve one batched NeedInformation request against the exact currently issued RepairStep with retained failed-check context. Select failure-context, cause-chain, suite-context, execution-context, full-output or source-file with a reason. Retained logs are immutable; source-file reads use the managed repository File workspace and identify current observation with candidate applicability unverified. Empty selections restore a finite page of delivered Evidence references for a replacement worker; historyAfter continues that page. knownEvidence suppresses repeat payloads only for an exact retained batch already known to the caller. Persist requested facts and unavailable results in Common Evidence and its Journal producer. This operation neither completes work nor advances the Session, executes SBT, grants file authority or consumes repair allowance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
+
 #### advanceGoalPhase
 
 ##### DESCRIPTION
@@ -5802,6 +6043,62 @@ GoalPhaseSourceHistoryRecoveryDescriptionInput
 
 GoalPhaseSourceHistoryRecoveryDescriptionResult
 
+#### describeGoalPhaseSourceHistoryNormalization
+
+##### DESCRIPTION
+
+Read managed native storage only. Describe the exact original selected-Step unresolved source-history intent after its contiguous successful prefix, or its exact unanswered source-history Human question. Bind the complete legacy RecoveryTarget, current native frontier/cause, optional question identity/pending revision and policy sm-workflow.source-history-normalization.v1. Return AdoptSameAuthorityNormalization and Defer. Refuse other effects, completed/deferred/cancelled questions, crossed authority and changed full rule. No File/Git/SBT or mutation follows description.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseSourceHistoryNormalizationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseSourceHistoryNormalizationDescriptionResult
+
+#### adoptGoalPhaseSourceHistoryNormalization
+
+##### DESCRIPTION
+
+Adopt the already held same-authority policy direction for the exact described target, rationale and actual policy-direction artifact reference. Independent host evidence under goal-phase-source-history-normalization must bind priorExecutionEnded=true to actual old invocation terminal evidence; absent receipts, elapsed time and current content never prove termination. This reference is existing policy direction, not an answer to the old Human or a new per-file permission. Append immutable mechanical direction, or supersede the exact pending source-history Human without answering it, preserving UNKNOWN, prefix, Plan/base and repair counts. Defer writes nothing. No File/Git/SBT or Advance follows adoption. Separate ordinary Advance verifies retained prefix/rule/date, observes an already normalized current comment without writing or uses managed UpdateExisting(expectedText) for bounded normalization. Its independent reconciliation intent/result never fills the old missing result. Known prewrite failures retain concrete failed observations. Interrupted new writers require actual terminal evidence and are never automatically repeated. Actual success precedes fresh ordinary candidate, selected validation and independent admission.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseSourceHistoryNormalizationAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseSourceHistoryNormalizationAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseSourceHistoryNormalizationAdoptionResult
+
 #### recoverGoalPhaseSourceHistory
 
 ##### DESCRIPTION
@@ -5829,6 +6126,63 @@ GoalPhaseSourceHistoryRecoveryInput
 ###### TYPE
 
 GoalPhaseSourceHistoryRecoveryResult
+
+#### describeGoalPhaseDependencySourceRevision
+
+##### DESCRIPTION
+
+Describe the exact current unanswered implementation or repair Human Decision, its retained dependency predecessor and proposed source selection. Observe selected and excluded regular-file bytes with managed File Identity reads and native Git index/status guards. Preserve original primary base, accepted prefix, approvals and repair history. Return only an exact target and the choices AdoptDependencySourceRevision and Defer. Typed observation can run IndexTree; no staging, source normalization, check, commit, Submit, Advance or adoption runs here.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDependencySourceRevisionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDependencySourceRevisionDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDependencySourceRevisionDescriptionResult
+
+#### adoptGoalPhaseDependencySourceRevision
+
+##### DESCRIPTION
+
+Adopt one independently observed Human source-selection direction for the exact described current target. Re-observe managed selected/excluded bytes, Git and native frontier; refuse stale, crossed, live, unresolved or uncertain effects. Append through the existing Decision supersession owner without answering the old question, replacing original primary base, refunding repairs or accepting new bytes. Defer stores nothing. Only later ordinary Advance, fresh inherited checks, independent review and ordinary closure can qualify a successor. No check, staging, Submit, Advance, commit or publication is run by adoption.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDependencySourceRevisionAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDependencySourceRevisionAdoptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDependencySourceRevisionAdoptionResult
+
 
 #### describeGoalPhaseRemainingPlan
 
@@ -8187,6 +8541,7 @@ GoalPhaseWorkSubmissionResult
 | purposeRepair | org.goldenport.record.Record | ? |
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
+| diagnosticHistory | org.goldenport.record.Record | * |
 
 ## GoalPhaseHumanQuestion
 
@@ -9119,6 +9474,7 @@ GoalPhase kind completion-policy-adoption requires participant, the actual GoalP
 
 GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhaseRepairPolicyDescriptionResult and GoalPhaseRepairPolicyAdoptionInput, exact target/choice/rationale/reference and matching independent worker, issuer and time. Prepare only the existing external-evidence import under goal-phase-repair-policy-adoption and repairPolicyAdoption(target,answer). Choices are AdoptRuntimePolicy, RetainSelectedLimit and Defer. Preparation has no workflow or authority effect and does not authenticate caller-origin claims. Optional restoration is exact business context; no consumer operation or count modification follows.
 
+GoalPhase kind source-history-normalization requires participant, the actual GoalPhaseSourceHistoryNormalizationDescriptionResult and GoalPhaseSourceHistoryNormalizationAnswer, matching execution worker, actual existing policy-direction artifact reference, issuer and time. Bind the complete strict target and answer including priorExecutionEnded under the dedicated goal-phase-source-history-normalization purpose. AdoptSameAuthorityNormalization requires priorExecutionEnded=true independently attested by the trusted host from actual terminal evidence. Passive preparation verifies supplied typed data only; it does not prove termination, invent consent, answer the old Human, provision storage, adopt policy or Advance. No old source-history-recovery purpose or generic authorization fallback is admitted.
 
 RepositorySync kind validation-continuation requires participant, the actual RepositorySyncValidationContinuationDescriptionResult and strict RepositorySyncValidationContinuationAnswer, matching execution worker, existing direction artifact reference, issuer and time. Bind every target/answer field under dedicated repository-sync-validation-continuation purpose. An adopting answer requires independently host-attested priorExecutionEnded=true and acceptOriginalUncertainty=true. The trusted host must verify actual terminal or not-started lifecycle externally before provisioning; live or unknown termination refuses. Passive preparation only encodes supplied facts: it cannot observe termination, manufacture consent, issue/provision evidence, adopt or execute. The old UNKNOWN effects remain unknown.
 

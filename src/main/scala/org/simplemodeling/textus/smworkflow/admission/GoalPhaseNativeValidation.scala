@@ -27,7 +27,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -74,18 +74,21 @@ private[smworkflow] object GoalPhaseNativeValidation {
     uncertainties: Vector[Uncertainty] = Vector.empty, newAttempts: Vector[NewAttempt] = Vector.empty,
     dependency: Option[GoalPhaseDependencyValidation.Capture] = None,
     dependencyExecutions: Vector[GoalPhaseDependencyValidation.Execution] = Vector.empty,
-    assessment: Option[GoalPhaseStepAssessment.Result] = None)
+    assessment: Option[GoalPhaseStepAssessment.Result] = None,
+    dependencySource: Option[GoalPhaseDependencySourceRevision.Capture] = None,
+    sourceConsumption: Option[GoalPhaseDependencySourceRevision.Consumption] = None)
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(value => value.mapObject(fields =>
       Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(fields) { (prior, key) =>
         if (prior(key).exists(_.asArray.exists(_.isEmpty))) prior.remove(key) else prior
-      }.filter { case (key, value) => (key != "dependency" && key != "assessment") || !value.isNull }))
+      }.filter { case (key, value) => !Set("dependency", "assessment", "dependencySource", "sourceConsumption")(key) || !value.isNull }))
     private val _decoder: Decoder[Payload] = deriveDecoder
     given Decoder[Payload] = Decoder.instance { cursor =>
       val normalized = Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(cursor.value) { (prior, key) =>
         if (cursor.downField(key).focus.isEmpty) prior.mapObject(_.add(key, Json.arr())) else prior
       }
-      _decoder.decodeJson(normalized).flatMap(value => if (!cursor.downField("dependency").focus.exists(_.isNull) && _valid_payload(value)) Right(value)
+      _decoder.decodeJson(normalized).flatMap(value => if (!Vector("dependency", "dependencySource", "sourceConsumption").exists(name =>
+          cursor.downField(name).focus.exists(_.isNull)) && _valid_payload(value)) Right(value)
         else Left(DecodingFailure("Invalid native validation payload", cursor.history)))
     }
   }
@@ -152,8 +155,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
     from: Option[InstanceRecord] = None,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
     recordingPaths: Vector[String] = Vector.empty,
-    allowRepairDirection: Boolean = false): Consequence[Option[Saved]] = for {
-    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths)
+    allowRepairDirection: Boolean = false,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths,
+      dependencyChain)
     retained <- store.loadC("validation")
     actual <- retained.fold(if (allowRepairDirection) store.pendingRepairSelectionC else store.pendingSelectionC)(x => store.completedC(x).map(Some(_)))
   } yield actual
@@ -220,29 +225,33 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private[admission] def recoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String]):
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None):
     Consequence[GoalPhaseValidationRecovery.RecoveryTarget] =
-    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths, dependencyChain)
       .flatMap(_.recoveryTargetC)
 
   private[admission] def repairRecoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String]):
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None):
     Consequence[GoalPhaseValidationRecovery.RecoveryTarget] =
-    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths, dependencyChain)
       .flatMap(_.repairRecoveryTargetC)
 
   private[admission] def appendRecoveryC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    expected: GoalPhaseValidationRecovery.RecoveryTarget, authorization: NewAttempt): Consequence[Saved] =
-    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths)
+    expected: GoalPhaseValidationRecovery.RecoveryTarget, authorization: NewAttempt,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Saved] =
+    _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from), documentPolicy, recordingPaths, dependencyChain)
       .flatMap(_.appendRecoveryC(expected, authorization))
 
   /** Read-only proof for the original Decision, including every retained prior attempt. */
   private[admission] def terminalFailedAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved): Consequence[TerminalFailedAttempt] =
-    terminalAttemptC(session, d, core, candidate, controller, failed, TerminalOutcome.Failed)
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[TerminalFailedAttempt] =
+    terminalAttemptC(session, d, core, candidate, controller, failed, TerminalOutcome.Failed, dependencyChain)
       .map(value => TerminalFailedAttempt(value.attempt, value.intent, value.result, value.validation))
 
   /** Both repair sources use the ordinary retained intent/result reconciliation.
@@ -250,24 +259,26 @@ private[smworkflow] object GoalPhaseNativeValidation {
     */
   private[admission] def terminalAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, failed: Saved,
-    expected: TerminalOutcome): Consequence[TerminalAttempt] = for {
+    expected: TerminalOutcome,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[TerminalAttempt] = for {
     entry <- session.current.history.filter(_.revision.value.toString == failed.payload.sourceRevision) match {
       case Vector(value) => Consequence.success(value)
       case _ => F.invalid("known failed validation source is absent or ambiguous")
     }
     source <- GoalPhaseNativeHistory.prefixC(session.current, entry.revision)
-    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty)
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty, dependencyChain)
     terminal <- store.terminalAttemptC(failed, expected)
   } yield terminal
 
   private[admission] def outputLimitedAttemptC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, limited: Saved): Consequence[OutputLimitedAttempt] = for {
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, limited: Saved,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[OutputLimitedAttempt] = for {
     entry <- session.current.history.filter(_.revision.value.toString == limited.payload.sourceRevision) match {
       case Vector(value) => Consequence.success(value)
       case _ => F.invalid("output-limited validation source is absent or ambiguous")
     }
     source <- GoalPhaseNativeHistory.prefixC(session.current, entry.revision)
-    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty)
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(source), None, Vector.empty, dependencyChain)
     actual <- store.actualTerminalAttemptC(limited, "incomplete", outputLimited(limited.payload))
   } yield OutputLimitedAttempt(actual._1, actual._2, actual._3, actual._4)
 
@@ -280,7 +291,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
     primary <- selectedChecksC(d, controller.plan, step)
-    selected <- GoalPhaseNativeDependencyValidation.checksC(primary, candidate.payload.dependency)
+    consumptions = (dependencyChain.toVector.flatMap(_.acceptedSources.map(_.capture.direction.target.proposal.consumption)) ++
+      candidate.payload.dependencySourceCapture.map(_.direction.target.proposal.consumption)).distinct
+    _ <- if (consumptions.size <= 1 && primary.forall(c => consumptions.forall(route =>
+        route.programs.exists(p => p.check == c.identity && p.kind == c.kind.wire)))) Consequence.unit
+      else F.invalid("primary checks have no unambiguous admitted source-consumption programs")
+    selected <- GoalPhaseNativeDependencyValidation.checksC(primary, candidate.payload.dependency, candidate.payload.dependencySourceCapture)
     scope = step.getOrElse("phase:" + controller.plan.phase)
     owned = if (whole) controller.plan.steps.flatMap(_.ownedPaths).distinct else controller.plan.steps(controller.cursor).ownedPaths
     _ <- L.bindingsC(selected, scope, owned, d.candidatePaths)
@@ -309,7 +325,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else F.invalid("native checks require the actual saved candidate")
     prefix = if (selected.exists(_.metadata.nonEmpty)) selected.takeWhile(_.metadata.isEmpty) else Vector.empty
     initial = Payload(frontier.revision.value.toString, scope, candidate.payload.candidate.get,
-      if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = candidate.payload.dependency)
+      if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = candidate.payload.dependency,
+      dependencySource = candidate.payload.dependencySourceCapture, sourceConsumption = consumptions.headOption)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, d, core, candidate, frontier, controller, selected, initial,
       None, acknowledgement, documentpolicy, recordingpaths, dependencyChain)
@@ -343,10 +360,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _check_loop_c(store: Store, initial: Saved): Consequence[Saved] =
     store.initial.selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (current.payload.receipts.size != index || !successful(current.payload.receipts, store.initial.selected)) Consequence.success(current)
-      else runCheckC(check, index, store.initial.dependency.nonEmpty || store.dependencyChain.exists(_.accepted.nonEmpty))(
+      else runCheckC(check, index, store.initial.dependency.nonEmpty || store.initial.dependencySource.nonEmpty || store.dependencyChain.exists(_.accepted.nonEmpty))(
         () => store._check_progress_c(current, index), () => store.preconditionsC,
         store.saveC, store.acknowledgeC,
-        selected => if (selected.operation.isEmpty) GoalPhaseNativeDependencyValidation.workspaceC(selected, store.initial.dependency)
+        selected => if (selected.operation.isEmpty) _workspace_c(selected, store.initial)
           .flatMap(workspace => E.repositoryValidationAttemptC(store.core, selected.ordinal, selected.kind, workspace))
           else N.operationC(selected, store.initial.metadata).flatMap(E.validationOperationAttemptC(store.core, _)),
         payload => store.evidenceC(payload).map(_ => ()))
@@ -391,25 +408,40 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private[admission] def attemptPayloadC(previous: Payload, check: Check, attempt: Int,
     actual: SbtExecutionAttempt): Consequence[Payload] = actual match {
     case SbtExecutionAttempt.Observed(result) => for {
-      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      workspace <- _workspace_c(check, previous)
       _ <- _attempt_target_c(check, workspace, result.target, result.operation)
+      _ <- if (_source_program(check, previous).forall(p => result.processResult != null &&
+          p.program == result.processResult.safeProgramIdentity)) Consequence.unit
+        else F.invalid("source-consumption check used a different admitted program")
       receipt <- V.sbtReceiptC(check.identity, check.kind, result)
-      execution = workspace.map(w => GoalPhaseDependencyValidation.Execution(check.identity, attempt, w, check.kind.wire))
+      execution = workspace.filter(_ => check.dependency.nonEmpty).map(w => GoalPhaseDependencyValidation.Execution(check.identity, attempt, w, check.kind.wire))
       executions = previous.dependencyExecutions ++ execution
     } yield if (_not_executed(receipt)) previous.copy(stopped = previous.stopped :+ receipt, dependencyExecutions = executions)
       else previous.copy(receipts = previous.receipts :+ receipt, dependencyExecutions = executions)
     case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) => for {
-      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      workspace <- _workspace_c(check, previous)
       _ <- _attempt_target_c(check, workspace, target, operation)
       diagnostic <- _diagnostic_c(conclusion.show)
     } yield previous.copy(admissionFailures = previous.admissionFailures :+ AdmissionFailure(check.identity, attempt, diagnostic))
     case SbtExecutionAttempt.Uncertain(target, operation, conclusion) => for {
-      workspace <- GoalPhaseNativeDependencyValidation.workspaceC(check, previous.dependency)
+      workspace <- _workspace_c(check, previous)
       _ <- _attempt_target_c(check, workspace, target, operation)
       diagnostic <- _diagnostic_c(conclusion.show)
     } yield previous.copy(uncertainties = previous.uncertainties :+ Uncertainty(check.identity, attempt, diagnostic))
     case _ => F.invalid("native check has no typed UoW attempt")
   }
+
+  private def _workspace_c(check: Check, payload: Payload): Consequence[Option[String]] =
+    if (check.dependency.isEmpty && payload.sourceConsumption.nonEmpty)
+      payload.sourceConsumption.get.programs.find(p => p.check == check.identity && p.kind == check.kind.wire)
+        .map(p => Consequence.success(Some(p.workspace)))
+        .getOrElse(F.invalid("primary check has no admitted source-consumption route"))
+    else GoalPhaseNativeDependencyValidation.workspaceC(check, payload.dependency, payload.dependencySource)
+
+  private def _source_program(check: Check, payload: Payload): Option[GoalPhaseDependencySourceRevision.CheckProgram] =
+    (if (check.dependency.isEmpty) payload.sourceConsumption
+      else payload.dependencySource.map(_.direction.target.proposal.consumption))
+      .flatMap(_.programs.find(p => p.check == check.identity && p.kind == check.kind.wire))
 
   private def _attempt_target_c(check: Check, workspace: Option[String], target: SbtTarget,
     operation: SbtOperation): Consequence[Unit] =
@@ -706,7 +738,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
     def preconditionsC: Consequence[Unit] = for {
-      _ <- GoalPhaseNativeDependencyValidation.chainFreshnessC(core, dependencyChain, initial.dependency.toVector)
+      _ <- GoalPhaseDependencySourceRevision.chainFreshnessC(core, dependencyChain,
+        initial.dependency.toVector, initial.dependencySource.toVector)
       parent <- B.parentC(controller.tipSnapshot, candidate.payload.continuation)
       _ <- if (parent == base && (controller.candidateParent.isEmpty || controller.candidateBase == parent)) Consequence.unit
         else F.invalid("native validation candidate parent differs from its retained proof")
@@ -796,9 +829,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
                   saved.payload.uncertainties.dropRight(1) == current.saved.payload.uncertainties &&
                   saved.payload.uncertainties.lastOption.exists(f => f.checkIdentity == initial.selected(index).identity && f.attempt == ordinal) &&
                   saved.payload.copy(uncertainties = current.saved.payload.uncertainties) == current.saved.payload
+                workspace <- _workspace_c(initial.selected(index), initial)
                 executions = if (initial.selected(index).dependency.nonEmpty && (stopped || completed))
                   current.saved.payload.dependencyExecutions :+ GoalPhaseDependencyValidation.Execution(
-                    initial.selected(index).identity, ordinal, initial.dependency.get.admission.binding.dependency.workspace,
+                    initial.selected(index).identity, ordinal, workspace.get,
                     initial.selected(index).kind.wire) else current.saved.payload.dependencyExecutions
                 _ <- if (Vector(stopped, completed, rejected, uncertain).count(identity) == 1 &&
                     saved.payload.dependencyExecutions == executions) Consequence.unit
@@ -956,7 +990,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _compatible_payload(initial: Payload, payload: Payload): Boolean =
     _valid_payload(payload) && payload.sourceRevision == initial.sourceRevision && payload.step == initial.step &&
       payload.candidate == initial.candidate && payload.selected == initial.selected && payload.metadata == initial.metadata &&
-      payload.dependency == initial.dependency
+      payload.dependency == initial.dependency && payload.dependencySource == initial.dependencySource &&
+      payload.sourceConsumption == initial.sourceConsumption
 
   private def _same_attempt_facts(left: Payload, right: Payload): Boolean =
     left.stopped == right.stopped && left.admissionFailures == right.admissionFailures &&
@@ -1058,9 +1093,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
         val failed = payload.selected(payload.receipts.size - 1)
         val exit = payload.receipts.last.exitCode.get
         val scope = if (controller.cursor == controller.plan.steps.size) "Release" else "Step"
-        val ownership = failed.dependency.flatMap(_ => payload.dependency).map(d =>
-          "approved linked dependency " + d.admission.binding.dependency.repository + " at " +
-            d.admission.binding.paths.mkString(", ")).getOrElse("selected " + scope + " " + payload.step)
+        val ownership = failed.dependency.flatMap(_ => GoalPhaseDependencySourceRevision.binding(
+          payload.dependency, payload.dependencySource)).map(b =>
+          "approved linked dependency " + b.dependency.repository + " at " +
+            b.paths.mkString(", ")).getOrElse("selected " + scope + " " + payload.step)
         val directive = O.RepairDirective("Correct selected " + scope + " check " + failed.identity + " (" + failed.kind.wire +
           ") after actual exit " + exit,
           Vector(if (controller.repairControl.nonEmpty) "Native check " + failed.identity + " (" + failed.kind.wire +
@@ -1083,14 +1119,28 @@ private[smworkflow] object GoalPhaseNativeValidation {
     N.validateRuntimeC(payload.selected, payload.metadata).isSuccess &&
     payload.receipts != null && payload.stopped != null &&
     payload.dependency != null && payload.dependency.forall(GoalPhaseDependencyValidation.captureValid) &&
-    payload.selected.forall(c => c.dependency != null && c.dependency.forall(identity => payload.dependency.exists(d =>
-      d.admission.binding.identity == identity && d.admission.binding.checks.exists(_.copy(dependency = Some(identity)) == c)))) &&
-    payload.dependency.forall(d => payload.selected.filter(_.dependency.nonEmpty) ==
-      d.admission.binding.checks.map(_.copy(dependency = Some(d.admission.binding.identity)))) &&
+    payload.dependencySource != null && payload.dependencySource.forall(GoalPhaseDependencySourceRevision.captureValid) &&
+    payload.sourceConsumption != null && payload.sourceConsumption.forall(GoalPhaseDependencySourceRevision.consumptionValid) &&
+    payload.dependencySource.forall(c => payload.sourceConsumption.contains(c.direction.target.proposal.consumption)) &&
+    payload.sourceConsumption.forall(route => payload.selected.filter(_.dependency.isEmpty).forall(check =>
+      route.programs.exists(p => p.check == check.identity && p.kind == check.kind.wire) &&
+      (payload.receipts ++ payload.stopped).filter(_.identity == check.identity).forall(receipt =>
+        receipt.processObservation.exists(process => route.programs.exists(p =>
+          p.check == check.identity && p.kind == check.kind.wire && p.program == process.safeProgramIdentity))))) &&
+    payload.selected.forall(check => _source_program(check, payload).forall(program =>
+      (payload.receipts ++ payload.stopped).filter(_.identity == check.identity).forall(receipt =>
+        receipt.processObservation.exists(_.safeProgramIdentity == program.program)))) &&
+    !(payload.dependency.nonEmpty && payload.dependencySource.nonEmpty) &&
+    payload.selected.forall(c => c.dependency != null && c.dependency.forall(identity =>
+      GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource).exists(b =>
+      b.identity == identity && b.checks.exists(_.copy(dependency = Some(identity)) == c)))) &&
+    GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource).forall(b =>
+      payload.selected.filter(_.dependency.nonEmpty) == b.checks.map(_.copy(dependency = Some(b.identity)))) &&
     payload.dependencyExecutions != null && payload.dependencyExecutions.forall(e =>
-      GoalPhaseDependencyValidation.executionValid(e) && payload.dependency.exists(d =>
-        e.workspace == d.admission.binding.dependency.workspace && payload.selected.exists(c =>
-          c.dependency.nonEmpty && c.identity == e.check && c.kind.wire == e.operation))) &&
+      GoalPhaseDependencyValidation.executionValid(e) && GoalPhaseDependencySourceRevision.binding(
+        payload.dependency, payload.dependencySource).exists(b =>
+        payload.selected.exists(c => c.dependency.nonEmpty && c.identity == e.check && c.kind.wire == e.operation &&
+          _workspace_c(c, payload).toOption.contains(Some(e.workspace))))) &&
     payload.dependencyExecutions.map(e => e.check -> e.attempt).distinct.size == payload.dependencyExecutions.size &&
     payload.dependencyExecutions.size == (payload.receipts ++ payload.stopped).count(r =>
       payload.selected.exists(c => c.dependency.nonEmpty && c.identity == r.identity)) &&

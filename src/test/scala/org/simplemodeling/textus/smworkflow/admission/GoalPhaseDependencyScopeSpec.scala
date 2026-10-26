@@ -13,7 +13,7 @@ import GoalPhaseDependencyScope.*
 
 /** Specification-owned reports prove input admission, never edits, consent or native success.
   * @since   Oct. 19, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,6 +36,61 @@ final class GoalPhaseDependencyScopeSpec extends AnyWordSpec with Matchers with 
     "Specification-owned review report: an unapproved dependency edit escaped the assigned Component.\nHuman disposition is pending.",
     discoveredEdits = Vector(_paths.head))
   private def _field(value: Json, name: String, nested: Json): Json = value.mapObject(_.add(name, nested))
+
+  "Explicit purpose authorization" should afterWord("in spec:goal-phase-dependency-scope, rules:PA-01,PA-02,PA-03") {
+    "preserve legacy absence and carry exact typed operations, exclusions and exhaustive restrictions" in {
+      Given("an old exact-file proposal and a typed boundary with an explicit exhaustive file list")
+      val boundary = AuthorizationBoundary(authorizationSchema, ContextReference("purpose:contract", "1"),
+        Vector("edit-source", "validate"), Vector("src/Forbidden.scala"), Some(_paths))
+      val typed = _proposed.copy(authorizationBoundary = Some(boundary))
+      When("ordinary owning codecs and kebab-case public Records consume both representations")
+      val oldwire = _proposed.asJson
+      val wire = typed.asJson
+      val publicrecord = PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase)
+        .transformRecord(publicProposal(Some(typed)).get)
+      Then("old wire has neither new key and the typed restriction and reference survive exactly")
+      oldwire.hcursor.downField("authorizationBoundary").focus shouldBe None
+      oldwire.hcursor.downField("scopeUpdate").focus shouldBe None
+      oldwire.as[Proposal] shouldBe Right(_proposed)
+      wire.as[Proposal] shouldBe Right(typed)
+      _take(fromPublicProposalC(Some(publicrecord))) shouldBe Some(typed)
+      wire.hcursor.downField("authorizationBoundary").get[Vector[String]]("exactPaths") shouldBe Right(_paths)
+      boundary.copy(exactPaths = None).asJson.hcursor.downField("exactPaths").focus shouldBe None
+    }
+
+    "refuse malformed, null, unknown, duplicate and colliding authorization fields at the ordinary public boundary" in {
+      Given("one valid boundary and representative invalid operation, purpose, restriction and option values")
+      val boundary = AuthorizationBoundary(authorizationSchema, ContextReference("purpose:contract", "1"),
+        Vector("edit-source"), Vector.empty)
+      val typed = _proposed.copy(discovery = "IMPLEMENTATION", authorizationBoundary = Some(boundary),
+        scopeUpdate = Some(ScopeUpdate(ContextReference("actual-answer", "1"), "The selected acceptance needs this inventory")))
+      val badboundary = Vector(Json.Null, Json.True, Json.obj(),
+        boundary.copy(schemaVersion = "unknown").asJson, boundary.copy(purpose = ContextReference("", "1")).asJson,
+        boundary.copy(permittedOperations = Vector.empty).asJson,
+        boundary.copy(permittedOperations = Vector("edit-source", "edit-source")).asJson,
+        boundary.copy(permittedOperations = Vector("execute-anything")).asJson,
+        boundary.copy(excludedPaths = Vector("../outside.scala")).asJson,
+        boundary.copy(excludedPaths = Vector("same.scala", "same.scala")).asJson,
+        boundary.copy(exactPaths = Some(Vector.empty)).asJson,
+        _field(boundary.asJson, "exactPaths", Json.Null), _field(boundary.asJson, "unknown", Json.True))
+      val badupdate = Vector(Json.Null, Json.obj(),
+        ScopeUpdate(ContextReference("", "1"), "Necessity").asJson,
+        ScopeUpdate(ContextReference("answer", "1"), " ").asJson,
+        _field(typed.scopeUpdate.get.asJson, "unknown", Json.True))
+      val colliding = _field(typed.asJson, "authorization-boundary", boundary.asJson)
+      When("strict raw decoding and the normal public Record conversion consume malformed presence")
+      val rejected = badboundary.map(value => _field(typed.asJson, "authorizationBoundary", value).as[Proposal]) ++
+        badupdate.map(value => _field(typed.asJson, "scopeUpdate", value).as[Proposal])
+      val collision = fromPublicProposalC(Some(GoalPhaseNativeMetadata.record(colliding)))
+      Then("no malformed value or alias collision becomes absence or consent")
+      rejected.foreach(_.isLeft shouldBe true)
+      collision.isSuccess shouldBe false
+      Vector(typed.copy(authorizationBoundary = None), typed.copy(discovery = "PLANNING"),
+        typed.copy(discovery = "REVIEW"), typed.copy(authorizationBoundary = Some(boundary.copy(excludedPaths = _paths))),
+        typed.copy(authorizationBoundary = Some(boundary.copy(exactPaths = Some(Vector("other.scala"))))))
+        .foreach(value => validateProposalC(value).isSuccess shouldBe false)
+    }
+  }
 
   "Logical Component and repository targets" should afterWord("in spec:goal-phase-dependency-scope, rules:R1,R2,R5") {
     "retain same-repository and external selections through owning codecs and actual public Record naming" in {

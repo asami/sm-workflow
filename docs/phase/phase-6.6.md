@@ -1,5 +1,18 @@
 # Phase 6.6: Incremental SBT Failure Diagnosis and Repair
 
+## Active D3 correction — 2026-10-26
+
+The consumer reports D1/D2 accepted and committed, with D3's repair accepted and
+source-history Human226 pending at repair count 1/10. Preserve that actual state;
+the original planned baseline below must not reset it. Consume the
+[SHR-C1–7 correction](source-history-recovery-result-collection-correction.md):
+recover completed producer receipts first, connect same-authority source-history
+normalization and public adoption, then continue D3 and D4 with applicable existing
+results. RRC completion alone does not settle source-history recovery. No caller
+bypass or reimplementation of D1/D2. See the
+[English handoff](../journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
+
+
 Status: planned
 Planned: 2026-10-23
 Owner: sm-workflow development chat

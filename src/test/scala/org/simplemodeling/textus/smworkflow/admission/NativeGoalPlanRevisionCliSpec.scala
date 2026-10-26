@@ -81,7 +81,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       scenario.plan.steps.head.copy(purpose = _purpose, checks = Vector(check))))
     val proposed = R.Proposal("specification-plan-proposal", "1", "SPECIFICATION-OWNED explicit requirement/design gap", revised)
     val result = V.GoalPhaseWorkResult("decision-needed", "Explicit current-Step design decision", Vector.empty,
-      None, None, None, R.publicProposal(Some(proposed)), None, None, None, None, dependencyValidation = None)
+      None, None, None, R.publicProposal(Some(proposed)), None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     When("a separate ordinary semantic Submit reports that proposal without changing source or executing checks")
     _submit(scenario, initial, result, "proposal")
     Then("the requesting semantic result is accepted and grants no consent, check or Plan adoption")
@@ -206,7 +206,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       When("the fixture authors the two owned business documents and ordinary decision-needed Submit supplies that complete proposal")
       val documents = _write_documents(scenario, revised)
       _submit(scenario, initial, V.GoalPhaseWorkResult("decision-needed", "Explicit current document requirement decision",
-        Vector.empty, None, None, None, R.publicProposal(Some(proposed)), None, None, None, None, dependencyValidation = None), "document-proposal")
+        Vector.empty, None, None, None, R.publicProposal(Some(proposed)), None, None, None, None, dependencyValidation = None, diagnosticRepair = None), "document-proposal")
       Then("the ordinary semantic result grants no adoption or execution and leaves the fixture product uncorrected")
       Files.readString(repository.resolve("value.txt"), UTF_8) shouldBe "initial\n"
       _executions(scenario) shouldBe empty
@@ -276,7 +276,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       When("ordinary completed Submit precedes a separate Advance that performs its selected typed SBT Test")
       Files.writeString(repository.resolve("value.txt"), "expected\n", UTF_8)
       _submit(scenario, implementation, V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED document requirement correction",
-        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None), "document-implementation")
+        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None), "document-implementation")
       _executions(scenario) shouldBe empty
       val checked = scenario.advance(task)
       val review = checked.business[V.GoalPhaseAdvanceResult]
@@ -370,7 +370,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       When("ordinary semantic Submit precedes a separate Advance that executes the actual selected typed SBT Test")
       Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n", UTF_8)
       _submit(scenario, implementation, V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED expected-newline correction",
-        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None), "implementation")
+        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None), "implementation")
       _executions(scenario) shouldBe empty
       val checked = scenario.advance(selected.task)
       val review = checked.business[V.GoalPhaseAdvanceResult]

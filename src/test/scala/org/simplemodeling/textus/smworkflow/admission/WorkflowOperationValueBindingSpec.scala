@@ -204,7 +204,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
 
     "consume outcome, summary and multiple findings as the named work result" in {
       Given("a semantic work result supplied without value/payload/schema wrappers")
-      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None, None, None, None, None, None, None, None, dependencyValidation = None)
+      val result = V.GoalPhaseWorkResult("accepted", "Implemented the selected Step.", Vector("one", "two"), None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val request = _request(Property("sessionId", "execution-1", None), Property("result", result, None))
 
       When("the result and canonical session parameters are read")

@@ -143,7 +143,7 @@ private[admission] trait NativePreparationOperationFixture extends ThreeWorkflow
 
   private def _evidence_cases(episode: PreparationEpisode, core: ActionCall.Core): Vector[PreparedCase] = {
     import NativePreparationFixture.*
-    val goalresult = V.GoalPhaseWorkResult("accept", "明示レビュー", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+    val goalresult = V.GoalPhaseWorkResult("accept", "明示レビュー", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     val repositoryresult = V.RepositorySyncNativeMergeReviewResult("accept", "明示レビュー", Vector.empty)
     def entry(label: String, family: String, kind: String, request: RecordPresentable, result: RecordPresentable,
       identity: String, payload: Record): PreparedCase = PreparedCase(label,

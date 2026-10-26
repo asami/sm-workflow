@@ -10,10 +10,12 @@ import scala.jdk.CollectionConverters.*
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
+import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
+import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseAcceptanceBoundary as B
 import GoalPhaseOrderedProgression as O
@@ -26,7 +28,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Commands terminate and retain logs. Typed host fixtures own actual SBT work.
   * No real Session, independent provider or genuine Human consent is claimed.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -112,6 +114,10 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
       submit(issued.business[V.GoalPhaseAdvanceResult], result, name, Some(execution))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     }
+    def authority(issued: Invocation, name: String): Unit = importPrepared(prepare("prepareAuthority",
+      V.WorkflowAuthorityPreparationInput(issued.stdout.toUri.toASCIIString,
+        file(name + "-reference", V.WorkflowArtifactReference(name, "1")), "participant", "normal-development-host",
+        "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence")))
     def direction(description: Invocation, choice: String, name: String): V.GoalPhaseRepairPolicyAdoptionInput = {
       val value = description.business[V.GoalPhaseRepairPolicyDescriptionResult]
       val reference = V.WorkflowArtifactReference(name, "1")
@@ -132,7 +138,8 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
       B.applicable(boundary, work.kind).map(condition => V.GoalPhaseAcceptanceObservation(condition.identity,
         if (condition.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED observed " + condition.description)), Vector.empty))
     val relevant = work.issues.toVector.flatMap(_.issues).filter(issue => (work.kind != "RepairStep" || issue.status != "RESOLVED") &&
-      (work.kind == "ReviewPhase" || work.stepIdentity.contains(issue.step)))
+      (work.kind == "ReviewPhase" || work.stepIdentity.contains(issue.step) ||
+        work.kind == "RepairStep" && work.stepIdentity.isEmpty && issue.step == "phase:" + plan.phase))
     val dispositions = relevant.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
       if (work.kind == "RepairStep" && outcome == "completed") "FIXED"
       else if (work.kind == "RepairStep" && outcome == "decision-needed") "BLOCKED"
@@ -142,7 +149,7 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
       work.stepIdentity.get, "Original owned documentation purpose remains unresolved", Vector("docs/phase.md"))))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + work.kind + " " + outcome, findings, acceptance,
       None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)),
-      None, None, None, None, GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None)
+      None, None, None, None, GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None, diagnosticRepair = None)
   }
   private def _checks(scenario: F.Scenario): Vector[String] =
     Files.readString(scenario.root.resolve("sbt-executions.txt")).linesIterator.toVector
@@ -178,7 +185,237 @@ final class NativeGoalRuntimeRepairControlCliSpec extends AnyWordSpec with Match
   private def _complete(cli: Cli, plan: O.Plan, request: V.GoalPhaseAdvanceResult, name: String): Unit =
     cli.submit(request, _result(plan, request, "completed"), name).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
 
+  /** Setup only: actual Compile/focused Step checks and a distinct full Phase
+    * test over an owned integration narrative. No native history is seeded.
+    */
+  private def _initial_phase_fixture(): (F.Scenario, O.Plan) = {
+    val executable = TypedSbtHostPlanFixture.normalExecutable
+    val scenario = F.freshStepAssessment("rrc-installed-first-phase-failure", executable, discoverAllTests = true)
+    val documentation = GoalPhaseStepAssessment.Policy("release-narrative", "documentation", "conditional", "off", "off", Vector.empty)
+    val selected = scenario.plan.copy(steps = scenario.plan.steps.updated(1,
+      scenario.plan.steps(1).copy(actionPolicy = Some(documentation))), phaseChecks = Vector("phase-test"), repairLimit = 10)
+    val host = scenario.host.copy(goal = scenario.host.goal.copy(
+      phaseValidation = GoalPhaseNativeValidation.Policy("first-phase-full-test", 1,
+        Vector(GoalPhaseNativeValidation.Check("phase-test", 3, WorkflowSbtValidation.Kind.Test))),
+      closure = scenario.host.goal.closure.copy(programs = scenario.host.goal.closure.programs :+
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3))))
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = host.goal.candidatePaths, goalMessages = Vector("Complete selected continuation Step 1",
+        "Complete selected continuation Step 2", "Complete accepted initial Phase check repair"),
+      goalSelections = Vector(host.goal.candidatePaths, Vector("docs/validation.md"), Vector("docs/validation.md")))
+    val ordinary = TypedSbtHostPlanFixture.authoringPlan(scenario.root, executable, git, compileFirst = true)
+    val full = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(3), operation = SbtOperation.Test)
+    def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
+    val programs = _array_(ordinary, "sbtPrograms") ++ _array_(full, "sbtPrograms")
+    val process = ordinary.mapObject(_.add("sbtPrograms", Json.fromValues(programs))
+      .add("workspaces", Json.fromValues(_array_(ordinary, "workspaces") ++ _array_(full, "workspaces")))
+      .add("workspaceGrants", Json.fromValues(_array_(ordinary, "workspaceGrants") ++ _array_(full, "workspaceGrants")))
+      .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString(SmWorkflowComponent.componentId.name),
+        "capabilities" -> Json.fromValues((_array_(ordinary, "gitPrograms") ++ programs)
+          .map(_.hcursor.downField("capability").focus.get))))))
+    val config = scenario.root.resolve(".textus/config.json")
+    Files.writeString(config, _read(config).mapObject(_.add("sm-workflow.runtime.definition",
+      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))
+      .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))).noSpaces)
+    Files.writeString(scenario.root.resolve("goal-plan.json"), selected.asJson.noSpaces)
+    scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
+    (scenario, selected)
+  }
+
   "Installed runtime-owned repair control" should {
+    "repair the first actual whole-Phase failure before any Phase review without replacing its completed Plan" in {
+      Given("RRC-PHASE-FIRST-FAILURE-01 D4 order: two conditional Steps, real focused checks and a separate full Phase integration check")
+      val (scenario, selected) = _initial_phase_fixture()
+      val cli = new Cli(scenario.root, _required("smworkflow.spec.installedCommand"), _required("smworkflow.spec.runtimeRoot"))
+      val session = _started(cli, scenario)
+      val repository = Path.of(scenario.host.target.root)
+      val originalhead = scenario.candidateHead
+      val initial = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      Files.writeString(repository.resolve("src/main/scala/org/simplemodeling/textus/smworkflow/p62authored/LineWriter.scala"),
+        "package org.simplemodeling.textus.smworkflow.p62authored\nobject LineWriter { def render(value: String): String = value + \"\\n\" }\n")
+      val test = repository.resolve(F.authoringPaths.head)
+      Files.createDirectories(test.getParent)
+      Files.writeString(test, """package org.simplemodeling.textus.smworkflow.p62authored
+        |import java.nio.file.{Files, Path}
+        |import org.scalatest.GivenWhenThen
+        |import org.scalatest.matchers.should.Matchers
+        |import org.scalatest.wordspec.AnyWordSpec
+        |final class LineWriterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+        |  "LineWriter" should {
+        |    "preserve text followed by one LF" in {
+        |      Given("the accepted line input")
+        |      val input = "expected"
+        |      When("the selected product renders it")
+        |      val output = LineWriter.render(input)
+        |      Then("the selected local behavior retains the text and one LF")
+        |      output shouldBe "expected\n"
+        |    }
+        |  }
+        |}
+        |final class ReleaseNarrativeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+        |  "The integrated Release narrative" should {
+        |    "describe the selected product's one LF contract" in {
+        |      Given("the accepted ordered Steps and their owned validation narrative")
+        |      val narrative = Files.readString(Path.of("docs/validation.md"))
+        |      When("the whole Release checks its published narrative against the accepted local behavior")
+        |      val expected = "LineWriter release contract: one LF.\n"
+        |      Then("the owned narrative states exactly the selected contract")
+        |      narrative shouldBe expected
+        |    }
+        |  }
+        |}
+        |""".stripMargin)
+      When("the first Step passes actual Compile and focused tests and closes through ordinary authority")
+      _complete(cli, selected, initial, "rrc-first-phase-step-one")
+      val firstclosing = cli.advance(session)
+      val firstview = firstclosing.business[V.GoalPhaseAdvanceResult]
+      firstview.validation.get.assessment.nonEmpty shouldBe true
+      firstview.work shouldBe None
+      cli.authority(firstclosing, "rrc-first-phase-first-closure")
+      val second = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      Then("the next Step retains the actual formally admitted first commit and original base")
+      second.work.get.kind shouldBe "ImplementStep"
+      second.work.get.completed.size shouldBe 1
+      second.work.get.completed.head.review shouldBe None
+      second.work.get.completed.head.admission.nonEmpty shouldBe true
+      second.work.get.completed.head.commit.parent shouldBe originalhead
+      second.work.get.originalBase shouldBe initial.work.get.originalBase
+
+      Given("the final documentation Step passes focused checks while its integration narrative still violates the whole-Phase contract")
+      Files.writeString(repository.resolve("docs/validation.md"), "Draft narrative awaiting the whole-Phase integration contract.\n")
+      _complete(cli, selected, second, "rrc-first-phase-step-two")
+      val lastclosing = cli.advance(session)
+      val lastview = lastclosing.business[V.GoalPhaseAdvanceResult]
+      lastview.validation.get.assessment.nonEmpty shouldBe true
+      lastview.work shouldBe None
+      val stepvalidation = lastview.validation.get
+      cli.authority(lastclosing, "rrc-first-phase-last-closure")
+      When("normal Advance commits the final Step and observes the first actual ordinary failed whole-Phase Test")
+      val failedcall = cli.advance(session)
+      val repair = failedcall.business[V.GoalPhaseAdvanceResult]
+      Then("the actual current whole-Phase validation reports failure")
+      withClue(Files.readString(failedcall.stdout) + "\n" + Files.readString(failedcall.stderr)) {
+        repair.validation.flatMap(_.outcome) shouldBe Some("failed")
+      }
+      val failure = repair.work.get.checkFailure.get
+      val closed = repair.work.get.completed
+      val failedrecords = _stored(scenario).filter(value => value.contains("sm-workflow.goal-phase-native-validation.v2") && value.contains("\"failed\""))
+      val beforechecks = _checks(scenario)
+      val beforeclosedhead = scenario.candidateHead
+      Then("the current Phase failure replaces the older Step assessment and one marked no-review Release repair is issued")
+      repair.kind shouldBe "Request"
+      repair.work.get.kind shouldBe "RepairStep"
+      repair.work.get.stepIdentity shouldBe None
+      repair.work.get.review shouldBe None
+      repair.work.get.purpose should include ("first failed whole-Phase")
+      failure.initialPhaseRepair.get.identity should startWith(session + ":ordered-initial-phase-check-repair:")
+      failure.initialPhaseRepair.get.revision shouldBe "1"
+      failure.validation.outcome shouldBe Some("failed")
+      failure.validation.checks.last.termination shouldBe "exited"
+      failure.validation.checks.last.exitCode shouldBe Some(1)
+      repair.validation.get shouldBe failure.validation
+      repair.validation.get.scopeIdentity shouldBe "phase:" + selected.phase
+      repair.validation.get.sourceRevision.toLong should be > stepvalidation.sourceRevision.toLong
+      repair.validation.get.assessment shouldBe None
+      repair.validation.get.checks.map(_.sbt.get.kind) shouldBe Vector("test")
+      closed.map(_.step) shouldBe selected.steps.map(_.identity)
+      closed.forall(step => step.review.isEmpty && step.admission.nonEmpty) shouldBe true
+      repair.work.get.selectedPlan.identity shouldBe selected.identity
+      repair.work.get.selectedPlan.revision shouldBe selected.revision
+      repair.work.get.selectedPlan.steps.size shouldBe 2
+      repair.work.get.originalBase shouldBe initial.work.get.originalBase
+      repair.repairProgress.get.automaticCount shouldBe 1
+      repair.repairProgress.get.ordinaryCount shouldBe 1
+      repair.repairProgress.get.runtimePolicy shouldBe Some(R.version)
+      failedrecords should not be empty
+      beforechecks.size shouldBe 4
+
+      When("repeated Advance and a replacement caller read the unfinished durable repair")
+      val repeated = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      val replacement = new Cli(scenario.root, _required("smworkflow.spec.installedCommand"), _required("smworkflow.spec.runtimeRoot"),
+        "rrc-first-phase-replacement-logs")
+      val rebuilt = replacement.advance(session).business[V.GoalPhaseAdvanceResult]
+      Then("the exact issued work, original failure reference, counts and closed prefix are reused without retry or adoption")
+      repeated.work shouldBe repair.work
+      repeated.issuedWorkContext shouldBe repair.issuedWorkContext
+      rebuilt.work shouldBe repair.work
+      rebuilt.issuedWorkContext shouldBe repair.issuedWorkContext
+      rebuilt.repairProgress shouldBe repair.repairProgress
+      rebuilt.validation shouldBe repair.validation
+      _checks(scenario) shouldBe beforechecks
+      scenario.candidateHead shouldBe beforeclosedhead
+      cli.operations should not contain A.adoptionOperation
+      cli.operations should not contain "adoptGoalPhaseFailedPhaseRepair"
+      cli.operations should not contain "submitGoalPhaseOrderedDecision"
+
+      Given("the first issued fixture-owned repair changes only the owned narrative but still misses its integrated contract")
+      Files.writeString(repository.resolve("docs/validation.md"), "Updated draft still missing the accepted LF contract.\n")
+      _complete(cli, selected, repair, "rrc-first-phase-incomplete-semantic-repair")
+      When("fresh native inspection and Test observe a second ordinary failure before the first integrated review")
+      val secondrepair = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      Then("normal policy reserves batch two with current actual failure diagnostics and the original admission provenance")
+      secondrepair.work.get.kind shouldBe "RepairStep"
+      secondrepair.work.get.stepIdentity shouldBe None
+      secondrepair.work.get.review shouldBe None
+      secondrepair.work.get.checkFailure.get.initialPhaseRepair shouldBe failure.initialPhaseRepair
+      secondrepair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+      secondrepair.work.get.checkFailure.get.validation.sourceRevision.toLong should be > failure.validation.sourceRevision.toLong
+      secondrepair.validation shouldBe Some(secondrepair.work.get.checkFailure.get.validation)
+      secondrepair.work.get.completed shouldBe closed
+      secondrepair.repairProgress.get.automaticCount shouldBe 2
+      secondrepair.repairProgress.get.ordinaryCount shouldBe 2
+      _checks(scenario).size shouldBe beforechecks.size + 1
+      cli.advance(session).business[V.GoalPhaseAdvanceResult].issuedWorkContext shouldBe secondrepair.issuedWorkContext
+      _checks(scenario).size shouldBe beforechecks.size + 1
+
+      Given("the second issued fixture-owned repair corrects only the original owned integration narrative")
+      Files.writeString(repository.resolve("docs/validation.md"), "LineWriter release contract: one LF.\n")
+      _complete(cli, selected, secondrepair, "rrc-first-phase-actual-repair")
+      When("ordinary Advance observes a fresh candidate and real successful whole-Phase checks")
+      val reviewcall = cli.advance(session)
+      val review = reviewcall.business[V.GoalPhaseAdvanceResult]
+      Then("the first independent PhaseReview is required with actual passed checks and no invented prior report")
+      review.work.get.kind shouldBe "ReviewPhase"
+      review.work.get.review.get.priorReviews shouldBe empty
+      review.work.get.checkFailure shouldBe None
+      review.work.get.completed shouldBe closed
+      review.work.get.review.get.checks.forall(_.exitCode.contains(0)) shouldBe true
+      review.validation.get.outcome shouldBe Some("passed")
+      review.validation.get.sourceRevision.toLong should be > failure.validation.sourceRevision.toLong
+      review.repairProgress.get.automaticCount shouldBe 2
+      _checks(scenario).size shouldBe beforechecks.size + 2
+      failedrecords.forall(_stored(scenario).contains) shouldBe true
+
+      Given("fixture-owned independent evidence accepts the actual first PhaseReview and the ordinary Final authority")
+      cli.review(reviewcall, _result(selected, review, "accept"), "rrc-first-phase-independent-review")
+      val finalwait = cli.advance(session)
+      finalwait.business[V.GoalPhaseAdvanceResult].authorityContext.nonEmpty shouldBe true
+      cli.authority(finalwait, "rrc-first-phase-final-authority")
+      When("normal Advance closes the accepted Release repair")
+      val terminal = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      Then("normal completion retains the original accepted Steps and Plan while recording the new Release commit")
+      terminal.kind shouldBe "Terminal"
+      terminal.completion.get.completed shouldBe closed
+      terminal.completion.get.selectedPlan.identity shouldBe selected.identity
+      terminal.completion.get.selectedPlan.revision shouldBe selected.revision
+      terminal.completion.get.originalBase shouldBe initial.work.get.originalBase
+      scenario.candidateParent shouldBe beforeclosedhead
+      scenario.candidateHead should not be beforeclosedhead
+      _checks(scenario).size shouldBe beforechecks.size + 2
+      failedrecords.forall(_stored(scenario).contains) shouldBe true
+      val envelopes = _stored(scenario).map(value => parse(value.stripPrefix("cncf.workflow-json.v1:")).toOption.get)
+      val instance = envelopes.filter(value => value.hcursor.get[String]("schemaVersion").toOption.contains("cncf.workflow-instance-record.v1") &&
+        value.hcursor.get[String]("identity").toOption.contains(session))
+      instance.size shouldBe 1
+      val causes = instance.head.hcursor.get[Vector[Json]]("history").toOption.get.map(_.hcursor.get[String]("causation").toOption.get)
+      causes.count(_ == GoalPhaseInitialPhaseCheckRepair.causation) shouldBe 1
+      causes.count(_.startsWith("ordered-review-issued:")) shouldBe 1
+      cli.operations.count(_ == "startGoalPhase") shouldBe 1
+    }
+
     "adopt an untouched public target with a reviewless completed prefix and preserve ordinary closing without replay" in {
       Given("D4-PUBLIC-TARGET-01: an isolated conditional code Step with actual Compile/TestOnly and the installed current image")
       val scenario = F.freshStepAssessment("rrc-installed-reviewless-prefix", TypedSbtHostPlanFixture.normalExecutable)

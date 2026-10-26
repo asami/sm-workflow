@@ -64,7 +64,8 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   }
   final case class Payload(target: Target, directive: ContextReference, participant: String, rationale: String)
   final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound],
-    decisionContext: Option[GoalPhaseNativeWork.DecisionContext] = None)
+    decisionContext: Option[GoalPhaseNativeWork.DecisionContext] = None,
+    dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
   }
@@ -170,6 +171,10 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         case GoalPhaseLegacyPurposeRepairContinuation.ReleaseRepair(payload) =>
           declaration.map(Consequence.success).getOrElse(F.invalid("Release disposition reconstruction requires the actual host declaration"))
             .flatMap(d => GoalPhaseReleaseRepairContinuation.reconstructC(source, d, core, payload,
+              value.receipt.sourceRevision, value.receipt.nextRevision)).map(Some(_))
+        case GoalPhaseLegacyPurposeRepairContinuation.DependencySourceRevision(payload) =>
+          declaration.map(Consequence.success).getOrElse(F.invalid("Dependency source direction reconstruction requires the actual host declaration"))
+            .flatMap(d => GoalPhaseDependencySourceRevision.reconstructC(source, d, core, payload,
               value.receipt.sourceRevision, value.receipt.nextRevision)).map(Some(_))
       }
     }

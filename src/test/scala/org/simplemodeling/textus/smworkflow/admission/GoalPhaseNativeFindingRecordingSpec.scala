@@ -239,7 +239,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       narrator.Then("the target includes the actual accepted commit, unchanged base and nonzero repair history")
       captured.completed.size shouldBe 1
       captured.completed.head.commit.identity shouldBe e.observe().head
-      captured.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(1, 1, 2)
+      captured.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(1, 1, 2,
+        Some("sm-workflow.repair-trend.v1"), Some(2), Some(2))
       _same_instance(e.current(session), before)
       val input = V.GoalPhaseRemainingPlanAdoptionInput(session, description.target, proposal,
         "SPECIFICATION-OWNED new Human direction; no answer to the old dependency question",
@@ -394,7 +395,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       assigned.originalBase shouldBe captured.get.base
       assigned.completed shouldBe captured.get.completed
       assigned.generation shouldBe captured.get.generation + 1
-      assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(1, 1, 10))
+      assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(1, 1, 10,
+        Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       assigned.selectedPlan shouldBe captured.get.captured.plan
       assigned.candidate shouldBe None
       assigned.checksReceipt shouldBe None
@@ -520,7 +522,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance), None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
             R.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation)), V.WorkflowArtifactReference(reference.identity, reference.revision),
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation), diagnosticRepair = None), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

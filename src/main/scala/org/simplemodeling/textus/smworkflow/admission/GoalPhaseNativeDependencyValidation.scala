@@ -242,8 +242,17 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     }
   }
 
-  def checksC(primary: Vector[GoalPhaseNativeValidation.Check], capture: Option[D.Capture]):
-    Consequence[Vector[GoalPhaseNativeValidation.Check]] = capture match {
+  def checksC(primary: Vector[GoalPhaseNativeValidation.Check], capture: Option[D.Capture],
+    revised: Option[GoalPhaseDependencySourceRevision.Capture] = None):
+    Consequence[Vector[GoalPhaseNativeValidation.Check]] = if (revised.nonEmpty) {
+    val value = revised.get
+    val binding = value.direction.target.binding
+    val combined = primary ++ binding.checks.map(_.copy(dependency = Some(binding.identity)))
+    if (capture.isEmpty && GoalPhaseDependencySourceRevision.captureValid(value) && combined.size <= 16 &&
+        combined.map(_.identity).distinct.size == combined.size && combined.map(_.ordinal).distinct.size == combined.size &&
+        primary.forall(_.metadata.isEmpty)) Consequence.success(combined)
+    else D.invalid("source revision checks require a complete capture and unique fixed check bindings")
+  } else capture match {
     case None => Consequence.success(primary)
     case Some(value) =>
       val combined = primary ++ value.admission.binding.checks.map(_.copy(dependency = Some(value.admission.binding.identity)))
@@ -252,18 +261,29 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
         Consequence.success(combined)
       else D.invalid("dependency checks require unique fixed identities/ordinals and an ordinary primary check policy")
   }
-  def workspaceC(check: GoalPhaseNativeValidation.Check, capture: Option[D.Capture]): Consequence[Option[String]] =
-    check.dependency match {
+  def workspaceC(check: GoalPhaseNativeValidation.Check, capture: Option[D.Capture],
+    revised: Option[GoalPhaseDependencySourceRevision.Capture] = None): Consequence[Option[String]] =
+    if (revised.nonEmpty && check.dependency.nonEmpty) {
+      val source = revised.get
+      val binding = source.direction.target.binding
+      if (capture.isEmpty && GoalPhaseDependencySourceRevision.captureValid(source) && check.dependency.contains(binding.identity) &&
+          binding.checks.exists(_.copy(dependency = Some(binding.identity)) == check))
+        Consequence.success(Some(source.direction.target.proposal.consumption.programs
+          .find(p => p.check == check.identity && p.kind == check.kind.wire)
+          .map(_.workspace).getOrElse(binding.dependency.workspace)))
+      else D.invalid("check has no exact captured revised-source binding")
+    } else check.dependency match {
       case None => Consequence.success(None)
       case Some(identity) => capture.filter(c => D.captureValid(c) && c.admission.binding.identity == identity &&
           c.admission.binding.checks.exists(_.copy(dependency = Some(identity)) == check))
         .map(c => Consequence.success(Some(c.admission.binding.dependency.workspace)))
         .getOrElse(D.invalid("check has no exact captured dependency binding"))
     }
-  def publicView(payload: GoalPhaseNativeValidation.Payload): Option[org.goldenport.record.Record] = payload.dependency.map { capture =>
+  def publicView(payload: GoalPhaseNativeValidation.Payload): Option[org.goldenport.record.Record] =
+    payload.dependency.map(_.asJson).orElse(payload.dependencySource.map(_.asJson)).map { capture =>
     import D.given
     val indices = payload.selected.zipWithIndex.filter(_._1.dependency.nonEmpty)
-    val value = io.circe.Json.obj("capture" -> capture.asJson,
+    val value = io.circe.Json.obj("capture" -> capture,
       "selectedChecks" -> indices.map(_._1).asJson,
       "checks" -> indices.flatMap((_, i) => payload.receipts.lift(i)).asJson,
       "executions" -> payload.dependencyExecutions.asJson,

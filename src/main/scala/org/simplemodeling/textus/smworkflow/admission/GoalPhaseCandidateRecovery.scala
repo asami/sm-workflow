@@ -259,11 +259,11 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
   }
   def observationAllowed(target: RecoveryTarget): Boolean = {
     val payload = preparedPayload(target)
-    payload.dependencyAdmission.forall(a => payload.dependencyStaged == a.binding.paths &&
+    payload.dependencySourceDirection.isEmpty && payload.dependencyAdmission.forall(a => payload.dependencyStaged == a.binding.paths &&
       !target.dependencyPrefix.lastOption.exists(_.key.startsWith("dependency-stage-intent-")))
   }
   def remainingSubject(payload: C.Payload): String =
-    if (payload.dependencyAdmission.nonEmpty && payload.dependency.isEmpty) "dependency" else "primary"
+    if (payload.dependencySourceDirection.nonEmpty || payload.dependencyAdmission.nonEmpty && payload.dependency.isEmpty) "dependency" else "primary"
 
   /** Exact effect receipts, not current index contents, establish completed staging. */
   def dependencyPrefixValid(target: RecoveryTarget): Boolean = {
@@ -271,6 +271,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     val prefix = target.dependencyPrefix
     if (prefix == null || initial.dependencyStaged.nonEmpty || initial.dependency.nonEmpty || initial.dependencyOrigin.nonEmpty)
       false
+    else if (initial.dependencySourceDirection.nonEmpty) GoalPhaseDependencySourceRevision.recoveryPrefixValid(target)
     else initial.dependencyAdmission match {
       case None => prefix.isEmpty
       case Some(admission) if D.admissionValid(admission) && admission.binding.step == initial.step &&
@@ -420,7 +421,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     result <- {
       def _walk_(prior: InstanceRecord, facts: Vector[DependencyFact]): Consequence[(InstanceRecord, Vector[DependencyFact])] =
         GoalPhaseNativeHistory.nextC(session.current, prior).flatMap {
-          case Some(next) if next.causation.value.startsWith("ordered-candidate:dependency-") && facts.size < 258 =>
+          case Some(next) if next.causation.value.startsWith("ordered-candidate:dependency-") && facts.size < 260 =>
             val key = next.causation.value.stripPrefix("ordered-candidate:")
             for {
               saved <- _load_c(adapter, core, source, key)

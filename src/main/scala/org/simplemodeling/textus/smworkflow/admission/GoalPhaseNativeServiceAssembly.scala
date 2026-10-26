@@ -33,11 +33,14 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
     new Operation(true, d, definition, plans, port),
     new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
+      IncrementalSbtDiagnosisInformation.operations(port) ++
       GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseSourceHistoryRecovery.operations(port) ++
+      GoalPhaseSourceHistoryNormalization.operations(port) ++
       GoalPhaseCandidateRecovery.operations(port) ++
       GoalPhaseCandidateObservationContinuation.operations(port) ++
       GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
       GoalPhaseClosureRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port) ++
+      GoalPhaseDependencySourceRevision.operations(port) ++
       GoalPhaseLegacyPurposeRepairContinuation.operations(port) ++
       GoalPhaseReleaseRepairContinuation.operations(port) ++
       GoalPhaseValidationRepairAdoption.operations(port) ++

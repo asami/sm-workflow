@@ -10,7 +10,7 @@ import GoalPhaseNativeWork as W
 /** Execution-local business issues reconstructed by the native history owner.
   * Claims never replace fresh checks or independent review evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixIssues {
@@ -66,8 +66,9 @@ private[smworkflow] object GoalPhaseFixIssues {
   def unresolved(issue: Issue): Boolean = issue.status != "RESOLVED"
   def relevant(request: W.Request, issue: Issue): Boolean =
     (issue.repository == request.selectedPlan.repository ||
-      request.checkFailure.toVector.flatMap(_.validation.dependency).exists(_.admission.binding.dependency.repository == issue.repository) ||
-      request.review.toVector.flatMap(_.dependencyValidations).flatMap(_.dependency).exists(_.admission.binding.dependency.repository == issue.repository)) &&
+      (request.checkFailure.toVector.map(_.validation) ++ request.review.toVector.flatMap(_.dependencyValidations))
+        .exists(payload => GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource)
+          .exists(_.dependency.repository == issue.repository))) &&
       (request.kind == "ReviewPhase" || request.stepIdentity.contains(issue.step) ||
         (request.kind == "RepairStep" && request.stepIdentity.isEmpty &&
           request.completed.map(_.step) == request.selectedPlan.steps.map(_.identity)))
@@ -239,8 +240,9 @@ private[smworkflow] object GoalPhaseFixIssues {
     known = payload.outcome.exists(Set("passed", "failed", "repair-required", "repair-limit-reached"))
     next = if (!known) state else payload.receipts.zip(payload.selected).zipWithIndex.foldLeft(state) {
       case (prior, ((receipt, check), index)) =>
-        val actualrepository = check.dependency.flatMap(_ => payload.dependency)
-          .map(_.admission.binding.dependency.repository).getOrElse(repository)
+        val actualrepository = check.dependency.flatMap(_ =>
+          GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource))
+          .map(_.dependency.repository).getOrElse(repository)
         val source = check.kind.wire + ":" + check.identity
         val existing = prior.issues.find(i => i.repository == actualrepository && i.step == payload.step &&
           i.source == "TEST" && i.sourceIdentity.contains(source))

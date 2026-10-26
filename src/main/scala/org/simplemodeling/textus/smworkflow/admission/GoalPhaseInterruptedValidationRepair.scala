@@ -16,7 +16,7 @@ import GoalPhasePlanRevision as R
 /** Read-only proof of the confirmed TimedOut variant. It is never a
   * KnownFailedPhase and supplies no retry or process authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseInterruptedValidationRepair {
@@ -64,7 +64,8 @@ private[smworkflow] object GoalPhaseInterruptedValidationRepair {
       _ <- if (original == from) Consequence.unit else F.invalid("Timeout Decision crosses its actual native prefix")
       selected <- N.selectedChecksC(d, state.plan, None)
       _ <- GoalPhaseNativeMetadata.validateRetainedC(selected, failed.payload.selected, failed.payload.metadata)
-      terminal <- N.terminalAttemptC(session, d, core, source.candidate, state, failed, N.TerminalOutcome.TerminatedTimeout)
+      terminal <- N.terminalAttemptC(session, d, core, source.candidate, state, failed, N.TerminalOutcome.TerminatedTimeout,
+        source.dependencyChain)
       check = failed.payload.selected.head
       _ <- if (terminal.validation.record == from && check.identity == state.plan.phaseChecks.head) Consequence.unit
         else F.invalid("Timeout repair crosses its original selection, intent, result or final receipt")

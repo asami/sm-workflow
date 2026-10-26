@@ -29,7 +29,9 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
   final case class Goal(input: GoalPhaseStartInput, candidatePaths: Vector[String],
     stepValidation: GoalPhaseNativeValidation.Policy, phaseValidation: GoalPhaseNativeValidation.Policy,
     review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy,
-    dependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
+    dependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
+    dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty)
   final case class Repository(input: RepositorySyncStartInput,
     validation: RepositorySyncNativeMergeValidation.Policy, conflicts: RepositorySyncNativeConflictInput.Policy,
     review: RepositorySyncNativeMergeReview.Policy)
@@ -37,14 +39,29 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
 
   // Bottom-up derivation also bounds compiler expansion for the nested policies.
   private given Encoder[Goal] = deriveEncoder[Goal].mapJson(_.mapObject(fields =>
-    if (fields("dependencyValidation").exists(_.isNull)) fields.remove("dependencyValidation") else fields))
+    Vector("dependencySourceRevisions", "dependencySourceConsumptions").foldLeft(
+      if (fields("dependencyValidation").exists(_.isNull)) fields.remove("dependencyValidation") else fields) { (prior, key) =>
+      if (prior(key).exists(_.asArray.exists(_.isEmpty))) prior.remove(key) else prior
+    }))
   private val _goal_decoder: Decoder[Goal] = deriveDecoder
   private given Decoder[Goal] = Decoder.instance { cursor =>
-    if (cursor.downField("dependencyValidation").focus.exists(_.isNull))
+    if (Vector("dependencyValidation", "dependencySourceRevisions", "dependencySourceConsumptions")
+        .exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(io.circe.DecodingFailure("Dependency validation binding must be absent or a complete object", cursor.history))
-    else _goal_decoder(cursor).flatMap(value =>
-      if (value.dependencyValidation != null && value.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Right(value)
+    else {
+      val normalized = Vector("dependencySourceRevisions", "dependencySourceConsumptions").foldLeft(cursor.value) { (prior, key) =>
+        if (cursor.downField(key).focus.isEmpty) prior.mapObject(_.add(key, Json.arr())) else prior
+      }
+      _goal_decoder(normalized.hcursor).flatMap(value =>
+      if (value.dependencyValidation != null && value.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid) &&
+          value.dependencySourceRevisions != null && value.dependencySourceRevisions.size <= 16 &&
+          value.dependencySourceRevisions.forall(GoalPhaseDependencyValidation.bindingValid) &&
+          value.dependencySourceRevisions.map(b => (b.identity, b.revision)).distinct.size == value.dependencySourceRevisions.size &&
+          value.dependencySourceConsumptions != null && value.dependencySourceConsumptions.size <= 16 &&
+          value.dependencySourceConsumptions.forall(GoalPhaseDependencySourceRevision.consumptionValid) &&
+          value.dependencySourceConsumptions.distinct.size == value.dependencySourceConsumptions.size) Right(value)
       else Left(io.circe.DecodingFailure("Invalid dependency validation host binding", cursor.history)))
+    }
   }
   private given Encoder[Repository] = deriveEncoder
   private given Decoder[Repository] = deriveDecoder
@@ -147,7 +164,10 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseLegacyPurposeRepairContinuation.Installation(ports.reviewPurposeRepair)), settings.goal.dependencyValidation,
         Some(GoalPhaseValidationRepairAdoption.Installation(ports.validationRepairAdoption)), callersource, observation,
         Some(GoalPhaseReleaseRepairContinuation.Installation(ports.releaseRepairContinuation)),
-        Some(GoalPhaseRepairPolicyAdoption.Installation(ports.repairPolicyAdoption)))
+        Some(GoalPhaseRepairPolicyAdoption.Installation(ports.repairPolicyAdoption)),
+        Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
+        Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
+        settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

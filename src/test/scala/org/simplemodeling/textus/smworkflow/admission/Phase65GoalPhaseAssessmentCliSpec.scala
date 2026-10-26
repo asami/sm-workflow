@@ -56,7 +56,7 @@ final class Phase65GoalPhaseAssessmentCliSpec extends AnyWordSpec with Matchers 
         |}
         |""".stripMargin)
       val semantic = V.GoalPhaseWorkResult("completed", "Specification-owned local code and behavioral tests",
-        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("p65-assessment-implementation", "1")
       scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
         "--result", json(semantic), "--resultReference", json(reference)))

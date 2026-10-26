@@ -41,6 +41,56 @@ driver, invoke tools, dispatch an application command or advance a Workflow.
 Actual installed host/tool/provider availability, all three skill families and
 genuine separate chat/session observations remain Phase 6 acceptance obligations.
 
+## Existing authorization and current-target registration
+
+Keep the user's authority separate from its registration against the runtime's
+current target. A description or preparation response, including
+`adoption-required`, identifies an available transition or missing registration;
+it does not by itself require a new Human decision. The caller uses attributable
+user direction that already covers the same Component, purpose, acceptance
+conditions and operations. Preserve explicit restrictions. A reference file,
+passing checks, a policy default or another agent's assertion cannot supply
+missing user direction.
+
+For an actual runtime Human request, use its supported evidence/admission route.
+When that contract permits an existing applicable decision, submit its real
+provenance without asking the same question again. Do not fabricate a fresh
+answer, reuse consent for a different choice, or override a runtime rejection.
+If no applicable direction exists, present the unresolved decision to the user.
+If existing direction is sufficient but the public route cannot admit it, report
+the exact operation and contract gap for producer correction; do not relabel the
+gap as missing user consent or implement a skill-local recovery controller.
+
+### Repair-policy adoption
+
+For `describeGoalPhaseRepairPolicy`, distinguish the returned description from
+the Workflow's actual Human/Wait state. Where the user already authorized the
+proposed runtime repair policy in the same scope, carry that direction through
+normal `prepareEvidence` with kind `repair-policy-adoption`, existing trusted
+provisioning, and `adoptGoalPhaseRepairPolicy`. Preserve its actual source,
+participant and occurrence metadata. The current target binding is a technical
+registration, not a newly invented consent event. Broad engineering approval
+alone does not select a policy; retain separately required decisions, including
+the legacy Release-repair contract. Policy adoption grants no commit authority.
+
+### Ordinary Step closure
+
+For a Closing `Wait` carrying `authority_context`, use the existing authorization
+for ordinary local Step commits when it covers that target. The configured
+`prepareAuthority` Operation (or its existing `native-goal-authority.py` caller)
+prepares the record; the existing trusted CNCF StartupImport route provisions it.
+Preparation and an authorization-reference file alone do not register authority.
+Then let ordinary Advance perform runtime admission and commit. Do not run Git
+commit in the skill or infer remote/publication permission.
+
+If policy adoption changes the runtime source revision, use the resulting
+current Closing context for authority registration rather than the old binding.
+A changed technical binding alone does not require renewed human permission.
+Preserve the same Session, accepted work, history, repair counts and applicable
+successful validation. Registration does not reset or consume a repair batch,
+re-Start, replay accepted Submit, or require repeating valid checks. Actual
+candidate changes and unresolved effects retain their runtime handling.
+
 ## Outcome-based delegation
 
 Assign a coherent authorized outcome to one delivery owner: diagnose, implement
@@ -284,6 +334,41 @@ V4 host configuration requires explicit migration to V3 with
 relabeling of historical accepted evidence is permitted. Historical schemas and
 decoding remain readable. See the [retirement contract](registered-sbt-host-execution.md).
 
+## Recovering completed results after caller interruption
+
+On resumption after a chat/model/transport interruption, or an explicit status
+request, reconcile retained executions before reporting a producer as incomplete
+or starting replacement work. A chat error is not a process failure. Use the
+original invocation/work identity and exact saved handle/result/output references
+in the existing continuation or handoff; no new tracking ledger or global scan.
+
+1. Read the attributable terminal receipt and relevant summary. A completed
+   success, failure or cancellation is its actual outcome regardless of whether
+   the owning chat sent a final message. If still running, collect the original
+   invocation through its supported delivery/wait mechanism. If no terminal result
+   is available, report that uncertainty and retain the unresolved reference.
+2. For publication, consume the normal `publishLocal` result and its publication/
+   runtime activation records. Distinguish publication success, runtime activation,
+   installed qualification, producer acceptance and consumer adoption. Do not infer
+   any of these from chat status or from another invocation's success.
+3. Recover all outstanding known verification results, including commands completed
+   after the chat stopped. Reuse success at its actual candidate/image/selection;
+   retain failures and genuinely missing results. Do not repeat successful commands
+   merely to obtain a new chat summary. Source changes require only the applicable
+   validation under the existing policy.
+4. Update the existing handoff with the recovered facts and next action. Collecting
+   an execution receipt does not Submit/Advance a consumer Session or complete its
+   Phase. The owning workflow performs any required admission through its public
+   route. Share one usable delivery when messaging is authorized; do not request
+   status-only AI turns from an unavailable producer.
+
+This is event-driven recovery, not periodic monitoring. Preserve the original
+Session, accepted results, history and repair counts; no fresh execution, extra
+AI monitor, automatic model switch, duplicate Submit or automatic publication is
+introduced. The current [long-running collection](#long-running-invocation-collection)
+contract still governs ordinary waiting. A missing live handle with known saved
+outputs calls for receipt recovery, not abandonment or blind replay.
+
 ## Long-running invocation collection
 
 For Advance or complete taking minutes or hours, preserve the one owned execution
@@ -420,8 +505,11 @@ running, return, error and unknown; status colors and interval arrows supplement
 | **⚙️ 🔴 sm-workflow 起動前エラー** | Confirmed failure before CLI launch; no execution interval started. |
 | **⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー** | The owned call ended with an observed failure; business outcome/cleanup can still be unknown. |
 | **⚙️ 🟡 │ sm-workflow 実行状態不明** | Lost/insufficient visibility; no claim of runtime termination or normal handback. |
-| **🌀 🔵 AI作業中** | Parent/assigned AI reasoning or editing after actual handoff. |
-| **🌀 🟣 AIレビュー中** / **🌀 🟠 AI修復中** | Actual AI review or admitted repair. |
+| **🤖 🛠️ 親AI作業中** | The parent itself is actively performing work, including editing/fixing code; state the activity. Never use for waiting alone. No blue circle. |
+| **🤖 ✨ AI作業中** | An active subagent is doing the work; identify the responsible subagent and activity. No blue circle. |
+| **💬 📨 別チャットへ依頼中** | A request was sent to another chat; active work is not yet confirmed. Name the destination chat and task. |
+| **💬 ✨ 別チャット作業中** | Available observations confirm work in the named destination chat; include its activity. |
+| **💬 ⏳ 別チャット待機中** | Available observations establish that the named destination chat is waiting; include the known reason. |
 | **👤 🟡 ユーザー入力待ち** | A genuine user answer is required. |
 | **🟢 完了** | Only the named task/operation is confirmed complete. |
 
@@ -452,8 +540,17 @@ runtime stopped. A returned Wait condition, accepted Submit, root exit or a
 requested SIGTERM alone proves neither whole-Workflow completion nor descendant
 settlement. Preserve those distinctions in the detail line.
 
-After confirmed handback, mark the actual AI work/review/repair or user-wait actor.
-If actors overlap, name both. Use the swirl `🌀` for AI. Include existing messages,
+Choose the marker from the actual actor and activity, not merely from handback.
+Use **🤖 🛠️ 親AI作業中** while the parent itself edits, fixes or otherwise
+actively performs the work; use **🤖 ✨ AI作業中** for an active subagent and
+name that agent. Append the actual task, review or repair detail to its actor's
+prefix. Neither marker guarantees health or success, and neither uses a blue
+circle or brain icon. If parent and child both work, label each separately.
+When the parent only waits for a child, runtime or user, do not label it as
+active parent work. Dispatch, transport waits and result collection alone do
+not establish editing or repair activity. State a real waiting transition only
+when useful in an existing update; do not add repeated waiting announcements.
+Keep the sm-workflow gear/blue execution markers unchanged. Include existing messages,
 result/acceptance values, supplied repair counts and retained response/stderr links
 without adding output-only operations or exposing secret payloads.
 
@@ -462,6 +559,28 @@ agent, continuation prompt, polling/status query, dedicated wait loop, persisted
 display state or periodic message solely for presentation. Existing runtime
 telemetry remains runtime-owned. Tool buffering or unavailable UI coloring is a
 display limitation, not permission to restart work or alter timeouts.
+
+### Separate-chat delegation display
+
+Use the three **💬** markers above for separately named chats; **🤖 ✨** remains
+the subagent marker and **🤖 🛠️** remains the active parent marker. Use the
+destination's actual chat title and a short task description so multiple
+deliveries remain distinguishable. A successful send establishes dispatch only.
+Choose working or waiting from actual messages, results or observations already
+obtained for the work. Silence, elapsed time and the parent's wait do not establish
+destination inactivity or a destination waiting reason.
+
+Update the display on meaningful observed changes in normal commentary. Identify
+delayed or outdated observations as such; do not present old progress as proof
+of current activity. Report an actual completed result as received instead of
+leaving it labeled working or waiting. The marker does not grant messaging,
+execution or continuation authority and requires no new display state.
+
+Keep any ongoing **⚙️ 🔵 │ sm-workflow 実行中** interval and its control ownership
+unchanged; separate-chat details do not signal runtime handback. Do not add AI
+calls, status queries, periodic monitoring, repeated unchanged announcements
+or dedicated waits for these markers. Use information already available from
+authorized work and ordinary result collection.
 
 ### Subagent call display
 
@@ -478,18 +597,18 @@ to improve the display.
 
 Use these compact paired markers in the normal dispatch/result handling:
 
-- **🌀 ▶ subagent 呼出し** — purpose/role, model and reasoning effort with
+- **🤖 ▶ subagent 呼出し** — purpose/role, model and reasoning effort with
   configured/requested/observed labels, and known Session/Step. This announces
   dispatch, not confirmed execution. When dispatch returns an actual identity,
   include it in the existing progress update; distinguish accepted from started
   if the tool does not establish execution.
-- **🌀 │ subagent 実行中** — actual agent identity and relevant observed progress
+- **🤖 ✨ AI作業中 — subagent=<actual identity>** — relevant observed progress
   when an ordinary work update is already due. Name the parent and child
   separately if both are working.
-- **🌀 ◀ subagent 結果受領** — the same agent identity/role and model/effort,
+- **🤖 ◀ subagent 結果受領** — the same agent identity/role and model/effort,
   actual outcome and concise result. Prefer observed model/effort when supplied;
   otherwise retain the configured labels. A child result is not Step acceptance.
-- **🌀 🔴 subagent 呼出し失敗** or **🌀 🟡 subagent 状態不明** — actual
+- **🤖 🔴 subagent 呼出し失敗** or **🤖 🟡 subagent 状態不明** — actual
   dispatch failure or uncertain status; do not manufacture an identity, success,
   termination or replacement call.
 
@@ -497,7 +616,8 @@ If runtime-owned subagent events arrive while sm-workflow is still running,
 retain the outer **⚙️ 🔵 │ sm-workflow 実行中** marker and show the child detail
 inside it. Do not imply control returned to the parent. Buffered observations
 may be summarized together as 出力一括受信; unavailable child details stay unknown.
-Parent INLINE work uses the existing AI marker and is never reported as delegation.
+Active parent INLINE work uses **🤖 🛠️ 親AI作業中** and is never reported as
+delegation; waiting for a delegated result is not active parent INLINE work.
 Use only normal calls, returned metadata and existing events: no extra AI turns,
 status/model queries, polling, continuation prompts or display ledger. Missing
 display metadata is not a work-admission failure or a reason to pause work.

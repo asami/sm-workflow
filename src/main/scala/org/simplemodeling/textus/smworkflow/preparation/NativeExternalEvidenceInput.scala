@@ -22,11 +22,11 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          Set("review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
           (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
-          (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
+          (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
+          (if (Set("human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -40,12 +40,14 @@ private[smworkflow] object NativeExternalEvidenceInput {
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
         } yield record }
         else if (options("family") == "GoalPhase" &&
-          Set("candidate-recovery", "candidate-observation-continuation")(options("kind")))
+          Set("candidate-recovery", "candidate-observation-continuation", "source-history-normalization")(options("kind")))
         readText(options("request")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
           target <- json.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
           _ <- (if (options("kind") == "candidate-recovery")
             org.simplemodeling.textus.smworkflow.admission.GoalPhaseCandidateRecovery.decodePublicTarget(target).map(_ => ())
+          else if (options("kind") == "source-history-normalization") NativeReviewPreparation.sourceHistoryNormalizationTargetC(target)
+            .map[Either[String, Unit]](_ => Right(())).fold(error => Left(error.toString), identity)
           else org.simplemodeling.textus.smworkflow.admission.GoalPhaseCandidateObservationContinuation.decodePublicTarget(target).map(_ => ()))
             .fold(_invalid(_), Consequence.success)
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
@@ -141,6 +143,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         prepared <- NativeClosureRecoveryPreparation.prepareC(description, answer, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
+      case "GoalPhase" if options("kind") == "dependency-source-revision" => for {
+        description <- summon[ValueReader[V.GoalPhaseDependencySourceRevisionDescriptionResult]].readC(request)
+        input <- summon[ValueReader[V.GoalPhaseDependencySourceRevisionAdoptionInput]].readC(result)
+        prepared <- NativeDependencySourceRevisionPreparation.prepareC(description, input, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "remaining-plan-adoption" => for {
         description <- summon[ValueReader[V.GoalPhaseRemainingPlanDescriptionResult]].readC(request)
         input <- summon[ValueReader[V.GoalPhaseRemainingPlanAdoptionInput]].readC(result)
@@ -175,6 +183,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         description <- summon[ValueReader[V.GoalPhaseSourceHistoryRecoveryDescriptionResult]].readC(request)
         answer <- summon[ValueReader[V.GoalPhaseSourceHistoryRecoveryAnswer]].readC(result)
         prepared <- NativeSourceHistoryRecoveryPreparation.prepareC(description, answer, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "GoalPhase" if options("kind") == "source-history-normalization" => for {
+        description <- summon[ValueReader[V.GoalPhaseSourceHistoryNormalizationDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.GoalPhaseSourceHistoryNormalizationAnswer]].readC(result)
+        prepared <- NativeSourceHistoryNormalizationPreparation.prepareC(description, answer, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" => for {

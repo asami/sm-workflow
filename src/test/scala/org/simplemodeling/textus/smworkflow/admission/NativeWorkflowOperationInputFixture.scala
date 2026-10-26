@@ -53,7 +53,7 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
       V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
         GoalPhaseAcceptanceBoundary.publicReport(result.acceptance), GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport),
         GoalPhasePlanRevision.publicProposal(result.planRevision), GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation)))
+        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
       V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
     case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->

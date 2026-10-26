@@ -213,7 +213,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
         take(call.createC("host_evidence", prepared.recordIdentity, prepared.record))
         Then("normal managed admission consumes only that exact dedicated purpose and full binding")
         take(reader.loadC(call.core, purpose, lookup, binding)).nonEmpty shouldBe true
-        take(reader.loadC(call.core, NativeExternalEvidence.Purpose.SourceHistoryRecovery, lookup, binding)) shouldBe None
+        take(reader.loadC(call.core, NativeExternalEvidence.Purpose.SourceHistoryNormalization, lookup, binding)) shouldBe None
         val crossed = take(RepositorySyncValidationContinuationFixture.binding(component, target.copy(frontierRevision = "10",
           intentRevision = "10")))
         reader.loadC(call.core, purpose, lookup, crossed).isSuccess shouldBe false

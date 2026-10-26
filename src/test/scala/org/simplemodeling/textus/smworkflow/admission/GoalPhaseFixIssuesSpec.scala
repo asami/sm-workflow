@@ -17,7 +17,7 @@ import RepositorySyncNativeMergeValidation as R
 
 /** Pure business examples use actual-shaped receipts, never genuine host acts.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+ * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -195,6 +195,51 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
   }
 
   "Actual selected check evidence" should {
+    "retain dependency issues across source revision and resolve the same issue only through fresh matching checks" in {
+      val original = DependencyValidationSpecificationFixture
+      val revised = DependencySourceRevisionSpecificationFixture
+      Given("an unresolved failed legacy dependency check and a new source for the same Component and check")
+      val check = original.check.copy(dependency = Some(original.binding.identity))
+      val failed = _validation(name = check.identity).copy(step = original.binding.step,
+        selected = Vector(check), dependency = Some(original.capture),
+        dependencyExecutions = Vector(GoalPhaseDependencyValidation.Execution(check.identity, 0,
+          original.binding.dependency.workspace, check.kind.wire)))
+      N.codec.decode(N.codec.encode(failed)) shouldBe Right(failed)
+      val previous = _take(validationC("same-session", original.plan.repository, None, failed, "original-dependency-failure")).get
+      val issue = previous.issues.head
+      val fresh = failed.copy(dependency = None, dependencySource = Some(revised.capture),
+        sourceConsumption = Some(revised.proposal.consumption),
+        dependencyExecutions = Vector(GoalPhaseDependencyValidation.Execution(check.identity, 0,
+          revised.binding.dependency.workspace, check.kind.wire)),
+        receipts = Vector(_receipt(check.identity, passed = true)), outcome = Some("passed"))
+      N.codec.decode(N.codec.encode(fresh)) shouldBe Right(fresh)
+      val repair = _request(state = Some(previous)).copy(selectedPlan = original.plan,
+        stepIdentity = Some(original.binding.step), checkFailure = Some(W.CheckFailureContext(
+          original.paths, "Revised dependency source", fresh.copy(receipts = failed.receipts, outcome = failed.outcome))))
+      val review = repair.copy(kind = "ReviewStep", checkFailure = None,
+        review = Some(GoalPhaseNativeReview.Context(original.paths, "Revised source review", fresh.receipts,
+          dependencyValidations = Vector(fresh))))
+      When("repair and review inspect the revised source before its fresh validation is settled")
+      val assignedIds = assigned(repair).map(_.identity)
+      val prematureAcceptance = completedC(review, W.Result("accept", "No fresh issue settlement", Vector.empty), "premature-review")
+      Then("the dependency issue remains assigned and cannot disappear from independent review")
+      issue.repository shouldBe original.binding.dependency.repository
+      assignedIds shouldBe Vector(issue.identity)
+      relevant(review, issue) shouldBe true
+      prematureAcceptance shouldBe a[Consequence.Failure[?]]
+      When("fresh actual-shaped matching success and a later supported recurrence are traversed")
+      val passed = _take(validationC("same-session", original.plan.repository, Some(previous), fresh, "revised-source-pass")).get
+      val recurring = _take(validationC("same-session", original.plan.repository, Some(passed),
+        fresh.copy(receipts = failed.receipts, outcome = failed.outcome), "revised-source-failure")).get
+      Then("the original dependency identity resolves and reopens without a replacement primary issue")
+      passed.issues.map(_.identity) shouldBe Vector(issue.identity)
+      passed.issues.head.status shouldBe "RESOLVED"
+      passed.history.take(previous.history.size) shouldBe previous.history
+      recurring.issues.map(_.identity) shouldBe Vector(issue.identity)
+      recurring.issues.head.status shouldBe "REOPENED"
+      recurring.issues.head.repository shouldBe issue.repository
+    }
+
     "resolve FIXED only after a fresh matching passed receipt and reopen a later supported recurrence" in {
       Given("a FIXED claim whose original failed check is still unresolved")
       val fixed = _completed(_request(), _result(Vector(_claim())))

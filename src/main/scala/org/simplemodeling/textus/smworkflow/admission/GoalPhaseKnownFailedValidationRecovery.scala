@@ -18,7 +18,7 @@ import GoalPhaseValidationRecovery as R
   * The original validation namespace is immutable. This separate mechanical
   * receipt selects a fresh Validation frontier without executing any check.
   * @since   Oct. 22, 2026
-  * @version Oct. 22, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
@@ -53,7 +53,8 @@ private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
 
   /** Called only with the original failed cursor established by native traversal. */
   def targetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
-    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved): Consequence[R.RecoveryTarget] = for {
+    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[R.RecoveryTarget] = for {
     _ <- if (from == failed.record && from.suspension.isEmpty &&
         from.currentProgression.contains(ProgressionReference("phase.Decision")) &&
         controller.stage == O.Stage.Decision && controller.decisionSource.contains(O.Stage.PhaseValidation) &&
@@ -71,7 +72,7 @@ private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
     _ <- GoalPhaseNativeMetadata.validateRetainedC(selected, failed.payload.selected, failed.payload.metadata)
     check = failed.payload.selected.head
     prefix = from.identity.value + ":ordered-validation:" + failed.payload.sourceRevision + ":"
-    terminal <- N.terminalFailedAttemptC(session, d, core, candidate, controller, failed)
+    terminal <- N.terminalFailedAttemptC(session, d, core, candidate, controller, failed, dependencyChain)
     _ <- if (terminal.validation.record == from && check.identity == controller.plan.phaseChecks.head) Consequence.unit
       else F.invalid("known failed recovery crosses the original intent, result, selection or failed receipt")
     target = R.RecoveryTarget(from.identity.value, controller.plan.identity, controller.plan.revision,
@@ -84,8 +85,9 @@ private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
   } yield target
 
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
-    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved): Consequence[R.RecoveryTarget] = for {
-    target <- targetC(session, d, core, from, controller, candidate, failed)
+    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[R.RecoveryTarget] = for {
+    target <- targetC(session, d, core, from, controller, candidate, failed, dependencyChain)
     _ <- if (session.current == from) Consequence.unit else F.invalid("known failed recovery requires the exact current Decision")
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     existing <- adapter.loadRetainedC(_reference(from))(using core.executionContext)
@@ -94,8 +96,9 @@ private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
 
   def appendC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved, expected: R.RecoveryTarget,
-    human: ContextReference, rationale: String): Consequence[Unit] = for {
-    actual <- currentTargetC(session, d, core, from, controller, candidate, failed)
+    human: ContextReference, rationale: String,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Unit] = for {
+    actual <- currentTargetC(session, d, core, from, controller, candidate, failed, dependencyChain)
     _ <- if (actual == expected) Consequence.unit else F.invalid("known failed recovery target changed")
     payload = Direction(actual, human, session.participantIdentity, rationale)
     _ <- codec.decode(codec.encode(payload)).fold(F.invalid, _ => Consequence.unit)
@@ -111,8 +114,9 @@ private[smworkflow] object GoalPhaseKnownFailedValidationRecovery {
 
   final case class Resumed(record: InstanceRecord, controller: O.State)
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
-    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved): Consequence[Resumed] = for {
-    actual <- targetC(session, d, core, from, controller, candidate, failed)
+    controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Resumed] = for {
+    actual <- targetC(session, d, core, from, controller, candidate, failed, dependencyChain)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     retained <- adapter.loadRetainedC(_reference(from))(using core.executionContext).flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("actual known failed recovery history has no retained direction")))

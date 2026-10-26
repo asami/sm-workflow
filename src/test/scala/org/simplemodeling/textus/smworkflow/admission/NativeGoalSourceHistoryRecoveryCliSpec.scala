@@ -4,7 +4,6 @@ import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax.*
 import java.nio.file.{Files, Path, StandardOpenOption}
-import java.sql.DriverManager
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -22,15 +21,13 @@ import SplitPhaseExplicitPartitionFixture.take
   * standard native codec bytes; no private row is ever seeded or changed.
   * Optional installed-command qualification uses the same isolated host.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
-@org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
-  private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
-  private def _call(fixture: Implemented, service: String, operation: String,
+  protected def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
+  protected def _call(fixture: Implemented, service: String, operation: String,
     arguments: Vector[String]): F.Result = sys.props.get("smworkflow.spec.installedCommand") match {
     case None => if (service == "GoalPhaseService") fixture.scenario.call("command", operation, arguments)
       else fixture.scenario.prepareHostInput(operation,
@@ -61,18 +58,18 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
         process.getErrorStream.close()
       }
   }
-  private def _goal(fixture: Implemented, operation: String, arguments: Vector[String]): F.Result =
+  protected def _goal(fixture: Implemented, operation: String, arguments: Vector[String]): F.Result =
     _call(fixture, "GoalPhaseService", operation, arguments)
-  private def _advance(fixture: Implemented): F.Result =
+  protected def _advance(fixture: Implemented): F.Result =
     _goal(fixture, "advanceGoalPhase", Vector("--sessionId", fixture.request.sessionId))
-  private def _describe(fixture: Implemented): F.Result =
+  protected def _describe(fixture: Implemented): F.Result =
     _goal(fixture, R.describeOperation, Vector("--sessionId", fixture.request.sessionId))
-  private def _recover(fixture: Implemented, input: V.GoalPhaseSourceHistoryRecoveryInput): F.Result =
+  protected def _recover(fixture: Implemented, input: V.GoalPhaseSourceHistoryRecoveryInput): F.Result =
     _goal(fixture, R.recoveryOperation, Vector("--input", _json(input)))
 
-  private final case class HumanAnswer(answer: V.GoalPhaseOrderedDecisionAnswer,
+  protected final case class HumanAnswer(answer: V.GoalPhaseOrderedDecisionAnswer,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence)
-  private def _human_answer(fixture: Implemented, request: Path, choice: String,
+  protected def _human_answer(fixture: Implemented, request: Path, choice: String,
     identity: String, prepare: Boolean = true): HumanAnswer = {
     val directory = Files.createTempDirectory(fixture.scenario.root, "ordinary-human-source-history-")
     val answer = V.GoalPhaseOrderedDecisionAnswer(choice, "Test-owned independent Human direction accepting the unknown old effect")
@@ -91,12 +88,12 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     }
     HumanAnswer(answer, reference, execution)
   }
-  private def _human_submit(fixture: Implemented, question: V.GoalPhaseAdvanceResult, answer: HumanAnswer): F.Result =
+  protected def _human_submit(fixture: Implemented, question: V.GoalPhaseAdvanceResult, answer: HumanAnswer): F.Result =
     _goal(fixture, question.submitOperation.get, Vector("--sessionId", question.submitSessionId.get,
       "--answer", _json(answer.answer), "--resultReference", _json(answer.reference),
       "--executionEvidence", _json(answer.execution)))
 
-  private def _select_import(fixture: Implemented, prepared: F.Result): Unit = {
+  protected def _select_import(fixture: Implemented, prepared: F.Result): Unit = {
     prepared.exitCode shouldBe 0
     val config = fixture.scenario.root.resolve(".textus/config.json")
     val current = parse(Files.readString(config)).toOption.get
@@ -104,7 +101,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       Json.fromString(prepared.invocation.stdout.toString))).noSpaces)
   }
 
-  private def _direction(fixture: Implemented, description: V.GoalPhaseSourceHistoryRecoveryDescriptionResult,
+  protected def _direction(fixture: Implemented, description: V.GoalPhaseSourceHistoryRecoveryDescriptionResult,
     request: Path, choice: String, referenceIdentity: String): V.GoalPhaseSourceHistoryRecoveryInput = {
     val root = fixture.scenario.root
     val directory = Files.createTempDirectory(root, "human-source-history-")
@@ -125,10 +122,10 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
   }
 
   /** Isolated observation uses SQLite's read-only URI; only native codec bytes leave this reader. */
-  private def _stored_json(fixture: Implemented): Vector[String] = {
+  protected def _stored_json(fixture: Implemented): Vector[String] = {
     val database = fixture.scenario.root.resolve("workflow.sqlite")
     Files.isRegularFile(database) shouldBe true
-    val connection = DriverManager.getConnection("jdbc:sqlite:" + database.toUri.toASCIIString + "?mode=ro")
+    val connection = new org.sqlite.JDBC().connect("jdbc:sqlite:" + database.toUri.toASCIIString + "?mode=ro", new java.util.Properties())
     try {
       val statement = connection.createStatement()
       try {
@@ -151,13 +148,13 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       } finally statement.close()
     } finally connection.close()
   }
-  private def _current(fixture: Implemented): InstanceRecord = {
+  protected def _current(fixture: Implemented): InstanceRecord = {
     val instances = _stored_json(fixture).flatMap(raw => WorkflowInstanceRecordJsonV1.decodeC(raw, _catalog).toOption)
       .filter(_.identity.value == fixture.request.sessionId)
     instances.size shouldBe 1
     instances.head
   }
-  private def _receipt[A](fixture: Implemented, reference: WorkflowMechanicalTransition.Reference,
+  protected def _receipt[A](fixture: Implemented, reference: WorkflowMechanicalTransition.Reference,
     codec: PayloadCodec[A]): WorkflowMechanicalTransition.Receipt[A] = {
     val values = _stored_json(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(raw, _catalog, codec).toOption)
       .filter(_.reference == reference)
@@ -165,20 +162,20 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     values.head
   }
 
-  private def _completed_facts(fixture: Implemented): Vector[String] = _stored_json(fixture).filter { raw =>
+  protected def _completed_facts(fixture: Implemented): Vector[String] = _stored_json(fixture).filter { raw =>
     parse(raw).toOption.exists(json =>
       json.hcursor.downField("reference").get[String]("identity").toOption.exists(_.startsWith(fixture.request.sessionId + ":")) &&
         json.hcursor.downField("payload").get[String]("typeIdentity").toOption.exists(kind =>
           Set(GoalPhaseNativeClosure.codec.typeIdentity, GoalPhaseNativeValidation.codec.typeIdentity)(kind)))
   }.sorted
 
-  private final case class DocumentEpisode(fixture: Implemented, plan: GoalPhaseOrderedProgression.Plan,
+  protected final case class DocumentEpisode(fixture: Implemented, plan: GoalPhaseOrderedProgression.Plan,
     phase: Path, checklist: Path, completed: V.GoalPhaseAdvanceResult)
-  private val _prefix_paths = (1 to 4).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector
-  private val _later_corrected_text = changedText + "// Preserve the compiled value in the second selected Step.\n"
-  private def _prefix_text(index: Int, value: Int): String =
+  protected val _prefix_paths = (1 to 4).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector
+  protected val _later_corrected_text = changedText + "// Preserve the compiled value in the second selected Step.\n"
+  protected def _prefix_text(index: Int, value: Int): String =
     "object ARecovery" + index + " { val value: Int = " + value + " }\n"
-  private def _fixture_git(fixture: Implemented, arguments: Vector[String]): String = {
+  protected def _fixture_git(fixture: Implemented, arguments: Vector[String]): String = {
     val directory = Files.createTempDirectory(fixture.scenario.root, "test-owned-integration-")
     val stdout = directory.resolve("stdout")
     val stderr = directory.resolve("stderr")
@@ -198,7 +195,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       process.getErrorStream.close()
     }
   }
-  private def _write_documents(phase: Path, checklist: Path, plan: GoalPhaseOrderedProgression.Plan): Unit = {
+  protected def _write_documents(phase: Path, checklist: Path, plan: GoalPhaseOrderedProgression.Plan): Unit = {
     val bindings = plan.steps.zipWithIndex.map { (step, index) => Json.obj("step" -> Json.fromString(step.identity),
       "items" -> Json.arr(Json.fromString("RECOVERY-" + (index + 1)))) }
     Files.writeString(phase, "# Isolated recovery document input\n\n```sm-workflow-plan\n" +
@@ -208,17 +205,17 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       "- [ ] RECOVERY-" + (index + 1) + ": Preserve the selected semantics of " + step.identity
     }.mkString("\n") + "\n")
   }
-  private def _submit(fixture: Implemented, request: V.GoalPhaseAdvanceResult, name: String,
+  protected def _submit(fixture: Implemented, request: V.GoalPhaseAdvanceResult, name: String,
     outcome: String = "completed", execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
     val result = V.GoalPhaseWorkResult(outcome, "Test-owned selected semantic disposition", Vector.empty,
-      None, None, None, None, None, None, None, None, dependencyValidation = None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     val reference = V.WorkflowArtifactReference(name, "1")
     _goal(fixture, request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
       "--result", _json(result), "--resultReference", _json(reference)) ++
       execution.toVector.flatMap(value => Vector("--executionEvidence", _json(value))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
   }
-  private def _document_episode(name: String, later: Boolean = false): DocumentEpisode = {
+  protected def _document_episode(name: String, later: Boolean = false): DocumentEpisode = {
     Given("CB1,CB2: a fresh normal source-history host with two document-selected Steps and fixed closure programs")
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), sourceHistory = true)
     val repository = Path.of(scenario.host.target.root)
@@ -269,7 +266,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     val reference = V.WorkflowArtifactReference(name + "-review-1", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("test-independent-reviewer"), None, None)
     val result = V.GoalPhaseWorkResult("accept", "Test-owned selected semantic disposition", Vector.empty,
-      None, None, None, None, None, None, None, None, dependencyValidation = None)
+      None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     def _file_(name: String, value: RecordPresentable): String = {
       val file = scenario.root.resolve(name + ".json")
       Files.writeString(file, _json(value))
@@ -308,7 +305,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     DocumentEpisode(next, plan, phase, checklist, second)
   }
 
-  private def _failed(name: String): Implemented = {
+  protected def _failed(name: String): Implemented = {
     val duplicate = "/**\n * @version Oct. 20, 2026\n * @version Oct. 21, 2026\n */\n" + changedText
     val fixture = implemented(name, enabledSettings, duplicate)
     configure(fixture.scenario, enabledSettings.updated("textus.resource.url.file.roots", Json.fromString(fixture.scenario.root.toString)))
@@ -326,6 +323,11 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
     fixture
   }
 
+}
+
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeGoalSourceHistoryRecoveryCliSpec extends NativeGoalSourceHistoryRecoveryCliSupport {
   "Public source history recovery through normal generated Operations" should {
     "end prefix reuse after the recovered candidate so a later same-Step repair receives ordinary source normalization" in {
       Given("CB-P116-SOURCE-HISTORY-CONTINUATION-001: an isolated later-intent recovery after a completed first Step and four successful normalization results")
@@ -358,7 +360,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       Given("a separately prepared ordinary independent Review result requesting one same-Step source-header repair")
       val finding = "Maintain the former prefix source during this ordinary same-Step repair"
       val reviewresult = V.GoalPhaseWorkResult("repair", "Test-owned independent review requests the selected source maintenance",
-        Vector(finding), None, None, None, None, None, None, None, None, dependencyValidation = None)
+        Vector(finding), None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reviewreference = V.WorkflowArtifactReference("later-ordinary-repair-review", "1")
       val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("test-independent-reviewer"), None, None)
       def _file_(name: String, value: RecordPresentable): String = {
@@ -395,7 +397,7 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
           issue.status != "RESOLVED").map(issue =>
         V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "Test-owned observation of the assigned source maintenance", None))
       val repairresult = V.GoalPhaseWorkResult("completed", "Test-owned ordinary repair of the assigned former prefix source",
-        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions)), None, None, None, None, None, dependencyValidation = None)
+        Vector.empty, None, None, Some(V.GoalPhaseIssueReport(dispositions)), None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val repairreference = V.WorkflowArtifactReference("later-ordinary-repair-completed", "1")
       When("ordinary RepairStep completion is followed by a fresh normal Advance")
       _goal(fixture, repair.submitOperation.get, Vector("--sessionId", repair.submitSessionId.get,
@@ -438,8 +440,9 @@ final class NativeGoalSourceHistoryRecoveryCliSpec extends AnyWordSpec with Nati
       completed.history.take(original.history.size) shouldBe original.history
       completed.history.take(recovered.history.size) shouldBe recovered.history
       completed.history.count(_.suspension.exists(_.completion.value == "goal-phase-ordered-human-completion-v1")) shouldBe 1
+      val catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
       val historyreceipts = _stored_json(fixture).flatMap(raw => WorkflowMechanicalTransitionJsonV1.decodeC(
-        raw, _catalog, GoalPhaseNativeSourceHistory.codec).toOption)
+        raw, catalog, GoalPhaseNativeSourceHistory.codec).toOption)
       historyreceipts.count(_.reference == originalintent.reference) shouldBe 1
       historyreceipts.count(_.reference == WorkflowMechanicalTransition.Reference(target.sessionId +
         ":ordered-candidate:" + target.sourceRevision + ":source-history-result-" + target.intentIndex, "1")) shouldBe 0

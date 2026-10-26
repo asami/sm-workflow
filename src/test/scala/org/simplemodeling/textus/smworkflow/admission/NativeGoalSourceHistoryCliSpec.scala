@@ -91,7 +91,7 @@ private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with
     Given("the issued implementation and fixture-authored semantic code without any claimed check or review evidence")
     When("the fixture writes the compiled value and a separate normal Submit completes only semantic work")
     Files.writeString(source, text, UTF_8)
-    val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic edit of HistoryExample value", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+    val result = V.GoalPhaseWorkResult("completed", "Fixture-owned semantic edit of HistoryExample value", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
     val reference = V.WorkflowArtifactReference("fixture-cli-source-history-implementation", "1")
     val submitted = _call_(request.submitOperation.get,
       Vector("--sessionId", request.submitSessionId.get,

@@ -18,6 +18,12 @@ import org.simplemodeling.textus.smworkflow.value as V
 object NativeReviewPreparation {
   final case class Prepared(recordIdentity: String, record: Record)
 
+  /** Preserve the complete opaque target before Record projection can erase
+    * malformed fields or colliding public property names. */
+  private[smworkflow] def sourceHistoryNormalizationTargetC(value: Json): Consequence[Unit] =
+    org.simplemodeling.textus.smworkflow.admission.GoalPhaseSourceHistoryNormalization.decodePublicTarget(value)
+      .fold(Consequence.stateConflict(_), _ => Consequence.unit)
+
   private val _handle_names = Vector("componentIdentity" -> "component_identity",
     "workflowIdentity" -> "workflow_identity", "workflowRevision" -> "workflow_revision",
     "instanceIdentity" -> "instance_identity", "protocolVersion" -> "protocol_version")

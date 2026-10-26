@@ -21,7 +21,7 @@ import GoalPhaseOrderedProgression as O
 /** Explicit HumanNewAttempt direction preserves an unknown historical outcome.
   * Description and authorization neither observe nor execute normalization.
   * @since   Oct. 21, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryRecovery {
@@ -312,7 +312,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
       else F.invalid("historical source history recovery differs from its complete captured target")
   } yield actual
 
-  private def _target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
+  private[admission] def _target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
     completedCandidates: Vector[GoalPhaseNativeCandidate.Payload]): Consequence[RecoveryTarget] = for {
     _ <- if (controller.stage == O.Stage.InspectCandidate && controller.cursor < controller.plan.steps.size &&
@@ -413,7 +413,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
     }
   } yield result
 
-  private def _adjacent_c(current: InstanceRecord, previous: InstanceRecord, saved: InstanceRecord,
+  private[admission] def _adjacent_c(current: InstanceRecord, previous: InstanceRecord, saved: InstanceRecord,
     cause: String): Consequence[InstanceRecord] = for {
     actual <- GoalPhaseNativeHistory.prefixC(current, saved.revision)
     _ <- if (actual == saved && saved.identity == previous.identity && saved.definition == previous.definition &&

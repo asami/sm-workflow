@@ -70,6 +70,85 @@ available direction through its public route; do not silently continue past it.
 Identify unsupported same-purpose adoption as a producer gap. Already approved
 restoration can continue without waiting for this correction or RRC completion.
 
+## Typed authorization and inventory continuation
+
+PA-INVENTORY-CARRY-01 implements the producer contract below. Producer source
+changes and specification fixtures alone do not establish installed delivery,
+actual Human direction or successful execution in an existing Session.
+
+The ordinary `dependencyProposal` optionally contains `authorizationBoundary`:
+
+```json
+{
+  "schemaVersion": "sm-workflow.dependency-authorization.v1",
+  "purpose": {"identity": "purpose:dependency-contract", "revision": "1"},
+  "permittedOperations": ["edit-source", "validate", "independent-review"],
+  "excludedPaths": ["src/Forbidden.scala"]
+}
+```
+
+The closed operation vocabulary is `edit-source`, `validate`,
+`independent-review`, `publish-local`, `install-runtime`, `publish-remote`,
+`push`, and `change-host-configuration`. These describe the authorized semantic
+boundary; actual CNCF execution permissions remain separately required. Omitting
+`exactPaths` makes `paths` the current implementation inventory. Supplying
+nonempty `exactPaths` makes that literal list an exhaustive restriction. Every
+proposal must satisfy its own exclusions and exact restriction. Absence of the
+new options retains the old wire shape and historical meaning; explicit null,
+unknown fields, colliding public aliases and malformed nested values refuse.
+
+The first genuine `ApproveDependencyScope` answer through the existing issued
+question, prepared evidence and ordered Human Submit adopts the full typed
+boundary. A later `IMPLEMENTATION` or `REPAIR` proposal can supply `scopeUpdate`
+with `approval` naming that retained actual answer and `rationale` explaining the
+necessary inventory change. Runtime compares the current Step, all requester and
+dependency identities, Usage Contract, exact purpose, complete acceptance and
+dependent-work vectors, operations and restrictions. Proposal identity, revision,
+reason, discovery and inventory can change within that stable boundary. Missing,
+foreign, rejected, stale or ambiguous answer links are invalid. REVIEW remains a
+read-only report and cannot claim this continuation.
+
+Freshness belongs to the actual issued assignment: its `decisionContext` must
+contain `ApproveDependencyScope` and exactly the linked answer reference. The
+original requesting proposal, or the exact current proposal and authenticated
+mechanical receipt in `inventoryContinuation`, must match the reconstructed
+effective grant. An older cumulative grant that is absent from this issued
+direction is stale for this update. Runtime does not guess the latest grant,
+scan for a similar Component, remove historical grants or infer revocation.
+
+An unchanged boundary appends one Unit-effect managed mechanical transition on
+ordinary Advance, schema `sm-workflow.dependency-inventory-continuation.v1`, at
+`session:ordered-dependency-inventory:DecisionRevision@1`. Its canonical causation
+is `ordered-dependency-inventory:continued`; Decision resumes Implementation or
+Repair through the existing resumption event. It grants no effect, new repair
+reservation, count refund, validation or acceptance. The native source, complete
+adjacent history, Plan, Step, generation, base, accepted prefix, repair progress,
+semantic result, original approval and proposed inventory bind the receipt.
+Repeated Advance reads the same durable assignment and receipt.
+
+`decisionContext` preserves the original Human `requestingResult`, `choice`,
+`rationale` and `decisionReference`. Optional `inventoryContinuation` contains
+the distinct mechanical `receipt`, inherited Human `approval`, and current full
+`proposal`. Current inventory therefore never appears to be a new Human answer.
+Only the matching effective approval projection changes; historical approvals,
+admissions, validation results and receipts remain immutable. Existing dependency
+validation still requires exact current configured Binding paths and concrete
+target registration. Adding inventory does not stage all files or extend old
+receipts to different bytes.
+
+Changes to Component, purpose, Usage Contract, acceptance, dependent work,
+operations or restrictions select the ordinary Human route with structured
+mismatch fields and pointers to the complete saved proposal reason
+and necessity rationale. Those original bounded strings remain intact in the
+requesting result; the Human reason does not duplicate or truncate them. A legacy grant without an
+explicit boundary also requires that route. Migration issues a normal typed
+boundary-adoption proposal and a new attributable question; existing actual user
+direction may answer it through supported preparation and Submit without asking
+the same user again. Never reinterpret an old exact-file approval or replay an
+accepted Submit. Genuine pending questions remain with their public Human owner.
+The already resolved Human818 is historical evidence and is never replayed by
+this producer correction.
+
 ## Legacy file-bound contract and evidence
 
 The sections below describe the original wire contract and retained verification.

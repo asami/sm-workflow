@@ -136,7 +136,7 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
     def submitImplementation(request: V.GoalPhaseAdvanceResult): V.GoalPhaseWorkSubmissionResult = {
       Files.writeString(root.resolve("repository/value.txt"), "selected semantic change\n")
       val result = V.GoalPhaseWorkResult("completed", "Test-owned selected semantic implementation", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       invoke[V.GoalPhaseWorkSubmissionResult](request.submitOperation.get, List(Property("sessionId", request.submitSessionId.get, None),
         Property("result", result.toRecord(), None), Property("resultReference", V.WorkflowArtifactReference("recovery-implementation", "1").toRecord(), None)))
     }

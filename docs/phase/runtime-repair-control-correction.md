@@ -81,4 +81,6 @@ repeated to obtain a chat summary. See the [producer delivery](../journal/2026/1
 RRC-06 and RRC-08 remain open only for actual consumer selection/adoption and
 continuation. The isolated same-Session restoration link and failure-to-FIX tests
 prove producer capability, not acceptance in a live consumer. That owner retains
-all live Operations. No earlier acceptance is reopened.
+all live Operations. Source-history missing-result reconciliation is the separate
+[SHR correction](source-history-recovery-result-collection-correction.md); it is
+not implemented or bypassed by this delivery. No earlier acceptance is reopened.

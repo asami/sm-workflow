@@ -706,18 +706,21 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the forty-one installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the fifty installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
+          "GoalPhaseService.resolveGoalPhaseDiagnosticInformation",
           "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
           "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
           "GoalPhaseService.describeGoalPhaseSourceHistoryRecovery", "GoalPhaseService.recoverGoalPhaseSourceHistory",
+          "GoalPhaseService.describeGoalPhaseSourceHistoryNormalization", "GoalPhaseService.adoptGoalPhaseSourceHistoryNormalization",
           "GoalPhaseService.describeGoalPhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseCandidate",
           "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
+          "GoalPhaseService.describeGoalPhaseDependencySourceRevision", "GoalPhaseService.adoptGoalPhaseDependencySourceRevision",
           "GoalPhaseService.describeGoalPhaseReleaseRepairContinuation", "GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation",
           "GoalPhaseService.describeGoalPhaseReviewPurposeRepair", "GoalPhaseService.admitGoalPhaseReviewPurposeRepair",
           "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
@@ -726,24 +729,27 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
+          "GoalPhaseService.describeGoalPhaseRepairPolicy", "GoalPhaseService.adoptGoalPhaseRepairPolicy",
           "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
           "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair",
           "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
           "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
+          "RepositorySyncService.describeRepositorySyncValidationContinuation", "RepositorySyncService.adoptRepositorySyncValidationContinuation",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 41
-        published.map(_._1).distinct should have size 41
+        published should have size 50
+        published.map(_._1).distinct should have size 50
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
-          "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation")
+          "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation",
+          "describeGoalPhaseSourceHistoryNormalization", "describeRepositorySyncValidationContinuation")
         published.foreach { (identity, operation) =>
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
-                else if (Vector("start", "describe", "recover", "adopt", "admit", "continue").exists(operation.name.startsWith)) "input"
+                else if (Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",

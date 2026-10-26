@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.syntax.*
+import IncrementalSbtDiagnosisRepair.given
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.workflow.{WorkflowInstancePersistence, ContextReference}
@@ -13,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -44,11 +45,14 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         dependencyValidations = r.dependencyValidations.flatMap(GoalPhaseNativeDependencyValidation.publicView),
         triageJudgment = r.triageJudgment.map(j => GoalPhaseNativeMetadata.record(j.asJson)))),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
-        d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
-      value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation))),
+        d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
+        d.inventoryContinuation.map(context => GoalPhaseNativeMetadata.record(context.asJson)))),
+      value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation),
+        c.initialPhaseRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
       GoalPhaseFixIssues.publicState(value.issues), value.purposeRepair.map(contract => GoalPhaseNativeMetadata.record(contract.asJson)),
       releaseRepairContract = value.releaseRepairContract,
-      triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)))
+      triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)),
+      diagnosticHistory = value.diagnosticHistory.toVector.flatten.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
@@ -61,7 +65,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         })), (payload.receipts ++ stopped).filter(r => payload.selected.exists(c => c.dependency.isEmpty && c.identity == r.identity)).map(_goal_check), payload.outcome,
       payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty,
       dependencyValidation = GoalPhaseNativeDependencyValidation.publicView(payload),
-      assessment = payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), assessmentJournal = None)
+      assessment = payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), assessmentJournal = None,
+      diagnostics = IncrementalSbtFailureDiagnosis.selected(payload).map(d => GoalPhaseNativeMetadata.record(d.asJson)))
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {
@@ -270,7 +275,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       GoalPhaseDependencyScope.publicProposal(value.dependencyProposal),
       value.completionConditions.map(conditions => GoalPhaseNativeMetadata.record(conditions.asJson)),
       GoalPhasePurposeRepair.publicSources(value.repairFindingSources),
-      dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation))
+      dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation),
+      diagnosticRepair = value.diagnosticRepair.map(m => GoalPhaseNativeMetadata.record(m.asJson)))
 
   /** Called only by the owning completion's after-commit projection. The
     * native closing result remains its real type/reference pair; it is not

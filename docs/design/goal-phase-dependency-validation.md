@@ -1,5 +1,11 @@
 # GoalPhase dependency validation design
 
+The separately versioned [source revision design](goal-phase-dependency-source-revision.md)
+connects an independently directed new source to the existing candidate,
+validation, review and closure owners. Its managed byte observations and native
+stage facts supplement the unchanged V1 lineage; they do not create a second
+candidate executor or an accepted prefix for an unrelated Git base.
+
 ## Planned authorization correction — 2026-10-25
 
 Implement [PA-01..07](../spec/goal-phase-dependency-scope.md#purpose-based-authorization--adopted-2026-10-25)

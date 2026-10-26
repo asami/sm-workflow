@@ -53,6 +53,22 @@ final class GoalPhaseDependencyValidationSpec extends AnyWordSpec with Matchers 
   import DependencyValidationSpecificationFixture.*
 
   "Public result constructor migration" should {
+    "refuse a dependency selection on decision-needed work before committing unreadable native results" in {
+      Given("the actual implementation result shape and a reference-only selected dependency")
+      val completed = GoalPhaseNativeWork.Result("completed", "Specification completion", Vector.empty,
+        dependencyValidation = Some(selection))
+      val decision = completed.copy(outcome = "decision-needed")
+      val unselected = decision.copy(dependencyValidation = None)
+      When("semantic admission and native retained-result decoding inspect the same three results")
+      val results = Vector(completed, decision, unselected)
+      val admitted = results.map(GoalPhaseNativeWork.admitSemanticResultC(request, _).isSuccess)
+      val readable = results.map(value => GoalPhaseNativeWork.resultCodec.decode(
+        GoalPhaseNativeWork.resultCodec.encode(value)).isRight)
+      Then("the invalid selection is rejected before persistence while ordinary completion and a decision retain their contracts")
+      admitted shouldBe Vector(true, false, true)
+      readable shouldBe admitted
+    }
+
     "allow reference-only results and reject every raw enriched admission presence before DTO conversion" in {
       Given("a strict named public result input with ordinary reference-only dependency selection")
       val plain = Json.obj("outcome" -> "completed".asJson, "summary" -> "Specification completion".asJson,

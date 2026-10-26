@@ -190,7 +190,7 @@ final class GoalPhaseDocumentWritebackOperationSpec extends AnyWordSpec with Giv
           V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, None,
             GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport), None,
             GoalPhaseFindingRecording.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation)),
+            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation), diagnosticRepair = None),
           V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), result.evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))

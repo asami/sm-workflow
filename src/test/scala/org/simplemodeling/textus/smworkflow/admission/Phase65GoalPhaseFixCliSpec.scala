@@ -50,7 +50,7 @@ final class Phase65GoalPhaseFixCliSpec extends AnyWordSpec with Matchers with Gi
     report: Option[V.GoalPhaseIssueReport] = None): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "Specification-owned assigned work", findings,
       None, None, report, None, None, None, None,
-      repairFindingSources = None, dependencyValidation = None)
+      repairFindingSources = None, dependencyValidation = None, diagnosticRepair = None)
   private def _submit(s: F.Scenario, request: V.GoalPhaseAdvanceResult, value: V.GoalPhaseWorkResult,
     ref: V.WorkflowArtifactReference, execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
     val response = _call(s, request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

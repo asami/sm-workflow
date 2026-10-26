@@ -61,7 +61,11 @@ private[smworkflow] object GoalPhaseNativeRun {
     validationRepairCallerSource: Option[GoalPhaseValidationPriorInvocation.CallerSourcePolicy] = None,
     developmentObservation: Option[DevelopmentOperationalView.Configuration] = None,
     releaseRepairContinuation: Option[GoalPhaseReleaseRepairContinuation.Installation] = None,
-    repairPolicyAdoption: Option[GoalPhaseRepairPolicyAdoption.Installation] = None)
+    repairPolicyAdoption: Option[GoalPhaseRepairPolicyAdoption.Installation] = None,
+    sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Installation] = None,
+    dependencySourceRevision: Option[GoalPhaseDependencySourceRevision.Installation] = None,
+    dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -190,6 +194,13 @@ private[smworkflow] object GoalPhaseNativeRun {
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.dependencyValidation == null || d.dependencyValidation.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
+        d.dependencySourceRevision == null || d.dependencySourceRevision.exists(i => i == null || !i.validateC.isSuccess) ||
+        d.dependencySourceRevisions == null || d.dependencySourceRevisions.size > 16 ||
+        d.dependencySourceRevisions.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
+        d.dependencySourceRevisions.map(b => (b.identity, b.revision)).distinct.size != d.dependencySourceRevisions.size ||
+        d.dependencySourceConsumptions == null || d.dependencySourceConsumptions.size > 16 ||
+        d.dependencySourceConsumptions.exists(c => !GoalPhaseDependencySourceRevision.consumptionValid(c)) ||
+        d.dependencySourceConsumptions.distinct.size != d.dependencySourceConsumptions.size ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
         d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||
         d.releaseRepairContinuation == null || d.releaseRepairContinuation.exists(i => i == null || !i.validateC.isSuccess) ||
@@ -201,6 +212,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           c.ownerDetailsUrl == null || !c.ownerDetailsUrl.forall(DevelopmentOperationalView.safeDetailsUrl)) ||
         d.journalPolicy.exists(_ == null) || d.evidencePolicy == null ||
         d.sourceHistoryRecovery == null || d.sourceHistoryRecovery.exists(_ == null) ||
+        d.sourceHistoryNormalization == null || d.sourceHistoryNormalization.exists(i => i == null || !i.validateC.isSuccess) ||
         d.candidateRecovery == null || d.candidateRecovery.exists(_ == null) ||
         d.candidateObservationContinuation == null || d.candidateObservationContinuation.exists(_ == null) ||
         d.wholePhaseCandidateRecovery == null || d.wholePhaseCandidateRecovery.exists(_ == null) ||
@@ -247,13 +259,16 @@ private[smworkflow] object GoalPhaseNativeRun {
             Set("readDevelopmentState", "readDevelopmentHistory")(core.action.request.operation) ||
             core.action.request.service.contains("GoalPhaseService") &&
           Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
+            IncrementalSbtDiagnosisInformation.operation,
             GoalPhaseValidationRecovery.describeOperation, GoalPhaseValidationRecovery.recoveryOperation,
             GoalPhaseSourceHistoryRecovery.describeOperation, GoalPhaseSourceHistoryRecovery.recoveryOperation,
+            GoalPhaseSourceHistoryNormalization.describeOperation, GoalPhaseSourceHistoryNormalization.adoptionOperation,
             GoalPhaseCandidateRecovery.describeOperation, GoalPhaseCandidateRecovery.recoveryOperation,
             GoalPhaseCandidateObservationContinuation.describeOperation, GoalPhaseCandidateObservationContinuation.continuationOperation,
             GoalPhaseWholePhaseCandidateRecovery.describeOperation, GoalPhaseWholePhaseCandidateRecovery.recoveryOperation,
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
+            GoalPhaseDependencySourceRevision.describeOperation, GoalPhaseDependencySourceRevision.adoptionOperation,
             GoalPhaseLegacyPurposeRepairContinuation.describeOperation, GoalPhaseLegacyPurposeRepairContinuation.admissionOperation,
             GoalPhaseReleaseRepairContinuation.describeOperation, GoalPhaseReleaseRepairContinuation.recoveryOperation,
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,

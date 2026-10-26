@@ -71,6 +71,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.SourceHistoryRecovery, key(reference.identity, reference.revision), binding)
   }
+  val sourceHistoryNormalization: GoalPhaseSourceHistoryNormalization.EvidencePort = new GoalPhaseSourceHistoryNormalization.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.SourceHistoryNormalization, key(reference.identity, reference.revision), binding)
+  }
   val repositoryValidationContinuation: RepositorySyncValidationContinuation.EvidencePort = new RepositorySyncValidationContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryValidationContinuation, key(reference.identity, reference.revision), binding)
@@ -90,6 +94,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val remainingPlanAdoption: GoalPhaseRemainingPlanAdoption.EvidencePort = new GoalPhaseRemainingPlanAdoption.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RemainingPlanAdoption, key(reference.identity, reference.revision), binding)
+  }
+  val dependencySourceRevision: GoalPhaseDependencySourceRevision.EvidencePort = new GoalPhaseDependencySourceRevision.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.DependencySourceRevision, key(reference.identity, reference.revision), binding)
   }
   val reviewPurposeRepair: GoalPhaseLegacyPurposeRepairContinuation.EvidencePort = new GoalPhaseLegacyPurposeRepairContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =

@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Specification-owned semantic fixtures; no independent authority is issued.
   * @since   Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   */
 private[admission] object GoalPhasePurposeRepairFixture {
   val required = B.Condition("required-one", "step", true, "Preserve required behavior")
@@ -44,7 +44,7 @@ final class GoalPhasePurposeRepairSpec extends AnyWordSpec with Matchers with Gi
       val state = controller
       val input = request
       When("actual-request-aware independent review admission completes")
-      val next = take(GoalPhaseNativeReview.completedRequestC(input, result, "independent-review", state))
+      val next = take(GoalPhaseNativeReview.completedRequestC(input, result, "independent-review", state, input.review))
       Then("the existing same-Step repair generation and ordinary budget own the correction")
       next.stage shouldBe O.Stage.Repair
       next.next.asInstanceOf[O.Semantic].key.step shouldBe input.stepIdentity

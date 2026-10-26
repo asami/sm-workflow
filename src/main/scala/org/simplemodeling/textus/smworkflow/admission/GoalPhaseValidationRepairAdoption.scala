@@ -26,7 +26,7 @@ import GoalPhaseValidationPriorInvocation as P
 /** One independently adopted corrective Plan; old incomplete/UNKNOWN facts
   * remain immutable. Adoption is a pure Direction, never execution or proof.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseValidationRepairAdoption {
@@ -61,7 +61,8 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
     participant: String, reference: ContextReference)
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
     candidate: GoalPhaseNativeCandidate.Saved, validation: N.Saved, documentBacked: Boolean,
-    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None, recordingPaths: Vector[String] = Vector.empty)
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None, recordingPaths: Vector[String] = Vector.empty,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None)
   final case class Resumed(record: InstanceRecord, controller: O.State, direction: Direction)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
@@ -201,7 +202,8 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
       else F.invalid("Validation repair requires all accepted original Steps and one ordinary native whole-Phase Test")
     proof <- if (source.controller.stage == O.Stage.Decision && N.outputLimited(source.validation.payload)) {
       if (prior.nonEmpty) F.invalid("Output-limited source must omit priorInvocation") else for {
-        actual <- N.outputLimitedAttemptC(source.session, d, core, source.candidate, source.controller, source.validation)
+        actual <- N.outputLimitedAttemptC(source.session, d, core, source.candidate, source.controller, source.validation,
+          source.dependencyChain)
         stream <- actual.result.payload.receipts.head.processObservation.get.termination match {
           case org.goldenport.cncf.processexecution.ProcessExecutionTermination.OutputLimitExceeded(value) =>
             Consequence.success(if (value == org.goldenport.cncf.processexecution.ProcessExecutionStream.Stdout) "stdout" else "stderr")
@@ -221,7 +223,8 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
       _ <- if (P.snapshotValid(snapshot) && d.validationRepairCallerSource.contains(snapshot.policy)) Consequence.unit
         else F.invalid("Historical comparison policy or source snapshot differs")
       start <- GoalPhaseNativeHistory.prefixC(source.session.current, InstanceRevision(source.validation.payload.sourceRevision.toLong))
-      recovery <- N.repairRecoveryTargetC(source.session, d, core, source.candidate, source.controller, start, source.documentPolicy, source.recordingPaths)
+      recovery <- N.repairRecoveryTargetC(source.session, d, core, source.candidate, source.controller, start, source.documentPolicy,
+        source.recordingPaths, source.dependencyChain)
       _ <- if (recovery.frontierRevision == recovery.intentRevision && recovery.frontierRevision == source.from.revision.value.toString &&
           source.validation.record == source.from && source.validation.payload.uncertainties.isEmpty &&
           source.validation.payload.admissionFailures.isEmpty && source.validation.payload.stopped.isEmpty &&

@@ -85,7 +85,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     with NativePreparationManagedFixture {
   import NativePreparationFixture.*
   private val _tool = NativeExternalEvidenceToolFixture
-  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None)
+  private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
 
   "T1 Own Goal review input" should afterWord("in spec:native-host-evidence-tool, example:T1, rules:R1,R2,R3,R4, phase:6") {

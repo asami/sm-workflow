@@ -27,7 +27,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
   private def _reference(name: String) = V.WorkflowArtifactReference("candidate-continuation-spec-" + name, "1")
   private def _result(outcome: String) = V.GoalPhaseWorkResult(outcome,
     "SPECIFICATION-OWNED selected candidate disposition", Vector.empty,
-    None, None, None, None, None, None, None, None, dependencyValidation = None)
+    None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   private def _submit_call(scenario: F.Scenario, request: V.GoalPhaseAdvanceResult, name: String,
     outcome: String, execution: Option[V.WorkflowExecutionEvidence]): F.Result =
     scenario.call("command", request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,

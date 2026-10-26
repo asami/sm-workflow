@@ -25,6 +25,14 @@ Start admission and effect permissions with their existing owners.
 
 ## Long-running invocation collection
 
+Before resuming after a caller/model interruption or answering a status request,
+[recover retained execution results](../../docs/spec/native-host-execution.md#recovering-completed-results-after-caller-interruption).
+Use the original invocation references and actual terminal receipts even when the
+producer chat has no final response. Separate publishLocal, activation, installed
+qualification and consumer adoption. Do not report missing completion from chat
+status alone or rerun a successful command to reconstruct its summary.
+
+
 Follow [passive result collection](../../docs/spec/native-host-execution.md#long-running-invocation-collection).
 Keep the existing owned Advance/complete invocation alive and collect its actual
 result. Do not periodically tail/read logs, stat the response file, query status,
@@ -72,8 +80,20 @@ Keep paired `complete` (Submit + permitted Advance) in one interval; an intermed
 Submit response does not return control. If output is buffered, show a compact
 matched start/end when received and label it `出力一括受信`, without claiming live
 delivery. A start not yet observable stays preparation/start-unconfirmed.
-After actual handback, use **🌀 🔵 AI作業中** (or the applicable AI review/repair
-indicator). Add no AI call, status query, wait loop, command, persisted display
+Show **🤖 🛠️ 親AI作業中** when the parent is actually doing the work,
+including editing or fixing code. For an active subagent, show
+**🤖 ✨ AI作業中** and identify the responsible subagent and activity.
+Neither AI marker uses a blue circle. A handback or dispatch alone does not
+establish active parent work: while only waiting for a child, runtime or user,
+do not show **🤖 🛠️ 親AI作業中**. Preserve the sm-workflow execution interval.
+If parent and child both work, label their activities separately.
+For another chat, use **💬 📨 別チャットへ依頼中** after dispatch when work
+is unconfirmed, **💬 ✨ 別チャット作業中** for observed active work, or
+**💬 ⏳ 別チャット待機中** for an observed wait. Always name the destination
+chat; include its task or known waiting reason. Do not use the subagent marker
+for another chat or infer its waiting state from the parent's wait.
+Follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display).
+Add no AI call, status query, wait loop, command, persisted display
 record or extra update solely to create these markers; use existing calls/events.
 
 Use actual program-produced information. Absent optional fields, repair counts

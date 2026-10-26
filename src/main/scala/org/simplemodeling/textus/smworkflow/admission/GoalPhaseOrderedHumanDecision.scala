@@ -75,7 +75,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   final case class Source(session: F.Session, input: S.Request, controller: O.State,
     from: InstanceRecord, result: ContinuationResult[S.Result], candidate: Option[GoalPhaseNativeCandidate.Saved],
     documents: Option[GoalPhaseDocumentSource.Bound] = None,
-    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None)
+    sourceHistoryRecovery: Option[GoalPhaseSourceHistoryRecovery.RecoveryTarget] = None,
+    dependencyInventoryReason: Option[String] = None)
 
   private[admission] def admitRevisionSourceC(controller: O.State, kind: String, result: S.Result,
     documents: Option[GoalPhaseDocumentSource.Bound]): Consequence[Unit] = {
@@ -391,6 +392,9 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
 
     private def _input_c(source: Source,
       selected: Option[WorkflowInteraction[Input, Nothing]], core: ActionCall.Core): Consequence[Input] = for {
+      _ <- if (source.dependencyInventoryReason != null && source.dependencyInventoryReason.forall(reason =>
+          _text(reason) && source.result.result.value.dependencyProposal.exists(_.scopeUpdate.nonEmpty))) Consequence.unit
+        else F.invalid("inventory Human reason requires its native typed scope update")
       _ <- R.validateOptionC(source.result.result.value.planRevision)
       _ <- GoalPhaseDependencyScope.admitResultC(source.input.kind, source.result.result.value.outcome,
         source.result.result.value.dependencyProposal)
@@ -418,7 +422,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             } yield Some(captured)
           }
         } yield Input(source.input, source.result.resultReference, source.result.result.value,
-          source.sourceHistoryRecovery.fold(source.controller.decision.get)( _ => GoalPhaseSourceHistoryRecovery.message),
+          source.sourceHistoryRecovery.fold(source.dependencyInventoryReason.getOrElse(source.controller.decision.get))(
+            _ => GoalPhaseSourceHistoryRecovery.message),
           Some(GoalPhaseRepairProgress.snapshot(source.controller)), captured, source.sourceHistoryRecovery,
           d.developmentObservation.map(_ => core.executionContext.clock.instant().toString))
       }
@@ -437,7 +442,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- if (input.result.dependencyProposal == source.result.result.value.dependencyProposal &&
           (input.result.dependencyProposal.isEmpty || (input.planRevision.isEmpty && input.result.planRevision.isEmpty &&
             input.work == source.input && input.requestingResult == source.result.resultReference &&
-            input.result == source.result.result.value && input.reason == source.controller.decision.get &&
+            input.result == source.result.result.value &&
+            input.reason == source.dependencyInventoryReason.getOrElse(source.controller.decision.get) &&
             input.repairProgress == Some(GoalPhaseRepairProgress.snapshot(source.controller))))) Consequence.unit
         else F.invalid("Saved dependency question differs from its requesting semantic result")
       _ <- if (input.planRevision.map(_.proposal) == source.result.result.value.planRevision &&

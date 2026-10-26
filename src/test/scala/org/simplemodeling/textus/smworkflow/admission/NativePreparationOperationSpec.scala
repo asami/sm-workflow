@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual public passive preparation and normal resource ownership, not authority issuance.
   * Existing NativeWorkflowCliSpec owns separate StartupImport and Start/Advance episodes.
   * @since   Oct. 15, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -272,7 +272,13 @@ final class NativePreparationOperationSpec extends AnyWordSpec with Matchers wit
             actual.keySet shouldBe Set("datastore")
             json(actual) shouldBe json(sample.expected)
             result.invocation.argv.count(_ == "--input") shouldBe 1
-            result.invocation.argv should contain("org.goldenport.cncf.CncfMain")
+            sys.props.get("smworkflow.spec.installedCommand") match {
+              case Some(command) =>
+                result.invocation.argv.take(3) shouldBe Vector(command, "--runtime-root", cli.root.toString)
+              case None => result.invocation.argv should contain("org.goldenport.cncf.CncfMain")
+            }
+            result.invocation.argv should contain(
+              s"${SmWorkflowComponent.componentId.name}.$preparationService.$operation")
           }
           Given("a selected command input with malformed finite metadata")
           When("the same standard command receives an invalid collection")

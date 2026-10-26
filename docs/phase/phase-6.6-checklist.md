@@ -3,7 +3,9 @@
 Status: planned
 Phase: [Phase 6.6](phase-6.6.md)
 
-All P66 outcomes are pending. The prior caller-size-limit removal is a completed
+The original planning baseline recorded all P66 outcomes as pending. Current
+consumer acceptance/history takes precedence; do not reset already accepted D1/D2.
+The new correction items below are pending until evidenced. The prior caller-size-limit removal is a completed
 baseline, not new Phase 6.6 acceptance. Reuse actual earlier results within their
 scope; source inspection here does not certify a new execution.
 
@@ -39,6 +41,12 @@ scope; source inspection here does not certify a new execution.
 
 ## D3: repair and focused validation
 
+- [ ] P66-17: Consume [SHR-C2–5/7](source-history-recovery-result-collection-correction.md)
+      for source-history interruption within existing authority, including public
+      adoption of a retained pending Human question. Keep D1/D2, accepted D3 repair,
+      original UNKNOWN/question, Session and repair count 1/10; no new approval
+      solely for missing comment-update receipt or caller-side bypass.
+
 - [ ] P66-16: D3 reuses the qualified RRC runtime controller for convergence and
       the ten-cycle ceiling; no AI-authored one-run restriction or per-failure
       reapproval. Reuse [RRC evidence](runtime-repair-control-correction.md)
@@ -58,6 +66,12 @@ scope; source inspection here does not certify a new execution.
       reusing focused fixtures rather than duplicating the entire integration run.
 
 ## D4: integration and adoption
+
+- [ ] P66-18: Consume [SHR-C1/6](source-history-recovery-result-collection-correction.md)
+      to recover attributable completed results after caller/model interruption.
+      Report publication, activation, installed qualification and consumer adoption
+      separately; retain/reuse successful executions without replay or periodic AI
+      monitoring. Missing final chat response alone is not an incomplete execution.
 
 - [ ] P66-10: One connected failure → information round trip → repair → focused
       validation path is accepted, with representative unavailable/partial cases

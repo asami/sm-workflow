@@ -74,6 +74,17 @@ Preserve the Session, accepted work, all history, counters and validation result
 Policy adoption uses supported public operations; never edit Session storage,
 re-Start, replay accepted Submit or reset counts to adopt this policy.
 
+## Existing authorization and closure registration
+
+Before asking for policy adoption or missing closing authority, follow the
+[authorization carry-forward contract](../../docs/spec/native-host-execution.md#existing-authorization-and-current-target-registration).
+A description's `adoption-required` is not itself a new Human question. Carry
+applicable attributable user direction through the supported public route;
+do not infer consent from that description or from successful checks.
+A Closing `Wait` with `authority_context` can require registration of already
+authorized ordinary Step closure, not another user decision. The caller
+registers evidence; the runtime still admits it and owns commit/continuation.
+
 ## Delegate a coherent outcome
 
 Apply the [common delegation contract](../../docs/spec/native-host-execution.md#outcome-based-delegation).
@@ -125,7 +136,29 @@ alternate attempts, without granting new dispatch or retry authority. INLINE
 work is parent work, not a subagent call. This is presentation only: add no
 agent, model probe, AI invocation, polling or saved record solely for display.
 
+## Source-history comment recovery
+
+The runtime owns recovery of an interrupted, already authorized history-comment
+normalization. It must reconcile the current comment or apply the same bounded
+normalization without a new approval solely because the old receipt is missing.
+Preserve the old UNKNOWN record, accepted work and repair counts. The skill does
+not independently infer success, edit comments as a recovery bypass, answer Human,
+or reset the Session. Consume the actual issued outcome and supported public
+adoption route. A legacy pending Human request requires runtime reconciliation;
+report an unavailable route as a producer gap and reuse existing user direction,
+not a new caller-authored permission demand. Genuine scope/intent decisions remain
+with the formal Human channel. This guidance defines target behavior; it is not
+proof that the installed runtime implements it.
+
 ## Long-running invocation collection
+
+Before resuming after a caller/model interruption or answering a status request,
+[recover retained execution results](../../docs/spec/native-host-execution.md#recovering-completed-results-after-caller-interruption).
+Use the original invocation references and actual terminal receipts even when the
+producer chat has no final response. Separate publishLocal, activation, installed
+qualification and consumer adoption. Do not report missing completion from chat
+status alone or rerun a successful command to reconstruct its summary.
+
 
 Follow [passive result collection](../../docs/spec/native-host-execution.md#long-running-invocation-collection).
 Keep the existing owned Advance/complete invocation alive and collect its actual
@@ -174,8 +207,20 @@ Keep paired `complete` (Submit + permitted Advance) in one interval; an intermed
 Submit response does not return control. If output is buffered, show a compact
 matched start/end when received and label it `出力一括受信`, without claiming live
 delivery. A start not yet observable stays preparation/start-unconfirmed.
-After actual handback, use **🌀 🔵 AI作業中** (or the applicable AI review/repair
-indicator). Add no AI call, status query, wait loop, command, persisted display
+Show **🤖 🛠️ 親AI作業中** when the parent is actually doing the work,
+including editing or fixing code. For an active subagent, show
+**🤖 ✨ AI作業中** and identify the responsible subagent and activity.
+Neither AI marker uses a blue circle. A handback or dispatch alone does not
+establish active parent work: while only waiting for a child, runtime or user,
+do not show **🤖 🛠️ 親AI作業中**. Preserve the sm-workflow execution interval.
+If parent and child both work, label their activities separately.
+For another chat, use **💬 📨 別チャットへ依頼中** after dispatch when work
+is unconfirmed, **💬 ✨ 別チャット作業中** for observed active work, or
+**💬 ⏳ 別チャット待機中** for an observed wait. Always name the destination
+chat; include its task or known waiting reason. Do not use the subagent marker
+for another chat or infer its waiting state from the parent's wait.
+Follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display).
+Add no AI call, status query, wait loop, command, persisted display
 record or extra update solely to create these markers; use existing calls/events.
 
 Use actual program-produced information. Absent optional fields, repair counts
@@ -203,6 +248,18 @@ a request; runtime-confirmed settlement and the actual durable result establish
 cancellation. Missing observations stay unknown; signals, elapsed time or root
 exit alone establish no cleanup, durable state or validation success. Preserve
 actual results and normal continuation authority without automatic replay.
+
+## Validation selection and timing
+
+When supplying or reviewing a new execution plan, follow the
+[ADMISSION/FULL/HEAVY cadence](../../docs/spec/native-host-execution.md#validation-cadence-admission-full-and-heavy):
+ADMISSION for ordinary Step acceptance, FULL for integrated Phase validation,
+and the complete HEAVY batch for separately scheduled overnight execution.
+Select only affected FOCUSED operations when daytime integration evidence is
+needed; naming a HEAVY suite alone selects more than the changed case.
+Use existing metadata and actual acceptance coverage. The runtime owns the
+captured checks; this guidance changes no active Session or required check and
+creates no schedule or additional execution authority.
 
 ## Product SBT ownership
 
@@ -655,6 +712,45 @@ installed-task consumption. Load the fresh packaged skill for the actual task
 and retain separate evidence. Prose and specification-owned tests establish no
 actual Human direction, linked dependency editing, execution or acceptance;
 those require their own genuine evidence and existing admission gates.
+
+## Incremental diagnostic information within an issued repair
+
+When a current `RepairStep` carries `checkFailure`, consume its attributed
+`validation.diagnostics` and the retained failure before requesting detail.
+Use `GoalPhaseService.resolveGoalPhaseDiagnosticInformation` with the exact
+current `issuedWorkContext`, a stable `requestIdentity`, and batched reasoned
+`selections`. Supported kinds are `failure-context`, `cause-chain`,
+`suite-context`, `execution-context`, `full-output`, and `source-file`.
+Log selections name the actual check/stream and, for occurrence selections,
+the displayed original `occurrenceLine`. Source selections use an owned
+repository-relative `path`. This information operation neither Submits nor
+Advances, creates no repair assignment and runs no SBT.
+
+Preserve each returned coverage, source loss, attribution uncertainty and
+unavailable item. `knownEvidence` suppresses already delivered text only for
+the exact returned Evidence reference. Reuse the same request identity for
+the immutable observation; choose a fresh identity to observe changed sources.
+Empty `selections` request delivered-context history, paged by the returned
+`historyNext`/`historyAfter`; read the referenced facts through normal
+`EvidenceService.readEvidence`. File observations retain their observation
+time and unverified candidate applicability. History or unavailable information
+does not establish a successful check or justify replaying SBT.
+
+Form one concrete `sm-workflow.diagnostic-repair.v1` Fix Manifest before edits,
+then implement it inside the already issued repair and return it as optional
+`diagnosticRepair` on the ordinary `GoalPhaseWorkResult`. Bind its validation
+`sourceRevision`/`candidate`, actual log `evidence` ranges, confirmed current-work
+`information` references, cause hypothesis, owned paths, directions, dependencies,
+checks and risks. Include the selected behavioral check and every selected
+compile check. `diagnosticHistory` preserves accepted earlier hypotheses when a
+later failure revises the diagnosis. The normal runtime owns fresh candidate
+inspection, Compile/TestOnly execution, nonempty behavioral success, repair
+counts and admission. Compilation success alone does not close a repair.
+
+These fields require a runtime that implements the Phase 6.6 contract. Report
+a concrete missing capability through the existing producer route; do not
+invent an information response, shell-based read executor or new approval loop.
+
 
 ## Issued repair and independent review
 

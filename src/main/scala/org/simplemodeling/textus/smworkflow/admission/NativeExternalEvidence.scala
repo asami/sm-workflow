@@ -37,6 +37,7 @@ private[smworkflow] object NativeExternalEvidence {
     case RepositoryHuman extends Purpose(RepositorySyncHumanConflict.purpose)
     case GoalHuman extends Purpose(GoalPhaseOrderedHumanDecision.purpose)
     case SourceHistoryRecovery extends Purpose(GoalPhaseSourceHistoryRecovery.purpose)
+    case SourceHistoryNormalization extends Purpose(GoalPhaseSourceHistoryNormalization.purpose)
     case RepositoryValidationContinuation extends Purpose(RepositorySyncValidationContinuation.purpose)
     case CandidateRecovery extends Purpose(GoalPhaseCandidateRecovery.purpose)
     case CandidateObservationContinuation extends Purpose(GoalPhaseCandidateObservationContinuation.purpose)
@@ -44,6 +45,7 @@ private[smworkflow] object NativeExternalEvidence {
     case ValidationRecovery extends Purpose(GoalPhaseValidationRecovery.purpose)
     case ClosureRecovery extends Purpose(GoalPhaseClosureRecovery.purpose)
     case RemainingPlanAdoption extends Purpose(GoalPhaseRemainingPlanAdoption.purpose)
+    case DependencySourceRevision extends Purpose(GoalPhaseDependencySourceRevision.purpose)
     case ReviewPurposeRepair extends Purpose(GoalPhaseLegacyPurposeRepairContinuation.purpose)
     case ReleaseRepairContinuation extends Purpose(GoalPhaseReleaseRepairContinuation.purpose)
     case FailedPhaseRepairAdoption extends Purpose(GoalPhaseFailedPhaseRepairAdoption.purpose)
@@ -158,15 +160,16 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
-    } else if (purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.CandidateRecovery ||
+    } else if (purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.SourceHistoryNormalization || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
         purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.RepairPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
-        purpose == Purpose.ReleaseRepairContinuation) {
+        purpose == Purpose.ReleaseRepairContinuation || purpose == Purpose.DependencySourceRevision) {
       val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
         else if (purpose == Purpose.RepositoryValidationContinuation) selected.hcursor.downField("repositoryValidationContinuation").downField("answer")
         else if (purpose == Purpose.ValidationRepairAdoption) selected.hcursor.downField("validationRepairAdoption").downField("answer")
         else if (purpose == Purpose.SourceHistoryRecovery) selected.hcursor.downField("sourceHistoryRecovery").downField("answer")
+        else if (purpose == Purpose.SourceHistoryNormalization) selected.hcursor.downField("sourceHistoryNormalization").downField("answer")
         else if (purpose == Purpose.CandidateRecovery) selected.hcursor.downField("candidateRecovery").downField("answer")
         else if (purpose == Purpose.CandidateObservationContinuation) selected.hcursor.downField("candidateObservationContinuation").downField("answer")
         else if (purpose == Purpose.WholePhaseCandidateRecovery) selected.hcursor.downField("wholePhaseCandidateRecovery").downField("answer")
@@ -176,6 +179,7 @@ private[smworkflow] object NativeExternalEvidence {
         else if (purpose == Purpose.RepairPolicyAdoption) selected.hcursor.downField("repairPolicyAdoption").downField("answer")
         else if (purpose == Purpose.ReviewPurposeRepair) selected.hcursor.downField("reviewPurposeRepair").downField("directive")
         else if (purpose == Purpose.ReleaseRepairContinuation) selected.hcursor.downField("releaseRepairContinuation").downField("directive")
+        else if (purpose == Purpose.DependencySourceRevision) selected.hcursor.downField("dependencySourceRevision").downField("directive")
         else selected.hcursor.downField("remainingPlanAdoption").downField("directive")
       if (answer.get[String]("participant").contains(value.participant) &&
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
@@ -202,6 +206,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.SplitStart => NativeSplitStartScope.select(purpose, value)
       case Purpose.SplitAnswer => NativeSplitAnswerScope.select(purpose, value)
       case Purpose.SourceHistoryRecovery => GoalPhaseSourceHistoryRecovery.selectBinding(value)
+      case Purpose.SourceHistoryNormalization => GoalPhaseSourceHistoryNormalization.selectBinding(value)
       case Purpose.RepositoryValidationContinuation => RepositorySyncValidationContinuation.selectBinding(value)
       case Purpose.CandidateRecovery => GoalPhaseCandidateRecovery.selectBinding(value)
       case Purpose.CandidateObservationContinuation => GoalPhaseCandidateObservationContinuation.selectBinding(value)
@@ -209,6 +214,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.ValidationRecovery => GoalPhaseValidationRecovery.selectBinding(value)
       case Purpose.ClosureRecovery => GoalPhaseClosureRecovery.selectBinding(value)
       case Purpose.RemainingPlanAdoption => GoalPhaseRemainingPlanAdoption.selectBinding(value)
+      case Purpose.DependencySourceRevision => GoalPhaseDependencySourceRevision.selectBinding(value)
       case Purpose.ReviewPurposeRepair => GoalPhaseLegacyPurposeRepairContinuation.selectBinding(value)
       case Purpose.ReleaseRepairContinuation => GoalPhaseReleaseRepairContinuation.selectBinding(value)
       case Purpose.FailedPhaseRepairAdoption => GoalPhaseFailedPhaseRepairAdoption.selectBinding(value)

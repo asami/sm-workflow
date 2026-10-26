@@ -1,7 +1,7 @@
 # Incremental SBT failure diagnosis
 
 Date: 2026-10-23
-Status: adopted target specification; diagnostic implementation and connected acceptance pending
+Status: diagnostic source implemented in accepted D1–D4; integrated Phase acceptance and combined delivery pending
 Delivery: [Phase 6.6](../phase/phase-6.6.md); prior caller-size-limit removal is complete
 
 ## Purpose and ownership
@@ -80,6 +80,29 @@ are proposed semantic result variants, not claims of installed API availability:
 | RepairProposal | Cause hypotheses, supporting evidence, affected scope, repair units, dependencies, proposed edits and focused validation selection |
 | UnableToDiagnose | Missing source, external prerequisite, unresolved design/scope question or remaining uncertainty; retain the reason without inventing a repair |
 
+D2 source contract: `GoalPhaseService.resolveGoalPhaseDiagnosticInformation`
+accepts the exact current `issuedWorkContext`, a request identity and a batch of
+typed selections with reasons. It is a side read of the outstanding `RepairStep`
+with retained check failure, not an accepted semantic completion or another work
+assignment. Its selections are `failure-context`, `cause-chain`, `suite-context`,
+`execution-context`, `full-output` and `source-file`. Unsupported selectors return
+an explicit unavailable item. Suite attribution without a retained structured
+interval expands to execution context and stays partial. File reads use the
+managed repository workspace within selected ownership; their candidate
+applicability is unverified, with the actual observation time retained.
+
+The immutable delivered batch uses Common Evidence and its Evidence Journal
+producer. Repeating the same request identity returns that observed batch;
+changing its selections or candidate refuses reuse. A fresh request identity
+observes current files again. `knownEvidence` suppresses a repeated batch's text
+only when the caller already has that exact Evidence reference. Empty selections
+restore a page of delivered references, including storage availability and the
+normal Evidence read route for full prior facts. `historyAfter` pages the remaining
+rounds; twenty items per request/page is not an interaction-round limit. No-new-
+information and unavailable items remain stored facts. Journal unavailability
+is reported independently of delivery and original SBT outcome. This is the
+source contract; installed CLI and connected consumer acceptance remain D4 work.
+
 An information request reuses existing Session/work/continuation/execution
 references and selects source material through managed resource access. Supply
 semantic units such as one failure with context, its cause chain, suite setup,
@@ -105,6 +128,35 @@ which AI call comes next. Persist unresolved/no-new-information status when the
 provider cannot proceed; do not manufacture progress through automatic polling.
 
 ## Repair and validation
+
+D3 source contract adds optional `diagnosticRepair` to the existing
+`GoalPhaseWorkResult` for a completed, failure-bearing `RepairStep`. It is one
+strict `sm-workflow.diagnostic-repair.v1` Fix Manifest: `identity`, the actual
+validation `sourceRevision` and `candidate`, `causeHypothesis`, retained-log
+`evidence` locators (`check`, `stream`, `firstLine`, `lastLine`, `rationale`),
+confirmed current-work `information` Evidence references, `ownedPaths`, concrete
+`directions`, `dependencies`, selected `checks` and `risks`. The provider forms
+the manifest before edits; the already assigned repair worker implements it
+and returns it through ordinary Submit. Inline work uses the same semantic
+participant. No second work assignment or approval is introduced to admit it.
+
+Native admission compares the manifest to the captured failure, checks the log
+ranges and selected ownership, verifies any information references against the
+actual issued work, and requires selected behavioral verification as well as
+any declared compilation check. It does not certify the causal hypothesis,
+assert that a source file matches the failed candidate, or establish successful
+tests. Existing candidate ownership and typed SBT admission still govern actual
+edits and positive nonempty focused execution. Unsupported/missing context can
+continue through NeedInformation or the existing explicit decision-needed route;
+it does not justify inventing a manifest or a new approval loop.
+
+Accepted manifests remain in native result history. Subsequent work receives
+same-Step `diagnosticHistory` with the actual result reference, generation and
+manifest, so later test failures can revise hypotheses while preserving prior
+compiler failure and counts. Records carrying the new result/history fields use
+native result v3/request v4; old forms retain their original versions. New records
+must not be silently downgraded for an old reader. This source contract still
+requires the planned connected/installed acceptance and qualified RRC delivery.
 
 The diagnosis provider proposes units based on causes and edit dependencies,
 not one worker per failed test. Each unit carries the concrete Fix Manifest

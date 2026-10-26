@@ -27,7 +27,7 @@ import GoalPhaseInterruptedValidationRepair as I
   * Failed or confirmed timeout whole-Phase check. Both sources retain their own
   * wire and proof. Description and adoption traverse retained history only.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
@@ -55,7 +55,8 @@ private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
   final case class Direction(target: Target, reference: ContextReference, participant: String, rationale: String)
   final case class InterruptedDirection(target: I.Target, reference: ContextReference, participant: String, rationale: String)
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
-    candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved, documentBacked: Boolean)
+    candidate: GoalPhaseNativeCandidate.Saved, failed: N.Saved, documentBacked: Boolean,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None)
   final case class Resumed(record: InstanceRecord, controller: O.State)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
@@ -211,7 +212,7 @@ private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
 
   private def _current_target_c(source: Source, d: F.Declaration, core: ActionCall.Core, proposal: Record): Consequence[Target] = for {
     recovery <- GoalPhaseKnownFailedValidationRecovery.currentTargetC(source.session, d, core, source.from,
-      source.controller, source.candidate, source.failed)
+      source.controller, source.candidate, source.failed, source.dependencyChain)
     captured <- _capture_c(source, d, proposal)
     target <- _target_c(source, d, recovery, captured)
     adapter <- source.session.storage.bindMechanicalC(F.advanceOperation, codec)
@@ -385,7 +386,7 @@ private[smworkflow] object GoalPhaseFailedPhaseRepairAdoption {
 
   private def _retained_failed_c(source: Source, d: F.Declaration, core: ActionCall.Core): Consequence[Resumed] = for {
     recovery <- GoalPhaseKnownFailedValidationRecovery.targetC(source.session, d, core, source.from,
-      source.controller, source.candidate, source.failed)
+      source.controller, source.candidate, source.failed, source.dependencyChain)
     adapter <- source.session.storage.bindMechanicalC(F.advanceOperation, codec)
     retained <- adapter.loadRetainedC(_reference(source.from))(using core.executionContext).flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("Actual failed Phase repair history has no retained direction")))

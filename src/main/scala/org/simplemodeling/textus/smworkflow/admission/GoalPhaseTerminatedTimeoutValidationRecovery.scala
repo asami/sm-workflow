@@ -19,7 +19,7 @@ import GoalPhaseInterruptedValidationRepair as I
   * The existing producer owns current configured process deadlines; this owner
   * proves historical facts and saves direction only, without parsing that plan.
   * @since   Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseTerminatedTimeoutValidationRecovery {
@@ -49,9 +49,10 @@ private[smworkflow] object GoalPhaseTerminatedTimeoutValidationRecovery {
 
   def targetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, validation: N.Saved,
-    documentBacked: Boolean): Consequence[R.RecoveryTarget] = for {
+    documentBacked: Boolean,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[R.RecoveryTarget] = for {
     actual <- I.targetC(GoalPhaseFailedPhaseRepairAdoption.Source(session, from, controller,
-      candidate, validation, documentBacked), d, core)
+      candidate, validation, documentBacked, dependencyChain), d, core)
     target = R.RecoveryTarget(actual.sessionId, actual.planIdentity, actual.planRevision, actual.base, actual.candidate,
       actual.sourceRevision, actual.decisionRevision, actual.step, actual.checkIdentity, actual.checkOrdinal,
       actual.attempt, actual.intent.revision, terminatedTimeoutPhase = Some(actual))
@@ -60,8 +61,9 @@ private[smworkflow] object GoalPhaseTerminatedTimeoutValidationRecovery {
 
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, validation: N.Saved,
-    documentBacked: Boolean): Consequence[R.RecoveryTarget] = for {
-    target <- targetC(session, d, core, from, controller, candidate, validation, documentBacked)
+    documentBacked: Boolean,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[R.RecoveryTarget] = for {
+    target <- targetC(session, d, core, from, controller, candidate, validation, documentBacked, dependencyChain)
     _ <- if (session.current == from) Consequence.unit else F.invalid("Timeout recovery requires the exact current Decision")
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     existing <- adapter.loadRetainedC(_reference(from))(using core.executionContext)
@@ -70,8 +72,9 @@ private[smworkflow] object GoalPhaseTerminatedTimeoutValidationRecovery {
 
   def appendC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, validation: N.Saved,
-    documentBacked: Boolean, expected: R.RecoveryTarget, human: ContextReference, rationale: String): Consequence[Unit] = for {
-    actual <- currentTargetC(session, d, core, from, controller, candidate, validation, documentBacked)
+    documentBacked: Boolean, expected: R.RecoveryTarget, human: ContextReference, rationale: String,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Unit] = for {
+    actual <- currentTargetC(session, d, core, from, controller, candidate, validation, documentBacked, dependencyChain)
     _ <- if (actual == expected) Consequence.unit else F.invalid("Terminated timeout recovery target changed")
     direction = Direction(actual, human, session.participantIdentity, rationale)
     _ <- codec.decode(codec.encode(direction)).fold(F.invalid, _ => Consequence.unit)
@@ -88,8 +91,9 @@ private[smworkflow] object GoalPhaseTerminatedTimeoutValidationRecovery {
   final case class Resumed(record: InstanceRecord, controller: O.State)
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, candidate: GoalPhaseNativeCandidate.Saved, validation: N.Saved,
-    documentBacked: Boolean): Consequence[Resumed] = for {
-    actual <- targetC(session, d, core, from, controller, candidate, validation, documentBacked)
+    documentBacked: Boolean,
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Resumed] = for {
+    actual <- targetC(session, d, core, from, controller, candidate, validation, documentBacked, dependencyChain)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     retained <- adapter.loadRetainedC(_reference(from))(using core.executionContext).flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("Actual timeout recovery history has no retained direction")))

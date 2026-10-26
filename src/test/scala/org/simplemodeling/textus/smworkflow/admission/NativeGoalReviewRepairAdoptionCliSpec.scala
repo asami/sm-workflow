@@ -157,7 +157,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       "SPECIFICATION-OWNED exact issue coverage", None))
     V.GoalPhaseWorkResult(outcome, "SPECIFICATION-OWNED " + work.kind + " " + outcome, findings, acceptance,
       None, Option.when(work.kind != "ImplementStep" && work.issues.nonEmpty)(V.GoalPhaseIssueReport(dispositions)), None, None, None, None,
-      GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None)
+      GoalPhasePurposeRepair.publicSources(sources), dependencyValidation = None, diagnosticRepair = None)
   }
   private def _review(cli: Cli, issued: Invocation, value: V.GoalPhaseWorkResult, name: String): V.GoalPhaseAdvanceResult = {
     val request = issued.business[V.GoalPhaseAdvanceResult]
@@ -365,7 +365,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       repair.work.get.repairDirective.get.findings shouldBe findings
       repair.work.get.repairDirective.get.reason shouldBe originalresult.summary
       repair.work.get.decisionContext shouldBe Some(V.GoalPhaseOrderedDecisionContext(originalresult, P.origin,
-        direction.rationale, Some(reference)))
+        direction.rationale, Some(reference), inventoryContinuation = None))
       repair.work.get.issues.get.issues.filter(i => target.findings.exists(_.issueIdentity == i.identity)).map(_.status) shouldBe Vector("OPEN", "OPEN")
       repair.repairProgress shouldBe Some(V.GoalPhaseRepairProgress(1, 1, 10, Some("sm-workflow.repair-trend.v1"), Some(10), Some(10)))
       reopened shouldBe repair
@@ -425,7 +425,7 @@ final class NativeGoalReviewRepairAdoptionCliSpec extends AnyWordSpec with Match
       val initial = cli.advance(started.sessionId).business[V.GoalPhaseAdvanceResult]
       val emptyreport = V.GoalPhaseAcceptanceReport(Vector.empty, Vector.empty)
       val completed = V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED selected implementation", Vector.empty,
-        Some(emptyreport), None, None, None, None, None, None, None, dependencyValidation = None)
+        Some(emptyreport), None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n")
       cli.submit(initial, completed, V.WorkflowArtifactReference("installed-review-implementation", "1"))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true

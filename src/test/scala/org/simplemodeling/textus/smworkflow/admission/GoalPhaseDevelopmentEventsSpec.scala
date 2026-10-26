@@ -187,7 +187,7 @@ final class GoalPhaseDevelopmentEventsSpec extends AnyWordSpec with Matchers wit
             summary = "SPECIFICATION-OWNED dependency scope request", findings = Vector.empty,
             acceptance = None, fixAssessment = None, issueReport = None, planRevision = None, reviewObservations = None,
             dependencyProposal = GoalPhaseDependencyScope.publicProposal(Some(proposal)), completionConditions = None,
-            repairFindingSources = None, dependencyValidation = None)
+            repairFindingSources = None, dependencyValidation = None, diagnosticRepair = None)
           val proposed = e.native.invoke[Generated.GoalPhaseWorkSubmissionResult]("submitGoalPhaseWorkResult", List(
             Property("sessionId", Native.sessionId, None), Property("result", result.toRecord(), None),
             Property("resultReference", Generated.WorkflowArtifactReference("fixture-proposal-" + choice, "1").toRecord(), None)))

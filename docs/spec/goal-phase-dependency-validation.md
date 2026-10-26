@@ -1,5 +1,10 @@
 # GoalPhase dependency validation
 
+An explicitly revised source uses the separate versioned
+[dependency source revision](goal-phase-dependency-source-revision.md) contract.
+It retains native V1 admissions and accepted-prefix history, and qualifies the
+new source with fresh checks. It does not reinterpret a V1 capture at a new base.
+
 ## Authorization correction — adopted 2026-10-25
 
 [PA-01..07](goal-phase-dependency-scope.md#purpose-based-authorization--adopted-2026-10-25)

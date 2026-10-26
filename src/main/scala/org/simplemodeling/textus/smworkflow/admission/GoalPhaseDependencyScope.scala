@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 
 /** Finite dependency-change input, never consent or an effect authority.
   * @since   Oct. 19, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyScope {
@@ -27,6 +27,33 @@ private[smworkflow] object GoalPhaseDependencyScope {
   private given Decoder[ContextReference] = _decoder(deriveDecoder[ContextReference],
     Set("identity", "revision"), value => _check(_reference(value), "context reference is invalid"))
 
+  val authorizationSchema = "sm-workflow.dependency-authorization.v1"
+  val permittedOperations = Set("edit-source", "validate", "independent-review", "publish-local",
+    "install-runtime", "publish-remote", "push", "change-host-configuration")
+  final case class AuthorizationBoundary(schemaVersion: String, purpose: ContextReference,
+    permittedOperations: Vector[String], excludedPaths: Vector[String], exactPaths: Option[Vector[String]] = None)
+  object AuthorizationBoundary {
+    given Encoder[AuthorizationBoundary] = deriveEncoder[AuthorizationBoundary].mapJson(_.mapObject(_.filter {
+      case ("exactPaths", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[AuthorizationBoundary] = _optional_decoder(deriveDecoder[AuthorizationBoundary],
+      Set("schemaVersion", "purpose", "permittedOperations", "excludedPaths"), Set("exactPaths"), validateBoundaryC)
+  }
+  final case class ScopeUpdate(approval: ContextReference, rationale: String)
+  object ScopeUpdate {
+    given Encoder[ScopeUpdate] = deriveEncoder
+    given Decoder[ScopeUpdate] = _decoder(deriveDecoder[ScopeUpdate], Set("approval", "rationale"), value =>
+      _check(value != null && _reference(value.approval) && _description(value.rationale), "scope update is invalid"))
+  }
+
+  def validateBoundaryC(value: AuthorizationBoundary): Consequence[Unit] =
+    _check(value != null && value.schemaVersion == authorizationSchema && _reference(value.purpose) &&
+      _unique(value.permittedOperations, 1, 8)(permittedOperations.contains) &&
+      _unique(value.excludedPaths, 0, 128)(_path) && value.exactPaths != null &&
+      value.exactPaths.forall(paths => _unique(paths, 1, 128)(_path) && !paths.exists(value.excludedPaths.contains)),
+      "authorization boundary has invalid purpose, operations or literal restrictions")
+
   final case class Proposal(
     identity: String,
     revision: String,
@@ -38,13 +65,19 @@ private[smworkflow] object GoalPhaseDependencyScope {
     paths: Vector[String],
     acceptance: Vector[String],
     dependentWork: Vector[ContextReference],
-    discoveredEdits: Vector[String]
+    discoveredEdits: Vector[String],
+    authorizationBoundary: Option[AuthorizationBoundary] = None,
+    scopeUpdate: Option[ScopeUpdate] = None
   )
   object Proposal {
-    given Encoder[Proposal] = deriveEncoder
-    given Decoder[Proposal] = _decoder(deriveDecoder[Proposal], Set(
+    given Encoder[Proposal] = deriveEncoder[Proposal].mapJson(_.mapObject(_.filter {
+      case ("authorizationBoundary" | "scopeUpdate", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Proposal] = _optional_decoder(deriveDecoder[Proposal], Set(
       "identity", "revision", "discovery", "requester", "dependency", "usageContract",
-      "reason", "paths", "acceptance", "dependentWork", "discoveredEdits"), validateProposalC)
+      "reason", "paths", "acceptance", "dependentWork", "discoveredEdits"),
+      Set("authorizationBoundary", "scopeUpdate"), validateProposalC)
   }
 
   def validateProposalC(value: Proposal): Consequence[Unit] = for {
@@ -66,6 +99,16 @@ private[smworkflow] object GoalPhaseDependencyScope {
     _ <- _check(value.discoveredEdits.forall(value.paths.contains), "discovered edits must be a subset of requested paths")
     _ <- _check(value.discoveredEdits.isEmpty || value.discovery == "REVIEW",
       "only REVIEW may report discovered edits")
+    _ <- _check(value.authorizationBoundary != null && value.scopeUpdate != null,
+      "authorization Options are null")
+    _ <- value.authorizationBoundary.fold(Consequence.unit)(validateBoundaryC)
+    _ <- _check(value.authorizationBoundary.forall(boundary => value.paths.forall(path =>
+      !boundary.excludedPaths.contains(path) && boundary.exactPaths.forall(_.contains(path)))),
+      "proposal paths cross their explicit authorization restrictions")
+    _ <- _check(value.scopeUpdate.forall(update => update != null && _reference(update.approval) &&
+      _description(update.rationale) && value.authorizationBoundary.nonEmpty &&
+      Set("IMPLEMENTATION", "REPAIR")(value.discovery) && value.discoveredEdits.isEmpty),
+      "scope update requires an explicit boundary and implementation or repair source")
   } yield ()
 
   def validateOptionC(value: Option[Proposal]): Consequence[Unit] =
@@ -134,6 +177,11 @@ private[smworkflow] object GoalPhaseDependencyScope {
       _ <- Either.cond(validate(value).isSuccess, (),
         DecodingFailure("GoalPhase dependency scope: business input is invalid", cursor.history))
     } yield value }
+  private def _optional_decoder[T](raw: Decoder[T], required: Set[String], optional: Set[String],
+    validate: T => Consequence[Unit]): Decoder[T] = Decoder.instance { cursor =>
+      val keys = required ++ optional.filter(key => cursor.downField(key).focus.nonEmpty)
+      _decoder(raw, keys, validate)(cursor)
+    }
   private def _nonnull(value: Json): Boolean = !value.isNull &&
     value.asObject.forall(_.values.forall(_nonnull)) && value.asArray.forall(_.forall(_nonnull))
   private def _public_c[T](value: Consequence[T], reason: String): Consequence[T] = value match {

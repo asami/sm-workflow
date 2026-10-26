@@ -157,7 +157,7 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
     def acceptStep(reviewcall: Invocation): Unit = {
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture review of the actual Compile Step", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("whole-step-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,

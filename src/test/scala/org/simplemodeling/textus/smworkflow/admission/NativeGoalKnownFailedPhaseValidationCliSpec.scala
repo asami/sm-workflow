@@ -273,7 +273,7 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
     def acceptStep(reviewcall: Invocation): Unit = {
       val review = reviewcall.business[V.GoalPhaseAdvanceResult]
       val result = V.GoalPhaseWorkResult("accept", "Independent fixture reviewer accepts the exact Step", Vector.empty,
-        None, None, None, None, None, None, None, None, dependencyValidation = None)
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
       val reference = V.WorkflowArtifactReference("installed-known-step-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
       val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "review", reviewcall.stdout.toUri.toASCIIString,
