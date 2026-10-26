@@ -20,12 +20,13 @@ import GoalPhaseOrderedHumanDecision as H
 import GoalPhaseNativeFindingRecording as N
 import GoalPhaseNativeRecordingCandidate as C
 import GoalPhaseNativeReviewCompletion as Q
+import GoalPhaseInitialPhaseCheckRepair as J
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -90,7 +91,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencyApprovals: Vector[GoalPhaseDependencyValidation.Approval] = Vector.empty,
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     dependencyBinding: Option[GoalPhaseDependencyValidation.Binding] = None,
-    dependencyChain: DependencyChain = _empty_dependency_chain)
+    dependencyChain: DependencyChain = _empty_dependency_chain,
+    validation: Option[GoalPhaseNativeValidation.Saved] = None,
+    reviewContext: Option[GoalPhaseNativeReview.Context] = None)
   private final case class Cursor(from: InstanceRecord, controller: O.State,
     documents: Option[D.Bound], candidate: Option[GoalPhaseNativeCandidate.Saved],
     validation: Option[GoalPhaseNativeValidation.Saved],
@@ -118,7 +121,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     completedDependencies: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
     validationRepair: Option[(GoalPhaseValidationRepairAdoption.Source, GoalPhaseValidationRepairAdoption.Direction)] = None,
     dependencyChain: DependencyChain = _empty_dependency_chain,
-    diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty)
+    diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty,
+    initialPhaseRepair: Option[J.Saved] = None)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -881,6 +885,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       validation = if (clear) None else cursor.validation,
                       lastresult = Some(prepared.input -> value.completion.result), decisioncontext = None,
                       validationRepair = if (prepared.input.kind == "ImplementStep") None else cursor.validationRepair,
+                      initialPhaseRepair = if (prepared.input.kind == "ReviewPhase") None else cursor.initialPhaseRepair,
                       issues = issues, findings = findings, priorReviews = priorreviews,
                       diagnoses = IncrementalSbtDiagnosisRepair.append(cursor.diagnoses, prepared.input,
                         value.completion.result.result.value, value.completion.result.resultReference),
@@ -927,6 +932,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Decision if entry.causation.value.startsWith("ordered-validation-repair-adoption:") &&
           cursor.candidate.nonEmpty && cursor.validation.nonEmpty =>
         _resume_validation_repair_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
+      case O.Stage.Decision if entry.causation.value == J.causation => for {
+        selected <- _initial_phase_repair_source_c(cursor).flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("retained initial Phase check repair has no eligible actual failed Decision")))
+        retained <- J.retainedC(source, core, selected).flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("initial Phase check repair history has no exact retained admission")))
+        result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.controller,
+          initialPhaseRepair = Some(retained)), soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
       case O.Stage.PhaseClosing if entry.causation.value.startsWith("ordered-completion-policy-adoption:") => for {
         retained <- GoalPhaseCompletionPolicyAdoption.retainedC(GoalPhaseCompletionPolicyAdoption.Source(
           source, cursor.from, cursor.controller, cursor.legacyClosure), core)
@@ -1258,7 +1271,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       checkfailure <- _check_failure_context_c(cursor.copy(controller = controller), input.kind)
       _ <- if (input.instanceIdentity == source.current.identity.value && input.sourceRevision == cursor.from.revision.value.toString &&
           input.kind == semantic.key.kind.toString && input.stepIdentity == semantic.key.step && input.generation == semantic.key.generation &&
-          input.originalBase == semantic.originalBase && input.completed == semantic.completed && input.purpose == semantic.purpose &&
+          input.originalBase == semantic.originalBase && input.completed == semantic.completed && input.purpose == _purpose(semantic, checkfailure, context) &&
           input.candidate == semantic.candidate && input.checksReceipt == semantic.checksReceipt &&
           input.repairDirective == semantic.repairDirective && GoalPhaseNativeReview.sameIssuedContext(input.review, context) && input.checkFailure == checkfailure &&
           input.decisionContext == cursor.decisioncontext && input.issues == cursor.issues &&
@@ -1274,7 +1287,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else F.invalid("actual issued business input differs from its contiguous native predecessor")
     } yield Prepared(source, input, None, pending, actual, controller,
       if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
-      cursor.dependencyApprovals, cursor.dependencyAdmission, d.dependencyValidation, cursor.dependencyChain)
+      cursor.dependencyApprovals, cursor.dependencyAdmission, d.dependencyValidation, cursor.dependencyChain,
+      validation = cursor.validation, reviewContext = context)
 
     private def _review_context_c(cursor: Cursor, kind: String): Consequence[Option[GoalPhaseNativeReview.Context]] = kind match {
       case "ReviewStep" | "ReviewPhase" => (cursor.candidate, cursor.validation) match {
@@ -1295,6 +1309,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
         case _ => F.invalid("review has no actual current candidate and passed native checks")
       }
+      case "RepairStep" if _initial_phase_provenance(cursor).nonEmpty => Consequence.success(None)
       case "RepairStep" if cursor.validation.exists(_.payload.outcome.exists(
           Set("repair-required", "repair-limit-reached"))) && !cursor.controller.releaseRepairActive => Consequence.success(None)
       case "RepairStep" => cursor.lastresult match {
@@ -1315,14 +1330,18 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     private def _check_failure_context_c(cursor: Cursor, kind: String): Consequence[Option[S.CheckFailureContext]] =
       if (kind != "RepairStep" || !cursor.validation.exists(_.payload.outcome.exists(
-          Set("repair-required", "repair-limit-reached"))))
+          Set("repair-required", "repair-limit-reached"))) && _initial_phase_provenance(cursor).isEmpty)
         Consequence.success(None)
       else (cursor.candidate, cursor.validation) match {
         case (Some(candidate), Some(validation)) if candidate.payload.candidate.contains(validation.payload.candidate) &&
             candidate.payload.diff.nonEmpty =>
-          S.checkFailureContextC(candidate.payload.changedPaths, candidate.payload.diff.get, validation.payload).map(Some(_))
+          S.checkFailureContextC(candidate.payload.changedPaths, candidate.payload.diff.get, validation.payload,
+            _initial_phase_provenance(cursor).map(_.reference)).map(Some(_))
         case _ => F.invalid("repair has no matching actual retained failed candidate and validation")
       }
+
+    private def _initial_phase_provenance(cursor: Cursor): Option[J.Saved] =
+      cursor.initialPhaseRepair.filter(_ => !cursor.priorReviews.exists(_.kind == "ReviewPhase"))
 
     private def _advance_session_c(source: F.Session, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
@@ -1330,7 +1349,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         located <- _walk_c(source, initial, None, None, None, core)
         wire <- located match {
           case Work(plan) => NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
-            .map(NativeWorkflowOperationOutput.withFindingRecording(_, plan.findings))
+            .map(wire => NativeWorkflowOperationOutput.withFindingRecording(wire.copy(validation =
+              plan.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))), plan.findings))
           case Human(decision, findings) => _human_output_c(decision, findings, core)
           case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
             .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
@@ -1501,16 +1521,25 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.documentpolicy, N.managementPaths(cursor.findings))
           .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
         else _wait_cursor_c(cursor, "Whole-Phase checks and review are retained; repository closure remains unavailable.")
-      case O.Stage.Decision =>
-        if (cursor.controller.policyRepairPending) cursor.controller.dispatchPolicyRepairC.flatMap(state =>
-          _semantic_frontier_c(source, cursor.copy(controller = state), core))
-        else if (d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
-            Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)))) for {
-          decision <- _human_source_c(source, cursor)
-          port <- _human_port_c
-          wire <- port.advanceC(decision, core)
-        } yield NativeWorkflowOperationOutput.withFindingRecording(wire, cursor.findings)
-        else _wait_cursor_c(cursor, cursor.controller.decision.getOrElse("Native Decision remains open."))
+      case O.Stage.Decision => for {
+        initial <- _initial_phase_repair_source_c(cursor)
+        wire <- initial match {
+          case Some(selected) => J.advanceC(source, d, core, selected).flatMap { saved =>
+            F.waitC(saved.record, "First whole-Phase check repair admitted",
+              "Original failed checks remain retained; one ordinary Release repair batch is reserved. Fresh checks and independent Phase review remain required.")
+              .flatMap(_after_native_c(source, cursor, _, core))
+          }
+          case None if cursor.controller.policyRepairPending => cursor.controller.dispatchPolicyRepairC.flatMap(state =>
+            _semantic_frontier_c(source, cursor.copy(controller = state), core))
+          case None if d.humanDecision.nonEmpty && (cursor.controller.pendingRepair.nonEmpty || cursor.controller.documentDecision || cursor.controller.decisionSource.exists(
+              Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview))) => for {
+            decision <- _human_source_c(source, cursor)
+            port <- _human_port_c
+            wire <- port.advanceC(decision, core)
+          } yield NativeWorkflowOperationOutput.withFindingRecording(wire, cursor.findings)
+          case None => _wait_cursor_c(cursor, cursor.controller.decision.getOrElse("Native Decision remains open."))
+        }
+      } yield wire
       case O.Stage.Closed => _wait_cursor_c(cursor, "Actual native Phase closure is retained.")
     }}
 
@@ -1532,6 +1561,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _dependency_freshness_c(cursor: Cursor, core: ActionCall.Core): Consequence[Unit] =
       GoalPhaseNativeDependencyValidation.chainFreshnessC(core, Some(cursor.dependencyChain),
         cursor.completedDependencies.flatMap(_.dependency) ++ cursor.candidate.toVector.flatMap(_.payload.dependency))
+
+    private def _initial_phase_repair_source_c(cursor: Cursor): Consequence[Option[J.Source]] =
+      if (cursor.controller.stage != O.Stage.Decision ||
+          !cursor.controller.decisionSource.contains(O.Stage.PhaseValidation) ||
+          cursor.controller.repairControl.isEmpty || d.phaseValidationPolicy.isEmpty)
+        Consequence.success(None)
+      else for {
+        checks <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan, None)
+        selected <- J.selectC(cursor.from, cursor.controller, cursor.candidate, cursor.validation, checks)
+      } yield selected
 
     private def _review_completion_source_c(cursor: Cursor): Consequence[Option[Q.Source]] = for {
       primary <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan,
@@ -1560,9 +1599,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         draft <- _prepare_assigned_c(source, input, cursor.from, cursor.controller,
           if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
           cursor.dependencyApprovals, cursor.dependencyAdmission, cursor.dependencyChain)
-        plan <- _issue_assigned_c(draft, core)
+        plan <- _issue_assigned_c(draft.copy(validation = cursor.validation), core)
         wire <- NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
-      } yield NativeWorkflowOperationOutput.withFindingRecording(wire, cursor.findings)
+      } yield NativeWorkflowOperationOutput.withFindingRecording(wire.copy(validation =
+        cursor.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))), cursor.findings)
 
     private def _after_native_c(source: F.Session, cursor: Cursor,
       fallback: org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult,
@@ -1570,10 +1610,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       F.sessionC(source.current.identity.value, d, definition, core).flatMap { current =>
         if (current.current.revision.value > cursor.from.revision.value) _advance_session_c(current, core).map { result =>
           fallback.validation.filter(v => v.evidenceRecording.nonEmpty || v.assessment.nonEmpty).fold(result) { original =>
-            val projected = result.validation.filter(v => v.sourceRevision == original.sourceRevision &&
-              v.scopeIdentity == original.scopeIdentity).getOrElse(original)
-            result.copy(validation = Some(projected.copy(evidenceRecording = original.evidenceRecording,
-              assessment = original.assessment, assessmentJournal = original.assessmentJournal)))
+            result.validation match {
+              case Some(projected) if projected.sourceRevision == original.sourceRevision && projected.scopeIdentity == original.scopeIdentity =>
+                result.copy(validation = Some(projected.copy(evidenceRecording = original.evidenceRecording,
+                  assessment = original.assessment, assessmentJournal = original.assessmentJournal)))
+              case Some(_) => result
+              case None => result.copy(validation = Some(original))
+            }
           }
         }
         else Consequence.success(NativeWorkflowOperationOutput.withFindingRecording(fallback, cursor.findings))
@@ -1582,7 +1625,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _request(source: F.Session, cursor: Cursor, semantic: O.Semantic,
       context: Option[GoalPhaseNativeReview.Context], checkfailure: Option[S.CheckFailureContext]): S.Request =
       S.Request(source.current.identity.value, cursor.from.revision.value.toString, semantic.key.kind.toString,
-        semantic.key.step, semantic.key.generation, semantic.purpose, semantic.selectedPlan,
+        semantic.key.step, semantic.key.generation, _purpose(semantic, checkfailure, context), semantic.selectedPlan,
         semantic.originalBase, semantic.completed, semantic.candidate, semantic.checksReceipt,
         semantic.repairDirective, context, cursor.decisioncontext, cursor.documents, checkfailure, cursor.issues,
         Some(GoalPhaseRepairProgress.snapshot(cursor.controller)),
@@ -1590,6 +1633,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         releaseRepairContract = Option.when(semantic.key.kind == O.WorkKind.ReviewPhase)(S.RELEASE_REPAIR_CONTRACT),
         triage = _triage_context(cursor, semantic.key.kind.toString),
         diagnosticHistory = IncrementalSbtDiagnosisRepair.selected(cursor.diagnoses, semantic.key.step))
+
+    private def _purpose(semantic: O.Semantic, failure: Option[S.CheckFailureContext],
+      review: Option[GoalPhaseNativeReview.Context]): String =
+      if (semantic.key.kind == O.WorkKind.RepairStep && failure.exists(_.initialPhaseRepair.nonEmpty))
+        "Repair the first failed whole-Phase check chain within the unchanged Plan scope; preserve closed Steps. No prior Phase review exists; fresh checks and independent Phase review remain required."
+      else GoalPhaseNativeReview.requestPurpose(semantic, review)
 
     private def _triage_context(cursor: Cursor, kind: String): Option[GoalPhaseStepTriage.Context] =
       if (kind != "TriageStep") None else for {
@@ -1706,6 +1755,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       bundle = ContextBundle((if (input.kind == "TriageStep")
         "Assess only the selected immediate semantic uncertainty in a context separate from implementation. Use the actual candidate diff, passed check results, exact assessment triggers and applicable prior decisions. Return outcome clean, suspicious or decline with a concrete summary; findings are attributable suspected observations, never confirmed blockers. clean requires empty observations. suspicious requires nonempty observations and scope for detailed review. decline is a genuine semantic inability to judge; transport/tool failure is not a business result and leaves this work open. Never edit, execute commands, waive required checks or manufacture independent review. No Plan or dependency proposal, acceptance, fix/issue report or review observations are permitted. Runtime routes clean to formal Step admission and suspicious/decline to one detailed review."
         else if (independent) "Independently review the actual candidate and selected native check outcomes"
+        else if (input.kind == "RepairStep" && input.checkFailure.exists(_.initialPhaseRepair.nonEmpty))
+          "Repair the ordinary whole-Phase check failure in the initial pre-review chain using its current actual failed diagnostics and original native admission reference. Preserve the original Plan, base and every closed Step. No prior integrated Phase review exists. Runtime owns fresh candidate observation, selected checks, independent Phase review and Final; this is no replacement Step or Plan amendment."
         else if (input.kind == "RepairStep" && input.stepIdentity.isEmpty)
           "Repair only the assigned Release delta within original Plan ownership. Preserve closed Step commits, prior integrated review and applicable checks. Runtime owns fresh validation, independent scoped review and Final; this is no replacement Step or Plan amendment."
         else if (input.kind == "RepairStep" && input.checkFailure.nonEmpty)
@@ -1760,7 +1811,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             else if (input.kind == "RepairStep") "Repair selected Phase Step" else "Implement selected Phase Step",
           "Return only the assigned semantic result. Workflow owns commands, validation, Step and Phase closure.")))
     } yield Prepared(source, input, Some(intent), pending, work, controller, candidate, documentpolicy, findings,
-      dependencyapprovals, dependencyadmission, d.dependencyValidation, dependencychain)
+      dependencyapprovals, dependencyadmission, d.dependencyValidation, dependencychain, reviewContext = input.review)
 
     private def _requirement_c(input: S.Request, required: StateMachineRequiredOperation,
       independent: Boolean): Consequence[ExecutionRequirement] = {
@@ -1889,7 +1940,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     next <- if (plan.input.kind == "TriageStep")
       GoalPhaseStepTriage.completedC(plan.input, submitted.result.value, submitted.resultReference, plan.controller)
     else if (_is_review(plan.input))
-      GoalPhaseNativeReview.completedRequestC(plan.input, submitted.result.value, submitted.resultReference.identity, plan.controller)
+      GoalPhaseNativeReview.completedRequestC(plan.input, submitted.result.value, submitted.resultReference.identity,
+        plan.controller, plan.reviewContext)
     else for {
       exempt <- GoalPhaseFixAssessment.ordinaryCountExemptC(plan.input, submitted.result.value)
       stage <- if (submitted.result.value.outcome == "completed") plan.controller.next match {

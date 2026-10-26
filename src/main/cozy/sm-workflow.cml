@@ -1656,6 +1656,7 @@ OperationResult
 | changedPaths | string | * |
 | diff | string | 1 |
 | validation | GoalPhaseNativeValidationView | 1 |
+| initialPhaseRepair | WorkflowArtifactReference | ? |
 
 ## GoalPhaseWorkResult
 
@@ -3354,6 +3355,11 @@ on = repair-policy-resumed
 
 to = Repair
 on = release-repair-continuation-admitted
+
+##### TRANSITION
+
+to = Repair
+on = initial-phase-check-repair-admitted
 
 ##### TRANSITION
 

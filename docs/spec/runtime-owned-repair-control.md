@@ -21,6 +21,48 @@ alone, several files, an executor replacement or a corrected preparation does no
 establish divergence or new authority. Preserve collection of live work and
 reconciliation of unknown effects; this contract never authorizes blind replay.
 
+For the first whole-Phase check failure, a completed Plan under the adopted
+`sm-workflow.repair-trend.v1` policy enters the same Plan's ordinary Release repair
+when the actual check terminated with a known failed exit and allowance remains.
+Every accepted Step, original base and Plan revision remains unchanged. This
+does not append a corrective Step, revise the Plan, retry the original check or
+reserve an additional window. One admission reserves one ordinary batch; reads,
+repeated Advance and retained reconstruction reuse the same durable work and
+count. A coarse failed check supplies no complete comparable finding catalog.
+
+Historical `failed` validation outcomes still reconstruct their original
+Decision. A separate pure native receipt, under
+`sm-workflow.initial-phase-check-repair.v1`, appends the guarded
+`initial-phase-check-repair-admitted` Decision-to-Repair transition. It binds the
+current Decision, original candidate/check references, adopted policy, limits,
+pre-counts and exact repair directive. Its source revision and normal native CAS
+permit only that adjacent admission, including when a separately retained policy
+adoption precedes it. Existing validation receipts are never rewritten.
+
+This first repair precedes independent Phase review. Its public check-failure
+context retains the original actual `failed` diagnostics and the exact optional
+`initialPhaseRepair` admission reference; its review context is absent. Legacy
+contexts retain absent defaults. A supplied reference alone grants no authority:
+the runtime proves the native prefixes and exact expected issued Request. No
+prior PhaseReview or review acceptance is manufactured. A fresh candidate,
+selected whole-Phase checks, independent PhaseReview and normal closure remain
+mandatory after repair. A newer Phase validation projection must retain its own
+identity and diagnostics when an older Step has evidence or formal assessment.
+The initial admission remains native provenance across completed repairs and
+fresh checks until the first actual PhaseReview. A later ordinary failure in
+that chain carries its own actual `repair-required` or `repair-limit-reached`
+payload and the same original admission reference. Normal counting, limits and
+unknown-outcome exclusions still apply. Once an actual PhaseReview exists, the
+existing review-owned repair context is authoritative.
+
+No-policy, exhausted-budget, timeout, unknown, incomplete, output-truncated,
+stopped, uncertain or admission-failed results do not select this admission.
+Policy adoption keeps its existing public eligibility: this correction does not
+open policy adoption on a legacy no-policy failed Phase Decision.
+Pending repair, document decisions, accepted Phase review, recording, closure
+intents and Release commits keep their existing owning routes. The existing
+active Release repair route after an actual integrated review is unchanged.
+
 Use existing authorization for the same purpose, target, operations and effects.
 An actual new scope/effect, explicit human restriction, unresolved semantic
 decision, runtime convergence stop or exhausted repair window retains its genuine

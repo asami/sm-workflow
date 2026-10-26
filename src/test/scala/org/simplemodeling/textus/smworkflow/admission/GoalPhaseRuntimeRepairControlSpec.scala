@@ -11,7 +11,7 @@ import GoalPhaseRuntimeRepairControl as R
 
 /** Pure runtime policy evidence; no command, provider or stored Session claims.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -42,6 +42,42 @@ final class GoalPhaseRuntimeRepairControlSpec extends AnyWordSpec with Matchers 
   }
 
   "Runtime-owned v1 repair policy" should {
+    "retain first Phase failure replay and reserve only its separate adopted-policy continuation" in {
+      Given("RRC-PHASE-FIRST-FAILURE-01: a completed original Plan and a first whole-Phase native check failure")
+      def _phase_(policy: Option[String], limit: Int = 10): O.State = {
+        val inspected = _inspect(_start(limit, policy))
+        val passed = _take(inspected.acceptC(O.ChecksObserved(inspected.candidate.get, Vector("check"), "step-passed", true)))
+        val reviewed = _take(passed.acceptC(O.ReviewAdmitted(_key(passed), passed.candidate.get,
+          "step-passed", "step-review", O.ReviewOutcome.Accept)))
+        val intent = _take(reviewed.acceptC(O.ClosureIntentSaved(reviewed.candidate.get, "step-closure")))
+        val closed = _take(intent.acceptC(O.StepCommitObserved("step-closure", O.Commit("d" * 40, _base.head, intent.candidate.get.tree))))
+        val observed = _take(closed.acceptC(O.CandidateObserved(closed.tipSnapshot)))
+        _take(observed.acceptC(O.ChecksObserved(observed.candidate.get, observed.plan.phaseChecks, "original-phase-failure", false)))
+      }
+      val old = _phase_(None)
+      val current = _phase_(Some(R.version))
+      val exhausted = _phase_(Some(R.version), 0)
+      val directive = O.RepairDirective("Correct first actual whole-Phase failure", Vector("Actual ordinary failed Phase check"))
+      When("the original event is replayed and only the new continuation reserves an ordinary Release batch")
+      val next = _take(current.continueInitialPhaseCheckRepairC("original-phase-failure", directive))
+      Then("old failed semantics and all accepted work remain unchanged while one same-Plan batch is charged")
+      old.stage shouldBe O.Stage.Decision
+      current.stage shouldBe O.Stage.Decision
+      old.repairs shouldBe 0
+      current.repairs shouldBe 0
+      next.stage shouldBe O.Stage.Repair
+      next.repairs shouldBe 1
+      next.ordinaryRepairs shouldBe 1
+      next.plan shouldBe current.plan
+      next.base shouldBe current.base
+      next.completed shouldBe current.completed
+      next.repairObservations shouldBe empty
+      old.continueInitialPhaseCheckRepairC("original-phase-failure", directive).isSuccess shouldBe false
+      current.continueInitialPhaseCheckRepairC("another-failure", directive).isSuccess shouldBe false
+      exhausted.continueInitialPhaseCheckRepairC("original-phase-failure", directive).isSuccess shouldBe false
+      next.continueInitialPhaseCheckRepairC("original-phase-failure", directive).isSuccess shouldBe false
+    }
+
     "continue improving decline and one temporary expansion without a divergence label" in {
       Given("RRC-03: complete attributable finding sets improve with one temporary expansion")
       val findings = Vector(Vector("a", "b", "c", "d"), Vector("a", "b", "c"),

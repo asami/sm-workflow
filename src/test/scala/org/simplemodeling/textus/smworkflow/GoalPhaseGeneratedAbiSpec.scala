@@ -5,7 +5,7 @@ import domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1
 import domain.statemachine.workflow.GoalPhaseWorkflowStateMachineWorkflow1
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.spec.OperationDefinition
-import org.goldenport.schema.Multiplicity
+import org.goldenport.schema.{DataType, Multiplicity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -24,6 +24,7 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseFindingRecordingOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.ResolveGoalPhaseDiagnosticInformationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseValidationRecoveryOperation,
     SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseValidationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseRemainingPlanOperation,
@@ -36,6 +37,8 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
     SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseClosureOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseSourceHistoryRecoveryOperation,
     SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseSourceHistoryOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseSourceHistoryNormalizationOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseSourceHistoryNormalizationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCandidateRecoveryOperation,
     SmWorkflowComponent.GoalPhaseServiceService.RecoverGoalPhaseCandidateOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseWholePhaseCandidateRecoveryOperation,
@@ -86,8 +89,17 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       // NativeWorkflowResourceInputSpec exercises the owning handlers' refusal
       // of neither/both/malformed business transport; action construction is inert.
       val provided = GoalPhaseWorkflowStateMachineProvidedApi1.workflow.providedOperations
-      provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
-      And("all twenty-nine Provided operations declare their business inputs, without a universal argument")
+      // The managed diagnostic side read is a service operation, outside the
+      // Workflow PROVIDED progression/completion contract in the authored CML.
+      val information = SmWorkflowComponent.GoalPhaseServiceService.ResolveGoalPhaseDiagnosticInformationOperation
+      val progression = operations.filterNot(_.specification.name == information.specification.name)
+      provided.map(_.name).toSet shouldBe progression.map(_.specification.name).toSet
+      information.specification.request.parameters.map(_.name) shouldBe Vector("input")
+      information.specification.request.parameters.map(_.domain.datatype) shouldBe
+        Vector(DataType.Named("goalphasediagnosticinformationinput"))
+      information.specification.request.parameters.map(_.domain.multiplicity) shouldBe Vector(Multiplicity.One)
+      information.specification.response.result shouldBe List(DataType.Named("GoalPhaseDiagnosticInformationResult"))
+      And("all declared Provided operations expose their exact business input types without a universal argument")
       operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
@@ -107,6 +119,8 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
         "recoverGoalPhaseClosure" -> Some("GoalPhaseClosureRecoveryInput"),
         "describeGoalPhaseSourceHistoryRecovery" -> Some("GoalPhaseSourceHistoryRecoveryDescriptionInput"),
         "recoverGoalPhaseSourceHistory" -> Some("GoalPhaseSourceHistoryRecoveryInput"),
+        "describeGoalPhaseSourceHistoryNormalization" -> Some("GoalPhaseSourceHistoryNormalizationDescriptionInput"),
+        "adoptGoalPhaseSourceHistoryNormalization" -> Some("GoalPhaseSourceHistoryNormalizationAdoptionInput"),
         "describeGoalPhaseCandidateRecovery" -> Some("GoalPhaseCandidateRecoveryDescriptionInput"),
         "recoverGoalPhaseCandidate" -> Some("GoalPhaseCandidateRecoveryInput"),
         "describeGoalPhaseWholePhaseCandidateRecovery" -> Some("GoalPhaseWholePhaseCandidateRecoveryDescriptionInput"),

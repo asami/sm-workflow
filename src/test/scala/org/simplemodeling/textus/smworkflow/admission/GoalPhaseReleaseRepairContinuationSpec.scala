@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Saved Phase review provenance and independently admitted direction only.
   * Actual old/new installed history and effects are qualified separately.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -55,7 +55,7 @@ final class GoalPhaseReleaseRepairContinuationSpec extends AnyWordSpec with Matc
     _phase.checksReceipt, None, review = Some(GoalPhaseNativeReview.Context(Vector("value.txt", "docs/usage.md"),
       "Actual integrated diff", Vector(RepositorySyncNativeMergeValidation.Receipt("whole", "Exited(0)", Some(0), "Passed", "")))),
     issues = Some(_issues))
-  private val _decision = take(GoalPhaseNativeReview.completedRequestC(_request, _result, _reference.identity, _phase))
+  private val _decision = take(GoalPhaseNativeReview.completedRequestC(_request, _result, _reference.identity, _phase, _request.review))
   private val _host = P.Host("/specification/repository", "main", Vector("value.txt", "docs"), "phase-policy", 1,
     Vector(GoalPhaseNativeValidation.Check("whole", 1)), "closure-policy", 1,
     Vector(P.Program("one", 1), P.Program("phase-release", 2)))
@@ -87,9 +87,9 @@ final class GoalPhaseReleaseRepairContinuationSpec extends AnyWordSpec with Matc
     "preserve the old Phase Decision and route only a captured new review into ordinary Release repair" in {
       Given("the same actual integrated required-condition repair verdict and successful native checks")
       When("the native owner admits the old and newly marked actual requests")
-      val legacy = take(GoalPhaseNativeReview.completedRequestC(_request, _result, _reference.identity, _phase))
+      val legacy = take(GoalPhaseNativeReview.completedRequestC(_request, _result, _reference.identity, _phase, _request.review))
       val current = take(GoalPhaseNativeReview.completedRequestC(_request.copy(releaseRepairContract = Some(W.RELEASE_REPAIR_CONTRACT)),
-        _result, _reference.identity, _phase))
+        _result, _reference.identity, _phase, _request.review))
       Then("history retains Decision while the new contract issues one phase-level RepairStep")
       legacy.stage shouldBe O.Stage.Decision
       legacy.decisionSource shouldBe Some(O.Stage.PhaseReview)

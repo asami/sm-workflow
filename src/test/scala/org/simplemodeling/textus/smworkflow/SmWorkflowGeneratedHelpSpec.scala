@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -36,9 +36,11 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
+      "resolveGoalPhaseDiagnosticInformation",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
       "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
       "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",
+      "describeGoalPhaseSourceHistoryNormalization", "adoptGoalPhaseSourceHistoryNormalization",
       "describeGoalPhaseCandidateRecovery", "recoverGoalPhaseCandidate",
       "describeGoalPhaseWholePhaseCandidateRecovery", "recoverGoalPhaseWholePhaseCandidate",
       "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
@@ -46,6 +48,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
       "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
       "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseRepairPolicy", "adoptGoalPhaseRepairPolicy",
       "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
       "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair"
     ),

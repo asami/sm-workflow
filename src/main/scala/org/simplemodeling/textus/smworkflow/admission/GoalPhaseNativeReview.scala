@@ -14,7 +14,7 @@ import GoalPhaseOrderedProgression as O
 /** Actual selected semantic review context and independent host admission.
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
@@ -55,6 +55,11 @@ private[smworkflow] object GoalPhaseNativeReview {
         else Left(DecodingFailure("Invalid retained review metadata or prior reports", cursor.history)))
     }
   }
+
+  private[admission] def requestPurpose(semantic: O.Semantic, review: Option[Context]): String =
+    if (semantic.key.kind == O.WorkKind.ReviewPhase && semantic.repairDirective.nonEmpty && review.exists(_.priorReviews.isEmpty))
+      "Independently review the whole selected Phase and first-check repair delta; no prior Phase review exists."
+    else semantic.purpose
 
   /** Called only after the native completion owner has admitted the real reply. */
   private[admission] def retainPriorC(existing: Vector[Prior], request: S.Request,
@@ -167,13 +172,14 @@ private[smworkflow] object GoalPhaseNativeReview {
     * It reconstructs from actual completions, never from a submitted stage.
     */
   def completedStateC(result: S.Result, evidence: String,
-    controller: O.State): Consequence[O.State] = _completed_state_c(result, evidence, controller, None)
+    controller: O.State): Consequence[O.State] = _completed_state_c(result, evidence, controller, None, None)
 
   def completedRequestC(request: S.Request, result: S.Result, evidence: String,
-    controller: O.State): Consequence[O.State] = _completed_state_c(result, evidence, controller, Some(request))
+    controller: O.State, reviewContext: Option[Context]): Consequence[O.State] =
+    _completed_state_c(result, evidence, controller, Some(request), reviewContext)
 
   private def _completed_state_c(result: S.Result, evidence: String,
-    controller: O.State, request: Option[S.Request]): Consequence[O.State] = for {
+    controller: O.State, request: Option[S.Request], reviewcontext: Option[Context]): Consequence[O.State] = for {
     _ <- if (result != null &&
         _bounded(result.summary, 16384) && result.summary.trim.nonEmpty &&
         result.findings != null && result.findings.size <= 128 && result.findings.forall(f => _bounded(f, 16384) && f.trim.nonEmpty) &&
@@ -198,7 +204,8 @@ private[smworkflow] object GoalPhaseNativeReview {
         _ <- _check(actual != null && actual.kind == work.key.kind.toString && actual.stepIdentity == work.key.step &&
           actual.selectedPlan == controller.plan && actual.originalBase == controller.base &&
           actual.completed == controller.completed && actual.generation == controller.generation &&
-          actual.purpose == work.purpose && actual.candidate == work.candidate && actual.checksReceipt == work.checksReceipt,
+          sameIssuedContext(actual.review, reviewcontext) && actual.purpose == requestPurpose(work, reviewcontext) &&
+          actual.candidate == work.candidate && actual.checksReceipt == work.checksReceipt,
           "review admission crosses its actual issued request")
         _ <- GoalPhaseAcceptanceBoundary.admitRequestC(actual, result)
       } yield ()

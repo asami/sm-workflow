@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -199,7 +199,7 @@ private[admission] object TypedSbtHostPlanFixture {
   }
 
   /** Inputs only. The external semantic worker must author the absent test source. */
-  def buildAuthoring(root: Path, cml: Boolean = false): Unit = {
+  def buildAuthoring(root: Path, cml: Boolean = false, discoverAllTests: Boolean = false): Unit = {
     val primary = Path.of("").toAbsolutePath.normalize
     val classpathfile = primary.resolve("target/cncf.d/runtime-classpath.txt")
     require(Files.isRegularFile(classpathfile), "Prepare the official primary runtime classpath first")
@@ -224,16 +224,17 @@ private[admission] object TypedSbtHostPlanFixture {
     Files.writeString(repository.resolve(".gitignore"), "target/\nproject/target/\nproject/project/\n.bsp/\n")
     Files.writeString(library, "package org.simplemodeling.textus.smworkflow.p62authored\n" +
       "object LineWriter { def render(value: String): String = value + \"\\n\" }\n")
-    val build = """scalaVersion := "3.3.8"
-      |Compile / unmanagedClasspath ++= Seq(__ROOTS__).map(path => Attributed.blank(file(path)))
-      |Test / unmanagedClasspath ++= Seq(__ROOTS__).map(path => Attributed.blank(file(path)))
-      |Test / testFrameworks := Seq(new TestFramework("org.scalatest.tools.Framework"))
-      |Test / definedTests := Seq(new TestDefinition("org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec", new sbt.testing.SubclassFingerprint {
+    val definedtests = if (discoverAllTests) "" else """Test / definedTests := Seq(new TestDefinition("org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec", new sbt.testing.SubclassFingerprint {
       |  def superclassName(): String = "org.scalatest.Suite"
       |  def isModule(): Boolean = false
       |  def requireNoArgConstructor(): Boolean = true
       |}, true, Array(new sbt.testing.SuiteSelector)))
-      |Global / onLoad := {
+      |""".stripMargin
+    val build = """scalaVersion := "3.3.8"
+      |Compile / unmanagedClasspath ++= Seq(__ROOTS__).map(path => Attributed.blank(file(path)))
+      |Test / unmanagedClasspath ++= Seq(__ROOTS__).map(path => Attributed.blank(file(path)))
+      |Test / testFrameworks := Seq(new TestFramework("org.scalatest.tools.Framework"))
+      |__DEFINED_TESTS__Global / onLoad := {
       |  val original = (Global / onLoad).value
       |  state => {
       |    val loaded = original(state)
@@ -243,6 +244,7 @@ private[admission] object TypedSbtHostPlanFixture {
       |  }
       |}
       |""".stripMargin.replace("__ROOTS__", roots.map(p => literal(p.toString)).mkString(", "))
+      .replace("__DEFINED_TESTS__", definedtests)
       .replace("__PIDS__", literal(root.resolve("sbt-executions.txt").toString))
       .replace("__COMMANDS__", literal(root.resolve("sbt-command-lines.txt").toString))
     val generated = if (cml) "Test / unmanagedSourceDirectories += baseDirectory.value / \"target\" / \"scala-3.3.8\" / \"src_managed\" / \"test\" / \"scala\"\n" else ""

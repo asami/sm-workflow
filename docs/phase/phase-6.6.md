@@ -28,8 +28,67 @@ source-history interruption remain retained. Public same-authority normalization
 adoption superseded Human226 without answering it, preserved the old UNKNOWN and
 eight successful prefix results, and resumed ordinary validation and closure.
 D3 consumed repair count 1/10; ordinary D4 starts its own 0/10 Step window.
-D4 is now issued as ImplementStep at continuation
-`f01d809d1b4bfe8a4b5c241dac301b81:ordered-implementation:331`, expected revision332.
+D4 was natively accepted and committed as
+`1873451f8baa0c49215942a1c2cf02a8a60becd6` after Compile, lint and both
+connected diagnostic cases passed. The actual public repair-policy direction
+was admitted through response038, retaining the selected limit 10 and the
+existing counts. This establishes Step admission, not independent Phase review
+or publication of the combined diagnostic runtime.
+
+The first actual `repository-full` validation (source1267) executed 1755 tests:
+1751 passed and four failed, with a terminated SBT exit 1. That formal failure
+is preserved. The qualified RRC first-Phase-failure correction then issued an
+ordinary whole-Phase `RepairStep` through response045, with all four closed
+Steps and Plan1/base intact, automatic count1 and ordinary count1/10. No prior
+Phase review is claimed. Response046 captured the bounded Cozy dependency
+proposal; actual Human1273 approval was formally accepted through response047.
+That approval resumed `ordered-repair:1275`, expected revision1276.
+
+The user selected **Cozy開発** as the owner of the two-file generator repair,
+its tests, independent review and normal publishLocal. Consumer catalog
+corrections and integration of the delivered first-failure RRC source are
+prepared in this checkout. Cozy delivery subsequently passed 51 tests across
+three suites and independent review; normal publication of repaired Cozy
+0.3.3-SNAPSHOT and the unchanged SimpleModeler prerequisite succeeded. Existing
+normal generation consumes those artifacts. Native validation1325 then passed
+1773 of1774 tests, retaining one failed exact ABI catalog assertion. The next
+ordinary repair corrected the service-versus-Workflow operation distinction
+without weakening public input/type/multiplicity assertions. Native
+validation1378 passed all1774 tests across182 suites, with zero aborted,
+canceled, ignored or pending tests and terminated SBT exit0. Both earlier
+formal whole-Phase failures remain retained.
+The RRC source transfer preserves the P66 diagnostic additions and excludes
+unrelated producer PA/DSR development. At the first whole-Phase repair, the qualified RRC image was
+installation `843f164a-bb11-4ab2-9cc6-9ac2f4be407e`, update
+`6dbe77da-eaeb-4707-875c-283423b59502`; this image predates the new diagnostic
+operations. The first actual independent Phase review1381 reviewed the complete
+115-path candidate tree `bb507f15e13c1a5697014423c39fe23ec88d6d9e` and found
+fourteen conditions satisfied. Its P66-11/P66-12 findings require combined
+publication, installed qualification and usable adoption handoff. Public
+Submit051 accepted that repair judgment; separate Advance052 issued
+`ordered-repair:1383`, expected revision1384, with automatic3/ordinary2/limit10.
+The existing sm-workflow development chat owns that normal producer delivery;
+the consumer owns the document correction and subsequent native continuation.
+At that handback, combined delivery, review acceptance and closure remained pending. No Start,
+accepted Submit or successful validation was replayed.
+
+Normal combined producer publication subsequently completed through the existing
+LocalApplicationUpdate registration: update
+`9495ae12-99d6-427a-a18c-efe8395f10ec`, installation
+`93ffa228-f7d2-49d1-a53d-87d1340896e3`, coordinate
+`org.simplemodeling.textus:textus-sm-workflow:0.1.0-SNAPSHOT`.
+Its publication receipt records Completed and Activated. The producer retained
+the entire normally accepted image, with its original identity and metadata,
+for isolated installed diagnostic qualification. Actual installed02 qualification
+passed both Compile/Test cases with SBT/wrapper exit0 and confirmed termination.
+It exercised retained compiler failure, managed information/Evidence/Journal,
+manifest/history, a later behavioral failure, successful Compile plus three
+focused behavioral tests, and normal Step continuation in each isolated Session.
+Original installed01 failure/partial fixture effects remain retained. The
+[English D4 handoff](../journal/2026/10/2026-10-26-phase-66-d4-connected-adoption-handoff.md)
+records the usable boundary and actual receipts. This completes the reported
+delivery work; P66-11/P66-12 remain subject to normal consumer repair admission
+and independent review. No live Session was operated solely for demonstration.
 
 On 2026-10-26 the consumer recovered the producer's original terminal receipts:
 `sm-rrc-20261025-publish01-result@1` reports successful publication with exit 0;
@@ -52,9 +111,11 @@ These are focused/isolated results with test-owned decisions, not a new full-sui
 run or real consumer consent. Successful commands/publication were not repeated.
 Producer qualification and delivery are complete. The consumer selected the
 subsequent qualified SHR image (which contains RRC) and completed live comment
-normalization adoption/continuation. Public repair-policy adoption and RRC-06/08
-consumer acceptance remain distinct pending work; image selection alone does
-not adopt a new policy in the existing legacy Session. Detailed evidence is retained in the
+normalization adoption/continuation. At that earlier delivery, public repair-policy adoption and RRC-06/08
+consumer acceptance were distinct pending work; image selection alone did
+not adopt a new policy in the existing legacy Session. Actual response038 and
+the subsequent first-failure repair above now establish policy adoption and
+consumer repair dispatch; combined diagnostic delivery remains pending. Detailed evidence is retained in the
 producer's execution archive through 2026-11-25.
 
 The separately adopted source-history/result-collection correction requires
@@ -72,11 +133,12 @@ nine isolated cases; this is distinct from the now observed live D3 continuation
 The original policy direction and actual old terminal command evidence were
 recovered from retained chat execution results; no successful command was rerun
 for collection. New P66-17/P66-18 planning conditions do not silently rewrite
-native Plan revision1 or reopen accepted D1/D2/D3. D4 integrates qualified RRC/SHR
-source with D1-D3 before a future combined distribution; the currently selected
-image does not yet contain the new Phase 6.6 diagnostic operations.
+native Plan revision1 or reopen accepted D1/D2/D3. That D4 source integration of
+qualified RRC/SHR with D1-D3 preceded the combined distribution recorded above.
 
-The checklist remains pending until the corresponding actual evidence is available.
+The checklist records fourteen independently satisfied conditions and qualified
+delivery evidence for the two corrected conditions. The first review remains a
+repair judgment; integrated Phase acceptance and completion are not yet claimed.
 The completed Phase 6.4/6.5 Sessions and their evidence are retained.
 
 ## Next-delivery scheduling clarification — 2026-10-23

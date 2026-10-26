@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as F
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -706,14 +706,16 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the forty-one installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the forty-six installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
+          "GoalPhaseService.resolveGoalPhaseDiagnosticInformation",
           "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
           "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
           "GoalPhaseService.describeGoalPhaseSourceHistoryRecovery", "GoalPhaseService.recoverGoalPhaseSourceHistory",
+          "GoalPhaseService.describeGoalPhaseSourceHistoryNormalization", "GoalPhaseService.adoptGoalPhaseSourceHistoryNormalization",
           "GoalPhaseService.describeGoalPhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseCandidate",
           "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
@@ -726,6 +728,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
+          "GoalPhaseService.describeGoalPhaseRepairPolicy", "GoalPhaseService.adoptGoalPhaseRepairPolicy",
           "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
           "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair",
           "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
@@ -733,17 +736,18 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 41
-        published.map(_._1).distinct should have size 41
+        published should have size 46
+        published.map(_._1).distinct should have size 46
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
-          "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation")
+          "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation",
+          "describeGoalPhaseSourceHistoryNormalization")
         published.foreach { (identity, operation) =>
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
-                else if (Vector("start", "describe", "recover", "adopt", "admit", "continue").exists(operation.name.startsWith)) "input"
+                else if (Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",

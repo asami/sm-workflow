@@ -1,7 +1,7 @@
 # Incremental SBT failure diagnosis
 
 Date: 2026-10-23
-Status: adopted target specification; diagnostic implementation and connected acceptance pending
+Status: accepted D1–D4 normally delivered and installed-qualified; integrated Phase acceptance pending
 Delivery: [Phase 6.6](../phase/phase-6.6.md); prior caller-size-limit removal is complete
 
 ## Purpose and ownership
