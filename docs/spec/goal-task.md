@@ -2,7 +2,8 @@
 
 Date: 2026-10-24 (Asia/Tokyo)
 Status: adopted specification; implementation and installed acceptance pending
-Delivery: [GoalTask and shared execution plan](../notes/goal-task-delivery-plan.md)
+Delivery: [Phase 6.7 main route](../phase/phase-6.7.md), [Phase 17 extensions](../phase/phase-17.md)
+Requirement detail: [GoalTask and shared execution plan](../notes/goal-task-delivery-plan.md)
 
 ## Purpose and input
 
@@ -74,6 +75,13 @@ checks remain required; reuse still-applicable results rather than repeat them
 at Final. Lack of required evidence prevents a success claim, not a fabricated PASS.
 
 ## Commit and completion
+
+For [assigned-chat dependency delivery](dependency-development-delivery.md),
+Phase 7 selects publishLocal after local Task acceptance/commit and best-effort
+sm-repository-sync afterward. Keep Task completion, publication and remote
+synchronization outcomes distinct; sync failure does not revoke local delivery.
+This explicit delivery policy supplies its existing effect authorization; it
+does not make publication or push implicit in every standalone Task invocation.
 
 A normal invocation of this entrypoint includes local commit of its intended
 changes as part of completion; no extra general commit confirmation is needed

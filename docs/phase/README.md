@@ -1,5 +1,44 @@
 # sm-workflow incremental-use roadmap
 
+Dependency delivery adopted 2026-10-26: [Phase 7](phase-7.md#dependency-development-delivery-priority--2026-10-26)
+owns fixed dependencies, FIFO requests to assigned development chats, and managed
+development subtrees. Assigned-chat delivery includes local commit and publishLocal;
+larger Task/Phase work adds best-effort repository sync afterward, without making
+remote success a local-delivery gate. Reuse Phase 6.7 single-request execution.
+Connect the ordinary chat/publication/consumer route before completing overlay
+breadth; retain all original Phase 7 obligations and active Sessions/results.
+See the [contract](../spec/dependency-development-delivery.md),
+[P7-DD checklist](phase-7-dependency-delivery-checklist.md) and
+[English handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md).
+
+Task/FIX priority allocation adopted 2026-10-26:
+[Phase 6.7](phase-6.7.md) promotes the single-repository sm-test-fix,
+sm-goal-task and sm-review-fix main routes from the unnumbered GTASK/SFIX
+plans, including initial installed delivery and actual separate-chat adoption.
+[Phase 17](phase-17.md) consolidates the remaining input, selection, composition
+and investigation/related-project integrations. Transfer bounded items from 17
+to the appropriate active/next Phase as actual needs arise; preserve source IDs
+and evidence, and distinguish transfer from completion. Existing Phase 7/9/14/16 owners
+remain unchanged. Neither allocation reopens active Phase 6.6 or resets any
+Session/history/counts/results. See the
+[English handoff](../journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md).
+
+Repository Git correction adopted 2026-10-26:
+[RS-C1–4](repository-sync-git-correction.md) first consumes the in-progress CNCF
+default-Git route, then corrects fetched-tip adoption, completed-effect recovery
+and redundant observations. Preserve ongoing source-history/RRC and Phase work,
+all Sessions, counters and results. This adds no new numbered Phase or blocking
+gate to unaffected work. See the
+[English handoff](../journal/2026/10/2026-10-26-git-execution-and-recovery-handoff.md).
+
+Source-history/result-collection correction adopted 2026-10-26:
+[SHR-C1–7](source-history-recovery-result-collection-correction.md) first recovers
+completed producer outcomes, then delivers same-authority comment normalization
+and public legacy-Session adoption. Phase 6.6 D3/D4 consumes the correction;
+accepted D1/D2 and current evidence/counters remain intact. No new Phase, general
+effect replay or per-comment Human gate is introduced.
+
+
 Purpose-based authorization correction adopted 2026-10-25:
 [PA-D1–5](purpose-based-authorization-correction.md) replaces per-file Human gates
 with runtime admission against Component, purpose, acceptance and operations.
@@ -42,7 +81,8 @@ and local commit without a numbered Phase. The
 [GTASK-1–4 plan](../notes/goal-task-delivery-plan.md) shares the SFIX execution
 path, retaining distinct terminal policies: sm-fix is Step-equivalent and does
 not implicitly commit. Deliver a single-repository main path before broadening
-inputs/composition. This is follow-on work, with no new gate for ongoing Phases.
+inputs/composition. Phase 6.7 owns that initial delivery; Phase 17 owns the
+remaining inputs/composition. Neither adds a gate for ongoing Phases.
 See the [English handoff](../journal/2026/10/2026-10-24-goal-task-handoff.md).
 
 Standalone sm-fix acceptance adopted 2026-10-24: one repair request is one
@@ -51,7 +91,8 @@ review. The [SFIX-1–4 delivery plan](../notes/standalone-fix-delivery-plan.md)
 consumes existing Phase 6.5 FIX and Phase 6.6 diagnosis as a follow-on slice;
 it adds no acceptance gate to those Phases. Start with single-repository
 `sm-test-fix`, then reuse it for finding-origin repair and dirty/focused options.
-Phase 14 diagnosis can hand off an explicitly authorized repair. No automatic
+Phase 6.7 owns initial test/review fix; Phase 17 owns the remaining selection and
+Phase 14 diagnosis integration. No automatic
 Phase/Release Review or commit is added. See the
 [specification](../spec/standalone-fix-acceptance.md) and
 [English handoff](../journal/2026/10/2026-10-24-standalone-fix-handoff.md).
@@ -307,7 +348,10 @@ and connects the skills; Phase 6.3 starts gradual real use after integrated acce
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 7 -> Phase 8**.
+needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 7 -> Phase 8**.
+Phase 17 extends Task/FIX after 6.7; its number does not require all Phases 8–16
+to finish first. Only the specific workspace/investigation integrations consume
+their relevant Phase 7/14 capabilities.
 Phase numbers do not require Phases 3 and 4 to precede Phase 5.
 
 Revised 2026-10-09: [Phase 5.1](phase-5.1.md) names the connected correction for
@@ -333,7 +377,10 @@ in Phase 6, using the corrected runtime contract.
 | [6.4: Common Evidence adoption and development operation](phase-6.4.md) | Adopt Phase 12 automatic archive/Journal/read; complete failure/batch/compression/retention use | Preserve active E1/history and all P64 IDs; own consumer validation/closure |
 | [12: Common Evidence and automatic Action recording](phase-12.md) | Actual common identity/save/read and Advance-to-Journal connection for one log producer | Short priority runtime delivery before 6.4 E2, independent of 11.1 and 7–10; [checklist](phase-12-checklist.md) |
 | [6.5: Conditional Actions and workflow quality optimization](phase-6.5.md) | GoalPhase no-AI admission/FIX -> RepositorySync clean merge admission -> SplitPhase unknown-only/context reuse; applicable lint and conditional review | After 6.4 and before 7; preserve active execution; optional Luna, no LLM evaluation or wait for Phase 9/10 |
+| [6.6: Incremental SBT failure diagnosis](phase-6.6.md) | Structured diagnosis, batched information and repair/focused validation | Preserve ongoing implementation, accepted work and existing evidence |
+| [6.7: Ad hoc Task and standalone FIX](phase-6.7.md) | sm-test-fix -> sm-goal-task -> sm-review-fix -> real separate-chat delivery | Single repository; conditional fix review, integrated Task review/commit; [checklist](phase-6.7-checklist.md) |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
+| [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |

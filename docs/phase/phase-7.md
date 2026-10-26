@@ -1,5 +1,48 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Dependency development delivery priority — 2026-10-26
+
+Adopt [three dependency modes and delivery](../spec/dependency-development-delivery.md):
+Fixed, assigned development chat with runtime-owned FIFO, and managed development
+subtree. Track implementation in the [P7-DD checklist](phase-7-dependency-delivery-checklist.md).
+The English [handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md)
+records the user direction and preservation rules.
+
+Assigned-chat work completes through local commit and successful publishLocal.
+Small defects use sm-fix with explicit commit/publication delivery; larger ad hoc
+development uses sm-goal-task; Phase development uses sm-goal-phase. Larger work
+then attempts best-effort sm-repository-sync, with development/local publication
+and synchronization reported separately. A failed/deferred sync does not revoke
+local delivery or consumer usability.
+
+Phase 6.7 supplies single-request Task/FIX execution and initial chat handoff.
+Phase 7 owns mode selection, durable FIFO, delivery policy, consumer adoption,
+subtree/workspace selection and synchronization. Do not add these queue/three-mode
+requirements to ongoing 6.6/6.7 acceptance. Existing GoalPhase execution is reused.
+Phase 17 retains optional Task/FIX breadth and is not an initial dependency.
+
+### Revised main-route order
+
+This order takes precedence over the older overlay-first sequence below.
+Retain original A/B/C/D and P7-DAO identities, existing evidence and remaining
+acceptance; the new ordinary publishLocal route is not overlay acceptance.
+
+| Order | Work | Connected evidence |
+| --- | --- | --- |
+| 1 | Reconcile accepted 6.7 execution and existing authorization/publication/result contracts; configure fixed/chat/subtree mode and one producer/consumer | Fixed-mode refusal is truthful; actual contract gaps are bounded |
+| 2 | Assigned-chat small defect -> existing fix -> local commit -> publishLocal -> result return -> consumer integration | P7-DD-04/07/08 main route with actual installed execution |
+| 3 | Runtime FIFO for two requests; Task/Phase deliveries and post-publication best-effort sync using existing C operations | Ordering, retained results and nonblocking failed/deferred sync; no AI queue controller |
+| 4 | Managed subtree development and sync target registration; reuse A/B resource/artifact selection and C dependency-order synchronization | Explicit origin/destination and isolated consumer selection; no general worktree use before qualification |
+| 5 | Complete remaining B/C, all P7-DD/DAO and original workspace scenarios, then D integrated review/upstream closure | Preserve existing validation; no duplicate whole-route qualification for unchanged behavior |
+
+Ordinary cross-chat publishLocal must work without completing all overlay
+operations first. Required generation is included only when the selected consumer
+needs it. Subtree denotes a logical managed area; the concrete Git/source layout
+uses the existing CNCF resources rather than assuming a Git subtree command.
+Planning changes no active Session, original base, accepted result, repair count
+or validation history. Reconcile pending Human records only through public
+admission; necessary same-purpose file additions do not create caller approval gates.
+
 Authorization reuse (2026-10-25): related-project delivery consumes the
 [purpose-based authorization correction](purpose-based-authorization-correction.md).
 Additional necessary files within the admitted Component/purpose/acceptance/operations
@@ -79,7 +122,8 @@ Keep the accepted 6.3 skills in production use while extending them; consume
 extension is one related producer/consumer development route, not completion of
 every overlay operation before any workspace synchronization.
 
-Execute **A's common bindings and one-producer/consumer main route -> C's minimum
+For the overlay branch after the ordinary assigned-chat delivery above, execute
+**A's common bindings and one-producer/consumer main route -> C's minimum
 connected workspace route -> remaining B and C cases -> D closure**. Batch letters
 and work IDs retain their identities; this ordering creates no new tracking or
 review cycles. Required generation from B is brought into the first route only
@@ -377,6 +421,13 @@ root + dedicated related worktrees
 
 RepositorySync MUST consume already-created local commits from GoalPhase without reimplementing GoalPhase closing. Conversely, GoalPhase MUST NOT grow multi-repository fetch/push/convergence semantics merely because its current worktree belongs to a larger Project Workspace.
 
+The assigned-chat delivery policy composes these existing owners: finish local
+Task/Phase acceptance and commit, perform publishLocal, return the local result,
+then attempt the selected best-effort sync. Reuse an applicable existing
+post-completion sync result rather than scheduling it twice. Consumer adoption
+does not wait for remote convergence; a live sync still retains its real resource
+ownership. Failed/unknown publication is not a delivered dependency.
+
 ## Example
 
 Project X uses project-specific branches of CNCF and Cozy.
@@ -574,8 +625,9 @@ This scenario must be supported through the same public project/workspace model 
 
 ## Practical completion condition
 
-Both the existing multi-repository synchronization scenario below and the
-Development Artifact Overlay checklist must be accepted for Phase 7 completion.
+The [dependency delivery checklist](phase-7-dependency-delivery-checklist.md),
+existing multi-repository synchronization scenario below and Development Artifact
+Overlay checklist must be accepted for Phase 7 completion.
 The Phase 7 [managed-suite integration items](managed-test-suites-phase-checklist.md)
 are also part of those connected scenarios, not a separate generic framework.
 Record actual integrated validation and independent review for each delivered

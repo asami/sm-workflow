@@ -1,5 +1,14 @@
 # RepositorySync owning native Start and fetch
 
+## Adopted fetch and continuation correction — 2026-10-26
+
+[RS-GIT-1–5](repository-sync-git-continuation.md) now governs executable defaults,
+actual fetched-tip adoption and same-Session effect reconciliation. It supersedes
+pre-fetch advertised-tip equality, unconditional no-refetch rules and new-Start
+recovery advice below for this scope. Prior tests remain historical evidence for
+their actual inputs, not proof of this correction. See the
+[delivery checklist](../phase/repository-sync-git-correction.md).
+
 ## Current Phase 5.2 C16 Fetch consumption — focused validation45 PASS
 
 Fetch consumes its actual retained observed payload, prepared intent or newly

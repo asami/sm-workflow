@@ -8,11 +8,14 @@ Handoff: [English developer instructions](../journal/2026/10/2026-10-24-goal-tas
 
 ## Placement
 
-Coordinate with [SFIX-1–4](standalone-fix-delivery-plan.md) as follow-on development
-consuming existing Phase 6.5 execution/assessment and Phase 6.6 diagnosis. Do not
-make every SFIX variant a prerequisite: share the first single-repository execution
-path, then deliver the two distinct completion policies. This allocates no new
-Phase number and adds no acceptance gate to ongoing Phases or recovery fixes.
+Allocation revised 2026-10-26: [Phase 6.7](../phase/phase-6.7.md) owns GTASK-1/2,
+journal/direct-input delivery and the initial GTASK-4 packaging/adoption.
+[Phase 17](../phase/phase-17.md) owns GTASK-3 wider inputs, multi-unit composition,
+investigation/related-project integration and extended GTASK-4 adoption.
+Coordinate with [SFIX-1–4](standalone-fix-delivery-plan.md) using the same execution
+path and distinct completion policies. Original requirement IDs remain; the
+Phase checklists own delivery evidence without duplicate acceptance runs.
+This adds no gate to ongoing Phases or recovery fixes.
 Phase 14 investigation may supply proposals but is not required for journal/direct
 instruction input. Phase 7 multi-repository breadth and Phase 9 enhanced provider
 routing do not block the first Task.
@@ -36,9 +39,9 @@ journal-sourced development request reaches actual commit and retained completio
 before expanding planning/input abstractions. Reuse ordinary commit recovery and
 automatic Journal/Evidence projection without duplicate execution or AI clerical work.
 
-### GTASK-3 — Other sources and bounded composition
+### GTASK-3 — Other sources and bounded composition (Phase 17)
 
-Exercise direct instructions and a referenced specification/Issue/review as source
+Reuse direct instructions accepted in Phase 6.7; exercise a referenced specification/Issue/review as source
 inputs; journal is not mandatory. Use existing source provenance rather than a
 new source registry. Connect authorized Phase 14 proposals and sm-fix execution
 without nested lifecycle/counter resets. Add multi-unit Task work only after the

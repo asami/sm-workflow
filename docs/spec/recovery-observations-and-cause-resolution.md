@@ -1,5 +1,17 @@
 # Recovery observations and cause resolution
 
+## Bounded comment normalization correction — 2026-10-26
+
+[SHR-01..06](goal-phase-source-history-recovery.md#same-authority-comment-recovery--adopted-2026-10-26)
+specializes the generic unresolved-effect rule below for already authorized,
+idempotent source-history comment normalization. Current-postcondition
+reconciliation and same-scope normalization do not require Human approval merely
+because the old result is absent. Preserve UNKNOWN as historical fact and append
+new evidence. Other effects do not inherit this permission. Record recovered
+terminal results after caller interruption separately from cause resolution;
+missing chat handoff is not a missing execution result. No extra AI call is needed.
+
+
 Date: 2026-10-24 (Asia/Tokyo)
 Status: adopted design; implementation and live adoption pending
 

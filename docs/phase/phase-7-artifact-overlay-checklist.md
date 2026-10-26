@@ -12,6 +12,12 @@ does not introduce a second test-command selector or per-run AI selection.
 
 ## Connected implementation
 
+The [2026-10-26 delivery order](phase-7.md#revised-main-route-order) first connects
+ordinary assigned-chat commit/publishLocal and consumer adoption, tracked in the
+[P7-DD checklist](phase-7-dependency-delivery-checklist.md). It is not proof of
+overlay publication. All existing DAO rows and evidence remain required for
+their actual scope; reuse these resources for the managed-subtree branch.
+
 Follow the [Phase 7 execution plan](phase-7.md#execution-plan--2026-10-07).
 The [cost-first order](phase-7.md#cost-first-execution-order--2026-10-18) takes
 A's single-producer/consumer main route into C's connected workspace sync before

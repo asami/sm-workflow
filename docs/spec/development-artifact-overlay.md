@@ -7,6 +7,13 @@ Acceptance: [Phase 7 overlay checklist](../phase/phase-7-artifact-overlay-checkl
 
 ## Purpose and boundary
 
+The [three-mode dependency delivery contract](dependency-development-delivery.md)
+distinguishes ordinary assigned-chat commit/publishLocal delivery from isolated
+development selections. This overlay is not a prerequisite for assigned-chat
+delivery and ordinary publishLocal is not evidence of overlay acceptance.
+Reuse this contract for explicitly selected managed-subtree/isolation needs;
+the queue and completion policy belong to Phase 7's dependency delivery owner.
+
 Give each development effort its own local artifact repository and let every
 consumer worktree explicitly select a set of development artifacts. Cover local
 development JARs and dependency metadata. Preserve ordinary dependency

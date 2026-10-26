@@ -23,7 +23,10 @@ authorized: focused tests and conditional review, without creating a Phase or
 implicit commit. Existing Phase work stays in its current sm-goal-phase Session.
 Investigation alone authorizes no source edit, and this integration does not make
 standalone FIX completion a prerequisite for Phase 14's read-only acceptance.
-See the [follow-on delivery plan](../notes/standalone-fix-delivery-plan.md).
+Initial Task/FIX delivery is now [Phase 6.7](phase-6.7.md); the remaining
+investigation-to-authorized-execution integration is [Phase 17](phase-17.md).
+Reuse that route rather than implementing another repair owner in Phase 14.
+See the [delivery plan](../notes/standalone-fix-delivery-plan.md).
 
 For an authorized ad hoc development assignment through integrated review and
 local commit, hand off to the planned [sm-goal-task](../spec/goal-task.md) route.

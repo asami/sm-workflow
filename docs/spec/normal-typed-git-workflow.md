@@ -1,5 +1,15 @@
 # Normal typed Git workflow
 
+## Adopted execution and recovery correction — 2026-10-26
+
+[RS-GIT-1–5](repository-sync-git-continuation.md) supersedes mandatory per-operation
+executable/program setup and abandoned-Session recovery advice in the affected
+RepositorySync route. CNCF supplies typed commands using an explicit executable
+or ordinary PATH Git; runtime authorization remains distinct. Preserve the
+typed UoW consumer and existing selection/validation evidence. Follow the
+[RS-C1–4 checklist](../phase/repository-sync-git-correction.md); this adoption
+does not claim the changed runtime behavior has already been verified.
+
 Candidate PendingDiff byte enforcement belongs solely to CNCF's resolved
 `cncf.git.diff.maximum-bytes` property (default and finite maximum 1048576 bytes,
 1 MiB). A host must explicitly declare PendingDiff `stdoutBytes: 1048576` to

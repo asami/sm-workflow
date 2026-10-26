@@ -1,5 +1,16 @@
 # RepositorySync native convergence
 
+## Adopted effect recovery correction — 2026-10-26
+
+[RS-GIT-1–5](repository-sync-git-continuation.md) supersedes the exclusion of
+intermediate recovery and new-Start advice below. Collect/reconcile successful
+commit, push and fetch effects before continuing unfinished work in the same
+Session. Preserve old failures/uncertainty and all counters/results; the public
+runtime owns adoption, without invented success or caller-side store edits.
+Repeated continuation consumes completed stages without duplicate mutations.
+The [delivery checklist](../phase/repository-sync-git-correction.md) remains open;
+historical passes do not establish that this behavior is installed.
+
 ## Current Phase 5.2 C18 contract
 
 This section supersedes the historical v9/v10 requirements below. The current

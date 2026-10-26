@@ -640,7 +640,9 @@ SkillBundleManifest
 skills/sm-goal-phase/
 skills/sm-split-phase/
 skills/sm-repository-sync/
-skills/sm-goal-task/          # 後続
+skills/sm-goal-task/          # Phase 6.7; extensions in Phase 17
+skills/sm-test-fix/           # Phase 6.7
+skills/sm-review-fix/         # Phase 6.7; selection extensions in Phase 17
 skills/sm-review/             # 後続
 skills/sm-validated-commit/   # 後続
 ```
@@ -727,7 +729,7 @@ CNCF 側の作業は公開 schema の所有ではなく、次の adapter/conform
    - 同一 path mutation の拒否
    - development/published skill bundle の同値性
 9. **適用範囲の拡張**
-   - `sm-goal-task`
+   - `sm-goal-task`: [Phase 6.7](../phase/phase-6.7.md) main route; [Phase 17](../phase/phase-17.md) remaining Task/FIX extensions
    - `sm-review`
    - `sm-validated-commit`
 

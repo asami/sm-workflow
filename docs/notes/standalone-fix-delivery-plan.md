@@ -8,12 +8,15 @@ Handoff: [English developer handoff](../journal/2026/10/2026-10-24-standalone-fi
 
 ## Scheduling and responsibility
 
-Deliver as a follow-on slice consuming Phase 6.5 FIX/conditional assessment and
-Phase 6.6 diagnosis. This plan does not enlarge their existing acceptance or
-interrupt ongoing 6.4/6.5 and recovery corrections. No new numbered Phase is
-allocated here. Phase 14 retains investigation-first ownership and later connects
-an explicitly authorized repair to this route. Phase 7 multi-repository selection
-and Phase 9 enhanced routing are optional later consumers, not initial blockers.
+Allocation revised 2026-10-26: [Phase 6.7](../phase/phase-6.7.md) owns SFIX-1/2,
+the SFIX-3 finding-origin sm-review-fix entry and initial SFIX-4 delivery.
+[Phase 17](../phase/phase-17.md) owns remaining SFIX-3 dirty/focused/full selection,
+investigation/related-project integration and extended SFIX-4 adoption.
+Reuse Phase 6.5 execution and Phase 6.6 diagnosis without enlarging their
+acceptance or interrupting ongoing work/recovery. Original SFIX IDs remain
+requirements; Phase checklists own delivery evidence without duplicate runs.
+Phase 14 retains investigation, Phase 7 workspace support and Phase 9 enhanced
+routing; none is a whole-Phase prerequisite for the initial repair route.
 
 ## Main route first
 
@@ -39,10 +42,10 @@ one independent scoped review. Follow-up FIX/re-review remains in the same unit,
 uses affected checks and retains prior evidence/counters. There is no AI call to
 waive review and no synthetic PASS for skipped review.
 
-### SFIX-3 — Reuse for other entry conditions
+### SFIX-3 — Reuse for other entry conditions (split between 6.7 and 17)
 
-Add `sm-review-fix` as finding-origin input to the same mechanism. Dirty/focused
-selection are options, not new repair engines. Use existing full-test policy when
+Phase 6.7 adds `sm-review-fix` as finding-origin input. Phase 17 holds dirty/focused
+selection as options, not new repair engines. Use existing full-test policy when
 explicitly requested. Connect Phase 14 `sm-diagnose` proposals only when repair is
 authorized; investigation-only requests remain read-only. Do not wait for all
 entrypoint variants before delivering SFIX-1/2.

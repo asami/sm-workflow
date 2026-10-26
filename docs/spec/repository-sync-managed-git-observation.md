@@ -1,5 +1,14 @@
 # RepositorySync managed native Git observations
 
+## Adopted producer/consumer refinement — 2026-10-26
+
+[RS-GIT-1–5](repository-sync-git-continuation.md) governs default executable
+selection, useful producer diagnostics and proportionate observation. The
+per-operation executable-configuration assumptions below are superseded: CNCF
+constructs supported typed commands and uses explicit Git or ordinary PATH Git.
+Keep the typed consumer/UoW boundary; do not duplicate CNCF parsing or introduce
+caller-side Git execution. Historical validation retains its original scope.
+
 Date: 2026-10-15 (Asia/Tokyo)
 Status: typed primary consumer migration completed bounded source-level parent
 qualification (66 passing checks in eight suites); independent review pending.

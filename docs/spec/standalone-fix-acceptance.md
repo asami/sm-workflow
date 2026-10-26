@@ -4,6 +4,11 @@ Date: 2026-10-24 (Asia/Tokyo)
 Status: adopted specification; standalone entrypoints and acceptance pending
 Plan: [standalone fix delivery](../notes/standalone-fix-delivery-plan.md)
 
+Allocation (2026-10-26): [Phase 6.7](../phase/phase-6.7.md) delivers single-repository
+test/review fix and initial caller adoption. [Phase 17](../phase/phase-17.md) owns
+selection options and investigation/related-project integration. Completion
+semantics below remain unchanged; neither allocation claims implementation.
+
 Related: [sm-goal-task](goal-task.md) reuses this execution path for ad hoc
 development from journals or other inputs, but adds integrated Task review and
 actual local commit as completion requirements. Those requirements do not become
@@ -84,6 +89,12 @@ No automatic Phase Review, Release Review, commit, push or release is added.
 Explicitly requested commit/release uses its own existing authorization and
 delivery route, reusing applicable acceptance evidence rather than restarting
 review. Standalone accepted changes may remain uncommitted.
+
+For [assigned-chat dependency delivery](dependency-development-delivery.md),
+the request explicitly includes local commit and publishLocal. This selected
+delivery reuses the accepted repair and conditional-review result; it does not
+add integrated Task/Phase review or a second consent request within scope.
+Phase 7 owns the queue and publication/adoption composition.
 
 ## Retention, counting and completion
 
