@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
  * @version Oct. 24, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
 final class RepositorySyncInputSelectionReadPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncInputSelectionReadPolicy.*
   private def collection(name: String) = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "repositoryrecords", name))

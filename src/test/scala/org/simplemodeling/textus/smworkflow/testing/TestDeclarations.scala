@@ -17,6 +17,16 @@ class LocalTestDeclaration extends ValidationDeclarationProvider {
       ReasoningLevel.Standard, reviewRequired = false)))
 }
 
+/** Small local acceptance selection. The one-minute aggregate body-time target
+  * is an operating guideline, not a per-operation duration or execution timeout.
+  * @since Oct. 26, 2026
+  * @version Oct. 26, 2026
+  */
+class AdmissionTestDeclaration extends LocalTestDeclaration {
+  override def declaration: Declaration = super.declaration.copy(
+    purposes = Some(Set(Purpose.ADMISSION, Purpose.FOCUSED, Purpose.FULL)))
+}
+
 /** Multi-process CLI/SBT scenarios have variable, substantial execution cost.
   * Artifact preparation is a separate requirement, not the reason for HEAVY.
   * @since Oct. 24, 2026

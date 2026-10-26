@@ -48,7 +48,40 @@ historical evidence, not the target authoring contract. A one-line enrollment ca
 be retained as existing work while migration is incomplete, but is not migration
 acceptance and does not become the permanent solution.
 
+## ADMISSION operating target
+
+ADMISSION targets **at most one minute of aggregate test-body execution time per
+selected run**, excluding compilation, dependency resolution, generation,
+discovery, runtime startup, fixture setup/teardown and result retention. Sum
+the selected bodies even when execution is parallel; this is not a one-minute
+allowance per test or suite. It is an engineering guideline, not a fixed timeout,
+test assertion, automatic cancellation or automatic reclassification rule.
+An over-target successful run remains successful; reconsider selection/cost with
+its actual coverage retained. Independently configured execution deadlines keep
+their existing role and are not set to 60 seconds by this policy.
+
+Use `testOnly --purpose ADMISSION` through the existing execution owner; inspect
+with `labelledTestSelection --purpose ADMISSION`. The initial local declarations
+cover GoalPhase ordered progression, RepositorySync input selection and SplitPhase
+candidate allocation. `AdmissionTestDeclaration` adds ADMISSION while retaining
+FOCUSED/FULL. Existing HEAVY declarations and default FULL selection are unchanged.
+Add or narrow membership at the executable specification, without a second suite
+registry. Operation overrides retain CNCF's replacement semantics: explicitly
+retain any intended FOCUSED/FULL memberships when overriding purposes.
+
+Record body time separately from preparation/cleanup when the execution evidence
+supports that separation. Suite/run wall-clock duration is not net body time;
+report net time as unavailable when it cannot be separated. A conservative
+upper bound below one minute may establish the target, with that basis explicit.
+Do not invent `expectedDuration` values: a declaration default is per operation,
+not the aggregate selection budget. ADMISSION is quick acceptance coverage, not
+a replacement for affected FOCUSED tests or required FULL/HEAVY acceptance.
+
 ## FULL boundary
+
+For new Step/Phase plans and overnight execution, follow the
+[ADMISSION/FULL/HEAVY cadence](native-host-execution.md#validation-cadence-admission-full-and-heavy).
+That operational policy uses the existing selection mechanism described here.
 
 Normal FULL selection excludes HEAVY work and external-service-dependent work.
 MySQL/PostgreSQL Docker start/stop, a separately started server, a required existing

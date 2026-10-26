@@ -15,7 +15,7 @@ import GoalPhaseOrderedProgression.*
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
 final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](c: Consequence[A]): A = c match {
     case Consequence.Success(value) => value

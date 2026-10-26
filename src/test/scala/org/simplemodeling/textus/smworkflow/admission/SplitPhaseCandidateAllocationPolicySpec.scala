@@ -24,7 +24,7 @@ private[admission] object SplitPhaseCandidateAllocationFixture {
 }
 
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
 final class SplitPhaseCandidateAllocationPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import SplitPhaseCandidateAllocationFixture.*
   private val _result = S.ResultReference("canonical-result", "1")

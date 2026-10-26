@@ -71,6 +71,25 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
   }
 
   "Canonical discovery through the build bridge" should {
+    "select ADMISSION without changing FULL or admitting HEAVY" in {
+      Given("real admission, ordinary local and HEAVY declarations")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val admission = classOf[GoalPhaseOrderedProgressionSpec].getName
+      val local = getClass.getName
+      val heavy = classOf[NativeGoalDependencyValidationCliSpec].getName
+      val candidates = Array(admission, local, heavy)
+      When("each purpose selects independently through canonical discovery")
+      val selected = LabelledTestSelection.select(root, "test", "ADMISSION", candidates)
+      val full = LabelledTestSelection.select(root, "test", "FULL", candidates)
+      val expensive = LabelledTestSelection.select(root, "test", "HEAVY", candidates)
+      Then("ADMISSION is nonempty and local, while existing FULL and HEAVY memberships remain")
+      selected.map(_(0)).toSet shouldBe Set(admission)
+      selected.map(_(1)).toSet shouldBe new GoalPhaseOrderedProgressionSpec().testNames
+      selected.forall(_(2) == "false") shouldBe true
+      full.map(_(0)).toSet shouldBe Set(admission, local)
+      expensive.map(_(0)).toSet shouldBe Set(heavy)
+    }
+
     "discover the dependency CLI without manual enrollment and exclude it from FULL" in {
       Given("the actual compiled test artifact and two explicitly labelled suites")
       val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString

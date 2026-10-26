@@ -185,6 +185,54 @@ without that configuration argument. Preparation/Submit uncertainty, rejection, 
 or changed routing stops without Advance or retry and retains all prior actual
 outputs. See the caller contract for exact input shapes and output sequence.
 
+## Validation cadence: ADMISSION, FULL and HEAVY
+
+For newly prepared execution plans, use the existing canonical purpose metadata
+with this default cadence. Purposes are selections, not three nested suite sets.
+
+| Purpose | Normal timing | Selection |
+| --- | --- | --- |
+| ADMISSION | Daytime implementation/repair and Step acceptance | A small, nonempty set covering the changed contract and acceptance-critical regressions |
+| FULL | Integrated Phase validation before Phase completion | Broad ordinary regression coverage, excluding HEAVY and external-service requirements |
+| HEAVY | A separately scheduled overnight batch | Long-running, nested-SBT, multi-process and external-service integration coverage |
+
+ADMISSION targets an aggregate **test-body time of at most
+one minute**, excluding preparation and cleanup. This is not a fixed timeout or
+a per-test budget; retain actual results even when the target is exceeded. See
+[label-driven selection](label-driven-test-selection.md#admission-operating-target)
+for timing attribution and declarations.
+
+Do not select an entire HEAVY suite for every repair merely because the changed
+case belongs to it. When daytime integration evidence is necessary, select the
+affected operations explicitly through the existing FOCUSED route, retaining
+their actual cost and requirements. Reuse applicable successful results for
+unchanged inputs and coverage; changed behavior or a new failure requires the
+affected validation. Suite-name selection without a purpose filter can include
+HEAVY operations and must not be treated as an ADMISSION or FULL shortcut.
+
+Plan and host-policy authors own the selections. The semantic skill supplies
+their meaning and acceptance coverage; the runtime resolves the captured
+selection, prepares its requirements, executes it and retains actual results.
+Use the existing purpose/feature queries and exact-operation filters. Do not
+add another test catalog, infer purpose from elapsed time or clock time, or
+combine all three purposes into the ordinary query.
+
+Where a project has no suitable ADMISSION declarations yet, select a bounded,
+nonempty affected FOCUSED set and report its actual coverage while classification
+is completed. Do not invent ADMISSION metadata, broaden automatically to HEAVY,
+or treat an empty selection as successful admission validation.
+
+The scheduler/caller owns overnight invocation and result notification. Record
+the tested revision/input scope and keep overnight results separate from current
+Step/Phase results. Review failures in the next development cycle; do not make
+every ordinary Step wait for the overnight batch unless its actual acceptance
+contract explicitly requires that result. This policy schedules no job itself.
+
+This cadence applies to future plans and explicit supported revisions. It does
+not narrow an already captured requirement or alter a running invocation,
+Session, accepted work, history or repair accounting. Daytime changes to those
+requirements use the existing planning/adoption route.
+
 ## Product SBT lifecycle
 
 The installed sm-workflow CLI's native local driver executes ordinary SBT
