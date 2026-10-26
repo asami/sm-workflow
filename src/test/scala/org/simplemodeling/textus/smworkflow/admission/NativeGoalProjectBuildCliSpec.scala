@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * owns a fresh managed host, repository, Session and finite child lifecycle.
   * Publication, runtime selection, execution and review belong to the parent.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

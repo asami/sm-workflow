@@ -109,19 +109,23 @@ retained and reused only for their applicable scopes; earlier failures remain
 recorded. This is not a single full-repository test result.
 
 One coordinated normal local publication completed and activated its runtime.
-The whole accepted image is retained for private installed DSR qualification.
-Its installed preparation case passed; the subsequent two source scenarios remain
-unqualified after a test-JVM generated-class loading abort. Actual fixture
-effects and the terminal failure are retained. Shared mutable build output and
-test-loader ownership were checked independently. A subsequent bounded
-invocation stopped before SBT because the runner selected a missing preparation
-helper path. Its unused attempt and permission remain retained; a concrete
-one-successor proposal received independent review and actual explicit Human
-admission. One newly registered owner now carries the same unused attempt,
-permission and exact two-case command; its actual result remains pending.
-No product failure, permission consumption or unknown execution is inferred
-from this preparation-only stop. The host proposal is un-applied. No consumer acceptance
-or synchronization completion is claimed.
+The complete accepted image passed all three requested installed CLI cases:
+preparation and both selected-changes/committed source-revision scenarios.
+The parent verified the actual terminal results; compilation and the final
+bounded invocation succeeded. This is not a full-repository or warning-cleanup
+claim. The earlier abort and subsequent preparation-path stop remain recorded.
+One independently reviewed, explicitly Human-authorized owner transfer used
+the same previously unused attempt, permission and exact two-case command;
+no successful effect, publication or old fixture Session was replayed.
+
+The current CNCF candidate adds independently committed build/test/documentation
+work, with no production-source change from the previously observed candidate.
+The immutable runtime module association does not qualify that new source HEAD.
+The un-applied host proposal retains the original source check obligations;
+the consumer owner alone performs actual public adoption, fresh checks,
+independent review and closure in the original Session. No consumer acceptance
+or synchronization completion is claimed. The final producer association is
+`cc51-dsr-producer-qualified-r1.json` in the retained task storage below.
 
 Detailed attempts, raw diagnostics, actual test results, independent reviews,
 publication/module associations and host proposals remain outside Git in the

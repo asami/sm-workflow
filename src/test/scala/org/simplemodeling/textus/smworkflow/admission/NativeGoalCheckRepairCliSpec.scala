@@ -10,7 +10,7 @@ import NativeWorkflowCliFixture as F
 /** Separate ordinary commands retain actual failed checks and fresh validation.
   * Assigned semantic edits are specification data, not external provider proof.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

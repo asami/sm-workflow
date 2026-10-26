@@ -14,7 +14,7 @@ import NativeWorkflowCliFixture as F
 
 /** Installed continuation retains the actual Test output under its selected policy.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

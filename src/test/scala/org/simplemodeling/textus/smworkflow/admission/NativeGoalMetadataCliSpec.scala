@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Semantic Submit is specification-owned input, never provider, Human or
   * independent review evidence. Every successful example stops pending review.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

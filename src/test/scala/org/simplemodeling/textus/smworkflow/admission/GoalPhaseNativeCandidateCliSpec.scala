@@ -11,7 +11,7 @@ import NativeWorkflowCliFixture as F
 /** Normal isolated CLI regression with explicitly specification-owned semantics,
   * review attestations and local effect grants. No live Session or external AI.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

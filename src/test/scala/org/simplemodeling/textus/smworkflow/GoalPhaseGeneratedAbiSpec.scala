@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])

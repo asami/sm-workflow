@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Supplied specification facts prove no reviewer, operator or execution authority.
   * The inherited normal fixture closes each actual runtime handle.
   * @since   Oct. 15, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativePreparationOperationFixture extends ThreeWorkflowManagedRepositoryFixture {

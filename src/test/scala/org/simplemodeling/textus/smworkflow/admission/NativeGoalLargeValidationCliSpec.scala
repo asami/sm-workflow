@@ -14,7 +14,7 @@ import NativeWorkflowCliFixture as F
 /** Fresh isolated ordinary commands retain a genuine large failed Test receipt.
   * Optional installed-command selection applies to both validation and reopening.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

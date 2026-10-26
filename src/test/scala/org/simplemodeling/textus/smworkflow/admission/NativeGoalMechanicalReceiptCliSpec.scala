@@ -22,7 +22,7 @@ import NativeWorkflowCliFixture as F
   * SPECIFICATION-OWNED; they establish no real independent review or acceptance.
   * The successful example stops at pending ReviewPhase.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

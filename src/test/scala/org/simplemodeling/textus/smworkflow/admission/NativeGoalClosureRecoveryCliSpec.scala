@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * access below is observation only. The optional installedCommand property
   * qualifies the same isolated host through an actual installed executable.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

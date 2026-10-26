@@ -28,7 +28,7 @@ import NativePreparationFixture.expectedRecordJson
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

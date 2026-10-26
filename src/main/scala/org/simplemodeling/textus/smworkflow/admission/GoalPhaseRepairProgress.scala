@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Read-only current selected-window context owned by the ordered controller.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRepairProgress {

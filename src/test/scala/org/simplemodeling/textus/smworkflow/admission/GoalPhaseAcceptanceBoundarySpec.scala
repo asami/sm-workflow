@@ -23,7 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Application quality examples with explicit fixture provenance. Native effects,
   * real providers and production independent review are not proved by these tests.
   * @since   Oct. 16, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

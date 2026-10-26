@@ -16,7 +16,7 @@ import NativeWorkflowCliFixture as F
 /** Ordinary commands connect current resolved settings to candidate history and checks.
   * Semantic edits are controlled fixture input, not genuine AI or acceptance evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with GivenWhenThen { this: AnyWordSpec =>

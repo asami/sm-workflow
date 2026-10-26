@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Selected-window projections only; no external Human or review execution.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

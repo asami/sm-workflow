@@ -27,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * The existing normal-host acknowledgement hook arranges interruption only.
   * No private row is seeded or changed; all Human input is specification-owned.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

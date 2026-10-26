@@ -1,7 +1,7 @@
 # Phase 6.6 incremental SBT failure diagnosis delivery detail
 
 Date: 2026-10-23
-Status: allocated to planned Phase 6.6; diagnostic implementation pending
+Status: completed; all sixteen Plan1 conditions accepted, Terminal/completed through Advance060
 Owner: sm-workflow development chat
 Spec: [incremental diagnosis](../spec/incremental-sbt-failure-diagnosis.md)
 Phase: [6.6](../phase/phase-6.6.md)
@@ -52,7 +52,7 @@ actual focused behavioral execution. See P66-13..15 for explicit acceptance.
 
 ## Acceptance ownership
 
-[P66-01 through P66-15](../phase/phase-6.6-checklist.md) is the canonical checklist,
+[P66-01 through P66-16](../phase/phase-6.6-checklist.md) is the canonical checklist,
 covering D1 diagnostics, D2 information interaction, D3 repair/verification and D4
 adoption. Maintain completion there rather than in a second checklist. The former
 unchecked size-limit-removal item is withdrawn as already completed baseline work.

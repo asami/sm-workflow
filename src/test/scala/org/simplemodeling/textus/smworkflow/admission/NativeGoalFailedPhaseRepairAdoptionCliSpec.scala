@@ -29,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * drives the same public Operations through the actual installed executable.
   * Fixture evidence asserts no production Human provenance.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

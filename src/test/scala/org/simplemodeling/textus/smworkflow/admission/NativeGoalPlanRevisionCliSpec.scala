@@ -18,7 +18,7 @@ import GoalPhaseOrderedProgression as O
   * Human answers. These examples claim no genuine Human/provider adoption,
   * independent review, accepted Step commit or Phase acceptance.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

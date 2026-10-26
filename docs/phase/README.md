@@ -19,7 +19,7 @@ plans, including initial installed delivery and actual separate-chat adoption.
 and investigation/related-project integrations. Transfer bounded items from 17
 to the appropriate active/next Phase as actual needs arise; preserve source IDs
 and evidence, and distinguish transfer from completion. Existing Phase 7/9/14/16 owners
-remain unchanged. Neither allocation reopens active Phase 6.6 or resets any
+remain unchanged. Neither allocation reopens completed Phase 6.6 or resets any
 Session/history/counts/results. See the
 [English handoff](../journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md).
 
@@ -127,7 +127,7 @@ the CNCF Phase 116 owner has adopted it and completed that same Session.
 GPSYNC-09..12, the amended parts of the earlier criteria and shared-skill
 promotion remain pending. This roadmap update performs no live Session operation.
 
-Incremental SBT diagnosis adopted 2026-10-23: [Phase 6.6](phase-6.6.md) and its
+Incremental SBT diagnosis completed 2026-10-26: native Session f01d809d1b4bfe8a4b5c241dac301b81, all sixteen Plan1 conditions accepted, Advance060 Terminal/completed. Original allocation adopted 2026-10-23: [Phase 6.6](phase-6.6.md) and its
 [P66 checklist](phase-6.6-checklist.md) own the
 [D1–D4 plan](../notes/incremental-sbt-failure-diagnosis-plan.md), prioritizing one
 failure → structured diagnostics → batched information request → repair → focused

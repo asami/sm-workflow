@@ -15,7 +15,7 @@ import NativeWorkflowCliFixture as F
 /** Explicit ordinary command stages around genuine external semantic repair.
   * Supplied observations check coherence and authenticate no provider provenance.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

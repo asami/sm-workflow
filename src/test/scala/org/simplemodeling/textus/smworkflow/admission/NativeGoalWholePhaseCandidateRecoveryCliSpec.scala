@@ -27,7 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * private state seeding or production Session is involved. Fixture provenance
   * claims only its actual completed test-owned prior invocation.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

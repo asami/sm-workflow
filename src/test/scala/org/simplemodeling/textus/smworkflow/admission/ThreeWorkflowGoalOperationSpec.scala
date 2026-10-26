@@ -29,7 +29,7 @@ import GoalPhaseAcceptanceBoundary as B
   * Real public Operations own all history, checks, staging, commits and closure.
   * Host evidence is explicit test data, not independent production issuance.
   * @since   Oct.  7, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

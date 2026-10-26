@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named value binding and generated result intake checks. Real operation execution is covered by
   * the normal three-workflow specs, not inferred from a codec round trip.
   * @since   Oct. 12, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

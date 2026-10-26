@@ -12,7 +12,7 @@ import NativeWorkflowCliFixture as F
 /** Independent ordinary CncfMain commands consume actual standard wire output.
   * Executor outcomes remain specification data, not installed provider evidence.
   * @since   Oct. 16, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

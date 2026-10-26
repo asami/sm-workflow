@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * acknowledgement interruption is installed by the isolated test host before
   * any effect; no private native row or invented execution receipt is written.
   * @since   Oct. 20, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Compile. All roots, executable copies, gates and child processes are owned
   * by these examples; no production Session or review authority is supplied.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 25, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
