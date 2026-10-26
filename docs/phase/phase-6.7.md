@@ -1,6 +1,6 @@
 # Phase 6.7: Ad Hoc Task and Standalone Fix Delivery
 
-Status: planned; implementation and installed acceptance pending
+Status: active; P67-T1 source implementation prepared, native validation and installed acceptance pending
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
 Predecessor: consume the qualified Phase 6.5 execution and Phase 6.6 diagnosis paths

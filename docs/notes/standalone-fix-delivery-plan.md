@@ -1,7 +1,7 @@
 # Standalone sm-fix delivery plan
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: planned; no standalone implementation or acceptance claimed
+Status: P67-T1 source implementation in progress; native validation and installed acceptance pending
 Owner: sm-workflow development
 Specification: [Step-equivalent standalone acceptance](../spec/standalone-fix-acceptance.md)
 Handoff: [English developer handoff](../journal/2026/10/2026-10-24-standalone-fix-handoff.md)
@@ -57,6 +57,13 @@ actual execution, review disposition and acceptance in common Journal/Evidence.
 Use existing runtime-owned SBT. Confirm preservation of existing work and results,
 without moving active Phase repairs to a standalone Session. Supply operational
 examples and English handoff. Commit/release remains explicitly selected work.
+
+## P67-T1 source delivery
+
+The [standalone runtime contract](../spec/standalone-fix-runtime.md) records the
+new public source route, shared check/diagnostic/Evidence machinery and its
+truthful fixture-versus-installed evidence boundary. No SFIX or Phase acceptance
+checkbox is closed by source implementation or bounded admission fixtures alone.
 
 ## Acceptance checklist — pending
 
