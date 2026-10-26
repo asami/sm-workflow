@@ -63,6 +63,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
   private val entry = if (task) "GoalTask" else "StandaloneFix"
   private val wire = if (task) "goal-task" else "standalone-fix"
   val startOperation = StateMachineOperationIdentity(entry + "Service", "start" + entry)
+  val reviewStartOperation = StateMachineOperationIdentity("StandaloneFixService", "startStandaloneReviewFix")
   val advanceOperation = StateMachineOperationIdentity(entry + "Service", "advance" + entry)
   val completionOperation = StateMachineOperationIdentity(entry + "Service", "submit" + entry + "WorkResult")
   val closingType = StateMachineResultTypeReference(entry + "View")
@@ -125,7 +126,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       else invalid("Requested repository/paths exceed the configured host bindings")
     selected = input.checks.flatMap(id => h.checks.find(_.identity == id))
     state <- S.startC(input, participant, selected)
-    binding = ProfileStartAdmission.Binding(startOperation, definition.workflowIdentity, definition.workflowRevision, (entry + "Input"))
+    admissionoperation = if (input.reviewOrigin.nonEmpty) reviewStartOperation else startOperation
+    inputtype = if (input.reviewOrigin.nonEmpty) "StandaloneReviewFixInput" else entry + "Input"
+    binding = ProfileStartAdmission.Binding(admissionoperation, definition.workflowIdentity, definition.workflowRevision, inputtype)
     // Freeze one actual managed read, so metadata admission and complete-input
     // equality cannot accidentally consume two different selection observations.
     chosen <- selections.loadForCallC(selection, core)
@@ -133,8 +136,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       def loadC(id: String) = if (id == selection) Consequence.success(chosen)
         else invalid("Selection read crossed its actual managed identity")
     }
-    _ <- ProfileStartAdmission.admitC(binding, TypedValue((entry + "Input"), input.asJson), selection, participant, key, actualSelection)
-    _ <- if (chosen.flatMap(_.selectedInput).exists(v => v.typeIdentity == (entry + "Input") && v.value == input.asJson))
+    _ <- ProfileStartAdmission.admitC(binding, TypedValue(inputtype, input.asJson), selection, participant, key, actualSelection)
+    _ <- if (chosen.flatMap(_.selectedInput).exists(v => v.typeIdentity == inputtype && v.value == input.asJson))
       Consequence.unit else invalid("Actual human selection does not bind this complete standalone request")
     root <- G.rootC(core)
     observed <- G.observeC(core)
@@ -154,6 +157,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
     active <- instances.appendC(identity, initial.revision, history(initial, "standalone-started"))(using core.executionContext)
     saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head, unrelated = if (task) Some(observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))) else None), core)
   } yield view(saved, state, "Started", if (task) "Task request retained; normal Advance owns implementation and selected checks"
+    else if (input.reviewOrigin.nonEmpty) "Original review findings retained; normal Advance owns bounded repair and selected checks"
     else "Standalone request retained; normal Advance owns the selected checks")
 
   def advanceC(id: String, h: Host, definition: DefinitionBinding, core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
@@ -188,7 +192,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
             retained = next.copy(evidenceReferences = next.evidenceReferences ++ references)
             saved <- saveC(h, storage, current, payload.copy(state = retained,
               implementationWorker = if (Set("Repair", "Implement")(payload.state.stage)) done.evidence.workerIdentity else payload.implementationWorker,
-              implementationWorkers = if (task && Set("Repair", "Implement")(payload.state.stage))
+              implementationWorkers = if ((task || payload.state.input.reviewOrigin.nonEmpty) && Set("Repair", "Implement")(payload.state.stage))
                 Some((payload.implementationWorkers.getOrElse(Vector.empty) ++ done.evidence.workerIdentity.toVector).distinct)
                 else payload.implementationWorkers), core)
           } yield saved
@@ -367,8 +371,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
     _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core) else freshC(payload, core)
     required <- requiredC(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
-    bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.",
-      (payload.state.input.sourceReferences ++ payload.state.evidenceReferences).distinct, Vector.empty,
+    bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks. Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
+      (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct, Vector.empty,
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))
     continuation = Continuation(StateMachineRunIdentity(from.identity.value),
       ContinuationIdentity(from.identity.value + ":standalone:" + from.revision.next.value), StateMachineRevision(from.revision.next.value.toString), required, bundle)

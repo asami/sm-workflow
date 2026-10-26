@@ -80,7 +80,7 @@ private[smworkflow] object NativeWorkflowResultInput {
         diagnosis <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
       } yield StandaloneFixExecution.Result(value.outcome, value.summary, value.findings,
         value.conditions.toVector.map(c => StandaloneFixExecution.Condition(c.identity, c.satisfied, c.detail)),
-        value.unresolvedQuestions, diagnosis, assessment))))
+        value.unresolvedQuestions, diagnosis, assessment, StandaloneReviewFix.dispositions(value.reviewDispositions)))))
 
   def task(service: spec.ServiceDefinition, creation: ComponentCreate,
     host: BoundedWorkRuntime.Host, definition: DefinitionBinding): spec.ServiceDefinition =

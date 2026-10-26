@@ -65,6 +65,14 @@ new public source route, shared check/diagnostic/Evidence machinery and its
 truthful fixture-versus-installed evidence boundary. No SFIX or Phase acceptance
 checkbox is closed by source implementation or bounded admission fixtures alone.
 
+## P67-T3 source delivery
+
+The [review-origin runtime contract](../spec/standalone-review-fix-runtime.md) adds
+identified original findings, exact disposition/change/check attribution and
+conditional affected review through the same standalone engine. Native checks
+and actual installed skill/delivery evidence remain separate; no checklist box
+is closed by source fixtures.
+
 ## Acceptance checklist — pending
 
 - [ ] SFIX-A01: A real single-repository test failure is repaired and passes actual

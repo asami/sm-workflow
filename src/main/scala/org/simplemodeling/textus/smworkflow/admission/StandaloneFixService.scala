@@ -36,7 +36,7 @@ private[smworkflow] object StandaloneFixService {
       N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
     service = NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.StandaloneFixServiceService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
-        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped)))
+        new Operation(false, h, definition, selections), new ReviewOriginStart(h, definition, selections), new InformationOperation(h, definition), wrapped)))
   } yield NativeWorkflowResultInput.standalone(service, creation, h, definition)
 
   private final class Operation(start: Boolean, h: N.Host, definition: DefinitionBinding,
@@ -63,6 +63,29 @@ private[smworkflow] object StandaloneFixService {
               input.checks.toVector, input.conditions.toVector, input.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
               input.reviewRequired, input.kind, input.scalaLint, input.repairLimit), participant, key, selection, selections, h, definition, selected)
           } yield result else N.advanceC(session, h, definition, selected)
+        } yield NativeWorkflowOperationOutput.response(result)
+      }
+    })
+  }
+
+  private final class ReviewOriginStart(h: N.Host, definition: DefinitionBinding,
+    selections: ProfileStartAdmission.CallScopedSelectionPort) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(
+      SmWorkflowComponent.StandaloneFixServiceService.StartStandaloneReviewFixOperation)
+    def createOperationRequest(incoming: Request): Consequence[OperationRequest] = Consequence.success(new CommandAction {
+      val request = incoming
+      override def commandExecutionMode = CommandExecutionMode.Sync
+      def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+        val core = c
+        def execute(): Consequence[OperationResponse] = for {
+          session <- NativeWorkflowOperationInput.startSessionC(incoming, core.executionContext)
+          context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
+          supplied <- NativeWorkflowOperationInput.valueC[V.StandaloneReviewFixInput](incoming, "input")
+          input <- StandaloneReviewFix.fromPublicC(supplied)
+          selection <- NativeWorkflowOperationInput.textC(incoming, "selectionId")
+          participant <- NativeWorkflowOperationInput.textC(incoming, "participant")
+          key <- NativeWorkflowOperationInput.textC(incoming, "idempotencyKey")
+          result <- N.startC(input, participant, key, selection, selections, h, definition, core.copy(executionContext = context))
         } yield NativeWorkflowOperationOutput.response(result)
       }
     })
@@ -152,7 +175,7 @@ private[smworkflow] object StandaloneFixService {
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
             _ <- h.review.map(_.admitStandaloneC(call, work, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))
-            _ <- if (submitted.evidence.workerIdentity.exists(w => w.nonEmpty && !payload.implementationWorker.contains(w)))
+            _ <- if (submitted.evidence.workerIdentity.exists(w => w.nonEmpty && !payload.implementationWorker.contains(w) && !payload.implementationWorkers.getOrElse(Vector.empty).contains(w)))
               Consequence.unit else N.invalid("Review requires an actual different worker identity")
           } yield () else Consequence.unit
           next <- current.appendC(current.revision, N.history(current,

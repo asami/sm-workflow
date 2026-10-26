@@ -8852,6 +8852,25 @@ Explicit standalone request selection metadata and absolute local file: URI refe
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
 
+## WorkflowStandaloneReviewFixStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit original review-fix request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
 ## WorkflowGoalTaskStartPreparationInput
 
 - input-kind :: COMMAND
@@ -9414,6 +9433,34 @@ WorkflowStandaloneFixStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareStandaloneReviewFixStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected original review-fix business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowStandaloneReviewFixStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowStandaloneReviewFixStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
@@ -9785,6 +9832,7 @@ WorkflowCallerInformationResult
 | unresolvedQuestions | string | * |
 | diagnosticRepair | record | ? |
 | fixAssessment | GoalPhaseFixAssessment | ? |
+| reviewDispositions | StandaloneReviewFixDisposition | * |
 
 ## StandaloneFixView
 
@@ -9904,6 +9952,10 @@ action = ReviewStandaloneFix
 
 operation = StandaloneFixService.startStandaloneFix
 
+#### startStandaloneReviewFix
+
+operation = StandaloneFixService.startStandaloneReviewFix
+
 #### advanceStandaloneFix
 
 operation = StandaloneFixService.advanceStandaloneFix
@@ -9998,6 +10050,38 @@ StandaloneFixInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | StandaloneFixInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### startStandaloneReviewFix
+
+##### DESCRIPTION
+
+Consume selected original review, finding identities and source context through the existing standalone repair runtime. Return normal standalone continuations; acceptance remains uncommitted. No new Phase or repeated whole-repository review is created.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneReviewFixInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneReviewFixInput | 1 |
 | selectionId | string | 1 |
 | participant | string | 1 |
 | idempotencyKey | string | 1 |
@@ -10596,3 +10680,61 @@ GoalTaskWorkRequest
 ###### TYPE
 
 GoalTaskWorkResult
+
+
+# VALUE
+
+## StandaloneReviewFixInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Frozen adopted repair objective, original identified review findings, ownership and source context. Original review does not constitute new execution or independent re-review authority.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+| originalReview | WorkflowArtifactReference | 1 |
+| reviewContext | string | 1 |
+| originalFindings | StandaloneReviewFixFinding | + |
+
+## StandaloneReviewFixFinding
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| summary | string | 1 |
+| paths | string | + |
+| sourceReferences | WorkflowArtifactReference | * |
+
+## StandaloneReviewFixDisposition
+
+### DESCRIPTION
+
+One original finding identity with fixed, not-applicable or unresolved outcome; mechanical or semantic basis, actual change attribution and selected verification checks. Native assessment requires matching candidate paths and successful executed receipts before acceptance. An unresolved or semantic basis requires scoped independent review. Original findings and context remain immutable.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| outcome | string | 1 |
+| basis | string | 1 |
+| rationale | string | 1 |
+| changedPaths | string | * |
+| checks | string | * |

@@ -19,7 +19,7 @@ private[smworkflow] object StandaloneFixExecution {
   final case class Input(repositoryIdentity: String, requestIdentity: String, objective: String,
     ownedPaths: Vector[String], checks: Vector[String], conditions: Vector[String],
     sourceReferences: Vector[ContextReference], reviewRequired: Boolean,
-    kind: String = "code", scalaLint: String = "required", repairLimit: Int = R.ceiling, task: Option[Task] = None)
+    kind: String = "code", scalaLint: String = "required", repairLimit: Int = R.ceiling, task: Option[Task] = None, reviewOrigin: Option[StandaloneReviewFix.Origin] = None)
   final case class Task(sourceKind: String, dependencies: Vector[String])
   final case class CommitExecution(outcome: String, selectedPaths: Vector[String], termination: String,
     exitCode: Option[Int], stdout: String, stderr: String)
@@ -29,7 +29,8 @@ private[smworkflow] object StandaloneFixExecution {
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     conditions: Vector[Condition], unresolvedQuestions: Vector[String],
     diagnosticRepair: Option[IncrementalSbtDiagnosisRepair.Manifest] = None,
-    fixAssessment: Option[GoalPhaseFixAssessment.Report] = None)
+    fixAssessment: Option[GoalPhaseFixAssessment.Report] = None,
+    reviewDispositions: Option[Vector[StandaloneReviewFix.Disposition]] = None)
   final case class State(input: Input, participant: String, stage: String, generation: Long,
     selected: Vector[Check], candidate: Option[Candidate], receipts: Vector[Receipt],
     automaticCount: Int, ordinaryCount: Int, repairControl: R.Context,
@@ -41,7 +42,8 @@ private[smworkflow] object StandaloneFixExecution {
     reviewReference: Option[ContextReference] = None,
     priorReview: Option[Result] = None,
     priorReviewCandidate: Option[Candidate] = None,
-    message: String = "Selected validation has not executed", commit: Option[Commit] = None, commitExecution: Option[CommitExecution] = None, projectionWarning: Option[String] = None)
+    message: String = "Selected validation has not executed", commit: Option[Commit] = None, commitExecution: Option[CommitExecution] = None, projectionWarning: Option[String] = None,
+    reviewDispositions: Option[Vector[StandaloneReviewFix.Disposition]] = None)
   final case class Work(session: String, sourceRevision: String, kind: String, state: State)
 
   private given Encoder[ContextReference] = deriveEncoder
@@ -52,20 +54,23 @@ private[smworkflow] object StandaloneFixExecution {
   given Decoder[CommitExecution] = deriveDecoder
   given Encoder[Commit] = deriveEncoder
   given Decoder[Commit] = deriveDecoder
-  given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(o => if (o("task").contains(io.circe.Json.Null)) o.remove("task") else o))
+  given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(_.filter {
+    case ("task" | "reviewOrigin", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Input] = deriveDecoder
   given Encoder[Candidate] = deriveEncoder
   given Decoder[Candidate] = deriveDecoder
   given Encoder[Condition] = deriveEncoder
   given Decoder[Condition] = deriveDecoder
   given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
-    case ("diagnosticRepair" | "fixAssessment", value) => !value.isNull
+    case ("diagnosticRepair" | "fixAssessment" | "reviewDispositions", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Result] = deriveDecoder
   private given Encoder[R.Context] = deriveEncoder
   private given Decoder[R.Context] = deriveDecoder
-  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning", value) => !value.isNull; case _ => true }))
+  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions", value) => !value.isNull; case _ => true }))
   given Decoder[State] = deriveDecoder
   given Encoder[Work] = deriveEncoder
   given Decoder[Work] = deriveDecoder
@@ -77,9 +82,9 @@ private[smworkflow] object StandaloneFixExecution {
       input.sourceReferences.nonEmpty && input.sourceReferences.size <= 128 && input.sourceReferences.forall(r => r != null && text(r.identity) && text(r.revision)) &&
       Set("code", "documentation")(input.kind) && Set("off", "required")(input.scalaLint) &&
       input.repairLimit > 0 && input.repairLimit <= R.ceiling && input.task != null &&
-      input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies))
+      input.reviewOrigin != null && input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies))
       catch { case scala.util.control.NonFatal(_) => false }
-    if (valid) Consequence.unit else invalid("adopted objective, ownership, checks, conditions or repair policy is invalid")
+    if (valid) StandaloneReviewFix.inputC(input) else invalid("adopted objective, ownership, checks, conditions or repair policy is invalid")
   }
 
   def startC(input: Input, participant: String, selected: Vector[Check]): Consequence[State] = for {
@@ -93,6 +98,17 @@ private[smworkflow] object StandaloneFixExecution {
   def candidateC(state: State, candidate: Candidate): Consequence[State] =
     if (state == null || state.stage != "Inspect" || !validCandidate(candidate) ||
         !candidate.paths.forall(owned(_, state.input.ownedPaths))) invalid("candidate crosses its actual selected source scope")
+    else if (state.input.reviewOrigin.nonEmpty && state.semanticReference.isEmpty) {
+      val origin = state.input.reviewOrigin.get
+      val findings = origin.findings.map(f => f.identity + ": " + f.summary)
+      val control = state.repairControl.observe(state.input.requestIdentity,
+        origin.originalReview.identity + "@" + origin.originalReview.revision, findings)
+      Consequence.success(state.copy(stage = if (control.stop.nonEmpty) "Human" else "Repair", candidate = Some(candidate),
+        findings = findings, repairControl = control, message = control.stop.getOrElse(
+          "Repair only the identified original review findings; retain original sources and attribute changes/checks")))
+    }
+    else if (!StandaloneReviewFix.attributionValid(state, candidate)) Consequence.success(state.copy(stage = "Human", candidate = Some(candidate),
+      message = "Observed candidate differs from the exact original-finding change attribution; no successful disposition is recorded"))
     else if (state.candidate.contains(candidate) && state.receipts.size == state.selected.size &&
         WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts).isSuccess)
       assessC(state.copy(stage = "Assess", pendingCheck = None,
@@ -147,13 +163,15 @@ private[smworkflow] object StandaloneFixExecution {
     _ <- if (state != null && state.stage == "Assess" && state.candidate.nonEmpty) Consequence.unit
       else invalid("assessment has no current candidate")
     _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
-    required = state.input.task.nonEmpty || state.input.reviewRequired || state.unresolvedQuestions.nonEmpty || state.priorReview.exists(_.outcome == "repair")
+    _ <- StandaloneReviewFix.verifiedC(state)
+    required = StandaloneReviewFix.needsReview(state) || state.input.task.nonEmpty || state.input.reviewRequired || state.unresolvedQuestions.nonEmpty || state.priorReview.exists(_.outcome == "repair")
     // An initially passing validation is a truthful no-change outcome. A repair
     // completion must evaluate every adopted condition before it can be accepted.
     _ <- if (state.semanticReference.isEmpty || (state.conditionReport.map(_.identity) == state.input.conditions &&
       state.conditionReport.forall(_.satisfied))) Consequence.unit
       else invalid("successful checks cannot replace the adopted semantic conditions")
   } yield state.copy(stage = if (required) "Review" else if (state.semanticReference.isEmpty) "NoChange" else "Accepted",
+    findings = if (state.input.reviewOrigin.nonEmpty && !required) Vector.empty else state.findings,
     message = if (required) "Independent scoped review is required by selected policy or unresolved meaning"
       else if (state.semanticReference.isEmpty) "Selected checks already passed; no repair was requested or implicitly committed"
       else "Selected checks and adopted conditions satisfied; independent review not required; changes remain uncommitted")
@@ -173,6 +191,7 @@ private[smworkflow] object StandaloneFixExecution {
     _ <- if (work.kind != "Implement" || (work.state.input.task.nonEmpty && work.state.stage == "Implement" &&
       result.fixAssessment.isEmpty && result.diagnosticRepair.isEmpty)) Consequence.unit
       else invalid("initial Task implementation is not a failure repair")
+    _ <- StandaloneReviewFix.resultC(work, result)
     _ <- GoalPhaseFixAssessment.validateOptionC(result.fixAssessment)
     _ <- if (result.fixAssessment.exists(_.convergence.status == "BLOCKED") && result.outcome != "decision-needed")
       invalid("BLOCKED assessment requires an explicit decision") else Consequence.unit
@@ -201,7 +220,7 @@ private[smworkflow] object StandaloneFixExecution {
     _ <- admitResultC(work, result)
     _ <- if (reference != null && text(reference.identity) && text(reference.revision)) Consequence.unit
       else invalid("semantic completion lacks its actual result reference")
-    s = work.state
+    s = work.state.copy(reviewDispositions = result.reviewDispositions.orElse(work.state.reviewDispositions))
     next <- if (result.outcome == "decision-needed") Consequence.success(s.copy(stage = "Human",
       findings = result.findings, message = result.summary,
       semanticReference = if (Set("Repair", "Implement")(work.kind)) Some(reference) else s.semanticReference,

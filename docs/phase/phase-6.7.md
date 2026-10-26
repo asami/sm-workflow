@@ -107,3 +107,10 @@ LLM evaluation are not added to 6.7.
 shared bounded execution, integrated review and selected local commit. Selected
 native validation and installed Task effects are owned by the runtime; this
 source handoff does not close any phase-scoped acceptance condition.
+
+## T3 source boundary
+
+[Review-origin standalone FIX](../spec/standalone-review-fix-runtime.md) adds
+original finding input and attributed dispositions through the shared T1/T2
+engine. Selected native validation, installed skill delivery and actual Phase
+acceptance remain owned by their later runtime boundaries.
