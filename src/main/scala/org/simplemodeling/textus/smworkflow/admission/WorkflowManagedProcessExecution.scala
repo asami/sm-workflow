@@ -145,13 +145,21 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     result <- executeGitC(core, GitOperation.CommitSelected(selection))
   } yield result
 
-  def checkGoalIndexC(core: ActionCall.Core, ordinal: Int, parent: String): Consequence[GitIndexCheck] = for {
+  private[admission] final case class GoalIndexPreparation(check: GitIndexCheck, selectedPaths: Vector[String])
+
+  def checkGoalIndexC(core: ActionCall.Core, ordinal: Int, parent: String): Consequence[GitIndexCheck] =
+    checkGoalIndexPreparationC(core, ordinal, parent).map(_.check)
+
+  private[admission] def checkGoalIndexPreparationC(core: ActionCall.Core, ordinal: Int,
+    parent: String): Consequence[GoalIndexPreparation] = for {
     _ <- _ordinal_c(ordinal, 64)
     selection <- GitSelectionId.parseC("goal-step-" + ordinal)
     selected <- GitObjectId.parseC(parent)
     result <- executeGitC(core, GitOperation.CheckSelectedIndex(selection, selected))
     value <- result.valueC
-  } yield value
+    _ <- if (result.selectedPaths != null && result.selectedPaths.forall(_ != null)) Consequence.unit
+      else Consequence.stateConflict("Selected Step index preparation has no actual physical selection")
+  } yield GoalIndexPreparation(value, result.selectedPaths.map(_.value))
 
   def goalIndexChangesC(core: ActionCall.Core, ordinal: Int, parent: String): Consequence[Vector[GitTreeChange]] = for {
     _ <- _ordinal_c(ordinal, 64)

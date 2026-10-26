@@ -39,12 +39,16 @@ its native Long range and ordinal/attempt require JSON integers.
 Git observation uses existing typed `git_*` operations in the current owning
 UnitOfWork. It reads the installed root, branch, HEAD/tree, index, merge and
 selected state and actual commit metadata, then checks for observation drift.
-Physical `selectedPaths` comes from the typed value of
-`SelectedIndexChanges(selection, originalParentHead)`, including deletions,
-additions and rename destinations. The reviewed-candidate comparison separately
-determines `selectedChangesEmpty`. Selection does not come from declared-path
-metadata or a comparison against current HEAD: it must remain available after
-an exact matching commit already exists. The
+The ordinary observation retains its existing physical path vector from typed
+`SelectedIndexChanges(selection, originalParentHead)`. A known-partial target
+also binds the actual typed execution selection scopes, which may be directory
+scopes. `CheckSelectedIndex` preparation retains both its typed
+check and `GitExecutionResult.selectedPaths`; `SelectedIndexChanges` uses that
+same host-fixed scope. Full `PendingPaths(originalParent)` includes deletions
+and both names of renames under CNCF's no-renames interpretation. Every required
+path must be covered by an actual exact path or directory scope. The
+reviewed-candidate comparison separately determines `selectedChangesEmpty`.
+Selection remains available after an exact matching commit already exists. The
 application never discovers selection by reading configuration, argv or Git
 output. Description writes no records and supplies no authority. These separate
 reads are not an atomic filesystem snapshot.
@@ -228,3 +232,80 @@ prefix, Session, Plan and accepted evidence. Every semantic answer, independent
 review and authority grant is explicitly specification-owned; no real Human
 consent or real incident Session is supplied by this suite. Publication,
 execution and independent review remain parent-owned acceptance evidence.
+
+## R7 — Known successful partial commit completion
+
+`CompletePartialCommit` is a distinct choice offered only when the saved original
+execution actually succeeded with `Exited(0)` and the native facts prove one
+bounded chain. Let P be the immutable accepted parent, C the actual partial
+commit, T the exact accepted final tree after only the already admitted terminal
+LF correction, and D the future completion. Current HEAD must be exactly C with
+native parents `[P]`, index T, no merge/replacement/intervening history or
+unexplained owned worktree state. Actual `TreeChanges(P,T)`, `TreeChanges(P,C)`
+and `TreeChanges(C,T)` retain every old/new mode and optional blob. C must contain
+only complete accepted path values from T; the nonempty remainder must be exactly
+the still staged accepted paths. A delete or rename cannot disappear from the
+proof. The existing admitted normalization receipt and original candidate remain
+distinct immutable facts; arbitrary content or mode corrections refuse.
+
+The exact public target binds all existing Session/definition/participant/Plan/
+Step/generation/source/frontier/intent/execution/attempt facts plus P, C, T,
+normalization, complete native deltas, remaining modes/blobs and physical
+selection. Independent Human evidence binds that entire target and attests the
+original owner ended. Development approval is not this real recovery answer.
+Wrong participant/reference, stale target, nonzero/unknown original, foreign
+change, changed index, incomplete selection or unadmitted normalization refuses.
+The predicates for `AuthorizeNewAttempt` and `ReconcileCommit` are unchanged.
+
+Recovery appends direction only. A separate ordinary owning Advance rechecks
+the exact live observation and containment, retains normal Step closure
+authority, writes one distinct completion intent, rechecks at the effect
+boundary, and invokes typed `CommitSelected` once. Persist the actual execution
+before projecting its value or claiming closure. Verify native `D.parents=[C]`,
+`D.tree=T`, actual completed remainder and unchanged scope. P and C are retained;
+there is no reset, amend, rebase, resubmission or accepted Test/review replay.
+
+Ordinary closure also proves full candidate/index equality (or the existing
+admitted LF-only relation), full pending ownership and physical coverage before
+saving its intent and immediately before effect. An incomplete selection is a
+preparation failure with no commit effect or additional semantic repair charge.
+These observations do not promise atomic exclusion of arbitrary file writers.
+
+## R8 — Immutable completion history and compatibility
+
+Completion roles have separate codecs
+`sm-workflow.goal-phase-partial-completion-intent.v1` and
+`sm-workflow.goal-phase-partial-completion-execution.v1`. Their exact original
+payload and recovery direction are bound across adjacent native revisions.
+Foreign or gapped records cannot be skipped. A saved resultless completion
+intent remains UNKNOWN and is never replayed. Actual nonzero/incomplete outcomes
+remain actual failures/incomplete observations; no automatic retry or broader
+unknown-effect recovery choice is introduced. Unsupported completion states
+remain explicitly unresolved/Defer.
+
+A completed chain uses `sm-workflow.goal-phase-native-step-closure.v4`; ordinary
+results still encode `.v3` with no new absent fields. Old `.v3` histories stay
+read-only and retain the direct-parent rule. Absent optional fields on historical
+targets, closed Steps and StepEvidence mean ordinary behavior, never inferred
+partial completion. Malformed or crossed chains refuse. New partial records
+require the updated runtime.
+
+Both live completion verification and recording-only history reconstruction
+produce `StepCommitChain(originalParent, partial, completion)`. The latter reads
+only adjacent retained accepted facts and performs no Git observation. The
+distinct Closing event records actual D with native parent C and retains the
+whole P→C→D proof in `ClosedStep.partialCompletion`. Public work, completion,
+terminal, journal and whole-Phase StepEvidence projections preserve it. Next
+Step and Phase use actual D as their tip; the normal next-Step counter
+transition and all required later Phase validation/review remain unchanged.
+Repeated collection or Advance never appends another completion commit.
+
+`GoalPhasePartialCommitClosureSpec` and the adjacent contract suites cover the
+proof, versioned retention, preserved history and ordinary compatibility.
+`NativeGoalPartialCommitClosureCliSpec` requires the explicit installed command
+and `smworkflow.spec.partialCompletionInstallations` image. Its fresh isolated
+repositories execute real Git and public operations. Fixture-only finite fault
+injection produces an actual successful partial Git execution; it never seeds a
+success receipt. It proves one completion, nonreplay, later Step/Phase history,
+ordinary direct-parent compatibility and no effect after selection drift or an
+unknown completion intent. Authored tests are not claims of executed acceptance.

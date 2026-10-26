@@ -12,7 +12,7 @@ import GoalPhaseRuntimeRepairControl as R
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -64,17 +64,34 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Encoder[Commit] = deriveEncoder
     given Decoder[Commit] = deriveDecoder
   }
+  final case class StepCommitChain(originalParent: Snapshot, partial: Commit, completion: Commit)
+  object StepCommitChain {
+    given Encoder[StepCommitChain] = deriveEncoder
+    given Decoder[StepCommitChain] = deriveDecoder
+  }
+  def validStepCommitChain(value: StepCommitChain): Boolean = value != null &&
+    validSnapshot(value.originalParent) && validCommit(value.partial) && validCommit(value.completion) &&
+    value.partial.parent == value.originalParent.head && value.completion.parent == value.partial.identity &&
+    Vector(value.originalParent.head, value.partial.identity, value.completion.identity).distinct.size == 3 &&
+    value.partial.tree != value.completion.tree
   final case class ClosedStep(step: String, commit: Commit, review: Option[String],
-    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+    admission: Option[GoalPhaseStepAssessment.Admission] = None,
+    partialCompletion: Option[StepCommitChain] = None)
   object ClosedStep {
     def apply(step: String, commit: Commit, review: String): ClosedStep = new ClosedStep(step, commit, Some(review))
     given Encoder[ClosedStep] = deriveEncoder[ClosedStep].mapJson(_.mapObject(_.filter {
-      case ("admission", value) => !value.isNull
+      case ("admission" | "partialCompletion", value) => !value.isNull
       case _ => true
     }))
-    given Decoder[ClosedStep] = deriveDecoder
+    private val _decoder: Decoder[ClosedStep] = deriveDecoder
+    given Decoder[ClosedStep] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (!cursor.downField("partialCompletion").focus.exists(_.isNull) && value.partialCompletion.forall(c =>
+          validStepCommitChain(c) && c.completion == value.commit)) Right(value)
+      else Left(io.circe.DecodingFailure("Closed Step partial chain is malformed or crossed", cursor.history))))
   }
   def validStepAcceptance(step: ClosedStep): Boolean = step != null && step.review != null && step.admission != null &&
+    step.partialCompletion != null && step.partialCompletion.forall(chain => validStepCommitChain(chain) &&
+      chain.completion == step.commit) &&
     ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
       step.admission.exists(GoalPhaseStepAssessment.validAdmission)))
   enum Stage {
@@ -123,6 +140,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   /** Durable intent must have committed before the native executor runs. */
   final case class ClosureIntentSaved(snapshot: Snapshot, identity: String) extends Event
   final case class ClosureUnknown(identity: String) extends Event
+  final case class StepPartialCompletionObserved(intent: String, chain: StepCommitChain,
+    expectedTree: String, eofCorrections: Vector[String]) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
   final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
@@ -629,6 +648,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           closureIntent.contains(intent) && validCommit(commit) && commit.parent == candidateBase.head &&
           candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
+      case StepPartialCompletionObserved(intent, chain, expected, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
+          validStepCommitChain(chain) && chain.originalParent == candidateBase &&
+          chain.completion.tree == expected && oid(expected) && candidate.exists(c =>
+            c.tree == expected || (paths != null && paths.nonEmpty)) &&
+          paths != null && paths.size <= 256 && paths.distinct == paths && paths.forall(value => path(value) &&
+            step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) && generation < Long.MaxValue =>
+        _close_step_c(chain.completion, Some(chain))
       case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
           closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
           validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
@@ -689,8 +716,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case _ => invalid("event differs from the Workflow-assigned ordered Phase frontier")
     }
 
-    private def _close_step_c(commit: Commit): Consequence[State] = {
-      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission)
+    private def _close_step_c(commit: Commit, chain: Option[StepCommitChain] = None): Consequence[State] = {
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission, chain)
       val nextcursor = cursor + 1
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,

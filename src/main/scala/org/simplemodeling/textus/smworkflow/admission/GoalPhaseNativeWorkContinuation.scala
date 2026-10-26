@@ -646,7 +646,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       if (ready) "continuation-ready" else "decision-required",
       if (ready) GoalPhaseClosureRecovery.continuationMessage else GoalPhaseClosureRecovery.message,
       core.component.get.core.instanceId.canonicalKey, GoalPhaseClosureRecovery.targetRecord(target),
-      if (ready) Vector.empty else GoalPhaseClosureRecovery.choices,
+      if (ready) Vector.empty else GoalPhaseClosureRecovery.choicesFor(target),
       if (ready) "advanceGoalPhase" else GoalPhaseClosureRecovery.recoveryOperation)
 
     def recoverClosureC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseClosureRecoveryInput,
@@ -660,8 +660,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       _ <- if (input.choice == "Defer") Consequence.unit else GoalPhaseClosureRecovery.appendC(source, d, core, actual, input)
     } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseClosureRecoveryResult(input.sessionId, true,
       if (input.choice == "Defer") "deferred" else if (input.choice == "ReconcileCommit") "reconciliation-authorized"
+        else if (input.choice == "CompletePartialCommit") "partial-completion-authorized"
         else "new-attempt-authorized",
       if (input.choice == "Defer") "Human deferred closure recovery. Native history and the original unknown intent remain unchanged."
+      else if (input.choice == "CompletePartialCommit")
+        "Independent Human direction was appended for the exact known successful partial commit. A separate ordinary Advance may append one completion commit and retains the actual original-parent -> partial -> completion chain; old results, accepted work and counters remain."
       else "Independent Human direction was appended with prior execution ended attestation. A separate ordinary Advance rechecks the exact observation and selection before continuing closure; old facts, accepted checks/review and counters remain retained.")
 
     private def _closure_recovery_source_c(identity: String, core: ActionCall.Core):
@@ -1605,13 +1608,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               context <- NativeAuthorityContext.stepC(core, input)
               waiting <- _wait_cursor_c(cursor, "Actual Step commit authority is unavailable; the selected Step and Phase remain open.")
             } yield waiting.copy(authorityContext = Some(context))
-            case Some(value) if value.payload.commit.isEmpty =>
-              F.waitC(value.record, if (value.execution.nonEmpty) "Selected Step commit remains open" else "Selected Step index check failed",
-                value.execution.map(GoalPhaseNativeClosure.executionMessage).orElse(value.payload.check.map(check =>
-                "Paths: " + check.eofPaths.mkString(", ") + ". " + check.findings.mkString("; ") +
-                  ". Correct selected staged content before the next ordinary Advance."))
-                .getOrElse("The original commit intent remains unknown; explicit public closure recovery is required."))
-                .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
+            case Some(value) if value.payload.commit.isEmpty => for {
+              message <- if (value.payload.check.exists(_.findings.nonEmpty)) Consequence.success(
+                "Paths: " + value.payload.check.get.eofPaths.mkString(", ") + ". " + value.payload.check.get.findings.mkString("; ") +
+                  ". Correct selected staged content before the next ordinary Advance.")
+                else GoalPhaseNativeClosure.waitMessageC(source, d, core, cursor.from, cursor.controller)
+              waiting <- F.waitC(value.record, if (value.payload.check.exists(_.findings.nonEmpty))
+                "Selected Step index check failed" else "Selected Step commit remains open", message)
+            } yield NativeWorkflowOperationOutput.withFindingRecording(waiting, cursor.findings)
             case Some(_) => _wait_cursor_c(cursor, "Actual ordered Step commit is retained; whole-Phase closure remains unfinished.")
               .flatMap(_after_native_c(source, cursor, _, core))
           }

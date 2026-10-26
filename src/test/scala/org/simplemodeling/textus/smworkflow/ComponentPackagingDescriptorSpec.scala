@@ -8,6 +8,7 @@ import org.goldenport.cncf.component.{ComponentDescriptorLoader, ComponentId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
@@ -27,6 +28,26 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
     value.hcursor.get[String](field).fold(error => fail(error.message), identity)
 
   "The authored packaging descriptor" should {
+    "E67 expose the bounded native chain and optional closed Step field in authored ABI and generated values" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R8 E67: the authored ABI and normally generated public value constructors")
+      val types = array(readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports").focus.get, "types")
+      val chain = types.find(v => text(v, "name") == "GoalPhaseStepCommitChain").get
+      val closed = types.find(v => text(v, "name") == "GoalPhaseClosedStep").get
+      When("the declared shape and ordinary absent optional constructor are consumed")
+      val fields = array(chain, "fields")
+      val optional = array(closed, "fields").find(v => text(v, "name") == "partialCompletion").get
+      val ordinary = V.GoalPhaseClosedStep("S1", V.GoalPhaseNativeCommit("d", "p", "t"), Some("review"), None, None)
+      val publicchain = V.GoalPhaseStepCommitChain(V.GoalPhaseNativeSnapshot("p", "pt"),
+        V.GoalPhaseNativeCommit("c", "p", "ct"), V.GoalPhaseNativeCommit("d", "c", "t"))
+      Then("the new field is optional while every native chain member is required and ordinary absence remains representable")
+      fields.map(v => text(v, "name")) shouldBe Vector("originalParent", "partial", "completion")
+      fields.forall(_.hcursor.get[Boolean]("required").contains(true)) shouldBe true
+      optional.hcursor.get[Boolean]("required") shouldBe Right(false)
+      text(optional, "type") shouldBe "GoalPhaseStepCommitChain"
+      ordinary.partialCompletion shouldBe None
+      ordinary.copy(partialCompletion = Some(publicchain)).partialCompletion shouldBe Some(publicchain)
+    }
+
     "provide the canonical project identity without granting runtime authority" in {
       Given("the style-less CML project and its canonical schema-3 CAR identity descriptor")
       val source = Paths.get("src/main/car/component-descriptor.json")

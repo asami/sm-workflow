@@ -93,6 +93,13 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("GoalPhaseService", "describeGoalPhaseClosureRecovery", Vector(
+      "CompletePartialCommit", "succeeded/Exited(0)", "exact remainder paths/blobs/modes"
+    )),
+    ("GoalPhaseService", "recoverGoalPhaseClosure", Vector(
+      "CompletePartialCommit", "separate ordinary Advance", "distinct completion intent",
+      "original-parent -> partial -> completion", "UNKNOWN completion intent is never replayed"
+    )),
     ("GoalPhaseService", "submitGoalPhaseOrderedDecision", Vector(
       "Independent host Human evidence", "authentication or AI output is not consent"
     )),

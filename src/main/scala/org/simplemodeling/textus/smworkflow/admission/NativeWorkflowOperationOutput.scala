@@ -265,9 +265,13 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   private def _sbt_facts(value: WorkflowSbtValidation.Facts): V.WorkflowSbtValidationFacts =
     V.WorkflowSbtValidationFacts(value.kind.wire, value.outcome.wire,
       value.selection.map(s => V.WorkflowSbtTestSelection(s.testClasses, s.completedSuites, s.testsRun)), value.reason)
-  private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
+  private[admission] def goalClosedStep(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep =
     V.GoalPhaseClosedStep(value.step, V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree),
-      value.review, value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)))
+      value.review, value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)), value.partialCompletion.map(c =>
+        V.GoalPhaseStepCommitChain(_goal_snapshot(c.originalParent),
+          V.GoalPhaseNativeCommit(c.partial.identity, c.partial.parent, c.partial.tree),
+          V.GoalPhaseNativeCommit(c.completion.identity, c.completion.parent, c.completion.tree))))
+  private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep = goalClosedStep(value)
   private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance),
       GoalPhaseFixAssessment.publicReport(value.fixAssessment), GoalPhaseFixIssues.publicReport(value.issueReport),

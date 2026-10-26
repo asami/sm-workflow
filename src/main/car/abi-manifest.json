@@ -1256,6 +1256,15 @@
           ]
         },
         {
+          "name": "GoalPhaseStepCommitChain",
+          "kind": "value",
+          "fields": [
+            { "name": "originalParent", "type": "GoalPhaseNativeSnapshot", "multiplicity": "1", "required": true },
+            { "name": "partial", "type": "GoalPhaseNativeCommit", "multiplicity": "1", "required": true },
+            { "name": "completion", "type": "GoalPhaseNativeCommit", "multiplicity": "1", "required": true }
+          ]
+        },
+        {
           "name": "GoalPhaseClosedStep",
           "kind": "value",
           "fields": [
@@ -1276,6 +1285,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "partialCompletion",
+              "type": "GoalPhaseStepCommitChain",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

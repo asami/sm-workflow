@@ -15,6 +15,7 @@ import GoalPhaseOrderedProgression as O
 import GoalPhaseClosureRecovery as R
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
+import GoalPhasePartialCommitClosure as P
 
 /** Native ordered Step closure, not a legacy Step Terminal. Host authorization
   * and fixed ProcessProgram grants are separate from AI review disposition.
@@ -59,14 +60,16 @@ private[smworkflow] object GoalPhaseNativeClosure {
   final case class Precheck(findings: Vector[String], eofPaths: Vector[String], eofOnly: Boolean)
   final case class Change(path: String, mode: String, oldBlob: String, newBlob: String)
   final case class Payload(input: Input, ordinal: Int, commit: Option[O.Commit], attempt: Int = 0,
-    check: Option[Precheck] = None, changes: Vector[Change] = Vector.empty)
+    check: Option[Precheck] = None, changes: Vector[Change] = Vector.empty,
+    partialCompletion: Option[O.StepCommitChain] = None)
   object Payload {
     given Encoder[Payload] = Encoder.instance { value =>
       Json.obj((Vector("input" -> value.input.asJson, "ordinal" -> value.ordinal.asJson,
         "commit" -> value.commit.asJson) ++
         (if (value.attempt == 0) Vector.empty else Vector("attempt" -> value.attempt.asJson)) ++
         value.check.toVector.map(actual => "check" -> actual.asJson) ++
-        (if (value.changes.isEmpty) Vector.empty else Vector("changes" -> value.changes.asJson)))*)
+        (if (value.changes.isEmpty) Vector.empty else Vector("changes" -> value.changes.asJson)) ++
+        value.partialCompletion.toVector.map(chain => "partialCompletion" -> chain.asJson))*)
     }
     given Decoder[Payload] = Decoder.instance { cursor =>
       for {
@@ -79,9 +82,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
           case Some(actual) => actual.as[Precheck].map(Some(_))
         }
         changes <- cursor.value.asObject.flatMap(_("changes")).fold[Decoder.Result[Vector[Change]]](Right(Vector.empty[Change]))(_.as[Vector[Change]])
-        _ <- Either.cond(attempt >= 0 && check.forall(_valid_precheck) && _valid_changes(changes), (),
+        chain <- cursor.get[Option[O.StepCommitChain]]("partialCompletion")
+        _ <- Either.cond(attempt >= 0 && check.forall(_valid_precheck) && _valid_changes(changes) &&
+          !cursor.downField("partialCompletion").focus.exists(_.isNull) &&
+          chain.forall(c => O.validStepCommitChain(c) && c.originalParent == input.parent && commit.contains(c.completion)), (),
           io.circe.DecodingFailure("invalid native Step closure attempt facts", cursor.history))
-      } yield Payload(input, ordinal, commit, attempt, check, changes)
+      } yield Payload(input, ordinal, commit, attempt, check, changes, chain)
     }
   }
   final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State,
@@ -92,16 +98,22 @@ private[smworkflow] object GoalPhaseNativeClosure {
   private[admission] final case class Progress(record: InstanceRecord, failed: Vector[Saved],
     nextAttempt: Option[Int], pending: Option[Saved], execution: Option[R.ExecutionSaved] = None,
     direction: Option[R.DirectionSaved] = None, recovery: Option[R.DirectionSaved] = None,
-    continuation: Option[R.ContinuationSaved] = None, automatic: Option[R.ContinuationSaved] = None)
+    continuation: Option[R.ContinuationSaved] = None, automatic: Option[R.ContinuationSaved] = None,
+    completionIntent: Option[(InstanceRecord, P.Intent)] = None,
+    completionExecution: Option[(InstanceRecord, P.Execution)] = None)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStepClosureReceipt"
-    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-step-closure.v3"),
+    def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString(
+      if (value.partialCompletion.nonEmpty) "sm-workflow.goal-phase-native-step-closure.v4"
+      else "sm-workflow.goal-phase-native-step-closure.v3"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native Step closure is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-step-closure.v3", (), "native Step closure schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-step-closure.v3", "sm-workflow.goal-phase-native-step-closure.v4")(schema), (), "native Step closure schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond((schema.endsWith(".v4") && payload.partialCompletion.nonEmpty) ||
+        (schema.endsWith(".v3") && payload.partialCompletion.isEmpty), (), "native Step closure schema and chain differ")
     } yield payload
   }
 
@@ -122,7 +134,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
       } yield if (progress.nextAttempt.nonEmpty || progress.direction.nonEmpty || progress.continuation.nonEmpty ||
           progress.execution.exists(saved => R.terminalExecution(saved.payload)))
         Some(Saved(progress.record, progress.pending.map(_.payload).orElse(progress.failed.lastOption.map(_.payload))
-          .getOrElse(Payload(store.input, store.ordinal, None)), controller)) else None
+          .getOrElse(Payload(store.input, store.ordinal, None)), controller,
+          progress.completionExecution.map(_._2.result).orElse(progress.execution.map(_.payload)))) else None
     }
   } yield saved
 
@@ -153,7 +166,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
         retained <- store.progressC
         _ <- store.latestC(retained.record)
         progress <- store.continueC(retained)
-        closed <- if (progress.direction.exists(_.payload.choice == "ReconcileCommit") ||
+        closed <- if (progress.direction.exists(_.payload.choice == "CompletePartialCommit"))
+          store.completePartialC(progress).map(Some(_))
+        else if (progress.direction.exists(_.payload.choice == "ReconcileCommit") ||
             progress.continuation.exists(_.payload.action == "reconcile-commit"))
           store.reconcileC(progress).map(Some(_))
         else if (progress.nextAttempt.isEmpty) progress.pending.map(saved => Consequence.success(Some(
@@ -205,8 +220,14 @@ private[smworkflow] object GoalPhaseNativeClosure {
     from: InstanceRecord, controller: O.State): Consequence[String] = for {
     store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
     progress <- store.recordingProgressC
-  } yield progress.execution.map(saved => executionMessage(saved.payload)).getOrElse(
+  } yield progress.completionIntent.fold(progress.execution.map(saved => executionMessage(saved.payload)).getOrElse(
     "Step commit has an unresolved clean check or original unknown intent; explicit public closure recovery is required. No automatic replay.")
+    )(_ => progress.completionExecution.fold(
+      "Partial completion intent is UNKNOWN. The effect is never replayed; completion remains unresolved/Defer.") { (_, result) =>
+      "Partial completion actual outcome: " + result.result.outcome + "; termination: " +
+        result.result.termination.getOrElse("unknown") + "; exitCode: " + result.result.exitCode.fold("unknown")(_.toString) +
+        ". " + result.result.stderr + " No automatic retry is authorized; completion remains unresolved/Defer."
+    })
 
   /** The owning Closing frontier supplies the same target to authority lookup
     * and the public missing-authority Wait projection. */
@@ -264,8 +285,13 @@ private[smworkflow] object GoalPhaseNativeClosure {
             Consequence.unit else F.invalid("retained Step closure is not its full actual native history prefix")
         } yield Some(Saved(admitted, value.receipt.payload.value, controller))
       }
-    def progressC: Consequence[Progress] = _scan_c(0, Vector.empty, _verify_retained_changes_c)
-    def recordingProgressC: Consequence[Progress] = _scan_c(0, Vector.empty, (_, _) => Consequence.unit)
+    def progressC: Consequence[Progress] = _scan_c(0, Vector.empty, _verify_retained_changes_c).flatMap(_partial_progress_c)
+    def recordingProgressC: Consequence[Progress] = _scan_c(0, Vector.empty, (_, _) => Consequence.unit).flatMap(_partial_progress_c)
+    private def _partial_progress_c(progress: Progress): Consequence[Progress] = for {
+      intent <- R.loadC(session, core, input, "partial-completion-intent", progress.pending.map(_.payload.attempt).getOrElse(0), P.intentCodec)
+      execution <- R.loadC(session, core, input, "partial-completion-execution", progress.pending.map(_.payload.attempt).getOrElse(0), P.executionCodec)
+      result <- partialProgressC(progress, intent, execution)
+    } yield result
     private def _scan_c(attempt: Int, attempts: Vector[Attempt],
       verify: (Saved, Progress) => Consequence[Unit]): Consequence[Progress] = for {
       check <- loadC(_attempt_key("check-result", attempt))
@@ -335,9 +361,20 @@ private[smworkflow] object GoalPhaseNativeClosure {
     } yield actual
     private def _verified_commit_c(payload: Payload, failed: Vector[Saved]): Consequence[Unit] = for {
       native <- G.commitC(core, payload.commit.get.identity)
-      _ <- if (native.identity != input.parent.head && native.parents == Vector(input.parent.head) &&
+      _ <- payload.partialCompletion match {
+        case None => if (native.identity != input.parent.head && native.parents == Vector(input.parent.head) &&
           native.tree == payload.commit.get.tree && payload.commit.get.parent == input.parent.head)
         Consequence.unit else F.invalid("actual Step commit differs from its native identity or original parent")
+        case Some(chain) => for {
+          parent <- G.commitC(core, chain.originalParent.head)
+          partial <- G.commitC(core, chain.partial.identity)
+          _ <- if (O.validStepCommitChain(chain) && chain.originalParent == input.parent &&
+              parent.tree == input.parent.tree && partial.tree == chain.partial.tree &&
+              partial.parents == Vector(input.parent.head) && native.parents == Vector(partial.identity) &&
+              native.tree == chain.completion.tree && payload.commit.contains(chain.completion)) Consequence.unit
+            else F.invalid("actual partial completion differs from native P -> C -> D metadata")
+        } yield ()
+      }
       actual <- _tree_changes_c(native.tree)
       admitted <- admitChangesC(failed, actual)
       _ <- if (admitted == payload.changes && (payload.changes.nonEmpty || native.tree == input.candidate.tree))
@@ -345,7 +382,10 @@ private[smworkflow] object GoalPhaseNativeClosure {
     } yield ()
     private def _closed_state_c(payload: Payload): Consequence[O.State] = for {
       entered <- controller.acceptC(O.ClosureIntentSaved(input.candidate, _intent_identity(payload.attempt)))
-      next <- if (payload.changes.isEmpty)
+      next <- if (payload.partialCompletion.nonEmpty)
+        entered.acceptC(O.StepPartialCompletionObserved(_intent_identity(payload.attempt), payload.partialCompletion.get,
+          payload.commit.get.tree, payload.changes.map(_.path)))
+      else if (payload.changes.isEmpty)
         entered.acceptC(O.StepCommitObserved(_intent_identity(payload.attempt), payload.commit.get))
         else entered.acceptC(O.StepEofCorrectionCommitObserved(_intent_identity(payload.attempt),
           payload.commit.get, payload.changes.map(_.path)))
@@ -356,7 +396,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       _ <- _verified_commit_c(result.payload, progress.failed)
     } yield saved
     def completedRecordingHistoryC(result: Saved): Consequence[Saved] = for {
-      progress <- _scan_c(0, Vector.empty, (_, _) => Consequence.unit)
+      progress <- recordingProgressC
       saved <- _completed_c(result, progress)
     } yield saved
     private def _completed_c(result: Saved, progress: Progress): Consequence[Saved] = for {
@@ -364,8 +404,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
         "ordered-step-closure:" + _attempt_key("intent", saved.payload.attempt))
         .map(Consequence.success).getOrElse(F.invalid("completed Step has no exact pending commit intent"))
       _ <- if (result != null && result.payload != null && result.payload.commit.nonEmpty &&
-          result.payload.copy(commit = None) == pending.payload) Consequence.unit
+          result.payload.copy(commit = None, partialCompletion = None) == pending.payload) Consequence.unit
         else F.invalid("retained Step closure changes its exact pending payload")
+      _ <- completedPartialC(result.payload, progress)
       next <- _closed_state_c(result.payload)
       _ <- _successor_c(progress.record, result.record, "committed", next.stage.toString)
     } yield Saved(result.record, result.payload, next, progress.execution.map(_.payload))
@@ -389,6 +430,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
       _ <- if (actual == saved.payload.target.observation) Consequence.unit
         else F.invalid("closure recovery Git observation or physical selection drifted before its new effect")
       _ <- R.choiceC(saved.payload.target, saved.payload.choice)
+      _ <- if (saved.payload.choice != "CompletePartialCommit") Consequence.unit else for {
+        proof <- P.prepareC(core, saved.payload.target.copy(observation = actual), progress.pending.get.payload,
+          progress.failed.flatMap(_.payload.check))
+        _ <- if (proof == saved.payload.target.partialCompletion) Consequence.unit
+          else F.invalid("partial completion native containment or normalization drifted")
+      } yield ()
       } yield () }
       _ <- progress.automatic.fold(Consequence.unit) { saved => for {
         actual <- R.observeC(d, core, input, ordinal)
@@ -412,8 +459,63 @@ private[smworkflow] object GoalPhaseNativeClosure {
       recorded <- saveC("committed", progress.record, next.stage.toString, completed)
       saved <- completedC(Saved(recorded, completed, next))
     } yield saved
+    def completePartialC(progress: Progress): Consequence[Saved] = {
+      val pending = progress.pending.get
+      progress.completionIntent match {
+        case Some((_, intent)) => progress.completionExecution match {
+          case Some((frontier, execution)) if execution.result.outcome == "succeeded" =>
+            _finish_partial_c(frontier, intent, execution)
+          case _ => Consequence.success(Saved(progress.record, pending.payload, controller,
+            progress.completionExecution.map(_._2.result)))
+        }
+        case None => for {
+          _ <- dependencyPreconditions()
+          _ <- recheckRecoveryC(progress)
+          granted <- installation.authority.isGrantedC(core, input)
+          _ <- if (granted) Consequence.unit else F.invalid("actual Step closure authority is unavailable")
+          intent = P.Intent(progress.direction.get.payload, pending.payload)
+          _ <- if (P.validIntent(intent)) Consequence.unit else F.invalid("partial completion has no exact original payload and direction")
+          prepared <- R.saveC(session, d, core, input, "partial-completion-intent", pending.payload.attempt,
+            progress.record, intent, P.intentCodec)
+          _ <- ackC("goal-step-partial-completion-prepared:" + input.step)
+          _ <- dependencyPreconditions()
+          _ <- recheckRecoveryC(progress)
+          actual <- E.commitGoalStepC(core, ordinal)
+          summary <- R.executionC(input, ordinal, pending.payload.attempt, actual)
+          execution = P.Execution(intent, summary)
+          recorded <- R.saveC(session, d, core, input, "partial-completion-execution", pending.payload.attempt,
+            prepared, execution, P.executionCodec)
+          _ <- ackC("goal-step-partial-completion-executed:" + input.step)
+          saved <- if (summary.outcome == "succeeded") for {
+            _ <- actual.valueC
+            result <- _finish_partial_c(recorded, intent, execution)
+          } yield result else Consequence.success(Saved(recorded, pending.payload, controller, Some(summary)))
+        } yield saved
+      }
+    }
+    private def _finish_partial_c(frontier: InstanceRecord, intent: P.Intent, execution: P.Execution): Consequence[Saved] = for {
+      proof <- intent.direction.target.partialCompletion.map(Consequence.success).getOrElse(F.invalid("partial completion lost its bound proof"))
+      observed <- G.inspectC(core)
+      native <- G.commitC(core, observed.observed.head)
+      index <- G.indexTreeC(core)
+      _ <- if (observed.mergeHead.isEmpty && observed.observed.branch == d.target.localBranch &&
+          native.parents == Vector(proof.partial.identity) && native.tree == proof.expectedTree && index == proof.expectedTree &&
+          !observed.observed.dirty.exists(_touches_owned) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, _owned_paths, true) &&
+          execution.result.selectedPaths.toSet == proof.remainder.map(_.path).toSet) Consequence.unit
+        else F.invalid("actual completion does not finish the exact accepted remainder")
+      commit = O.Commit(native.identity, proof.partial.identity, native.tree)
+      chain = O.StepCommitChain(input.parent, proof.partial, commit)
+      completed = intent.original.copy(commit = Some(commit), partialCompletion = Some(chain))
+      retained <- progressC
+      _ <- _verified_commit_c(completed, retained.failed)
+      next <- _closed_state_c(completed)
+      recorded <- saveC("committed", frontier, next.stage.toString, completed)
+      saved <- completedC(Saved(recorded, completed, next))
+      _ <- ackC("goal-step-partial-completion-recorded:" + input.step)
+    } yield saved
     def commitC(checked: InstanceRecord, payload: Payload): Consequence[Saved] = for {
-      _ <- preconditionsC
+      selection <- preconditionsC
       differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
       progress <- progressC
       _ <- recheckRecoveryC(progress)
@@ -422,6 +524,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
         else F.invalid("selected Step index changed after its admitted precheck")
       intent <- saveC(_attempt_key("intent", payload.attempt), checked, "Closing", payload)
       _ <- ackC("goal-step-commit-prepared:" + input.step)
+      repeated <- preconditionsC
+      _ <- if (selection == repeated) Consequence.unit else F.invalid("physical selection changed at the commit effect boundary")
       actual <- E.commitGoalStepC(core, ordinal)
       summary <- R.executionC(input, ordinal, payload.attempt, actual)
       recorded <- R.saveC(session, d, core, input, "execution-result", payload.attempt, intent, summary, R.executionCodec)
@@ -456,7 +560,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
     } yield saved
     private def _touches_owned(value: G.DirtyPath): Boolean = _owned_paths.exists(owner =>
       covers(owner, value.path) || value.renamedFrom.exists(covers(owner, _)))
-    def preconditionsC: Consequence[Unit] = for {
+    def preconditionsC: Consequence[Vector[String]] = for {
       _ <- dependencyPreconditions()
       root <- G.rootC(core)
       native <- G.inspectC(core)
@@ -469,21 +573,75 @@ private[smworkflow] object GoalPhaseNativeClosure {
       paths <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
       _ <- if (GoalPhaseNativeCandidateBoundary.pathsOwned(paths.map(_.value), _owned_paths)) Consequence.unit
         else F.invalid("actual Step commit includes an unrelated index delta")
-      differences <- E.goalIndexChangesC(core, ordinal, input.candidate.tree)
+      selection <- E.checkGoalIndexPreparationC(core, ordinal, input.parent.head)
+      _ <- if (P.coverage(paths.map(_.value), selection.selectedPaths) &&
+          actual.dirty.filter(_touches_owned).forall(value => Vector(Some(value.path), value.renamedFrom).flatten.forall(p =>
+            _owned_paths.exists(covers(_, p))))) Consequence.unit
+        else F.invalid("physical selected Step paths do not cover the complete accepted candidate")
+      index <- G.indexTreeC(core)
+      differences <- _tree_changes_c(index)
       progress <- progressC
       _ <- admitChangesC(progress.failed, differences)
       after <- G.observeC(core)
+      afterindex <- G.indexTreeC(core)
       afterroot <- G.rootC(core)
-      _ <- if (afterroot == root && after.branch == actual.branch && after.head == input.parent.head && after.tree == input.parent.tree &&
+      _ <- if (afterroot == root && afterindex == index && after.branch == actual.branch && after.head == input.parent.head && after.tree == input.parent.tree &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(after.dirty, _owned_paths, true)) Consequence.unit
         else F.invalid("actual Step parent drifted during closure observation")
-    } yield ()
+    } yield selection.selectedPaths
     def ackC(stage: String): Consequence[Unit] = acknowledge(stage) match {
       case Consequence.Success(_) => Consequence.unit
       case _ => org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
         "GoalPhase Step commit acknowledgement interrupted; retained intent is not replayed: " + stage)
     }
   }
+  /** Completion roles are adjacent to the exact retained Human direction.
+    * Recording-only reconstruction uses these same facts without observing Git.
+    */
+  private[admission] def partialProgressC(progress: Progress, intent: Option[(InstanceRecord, P.Intent)],
+    execution: Option[(InstanceRecord, P.Execution)]): Consequence[Progress] = (intent, execution) match {
+    case (None, None) => Consequence.success(progress)
+    case (None, Some(_)) => F.invalid("partial completion execution has no intent")
+    case (Some((record, payload)), result) => for {
+      direction <- progress.direction.filter(_.payload.choice == "CompletePartialCommit")
+        .map(Consequence.success).getOrElse(F.invalid("partial completion has no bound Human direction"))
+      pending <- progress.pending.map(Consequence.success).getOrElse(F.invalid("partial completion has no original intent"))
+      _ <- if (P.validIntent(payload) && payload.direction == direction.payload && payload.original == pending.payload &&
+          progress.record == direction.record) Consequence.unit
+        else F.invalid("partial completion intent crosses its original result or recovery direction")
+      _ <- R.adjacentC(direction.record, record, "partial-completion-intent", pending.payload.attempt)
+      next <- result match {
+        case None => Consequence.success(progress.copy(record = record, completionIntent = intent))
+        case Some((saved, actual)) => for {
+          _ <- if (P.validExecution(actual) && actual.intent == payload) Consequence.unit
+            else F.invalid("partial completion execution crosses its distinct intent")
+          _ <- R.adjacentC(record, saved, "partial-completion-execution", pending.payload.attempt)
+        } yield progress.copy(record = saved, completionIntent = intent, completionExecution = result)
+      }
+    } yield next
+  }
+  private[admission] def completedPartialC(payload: Payload, progress: Progress): Consequence[Unit] =
+    payload.partialCompletion match {
+      case None => if (progress.completionIntent.isEmpty && progress.completionExecution.isEmpty)
+        Consequence.unit else F.invalid("partial completion cannot be flattened into an ordinary closure")
+      case Some(chain) => for {
+        intent <- progress.completionIntent.map(v => Consequence.success(v._2))
+          .getOrElse(F.invalid("completed partial chain has no retained completion intent"))
+        execution <- progress.completionExecution.map(v => Consequence.success(v._2))
+          .getOrElse(F.invalid("completed partial chain has no terminal completion execution"))
+        _ <- if (P.validIntent(intent)) Consequence.unit else F.invalid("completed partial chain has an invalid completion intent")
+        proof <- intent.direction.target.partialCompletion.map(Consequence.success)
+          .getOrElse(F.invalid("completed partial chain has no original containment proof"))
+        _ <- if (P.validIntent(intent) && P.validExecution(execution) && execution.intent == intent &&
+            R.terminalExecution(execution.result) && execution.result.outcome == "succeeded" &&
+            O.validStepCommitChain(chain) && chain.originalParent == proof.originalParent && chain.partial == proof.partial &&
+            chain.completion.tree == proof.expectedTree && payload.commit.contains(chain.completion) &&
+            payload.copy(commit = None, partialCompletion = None) == intent.original &&
+            execution.result.selectedPaths.toSet == proof.remainder.map(_.path).toSet) Consequence.unit
+          else F.invalid("completed partial chain changes its retained accepted facts or actual result")
+      } yield ()
+    }
+
   /** Pure reconciliation; the Store separately binds every record to actual history. */
   private[admission] def reconcileAttemptsC(from: InstanceRecord, input: Input, ordinal: Int,
     attempts: Vector[Attempt]): Consequence[Progress] = for {

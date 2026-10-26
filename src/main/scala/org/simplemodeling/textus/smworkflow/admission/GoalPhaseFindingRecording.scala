@@ -105,7 +105,13 @@ private[smworkflow] object GoalPhaseFindingRecording {
         Vector(c.commit.identity, c.commit.parent, c.commit.tree).forall(_oid)) &&
       value.completed.map(_.step) == value.selectedPlan.steps.take(value.completed.size).map(_.identity) &&
       value.completed.map(_.commit.identity).distinct.size == value.completed.size &&
-      value.completed.map(_.commit.parent) == (Vector(value.originalBase.head) ++ value.completed.map(_.commit.identity)).take(value.completed.size),
+      value.completed.zipWithIndex.forall { (closed, index) =>
+        val predecessor = if (index == 0) value.originalBase else {
+          val previous = value.completed(index - 1).commit
+          O.Snapshot(previous.identity, previous.tree)
+        }
+        closed.partialCompletion.fold(closed.commit.parent == predecessor.head)(_.originalParent == predecessor)
+      },
       "completed Steps must form the selected ordered commit prefix")
     _ <- _check(value.items != null && value.items.nonEmpty && value.items.size <= 256 && value.items.forall(_item) &&
       value.items.map(i => _key(i.sourceReference, i.observation.identity)).distinct.size == value.items.size,

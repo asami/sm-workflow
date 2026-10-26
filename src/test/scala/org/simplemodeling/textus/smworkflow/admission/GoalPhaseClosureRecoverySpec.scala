@@ -79,6 +79,44 @@ final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with 
       ContextReference("actual-human", "1"), true))
 
   "Selected Step closure recovery" should {
+    "E67 bind the complete partial proof and retain ordinary absent-field compatibility" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R7,R8 E67: the exact original intent and its actual terminal successful execution")
+      val (_, input, attempt) = _pending
+      val result = R.ExecutionSaved(_append(attempt.intent.get.record, "execution-result"),
+        _execution(input).copy(outcome = "succeeded", termination = Some("Exited(0)"), exitCode = Some(0), stderr = ""))
+      val changes = Vector("docs/one.md", "docs/two.md", _paths.head).sorted.map(path =>
+        GoalPhasePartialCommitClosure.Change(path, "100644", "100644", Some("1" * 40), Some("2" * 40)))
+      val partial = O.Commit("d" * 40, _parent.head, "e" * 40)
+      val proof = GoalPhasePartialCommitClosure.Proof(_parent, partial, _candidate.tree, Vector.empty,
+        changes, changes.filter(_.path == _paths.head), changes.filterNot(_.path == _paths.head), Vector("docs"))
+      val observation = _observation.copy(head = partial.identity, tree = partial.tree, selectedPaths = Vector("docs"),
+        pendingPaths = changes.map(_.path), dirty = proof.remainder.map(c => G.DirtyPath('M', ' ', c.path, None)),
+        commit = G.Commit(partial.identity, partial.tree, Vector(_parent.head)))
+      val target = _target(input, attempt.intent.get, Some(result)).copy(ownedPaths = Vector("docs", "src"),
+        observation = observation, partialCompletion = Some(proof))
+      val reference = ContextReference("exact-partial-human", "1")
+      When("the new public target direction and Human binding use the complete proof")
+      val decoded = take(R.targetC(R.targetRecord(target)))
+      val binding = take(R.bindingC("component", target, "CompletePartialCommit", "Finish only the accepted remainder", "participant", reference, true))
+      val direction = R.Direction(target, "CompletePartialCommit", "Finish only the accepted remainder", "participant", reference, true)
+      Then("all native facts survive and stale selection participant reference and unknown original outcomes cannot substitute")
+      decoded shouldBe target
+      R.selectBinding(binding) shouldBe Right(binding)
+      R.directionCodec.decode(R.directionCodec.encode(direction)) shouldBe Right(direction)
+      R.choicesFor(target) should contain("CompletePartialCommit")
+      R.choiceC(target, "AuthorizeNewAttempt").isSuccess shouldBe false
+      R.choiceC(target, "ReconcileCommit").isSuccess shouldBe false
+      R.bindingC("component", target, direction.choice, direction.rationale, "other", reference, true).isSuccess shouldBe false
+      R.bindingC("component", target, direction.choice, direction.rationale, "participant", ContextReference("", "1"), true).isSuccess shouldBe false
+      R.bindingC("component", target, direction.choice, direction.rationale, "participant", reference, false).isSuccess shouldBe false
+      R.validTarget(target.copy(observation = observation.copy(selectedPaths = Vector("docs/one.md")))) shouldBe false
+      R.validTarget(target.copy(execution = Some(result.payload.copy(outcome = "failed", termination = Some("Exited(1)"), exitCode = Some(1))))) shouldBe false
+      val ordinary = _target(input, attempt.intent.get)
+      ordinary.asJson.hcursor.downField("partialCompletion").focus shouldBe None
+      R.decodeTarget(ordinary.asJson) shouldBe Right(ordinary)
+      R.choicesFor(ordinary) should not contain "CompletePartialCommit"
+    }
+
     "preserve legacy v3 receipt bytes and distinguish absent execution observations from an actual failed result" in {
       Given("a legacy pending intent without a terminal summary and a separate actual-shaped failed summary")
       val (from, input, attempt) = _pending
@@ -173,7 +211,7 @@ final class GoalPhaseClosureRecoverySpec extends AnyWordSpec with Matchers with 
       val (_, input, attempt) = _pending
       val target = _target(input, attempt.intent.get)
       val description = V.GoalPhaseClosureRecoveryDescriptionResult(target.sessionId, "decision-required", R.message,
-        "component", R.targetRecord(target), R.choices, R.recoveryOperation)
+        "component", R.targetRecord(target), R.choicesFor(target), R.recoveryOperation)
       val answer = V.GoalPhaseClosureRecoveryAnswer("AuthorizeNewAttempt", "Prior owner terminal evidence retained by trusted fixture host", true)
       val reference = V.WorkflowArtifactReference("closure-human-preparation", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)

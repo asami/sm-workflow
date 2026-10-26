@@ -146,6 +146,28 @@ final class GoalPhaseDependencyInventoryContinuationSpec extends AnyWordSpec wit
   }
 
   "Native inventory proof and codec" should {
+    "E67 retain a partial-chain accepted prefix in the existing inventory continuation receipt" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R8 E67: an exact inventory direction and immutable accepted P/C/D prefix")
+      val source = take(_native().selectC).get
+      val original = I.payload(source)
+      val partial = O.Commit("9" * 40, original.base.head, "d" * 40)
+      val completion = O.Commit("e" * 40, partial.identity, "f" * 40)
+      val chain = O.StepCommitChain(original.base, partial, completion)
+      val step = O.ClosedStep("prior-step", completion, Some("accepted-review"), partialCompletion = Some(chain))
+      val payload = original.copy(completed = Vector(step))
+      When("the existing immutable receipt is encoded and decoded without a live observation")
+      val decoded = I.codec.decode(I.codec.encode(payload))
+      Then("native source generation frontier approval and consumed counts remain exact with the completed chain")
+      decoded shouldBe Right(payload)
+      decoded.toOption.get.completed.head.partialCompletion shouldBe Some(chain)
+      decoded.toOption.get.completed.head.commit.parent shouldBe partial.identity
+      decoded.toOption.get.sourceRevision shouldBe original.sourceRevision
+      decoded.toOption.get.generation shouldBe original.generation
+      decoded.toOption.get.repairProgress shouldBe original.repairProgress
+      val forged = payload.copy(completed = Vector(step.copy(partialCompletion = Some(chain.copy(completion = partial)))))
+      I.codec.decode(I.codec.encode(forged)).isLeft shouldBe true
+    }
+
     "bind a complete source and one adjacent successor while preserving Plan, base, prefix and counters" in {
       Given("specification-owned complete adjacent work issuance and decision-needed completion")
       val native = _native()

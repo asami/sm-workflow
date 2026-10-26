@@ -460,7 +460,8 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         local.hcursor.downField("next").focus shouldBe Some(failednative)
         val expectedcompleted = localpayload.input.completed.map(value => V.GoalPhaseClosedStep(value.step,
           V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review,
-          admission = value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson))))
+          admission = value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)),
+          partialCompletion = NativeWorkflowOperationOutput.goalClosedStep(value).partialCompletion))
         val parent = localpayload.input.completed.last.commit.identity
         val finalhead = s.candidateHead
         finalhead should not be parent

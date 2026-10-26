@@ -21,6 +21,7 @@ import GoalPhaseNativeClosure as K
 import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
+import GoalPhasePartialCommitClosure as P
 
 /** Explicit recovery of an unresolved selected Step commit. Old intent and
   * terminal observations are immutable; direction never executes a commit.
@@ -32,14 +33,17 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   val purpose = "goal-phase-closure-recovery"
   val describeOperation = "describeGoalPhaseClosureRecovery"
   val recoveryOperation = "recoverGoalPhaseClosure"
-  val choices = Vector("AuthorizeNewAttempt", "ReconcileCommit", "Defer")
+  val choices = Vector("AuthorizeNewAttempt", "ReconcileCommit", "CompletePartialCommit", "Defer")
+  def choicesFor(target: RecoveryTarget): Vector[String] = choices.filter(choice => choiceC(target, choice).isSuccess)
   val continuationMessage = "The saved actual local selected commit execution ended and its current typed Git " +
     "observation permits mechanical continuation under the existing Step closure authority. Use ordinary " +
     "advanceGoalPhase for this same Session. No new Human recovery direction or repeated Test/review is required."
   val message = "The original commit intent remains unknown unless its actual execution summary was saved. " +
     "Independent trusted Human evidence must attest that its prior execution owner ended. AuthorizeNewAttempt " +
     "permits a NEW commit attempt and may repeat an old effect; ReconcileCommit records only an actual matching " +
-    "single-parent commit. Recovery appends direction only. A separate ordinary Advance rechecks the exact live " +
+    "single-parent commit. CompletePartialCommit permits one new completion commit only for a proved known successful " +
+    "partial commit, retaining the actual original-parent -> partial -> completion chain. Recovery appends direction only. " +
+    "A separate ordinary Advance rechecks the exact live " +
     "Git observation and physical selection. Original Session, Plan, accepted checks/review, history and counters remain. " +
     "Defer changes nothing. Authentication, unchanged HEAD and an absent receipt do not prove termination or nonexecution."
 
@@ -72,7 +76,8 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     sourceRevision: String, frontierRevision: String, intentIdentity: String, intentRevision: String,
     intentRecordRevision: String, ordinal: Int, attempt: Int, parent: O.Snapshot, candidate: O.Snapshot,
     reviewEvidence: Option[String], ownedPaths: Vector[String], observation: Observation, execution: Option[Execution],
-    admission: Option[GoalPhaseStepAssessment.Admission] = None) {
+    admission: Option[GoalPhaseStepAssessment.Admission] = None,
+    partialCompletion: Option[P.Proof] = None) {
     def input: K.Input = K.Input(sessionId, sourceRevision, planIdentity, planRevision, step, generation,
       parent, candidate, reviewEvidence, admission)
   }
@@ -98,8 +103,10 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       "reviewEvidence" -> value.reviewEvidence.asJson,
       "ownedPaths" -> value.ownedPaths.asJson,
       "observation" -> value.observation.asJson,
-      "execution" -> value.execution.asJson).mapObject(fields =>
-        value.admission.fold(fields)(a => fields.add("admission", a.asJson))))
+      "execution" -> value.execution.asJson).mapObject { fields =>
+        val admitted = value.admission.fold(fields)(a => fields.add("admission", a.asJson))
+        value.partialCompletion.fold(admitted)(p => admitted.add("partialCompletion", p.asJson))
+      })
     given Decoder[RecoveryTarget] = Decoder.instance(cursor => for {
       sessionid <- cursor.get[String]("sessionId")
       definitionidentity <- cursor.get[String]("definitionIdentity")
@@ -123,9 +130,12 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       ownedpaths <- cursor.get[Vector[String]]("ownedPaths")
       observation <- cursor.get[Observation]("observation")
       execution <- cursor.get[Option[Execution]]("execution")
+      partial <- cursor.get[Option[P.Proof]]("partialCompletion")
+      _ <- Either.cond(!cursor.downField("partialCompletion").focus.exists(_.isNull), (),
+        io.circe.DecodingFailure("Partial completion proof cannot be null", cursor.history))
     } yield RecoveryTarget(sessionid, definitionidentity, definitionrevision, participant, planidentity, planrevision,
       step, generation, sourcerevision, frontierrevision, intentidentity, intentrevision, intentrecordrevision,
-      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution, admission))
+      ordinal, attempt, parent, candidate, reviewevidence, ownedpaths, observation, execution, admission, partial))
   }
   final case class Direction(target: RecoveryTarget, choice: String, rationale: String,
     participant: String, reference: ContextReference, priorExecutionEnded: Boolean)
@@ -208,6 +218,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     value.execution != null && value.execution.forall(result => validExecution(result) && result.input == value.input &&
       result.ordinal == value.ordinal && result.attempt == value.attempt &&
       result.selectedPaths.forall(path => value.ownedPaths.exists(_covers(_, path)))) &&
+    value.partialCompletion != null && value.partialCompletion.forall(_ => P.applicable(value)) &&
     BigInt(value.frontierRevision) == BigInt(value.intentRecordRevision) + value.execution.size
 
   private def _observation_valid(value: Observation): Boolean = value != null && _exact(value.root) &&
@@ -230,6 +241,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
       GoalPhaseNativeCandidateBoundary.scopedDirty(observed.dirty, target.ownedPaths, true) &&
       GoalPhaseNativeCandidateBoundary.pathsOwned(observed.pendingPaths, target.ownedPaths)
     if (choice == "Defer") Consequence.unit
+    else if (choice == "CompletePartialCommit" && P.applicable(target)) Consequence.unit
     else if (choice == "AuthorizeNewAttempt" && common && observed.head == target.parent.head &&
         observed.tree == target.parent.tree) Consequence.unit
     else if (choice == "ReconcileCommit" && common && observed.head != target.parent.head &&
@@ -291,7 +303,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     "GoalPhaseClosureExecutionResult", "sm-workflow.goal-phase-closure-execution.v1", validExecution)
   val directionCodec: WorkflowResultJsonV1.PayloadCodec[Direction] = _codec[Direction](
     "GoalPhaseClosureRecoveryDirection", "sm-workflow.goal-phase-closure-recovery.v1", value => value != null &&
-      validTarget(value.target) && Set("AuthorizeNewAttempt", "ReconcileCommit")(value.choice) &&
+      validTarget(value.target) && Set("AuthorizeNewAttempt", "ReconcileCommit", "CompletePartialCommit")(value.choice) &&
       _text(value.rationale) && value.participant == value.target.participant && value.priorExecutionEnded &&
       value.reference != null && _exact(value.reference.identity) && _exact(value.reference.revision) &&
       choiceC(value.target, value.choice).isSuccess)
@@ -355,7 +367,8 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     selected <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, candidate))
     differences <- selected.valueC
     parent <- GitObjectId.parseC(input.parent.head)
-    physical <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, parent)).flatMap(_.valueC)
+    physical <- E.executeGitC(core, GitOperation.SelectedIndexChanges(selection, parent))
+    physicalchanges <- physical.valueC
     pending <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
     commit <- G.commitC(core, before.observed.head)
     after <- G.inspectC(core)
@@ -365,7 +378,9 @@ private[smworkflow] object GoalPhaseClosureRecovery {
         before.observed.branch == d.target.localBranch) Consequence.unit
       else _invalid("actual Git observation drifted or crossed the installed target")
   } yield Observation(root, before.observed.branch, before.observed.head, before.observed.tree, index,
-    before.mergeHead, before.observed.dirty, physical.map(_.path.value), differences.isEmpty,
+    before.mergeHead, before.observed.dirty,
+    if (before.observed.head != input.parent.head && before.observed.tree != index) physical.selectedPaths.map(_.value)
+      else physicalchanges.map(_.path.value), differences.isEmpty,
     pending.map(_.value), commit)
 
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
@@ -377,11 +392,13 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     _ <- if (progress.nextAttempt.isEmpty && progress.direction.isEmpty && progress.continuation.isEmpty && progress.record == session.current)
       Consequence.unit else _invalid("recovery direction is stale, already used or not at the exact current frontier")
     observed <- observeC(d, core, input, ordinal)
-    target = RecoveryTarget(input.instance, from.definition.workflowIdentity.value, from.definition.workflowRevision.value,
+    base = RecoveryTarget(input.instance, from.definition.workflowIdentity.value, from.definition.workflowRevision.value,
       session.participantIdentity, input.plan, input.planRevision, input.step, input.generation,
       input.sourceRevision, progress.record.revision.value.toString, reference(input, "intent", pending.payload.attempt).identity,
       "1", pending.record.revision.value.toString, ordinal, pending.payload.attempt, input.parent, input.candidate,
       input.reviewEvidence, controller.plan.steps(controller.cursor).ownedPaths, observed, progress.execution.map(_.payload), input.admission)
+    proof <- P.prepareC(core, base, pending.payload, progress.failed.flatMap(_.payload.check))
+    target = base.copy(partialCompletion = proof)
     _ <- if (validTarget(target)) Consequence.unit else _invalid("actual unresolved closure target is invalid")
   } yield target
 
