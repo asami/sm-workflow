@@ -190,6 +190,43 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## LocalPublicationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| requestIdentity | string | 1 |
+| targetIdentity | string | 1 |
+| ownerSessionId | string | ? |
+| explicit | boolean | 1 |
+| answer | org.goldenport.record.Record | ? |
+
+## LocalPublicationCollectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| requestIdentity | string | 1 |
+| targetIdentity | string | 1 |
+| ownerSessionId | string | ? |
+| explicit | boolean | 1 |
+
+## LocalPublicationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| reason | string | 1 |
+| publication | org.goldenport.record.Record | ? |
+
 ## GoalPhaseAdvanceResult
 
 ### EXTENDS
@@ -220,6 +257,7 @@ OperationResult
 | validation | GoalPhaseNativeValidationView | ? |
 | repairProgress | GoalPhaseRepairProgress | ? |
 | findingRecording | GoalPhaseFindingRecordingState | ? |
+| localPublication | org.goldenport.record.Record | ? |
 
 ## GoalPhaseClosureRecoveryDescriptionInput
 
@@ -9245,6 +9283,70 @@ DevelopmentHistoryReadInput
 ###### TYPE
 
 DevelopmentObservationResult
+
+## LocalPublicationService
+
+### DESCRIPTION
+
+Runtime-owned local publication of host-declared Component targets using typed SBT inside the owning UoW. Necessity and actual outcomes are retained; unresolved build relevance alone is returned to the caller. Collection never executes or replays publication.
+
+### OPERATION
+
+#### ensureLocalPublication
+
+##### DESCRIPTION
+
+Ensure the selected local publication prerequisite or explicit request. Reuse completed results, retain actual failures and uncertainty, and continue confirmed nonstart preparation under the unchanged scope. No arbitrary task, argv or destination is accepted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+LocalPublicationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### collectLocalPublication
+
+##### DESCRIPTION
+
+Collect the actual retained publication result without source inspection or process execution. Unknown execution is never replayed.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+LocalPublicationCollectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationCollectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
 
 ## JournalService
 

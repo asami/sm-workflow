@@ -20,6 +20,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     .map(name => s"skills/$name/SKILL.md")
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
+    "docs/spec/runtime-owned-local-publication.md",
     "docs/spec/caller-information.md",
     "docs/spec/goal-phase-acceptance-boundary.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
@@ -61,7 +62,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       } finally jar.close()
     }
 
-    "retain identical bytes for exactly fifteen distribution files in the standalone ZIP and component JAR" in {
+    "retain identical bytes for every declared distribution file in the standalone ZIP and component JAR" in {
       Given("the actual skillBundle ZIP, packageBin JAR and independent authoring sources")
       val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
@@ -80,7 +81,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           val packagedpaths = jar.entries().asScala
             .filter(entry => !entry.isDirectory && entry.getName.startsWith("META-INF/sm-workflow/"))
             .map(_.getName.stripPrefix("META-INF/sm-workflow/")).toVector
-          Then("both distribution namespaces contain exactly fifteen files with authoring and JAR byte equality")
+          Then("both distribution namespaces contain exactly the declared files with authoring and JAR byte equality")
           entries.map(_.getName).sorted shouldBe _distribution_paths.sorted
           packagedpaths.sorted shouldBe _distribution_paths.sorted
           _distribution_paths.foreach { path =>

@@ -74,6 +74,9 @@
         },
         {
           "name": "DevelopmentObservationService"
+        },
+        {
+          "name": "LocalPublicationService"
         }
       ],
       "operations": [
@@ -461,6 +464,20 @@
           "kind": "COMMAND",
           "input": "DevelopmentHistoryReadInput",
           "output": "DevelopmentObservationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "ensureLocalPublication",
+          "kind": "COMMAND",
+          "input": "LocalPublicationInput",
+          "output": "LocalPublicationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "collectLocalPublication",
+          "kind": "COMMAND",
+          "input": "LocalPublicationCollectionInput",
+          "output": "LocalPublicationResult"
         }
       ],
       "types": [
@@ -1089,6 +1106,12 @@
             {
               "name": "findingRecording",
               "type": "GoalPhaseFindingRecordingState",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "localPublication",
+              "type": "Record",
               "multiplicity": "?",
               "required": false
             }
@@ -5103,6 +5126,96 @@
             {
               "name": "ownerDetailsUrl",
               "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "LocalPublicationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "targetIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownerSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "explicit",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "answer",
+              "type": "Record",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "LocalPublicationCollectionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "targetIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownerSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "explicit",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "LocalPublicationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "publication",
+              "type": "Record",
               "multiplicity": "?",
               "required": false
             }

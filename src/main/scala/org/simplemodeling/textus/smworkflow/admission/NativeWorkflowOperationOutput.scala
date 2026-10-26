@@ -78,7 +78,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     reviewContext <- NativeReviewContext.goalC(core, work)
   } yield V.GoalPhaseAdvanceResult(work.handle.instanceIdentity.value, "Request", value.purpose,
       Some(GoalPhaseNativeRun.completionOperation.operation), Some(work.handle.instanceIdentity.value), Some("GoalPhaseWorkResult"),
-      None, None, Some(goalWork(value, reviewContext)), None, None, None, None, None, None, Some(issuedContext), None, None, progress, None)
+      None, None, Some(goalWork(value, reviewContext)), None, None, None, None, None, None, Some(issuedContext), None, None, progress, None, None)
 
   def goalHumanC(question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing], core: ActionCall.Core):
     Consequence[V.GoalPhaseAdvanceResult] = for {
@@ -98,16 +98,16 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       Some("GoalPhaseOrderedDecisionAnswer"), None, None, None,
       Some(V.GoalPhaseHumanQuestion(goalWork(value.work), _goal_result(value.result), value.reason,
         choices, Some(context), GoalPhasePlanRevision.publicCaptured(value.planRevision),
-        value.sourceHistoryRecovery.map(GoalPhaseSourceHistoryRecovery.targetRecord))), None, None, None, None, None, None, None, None, progress, None)
+        value.sourceHistoryRecovery.map(GoalPhaseSourceHistoryRecovery.targetRecord))), None, None, None, None, None, None, None, None, progress, None, None)
 
   def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,
-      None, None, None, None, None, None, None, None, None, None, None, None)
+      None, None, None, None, None, None, None, None, None, None, None, None, None)
 
   def goalChild(session: String, child: V.RepositorySyncAdvanceResult): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, child.kind, child.message, child.submitOperation, child.submitSessionId,
       child.resultType, child.condition, child.outcome, None, None, child.conflict, child.review, child.human, None, None,
-      child.issuedWorkContext, child.repair, None, None, None)
+      child.issuedWorkContext, child.repair, None, None, None, None)
 
   def goalComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
     completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
@@ -116,7 +116,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       None, None, None, None, Some("completed"), None, None, None, None, None,
       Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
         _goal_snapshot(candidate), Some(repository), V.GoalPhaseSynchronizationResult("succeeded",
-          "Actual RepositorySync convergence and native completion are retained.", None, None))), None, None, None, None, None, None)
+          "Actual RepositorySync convergence and native completion are retained.", None, None))), None, None, None, None, None, None, None)
 
   def goalLocallyComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
     completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
@@ -127,7 +127,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       None, None, None, None, None, Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base),
         completed.map(_goal_closed), _goal_snapshot(candidate), repository,
         V.GoalPhaseSynchronizationResult(synchronization.state, synchronization.reason,
-          synchronization.childSessionId, synchronization.advanceOperation))), None, None, None, None, None, None)
+          synchronization.childSessionId, synchronization.advanceOperation))), None, None, None, None, None, None, None)
 
   def goalRecordingResult(value: GoalPhaseFindingRecording.Result): V.GoalPhaseFindingRecordingResult =
     V.GoalPhaseFindingRecordingResult(value.outcome, value.summary, value.items.map(item =>

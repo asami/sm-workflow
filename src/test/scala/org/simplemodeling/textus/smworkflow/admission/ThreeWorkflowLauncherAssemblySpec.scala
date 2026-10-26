@@ -42,7 +42,9 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
         SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
-          s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}")
+          s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}") ++
+        SmWorkflowComponent.LocalPublicationServiceService.operations.operations.toVector.map(o =>
+          s"${SmWorkflowComponent.LocalPublicationServiceService.name}.${o.name}")
       val expected = Set(
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
         "GoalPhaseService.submitGoalPhaseOrderedDecision",
@@ -56,6 +58,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
+        "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
         "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
         "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory")
       Then("every published native operation has a generated counterpart and each owning advance has its paired Start")

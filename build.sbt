@@ -12,9 +12,42 @@ lazy val labelledFullTests = taskKey[Seq[LabelledTests.Selected]]("Canonical def
 lazy val labelledTestSelection = inputKey[Seq[TestDefinition]]("Inspect canonical test selection without executing selected bodies")
 lazy val prepareFullTests = taskKey[Unit]("Prepare prerequisites required by default FULL metadata")
 lazy val labelledTestExecution = inputKey[Unit]("Internal standard SBT execution for exact metadata-selected suite operations")
+lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."), sys.env.get("TEXTUS_SM_WORKFLOW_CNCF_SOURCE_ROOT"))
+lazy val cncfSourceProject = cncfSourceDirectory.map(source => RootProject(source.toURI))
+lazy val validateCncfSource = taskKey[Unit]("Validate the selected source dependency against the declared CNCF coordinates")
+lazy val validateCncfPublicationClasspath = taskKey[Unit]("Verify the normal attributed source JAR in the application publication closure")
+lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatMap { source => Seq(
+  libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
+  validateCncfSource := {
+    require((source / organization).value == "org.goldenport" && (source / moduleName).value == "goldenport-cncf" &&
+      (source / version).value == "0.5.3-SNAPSHOT" && (source / scalaVersion).value == scalaVersion.value,
+      "Selected CNCF source coordinates differ from project.yaml")
+  },
+  Compile / compile := ((Compile / compile) dependsOn validateCncfSource).value,
+  cozyCncfRuntimeDescriptorInput := Some((source / TaskKey[File]("generateCncfRuntimeDescriptor")).value),
+  cozyCncfRuntimeArtifactInput := Some((source / Compile / packageBin).value),
+  Compile / dependencyClasspath := SmWorkflowCncfDevelopmentBuild.runtimeClasspath(
+    (Compile / dependencyClasspath).value, (source / Compile / classDirectory).value,
+    (source / Compile / packageBin).value, (source / organization).value,
+    (source / moduleName).value, (source / scalaBinaryVersion).value, (source / version).value),
+  validateCncfPublicationClasspath := {
+    val classpath = (Compile / dependencyClasspath).value
+    val archive = (source / Compile / packageBin).value.getCanonicalFile
+    val classes = (source / Compile / classDirectory).value.getCanonicalFile
+    val roots = classpath.filter(_.get(moduleID.key).exists(module =>
+      module.organization == "org.goldenport" && module.name == "goldenport-cncf_3"))
+    require(roots.size == 1 && roots.head.data.getCanonicalFile == archive &&
+      roots.head.get(artifact.key).exists(value => value.extension == "jar" && value.classifier.isEmpty),
+      "Publication must contain exactly the selected normally packaged CNCF root")
+    require(!classpath.exists(_.data.getCanonicalFile == classes),
+      "Publication cannot contain a source classes directory")
+    streams.value.log.info("Source publication closure: one attributed CNCF packageBin JAR; normal transitive dependencies retained")
+  }
+) }
 
 lazy val root = project
   .in(file("."))
+  .dependsOn(cncfSourceProject.toSeq.map(source => source % "compile->compile;runtime->runtime"): _*)
   .enablePlugins(org.goldenport.cozy.CozyPlugin)
   .settings(inConfig(Test)(Defaults.testTaskOptions(labelledTestExecution) ++
     Defaults.defaultTestTasks(labelledTestExecution) ++ Seq(
@@ -97,6 +130,7 @@ lazy val root = project
       }
       val contracts = Seq(
         "docs/spec/native-host-execution.md",
+        "docs/spec/runtime-owned-local-publication.md",
         "docs/spec/caller-information.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-purpose-repair.md",
@@ -152,5 +186,6 @@ lazy val root = project
     cozyCarName := ProjectYamlBuild.carBaseName(projectIdentityEvidence.value, moduleName.value, version.value),
     cozyManifestMetadata ++= ProjectYamlBuild.manifestMetadata(projectIdentityEvidence.value, cozyProjectMetadata.value)
   )
+  .settings(cncfSourceSettings)
 // Syntactic check only: no SemanticDB or additional compilation prerequisite.
 addCommandAlias("fixCheck", "Compile / scalafix --check")

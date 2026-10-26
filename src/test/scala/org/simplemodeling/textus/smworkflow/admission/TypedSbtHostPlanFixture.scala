@@ -85,13 +85,14 @@ private[admission] object TypedSbtHostPlanFixture {
           x.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")) &&
         testClasses.distinct == testClasses &&
         testClasses.map(_.split('.').last).distinct.size == testClasses.size
-      case SbtOperation.Compile | SbtOperation.Test | SbtOperation.FixCheck => testClasses.isEmpty
+      case SbtOperation.Compile | SbtOperation.Test | SbtOperation.FixCheck | SbtOperation.PublishLocal => testClasses.isEmpty
     }), "Only bounded exact TestOnly classes or class-free Compile/Test are admitted")
     val operationwire = operation match {
       case SbtOperation.Compile => "compile"
       case SbtOperation.Test => "test"
       case SbtOperation.TestOnly => "test-only"
       case SbtOperation.FixCheck => "fix-check"
+      case SbtOperation.PublishLocal => "publish-local"
     }
     require(ordinals.nonEmpty && ordinals.forall(value => value >= 1 && value <= 16) &&
       ordinals.distinct == ordinals, "Only distinct selected SBT ordinals 1..16 are admitted")

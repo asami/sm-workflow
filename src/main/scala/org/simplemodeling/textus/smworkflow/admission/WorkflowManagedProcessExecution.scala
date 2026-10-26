@@ -127,6 +127,17 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     else Consequence.stateConflict("Workflow validation attempt differs from its exact selected target or operation")
   }
 
+  /** A host-bound local publication runs through this call's existing UoW.
+    * Publication necessity and retained intent belong to LocalPublication.
+    */
+  def publishLocalAttemptC(core: ActionCall.Core, workspaceIdentity: String): Consequence[SbtExecutionAttempt] = for {
+    workspace <- WorkspaceId.parseC(workspaceIdentity)
+    target = SbtTarget(workspace)
+    execution = new Execution(core)
+    result <- execution.runSbtAttemptC(execution.preparePublication(target))
+    _ <- _attempt_target_c(result, target, SbtOperation.PublishLocal)
+  } yield result
+
   /** The host fixes the selected Step's message and commit identity. */
   def commitGoalStepC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
     _ <- _ordinal_c(ordinal, 64)
@@ -151,6 +162,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   } yield value
 
   private final class Execution(val core: ActionCall.Core) extends ProcedureActionCall {
+    def preparePublication(target: SbtTarget): ExecUowM[SbtExecutionAttempt] = sbt_publish_local_attempt(target)
     // Typed constructors and executeProgram borrow the actual owning UoW.
     // CNCF interprets its current authority and owns the managed lifecycle.
     def prepareSbt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionResult] = kind match {

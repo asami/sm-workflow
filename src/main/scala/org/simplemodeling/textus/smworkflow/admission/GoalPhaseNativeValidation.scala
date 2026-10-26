@@ -180,6 +180,12 @@ private[smworkflow] object GoalPhaseNativeValidation {
     dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths, dependencyChain)
     retained <- store.loadC("validation")
+    existingintent <- store.loadC("check-intent-0")
+    prerequisite <- if (retained.isEmpty && existingintent.isEmpty) LocalPublicationRuntime.beforeChecksC(session, d, core, candidate)
+      else Consequence.success(None)
+    response <- prerequisite match {
+      case Some(waiting) => Consequence.success(waiting)
+      case None => for {
     actual <- retained match {
       case Some(value) => store.completedC(value)
       case None => _checks_c(store)
@@ -222,6 +228,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
     })
   } yield wire.copy(validation = Some(NativeWorkflowOperationOutput.goalValidation(actual.payload)
     .copy(evidenceRecording = evidence ++ repairevidence, assessmentJournal = journal)))
+    }
+  } yield response
 
   private[admission] def recoveryTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
@@ -451,6 +459,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           case SbtOperation.Test => check.kind == WorkflowSbtValidation.Kind.Test
           case SbtOperation.TestOnly => check.kind == WorkflowSbtValidation.Kind.TestOnly
           case SbtOperation.FixCheck => check.kind == WorkflowSbtValidation.Kind.FixCheck
+          case SbtOperation.PublishLocal => false
         })) Consequence.unit
     else F.invalid("native check attempt differs from its exact target or operation")
 

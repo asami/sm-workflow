@@ -65,7 +65,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Installation] = None,
     dependencySourceRevision: Option[GoalPhaseDependencySourceRevision.Installation] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
-    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty)
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
+    localPublication: Option[LocalPublicationRuntime.Policy] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -201,6 +202,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.dependencySourceConsumptions == null || d.dependencySourceConsumptions.size > 16 ||
         d.dependencySourceConsumptions.exists(c => !GoalPhaseDependencySourceRevision.consumptionValid(c)) ||
         d.dependencySourceConsumptions.distinct.size != d.dependencySourceConsumptions.size ||
+        d.localPublication == null || d.localPublication.exists(p => !LocalPublicationRuntime.validateC(p).isSuccess) ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
         d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||
         d.releaseRepairContinuation == null || d.releaseRepairContinuation.exists(i => i == null || !i.validateC.isSuccess) ||

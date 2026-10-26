@@ -32,6 +32,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
     "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
     "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",
@@ -96,5 +97,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       NativeWorkflowPreparationServiceAssembly.bind,
       DevelopmentJournalService.bind(host.goal.journalPolicy),
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
-      DevelopmentObservationService.bind(host.goal, goalCatalog.definition))
+      DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
+      LocalPublicationService.bind(host.goal, goalCatalog.definition))
 }
