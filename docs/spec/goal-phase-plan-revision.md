@@ -1,5 +1,21 @@
 # Explicit bounded Plan revision
 
+Updated 2026-10-27: the separate
+[current primary-Component inventory adoption](goal-phase-remaining-plan-adoption.md#current-primary-component-inventory-continuation-r13r16-e3)
+uses its own pure current-Step literal append guard and typed `Target.currentInventory`
+within the existing remaining-Plan operations. Ordinary `adoptRevisionC` and
+`adoptRemainingRevisionC` remain strict about ownership. The inventory branch
+changes only the fresh revision and current uncompleted Step's explicit appended
+paths; every purpose, check, condition/source, closure policy and other Step remains
+exact. Each added path requires explicit same-Component host registration and an
+independent Human binding of the exact current target. Retained adoption resumes
+ordinary Implementation at generation + 1 with the original base, accepted prefix,
+partialCompletion chains and all repair counts unchanged. The original unanswered
+Human is atomically superseded without an answer; actual effects belong to a
+separate ordinary Advance. This contract neither introduces a Proposal schema nor
+permits current host defaults to reinterpret old captured inputs. See R13–R16 and
+E3 for public codec, authority and installed old-to-new qualification obligations.
+
 Updated 2026-10-23: the separate
 [remaining Plan adoption](goal-phase-remaining-plan-adoption.md#narrow-review-decision-continuation-r8r12)
 contract now includes a narrow saved ReviewStep `decision-needed` continuation.

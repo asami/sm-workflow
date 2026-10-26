@@ -18,7 +18,7 @@ import GoalPhaseOrderedProgression as O
   * Human answers. These examples claim no genuine Human/provider adoption,
   * independent review, accepted Step commit or Phase acceptance.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -33,6 +33,38 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
   private val _document_acceptance = "Produce expected followed by exactly one newline under the revised current-Step requirement"
   private val _participant = "participant"
   private val _provenance = "SPECIFICATION-OWNED answer; no genuine Human adoption claim"
+
+  "E3 ordinary revision versus explicit inventory registration" should afterWord(
+    "in spec:goal-phase-remaining-plan-adoption, example:E3, rules:R13,R14,R15, phase:P67-T4-INV01") {
+    "keep legacy remaining targets readable and refuse an inventory description without literal host registration" in {
+      Given("docs/spec/goal-phase-remaining-plan-adoption.md R13–R15 E3: a real unanswered ordinary revision and SPECIFICATION-OWNED proposal")
+      val selected = _selected("inventory-registration-refusal")
+      val scenario = selected.scenario
+      val session = selected.initial.sessionId
+      When("the existing description operation describes an ordinary unchanged-scope remaining proposal")
+      val described = scenario.call("command", GoalPhaseRemainingPlanAdoption.describeOperation, Vector("--input", json(
+        V.GoalPhaseRemainingPlanDescriptionInput(session, R.publicProposal(Some(selected.proposal)).get).toRecord()).noSpaces))
+      val description = described.business[V.GoalPhaseRemainingPlanDescriptionResult]
+      val target = take(GoalPhaseRemainingPlanAdoption.targetC(description.target))
+      Then("legacy target encoding omits inventory and the same decoder still reads the original target")
+      target.currentInventory shouldBe None
+      val wire = target.asJson
+      wire.hcursor.downField("currentInventory").focus shouldBe None
+      wire.as[GoalPhaseRemainingPlanAdoption.Target] shouldBe Right(target)
+      wire.mapObject(_.add("currentInventory", Json.Null)).as[GoalPhaseRemainingPlanAdoption.Target].isLeft shouldBe true
+      When("a complete proposal appends the ABI path that the actual finite host has never registered")
+      val prior = scenario.plan
+      val inventory = prior.copy(revision = "inventory-2", steps = prior.steps.updated(0,
+        prior.steps.head.copy(ownedPaths = prior.steps.head.ownedPaths :+ "src/main/car/abi-manifest.json")))
+      val proposed = R.publicProposal(Some(R.Proposal("spec-inventory", "1", "SPECIFICATION-OWNED inventory scope gap", inventory))).get
+      val refused = scenario.call("command", GoalPhaseRemainingPlanAdoption.describeOperation, Vector("--input", json(
+        V.GoalPhaseRemainingPlanDescriptionInput(session, proposed).toRecord()).noSpaces))
+      Then("Plan direction cannot invent a host staging registration or supersede the old question")
+      refused.exitCode should not be 0
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe selected.question.get
+      _executions(scenario) shouldBe empty
+    }
+  }
 
   private def _executions(scenario: F.Scenario): Vector[Long] = {
     val marker = scenario.root.resolve("sbt-executions.txt")

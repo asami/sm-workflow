@@ -31,7 +31,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -41,6 +41,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private val _hygiene = "docs/journal.md"
   private val _candidates = "docs/candidates.md"
   private val _paths = Vector("step-1.txt", "step-2.txt", _hygiene, _candidates)
+  private val _inventory_path = "src/main/car/abi-manifest.json"
   private val _policy = R.Policy(_hygiene, _candidates)
   private val _journal = DevelopmentJournal.Policy("workflow",
     DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", "development_journal")))
@@ -83,7 +84,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _process_plan(directory: Path, goal: ThreeWorkflowRuntimeParameters.Goal, denygit: Boolean = false): Json = {
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
-    val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates))
+    val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates) ++
+      Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
       goalSelections = selections)
     val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
@@ -113,14 +115,16 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
-    journalInterruption: Option[String] = None, evidence: Boolean = false)(task: Episode => Unit): Unit = {
+    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
     val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces)) ++
       (if (evidence) _evidence_values(directory) else Map.empty)
-    _with_runtime_(directory, "FindingRecording", Some(_host(directory)), parameters,
+    val host = _host(directory)
+    val selectedhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
+    _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
       if (initialize) prepare(call => call.setupC(_setup_commands_(directory, "FindingRecording").size).flatMap(_ => _install(call, selected)))
       task(new Episode(directory, owner, component, actor, prepare))
@@ -195,14 +199,18 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     * The first Step commit, pending question and native SQL history are actual.
     */
   private[admission] def qualifyRemainingPlanAdoption(narrator: GivenWhenThen): Unit = {
-    narrator.Given("an actual two-Step Session with its first Step accepted and committed")
+    _qualify_remaining_plan(narrator, inventory = false)
+    _qualify_remaining_plan(narrator, inventory = true)
+  }
+  private def _qualify_remaining_plan(narrator: GivenWhenThen, inventory: Boolean): Unit = {
+    narrator.Given("docs/spec/goal-phase-remaining-plan-adoption.md R13–R16 E3: an actual two-Step Session with its first Step accepted and committed; Human inputs are SPECIFICATION-OWNED")
     val directory = _root()
     val initial = _plan(two = true)
     var session = ""
     var original = Option.empty[InstanceRecord]
     var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
     var target = Option.empty[GoalPhaseRemainingPlanAdoption.Target]
-    _episode(directory, initialize = true, selected = initial) { e =>
+    _episode(directory, initialize = true, selected = initial, inventory = inventory) { e =>
       session = e.start()
       e.advance(session)
       Files.writeString(directory.resolve("repository/step-1.txt"), "Accepted original first Step.\n")
@@ -228,7 +236,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val before = e.current(session)
       original = Some(before)
       val raw = initial.copy(revision = "remaining-2", steps = initial.steps.updated(1,
-        initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
+        if (inventory) initial.steps(1).copy(ownedPaths = initial.steps(1).ownedPaths :+ _inventory_path)
+        else initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
       val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal(
         "spec-new-contract", "2", "Actual new direction replaces the unaccepted future contract", raw))).get
       narrator.When("public description captures the actual unanswered frontier and proposed remaining contract")
@@ -241,6 +250,25 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       captured.completed.head.commit.identity shouldBe e.observe().head
       captured.repairProgress shouldBe GoalPhaseRepairProgress.Snapshot(1, 1, 2,
         Some("sm-workflow.repair-trend.v1"), Some(2), Some(2))
+      if (inventory) {
+        val metadata = captured.currentInventory.get
+        metadata.componentInstance shouldBe description.componentInstance
+        metadata.stepIdentity shouldBe "step-2"
+        metadata.appendedPaths shouldBe Vector(_inventory_path)
+        metadata.candidatePaths shouldBe (_paths :+ _inventory_path)
+        captured.captured.plan.effectiveAcceptance shouldBe captured.plan.effectiveAcceptance
+        val wire = captured.asJson
+        val malformed = Vector(Json.Null, Json.True, Json.obj(), metadata.asJson.mapObject(_.add("extra", Json.True)))
+        malformed.foreach(value => wire.mapObject(_.add("currentInventory", value)).as[GoalPhaseRemainingPlanAdoption.Target].isLeft shouldBe true)
+        wire.mapObject(_.remove("currentInventory")).as[GoalPhaseRemainingPlanAdoption.Target].isLeft shouldBe true
+        val crossed = captured.copy(currentInventory = Some(metadata.copy(componentInstance = "other-component")))
+        GoalPhaseRemainingPlanAdoption.bindingC(description.componentInstance, crossed, "SPECIFICATION-OWNED crossed component",
+          "participant", ContextReference("crossed", "1")).isSuccess shouldBe false
+      } else {
+        captured.currentInventory shouldBe None
+        captured.asJson.hcursor.downField("currentInventory").focus shouldBe None
+        captured.asJson.as[GoalPhaseRemainingPlanAdoption.Target] shouldBe Right(captured)
+      }
       _same_instance(e.current(session), before)
       val input = V.GoalPhaseRemainingPlanAdoptionInput(session, description.target, proposal,
         "SPECIFICATION-OWNED new Human direction; no answer to the old dependency question",
@@ -256,6 +284,15 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       narrator.When("the specification host records the matching separately observed directive and public adoption runs")
       e.prepareRemaining(description, input)
       val crossed = _request_(input.copy(rationale = "A different unobserved directive"))
+      if (inventory) {
+        val metadata = captured.currentInventory.get
+        _request_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(captured.copy(
+          currentInventory = Some(metadata.copy(componentInstance = "other-component")))))).isSuccess shouldBe false
+        _request_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(captured.copy(
+          generation = captured.generation + 1)))).isSuccess shouldBe false
+        _request_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(captured.copy(
+          currentInventory = Some(metadata.copy(appendedPaths = metadata.appendedPaths :+ "excess.txt")))))).isSuccess shouldBe false
+      }
       val result = e.invoke[V.GoalPhaseRemainingPlanAdoptionResult](GoalPhaseRemainingPlanAdoption.adoptionOperation,
         List(Property("input", input.toRecord(), None)))
       val after = e.current(session)
@@ -272,7 +309,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _same_instance(e.current(session), after)
     }
     narrator.Given("the producer runtime has closed and the same managed SQL Session reopens")
-    _episode(directory, selected = initial) { e =>
+    _episode(directory, selected = initial, inventory = inventory) { e =>
       narrator.When("ordinary Advance reconstructs the retained adoption and issues only the unaccepted second Step")
       val next = e.advance(session)
       val assigned = _business(e.work(session))
@@ -282,7 +319,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       assigned.stepIdentity shouldBe Some("step-2")
       assigned.selectedPlan.revision shouldBe "remaining-2"
       assigned.selectedPlan.steps.head shouldBe initial.steps.head
-      assigned.selectedPlan.steps(1).purpose should include("operation-owned Evidence")
+      if (inventory) {
+        assigned.selectedPlan shouldBe target.get.captured.plan
+        assigned.selectedPlan.steps(1).ownedPaths shouldBe (initial.steps(1).ownedPaths :+ _inventory_path)
+      } else assigned.selectedPlan.steps(1).purpose should include("operation-owned Evidence")
       assigned.completed shouldBe target.get.completed
       assigned.originalBase shouldBe target.get.base
       assigned.repairProgress shouldBe Some(target.get.repairProgress)

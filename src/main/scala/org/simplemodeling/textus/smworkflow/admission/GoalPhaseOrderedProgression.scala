@@ -372,6 +372,21 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
+    /** Direction only: the native owner separately binds the actual Component,
+      * finite host registration and independently admitted Human directive.
+      */
+    private[admission] def adoptCurrentInventoryRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
+          !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          cursor == completed.size && cursor < plan.steps.size && generation < Long.MaxValue &&
+          decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
+        else invalid("Current inventory adoption requires its independent Human directive and unanswered current implementation or repair Decision")
+      _ <- currentInventoryPathsC(plan, proposed, step.identity)
+    } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, None, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+
     /** Eligibility only. The native owner binds the actual Review finding and
       * new condition to an independently admitted Human directive. This consumes
       * one ordinary repair; no past acceptance observation is manufactured.
@@ -790,6 +805,32 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         !prior.conditions.exists(_.identity == condition.identity)) Consequence.unit
       else invalid("Review continuation requires one fresh required Step condition; exclusions cannot be promoted")
   } yield condition
+
+  /** Literal append only; no directory expansion or overlapping additions. */
+  private[admission] def currentInventoryPathsC(current: Plan, proposed: Plan, stepIdentity: String):
+      Consequence[Vector[String]] = for {
+    _ <- validatePlanC(current)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(current)
+    _ <- validatePlanC(proposed)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+    index = current.steps.indexWhere(_.identity == stepIdentity)
+    _ <- if (index >= 0 && proposed.steps.size == current.steps.size && proposed.revision != current.revision)
+      Consequence.unit else invalid("Current inventory requires the same Step set and a fresh Plan revision")
+    prior = current.steps(index)
+    next = proposed.steps(index)
+    added = next.ownedPaths.drop(prior.ownedPaths.size)
+    _ <- if (added.nonEmpty && next.ownedPaths.take(prior.ownedPaths.size) == prior.ownedPaths &&
+        proposed.copy(revision = current.revision, steps = proposed.steps.updated(index, prior)) == current &&
+        next.copy(ownedPaths = prior.ownedPaths) == prior &&
+        added.forall(value => RepositorySyncNativeConflictInput.relative(value) &&
+          !value.exists(c => c.isControl || "*?[]{}".contains(c)) &&
+          !prior.ownedPaths.exists(owner => _inventory_overlap(owner, value))) &&
+        added.indices.forall(i => !added.take(i).exists(_inventory_overlap(_, added(i))))) Consequence.unit
+      else invalid("Current inventory may only append finite unique uncovered literal paths; every other Plan value stays exact")
+  } yield added
+
+  private def _inventory_overlap(left: String, right: String): Boolean =
+    left == right || left.startsWith(right + "/") || right.startsWith(left + "/")
 
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||

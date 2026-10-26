@@ -45,7 +45,9 @@ The directive is new adoption input with its own provenance; it is neither
   effect, exhausted repair window, closure intent, document conflict, accepted
   Phase review or Closed state is eligible.
 - Session identity, original base, Plan identity/Phase/repository, Step count and
-  order, every Step ID, owned paths, dependencies and work classification remain.
+  order, every Step ID, dependencies and work classification remain. Owned paths
+  remain exact on the ordinary and Review branches; only the distinct R13–R16
+  current inventory branch may append paths to the current uncompleted Step.
   Repair limit and selected Phase check/review policy remain unchanged. Current
   and cumulative repair counts, issue/finding history and actual prior results
   remain; generation increments once.
@@ -183,3 +185,72 @@ prepareEvidence/import, adoption and fresh Advance/Submit/checks/review.
 Every semantic response and directive is explicitly specification-owned.
 These source additions have not been executed by the repair editor and claim
 no installed delivery, genuine Human approval or live Session adoption.
+
+## Current primary-Component inventory continuation (R13–R16, E3)
+
+R13. A distinct pure `adoptCurrentInventoryRevisionC` applies only at the actual
+unanswered Implementation/Repair Decision, with cursor equal to completed count
+and below Step count. Document decisions, pending repair, closure intent,
+accepted Phase review and generation overflow refuse. The complete proposed Plan
+must equal the saved Plan apart from a fresh revision and a strict ordered append
+to the current Step's `ownedPaths`. Purpose, checks, action policy, classification,
+dependencies, every other Step, identity, Phase, repository, repair limit, closure
+policies, raw acceptance and all saved effective conditions and their sources
+remain exact. Ordinary `adoptRevisionC`, ordinary `adoptRemainingRevisionC` and
+Review continuation retain their separate guards. Acceptance additions cannot
+be mixed into inventory adoption. The current engineering use adds exactly
+`src/main/car/abi-manifest.json` in the same primary Component.
+
+R14. Additions are finite, unique, standard-valid literal relative paths.
+Duplicate, already owned/covered, traversal/root, wildcard, parent expansion and
+overlapping additions refuse. Description requires every added literal path in
+the actual same-repository host's explicit finite `candidatePaths`. The target's
+optional typed `currentInventory` contains exactly `componentInstance`,
+`stepIdentity`, `appendedPaths` and complete ordered `candidatePaths`. Description
+shows the path-to-staging-ordinal mapping and explains the separate registration
+of the current Step's Git selection. Existing ordinals and earlier Step selections
+must remain intact. Plan direction does not grant File, staging, Git or commit
+capabilities. Omitted metadata remains legacy-compatible; present null,
+malformed/extra nested keys, missing inventory metadata on an append,
+cross-Step/excess paths and coexistence with `reviewRepair` refuse.
+
+R15. Passive `prepareEvidence(kind=remaining-plan-adoption)` uses the unchanged
+complete raw Proposal and `R.Captured`; no new DTO, service or ABI field is needed
+because the target is already a Record. Independent Human admission binds the
+actual Component instance, exact freshly described target, participant, directive
+reference and rationale. Actual adoption rederives the current target and checks
+that independent binding, then uses existing atomic DecisionSupersession once.
+The original unanswered Human remains superseded without an invented answer.
+Missing independent evidence, stale/mutated/cross-Component targets, duplicate
+adoption and stale old answers refuse. Adoption runs no effects, checks, Submit,
+Advance or commit. A separate ordinary Advance issues the current ImplementStep
+with generation + 1; repair counters, policy, observations and consumed allowance
+are retained without consumption or refund.
+
+R16. Retained traversal validates the original target, captured Plan, historical
+source prefix, counters and adjacent supersession. It never recaptures later host
+defaults or rewrites old captured requests/candidates. Original base, completed
+Steps, partialCompletion P→C→D chains, successful/failed/UNKNOWN receipts, reviews
+and history remain immutable. Fresh candidate inspection, selected checks,
+independent review and scoped commit are still required for the newly issued work.
+
+`GoalPhasePlanRevisionSpec` E3 specifies pure strict append and refusal with a
+retained partial chain. `GoalPhaseNativeFindingRecordingSpec` extends its managed
+Operation qualification with exact target/evidence/codec refusal and separate
+Advance; the existing ordinary and Review cases remain separate.
+`NativeGoalPlanRevisionCliSpec` E3 specifies legacy target readback and missing
+host registration refusal. `NativeGoalPartialCommitClosureCliSpec` E3 reuses its
+actual installed P→C→D fixture for finite old-to-new qualification. It requires
+absolute `smworkflow.spec.installedCommand` (preserving the lexical executable
+path), `smworkflow.spec.inventoryPreviousInstallations` and
+`smworkflow.spec.inventoryInstallations`. Each invocation explicitly selects its
+old/new root, without changing global selection. The previous image creates the
+actual partial closure, completion and next-Step scope question. After selecting
+the qualified image, only the fixture host candidate inventory/staging append
+and current-Step Git selection change. Public describe → independently observed
+SPECIFICATION-OWNED Human preparation/import → atomic adoption → separate Advance
+must retain the old v4 closure/candidate bytes and counts. Actual scoped work,
+checks, independent fixture review, commit and fresh reentry prove consumption
+of the added path. This specification adds no live Session or provider consent.
+These new cases are added but not run by the repair editor; parent-owned
+generation, validation, independent review and installed qualification remain due.
