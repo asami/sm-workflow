@@ -29,6 +29,7 @@ private[smworkflow] object NativeExternalEvidence {
   enum Purpose(val identity: String) {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
+    case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
     case StepClosure extends Purpose("goal-phase-step-closure")
@@ -201,7 +202,7 @@ private[smworkflow] object NativeExternalEvidence {
   private def selectedC(purpose: Purpose, value: Json): Consequence[Json] = {
     val selected = purpose match {
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
-      case Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
+      case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)
       case Purpose.SplitStart => NativeSplitStartScope.select(purpose, value)
       case Purpose.SplitAnswer => NativeSplitAnswerScope.select(purpose, value)

@@ -1,10 +1,12 @@
 package org.simplemodeling.textus.smworkflow.preparation
 
+import org.simplemodeling.textus.smworkflow.admission.StandaloneFixExecution.given
+
 import io.circe.Json
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeReviewCompletion, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhasePurposeRepair, GoalPhaseRepairProgress, NativeExternalEvidence,
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseAcceptanceBoundary, GoalPhaseDependencyScope, GoalPhaseFindingRecording, GoalPhaseFixAssessment, GoalPhaseFixIssues, GoalPhaseNativeMetadata, GoalPhaseNativeReviewCompletion, GoalPhaseNativeWork, GoalPhasePlanRevision, GoalPhasePurposeRepair, GoalPhaseRepairProgress, NativeExternalEvidence, StandaloneFixExecution, StandaloneFixNativeRun,
   RepositorySyncNativeMergeReview, ThreeWorkflowExternalEvidencePorts, WorkflowSbtValidation}
 import io.circe.syntax.*
 import org.simplemodeling.textus.smworkflow.value as V
@@ -73,6 +75,22 @@ object NativeReviewPreparation {
         RepositorySyncNativeMergeReview.Result(result.decision, result.rationale, result.findings.map(f =>
           RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale)))))
 
+  private[smworkflow] def standaloneC(context: V.WorkflowReviewContext, result: V.StandaloneFixWorkResult,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant): Consequence[Prepared] = for {
+    assessment <- GoalPhaseFixAssessment.internalReportC(result.fixAssessment)
+    diagnosis <- org.simplemodeling.textus.smworkflow.admission.IncrementalSbtDiagnosisRepair.fromPublicC(result.diagnosticRepair)
+    value = StandaloneFixExecution.Result(result.outcome, result.summary, result.findings,
+      result.conditions.toVector.map(c => StandaloneFixExecution.Condition(c.identity, c.satisfied, c.detail)),
+      result.unresolvedQuestions, diagnosis, assessment)
+    rawWork <- _json_c(context.target)
+    workJson <- GoalPhaseNativeMetadata.normalizePublicJson(rawWork).fold(Consequence.stateConflict(_), Consequence.success)
+    work <- workJson.as[StandaloneFixExecution.Work].fold(e => Consequence.stateConflict(e.message), Consequence.success)
+    _ <- StandaloneFixExecution.admitResultC(work, value)
+    prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.StandaloneReview, StandaloneFixNativeRun.resultCodec.typeIdentity,
+      reference, execution, issuer, occurredAt, value.asJson)
+  } yield prepared
+
   private def _prepare_c(context: V.WorkflowReviewContext, purpose: NativeExternalEvidence.Purpose,
     typeIdentity: String, reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
     issuer: String, occurredAt: Instant, verdict: Json): Consequence[Prepared] = for {
@@ -94,7 +112,7 @@ object NativeReviewPreparation {
       "continuationId" -> Json.fromString(context.completion.continuationId),
       "typeIdentity" -> Json.fromString(context.completion.typeIdentity))
     binding = ThreeWorkflowExternalEvidencePorts.reviewBinding(context.componentInstance,
-      if (purpose == NativeExternalEvidence.Purpose.GoalReview) "goal-review" else "repository-review", target, completion,
+      if (purpose == NativeExternalEvidence.Purpose.StandaloneReview) "standalone-review" else if (purpose == NativeExternalEvidence.Purpose.GoalReview) "goal-review" else "repository-review", target, completion,
       Json.obj("identity" -> Json.fromString(reference.identity), "revision" -> Json.fromString(reference.revision)),
       Json.fromString(execution.workerIdentity.get), verdict)
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
@@ -116,7 +134,10 @@ object NativeReviewPreparation {
     }.getOrElse(Consequence.stateConflict("Review preparation requires a structured object"))
 
   private def _target_c(value: Json, purpose: NativeExternalEvidence.Purpose): Consequence[Json] =
-    if (purpose == NativeExternalEvidence.Purpose.GoalReview) for {
+    if (purpose == NativeExternalEvidence.Purpose.StandaloneReview)
+      GoalPhaseNativeMetadata.normalizePublicJson(value).fold(Consequence.stateConflict(_), normalized =>
+        normalized.as[StandaloneFixExecution.Work].fold(e => Consequence.stateConflict(e.message), work => Consequence.success(work.asJson)))
+    else if (purpose == NativeExternalEvidence.Purpose.GoalReview) for {
       selected <- _project_c(value, _goal_names)
       contract <- selected.hcursor.downField("purposeRepair").focus match {
         case None => Consequence.success(Option.empty[Json])

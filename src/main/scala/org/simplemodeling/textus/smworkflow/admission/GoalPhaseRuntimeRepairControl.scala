@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Bounded context reconstructed by the ordered controller from admitted failures.
   * No observation, direction or context value grants execution authority.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRuntimeRepairControl {
@@ -49,6 +49,16 @@ private[smworkflow] object GoalPhaseRuntimeRepairControl {
       }
     }
   }
+  /** One shared finite batch admission; each business unit retains its own
+    * existing window and chooses its already-authorized admission boundary. */
+  final case class Counts(automatic: Int, ordinary: Int)
+  def admitBatchC(automatic: Int, ordinary: Int, selectedLimit: Int,
+    ordinaryExempt: Boolean = false): Consequence[Counts] =
+    if (automatic < 0 || ordinary < 0 || selectedLimit <= 0 || automatic >= selectedLimit ||
+        (!ordinaryExempt && ordinary == Int.MaxValue))
+      Consequence.stateConflict("Runtime repair batch allowance is exhausted or invalid")
+    else Consequence.success(Counts(automatic + 1, ordinary + (if (ordinaryExempt) 0 else 1)))
+
   def exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   def validLink(value: RestorationLink): Boolean = value != null &&
     Vector(value.producerSession, value.producerRepository, value.consumerSession, value.consumerRepository, value.purpose).forall(exact) &&

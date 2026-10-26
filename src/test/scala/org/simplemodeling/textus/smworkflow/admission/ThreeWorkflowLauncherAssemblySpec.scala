@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,7 +36,8 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       Given("the three generated CML provided-operation declarations and generated Journal and Evidence services")
       val generated = Vector(domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1.workflow,
         domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2.workflow,
-        domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow)
+        domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow,
+        domain.statemachine.providedapi.StandaloneFixWorkflowStateMachineProvidedApi4.workflow)
       When("the native launcher publication set is compared with the generated operations")
       val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
@@ -44,6 +45,8 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
           s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}")
       val expected = Set(
+        "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
+        "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
         "GoalPhaseService.submitGoalPhaseOrderedDecision",
         "GoalPhaseService.submitGoalPhaseFindingRecording",

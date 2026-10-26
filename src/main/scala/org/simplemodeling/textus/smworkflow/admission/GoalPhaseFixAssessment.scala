@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Bounded AI claims about one actual repair, never execution or acceptance authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixAssessment {
@@ -68,13 +68,16 @@ private[smworkflow] object GoalPhaseFixAssessment {
   def ordinaryCountExemptC(request: GoalPhaseNativeWork.Request,
     result: GoalPhaseNativeWork.Result): Consequence[Boolean] =
     GoalPhaseNativeWork.admitSemanticResultC(request, result).map { _ =>
-      request.kind == "RepairStep" && result.outcome == "completed" && result.fixAssessment.exists { report =>
-        val c = report.change
-        !c.requirementChanged && !c.contractChanged && !c.crossFileLogic &&
-          (c.changeClass == "HYGIENE" ||
-            (c.minorBugFix && Set("TRIVIAL_COMPILE_FIX", "SIMPLE_LOGIC")(c.changeClass)))
-      }
+      request.kind == "RepairStep" && result.outcome == "completed" && result.fixAssessment.exists(ordinaryCountExempt)
     }
+
+  /** Shared classification predicate; callers first admit the actual semantic result. */
+  def ordinaryCountExempt(report: Report): Boolean = {
+    val c = report.change
+    !c.requirementChanged && !c.contractChanged && !c.crossFileLogic &&
+      (c.changeClass == "HYGIENE" ||
+        (c.minorBugFix && Set("TRIVIAL_COMPILE_FIX", "SIMPLE_LOGIC")(c.changeClass)))
+  }
 
   // Exact projections preserve malformed nested nulls for typed admission; no
   // normalization, dropped fields or conversion of invalid options to absence.

@@ -12,7 +12,7 @@ import scala.util.control.NonFatal
 /**
  * Resolve and consume the official executable definition; no compiled-copy proof.
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 26, 2026
  */
 private[smworkflow] object GoalPhaseRuntimeCatalog {
   final class Catalog private[GoalPhaseRuntimeCatalog] (
@@ -43,7 +43,7 @@ private[smworkflow] object GoalPhaseRuntimeCatalog {
       catalog <- parseC(workflow, producer)
     } yield catalog
 
-  private def readResourceC(loader: ClassLoader, path: String): Consequence[String] =
+  private[admission] def readResourceC(loader: ClassLoader, path: String): Consequence[String] =
     try {
       val resources = loader.getResources(path).asScala.toVector
       if (resources.size != 1)

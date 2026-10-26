@@ -162,6 +162,9 @@ private[smworkflow] object GoalPhaseNativeReview {
       else F.invalid("native independent review policy is incomplete")
   }
   trait EvidencePort {
+    def admitStandaloneC(core: ActionCall.Core, input: StandaloneFixExecution.Work,
+      submitted: ContinuationResult[StandaloneFixExecution.Result]): Consequence[Unit] =
+      Consequence.securityPermissionDenied("Host has no standalone independent review evidence binding")
     def admitC(core: ActionCall.Core, input: S.Request, submitted: ContinuationResult[S.Result]): Consequence[Unit]
   }
   final case class Installation(policy: Policy, evidence: EvidencePort) {

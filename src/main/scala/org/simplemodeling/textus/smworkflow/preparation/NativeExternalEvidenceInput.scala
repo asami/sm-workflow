@@ -21,7 +21,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
-      _ <- if (Set("GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
+      _ <- if (Set("StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
           Set("review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
           (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
@@ -104,6 +104,13 @@ private[smworkflow] object NativeExternalEvidenceInput {
       prepared <- NativeHumanDecisionPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "StandaloneFix" if options("kind") == "review" => for {
+        output <- summon[ValueReader[V.StandaloneFixView]].readC(request)
+        _ <- _kind_c(output.kind, false)
+        context <- _one_c(output.reviewContext.toVector)
+        answer <- summon[ValueReader[V.StandaloneFixWorkResult]].readC(result)
+        prepared <- NativeReviewPreparation.standaloneC(context, answer, reference, execution, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalPhase" if options("kind") == "release-repair-continuation" => for {
         description <- summon[ValueReader[V.GoalPhaseReleaseRepairContinuationDescriptionResult]].readC(request)
         input <- summon[ValueReader[V.GoalPhaseReleaseRepairContinuationRecoveryInput]].readC(result)

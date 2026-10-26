@@ -20,11 +20,11 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
-  type Value = GoalPhaseNativeWork.Result | GoalPhaseOrderedHumanDecision.Answer | GoalPhaseFindingRecording.Result |
+  type Value = StandaloneFixExecution.Result | GoalPhaseNativeWork.Result | GoalPhaseOrderedHumanDecision.Answer | GoalPhaseFindingRecording.Result |
     SplitPhaseExplicitPartitionSemantic.Judgment | SplitPhaseScopeSemantic.Judgment |
     SplitPhaseExplicitReasoningSemantic.Judgment | SplitPhaseHumanDirectionAnswerContract.Answer |
     RepositorySyncConflictSemantic.Result | RepositorySyncNativeMergeReview.Result |
@@ -70,6 +70,17 @@ private[smworkflow] object NativeWorkflowResultInput {
   private final case class Target(operation: StateMachineOperationIdentity,
     readC: Request => Consequence[Value],
     load: (WorkflowComponentStorage, ContinuationIdentity, ExecutionContext) => Consequence[Assigned])
+
+  def standalone(service: spec.ServiceDefinition, creation: ComponentCreate,
+    host: StandaloneFixNativeRun.Host, definition: DefinitionBinding): spec.ServiceDefinition =
+    _service(service, creation, host.configuration, host.instances, host.continuations, definition,
+      Vector(_work(StandaloneFixNativeRun.completionOperation, StandaloneFixNativeRun.inputCodec, request => for {
+        value <- NativeWorkflowOperationInput.valueC[V.StandaloneFixWorkResult](request, "result")
+        assessment <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
+        diagnosis <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
+      } yield StandaloneFixExecution.Result(value.outcome, value.summary, value.findings,
+        value.conditions.toVector.map(c => StandaloneFixExecution.Condition(c.identity, c.satisfied, c.detail)),
+        value.unresolvedQuestions, diagnosis, assessment))))
 
   def goal(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =

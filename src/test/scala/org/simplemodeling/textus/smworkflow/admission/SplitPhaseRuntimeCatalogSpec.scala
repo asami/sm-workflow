@@ -11,8 +11,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /**
-  * @since Oct.  2, 2026
-  * @version Oct. 24, 2026
+  * @since   Oct.  2, 2026
+  * @version Oct. 26, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -38,7 +38,7 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
         catalog.definition.workflowRevision.value shouldBe "split-phase-business-operation-v14"
         catalog.definition.validateC shouldBe a[Consequence.Success[?]]
         catalog.producer.models.map(_.model.workflow.map(_.identity.value)).flatten.toSet shouldBe
-          Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow")
+          Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow", "StandaloneFixWorkflow")
         take(SplitPhaseRuntimeCatalog.loadC()).workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
       } finally loader.close()
     }

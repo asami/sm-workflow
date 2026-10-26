@@ -1,5 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import org.simplemodeling.textus.smworkflow.admission.StandaloneFixExecution.given
+
 import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -45,6 +47,15 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   // Actual ordinary reviewer results are independently host-admitted here;
   // CBD review integration is a separate Phase 10 boundary.
   val goalReview: GoalPhaseNativeReview.EvidencePort = new GoalPhaseNativeReview.EvidencePort {
+    override def admitStandaloneC(core: ActionCall.Core, input: StandaloneFixExecution.Work,
+      submitted: ContinuationResult[StandaloneFixExecution.Result]) = for {
+      _ <- if (input.kind == "Review" && submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit
+        else Consequence.securityPermissionDenied("Standalone review has no actual independent worker")
+      binding = _review_target(core, "standalone-review", input.asJson, submitted, submitted.result.value.asJson)
+      _ <- _admit_evidence_c(core, Purpose.StandaloneReview,
+        key(submitted.resultReference.identity, submitted.resultReference.revision), binding)
+    } yield ()
+
     def admitC(core: ActionCall.Core, input: GoalPhaseNativeWork.Request,
       submitted: ContinuationResult[GoalPhaseNativeWork.Result]) = for {
       binding <- goalReviewBindingC(core, input, submitted)

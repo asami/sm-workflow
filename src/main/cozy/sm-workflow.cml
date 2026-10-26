@@ -8833,6 +8833,25 @@ Explicit passive preparation metadata and absolute local file: URI references. S
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
 
+## WorkflowStandaloneFixStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit standalone request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
 ## WorkflowSplitStartPreparationInput
 
 - input-kind :: COMMAND
@@ -9348,6 +9367,34 @@ WorkflowGoalStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareStandaloneFixStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected standalone business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowStandaloneFixStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowStandaloneFixStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareRepositoryStart
 
 ##### DESCRIPTION
@@ -9619,3 +9666,426 @@ WorkflowCallerInformationRecordInput
 ###### TYPE
 
 WorkflowCallerInformationResult
+
+
+# VALUE
+
+## StandaloneFixInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+
+## StandaloneFixAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## StandaloneFixWorkRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| session | string | 1 |
+| sourceRevision | string | 1 |
+| kind | string | 1 |
+| state | record | 1 |
+
+## StandaloneFixCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| satisfied | boolean | 1 |
+| detail | string | 1 |
+
+## StandaloneFixWorkResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| summary | string | 1 |
+| findings | string | * |
+| conditions | StandaloneFixCondition | + |
+| unresolvedQuestions | string | * |
+| diagnosticRepair | record | ? |
+| fixAssessment | GoalPhaseFixAssessment | ? |
+
+## StandaloneFixView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| state | record | ? |
+| work | record | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| diagnostics | record | * |
+| reviewContext | WorkflowReviewContext | ? |
+
+# WORKFLOW
+
+## StandaloneFixWorkflow
+
+version = standalone-fix-business-operation-v1
+
+### COMPOSITE-STATEMACHINE
+
+#### CONSTITUENT
+
+##### fix
+
+state-machine = StandaloneFixLifecycle
+subject = fixWork
+subject-type = StandaloneFixWorkRequest
+
+#### STATE
+
+##### Pending
+
+##### Running
+
+##### Accepted
+
+#### DERIVATION
+
+##### pending
+
+state = Pending
+when = fix.Idle
+
+##### running
+
+state = Running
+when = fix.Running
+
+##### accepted
+
+state = Accepted
+when = fix.Accepted
+
+#### INITIAL
+
+fix.Idle
+
+#### ACTION
+
+##### RepairStandaloneFix
+
+kind = OPERATION
+operation = repairStandaloneFix
+input = fix.subject
+
+##### ReviewStandaloneFix
+
+kind = JUDGMENT
+operation = reviewStandaloneFix
+input = fix.subject
+goal = standalone-repair-review
+context = assigned-standalone-candidate-and-selected-checks
+candidate = assigned-standalone-repair
+alternative = accept
+alternative = repair
+alternative = decision-needed
+criteria = adopted-objective-and-owned-path-coverage
+criteria = independent-reviewer-evidence
+criteria = unresolved-test-meaning-remains-unaccepted
+expected-result = standalone-review-disposition
+rationale = review-rationale
+evidence = retained-selected-validation
+evidence-scope = assigned-standalone-candidate
+evidence-freshness = assigned-work-revision
+evidence-provenance = independently-admitted-reviewer
+
+##### AdmitStandaloneFixReview
+
+kind = ADMISSION
+operation = admitStandaloneFixReview
+input = fix.subject
+candidate-action = ReviewStandaloneFix
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
+
+### REQUIRED-OPERATION
+
+#### standalone-fix-repair-capability
+
+action = RepairStandaloneFix
+
+#### standalone-fix-review-capability
+
+action = ReviewStandaloneFix
+
+### OPERATION
+
+#### startStandaloneFix
+
+operation = StandaloneFixService.startStandaloneFix
+
+#### advanceStandaloneFix
+
+operation = StandaloneFixService.advanceStandaloneFix
+
+#### submitStandaloneFixWorkResult
+
+operation = StandaloneFixService.submitStandaloneFixWorkResult
+
+#### resolveStandaloneFixDiagnosticInformation
+
+operation = StandaloneFixService.resolveStandaloneFixDiagnosticInformation
+
+# STATE-MACHINE
+
+## StandaloneFixLifecycle
+
+### STATE
+
+#### Idle
+
+##### TRANSITION
+
+to = Running
+on = standalone-started
+
+#### Running
+
+##### TRANSITION
+
+to = Running
+on = standalone-progress
+
+##### TRANSITION
+
+to = Accepted
+on = standalone-accepted
+
+#### Accepted
+
+# SERVICE
+
+## StandaloneFixService
+
+### DESCRIPTION
+
+Standalone bounded repair. Native WorkOrder, managed checks, diagnosis and repair policy own execution. Acceptance leaves changes uncommitted; this service has no commit or push operation.
+
+### OPERATION
+
+#### resolveStandaloneFixDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve the shared finite reasoned NeedInformation batch for the exact pending standalone repair. Retained delivery is reused without rereading sources. The shared diagnostic DTO name is historical; no Phase or Step is created or required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
+
+#### startStandaloneFix
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneFixInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### advanceStandaloneFix
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### submitStandaloneFixWorkResult
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | StandaloneFixWorkResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+# SERVICE
+
+## StandaloneFixRepairService
+
+### OPERATION
+
+#### repairStandaloneFix
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+# SERVICE
+
+## StandaloneFixReviewService
+
+### OPERATION
+
+#### reviewStandaloneFix
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+# SERVICE
+
+## StandaloneFixSemanticAdmissionService
+
+### DESCRIPTION
+
+Native standalone completion admits the assigned review against the retained work and candidate through StandaloneFixExecution.admitResultC. This semantic admission neither executes validation nor commits source changes.
+
+### OPERATION
+
+#### admitStandaloneFixReview
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView

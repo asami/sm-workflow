@@ -182,10 +182,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       val observed = repairControl.map(_.copy(observations = observations))
       val trend = observed.flatMap(_.stop)
       if (generation < Long.MaxValue && repairs < effectiveRepairLimit && trend.isEmpty)
-        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive),
-          newPendingRepair = None, newcontrol = observed, newpolicypending = false,
-          newobservations = observations, reason = None, clear = true)
+        R.admitBatchC(repairs, ordinaryRepairs, effectiveRepairLimit).flatMap(counts =>
+          success(Stage.Repair, newGeneration = generation + 1, newRepairs = counts.automatic,
+            newOrdinaryRepairs = counts.ordinary, newDirective = Some(directive),
+            newPendingRepair = None, newcontrol = observed, newpolicypending = false,
+            newobservations = observations, reason = None, clear = true))
       else success(Stage.Decision, newDirective = Some(directive),
         newReview = if (Set(Stage.Review, Stage.PhaseReview)(stage)) Some(reference) else reviewEvidence,
         newPendingRepair = Option.when(effectiveRepairLimit > 0 && generation < Long.MaxValue)(directive),
@@ -222,9 +223,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     private[admission] def dispatchPolicyRepairC: Consequence[State] =
       if (policyRepairPending && stage == Stage.Decision && pendingRepair.exists(_valid_directive) &&
           repairControl.nonEmpty && repairs < effectiveRepairLimit && generation < Long.MaxValue)
-        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = pendingRepair, newPendingRepair = None,
-          newpolicypending = false, reason = None, clear = true)
+        R.admitBatchC(repairs, ordinaryRepairs, effectiveRepairLimit).flatMap(counts =>
+          success(Stage.Repair, newGeneration = generation + 1, newRepairs = counts.automatic,
+            newOrdinaryRepairs = counts.ordinary, newDirective = pendingRepair, newPendingRepair = None,
+            newpolicypending = false, reason = None, clear = true))
       else invalid("repair policy has no eligible unreserved pending batch")
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)

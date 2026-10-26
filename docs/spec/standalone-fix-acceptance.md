@@ -1,13 +1,13 @@
 # Standalone sm-fix acceptance
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: adopted specification; standalone entrypoints and acceptance pending
+Status: adopted specification; P67-T1 source entry implemented, native and installed acceptance pending
 Plan: [standalone fix delivery](../notes/standalone-fix-delivery-plan.md)
 
 Allocation (2026-10-26): [Phase 6.7](../phase/phase-6.7.md) delivers single-repository
 test/review fix and initial caller adoption. [Phase 17](../phase/phase-17.md) owns
 selection options and investigation/related-project integration. Completion
-semantics below remain unchanged; neither allocation claims implementation.
+semantics below remain unchanged; allocation alone claims no implementation or acceptance. See the [P67-T1 runtime entry](standalone-fix-runtime.md) for the current source boundary.
 
 Related: [sm-goal-task](goal-task.md) reuses this execution path for ad hoc
 development from journals or other inputs, but adds integrated Task review and

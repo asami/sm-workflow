@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -88,8 +88,11 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
         "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision")
 
-      And("six passive import preparations and two caller-information Operations expose distinct concrete inputs and outputs")
-      val preparation = Map("prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
+      names("StandaloneFixService") should contain theSameElementsAs Vector(
+        "startStandaloneFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation")
+
+      And("seven passive import preparations and two caller-information Operations expose distinct concrete inputs and outputs")
+      val preparation = Map("prepareStandaloneFixStart" -> "WorkflowRepositoryStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
