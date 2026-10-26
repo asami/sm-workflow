@@ -11,7 +11,9 @@ Earlier UNKNOWN and failed results and consumed repair counts remain historical.
 No accepted result or successful check was replayed to establish completion.
 Repository synchronization was deferred at closure and is handled separately.
 P66-17/P66-18 planning additions below do not amend this completed sixteen-condition
-Plan; their remaining scope belongs to successor planning.
+Plan. The [retained-evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+confirms both completed within the earlier recovery and continuation. Their stale
+unchecked projection has been corrected; no successor work remains for these IDs.
 
 ## Historical D3 correction — 2026-10-26
 

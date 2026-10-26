@@ -1,7 +1,8 @@
 # Source-history recovery and completed-result collection correction
 
 Date: 2026-10-26
-Status: producer C1–C4 delivered and qualified; real consumer adoption remains owner-held.
+Status: producer C1–C4 delivered and qualified; live consumer adoption and ordinary
+D3 continuation verified from retained public responses on 2026-10-26.
 Owner: sm-workflow development (producer); sm-workflow-dev development (consumer).
 
 ## Scope and execution order
@@ -68,7 +69,7 @@ per comment; use existing Step/Release policy and affected validation.
 
 See the [English handoff](../journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
 
-## Current producer boundary
+## Producer boundary at the original handoff
 
 The completed RRC results have been collected and delivered without rerunning
 successful commands. Its runtime publication/activation and isolated public
@@ -109,11 +110,28 @@ one additional focused03 transfer executed and is consumed; earlier stopped
 children remain terminal/do-not-resume. All source failures and actual terminal
 results are retained, without resetting any native budget.
 
-Real Session `f01d809d1b4bfe8a4b5c241dac301b81`, Human226, accepted work and 1/10
-counts remain with sm-workflow-dev development. No producer Start, accepted
+At the producer handoff, real Session `f01d809d1b4bfe8a4b5c241dac301b81`, Human226,
+accepted work and 1/10 counts remained with sm-workflow-dev development. No producer Start, accepted
 Submit, live consumer Operation or storage edit was performed. The separate
 RS-GIT validation-intent/current-candidate continuation gap remains in its
 existing correction plan and does not reopen these producer checks.
 
 See the [producer delivery journal](../journal/2026/10/2026-10-26-source-history-normalization-producer-delivery.md)
 for the retained evidence location and consumer handoff.
+
+## Verified consumer completion — 2026-10-26
+
+The consumer subsequently used the public same-Session normalization route:
+description017 retained Human226 and the eight successful prefix records;
+preparation018 bound the existing actual policy direction and prior invocation
+termination evidence; adoption019 returned accepted/adopted with the old question
+unanswered. Separate ordinary Advance020 passed Compile, lint and four focused
+tests with automatic1/ordinary1/limit10. Advance022 retained D1/D2, closed D3 at
+`38b53fa5c689bf18b6ab095d001e21ba12da35b2` and issued D4. Advance060 later
+completed the same Session with Plan1 and its original base.
+
+This resolves the former owner-held adoption item; it does not turn isolated
+producer fixtures into real consent or resolve the historical UNKNOWN outcome.
+The [P66-17/P66-18 evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+records original receipts, separate publication/activation/qualification facts,
+consumer responses and the limits of this documentation-only verification.

@@ -1,6 +1,7 @@
 # Phase 6.6 Checklist: Incremental SBT Failure Diagnosis and Repair
 
-Status: completed — all sixteen Plan1 conditions accepted by ReviewPhase1438
+Status: completed — all sixteen Plan1 conditions accepted by ReviewPhase1438;
+additional P66-17/P66-18 reconciled as completed from retained execution evidence
 Phase: [Phase 6.6](phase-6.6.md)
 
 Session `f01d809d1b4bfe8a4b5c241dac301b81` completed through Advance060
@@ -73,20 +74,33 @@ remain retained. Synchronization is a separate repository operation.
       repair counts and original success/failure/UNKNOWN results. English handoff
       records actual usable capability and remaining limits without replay/reset.
 
-## Successor planning outside the completed Plan1
+## Additional conditions reconciled against retained execution evidence
 
 P66-17/P66-18 were later producer planning additions; they are not extra
-acceptance gates for this completed Session. Retain their scope for successor
-planning without reopening D1–D4.
+acceptance gates in native Plan1 or additional ReviewPhase1438 judgments.
+The [2026-10-26 evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+confirms that both were already performed. Their unchecked state was a stale
+documentation projection, not remaining implementation or successor work.
+No Session operation, Plan amendment or successful execution was repeated.
 
-- [ ] P66-17: Consume [SHR-C2–5/7](source-history-recovery-result-collection-correction.md)
+- [x] P66-17: Consume [SHR-C2–5/7](source-history-recovery-result-collection-correction.md)
       for source-history interruption within existing authority, including public
       adoption of a retained pending Human question. Keep D1/D2, accepted D3 repair,
       original UNKNOWN/question, Session and repair count 1/10; no new approval
       solely for missing comment-update receipt or caller-side bypass.
+      Evidence: public description017 retains Human226 and eight prefix results;
+      prepared evidence018 and adopted result019 use the existing policy direction.
+      Ordinary Advance020 passed Compile, lint and four focused tests at counts1/10;
+      Advance022 retains D1/D2, commits D3 as `38b53fa5` and issues D4.
 
-- [ ] P66-18: Consume [SHR-C1/6](source-history-recovery-result-collection-correction.md)
+- [x] P66-18: Consume [SHR-C1/6](source-history-recovery-result-collection-correction.md)
       to recover attributable completed results after caller/model interruption.
       Report publication, activation, installed qualification and consumer adoption
       separately; retain/reuse successful executions without replay or periodic AI
       monitoring. Missing final chat response alone is not an incomplete execution.
+      Evidence: all nine known RRC command receipts match their original terminal
+      results and SBT summaries, including retained failures; original publish01
+      and installed03 succeeded with exit0. RRC and SHR publication records each
+      show Completed/Activated; SHR installed01 passed nine isolated cases.
+      Actual consumer adoption019 and continuation020/022 establish live use,
+      separately from producer qualification. See the reconciliation for locators.
