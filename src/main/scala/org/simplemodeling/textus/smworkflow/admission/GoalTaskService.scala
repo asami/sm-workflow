@@ -12,7 +12,6 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
-import GoalTaskNativeRun as N
 import BoundedWorkRuntime.Host
 import StandaloneFixExecution as S
 
@@ -21,52 +20,75 @@ import StandaloneFixExecution as S
   * @version Oct. 27, 2026
   */
 private[smworkflow] object GoalTaskService {
+  def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
+    new BoundedTaskService(GoalTaskNativeRun).bindC(creation, declaration)
+  def bindC(creation: ComponentCreate, h: Host, selections: ProfileStartAdmission.CallScopedSelectionPort): Consequence[spec.ServiceDefinition] =
+    new BoundedTaskService(GoalTaskNativeRun).bindC(creation, h, selections)
+}
+private[smworkflow] object DelegateTaskService {
+  def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
+    new BoundedTaskService(DelegateTaskNativeRun).bindC(creation, declaration)
+}
+
+/** One binding/completion implementation for independently declared entries. */
+private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
+  private val declaredService: spec.ServiceDefinition = if (N.delegation) SmWorkflowComponent.DelegateTaskServiceService
+    else SmWorkflowComponent.GoalTaskServiceService
+  private def declared(name: String): spec.OperationDefinition = declaredService.operations.operations.find(_.name == name).get
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] = for {
     readers <- GoalPhaseNativeInputReadPolicy.bindC(creation.configuration, declaration)
     service <- bindC(creation, BoundedWorkRuntime.host(declaration), readers.selections)
   } yield service
 
-  /** Neutral host capability view: Task callers supply no Phase input or Plan. */
   def bindC(creation: ComponentCreate, h: Host, selections: ProfileStartAdmission.CallScopedSelectionPort): Consequence[spec.ServiceDefinition] = for {
     _ <- GoalPhaseNativeExecution.validatePairC(h.profiles, h.origin)
-    definition <- GoalTaskRuntimeCatalog.loadC()
+    definition <- if (N.delegation) DelegateTaskRuntimeCatalog.loadC() else GoalTaskRuntimeCatalog.loadC()
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
-    recovery = GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+    recovery = if (N.delegation) Vector.empty else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
     completion <- completionC(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
-    service = NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.GoalTaskServiceService,
+    service = NativeWorkflowDescriptionMetadata.service(declaredService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
         new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
-  } yield NativeWorkflowResultInput.task(service, creation, h, definition)
+  } yield NativeWorkflowResultInput.task(service, creation, h, definition, N)
 
   private final class Operation(start: Boolean, h: Host, definition: DefinitionBinding,
     selections: ProfileStartAdmission.CallScopedSelectionPort) extends spec.OperationDefinition {
-    val specification = NativeWorkflowDescriptionMetadata.operation(if (start)
-      SmWorkflowComponent.GoalTaskServiceService.StartGoalTaskOperation
-      else SmWorkflowComponent.GoalTaskServiceService.AdvanceGoalTaskOperation)
+    val specification = NativeWorkflowDescriptionMetadata.operation(declared(if (start) N.startOperation.operation else N.advanceOperation.operation))
     def createOperationRequest(incoming: Request): Consequence[OperationRequest] = Consequence.success(new CommandAction {
       val request = incoming
       override def commandExecutionMode = CommandExecutionMode.Sync
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
-          session <- if (start) NativeWorkflowOperationInput.startSessionC(incoming, core.executionContext)
+          session <- if (start && N.delegation) NativeWorkflowOperationInput.valueC[V.DelegateTaskInput](incoming, "input")
+            .flatMap(DelegateTask.inputC).flatMap { input =>
+              val identity = DelegateTask.sessionIdentity(input)
+              NativeWorkflowOperationInput.optionalTextC(incoming, "sessionId").flatMap { supplied =>
+                if (supplied.forall(_ == identity)) Consequence.success(identity)
+                else N.invalid("Delegation Session is runtime-selected from this admitted request and owner role")
+              }
+            }
+            else if (start) NativeWorkflowOperationInput.startSessionC(incoming, core.executionContext)
             else NativeWorkflowOperationInput.textC(incoming, "sessionId")
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
           selected = core.copy(executionContext = context)
           result <- if (start) for {
-            input <- NativeWorkflowOperationInput.valueC[V.GoalTaskInput](incoming, "input")
+            input <- if (N.delegation) NativeWorkflowOperationInput.valueC[V.DelegateTaskInput](incoming, "input").flatMap(DelegateTask.inputC)
+              else NativeWorkflowOperationInput.valueC[V.GoalTaskInput](incoming, "input").map { input =>
+                S.Input(input.repositoryIdentity, input.requestIdentity, input.objective, input.ownedPaths.toVector,
+                  input.checks.toVector, input.conditions.toVector, input.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
+                  input.reviewRequired, input.kind, input.scalaLint, input.repairLimit,
+                  Some(S.Task(input.sourceKind, input.dependencies.toVector)))
+              }
             selection <- NativeWorkflowOperationInput.textC(incoming, "selectionId")
             participant <- NativeWorkflowOperationInput.textC(incoming, "participant")
             key <- NativeWorkflowOperationInput.textC(incoming, "idempotencyKey")
-            result <- N.startC(S.Input(input.repositoryIdentity, input.requestIdentity, input.objective, input.ownedPaths.toVector,
-              input.checks.toVector, input.conditions.toVector, input.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
-              input.reviewRequired, input.kind, input.scalaLint, input.repairLimit,
-              Some(S.Task(input.sourceKind, input.dependencies.toVector))), participant, key, selection, selections, h, definition, selected)
+            result <- N.startC(input, participant, key, selection, selections, h, definition, selected)
           } yield result else N.advanceC(session, h, definition, selected)
         } yield NativeWorkflowOperationOutput.response(result)
       }
@@ -75,7 +97,7 @@ private[smworkflow] object GoalTaskService {
 
   private final class InformationOperation(h: Host, definition: DefinitionBinding) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(
-      SmWorkflowComponent.GoalTaskServiceService.ResolveGoalTaskDiagnosticInformationOperation)
+      declared("resolve" + N.entry + "DiagnosticInformation"))
     def createOperationRequest(incoming: Request): Consequence[OperationRequest] = for {
       input <- NativeWorkflowOperationInput.valueC[V.GoalPhaseDiagnosticInformationInput](incoming, "input")
     } yield new CommandAction {
@@ -92,7 +114,8 @@ private[smworkflow] object GoalTaskService {
   }
 
   private def provided: GeneratedProvidedApiAbi.Definition = {
-    val p = domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow
+    val p = if (N.delegation) domain.statemachine.providedapi.DelegateTaskWorkflowStateMachineProvidedApi6.workflow
+      else domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow
     GeneratedProvidedApiAbi.Definition(p.schemaVersion, p.generator, p.identity, p.version,
       GeneratedProvidedApiAbi.WorkflowSourceCorrelation(GeneratedProvidedApiAbi.SourceIdentity(p.source.root.line),
         GeneratedProvidedApiAbi.SourceIdentity(p.source.definition.line)),
@@ -154,7 +177,7 @@ private[smworkflow] object GoalTaskService {
           _ <- if (root == payload.root && observation.branch == payload.branch && observation.head == payload.baseHead &&
             observation.dirty.filterNot(d => S.owned(d.path, payload.state.input.ownedPaths)) == payload.unrelated.getOrElse(Vector.empty) &&
             observation.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(d =>
-              !d.unmerged && d.renamedFrom.forall(S.owned(_, payload.state.input.ownedPaths))))
+              !d.unmerged && S.permitted(d.path, payload.state.input) && d.renamedFrom.forall(S.permitted(_, payload.state.input))))
             Consequence.unit else N.invalid("Semantic completion changed HEAD or exceeded ownership")
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
@@ -171,7 +194,7 @@ private[smworkflow] object GoalTaskService {
       }
       val instances = CallScopedWorkflowInstances.managed(h.configuration, definition, h.instances, h.continuations)
       val actual = core.fold[WorkflowInstancePersistence](instances)(CallScopedWorkflowInstances.forCall(instances, _))
-      val declared = SmWorkflowComponent.GoalTaskServiceService.SubmitGoalTaskWorkResultOperation
+      val declared = this.declared(N.completionOperation.operation)
       WorkflowCompletionServiceOperation.bindC(provided, operation, declared.specification.request, declared.specification.response,
         codec, ContinuationRuntime.empty, issued, actual, h.configuration,
         () => throw new IllegalStateException("Task completion requires canonical managed UoW"), Some(closing), Some(native),

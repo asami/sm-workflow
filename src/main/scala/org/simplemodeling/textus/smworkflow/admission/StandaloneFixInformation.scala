@@ -15,7 +15,7 @@ import StandaloneFixNativeRun as N
 /** Common batched NeedInformation delivery for an actual standalone repair.
   * Delivery neither completes WorkOrder nor consumes a repair batch.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object StandaloneFixInformation {
   def resolveC(h: N.Host, definition: WorkflowInstancePersistence.DefinitionBinding, core: ActionCall.Core,
@@ -39,7 +39,7 @@ private[smworkflow] object StandaloneFixInformation {
     context <- NativeWorkflowIssuedWorkContext.fromIssuedC(actual, NativeWorkflowIssuedWorkContext.Mode.Implementation, N.inputCodec)
     _ <- I.sameWorkC(context, input.issuedWorkContext)
     source = CommonEvidence.Source(ContextReference(context.continuationId, context.expectedRevision),
-      h.repository, if (engine.task) "goal-task" else "standalone-fix", None, work.session, "diagnostic-information:" + input.requestIdentity, "failed")
+      h.repository, if (engine.delegation) "delegate-task" else if (engine.task) "goal-task" else "standalone-fix", None, work.session, "diagnostic-information:" + input.requestIdentity, "failed")
     history <- DevelopmentJournalEvidence.producerPageC(h.journal, core, h.repository, work.session, source.reference, input.historyAfter)
     delivery <- if (input.selections.isEmpty || h.evidence.isEmpty) Consequence.success(None)
       else {

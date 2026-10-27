@@ -141,3 +141,14 @@ C3 source-authorship note (2026-10-27): the issued `P68-C3` implementation adds
 Affected partial staging is preserved by a specific no-write diagnostic; no
 partial-index correction is claimed. These unchecked conditions await native
 validation and independent review; broader C4 closure remains open.
+
+
+D1/D2 source-authorship note (2026-10-27): the actual issued `P68-D1D2`
+adds independent DelegateTask input/result/CML/service operations through the
+shared bounded runtime. Its focused executable spec describes actual fixture
+checks/commit/publication, no-change/redelivery, independent requester attachment
+admission and FULL contrasts. No validation was executed by the implementation
+owner. Requester attachment explicitly does not certify host activation or
+consumer checks. The authorized installed cross-chat sample, actual selection/use
+evidence and Phase acceptance remain pending; no item above is checked by source
+authorship. See [the public connection](../spec/delegate-task.md#source-connection-for-p68-d1d2--2026-10-27).

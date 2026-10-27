@@ -21,8 +21,10 @@ private[smworkflow] object NativeExternalEvidenceInput {
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
-      _ <- if (Set("GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+      _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
+          Set("adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          (options("family") != "DelegateTask" || Set("review", "adoption")(options("kind"))) &&
+          (options("kind") != "adoption" || options("family") == "DelegateTask") &&
           (options("family") != "GoalTask" || Set("review", "malformed-issued-work-recovery")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
           (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
@@ -106,6 +108,18 @@ private[smworkflow] object NativeExternalEvidenceInput {
       prepared <- NativeHumanDecisionPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
+      case "DelegateTask" if options("kind") == "adoption" => for {
+        context <- summon[ValueReader[V.DelegateTaskAdoptionContext]].readC(request)
+        observation <- summon[ValueReader[V.DelegateTaskObservationInput]].readC(result)
+        prepared <- NativeDelegateTaskAdoptionPreparation.prepareC(context, observation, reference, execution, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "DelegateTask" if options("kind") == "review" => for {
+        output <- summon[ValueReader[V.DelegateTaskView]].readC(request)
+        _ <- _kind_c(output.kind, false)
+        context <- _one_c(output.reviewContext.toVector)
+        answer <- summon[ValueReader[V.DelegateTaskWorkResult]].readC(result)
+        prepared <- NativeReviewPreparation.delegateC(context, answer, reference, execution, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
       case "GoalTask" if options("kind") == "review" => for {
         output <- summon[ValueReader[V.GoalTaskView]].readC(request)
         _ <- _kind_c(output.kind, false)

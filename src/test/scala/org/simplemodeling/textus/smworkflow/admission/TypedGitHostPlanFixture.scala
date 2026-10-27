@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 /** Public strict host JSON, decoded and bound only by ordinary CNCF bootstrap.
   * No producer-private declaration, codec, binding or admission is constructed.
   * @since   Oct. 15, 2026
-  * @version Oct. 19, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedGitHostPlanFixture {
@@ -21,7 +21,7 @@ private[admission] object TypedGitHostPlanFixture {
     GitOperationKind.Fetch, GitOperationKind.FastForward, GitOperationKind.IndexTree, GitOperationKind.CheckPendingIndex)
   val ordinary: Vector[GitOperationKind] = GitOperationKind.values.toVector.filterNot(kind =>
     Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll, GitOperationKind.CommitSelected,
-      GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)(kind))
+      GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries)(kind))
   val limits: Json = Json.obj(Vector("launchTimeoutMillis" -> 10000L, "executionTimeoutMillis" -> 30000L,
     "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> 131072L,
     "stderrBytes" -> 16384L, "argumentCount" -> 512L, "argumentBytes" -> 131072L,
@@ -60,7 +60,8 @@ private[admission] object TypedGitHostPlanFixture {
         Vector("selectedPaths" -> Json.fromValues(paths.map(Json.fromString)))))*)
     }
     val selectedkinds = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll,
-      GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+      GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges,
+      GitOperationKind.TreeEntries)
     val readkinds = if (goalMessages.isEmpty) Vector.empty else Vector(GitOperationKind.BlobContent, GitOperationKind.TreeChanges)
     val git = (kinds ++ readkinds).distinct.filterNot(selectedkinds)
       .filter(kind => commitIdentity || !identitykinds(kind)).map(kind => declaration(kind)) ++
@@ -71,7 +72,8 @@ private[admission] object TypedGitHostPlanFixture {
       } ++ goalMessages.zip(goalSelections).zipWithIndex.flatMap { case ((message, paths), index) =>
         val selection = Some("goal-step-" + (index + 1))
         Vector(declaration(GitOperationKind.CheckSelectedIndex, selection, paths = paths),
-          declaration(GitOperationKind.SelectedIndexChanges, selection, paths = paths)) ++
+          declaration(GitOperationKind.SelectedIndexChanges, selection, paths = paths),
+          declaration(GitOperationKind.TreeEntries, selection, paths = paths)) ++
           (if (!commitIdentity) Vector.empty else Vector(declaration(GitOperationKind.CommitSelected,
             selection, message = Some(message), paths = paths)))
       }

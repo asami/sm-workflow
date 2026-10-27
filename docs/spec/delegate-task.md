@@ -131,3 +131,66 @@ and successful verification. Do not migrate an active 6.7 episode to delegation,
 re-Start it or replay accepted Submit. Current authorized work continues on its
 existing public route until explicit qualified adoption. Phase 7 retains modes,
 FIFO, dependency graph and subtrees; Phase 17 retains broader Task/FIX inputs.
+
+
+## Source connection for P68-D1/D2 — 2026-10-27
+
+The independent CML entry is `DelegateTaskService`: `startDelegateTask`,
+`advanceDelegateTask`, `submitDelegateTaskResult` and its information operations.
+`prepareDelegateTaskStart` prepares the complete public `DelegateTaskInput` for
+normal selection/profile admission. Preparation is passive; it is not Human
+consent. The input includes distinct requester/destination identities, return
+owner, Component, purpose, conditions, source and authorization references,
+permitted operations, literal exclusions, impact scope and optional publication
+target/coordinates. Both roles use the same admitted request with only `role`
+changed. Missing complete-input execution/profile mapping is refused before a
+fresh WorkOrder. The runtime derives one stable native Session identity per
+request, Component and role; exact Start redelivery returns that Session's current
+native state and rejects changed ownership/input. There is no second queue or
+execution ledger.
+
+The independently named DTOs and workflow use the existing bounded WorkOrder,
+Continuation, semantic completion, execution-admission, repair-count, check,
+review and commit machinery. They do not call the goal-task or test-fix public
+entry. Localized code requires actual compile and focused behavioral checks;
+broad scope retains an explicitly selected FULL check. Detailed review remains
+conditional unless the request requires it. The original goal-task mandatory
+review and standalone FIX uncommitted completion contracts remain unchanged.
+Delegate commits use the shared selected staging and mechanical hygiene policy;
+required publication uses `LocalPublicationRuntime` and its retained actual
+request/result. A legitimate unchanged candidate returns the applicable existing
+commit. A publication wait retains the commit and successful checks.
+
+`DelegateTaskDeliveryService.observeDelegateTaskDelivery` records attributable
+`dispatch-observed`, `result-received`, `return-observed`, `adopt` or `defer`
+observations. Dispatch does not certify acceptance. A received result must match
+the original owners, full input, exact destination Session, accepted conditions,
+actual checks and commit, and required publication target/source. Destination
+`ReturnReady` differs from observed `Returned`; requester `ResultReceived`
+differs from `Adopted`. Exact duplicate observations preserve the current state;
+changed observations of an already recorded event are refused.
+
+Requester `adopt` attaches the returned result and attributable artifact selection
+only. `describeDelegateTaskAdoption` exposes the exact current Component instance,
+Session, source revision, participant and returned target. The ordinary evidence
+preparation route accepts family `DelegateTask`, kind `adoption`, that description
+and the proposed observation. Its passive projection must be independently
+admitted by the existing configured host-evidence owner under
+`delegate-task-requester-artifact-adoption`; caller JSON alone is insufficient.
+Admission binds the current target, received source commit, exact coordinates,
+selection reference and observing participant. The stored adoption scope is
+`result-and-selection-attachment-only`. Optional activation/check references are
+attribution, not proof that this service performed or accepted those effects.
+Actual artifact selection, reload and affected consumer checks remain with the
+normal host/artifact owner. Publication or transport success cannot stand in for
+their evidence.
+
+`DelegateTaskWorkflowSpec` authors executable coverage of this ordinary route,
+actual fixture compile/focused checks/commit/publication, redelivery, no-change,
+attachment admission and policy contrasts. Its fixture transport and host
+observations are specification-owned. Source authorship does not establish an
+installed cross-chat result. The authorized isolated sample and actual consumer
+selection/use qualification remain pending on their public runtime owners; no
+old Session or P67 fixture is migrated by this connection. D3/D4 and C4/C5 retain
+their remaining failure, completion-record, installed/help and live acceptance
+work.

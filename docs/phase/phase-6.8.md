@@ -1,6 +1,6 @@
 # Phase 6.8: Commit Recovery and Delegated Delivery
 
-Status: in progress; C1/C2 source implementation assigned, qualification and Phase acceptance pending.
+Status: in progress; C1/C2 and C3 accepted at their issued Step scope; D1/D2 source authored, qualification and Phase acceptance pending.
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
 Native Start: Session `15e4adbe862418c95b8fb7c6a1374155`, Plan revision `1`,
@@ -214,3 +214,19 @@ closure, release candidate preparation and pending merge preparation use the
 shared policy. Source authorship alone is not compilation, test execution,
 installed qualification or Phase acceptance; checklist conditions remain open.
 Broader C4 completion-record closure and caller qualification remain separate.
+
+
+### D1/D2 implementation source — 2026-10-27
+
+Native Session `15e4adbe862418c95b8fb7c6a1374155`, Plan 1 issued P68-D1D2
+at `019-c3-closure-advance`, after accepted C3
+`22c0be2914bf290970991276bcf5376b070f7a82`. The independent DelegateTask
+CML/service/DTO route shares the bounded native execution, continuation, repair,
+check, conditional review, selected local commit and retained publication owners.
+Requester/destination transport and independently host-admitted artifact attachment
+remain distinct from actual host activation and consumer checks. The focused
+`DelegateTaskWorkflowSpec` source covers the main route, no-change and re-entry;
+its authorship is not execution or installed acceptance. Details are in the
+[public contract](../spec/delegate-task.md#source-connection-for-p68-d1d2--2026-10-27).
+The one authorized new isolated cross-chat sample remains pending; neither the old
+P67 fixture nor old live Task is changed. All Phase acceptance remains unchecked.

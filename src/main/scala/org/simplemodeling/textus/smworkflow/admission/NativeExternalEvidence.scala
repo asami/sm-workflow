@@ -29,6 +29,7 @@ private[smworkflow] object NativeExternalEvidence {
   enum Purpose(val identity: String) {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
+    case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
@@ -184,6 +185,13 @@ private[smworkflow] object NativeExternalEvidence {
     _ <- if (purpose == Purpose.RepositoryEffect) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Host effect authority belongs to another selected participant")
+    } else if (purpose == Purpose.DelegateAdoption) {
+      val target = selected.hcursor.downField("delegateAdoption").downField("target")
+      val observation = selected.hcursor.downField("delegateAdoption").downField("observation")
+      if (target.get[String]("participant").contains(value.participant) &&
+        observation.downField("sourceReference").get[String]("identity").contains(value.reference) &&
+        observation.downField("sourceReference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Requester adoption evidence crosses its actual participant or selection observation source")
     } else if (NativeReviewScope.supports(purpose)) {
       val result = selected.hcursor.downField("attestation").downField("result")
       if (result.get[String]("worker").contains(value.participant) &&
@@ -250,6 +258,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
+      case Purpose.DelegateAdoption => DelegateTask.selectAdoptionBinding(value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)
       case Purpose.SplitStart => NativeSplitStartScope.select(purpose, value)
