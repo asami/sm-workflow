@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -35,17 +35,35 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val closed = types.find(v => text(v, "name") == "GoalPhaseClosedStep").get
       When("the declared shape and ordinary absent optional constructor are consumed")
       val fields = array(chain, "fields")
-      val optional = array(closed, "fields").find(v => text(v, "name") == "partialCompletion").get
+      val closedFields = array(closed, "fields")
+      val optional = closedFields.find(v => text(v, "name") == "partialCompletion").get
       val ordinary = V.GoalPhaseClosedStep("S1", V.GoalPhaseNativeCommit("d", "p", "t"), Some("review"), None, None)
+      val legacy = summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(
+        org.goldenport.record.Record.data("step" -> "S1", "commit" -> ordinary.commit.toRecord()))
       val publicchain = V.GoalPhaseStepCommitChain(V.GoalPhaseNativeSnapshot("p", "pt"),
         V.GoalPhaseNativeCommit("c", "p", "ct"), V.GoalPhaseNativeCommit("d", "c", "t"))
       Then("the new field is optional while every native chain member is required and ordinary absence remains representable")
       fields.map(v => text(v, "name")) shouldBe Vector("originalParent", "partial", "completion")
       fields.forall(_.hcursor.get[Boolean]("required").contains(true)) shouldBe true
+      closedFields.map(field => (text(field, "name"), text(field, "type"), text(field, "multiplicity"),
+        field.hcursor.get[Boolean]("required").toOption.get)) shouldBe Vector(
+        ("step", "string", "1", true),
+        ("commit", "GoalPhaseNativeCommit", "1", true),
+        ("review", "string", "?", false),
+        ("admission", "org.goldenport.record.Record", "?", false),
+        ("partialCompletion", "GoalPhaseStepCommitChain", "?", false))
       optional.hcursor.get[Boolean]("required") shouldBe Right(false)
       text(optional, "type") shouldBe "GoalPhaseStepCommitChain"
       ordinary.partialCompletion shouldBe None
       ordinary.copy(partialCompletion = Some(publicchain)).partialCompletion shouldBe Some(publicchain)
+      withClue(s"Legacy ClosedStep without optional fields must decode: $legacy. ") { legacy.isSuccess shouldBe true }
+      legacy.toOption.get.review shouldBe None
+      legacy.toOption.get.admission shouldBe None
+      legacy.toOption.get.partialCompletion shouldBe None
+      val admission = org.goldenport.record.Record.data("policy" -> "specification-passive-admission")
+      val withAdmission = ordinary.copy(admission = Some(admission))
+      summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(withAdmission.toRecord())
+        .toOption.get.admission shouldBe Some(admission)
     }
 
     "provide the canonical project identity without granting runtime authority" in {
@@ -74,6 +92,54 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
   }
 
   "The authored ABI manifest" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
+    "retain current Task, standalone, preparation and delivery CML signatures in the distributed contract" in {
+      Given("the current consumer CML and the authored ABI selected for CAR packaging")
+      val cml = Files.readString(Paths.get("src/main/cozy/sm-workflow.cml"))
+      val sections = "(?ms)^## (\\w+)\\n(.*?)(?=^## |\\z)".r.findAllMatchIn(cml)
+        .map(m => m.group(1) -> m.group(2)).toMap
+      val exports = readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports")
+        .focus.getOrElse(fail("Missing exports"))
+      val services = Vector("StandaloneFixService", "StandaloneFixRepairService", "StandaloneFixReviewService",
+        "StandaloneFixSemanticAdmissionService", "GoalTaskService", "GoalTaskRepairService", "GoalTaskReviewService",
+        "GoalTaskSemanticAdmissionService", "GoalTaskImplementationService", "NativeWorkflowPreparationService")
+
+      When("the complete selected public Operation signatures are compared with their source declarations")
+      services.foreach { service =>
+        array(exports, "services").count(value => text(value, "name") == service) shouldBe 1
+        val expected = "(?ms)^#### (\\w+)\\n(.*?)(?=^#### |\\z)".r.findAllMatchIn(sections(service)).map { m =>
+          val body = m.group(2)
+          def _declaration_(label: String): String = {
+            val nested = if (label == "TYPE") "" else "###### TYPE\\n\\s*"
+            ("(?m)^##### " + label + "\\n\\s*" + nested + "(\\w+)").r.findFirstMatchIn(body)
+              .map(_.group(1)).getOrElse(fail(s"Missing CML $label for $service.${m.group(1)}"))
+          }
+          Json.obj("service" -> Json.fromString(service), "name" -> Json.fromString(m.group(1)),
+            "kind" -> Json.fromString(_declaration_("TYPE")), "input" -> Json.fromString(_declaration_("INPUT")),
+            "output" -> Json.fromString(_declaration_("OUTPUT")))
+        }.toVector
+        expected should not be empty
+        array(exports, "operations").filter(op => text(op, "service") == service) should contain theSameElementsAs expected
+      }
+
+      Then("every related value retains field order, types, multiplicity and requiredness without an extra envelope")
+      val values = Vector("StandaloneFix", "GoalTask").flatMap(prefix =>
+        Vector("Input", "AdvanceInput", "WorkRequest", "Condition", "WorkResult", "View").map(prefix + _)) ++
+        Vector("StandaloneReviewFixInput", "StandaloneReviewFixFinding", "StandaloneReviewFixDisposition",
+          "WorkflowStandaloneFixStartPreparationInput", "WorkflowStandaloneReviewFixStartPreparationInput",
+          "WorkflowGoalTaskStartPreparationInput", "WorkflowCallerExecutionPrepareInput", "WorkflowCallerExecutionRecordInput",
+          "WorkflowCallerExecutionState", "WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery",
+          "WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption")
+      values.foreach { name =>
+        val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
+          Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),
+            "multiplicity" -> Json.fromString(m.group(3)), "required" -> Json.fromBoolean(Set("1", "+").contains(m.group(3))))
+        }.toVector
+        fields should not be empty
+        array(exports, "types").filter(value => text(value, "name") == name) shouldBe Vector(
+          Json.obj("name" -> Json.fromString(name), "kind" -> Json.fromString("value"), "fields" -> Json.fromValues(fields)))
+      }
+    }
+
     "describe the minimal participant Operations and genuine capability contracts" in {
       Given("the source-managed schema-v2 ABI used for CAR distribution")
       val abi = readJson("src/main/car/abi-manifest.json")
@@ -109,12 +175,20 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
         "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision")
 
-      And("six passive import preparations and two caller-information Operations expose distinct concrete inputs and outputs")
-      val preparation = Map("prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
+      names("StandaloneFixService") should contain theSameElementsAs Vector(
+        "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation")
+
+      And("passive import, execution, delivery and caller-information Operations expose distinct concrete inputs and outputs")
+      val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
+        "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
       val callerinformation = Map(
+        "prepareExecution" -> ("WorkflowCallerExecutionPrepareInput", "WorkflowCallerExecutionState"),
+        "recordExecution" -> ("WorkflowCallerExecutionRecordInput", "WorkflowCallerExecutionState"),
+        "prepareTaskFixDelivery" -> ("WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery"),
+        "prepareTaskFixAdoption" -> ("WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption"),
         "prepareCallerInformation" -> ("WorkflowCallerInformationPrepareInput", "WorkflowCallerInformationRequest"),
         "recordCallerInformation" -> ("WorkflowCallerInformationRecordInput", "WorkflowCallerInformationResult"))
       names("NativeWorkflowPreparationService") should contain theSameElementsAs (preparation.keys ++ callerinformation.keys).toVector

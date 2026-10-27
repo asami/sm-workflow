@@ -24,7 +24,7 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -218,10 +218,16 @@ private[admission] object NativeWorkflowCliFixture {
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
-      installations: Option[Path] = None): Result = {
+      installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None): Result = {
       require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
         "Select an actual absolute installed command")
-      _run(Vector(executable.toString, "--runtime-root", root.toString, "command", s"$_component.$service.$operation") ++
+      val descriptor = assemblyDescriptor.toVector.map { path =>
+        require(path.isAbsolute && path.normalize == path && path == _assembly && Files.isRegularFile(path),
+          "Select only this scenario's existing explicit assembly descriptor")
+        s"--textus.assembly.descriptor=$path"
+      }
+      _run(Vector(executable.toString, "--runtime-root", root.toString) ++ descriptor ++
+        Vector("command", s"$_component.$service.$operation") ++
         parameters ++ Vector("--json"), installations)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =

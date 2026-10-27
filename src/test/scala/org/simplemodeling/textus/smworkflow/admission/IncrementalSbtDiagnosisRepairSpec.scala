@@ -20,7 +20,7 @@ import RepositorySyncNativeMergeValidation as R
   * native progression, result codecs and information selectors. This focused
   * suite does not claim installed RRC or connected external SBT acceptance.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -107,6 +107,93 @@ final class IncrementalSbtDiagnosisRepairSpec extends AnyWordSpec with Matchers 
       D.admitC(work.copy(kind = "ImplementStep"), _result()).isSuccess shouldBe false
       D.admitC(work.copy(kind = "ReviewStep"), _result()).isSuccess shouldBe false
       D.admitC(work, _result().copy(outcome = "decision-needed")).isSuccess shouldBe false
+    }
+
+    "admit a primary report manifest without absorbing frozen unexecuted dependency checks" in {
+      Given("the real typed combined-selection producer and a frozen dependency before execution")
+      val fixture = GoalPhaseStepTestReportRepairFixture.frozenDependencyFixture()
+      val failure = fixture.validation.payload
+      val work = _work(failure).copy(instanceIdentity = fixture.from.identity.value,
+        stepIdentity = Some("T4"), selectedPlan = fixture.controller.plan,
+        originalBase = fixture.controller.base)
+      val manifest = _manifest(failure).copy(identity = "primary-invalid-report-correction",
+        evidence = Vector(D.Locator("focused", "stdout", 1, 1, "Retained malformed multi-run report")))
+      val before = N.codec.encode(failure)
+      val primary = failure.selected.filter(_.dependency.isEmpty)
+      val dependency = failure.selected.filter(_.dependency.nonEmpty)
+      primary.map(_.identity) shouldBe Vector("compile", "focused")
+      dependency.map(_.identity) shouldBe Vector("dependency-compile", "dependency-focused")
+      failure.dependency should not be empty
+      failure.dependencyExecutions shouldBe empty
+      failure.receipts.map(_.identity) shouldBe primary.map(_.identity)
+      GoalPhaseStepTestReportRepair.frozenDependencyFailureValid(failure) shouldBe true
+      val publicView = NativeWorkflowOperationOutput.goalValidation(failure)
+      publicView.selectedChecks.map(_.identity) shouldBe primary.map(_.identity)
+      publicView.dependencyValidation should not be empty
+
+      When("the manifest selects only the adopted primary Step compile and behavioral checks")
+      D.admitC(work, _result(manifest)).isSuccess shouldBe true
+      Then("all original dependency selections, capture and failed receipt remain unchanged")
+      N.codec.encode(failure) shouldBe before
+      failure.selected shouldBe take(GoalPhaseNativeDependencyValidation.checksC(primary, failure.dependency))
+      failure.outcome shouldBe Some("failed")
+
+      And("missing primary compile, dependency smuggling and crossed selection metadata are refused")
+      val invalid = Vector(manifest.copy(checks = Vector("focused")),
+        manifest.copy(checks = manifest.checks :+ "dependency-compile"),
+        manifest.copy(checks = Vector("compile", "dependency-focused")),
+        manifest.copy(evidence = Vector(D.Locator("dependency-focused", "stdout", 1, 1, "Unexecuted dependency"))))
+      invalid.foreach(m => D.admitC(work, _result(m)).isSuccess shouldBe false)
+      val crossed = failure.copy(selected = failure.selected.map(c =>
+        if (c.identity == "compile") c.copy(dependency = Some(failure.dependency.get.admission.binding.identity)) else c))
+      D.admitC(work.copy(checkFailure = work.checkFailure.map(_.copy(validation = crossed))),
+        _result(manifest)).isSuccess shouldBe false
+      val foreign = failure.copy(selected = failure.selected.map(c =>
+        if (c.identity == "compile") c.copy(identity = "foreign-compile") else c))
+      D.admitC(work.copy(checkFailure = work.checkFailure.map(_.copy(validation = foreign))),
+        _result(manifest)).isSuccess shouldBe false
+    }
+
+    "retain declared Step and Phase identities across real metadata expansion and ordinary checks" in {
+      for (phase <- Vector(false, true); ordinaryBehavior <- Vector(false, true)) {
+        Given(s"real metadata discovery with ordinary Compile, Phase=$phase and ordinary behavior=$ordinaryBehavior")
+        val metadata = GoalPhaseNativeMetadataFixture
+        val requested = Vector(N.Check("compile", 1, S.Kind.Compile), metadata.check) ++
+          Option.when(ordinaryBehavior)(N.Check("ordinary-behavior", 3, S.Kind.TestOnly)).toVector
+        val (selected, batches) = take(GoalPhaseNativeMetadata.prepareC(requested, metadata.loader))
+        GoalPhaseNativeMetadata.validateRetainedC(requested, selected, batches).isSuccess shouldBe true
+        val declared = requested.map(_.identity)
+        GoalPhaseNativeMetadata.declaredIdentities(selected) shouldBe declared
+        selected.size shouldBe requested.size + 1 // The real profile expands to two operations.
+        val expanded = selected.filter(_.hostIdentity.contains(metadata.check.identity))
+        expanded.size shouldBe 2
+        val failed = expanded.head
+        val failure = N.Payload("12", if (phase) "phase:6.6" else "D3", _failed, selected, Vector(
+          _receipt("compile", S.Kind.Compile, false, "Compilation succeeded"),
+          _receipt(failed.identity, S.Kind.TestOnly, true, "Retained selected metadata failure\nActual: false\nExpected: true\n")),
+          Some("failed"), metadata = batches)
+        val plan = _plan.copy(steps = _plan.steps.map(_.copy(checks = declared)), phaseChecks = declared)
+        val work = _work(failure).copy(selectedPlan = plan, stepIdentity = Option.unless(phase)("D3"))
+        val manifest = _manifest(failure).copy(identity = "expanded-metadata-correction",
+          checks = declared, evidence = Vector(D.Locator(failed.identity, "stdout", 1, 3,
+            "The actual expanded operation retains the failed behavioral observation")))
+
+        When("the manifest names declared checks while evidence names the actual expanded operation")
+        D.admitC(work, _result(manifest)).isSuccess shouldBe true
+        Then("the original host mapping and every compile, behavior and evidence guard remain required")
+        D.admitC(work, _result(manifest.copy(checks = declared.filterNot(_ == "compile")))).isSuccess shouldBe false
+        D.admitC(work, _result(manifest.copy(checks = Vector("compile")))).isSuccess shouldBe false
+        D.admitC(work, _result(manifest.copy(checks = Vector("compile", failed.identity)))).isSuccess shouldBe false
+        val crossed = failure.copy(selected = selected.map(c =>
+          if (c.identity == failed.identity) c.copy(hostIdentity = Some("foreign-metadata-host")) else c))
+        D.admitC(work.copy(checkFailure = work.checkFailure.map(_.copy(validation = crossed))),
+          _result(manifest)).isSuccess shouldBe false
+        D.admitC(work, _result(manifest.copy(evidence = Vector(D.Locator(metadata.check.identity,
+          "stdout", 1, 1, "The declared host is not an executed receipt identity"))))).isSuccess shouldBe false
+        failure.selected shouldBe selected
+        failure.metadata shouldBe batches
+        failure.outcome shouldBe Some("failed")
+      }
     }
 
     "retain earlier hypotheses, failures and consumed counts when later behavioral failure requires revision" in {

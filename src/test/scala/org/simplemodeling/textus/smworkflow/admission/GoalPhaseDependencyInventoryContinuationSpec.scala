@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned native-shaped data exercises proof, never genuine Human
   * consent, installed execution, persistence effects or independent acceptance.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

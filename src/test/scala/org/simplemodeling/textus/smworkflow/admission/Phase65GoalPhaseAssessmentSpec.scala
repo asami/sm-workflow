@@ -9,6 +9,7 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import GoalPhaseOrderedProgression as O
+import GoalPhaseNativeWork as W
 import GoalPhaseNativeValidation as N
 import GoalPhaseStepAssessment as A
 import RepositorySyncNativeMergeValidation as R
@@ -18,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure typed-boundary evidence; actual CLI/SBT/Git evidence is a separate suite.
   * @since   Oct. 23, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -511,6 +512,7 @@ final class Phase65GoalPhaseAssessmentSpec extends AnyWordSpec with Matchers wit
         publicrestored.originalRequest shouldBe target.originalRequest
         GoalPhaseReleaseRepairContinuation.validateTargetC(target).isSuccess shouldBe true
         val step = wire.hcursor.downField("completed").downArray
+        step.downField("partialCompletion").focus shouldBe None
         if (reviewless) {
           step.downField("review").focus shouldBe Some(io.circe.Json.Null)
           step.downField("admission").focus should not be empty
@@ -523,6 +525,40 @@ final class Phase65GoalPhaseAssessmentSpec extends AnyWordSpec with Matchers wit
           step.downField("admission").focus shouldBe None
           step.focus.get.asObject.get.keys.toSet shouldBe Set("step", "commit", "review")
         }
+      }
+    }
+
+    "retain exact partial completion chains with reviewed and formally admitted Release prefixes" in {
+      for (reviewless <- Vector(false, true)) {
+        Given("the exact completed Release prefix and its retained P to C to D commit chain")
+        val original = _release_target(reviewless)
+        val previous = original.completed.head
+        val partial = O.Commit("e" * 40, previous.commit.parent, "f" * 40)
+        val completion = previous.commit.copy(parent = partial.identity)
+        val chain = O.StepCommitChain(original.base, partial, completion)
+        O.validStepCommitChain(chain) shouldBe true
+        val closed = previous.copy(commit = completion, partialCompletion = Some(chain))
+        val request = W.inputCodec.decode(original.originalRequest).fold(message => fail(message), identity)
+          .copy(completed = Vector(closed))
+        val target = original.copy(completed = Vector(closed), originalRequest = W.inputCodec.encode(request))
+        When("the strict Release codec and public target record read that original chain")
+        val wire = target.asJson
+        wire.as[GoalPhaseReleaseRepairContinuation.Target] shouldBe Right(target)
+        take(GoalPhaseReleaseRepairContinuation.targetC(GoalPhaseReleaseRepairContinuation.targetRecord(target))) shouldBe target
+        Then("acceptance provenance and every exact commit link remain present while malformed variants are refused")
+        target.completed.head.review shouldBe previous.review
+        target.completed.head.admission shouldBe previous.admission
+        target.completed.head.partialCompletion shouldBe Some(chain)
+        val step = wire.hcursor.downField("completed").downArray.focus.get
+        val chainJson = step.hcursor.downField("partialCompletion").focus.get
+        val invalid = Vector(step.mapObject(_.add("partialCompletion", io.circe.Json.Null)),
+          step.mapObject(_.add("partialCompletion", chainJson.mapObject(_.add("unknownChain", true.asJson)))),
+          step.mapObject(_.add("partialCompletion", chainJson.hcursor.downField("partial")
+            .withFocus(_.mapObject(_.add("parent", ("9" * 40).asJson))).top.get)),
+          step.mapObject(_.add("partialCompletion", chainJson.hcursor.downField("completion")
+            .withFocus(_.mapObject(_.add("tree", ("8" * 40).asJson))).top.get)))
+        invalid.foreach(value => wire.mapObject(_.add("completed", io.circe.Json.arr(value)))
+          .as[GoalPhaseReleaseRepairContinuation.Target].isLeft shouldBe true)
       }
     }
 

@@ -7,7 +7,7 @@ import io.circe.syntax.*
 /** Read-only extraction from the actual retained check, never a command or a
   * causal classifier. Line locators address the original, unmodified capture.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object IncrementalSbtFailureDiagnosis {
@@ -109,7 +109,8 @@ private[smworkflow] object IncrementalSbtFailureDiagnosis {
     }
 
   def extract(receipt: RepositorySyncNativeMergeValidation.Receipt, kind: WorkflowSbtValidation.Kind,
-    revision: String, candidate: GoalPhaseOrderedProgression.Snapshot): View = {
+    revision: String, candidate: GoalPhaseOrderedProgression.Snapshot,
+    remainingTestsSelected: Boolean = false): View = {
     val captures = Vector("stdout" -> receipt.stdout, "stderr" -> receipt.stderr)
     val sources = captures.map { case (stream, text) =>
       val raw = receipt.processObservation.map(p => if (stream == "stdout") p.stdout else p.stderr)
@@ -138,7 +139,10 @@ private[smworkflow] object IncrementalSbtFailureDiagnosis {
     // project/run identity. Retain the raw lines; counts then remain unknown.
     def unique[A](values: Vector[A]): Option[A] = Option.when(values.size == 1)(values.head)
     val testsRun = verified.map(_.testsRun).orElse(unique(totals))
-    val requestedTests = kind == WorkflowSbtValidation.Kind.Test || kind == WorkflowSbtValidation.Kind.TestOnly
+    // A batch owner may know that this Compile precedes selected test checks.
+    // Raw Compile callers retain tests-not-selected; actual execution evidence
+    // still takes precedence over compilation blocking in a mixed run.
+    val requestedTests = remainingTestsSelected || kind == WorkflowSbtValidation.Kind.Test || kind == WorkflowSbtValidation.Kind.TestOnly
     val blocked = if (requestedTests) plain.collect { case _task(project, configuration) =>
       BlockedSelection(Option(project), configuration)
     }.distinct else Vector.empty

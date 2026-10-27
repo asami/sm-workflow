@@ -26,7 +26,7 @@ import GoalPhasePartialCommitClosure as P
 /** Explicit recovery of an unresolved selected Step commit. Old intent and
   * terminal observations are immutable; direction never executes a commit.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseClosureRecovery {

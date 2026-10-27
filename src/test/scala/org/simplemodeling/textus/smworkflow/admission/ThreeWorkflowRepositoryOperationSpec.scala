@@ -42,7 +42,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -165,6 +165,27 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   }
   protected final class Setup(val core: ActionCall.Core, task: Setup => Consequence[Unit],
     fixtureRoot: Path, fixtureScenario: String) extends ProcedureActionCall {
+    /** Task qualification uses the same managed SQLite owner. No adapter escapes
+      * this call; historical malformed issues are issued via suspendC in the spec. */
+    def taskStorageC(): Consequence[WorkflowComponentStorage] = for {
+      definition <- GoalTaskRuntimeCatalog.loadC()
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(definition), _collection_("instances"), _collection_("continuations"))
+    } yield storage
+
+    def withTaskClaimsC[A](run: WorkflowContinuationDataStorePersistence => Consequence[A]): Consequence[A] = {
+      given ExecutionContext = executionContext
+      val space = executionContext.dataStoreSpace
+      val prior = space.captureBinding()
+      try for {
+        _ <- bind_component_application_datastore_c("workflow")
+        store <- space.dataStore(_collection_("continuations"))
+        claims <- WorkflowContinuationDataStorePersistence.bindC(store, _configuration_, _collection_("continuations"))
+        result <- run(claims)
+      } yield result
+      finally space.restoreBinding(prior)
+    }
+
     def createC(name: String, identity: String, record: Record): Consequence[Unit] =
       ComponentRecordStorage.bindForCallC(core, "workflow", _collection_(name), DataStore.StringEntryId(identity))
         .flatMap(_.createC(record))

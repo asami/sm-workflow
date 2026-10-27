@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure native history and independent host evidence contracts. Installed
   * command behavior is exercised separately against a fresh test Session.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

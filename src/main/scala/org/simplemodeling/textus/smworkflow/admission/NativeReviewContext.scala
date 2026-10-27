@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Selected review context from the actual owning issued WorkOrder.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 26, 2026
   */
 private[smworkflow] object NativeReviewContext {
   def goalC(core: ActionCall.Core, work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing]):
@@ -27,6 +27,15 @@ private[smworkflow] object NativeReviewContext {
     context <- _context_c(core, work, NativeExternalEvidence.Purpose.RepositoryReview,
       ThreeWorkflowExternalEvidencePorts.repositoryReviewTarget(input))
   } yield context
+
+  def standaloneC(core: ActionCall.Core, work: WorkflowInteraction[StandaloneFixExecution.Work, Nothing]):
+    Consequence[Option[V.WorkflowReviewContext]] = for {
+    input <- NativeWorkflowOperationOutput.workInputC(work)
+    result <- if (input.kind == "Review") {
+      import io.circe.syntax.*
+      _context_c(core, work, NativeExternalEvidence.Purpose.StandaloneReview, input.asJson).map(Some(_))
+    } else Consequence.success(Option.empty[V.WorkflowReviewContext])
+  } yield result
 
   private def _context_c[A](core: ActionCall.Core, work: WorkflowInteraction[A, Nothing],
     purpose: NativeExternalEvidence.Purpose, target: Json): Consequence[V.WorkflowReviewContext] = for {

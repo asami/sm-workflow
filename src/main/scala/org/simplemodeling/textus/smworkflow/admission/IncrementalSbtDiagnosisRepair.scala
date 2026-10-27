@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * checks scope and retained evidence, not causal truth or test success. Actual
   * candidate inspection, checks, review and common repair control keep ownership.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object IncrementalSbtDiagnosisRepair {
@@ -89,15 +89,21 @@ private[smworkflow] object IncrementalSbtDiagnosisRepair {
             .getOrElse(work.selectedPlan.phaseChecks)
           val owners = work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id)).map(_.ownedPaths)
             .getOrElse(work.selectedPlan.steps.flatMap(_.ownedPaths))
-          val kinds = validation.selected.map(c => c.identity -> c.kind).toMap
+          // The retained native vector also contains separately admitted dependency
+          // checks. Match the public primary selection and the adopted Step scope;
+          // dependency execution remains mandatory in native validation, not in this
+          // primary-source repair manifest.
+          val primary = validation.selected.filter(_.dependency.isEmpty)
+          val behavioral = GoalPhaseNativeMetadata.declaredIdentities(primary.filter(c =>
+            c.kind == WorkflowSbtValidation.Kind.Test || c.kind == WorkflowSbtValidation.Kind.TestOnly))
           manifest.sourceRevision == validation.sourceRevision && manifest.candidate == validation.candidate &&
             manifest.ownedPaths.forall(path => owners.exists(p => path == p || path.startsWith(p + "/"))) &&
-            manifest.checks.forall(stepchecks.contains) && manifest.checks.exists(id => kinds.get(id).exists(k =>
-              k == WorkflowSbtValidation.Kind.Test || k == WorkflowSbtValidation.Kind.TestOnly)) &&
-            validation.selected.filter(_.kind == WorkflowSbtValidation.Kind.Compile).forall(c => manifest.checks.contains(c.identity)) &&
+            GoalPhaseNativeMetadata.declaredIdentities(primary) == stepchecks &&
+            manifest.checks.forall(stepchecks.contains) && manifest.checks.exists(behavioral.contains) &&
+            primary.filter(_.kind == WorkflowSbtValidation.Kind.Compile).forall(c => manifest.checks.contains(c.identity)) &&
             manifest.evidence.forall { locator =>
               validation.receipts.find(_.identity == locator.check).exists { receipt =>
-                val failed = validation.selected.find(_.identity == receipt.identity).exists(c =>
+                val failed = primary.find(_.identity == receipt.identity).exists(c =>
                   !RepositorySyncNativeMergeValidation.productSuccessful(receipt, c.kind))
                 val capture = receipt.processObservation.map(p => if (locator.stream == "stdout") p.stdout else p.stderr)
                 val text = if (locator.stream == "stdout") receipt.stdout else receipt.stderr

@@ -15,7 +15,7 @@ import GoalPhaseOrderedProgression as O
 /** Finite nonblocking review observations and assigned recording replies.
   * Source references and these pure values grant no native-history or effect authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFindingRecording {

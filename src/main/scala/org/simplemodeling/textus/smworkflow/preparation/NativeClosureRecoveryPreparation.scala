@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * establish actual terminal invocation evidence before attesting prior ended;
   * an AI-supplied Boolean or preparation output grants no authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeClosureRecoveryPreparation {

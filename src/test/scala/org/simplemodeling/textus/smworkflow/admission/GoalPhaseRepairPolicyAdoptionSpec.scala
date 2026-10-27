@@ -17,7 +17,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Exact wires and real isolated same-Session mechanical direction replay.
   * Every direction is specification-owned, never genuine live Human consent.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

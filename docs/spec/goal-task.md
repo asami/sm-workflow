@@ -1,9 +1,11 @@
 # Ad hoc development with sm-goal-task
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: adopted specification; implementation and installed acceptance pending
+Status: adopted specification; P67-T2 source entry prepared, native validation and installed acceptance pending
 Delivery: [Phase 6.7 main route](../phase/phase-6.7.md), [Phase 17 extensions](../phase/phase-17.md)
 Requirement detail: [GoalTask and shared execution plan](../notes/goal-task-delivery-plan.md)
+
+Source boundary: [GoalTask runtime contract](goal-task-runtime.md).
 
 ## Purpose and input
 

@@ -201,10 +201,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       val observed = repairControl.map(_.copy(observations = observations))
       val trend = observed.flatMap(_.stop)
       if (generation < Long.MaxValue && repairs < effectiveRepairLimit && trend.isEmpty)
-        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = Some(directive),
-          newPendingRepair = None, newcontrol = observed, newpolicypending = false,
-          newobservations = observations, reason = None, clear = true)
+        R.admitBatchC(repairs, ordinaryRepairs, effectiveRepairLimit).flatMap(counts =>
+          success(Stage.Repair, newGeneration = generation + 1, newRepairs = counts.automatic,
+            newOrdinaryRepairs = counts.ordinary, newDirective = Some(directive),
+            newPendingRepair = None, newcontrol = observed, newpolicypending = false,
+            newobservations = observations, reason = None, clear = true))
       else success(Stage.Decision, newDirective = Some(directive),
         newReview = if (Set(Stage.Review, Stage.PhaseReview)(stage)) Some(reference) else reviewEvidence,
         newPendingRepair = Option.when(effectiveRepairLimit > 0 && generation < Long.MaxValue)(directive),
@@ -241,9 +242,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     private[admission] def dispatchPolicyRepairC: Consequence[State] =
       if (policyRepairPending && stage == Stage.Decision && pendingRepair.exists(_valid_directive) &&
           repairControl.nonEmpty && repairs < effectiveRepairLimit && generation < Long.MaxValue)
-        success(Stage.Repair, newGeneration = generation + 1, newRepairs = repairs + 1,
-          newOrdinaryRepairs = ordinaryRepairs + 1, newDirective = pendingRepair, newPendingRepair = None,
-          newpolicypending = false, reason = None, clear = true)
+        R.admitBatchC(repairs, ordinaryRepairs, effectiveRepairLimit).flatMap(counts =>
+          success(Stage.Repair, newGeneration = generation + 1, newRepairs = counts.automatic,
+            newOrdinaryRepairs = counts.ordinary, newDirective = pendingRepair, newPendingRepair = None,
+            newpolicypending = false, reason = None, clear = true))
       else invalid("repair policy has no eligible unreserved pending batch")
     private def phaseWide = cursor == plan.steps.size
     private def step = plan.steps(cursor)
@@ -295,6 +297,24 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       next <- _reserve_repair_c(directive, failedReceipt, "Initial Phase check repair allowance exhausted", comparable = false)
       _ <- if (next.stage == Stage.Repair) Consequence.unit
         else invalid("initial Phase check repair has no reservable ordinary batch")
+    } yield next
+
+    /** The native owner separately proves a complete genuinely terminated
+      * InvalidReport receipt and appends its own immutable admission. Historical
+      * ChecksObserved(false) remains Decision; this reserves one NEW batch.
+      */
+    private[admission] def continueStepTestReportRepairC(failedReceipt: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(failedReceipt) && !failedReceipt.exists(_.isControl) && _valid_directive(directive) &&
+          stage == Stage.Decision && decisionSource.contains(Stage.Validation) &&
+          decision.contains("Selected native checks failed: " + failedReceipt) && !phaseWide && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && reviewEvidence.isEmpty &&
+          candidate.exists(validSnapshot) && completed.map(_.step) == plan.steps.take(cursor).map(_.identity) &&
+          completed.forall(validStepAcceptance) && releaseCommit.isEmpty && repositoryReceipt.isEmpty &&
+          repairControl.exists(_.policy == R.version) && repairs < effectiveRepairLimit && generation < Long.MaxValue)
+        Consequence.unit else invalid("Step test report repair requires its exact failed Step Decision and remaining runtime allowance")
+      next <- _reserve_repair_c(directive, failedReceipt, "Step test report repair allowance exhausted", comparable = false)
+      _ <- if (next.stage == Stage.Repair) Consequence.unit else invalid("Step test report repair has no reservable ordinary batch")
     } yield next
 
     /** Business context only: this projection grants no issue or execution authority. */

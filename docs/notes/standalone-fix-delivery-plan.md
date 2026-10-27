@@ -1,7 +1,7 @@
 # Standalone sm-fix delivery plan
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: planned; no standalone implementation or acceptance claimed
+Status: P67-T1 source implementation in progress; native validation and installed acceptance pending
 Owner: sm-workflow development
 Specification: [Step-equivalent standalone acceptance](../spec/standalone-fix-acceptance.md)
 Handoff: [English developer handoff](../journal/2026/10/2026-10-24-standalone-fix-handoff.md)
@@ -58,6 +58,21 @@ Use existing runtime-owned SBT. Confirm preservation of existing work and result
 without moving active Phase repairs to a standalone Session. Supply operational
 examples and English handoff. Commit/release remains explicitly selected work.
 
+## P67-T1 source delivery
+
+The [standalone runtime contract](../spec/standalone-fix-runtime.md) records the
+new public source route, shared check/diagnostic/Evidence machinery and its
+truthful fixture-versus-installed evidence boundary. No SFIX or Phase acceptance
+checkbox is closed by source implementation or bounded admission fixtures alone.
+
+## P67-T3 source delivery
+
+The [review-origin runtime contract](../spec/standalone-review-fix-runtime.md) adds
+identified original findings, exact disposition/change/check attribution and
+conditional affected review through the same standalone engine. Native checks
+and actual installed skill/delivery evidence remain separate; no checklist box
+is closed by source fixtures.
+
 ## Acceptance checklist — pending
 
 - [ ] SFIX-A01: A real single-repository test failure is repaired and passes actual
@@ -82,3 +97,14 @@ examples and English handoff. Commit/release remains explicitly selected work.
 Use focused behavior checks for changed admission and routing, plus one connected
 real request. Reuse prior producer evidence. Documentation alone does not establish
 that these entrypoints exist, are installed or have passed the checklist.
+
+## P67-T4 source delivery boundary
+
+The [Task/FIX delivery contract](../spec/task-fix-delivery.md) supplies matching
+thin skill sources and passive public result/adoption preparations. Their exact
+caller observations retain destination state and distinct owners; they grant no
+consent, effect or requester acceptance. Actual installed and authorized
+existing-chat evidence is pending. Keep active Sessions pinned: this consumer's
+v3 GoalPhase closure codec cannot adopt retained v4 partial completion. Source
+CAR ABI reconciliation is outside this Step's owned paths. See the
+[English source handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).

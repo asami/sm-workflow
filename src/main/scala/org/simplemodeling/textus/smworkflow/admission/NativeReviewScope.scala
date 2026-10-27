@@ -1,16 +1,18 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import org.simplemodeling.textus.smworkflow.admission.StandaloneFixExecution.given
+
 import io.circe.{Json, JsonObject}
 import io.circe.syntax.*
 import NativeExternalEvidence.Purpose
 
 /** Selected independent review targets; native completion owns result validity.
   * @since   Oct.  8, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeReviewScope {
-  def supports(purpose: Purpose): Boolean = Set(Purpose.GoalReview, Purpose.RepositoryReview)(purpose)
+  def supports(purpose: Purpose): Boolean = Set(Purpose.StandaloneReview, Purpose.GoalReview, Purpose.RepositoryReview)(purpose)
   def select(purpose: Purpose, binding: Json): Either[String, Json] =
     if (!supports(purpose)) Right(binding)
     else for {
@@ -18,7 +20,10 @@ private[smworkflow] object NativeReviewScope {
       owner <- text(root, "componentInstance")
       body <- at(root, "attestation")
       input <- at(body, "target")
-      target <- if (purpose == Purpose.GoalReview) goal(input) else repository(input)
+      target <- if (purpose == Purpose.StandaloneReview) {
+        Json.fromJsonObject(input).as[StandaloneFixExecution.Work].left.map(_.message).flatMap(work =>
+          Either.cond(work.kind == "Review", work.asJson, "Standalone scope is not actual review work"))
+      } else if (purpose == Purpose.GoalReview) goal(input) else repository(input)
       result <- at(body, "result").flatMap(resultTarget(_, purpose))
       _ <- if (purpose != Purpose.GoalReview) Right(()) else {
         val conditions = result.hcursor.downField("verdict").downField("completionConditions").focus
@@ -44,7 +49,7 @@ private[smworkflow] object NativeReviewScope {
         }
       }
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "attestation" -> Json.obj(
-      "kind" -> Json.fromString(if (purpose == Purpose.GoalReview) "goal-review" else "repository-review"),
+      "kind" -> Json.fromString(if (purpose == Purpose.StandaloneReview) "standalone-review" else if (purpose == Purpose.GoalReview) "goal-review" else "repository-review"),
       "target" -> target, "result" -> result))
 
   private def goal(input: JsonObject): Either[String, Json] = for {
@@ -113,7 +118,9 @@ private[smworkflow] object NativeReviewScope {
     handle <- at(input, "handle").flatMap(NativeHumanDecisionScope.handleTarget)
     reference <- at(input, "reference").flatMap(NativeHumanDecisionScope.referenceTarget)
     body <- at(input, "verdict")
-    verdict <- if (purpose == Purpose.GoalReview) goalVerdict(body) else repositoryVerdict(body)
+    verdict <- if (purpose == Purpose.StandaloneReview)
+      Json.fromJsonObject(body).as[StandaloneFixExecution.Result].left.map(_.message).map(_.asJson)
+      else if (purpose == Purpose.GoalReview) goalVerdict(body) else repositoryVerdict(body)
   } yield Json.fromJsonObject(fields.add("handle", handle).add("reference", reference).add("verdict", verdict))
 
   private def goalVerdict(input: JsonObject): Either[String, Json] = for {

@@ -10,7 +10,7 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -32,6 +32,12 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
+    "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
+    "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",
+    "StandaloneFixService.startStandaloneReviewFix",
+    "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
+    "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
     "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
@@ -77,6 +83,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       _ <- if (repository.review.nonEmpty && repository.humanConflict.nonEmpty && repository.conflicts.semanticPaths.nonEmpty)
         Consequence.unit else Consequence.configurationInvalid("Three-workflow RepositorySync requires paired semantic conflict, independent review and Human handling")
       goal <- GoalPhaseNativeServiceAssembly.bindRuntimeC(creation, host.goal)
+      standalone <- StandaloneFixService.bindC(creation, host.goal)
+      task <- GoalTaskService.bindC(creation, host.goal)
       sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
@@ -88,6 +96,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
     } yield Vector(
+      standalone, task,
       NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(goal, creation, host.goal, goalCatalog.definition),
         creation, host.goal, goalCatalog.definition),
       NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),

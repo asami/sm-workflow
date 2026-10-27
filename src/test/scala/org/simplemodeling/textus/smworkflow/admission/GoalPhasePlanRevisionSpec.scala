@@ -130,6 +130,71 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       O.currentInventoryPathsC(withfuture, proposed.copy(steps = proposed.steps :+ future.copy(purpose = "Changed future")), "S2").isSuccess shouldBe false
     }
   }
+  "Retained Plan2 current inventory metadata" should {
+    "roundtrip three accepted Steps including a partial chain and preserve three consumed repairs on the current ABI append" in {
+      val raw = _raw.copy(repairLimit = 10, steps = (1 to 4).toVector.map { index =>
+        _raw.steps.head.copy(identity = "T" + index, purpose = "Specification boundary " + index,
+          ownedPaths = Vector("src/step-" + index + ".scala"), dependencies = (1 until index).map("T" + _).toVector,
+          checks = Vector("check-" + index))
+      })
+      val initial = _take(O.startC(_take(A.captureC(Some(_project), raw)), _base,
+        Some(GoalPhaseRuntimeRepairControl.version)))
+      val implemented = _take(initial.acceptC(O.SemanticCompleted(_key(initial), "Specification first Step")))
+      val snapshot = O.Snapshot(_base.head, "d" * 40)
+      val inspected = _take(implemented.acceptC(O.CandidateObserved(snapshot)))
+      val checked = _take(inspected.acceptC(O.ChecksObserved(snapshot, Vector("check-1"), "spec-check-1", true)))
+      val reviewed = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "spec-check-1", "spec-review-1", O.ReviewOutcome.Accept)))
+      val closing = _take(reviewed.acceptC(O.ClosureIntentSaved(snapshot, "spec-intent-1")))
+      val partial = O.Commit("c" * 40, _base.head, "e" * 40)
+      val chain = O.StepCommitChain(_base, partial, O.Commit("f" * 40, partial.identity, snapshot.tree))
+      val first = _take(closing.acceptC(O.StepPartialCompletionObserved("spec-intent-1", chain, snapshot.tree, Vector.empty)))
+      val fourth = _close_step(_close_step(first, "1" * 40, "2" * 40), "3" * 40, "4" * 40)
+      val repaired = (1 to 3).foldLeft(fourth) { (state, index) =>
+        val completed = _take(state.acceptC(O.SemanticCompleted(_key(state), "Specification repair input " + index)))
+        val candidate = O.Snapshot(state.tipSnapshot.head, "5" * 40)
+        val observed = _take(completed.acceptC(O.CandidateObserved(candidate)))
+        _take(observed.acceptC(O.RepairableChecksObserved(candidate, Vector("check-4"), "spec-failed-check-" + index,
+          O.RepairDirective("Specification repair " + index, Vector("Distinct fixture finding " + index)),
+          comparableFindings = false)))
+      }
+      val paused = _decision(repaired)
+      paused.completed.map(_.step) shouldBe Vector("T1", "T2", "T3")
+      paused.repairs shouldBe 3
+      paused.ordinaryRepairs shouldBe 3
+      val inventory = "src/main/car/abi-manifest.json"
+      val proposed = paused.plan.copy(revision = "2", steps = paused.plan.steps.updated(3,
+        paused.plan.steps(3).copy(ownedPaths = paused.plan.steps(3).ownedPaths :+ inventory)))
+      val proposal = Proposal("spec-plan2", "1", "Specification current ABI inventory append",
+        proposed.copy(effectiveAcceptance = None))
+      val metadata = GoalPhaseRemainingPlanAdoption.CurrentInventoryTarget("fixture-component", "T4", Vector(inventory),
+        paused.plan.steps.flatMap(_.ownedPaths) :+ inventory)
+      val target = GoalPhaseRemainingPlanAdoption.Target("fixture-session", "fixture-question", "557", "558",
+        paused.plan, paused.base, paused.completed, paused.generation, GoalPhaseRepairProgress.snapshot(paused),
+        ContextReference("spec-requesting-result", "1"), Captured(proposal, proposed), currentInventory = Some(metadata))
+      val retained = GoalPhaseRemainingPlanAdoption.Payload(target, ContextReference("spec-independent-human", "1"),
+        "participant", "Specification-only independent direction")
+      val decoded = GoalPhaseRemainingPlanAdoption.codec.decode(GoalPhaseRemainingPlanAdoption.codec.encode(retained))
+        .fold(reason => fail(reason), identity)
+      _take(GoalPhaseRemainingPlanAdoption.targetC(GoalPhaseRemainingPlanAdoption.targetRecord(target))) shouldBe target
+      decoded shouldBe retained
+      decoded.target.currentInventory shouldBe Some(metadata)
+      decoded.target.completed.head.partialCompletion shouldBe Some(chain)
+      val resumed = _take(paused.adoptCurrentInventoryRevisionC(decoded.target.captured.plan, decoded.directive.identity))
+      resumed.plan shouldBe proposed
+      resumed.completed shouldBe paused.completed
+      resumed.base shouldBe paused.base
+      resumed.cursor shouldBe 3
+      resumed.generation shouldBe paused.generation + 1
+      GoalPhaseRepairProgress.snapshot(resumed) shouldBe GoalPhaseRepairProgress.snapshot(paused)
+      resumed.repairObservations shouldBe paused.repairObservations
+      val wire = GoalPhaseRemainingPlanAdoption.codec.encode(retained)
+      val withoutMetadata = wire.mapObject(fields => fields.add("target", target.asJson.mapObject(_.remove("currentInventory"))))
+      GoalPhaseRemainingPlanAdoption.codec.decode(withoutMetadata).isLeft shouldBe true
+      val changed = target.copy(currentInventory = Some(metadata.copy(stepIdentity = "T3")))
+      GoalPhaseRemainingPlanAdoption.codec.decode(wire.mapObject(_.add("target", changed.asJson))).isLeft shouldBe true
+      paused.adoptRemainingRevisionC(proposed, "spec-wrong-ordinary-route").isSuccess shouldBe false
+    }
+  }
   private def _close_step(state: O.State, identity: String, tree: String): O.State = {
     val implemented = _take(state.acceptC(O.SemanticCompleted(_key(state), "Specification-owned implementation")))
     val snapshot = O.Snapshot(state.tipSnapshot.head, tree)

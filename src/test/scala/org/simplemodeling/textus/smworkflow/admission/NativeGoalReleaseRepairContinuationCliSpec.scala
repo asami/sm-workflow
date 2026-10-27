@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * All reviews and Human directions here are SPECIFICATION-OWNED test data.
   * No real Session, genuine approval, or manually seeded native receipt is used.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

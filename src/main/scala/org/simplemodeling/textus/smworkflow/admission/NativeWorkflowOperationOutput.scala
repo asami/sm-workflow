@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -48,7 +48,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
         d.inventoryContinuation.map(context => GoalPhaseNativeMetadata.record(context.asJson)))),
       value.checkFailure.map(c => V.GoalPhaseCheckFailureContext(c.changedPaths, c.diff, goalValidation(c.validation),
-        c.initialPhaseRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
+        c.initialPhaseRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
+        c.stepTestReportRepair.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)))),
       GoalPhaseFixIssues.publicState(value.issues), value.purposeRepair.map(contract => GoalPhaseNativeMetadata.record(contract.asJson)),
       releaseRepairContract = value.releaseRepairContract,
       triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)),

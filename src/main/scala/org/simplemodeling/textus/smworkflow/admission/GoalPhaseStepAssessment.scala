@@ -6,12 +6,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeValidation as N
-import WorkflowSbtValidation as T
 
 /** Small PLAN-owned Step policy over actual native validation facts.
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {
@@ -92,12 +91,7 @@ private[smworkflow] object GoalPhaseStepAssessment {
     _ <- if (GoalPhaseNativeMetadata.declaredIdentities(selected) == step.checks &&
         receipts.map(_.identity) == selected.map(_.identity)) Consequence.unit
       else invalid("assessment requires the exact primary Step checks and matching receipts")
-    _ <- if (policy.kind != "code" || (selected.exists(_.kind == T.Kind.Compile) &&
-        selected.zip(receipts).exists((c, r) => c.kind == T.Kind.TestOnly &&
-          r.sbt.flatMap(_.selection).exists(s => s.completedSuites > 0 && s.testsRun > 0)))) Consequence.unit
-      else invalid("code admission requires compilation and actual nonempty focused behavioral tests")
-    _ <- if (policy.scalaLint != "required" || selected.exists(_.kind == T.Kind.FixCheck)) Consequence.unit
-      else invalid("required Scala lint has no actual selected fix-check receipt")
+    _ <- WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
     signals = policy.scenarioInventory.map(GoalPhaseStepTriage.signals(changedPaths, _))
     immediate = policy.observations.exists(_.timing == "immediate") || signals.exists(_.missing.nonEmpty)
     branch = if (policy.detailedReview == "required" ||

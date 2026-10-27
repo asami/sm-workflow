@@ -1838,6 +1838,7 @@ OperationResult
 | diff | string | 1 |
 | validation | GoalPhaseNativeValidationView | 1 |
 | initialPhaseRepair | WorkflowArtifactReference | ? |
+| stepTestReportRepair | WorkflowArtifactReference | ? |
 
 ## GoalPhaseWorkResult
 
@@ -3549,6 +3550,11 @@ on = release-repair-continuation-admitted
 
 to = Repair
 on = initial-phase-check-repair-admitted
+
+##### TRANSITION
+
+to = Repair
+on = step-test-report-repair-admitted
 
 ##### TRANSITION
 
@@ -8889,6 +8895,63 @@ Explicit passive preparation metadata and absolute local file: URI references. S
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
 
+## WorkflowStandaloneFixStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit standalone request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+## WorkflowStandaloneReviewFixStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit original review-fix request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+## WorkflowGoalTaskStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
 ## WorkflowSplitStartPreparationInput
 
 - input-kind :: COMMAND
@@ -9468,6 +9531,90 @@ WorkflowGoalStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareStandaloneFixStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected standalone business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowStandaloneFixStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowStandaloneFixStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareStandaloneReviewFixStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected original review-fix business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowStandaloneReviewFixStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowStandaloneReviewFixStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
+#### prepareGoalTaskStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected ad hoc Task business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowGoalTaskStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowGoalTaskStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareRepositoryStart
 
 ##### DESCRIPTION
@@ -9523,6 +9670,62 @@ WorkflowSplitStartPreparationInput
 ###### TYPE
 
 WorkflowPreparedImport
+
+#### prepareTaskFixDelivery
+
+##### DESCRIPTION
+
+Passively attach an actual public destination Task/FIX response to its selected request and distinct chat owners. Preserve complete state, selected checks, review, counters and commit truth. Supplied source metadata is an observation, never authentication or Human consent; no workflow mutation or delivery occurs.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowTaskFixDeliveryPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowTaskFixDeliveryPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowTaskFixDelivery
+
+#### prepareTaskFixAdoption
+
+##### DESCRIPTION
+
+Prepare an explicit requester disposition of the exact returned attachment for its existing workflow. Adoption does not Submit, Advance, mutate a Session, accept destination evidence or authorize effects. Actual provenance and affected integration acceptance remain with the requester.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowTaskFixAdoptionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowTaskFixAdoptionPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowTaskFixAdoption
 
 #### prepareRepositoryEffect
 
@@ -9739,3 +9942,1224 @@ WorkflowCallerInformationRecordInput
 ###### TYPE
 
 WorkflowCallerInformationResult
+
+
+# VALUE
+
+## StandaloneFixInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+
+## StandaloneFixAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## StandaloneFixWorkRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| session | string | 1 |
+| sourceRevision | string | 1 |
+| kind | string | 1 |
+| state | record | 1 |
+
+## StandaloneFixCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| satisfied | boolean | 1 |
+| detail | string | 1 |
+
+## StandaloneFixWorkResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| summary | string | 1 |
+| findings | string | * |
+| conditions | StandaloneFixCondition | + |
+| unresolvedQuestions | string | * |
+| diagnosticRepair | record | ? |
+| fixAssessment | GoalPhaseFixAssessment | ? |
+| reviewDispositions | StandaloneReviewFixDisposition | * |
+
+## StandaloneFixView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| state | record | ? |
+| work | record | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| diagnostics | record | * |
+| reviewContext | WorkflowReviewContext | ? |
+
+# WORKFLOW
+
+## StandaloneFixWorkflow
+
+version = standalone-fix-business-operation-v1
+
+### COMPOSITE-STATEMACHINE
+
+#### CONSTITUENT
+
+##### fix
+
+state-machine = StandaloneFixLifecycle
+subject = fixWork
+subject-type = StandaloneFixWorkRequest
+
+#### STATE
+
+##### Pending
+
+##### Running
+
+##### Accepted
+
+#### DERIVATION
+
+##### pending
+
+state = Pending
+when = fix.Idle
+
+##### running
+
+state = Running
+when = fix.Running
+
+##### accepted
+
+state = Accepted
+when = fix.Accepted
+
+#### INITIAL
+
+fix.Idle
+
+#### ACTION
+
+##### RepairStandaloneFix
+
+kind = OPERATION
+operation = repairStandaloneFix
+input = fix.subject
+
+##### ReviewStandaloneFix
+
+kind = JUDGMENT
+operation = reviewStandaloneFix
+input = fix.subject
+goal = standalone-repair-review
+context = assigned-standalone-candidate-and-selected-checks
+candidate = assigned-standalone-repair
+alternative = accept
+alternative = repair
+alternative = decision-needed
+criteria = adopted-objective-and-owned-path-coverage
+criteria = independent-reviewer-evidence
+criteria = unresolved-test-meaning-remains-unaccepted
+expected-result = standalone-review-disposition
+rationale = review-rationale
+evidence = retained-selected-validation
+evidence-scope = assigned-standalone-candidate
+evidence-freshness = assigned-work-revision
+evidence-provenance = independently-admitted-reviewer
+
+##### AdmitStandaloneFixReview
+
+kind = ADMISSION
+operation = admitStandaloneFixReview
+input = fix.subject
+candidate-action = ReviewStandaloneFix
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
+
+### REQUIRED-OPERATION
+
+#### standalone-fix-repair-capability
+
+action = RepairStandaloneFix
+
+#### standalone-fix-review-capability
+
+action = ReviewStandaloneFix
+
+### OPERATION
+
+#### startStandaloneFix
+
+operation = StandaloneFixService.startStandaloneFix
+
+#### startStandaloneReviewFix
+
+operation = StandaloneFixService.startStandaloneReviewFix
+
+#### advanceStandaloneFix
+
+operation = StandaloneFixService.advanceStandaloneFix
+
+#### submitStandaloneFixWorkResult
+
+operation = StandaloneFixService.submitStandaloneFixWorkResult
+
+#### resolveStandaloneFixDiagnosticInformation
+
+operation = StandaloneFixService.resolveStandaloneFixDiagnosticInformation
+
+# STATE-MACHINE
+
+## StandaloneFixLifecycle
+
+### STATE
+
+#### Idle
+
+##### TRANSITION
+
+to = Running
+on = standalone-started
+
+#### Running
+
+##### TRANSITION
+
+to = Running
+on = standalone-progress
+
+##### TRANSITION
+
+to = Accepted
+on = standalone-accepted
+
+#### Accepted
+
+# SERVICE
+
+## StandaloneFixService
+
+### DESCRIPTION
+
+Standalone bounded repair. Native WorkOrder, managed checks, diagnosis and repair policy own execution. Acceptance leaves changes uncommitted; this service has no commit or push operation.
+
+### OPERATION
+
+#### resolveStandaloneFixDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve the shared finite reasoned NeedInformation batch for the exact pending standalone repair. Retained delivery is reused without rereading sources. The shared diagnostic DTO name is historical; no Phase or Step is created or required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
+
+#### startStandaloneFix
+
+##### DESCRIPTION
+
+Start an idempotent bounded standalone repair for the selected participant and repository request. Native WorkOrder and managed validation own subsequent progress; successful acceptance leaves changes uncommitted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneFixInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### startStandaloneReviewFix
+
+##### DESCRIPTION
+
+Consume selected original review, finding identities and source context through the existing standalone repair runtime. Return normal standalone continuations; acceptance remains uncommitted. No new Phase or repeated whole-repository review is created.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneReviewFixInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneReviewFixInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### advanceStandaloneFix
+
+##### DESCRIPTION
+
+Advance the retained standalone repair through native WorkOrder, managed checks, diagnosis and independent review. Redisplay an existing pending request rather than issue duplicate work; acceptance leaves changes uncommitted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+#### submitStandaloneFixWorkResult
+
+##### DESCRIPTION
+
+Admit the semantic result and independently supplied completion facts for the exact retained standalone WorkOrder. Submission does not run validation or commit changes; ordinary Advance owns subsequent progress.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | StandaloneFixWorkResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+# SERVICE
+
+## StandaloneFixRepairService
+
+### DESCRIPTION
+
+Perform the assigned bounded standalone repair and return its semantic work result. Native validation, diagnosis and independent review remain owned by the retained standalone workflow; acceptance leaves changes uncommitted.
+
+### OPERATION
+
+#### repairStandaloneFix
+
+##### DESCRIPTION
+
+Perform only the assigned bounded standalone repair and return its semantic result. Preserve the retained ownership and findings; native checks and independent review determine subsequent acceptance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+# SERVICE
+
+## StandaloneFixReviewService
+
+### DESCRIPTION
+
+Independently review the exact assigned standalone candidate and return identified findings or acceptance. The reviewer does not repair the candidate or replace native validation and closure evidence.
+
+### OPERATION
+
+#### reviewStandaloneFix
+
+##### DESCRIPTION
+
+Independently review the assigned standalone candidate and report identified findings or acceptance. Do not repair the candidate or present review as native validation or committed delivery.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixWorkResult
+
+# SERVICE
+
+## StandaloneFixSemanticAdmissionService
+
+### DESCRIPTION
+
+Native standalone completion admits the assigned review against the retained work and candidate through StandaloneFixExecution.admitResultC. This semantic admission neither executes validation nor commits source changes.
+
+### OPERATION
+
+#### admitStandaloneFixReview
+
+##### DESCRIPTION
+
+Admit the independently completed review against the exact retained standalone work and candidate through native semantic admission. This operation neither runs checks nor commits changes.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
+
+
+# VALUE
+
+## GoalTaskInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+| sourceKind | string | 1 |
+| dependencies | string | * |
+
+## GoalTaskAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalTaskWorkRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| session | string | 1 |
+| sourceRevision | string | 1 |
+| kind | string | 1 |
+| state | record | 1 |
+
+## GoalTaskCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| satisfied | boolean | 1 |
+| detail | string | 1 |
+
+## GoalTaskWorkResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| summary | string | 1 |
+| findings | string | * |
+| conditions | GoalTaskCondition | + |
+| unresolvedQuestions | string | * |
+| diagnosticRepair | record | ? |
+| fixAssessment | GoalPhaseFixAssessment | ? |
+
+## GoalTaskView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| state | record | ? |
+| work | record | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| diagnostics | record | * |
+| reviewContext | WorkflowReviewContext | ? |
+
+# WORKFLOW
+
+## GoalTaskWorkflow
+
+version = goal-task-business-operation-v1
+
+### COMPOSITE-STATEMACHINE
+
+#### CONSTITUENT
+
+##### task
+
+state-machine = GoalTaskLifecycle
+subject = taskWork
+subject-type = GoalTaskWorkRequest
+
+#### STATE
+
+##### Pending
+
+##### Running
+
+##### Accepted
+
+#### DERIVATION
+
+##### pending
+
+state = Pending
+when = task.Idle
+
+##### running
+
+state = Running
+when = task.Running
+
+##### accepted
+
+state = Accepted
+when = task.Accepted
+
+#### INITIAL
+
+task.Idle
+
+#### ACTION
+
+##### ImplementGoalTask
+
+kind = OPERATION
+operation = implementGoalTask
+input = task.subject
+
+##### RepairGoalTask
+
+kind = OPERATION
+operation = repairGoalTask
+input = task.subject
+
+##### ReviewGoalTask
+
+kind = JUDGMENT
+operation = reviewGoalTask
+input = task.subject
+goal = task-repair-review
+context = assigned-task-candidate-and-selected-checks
+candidate = assigned-task-repair
+alternative = accept
+alternative = repair
+alternative = decision-needed
+criteria = adopted-objective-and-owned-path-coverage
+criteria = independent-reviewer-evidence
+criteria = unresolved-test-meaning-remains-unaccepted
+expected-result = task-review-disposition
+rationale = review-rationale
+evidence = retained-selected-validation
+evidence-scope = assigned-task-candidate
+evidence-freshness = assigned-work-revision
+evidence-provenance = independently-admitted-reviewer
+
+##### AdmitGoalTaskReview
+
+kind = ADMISSION
+operation = admitGoalTaskReview
+input = task.subject
+candidate-action = ReviewGoalTask
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
+
+### REQUIRED-OPERATION
+
+#### goal-task-implementation-capability
+
+action = ImplementGoalTask
+
+#### goal-task-repair-capability
+
+action = RepairGoalTask
+
+#### goal-task-review-capability
+
+action = ReviewGoalTask
+
+### OPERATION
+
+#### startGoalTask
+
+operation = GoalTaskService.startGoalTask
+
+#### advanceGoalTask
+
+operation = GoalTaskService.advanceGoalTask
+
+#### submitGoalTaskWorkResult
+
+operation = GoalTaskService.submitGoalTaskWorkResult
+
+#### resolveGoalTaskDiagnosticInformation
+
+operation = GoalTaskService.resolveGoalTaskDiagnosticInformation
+
+#### describeGoalTaskMalformedIssuedWorkRecovery
+
+operation = GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery
+
+#### recoverGoalTaskMalformedIssuedWork
+
+operation = GoalTaskService.recoverGoalTaskMalformedIssuedWork
+
+# STATE-MACHINE
+
+## GoalTaskLifecycle
+
+### STATE
+
+#### Idle
+
+##### TRANSITION
+
+to = Running
+on = task-started
+
+#### Running
+
+##### TRANSITION
+
+to = Running
+on = task-progress
+
+##### TRANSITION
+
+to = Accepted
+on = task-accepted
+
+#### Accepted
+
+# SERVICE
+
+## GoalTaskService
+
+### DESCRIPTION
+
+Ad hoc single-repository development from journal or direct instructions. Native WorkOrder, shared validation/repair, integrated independent Task review and actual typed selected local commit own completion. Push and publication are separate effects.
+
+### OPERATION
+
+#### describeGoalTaskMalformedIssuedWorkRecovery
+
+##### DESCRIPTION
+
+Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskMalformedIssuedWorkRecoveryDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
+#### recoverGoalTaskMalformedIssuedWork
+
+##### DESCRIPTION
+
+Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskMalformedIssuedWorkRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
+#### resolveGoalTaskDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve the shared finite reasoned NeedInformation batch for the exact pending Task development. Retained delivery is reused without rereading sources. The shared diagnostic DTO name is historical; no Phase or Step is created or required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
+
+#### startGoalTask
+
+##### DESCRIPTION
+
+Start an idempotent single-repository Task for the selected participant, owned paths and development objective. Native WorkOrder, managed validation, mandatory independent review and a typed selected local commit own later completion.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskView
+
+#### advanceGoalTask
+
+##### DESCRIPTION
+
+Advance the retained Task through native WorkOrder, fresh candidate observation, selected validation, mandatory independent review and typed selected local commit. Reuse pending issued work; after admitted malformed-work recovery, issue exactly one corrected successor on ordinary Advance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskView
+
+#### submitGoalTaskWorkResult
+
+##### DESCRIPTION
+
+Admit a semantic result for the exact retained Task WorkOrder and supplied independent completion evidence. Any issuedWorkContext must match the actual issued identity, revision, session, contracts and context; it is required after durable supersession history. Submission does not run checks or commit changes.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskWorkResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | GoalTaskWorkResult | 1 |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskView
+
+# SERVICE
+
+## GoalTaskRepairService
+
+### DESCRIPTION
+
+Repair only the exact assigned Task findings and owned paths. Return a semantic work result for fresh native candidate observation, validation and independent review without resetting retained repair counters.
+
+### OPERATION
+
+#### repairGoalTask
+
+##### DESCRIPTION
+
+Repair only the assigned Task findings and owned paths and return a semantic work result. Preserve retained counters and history; fresh candidate observation, selected checks and independent review remain required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskWorkResult
+
+# SERVICE
+
+## GoalTaskReviewService
+
+### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Preserve worker independence and Task identity; review does not perform repairs, validation or the selected local commit.
+
+### OPERATION
+
+#### reviewGoalTask
+
+##### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Do not repair it, relabel Task work as standalone work or replace native selected checks and closure evidence.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskWorkResult
+
+# SERVICE
+
+## GoalTaskSemanticAdmissionService
+
+### DESCRIPTION
+
+Native Task completion admits the assigned review against the retained work and candidate through the shared StandaloneFixExecution.admitResultC. This semantic admission neither executes validation nor commits source changes.
+
+### OPERATION
+
+#### admitGoalTaskReview
+
+##### DESCRIPTION
+
+Admit the independently completed Task review against the exact retained work and candidate through native semantic admission. This operation neither executes validation nor commits source changes.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskView
+
+
+# SERVICE
+
+## GoalTaskImplementationService
+
+### DESCRIPTION
+
+Implement the exact assigned Task objective within its owned repository paths and return a semantic work result. Native candidate observation, validation, independent review and selected local commit remain separate workflow steps.
+
+### OPERATION
+
+#### implementGoalTask
+
+##### DESCRIPTION
+
+Implement only the assigned Task objective and owned paths, then return a semantic work result. Native candidate observation, selected checks, independent review and local commit remain separate workflow steps.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskWorkResult
+
+
+# VALUE
+
+## StandaloneReviewFixInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Frozen adopted repair objective, original identified review findings, ownership and source context. Original review does not constitute new execution or independent re-review authority.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+| originalReview | WorkflowArtifactReference | 1 |
+| reviewContext | string | 1 |
+| originalFindings | StandaloneReviewFixFinding | + |
+
+## StandaloneReviewFixFinding
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| summary | string | 1 |
+| paths | string | + |
+| sourceReferences | WorkflowArtifactReference | * |
+
+## StandaloneReviewFixDisposition
+
+### DESCRIPTION
+
+One original finding identity with fixed, not-applicable or unresolved outcome; mechanical or semantic basis, actual change attribution and selected verification checks. Native assessment requires matching candidate paths and successful executed receipts before acceptance. An unresolved or semantic basis requires scoped independent review. Original findings and context remain immutable.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| outcome | string | 1 |
+| basis | string | 1 |
+| rationale | string | 1 |
+| changedPaths | string | * |
+| checks | string | * |
+
+# VALUE
+
+## WorkflowTaskFixDeliveryPreparationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| route | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| destinationParticipant | string | 1 |
+| result | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+
+## WorkflowTaskFixDelivery
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| route | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| destinationParticipant | string | 1 |
+| sessionId | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| observation | record | 1 |
+| disposition | string | 1 |
+| provenance | string | 1 |
+
+## WorkflowTaskFixAdoptionPreparationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| delivery | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| disposition | string | 1 |
+| rationale | string | 1 |
+
+## WorkflowTaskFixAdoption
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| delivery | WorkflowTaskFixDelivery | 1 |
+| disposition | string | 1 |
+| rationale | string | 1 |
+| effect | string | 1 |
+
+# VALUE
+
+## GoalTaskMalformedIssuedWorkRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+
+## GoalTaskMalformedIssuedWorkRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| recoveryOperation | string | 1 |
+| externalEffects | string | 1 |
+| successorContinuationId | string | ? |

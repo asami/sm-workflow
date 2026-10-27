@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contract and passive preparation evidence; these inputs grant no real Human authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -17,7 +17,7 @@ import WorkflowManagedProcessExecution as E
   * All identities below are native Git object identities. No effect is inferred
   * from missing execution output, and completion records never replay an intent.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePartialCommitClosure {

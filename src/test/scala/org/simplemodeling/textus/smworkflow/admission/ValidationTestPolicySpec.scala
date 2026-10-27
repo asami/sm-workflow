@@ -10,8 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.testing.{LabelledTestSelection, LocalTestDeclaration}
 
 /** Metadata-driven discovery, exclusion and explicit selection without executing HEAVY bodies.
-  * @since Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @since   Oct. 24, 2026
+  * @version Oct. 27, 2026
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
 final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -71,6 +71,24 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
   }
 
   "Canonical discovery through the build bridge" should {
+    "retain exact-name and substring selection as suite-local operations through the real bridge" in {
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val report = classOf[GoalPhaseStepTestReportRepairSpec].getName
+      val progression = classOf[GoalPhaseOrderedProgressionSpec].getName
+      val expected = new GoalPhaseStepTestReportRepairSpec().testNames.map(report -> _) ++
+        new GoalPhaseOrderedProgressionSpec().testNames.map(progression -> _)
+      val exact = new GoalPhaseStepTestReportRepairSpec().testNames.toVector.sorted.head
+      val classes = Array(report, progression)
+      val exactRows = LabelledTestSelection.select(root, "test", "EXPLICIT", classes, Array(exact), Array.empty[String])
+      val containingRows = LabelledTestSelection.select(root, "test", "EXPLICIT", classes, Array.empty[String], Array("repair"))
+      exactRows.map(row => row(0) -> row(1)).toSet shouldBe expected.filter(_._2 == exact)
+      containingRows.map(row => row(0) -> row(1)).toSet shouldBe expected.filter(_._2.contains("repair"))
+      exactRows should not be empty
+      containingRows should not be empty
+      (exactRows ++ containingRows).foreach(row => expected should contain(row(0) -> row(1)))
+      (exactRows ++ containingRows).forall(_(2) == "false") shouldBe true
+    }
+
     "select ADMISSION without changing FULL or admitting HEAVY" in {
       Given("real admission, ordinary local and HEAVY declarations")
       val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString

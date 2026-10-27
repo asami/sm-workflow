@@ -988,7 +988,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         assigned.completed.head.review shouldBe Some(secondreview.resultReference.identity)
         assigned.completed.head.commit.identity shouldBe e.observe().head
         assigned.requiredIssues.get.issues.map(_.status) shouldBe Vector("RESOLVED")
-        assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(0, 0, 2))
+        // Step closure resets this window's counts and observations, retaining
+        // the normal Start's adopted runtime policy and selected hard bounds.
+        assigned.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(0, 0, 2,
+          Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
         _request(work).requiredOperation.capability shouldBe "goal-phase-finding-recording-capability"
         _request(work).operation shouldBe StateMachineOperationIdentity("GoalPhaseFindingRecordingService", "recordGoalFindings")
         work.current.asInstanceOf[WorkflowContinuation.WorkOrder[R.Request]].requirement.reviewRequired shouldBe false

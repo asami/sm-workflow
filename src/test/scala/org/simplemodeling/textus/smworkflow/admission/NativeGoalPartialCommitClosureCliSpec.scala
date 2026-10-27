@@ -70,7 +70,8 @@ final class NativeGoalPartialCommitClosureCliSpec extends AnyWordSpec with Match
     var session = ""
     private var _sequence = 0
     def call(service: String, operation: String, arguments: Vector[String]): F.Result =
-      scenario.callInstalled(_executable, service, operation, arguments, Some(installations.getOrElse(_image)))
+      scenario.callInstalled(_executable, service, operation, arguments, Some(installations.getOrElse(_image)),
+        assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
     def goal(operation: String, arguments: Vector[String]): F.Result = call("GoalPhaseService", operation, arguments)
     def advance(): F.Result = goal("advanceGoalPhase", Vector("--sessionId", session))
     def file(name: String, value: RecordPresentable): String = {

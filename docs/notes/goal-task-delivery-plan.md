@@ -1,7 +1,7 @@
 # sm-goal-task and shared ad hoc execution delivery
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: planned; no installed capability or acceptance claimed
+Status: P67-T2 source entry prepared; native validation and installed acceptance pending
 Owner: sm-workflow development
 Specification: [GoalTask](../spec/goal-task.md)
 Handoff: [English developer instructions](../journal/2026/10/2026-10-24-goal-task-handoff.md)
@@ -56,6 +56,13 @@ successful checks solely for installation. Report actual availability separately
 from planned API/skill names. Commit/push this documentation is not part of the
 current planning request.
 
+## P67-T2 source boundary
+
+The [public runtime contract](../spec/goal-task-runtime.md) describes the shared
+T1 runtime, initial development input, independent integrated Task review and
+typed selected commit. Native validation and an actual installed Task commit
+episode remain required; fixture observations close no acceptance checkbox.
+
 ## Acceptance checklist — pending
 
 - [ ] GTASK-A01: A journal-sourced ad hoc request adopts an objective/scope/conditions
@@ -83,3 +90,14 @@ current planning request.
 
 Validate the affected behavior and one connected real Task, reusing accepted
 producer evidence. Keep all checklist items pending until actual evidence exists.
+
+## P67-T4 source delivery boundary
+
+The [Task/FIX delivery contract](../spec/task-fix-delivery.md) supplies matching
+thin skill sources and passive public result/adoption preparations. Their exact
+caller observations retain destination state and distinct owners; they grant no
+consent, effect or requester acceptance. Actual installed and authorized
+existing-chat evidence is pending. Keep active Sessions pinned: this consumer's
+v3 GoalPhase closure codec cannot adopt retained v4 partial completion. Source
+CAR ABI reconciliation is outside this Step's owned paths. See the
+[English source handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).

@@ -11,8 +11,8 @@ import RepositorySyncManagedGitObservation as G
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Native-shaped pure proof data, never real Session authority.
-  * @since Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @since   Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])

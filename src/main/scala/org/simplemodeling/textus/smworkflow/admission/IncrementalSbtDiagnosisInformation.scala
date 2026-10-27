@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Common Evidence retains immutable delivered batches; its Journal supplies a
   * paged case history. No work assignment, repair charge or execution occurs.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object IncrementalSbtDiagnosisInformation {
@@ -36,6 +36,17 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   given Decoder[Item] = deriveDecoder
   given Encoder[Batch] = deriveEncoder
   given Decoder[Batch] = deriveDecoder
+
+  /** Neutral retained failure context shared with standalone WorkOrders. */
+  final case class FailureContext(sourceRevision: String, candidate: GoalPhaseOrderedProgression.Snapshot,
+    selected: Vector[GoalPhaseNativeValidation.Check], receipts: Vector[RepositorySyncNativeMergeValidation.Receipt])
+  final case class WorkContext(ownedPaths: Vector[String], failure: Option[FailureContext],
+    candidate: Option[GoalPhaseOrderedProgression.Snapshot])
+  private def context(work: GoalPhaseNativeWork.Request): WorkContext = WorkContext(
+    work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id)).map(_.ownedPaths)
+      .getOrElse(work.selectedPlan.steps.flatMap(_.ownedPaths)),
+    work.checkFailure.map(f => FailureContext(f.validation.sourceRevision, f.validation.candidate,
+      f.validation.selected, f.validation.receipts)), failedCandidate(work))
 
   trait SourceReader {
     def readC(path: String): Consequence[Option[String]]
@@ -111,7 +122,10 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   /** Pure retained-log selection and injected managed File access make the
     * evidence semantics testable without launching a command or a second AI.
     */
-  def itemsC(work: GoalPhaseNativeWork.Request, selections: Vector[Selection], files: SourceReader): Consequence[Vector[Item]] = {
+  def itemsC(work: GoalPhaseNativeWork.Request, selections: Vector[Selection], files: SourceReader): Consequence[Vector[Item]] =
+    itemsC(context(work), selections, files)
+
+  def itemsC(work: WorkContext, selections: Vector[Selection], files: SourceReader): Consequence[Vector[Item]] = {
     val observed = scala.collection.mutable.Map.empty[String, Consequence[Option[String]]]
     val samecall = new SourceReader {
       def readC(path: String) = observed.getOrElseUpdate(path, files.readC(path))
@@ -122,11 +136,10 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
     } yield items :+ item }
   }
 
-  private def _item_c(work: GoalPhaseNativeWork.Request, s: Selection, files: SourceReader): Consequence[Item] = {
+  private def _item_c(work: WorkContext, s: Selection, files: SourceReader): Consequence[Item] = {
     if (!_valid_shape(s)) Consequence.success(_missing(s, "Unsupported semantic selection or incompatible selector fields"))
     else if (s.kind == "source-file") {
-      val owners = work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id))
-        .map(_.ownedPaths).getOrElse(work.selectedPlan.steps.flatMap(_.ownedPaths))
+      val owners = work.ownedPaths
       val path = s.path.get
       if (!WorkspaceFilePath.parseC(path).isSuccess || !owners.exists(p => path == p || path.startsWith(p + "/")))
         Consequence.success(_missing(s, "Source is outside this work's selected repository ownership; no read attempted"))
@@ -137,15 +150,15 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
       }.fold(_ => _missing(s, "Managed File read unavailable"), v => v))
     } else {
       val result = for {
-        failure <- work.checkFailure
-        check <- failure.validation.selected.find(_.identity == s.check.get)
-        receipt <- failure.validation.receipts.find(_.identity == check.identity)
-        view = IncrementalSbtFailureDiagnosis.extract(receipt, check.kind, failure.validation.sourceRevision, failure.validation.candidate)
+        failure <- work.failure
+        check <- failure.selected.find(_.identity == s.check.get)
+        receipt <- failure.receipts.find(_.identity == check.identity)
+        view = IncrementalSbtFailureDiagnosis.extract(receipt, check.kind, failure.sourceRevision, failure.candidate)
         source <- view.sources.find(_.stream == s.stream.get)
       } yield {
         val raw = if (s.stream.contains("stdout")) receipt.stdout else receipt.stderr
         val lines = if (raw.isEmpty) Vector.empty else raw.split("\\r?\\n", -1).toVector
-        val locator = s"check:${check.identity}@${failure.validation.sourceRevision}/${s.stream.get}"
+        val locator = s"check:${check.identity}@${failure.sourceRevision}/${s.stream.get}"
         if (Set("unavailable", "undecodable")(source.textStatus) || lines.isEmpty)
           _missing(s, "Selected retained stream has no available decodable text").copy(sourceLoss = source.sourceLoss, locator = locator)
         else if (Set("full-output", "execution-context")(s.kind))
@@ -201,6 +214,12 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
     work: GoalPhaseNativeWork.Request, input: V.GoalPhaseDiagnosticInformationInput, files: SourceReader,
     clock: java.time.Clock,
     journal: (CommonEvidence.Allocation, CommonEvidence.Observation) => Consequence[V.JournalRecordingState]):
+    Consequence[(Batch, V.EvidenceRecordingState)] =
+    deliverC(store, policy, selectedsource, context(work), input, files, clock, journal)
+
+  def deliverC(store: CommonEvidence.Storage, policy: CommonEvidence.Policy, selectedsource: CommonEvidence.Source,
+    work: WorkContext, input: V.GoalPhaseDiagnosticInformationInput, files: SourceReader, clock: java.time.Clock,
+    journal: (CommonEvidence.Allocation, CommonEvidence.Observation) => Consequence[V.JournalRecordingState]):
     Consequence[(Batch, V.EvidenceRecordingState)] = {
     val id = CommonEvidence.identity(selectedsource)
     val selections = input.selections.map(_selection)
@@ -219,7 +238,7 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
           .getOrElse(Consequence.stateConflict("Delivered batch payload unavailable; no repeat source read")))
         batch <- _batch_c(text)
         _ <- if (batch.work == input.issuedWorkContext.continuationId && batch.revision == input.issuedWorkContext.expectedRevision &&
-            batch.requestIdentity == input.requestIdentity && batch.candidate == failedCandidate(work) && batch.items.map(_.selection) == selections)
+            batch.requestIdentity == input.requestIdentity && batch.candidate == work.candidate && batch.items.map(_.selection) == selections)
           Consequence.unit else Consequence.stateConflict("Request identity already names a different delivered batch")
         state = V.EvidenceRecordingState(observed.status, "Retained delivered batch; no source refresh",
           Some(V.EvidenceReference(id, "1")), Some(CommonEvidence.observation(allocation, observed)), None)
@@ -230,7 +249,7 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
         resolution = if (items.forall(_.status == "unavailable")) "no-new-information"
           else if (items.exists(_.status != "available")) "partial-information" else "information-available"
         batch = Batch("sm-workflow.diagnostic-information.v1", input.issuedWorkContext.continuationId,
-          input.issuedWorkContext.expectedRevision, input.requestIdentity, failedCandidate(work),
+          input.issuedWorkContext.expectedRevision, input.requestIdentity, work.candidate,
           clock.instant().toString, resolution, items)
         saved <- CommonEvidence.archiveManagedC(store, policy, selectedsource, batch.asJson.noSpaces, "identity", clock)
         result <- recordedC(batch, saved._1, saved._2)
